@@ -1,0 +1,15 @@
+{
+  "name": "diariz-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Diariz Electron desktop shell (mic + Windows system/loopback audio capture)",
+  "main": "main.js",
+  "scripts": {
+    "dev": "cross-env DIARIZ_DEV=1 electron .",
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^33.2.1"
+  }
+}

@@ -427,3 +427,8 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Diariz
+apps/*/dist/
+deploy/.env
+*.pyc

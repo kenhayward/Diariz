@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Diariz.Api/Diariz.Api.csproj" />
+    <Project Path="src/Diariz.Domain/Diariz.Domain.csproj" />
+  </Folder>
+</Solution>
