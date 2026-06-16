@@ -42,8 +42,10 @@ public class AudioStorage : IAudioStorage
             BucketName = _opts.Bucket,
             Key = key,
             InputStream = content,
-            ContentType = contentType,
-            DisablePayloadSigning = true // required for MinIO over plain HTTP
+            ContentType = contentType
+            // NB: do NOT set DisablePayloadSigning here — AWS SDK v4 rejects it over
+            // plain HTTP ("must be sent over HTTPS"). Normal SigV4 payload signing works
+            // fine against MinIO over HTTP.
         }, ct);
     }
 
