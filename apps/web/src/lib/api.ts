@@ -66,3 +66,22 @@ export const api = {
     return data.url;
   },
 };
+
+// Extract a human-readable message from an axios error. Understands the shapes the
+// API returns: plain strings (BadRequest("...")), Identity error arrays, and
+// ASP.NET ProblemDetails ({ title, errors }). Falls back gracefully.
+export function apiErrorMessage(e: unknown, fallback = "Something went wrong."): string {
+  if (axios.isAxiosError(e)) {
+    if (!e.response) return "Cannot reach the server.";
+    const data = e.response.data as any;
+    if (typeof data === "string" && data.trim()) return data;
+    if (Array.isArray(data) && data.length) return data.map(String).join(" ");
+    if (data?.errors) {
+      const msgs = Object.values(data.errors).flat();
+      if (msgs.length) return msgs.map(String).join(" ");
+    }
+    if (data?.title) return data.title;
+    return `Request failed (${e.response.status}).`;
+  }
+  return e instanceof Error ? e.message : fallback;
+}

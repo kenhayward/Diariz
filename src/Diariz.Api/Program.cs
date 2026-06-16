@@ -122,11 +122,26 @@ app.Run();
 
 static async Task SeedDefaultUserAsync(IServiceProvider sp, IConfiguration config)
 {
+    var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Seed");
     var email = config["Seed:Email"];
     var password = config["Seed:Password"];
-    if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password)) return;
+    if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+    {
+        logger.LogWarning("Seed skipped: Seed:Email / Seed:Password not configured.");
+        return;
+    }
 
     var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
-    if (await users.FindByEmailAsync(email) is not null) return;
-    await users.CreateAsync(new ApplicationUser { UserName = email, Email = email }, password);
+    if (await users.FindByEmailAsync(email) is not null)
+    {
+        logger.LogInformation("Seed user {Email} already exists; nothing to do.", email);
+        return;
+    }
+
+    var result = await users.CreateAsync(new ApplicationUser { UserName = email, Email = email }, password);
+    if (result.Succeeded)
+        logger.LogInformation("Seed user {Email} created.", email);
+    else
+        logger.LogError("Seed user {Email} creation FAILED: {Errors}", email,
+            string.Join("; ", result.Errors.Select(e => e.Description)));
 }
