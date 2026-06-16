@@ -29,7 +29,9 @@ public class AudioStorage : IAudioStorage
     public async Task EnsureBucketAsync(CancellationToken ct = default)
     {
         var buckets = await _s3.ListBucketsAsync(ct);
-        if (!buckets.Buckets.Any(b => b.BucketName == _opts.Bucket))
+        // AWS SDK v4 returns a null Buckets list (not an empty one) when none exist.
+        var exists = buckets.Buckets?.Any(b => b.BucketName == _opts.Bucket) ?? false;
+        if (!exists)
             await _s3.PutBucketAsync(_opts.Bucket, ct);
     }
 

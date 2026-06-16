@@ -32,8 +32,8 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     ports:
-      - "9000:9000"   # S3 API
-      - "9001:9001"   # console
+      - "9002:9000"   # S3 API   (host 9002 -> container 9000)
+      - "9003:9001"   # console   (host 9003 -> container 9001)
     volumes:
       - miniodata:/data
     healthcheck:

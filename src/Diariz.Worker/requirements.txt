@@ -1,5 +1,6 @@
 # torch / torchaudio are installed from the CUDA wheel index in the Dockerfile.
 whisperx==3.3.1
+matplotlib==3.9.4
 redis==5.2.1
 boto3==1.35.99
 requests==2.32.3
