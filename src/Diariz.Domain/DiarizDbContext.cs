@@ -18,9 +18,15 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     {
         base.OnModelCreating(builder);
 
+        // The vector column and pgvector extension only exist on Postgres. Under other
+        // providers (e.g. the EF in-memory provider used by unit tests) the embedding is
+        // unmapped — it is unused before Milestone 3 anyway.
+        var isNpgsql = Database.IsNpgsql();
+
         // pgvector extension; embedding dimension is for typical local embedding models
         // (e.g. nomic-embed-text = 768). Adjust the migration if a different model is chosen.
-        builder.HasPostgresExtension("vector");
+        if (isNpgsql)
+            builder.HasPostgresExtension("vector");
 
         builder.Entity<Recording>(e =>
         {
@@ -52,7 +58,10 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         builder.Entity<Segment>(e =>
         {
             e.HasIndex(s => new { s.TranscriptionId, s.Ordinal });
-            e.Property(s => s.Embedding).HasColumnType("vector(768)");
+            if (isNpgsql)
+                e.Property(s => s.Embedding).HasColumnType("vector(768)");
+            else
+                e.Ignore(s => s.Embedding);
         });
 
         builder.Entity<Speaker>(e =>
