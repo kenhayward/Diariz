@@ -140,7 +140,12 @@ Diarization is gated: you **must** set `HF_TOKEN` and accept the `pyannote/speak
 cd apps/web
 npm run dev        # http://localhost:5173, proxies /api and /hubs to :8080
 npm run build      # tsc typecheck + vite build
+npm test           # vitest (jsdom); npm run test:watch for the watch loop
 ```
+Vitest config is in `vitest.config.ts` (kept separate from `vite.config.ts` so the production
+build doesn't depend on vitest). Tests are `src/**/*.test.ts(x)`, excluded from the build's `tsc`
+via `tsconfig.json`. No DOM/component testing library is wired yet — add `@testing-library/react`
+(+ the react plugin in `vitest.config.ts`) when you start testing components.
 
 ### Desktop (Electron)
 ```bash
@@ -154,16 +159,22 @@ audio" recorder option, and can override the API base via `window.__DIARIZ_API_B
 ```bash
 cd deploy
 cp .env.example .env      # JWT_KEY, CALLBACK_SECRET, HF_TOKEN, SEED_EMAIL/PASSWORD, MinIO creds
-docker compose up --build # postgres, redis, minio, api, GPU worker
+docker compose up --build # web, api, postgres, redis, minio, GPU worker
 ```
-The GPU worker needs the NVIDIA Container Toolkit; for CPU comment out the `deploy.resources` GPU
-block and set `WORKER_DEVICE=cpu WORKER_COMPUTE_TYPE=int8`.
+The Compose project is named **`diariz`** (top-level `name:` in `docker-compose.yml`; Docker forces
+lowercase, so it is `diariz` not `Diariz`) rather than defaulting to the `deploy` directory name. The
+**`web`** service builds `apps/web` (`apps/web/Dockerfile`) and serves the static SPA via nginx at
+**http://localhost:8081**, proxying `/api` and `/hubs` to the `api` container (same-origin, so no CORS
+needed — `apps/web/nginx.conf`). The GPU worker needs the NVIDIA Container Toolkit; for CPU comment
+out the `deploy.resources` GPU block and set `WORKER_DEVICE=cpu WORKER_COMPUTE_TYPE=int8`.
 
 ## Conventions & gotchas
 
-- **Tests:** the .NET harness exists (`tests/Diariz.Api.Tests`, see above). The Python worker and
-  web app do **not** have test harnesses yet — add `pytest` / `vitest` when working in those.
-- **Ports:** API `8080`; web `5173`; Postgres `5432`; Redis `6379`; **MinIO is remapped on the host**
+- **Tests:** the .NET harness (`tests/Diariz.Api.Tests` + integration) and the web `vitest` harness
+  exist (see above). The **Python worker** does **not** have a test harness yet — add `pytest` when
+  working in it.
+- **Ports:** API `8080`; web UI (Docker/nginx) `8081`; web dev server `5173`; Postgres `5432`;
+  Redis `6379`; **MinIO is remapped on the host**
   — S3 API `9002→9000`, console `9003→9001` (avoids clashing with other local MinIO instances).
   In-container, services use the compose service names (`minio:9000`, `redis:6379`, `postgres:5432`).
 - **MinIO/S3 quirk:** `AmazonS3Config` uses `ForcePathStyle` + region `us-east-1`. A prior bug

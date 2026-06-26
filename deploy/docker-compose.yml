@@ -1,6 +1,10 @@
-# Diariz — full backend stack for Milestone 1.
+# Diariz — full stack for Milestone 1 (web UI + API + worker + infra).
 # Run from this directory:  docker compose up --build
 # Secrets/config come from ./.env (copy from .env.example).
+
+# Project/stack name (Docker requires lowercase, so this shows as "diariz"
+# instead of defaulting to the "deploy" directory name).
+name: diariz
 
 services:
   postgres:
@@ -62,8 +66,19 @@ services:
       Seed__Email: ${SEED_EMAIL}
       Seed__Password: ${SEED_PASSWORD}
       Cors__Origins__0: "http://localhost:5173"
+      Cors__Origins__1: "http://localhost:8081"
     ports:
       - "8080:8080"
+
+  # Static web UI served by nginx, proxying /api and /hubs to the API container.
+  web:
+    build:
+      context: ../apps/web
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "8081:80"   # open the app at http://localhost:8081
 
   worker:
     build:

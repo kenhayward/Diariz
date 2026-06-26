@@ -30,12 +30,14 @@ For diarization you need a Hugging Face token with the `pyannote/speaker-diariza
 terms accepted — see [src/Diariz.Worker/README.md](src/Diariz.Worker/README.md).
 
 ```bash
-# 1. Backend stack (API, Postgres, Redis, MinIO, GPU worker)
+# 1. Whole stack — web UI, API, Postgres, Redis, MinIO, GPU worker.
+#    Runs as a single Compose project named "diariz".
 cd deploy
 cp .env.example .env        # fill in JWT_KEY, CALLBACK_SECRET, HF_TOKEN, seed user
-docker compose up --build
+docker compose up --build   # web UI at http://localhost:8081, API at http://localhost:8080
 
-# 2. Web app (dev server, proxies /api and /hubs to the API)
+# 2. (dev alternative to the bundled UI) Vite dev server with hot reload,
+#    proxying /api and /hubs to the API.
 cd ../apps/web
 npm install && npm run dev  # http://localhost:5173
 
