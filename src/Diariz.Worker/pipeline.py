@@ -45,6 +45,23 @@ def _get_diarizer():
     return _diarize_model
 
 
+def _shape_segments(raw_segments: list[dict]) -> list[dict]:
+    """Convert whisperx segments to the API's contract: PascalCase keys, seconds -> ms,
+    empty-text segments dropped, missing speaker defaulted to UNKNOWN."""
+    segments = []
+    for seg in raw_segments:
+        text = (seg.get("text") or "").strip()
+        if not text:
+            continue
+        segments.append({
+            "Speaker": seg.get("speaker", "UNKNOWN"),
+            "StartMs": int(round(seg["start"] * 1000)),
+            "EndMs": int(round(seg["end"] * 1000)),
+            "Text": text,
+        })
+    return segments
+
+
 def transcribe(audio_path: str) -> dict:
     """Run transcription -> alignment -> diarization. Returns {language, segments}."""
     audio = whisperx.load_audio(audio_path)
@@ -63,16 +80,4 @@ def transcribe(audio_path: str) -> dict:
     diarize_segments = _get_diarizer()(audio)
     result = whisperx.assign_word_speakers(diarize_segments, result)
 
-    segments = []
-    for seg in result["segments"]:
-        text = (seg.get("text") or "").strip()
-        if not text:
-            continue
-        segments.append({
-            "Speaker": seg.get("speaker", "UNKNOWN"),
-            "StartMs": int(round(seg["start"] * 1000)),
-            "EndMs": int(round(seg["end"] * 1000)),
-            "Text": text,
-        })
-
-    return {"language": language, "segments": segments}
+    return {"language": language, "segments": _shape_segments(result["segments"])}

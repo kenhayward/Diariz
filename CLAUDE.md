@@ -135,6 +135,12 @@ HF_TOKEN=... REDIS_URL=redis://localhost:6379/0 API_BASE_URL=http://localhost:80
 Diarization is gated: you **must** set `HF_TOKEN` and accept the `pyannote/speaker-diarization-3.1`
 + `pyannote/segmentation-3.0` terms on Hugging Face, or jobs fail. CPU-only: `DEVICE=cpu COMPUTE_TYPE=int8` (slow).
 
+Worker tests (pytest, no GPU): `pip install -r requirements-test.txt && python -m pytest`. The suite
+stubs `whisperx` (`tests/conftest.py`) so `torch`/CUDA aren't needed — it covers the callback contract
+(`callback.py`), job orchestration + temp cleanup (`worker.handle`), and segment shaping
+(`pipeline._shape_segments`). The shaping logic is extracted into `_shape_segments` precisely so it can
+be unit-tested without the models; keep new pure transforms similarly separable from the whisperx calls.
+
 ### Web
 ```bash
 cd apps/web
@@ -170,9 +176,8 @@ out the `deploy.resources` GPU block and set `WORKER_DEVICE=cpu WORKER_COMPUTE_T
 
 ## Conventions & gotchas
 
-- **Tests:** the .NET harness (`tests/Diariz.Api.Tests` + integration) and the web `vitest` harness
-  exist (see above). The **Python worker** does **not** have a test harness yet — add `pytest` when
-  working in it.
+- **Tests:** harnesses exist for all three stacks — .NET (`tests/Diariz.Api.Tests` + integration),
+  web (`vitest`), and the Python worker (`pytest`, see the Worker section). No CI runs them on push yet.
 - **Ports:** API `8080`; web UI (Docker/nginx) `8081`; web dev server `5173`; Postgres `5432`;
   Redis `6379`; **MinIO is remapped on the host**
   — S3 API `9002→9000`, console `9003→9001` (avoids clashing with other local MinIO instances).
