@@ -2,6 +2,7 @@ import axios from "axios";
 import type {
   AuthResponse,
   RecordingDetail,
+  RecordingSource,
   RecordingSummary,
 } from "./types";
 
@@ -43,12 +44,18 @@ export const api = {
     return data;
   },
 
-  async upload(blob: Blob, title: string, durationMs: number): Promise<RecordingSummary> {
+  async upload(
+    blob: Blob,
+    title: string,
+    durationMs: number,
+    source: RecordingSource = "Microphone",
+  ): Promise<RecordingSummary> {
     const form = new FormData();
     const ext = blob.type.includes("wav") ? "wav" : "webm";
     form.append("audio", blob, `recording.${ext}`);
     form.append("title", title);
     form.append("durationMs", String(Math.round(durationMs)));
+    form.append("source", source);
     const { data } = await http.post<RecordingSummary>("/api/recordings", form);
     return data;
   },
@@ -57,15 +64,66 @@ export const api = {
     await http.put(`/api/recordings/${id}/speakers`, { label, displayName });
   },
 
+  async renameRecording(id: string, name: string | null): Promise<void> {
+    await http.put(`/api/recordings/${id}/name`, { name });
+  },
+
+  async deleteRecording(id: string): Promise<void> {
+    await http.delete(`/api/recordings/${id}`);
+  },
+
+  async summarize(id: string): Promise<void> {
+    await http.post(`/api/recordings/${id}/summarize`);
+  },
+
   async retranscribe(id: string, model?: string): Promise<void> {
     await http.post(`/api/recordings/${id}/retranscribe`, { model: model ?? null });
   },
 
-  async audioUrl(id: string): Promise<string> {
-    const { data } = await http.get<{ url: string }>(`/api/recordings/${id}/audio-url`);
+  async audioUrl(id: string, opts?: { download?: boolean }): Promise<string> {
+    const { data } = await http.get<{ url: string }>(`/api/recordings/${id}/audio-url`, {
+      params: opts?.download ? { download: true } : undefined,
+    });
     return data.url;
   },
+
+  /// Transcript endpoints are JWT-protected, so fetch the bytes (carrying the bearer) and
+  /// trigger a client-side download rather than navigating to a bare URL.
+  async downloadTranscript(id: string, format: "txt" | "srt"): Promise<void> {
+    const { data, headers } = await http.get(`/api/recordings/${id}/transcript.${format}`, {
+      responseType: "blob",
+    });
+    triggerBlobDownload(data as Blob, filenameFromHeaders(headers, `transcript.${format}`));
+  },
+
+  /// The audio download URL is a self-authenticating presigned URL with attachment disposition.
+  async downloadAudio(id: string): Promise<void> {
+    const url = await api.audioUrl(id, { download: true });
+    const a = document.createElement("a");
+    a.href = url;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  },
 };
+
+function filenameFromHeaders(headers: unknown, fallback: string): string {
+  const cd = (headers as Record<string, string> | undefined)?.["content-disposition"];
+  const match = cd?.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+  return match ? decodeURIComponent(match[1]) : fallback;
+}
+
+function triggerBlobDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 // Extract a human-readable message from an axios error. Understands the shapes the
 // API returns: plain strings (BadRequest("...")), Identity error arrays, and

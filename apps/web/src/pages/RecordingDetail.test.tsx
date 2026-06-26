@@ -4,7 +4,6 @@ import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { RecordingDetail as RecordingDetailType } from "../lib/types";
 
-// SignalR is irrelevant to the button behaviour and needs a live server; stub it.
 vi.mock("../lib/signalr", () => ({
   createHub: () => ({ start: () => Promise.resolve(), stop: () => Promise.resolve(), on: () => {} }),
 }));
@@ -14,6 +13,12 @@ vi.mock("../lib/api", () => ({
     getRecording: vi.fn(),
     retranscribe: vi.fn(),
     renameSpeaker: vi.fn(),
+    renameRecording: vi.fn(),
+    deleteRecording: vi.fn(),
+    summarize: vi.fn(),
+    audioUrl: vi.fn(),
+    downloadTranscript: vi.fn(),
+    downloadAudio: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -21,18 +26,28 @@ vi.mock("../lib/api", () => ({
 import { api } from "../lib/api";
 import RecordingDetail from "./RecordingDetail";
 
-const recording: RecordingDetailType = {
+const base: RecordingDetailType = {
   id: "rec-123",
-  title: "Test recording",
-  durationMs: 1000,
+  title: "Mic 6/26/2026",
+  name: null,
+  source: "Microphone",
+  durationMs: 2000,
   status: "Transcribed",
   error: null,
   createdAt: new Date("2026-06-26T12:00:00Z").toISOString(),
   speakerNames: {},
-  current: { id: "t1", model: "whisperx-large-v3", version: 1, language: "en", segments: [] },
+  current: {
+    id: "t1",
+    model: "whisperx-large-v3",
+    version: 1,
+    language: "en",
+    segments: [{ speaker: "SPEAKER_00", speakerDisplay: "Alice", startMs: 0, endMs: 1000, text: "Hi" }],
+  },
+  summary: null,
 };
 
-function renderPage() {
+function renderPage(rec: RecordingDetailType) {
+  (api.getRecording as ReturnType<typeof vi.fn>).mockResolvedValue(rec);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
@@ -45,24 +60,55 @@ function renderPage() {
   );
 }
 
-describe("RecordingDetail re-transcribe button", () => {
+describe("RecordingDetail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (api.getRecording as ReturnType<typeof vi.fn>).mockResolvedValue(recording);
     (api.retranscribe as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (api.summarize as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (api.audioUrl as ReturnType<typeof vi.fn>).mockResolvedValue("blob:audio");
   });
 
-  it("enqueues a re-transcribe and refetches the recording so the UI reflects it", async () => {
-    renderPage();
-
+  it("re-transcribe enqueues and refetches the recording", async () => {
+    renderPage(base);
     const button = await screen.findByRole("button", { name: /re-transcribe/i });
     await waitFor(() => expect(api.getRecording).toHaveBeenCalledTimes(1));
 
     fireEvent.click(button);
 
     await waitFor(() => expect(api.retranscribe).toHaveBeenCalledWith("rec-123"));
-    // The fix: a successful enqueue must invalidate the recording query so the page
-    // refetches (status flips to Queued) instead of silently doing nothing.
     await waitFor(() => expect(api.getRecording).toHaveBeenCalledTimes(2));
+  });
+
+  it("Summarise calls the API and refetches", async () => {
+    renderPage(base);
+    const button = await screen.findByRole("button", { name: /summarise/i });
+
+    fireEvent.click(button);
+
+    await waitFor(() => expect(api.summarize).toHaveBeenCalledWith("rec-123"));
+    await waitFor(() => expect(api.getRecording).toHaveBeenCalledTimes(2));
+  });
+
+  it("renders the summary text when present", async () => {
+    renderPage({ ...base, summary: { model: "gpt", text: "The key decisions.", createdAt: base.createdAt } });
+    expect(await screen.findByText("The key decisions.")).toBeTruthy();
+  });
+
+  it("clicking a segment resolves the audio URL and plays from its start", async () => {
+    const play = vi
+      .spyOn(window.HTMLMediaElement.prototype, "play")
+      .mockResolvedValue(undefined);
+    renderPage({
+      ...base,
+      current: {
+        ...base.current!,
+        segments: [{ speaker: "SPEAKER_00", speakerDisplay: "Alice", startMs: 1000, endMs: 2000, text: "Hello there" }],
+      },
+    });
+
+    fireEvent.click(await screen.findByText("Hello there"));
+
+    await waitFor(() => expect(api.audioUrl).toHaveBeenCalledWith("rec-123"));
+    await waitFor(() => expect(play).toHaveBeenCalled());
   });
 });

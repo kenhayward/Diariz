@@ -11,11 +11,15 @@ public record AuthResponse(string AccessToken, DateTimeOffset ExpiresAt);
 public record RecordingSummaryDto(
     Guid Id,
     string Title,
+    string? Name,
+    RecordingSource Source,
     long DurationMs,
     RecordingStatus Status,
     DateTimeOffset CreatedAt);
 
 public record SegmentDto(string Speaker, string SpeakerDisplay, long StartMs, long EndMs, string Text);
+
+public record SummaryDto(string Model, string Text, DateTimeOffset CreatedAt);
 
 public record TranscriptionDto(
     Guid Id,
@@ -28,12 +32,16 @@ public record TranscriptionDto(
 public record RecordingDetailDto(
     Guid Id,
     string Title,
+    string? Name,
+    RecordingSource Source,
     long DurationMs,
     RecordingStatus Status,
     string? Error,
     DateTimeOffset CreatedAt,
     IReadOnlyDictionary<string, string> SpeakerNames,
-    TranscriptionDto? Current);
+    TranscriptionDto? Current,
+    SummaryDto? Summary);
 
 public record RenameSpeakerRequest(string Label, string DisplayName);
+public record RenameRecordingRequest(string? Name);
 public record RetranscribeRequest(string? Model);

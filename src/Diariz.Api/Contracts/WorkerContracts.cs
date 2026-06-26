@@ -7,6 +7,11 @@ public record TranscriptionJob(
     string BlobKey,
     string Model);
 
+/// <summary>Job payload for async summarisation, consumed by the API's SummarizationWorker.</summary>
+public record SummarizationJob(
+    Guid RecordingId,
+    Guid TranscriptionId);
+
 /// <summary>One diarized, timestamped segment returned by the worker.</summary>
 public record SegmentResult(
     string Speaker,

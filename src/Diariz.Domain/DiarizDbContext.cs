@@ -32,6 +32,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         {
             e.HasIndex(r => new { r.UserId, r.CreatedAt });
             e.Property(r => r.Title).HasMaxLength(512);
+            e.Property(r => r.Name).HasMaxLength(512);
             e.HasMany(r => r.Transcriptions)
                 .WithOne(t => t.Recording!)
                 .HasForeignKey(t => t.RecordingId)
