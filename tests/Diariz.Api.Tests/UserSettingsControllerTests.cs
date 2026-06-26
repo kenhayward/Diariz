@@ -1,16 +1,21 @@
+using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Tests;
 
 public class UserSettingsControllerTests
 {
-    private static UserSettingsController Build(DiarizDbContext db, Guid userId) =>
-        new(db, new FakeApiKeyProtector()) { ControllerContext = Http.Context(userId) };
+    private static UserSettingsController Build(DiarizDbContext db, Guid userId, SummarizationOptions? server = null) =>
+        new(db, new FakeApiKeyProtector(), Options.Create(server ?? new SummarizationOptions()))
+        {
+            ControllerContext = Http.Context(userId)
+        };
 
     [Fact]
     public async Task Get_NoSettings_ReturnsEmpty()
@@ -83,6 +88,29 @@ public class UserSettingsControllerTests
         var dto = await Build(db, userId).Get();
         Assert.Null(dto.ApiBase);
         Assert.Null(dto.Model);
+    }
+
+    [Fact]
+    public async Task Get_ExposesServerDefaults_AsPlaceholders_WithoutTheServerKey()
+    {
+        using var db = TestDb.Create();
+        var server = new SummarizationOptions
+        {
+            ApiBase = "https://server/v1",
+            Model = "server-model",
+            ApiKey = "sk-server-secret",
+        };
+
+        var dto = await Build(db, Guid.NewGuid(), server).Get();
+
+        Assert.Equal("https://server/v1", dto.DefaultApiBase);
+        Assert.Equal("server-model", dto.DefaultModel);
+        Assert.True(dto.ServerHasApiKey);
+        // Server key must never be serialised to the client.
+        Assert.DoesNotContain("sk-server-secret", System.Text.Json.JsonSerializer.Serialize(dto));
+        // No per-user override set, so the user's own fields stay null.
+        Assert.Null(dto.ApiBase);
+        Assert.False(dto.HasApiKey);
     }
 
     [Fact]

@@ -49,4 +49,17 @@ describe("Workspace", () => {
     renderWorkspace("/recordings/rec-1");
     expect(screen.getByText("DETAIL")).toBeTruthy();
   });
+
+  it("drag-resizes the right panel and persists the width", () => {
+    renderWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: /expand chat panel/i }));
+
+    const handle = screen.getByRole("separator", { name: /resize chat panel/i });
+    fireEvent.mouseDown(handle);
+    fireEvent.mouseMove(document, { clientX: 700 });
+    fireEvent.mouseUp(document);
+
+    // jsdom window.innerWidth is 1024, so width = 1024 - 700 = 324 (within clamp).
+    expect(localStorage.getItem("diariz.panels.rightWidth")).toBe("324");
+  });
 });

@@ -17,7 +17,7 @@ public record RecordingSummaryDto(
     RecordingStatus Status,
     DateTimeOffset CreatedAt);
 
-public record SegmentDto(string Speaker, string SpeakerDisplay, long StartMs, long EndMs, string Text);
+public record SegmentDto(Guid Id, string Speaker, string SpeakerDisplay, long StartMs, long EndMs, string Text);
 
 public record SummaryDto(string Model, string Text, DateTimeOffset CreatedAt);
 
@@ -45,10 +45,15 @@ public record RecordingDetailDto(
 public record RenameSpeakerRequest(string Label, string DisplayName);
 public record RenameRecordingRequest(string? Name);
 public record RetranscribeRequest(string? Model);
+public record UpdateSegmentRequest(string Text);
 
 // ---- User settings (per-user summarisation config) ----
-/// <summary>Settings returned to the client. The API key is never exposed — only whether one is set.</summary>
-public record UserSettingsDto(string? ApiBase, string? Model, bool HasApiKey);
+/// <summary>Settings returned to the client. The API key is never exposed — only whether one is set.
+/// The Default* fields are the server-wide values, shown as placeholders so the user can see what
+/// applies when they leave a field blank (without those defaults being persisted as their own).</summary>
+public record UserSettingsDto(
+    string? ApiBase, string? Model, bool HasApiKey,
+    string? DefaultApiBase, string? DefaultModel, bool ServerHasApiKey);
 
 /// <summary>Update request. ApiKey is tri-state: null = leave unchanged, "" = clear, value = set.</summary>
 public record UpdateUserSettingsRequest(string? ApiBase, string? Model, string? ApiKey);

@@ -55,37 +55,51 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
           Your own OpenAI-compatible endpoint for summaries. Leave fields blank to use the server default.
         </p>
-        <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="space-y-3">
+        {/* autoComplete="off" + non-login field names stop password managers treating these as
+            username/password login fields and autofilling stored credentials. */}
+        <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="space-y-3" autoComplete="off">
           <label className="block text-sm">
-            <span className="mb-1 block text-gray-600 dark:text-gray-300">Endpoint (base URL)</span>
+            <span className="mb-1 block text-gray-600 dark:text-gray-300">Summarisation endpoint (base URL)</span>
             <input
+              name="diariz-summary-endpoint"
+              autoComplete="off"
               value={apiBase}
               onChange={(e) => setApiBase(e.target.value)}
-              placeholder="https://api.openai.com/v1"
+              placeholder={data?.defaultApiBase ? `Default: ${data.defaultApiBase}` : "https://api.openai.com/v1"}
               className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block text-gray-600 dark:text-gray-300">Model</span>
+            <span className="mb-1 block text-gray-600 dark:text-gray-300">Summarisation model</span>
             <input
+              name="diariz-summary-model"
+              autoComplete="off"
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              placeholder="gpt-4o-mini"
+              placeholder={data?.defaultModel ? `Default: ${data.defaultModel}` : "gpt-4o-mini"}
               className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             />
           </label>
           <label className="block text-sm">
             <span className="mb-1 block text-gray-600 dark:text-gray-300">
-              API key
+              Summarisation API key
               {data?.hasApiKey && apiKey === null && (
                 <span className="ml-1 text-green-600 dark:text-green-400">· set</span>
               )}
             </span>
             <input
               type="password"
+              name="diariz-summary-key"
+              autoComplete="new-password"
               value={apiKey ?? ""}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder={data?.hasApiKey ? "•••••• (leave blank to keep)" : "sk-…"}
+              placeholder={
+                data?.hasApiKey
+                  ? "•••••• (leave blank to keep)"
+                  : data?.serverHasApiKey
+                    ? "Using server default (leave blank)"
+                    : "sk-…"
+              }
               className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             />
             {data?.hasApiKey && (

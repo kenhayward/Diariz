@@ -83,6 +83,10 @@ export const api = {
     await http.put(`/api/recordings/${id}/speakers`, { label, displayName });
   },
 
+  async updateSegment(id: string, segmentId: string, text: string): Promise<void> {
+    await http.put(`/api/recordings/${id}/segments/${segmentId}`, { text });
+  },
+
   async renameRecording(id: string, name: string | null): Promise<void> {
     await http.put(`/api/recordings/${id}/name`, { name });
   },

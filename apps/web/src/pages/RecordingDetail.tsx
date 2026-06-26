@@ -26,6 +26,7 @@ export default function RecordingDetail() {
   const [requeuing, setRequeuing] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [editingSeg, setEditingSeg] = useState<SegmentDto | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -209,10 +210,11 @@ export default function RecordingDetail() {
           <ul className="space-y-2">
             {rec.current.segments.map((s, i) => (
               <SegmentRow
-                key={i}
+                key={s.id}
                 seg={s}
                 active={i === activeIdx}
                 onPlay={() => playFrom(s.startMs)}
+                onEdit={() => setEditingSeg(s)}
               />
             ))}
           </ul>
@@ -222,6 +224,88 @@ export default function RecordingDetail() {
           No transcript yet — it appears here automatically when transcription finishes.
         </p>
       )}
+
+      {editingSeg && (
+        <SegmentEditModal
+          seg={editingSeg}
+          onClose={() => setEditingSeg(null)}
+          onSave={async (text) => {
+            await api.updateSegment(id, editingSeg.id, text);
+            setEditingSeg(null);
+            qc.invalidateQueries({ queryKey: ["recording", id] });
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function SegmentEditModal({
+  seg,
+  onClose,
+  onSave,
+}: {
+  seg: SegmentDto;
+  onClose: () => void;
+  onSave: (text: string) => Promise<void>;
+}) {
+  const [text, setText] = useState(seg.text);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      await onSave(text);
+    } catch (e) {
+      setError(apiErrorMessage(e, "Could not save the segment."));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-label="Edit segment"
+        className="w-full max-w-lg rounded-lg border bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="mb-3 text-base font-semibold dark:text-gray-100">Edit segment</h2>
+        <textarea
+          autoFocus
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={4}
+          aria-label="Segment text"
+          className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+        />
+        {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+        <div className="mt-3 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            disabled={busy}
+            className="rounded bg-gray-900 px-3 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
+          >
+            {busy ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -287,15 +371,17 @@ function SegmentRow({
   seg,
   active,
   onPlay,
+  onEdit,
 }: {
   seg: SegmentDto;
   active: boolean;
   onPlay: () => void;
+  onEdit: () => void;
 }) {
   return (
     <li
       onClick={onPlay}
-      className={`flex cursor-pointer gap-3 rounded-lg border px-4 py-2 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800 ${
+      className={`flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-2 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800 ${
         active
           ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/30"
           : "bg-white dark:bg-gray-900"
@@ -303,7 +389,8 @@ function SegmentRow({
     >
       <span className="w-12 shrink-0 font-mono text-xs text-gray-400 dark:text-gray-500">{fmt(seg.startMs)}</span>
       <span className="w-28 shrink-0 text-sm font-medium text-gray-700 dark:text-gray-200">{seg.speakerDisplay}</span>
-      <span className="text-sm dark:text-gray-200">{seg.text}</span>
+      <span className="flex-1 text-sm dark:text-gray-200">{seg.text}</span>
+      <KebabMenu actions={[{ label: "Edit", onClick: onEdit }]} label="Segment actions" />
     </li>
   );
 }

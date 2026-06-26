@@ -67,6 +67,7 @@ public class RecordingsController : ControllerBase
         TranscriptionDto? tDto = current is null ? null : new(
             current.Id, current.Model, current.Version, current.Language, current.CreatedAt,
             current.Segments.Select(s => new SegmentDto(
+                s.Id,
                 s.SpeakerLabel,
                 names.TryGetValue(s.SpeakerLabel, out var dn) ? dn : s.SpeakerLabel,
                 s.StartMs, s.EndMs, s.Text)).ToList());
@@ -137,6 +138,22 @@ public class RecordingsController : ControllerBase
             _db.Speakers.Add(speaker);
         }
         speaker.DisplayName = req.DisplayName;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpPut("{id:guid}/segments/{segmentId:guid}")]
+    public async Task<IActionResult> UpdateSegment(Guid id, Guid segmentId, UpdateSegmentRequest req)
+    {
+        var seg = await _db.Segments.Include(s => s.Transcription)
+            .FirstOrDefaultAsync(s => s.Id == segmentId);
+        if (seg?.Transcription is null || seg.Transcription.RecordingId != id) return NotFound();
+
+        // Ownership: the segment's recording must belong to the caller.
+        var owned = await _db.Recordings.AnyAsync(r => r.Id == id && r.UserId == UserId);
+        if (!owned) return NotFound();
+
+        seg.Text = req.Text ?? "";
         await _db.SaveChangesAsync();
         return NoContent();
     }
@@ -223,6 +240,7 @@ public class RecordingsController : ControllerBase
         var segs = current.Segments
             .OrderBy(s => s.Ordinal)
             .Select(s => new SegmentDto(
+                s.Id,
                 s.SpeakerLabel,
                 names.TryGetValue(s.SpeakerLabel, out var dn) ? dn : s.SpeakerLabel,
                 s.StartMs, s.EndMs, s.Text))

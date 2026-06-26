@@ -28,6 +28,7 @@ export interface SummaryDto {
 }
 
 export interface SegmentDto {
+  id: string;
   speaker: string;
   speakerDisplay: string;
   startMs: number;
@@ -67,6 +68,10 @@ export interface UserSettings {
   apiBase: string | null;
   model: string | null;
   hasApiKey: boolean;
+  /// Server-wide defaults, shown as placeholders (applied when the user leaves a field blank).
+  defaultApiBase: string | null;
+  defaultModel: string | null;
+  serverHasApiKey: boolean;
 }
 
 export interface UpdateUserSettings {

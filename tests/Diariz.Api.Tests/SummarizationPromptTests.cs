@@ -8,8 +8,8 @@ public class SummarizationPromptTests
 {
     private static readonly IReadOnlyList<SegmentDto> Segments =
     [
-        new SegmentDto("SPEAKER_00", "Alice", 0, 1000, "We ship Friday."),
-        new SegmentDto("SPEAKER_01", "Bob", 1000, 2000, "I'll write the tests."),
+        new SegmentDto(Guid.NewGuid(), "SPEAKER_00", "Alice", 0, 1000, "We ship Friday."),
+        new SegmentDto(Guid.NewGuid(), "SPEAKER_01", "Bob", 1000, 2000, "I'll write the tests."),
     ];
 
     // Wraps model output the way an OpenAI chat-completions response does.
