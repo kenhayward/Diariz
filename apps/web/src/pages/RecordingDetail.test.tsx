@@ -69,22 +69,23 @@ describe("RecordingDetail", () => {
     (api.audioUrl as ReturnType<typeof vi.fn>).mockResolvedValue("blob:audio");
   });
 
-  it("re-transcribe enqueues and refetches the recording", async () => {
+  it("re-transcribe (kebab) enqueues and refetches the recording", async () => {
     renderPage(base);
-    const button = await screen.findByRole("button", { name: /re-transcribe/i });
     await waitFor(() => expect(api.getRecording).toHaveBeenCalledTimes(1));
 
-    fireEvent.click(button);
+    fireEvent.click(await screen.findByRole("button", { name: "Actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /re-transcribe/i }));
 
     await waitFor(() => expect(api.retranscribe).toHaveBeenCalledWith("rec-123"));
     await waitFor(() => expect(api.getRecording).toHaveBeenCalledTimes(2));
   });
 
-  it("Summarise calls the API and refetches", async () => {
+  it("Summarise (kebab) calls the API and refetches", async () => {
     renderPage(base);
-    const button = await screen.findByRole("button", { name: /summarise/i });
+    await screen.findByText("Hi");
 
-    fireEvent.click(button);
+    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /summarise/i }));
 
     await waitFor(() => expect(api.summarize).toHaveBeenCalledWith("rec-123"));
     await waitFor(() => expect(api.getRecording).toHaveBeenCalledTimes(2));

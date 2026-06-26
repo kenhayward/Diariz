@@ -11,9 +11,14 @@ vi.mock("../lib/signalr", () => ({
 vi.mock("../lib/api", () => ({
   api: {
     listRecordings: vi.fn(),
+    listSections: vi.fn().mockResolvedValue([]),
+    retranscribe: vi.fn(),
     summarize: vi.fn(),
     deleteRecording: vi.fn(),
     renameRecording: vi.fn(),
+    moveRecording: vi.fn(),
+    renameSection: vi.fn(),
+    deleteSection: vi.fn(),
     audioUrl: vi.fn(),
     downloadTranscript: vi.fn(),
     downloadAudio: vi.fn(),
@@ -32,6 +37,8 @@ const rec: RecordingSummary = {
   durationMs: 9000,
   status: "Transcribed",
   createdAt: new Date("2026-06-26T12:00:00Z").toISOString(),
+  sectionId: null,
+  sectionName: null,
 };
 
 function renderList() {
@@ -74,5 +81,46 @@ describe("RecordingsPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: /actions/i }));
     fireEvent.click(screen.getByRole("menuitem", { name: /delete/i }));
     await waitFor(() => expect(api.deleteRecording).toHaveBeenCalledWith("rec-1"));
+  });
+
+  it("groups recordings under section headings with Ungrouped last", async () => {
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...rec, id: "a", name: "Grouped one", sectionId: "sec-1", sectionName: "Work" },
+      { ...rec, id: "b", name: "Loose one", sectionId: null, sectionName: null },
+    ]);
+    renderList();
+
+    const work = await screen.findByRole("heading", { name: "Work" });
+    const ungrouped = screen.getByRole("heading", { name: "Ungrouped" });
+    expect(work).toBeTruthy();
+    // Ungrouped heading comes after the Work heading in document order.
+    expect(work.compareDocumentPosition(ungrouped) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("deletes a section from its heading menu (recordings fall back to Ungrouped)", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    (api.deleteSection as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...rec, id: "a", sectionId: "sec-1", sectionName: "Work" },
+      { ...rec, id: "b", sectionId: null, sectionName: null },
+    ]);
+    renderList();
+    await screen.findByRole("heading", { name: "Work" });
+
+    fireEvent.click(screen.getByRole("button", { name: /section actions/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /delete/i }));
+
+    await waitFor(() => expect(api.deleteSection).toHaveBeenCalledWith("sec-1"));
+  });
+
+  it("kebab includes Re-transcribe, Summarise and Move (and no Download both)", async () => {
+    renderList();
+    await screen.findByText("Weekly Standup");
+    fireEvent.click(screen.getByRole("button", { name: /actions/i }));
+
+    expect(screen.getByRole("menuitem", { name: /re-transcribe/i })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /summarise/i })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /move to section/i })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: /download both/i })).toBeNull();
   });
 });

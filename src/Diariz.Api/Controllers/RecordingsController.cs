@@ -46,7 +46,8 @@ public class RecordingsController : ControllerBase
         await _db.Recordings
             .Where(r => r.UserId == UserId)
             .OrderByDescending(r => r.CreatedAt)
-            .Select(r => new RecordingSummaryDto(r.Id, r.Title, r.Name, r.Source, r.DurationMs, r.Status, r.CreatedAt))
+            .Select(r => new RecordingSummaryDto(r.Id, r.Title, r.Name, r.Source, r.DurationMs, r.Status, r.CreatedAt,
+                r.SectionId, r.Section != null ? r.Section.Name : null))
             .ToListAsync();
 
     [HttpGet("{id:guid}")]
@@ -107,7 +108,8 @@ public class RecordingsController : ControllerBase
         await _db.SaveChangesAsync();
 
         return CreatedAtAction(nameof(Get), new { id = rec.Id },
-            new RecordingSummaryDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.Status, rec.CreatedAt));
+            new RecordingSummaryDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.Status, rec.CreatedAt,
+                rec.SectionId, null));
     }
 
     [HttpPost("{id:guid}/retranscribe")]
@@ -190,6 +192,28 @@ public class RecordingsController : ControllerBase
         if (rec is null) return NotFound();
 
         rec.Name = string.IsNullOrWhiteSpace(req.Name) ? null : req.Name.Trim();
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpPut("{id:guid}/section")]
+    public async Task<IActionResult> MoveToSection(Guid id, MoveRecordingRequest req)
+    {
+        var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+
+        if (req.SectionId is { } sectionId)
+        {
+            // Only allow moving into a section the caller owns.
+            var owned = await _db.Sections.AnyAsync(s => s.Id == sectionId && s.UserId == UserId);
+            if (!owned) return NotFound();
+            rec.SectionId = sectionId;
+        }
+        else
+        {
+            rec.SectionId = null; // ungroup
+        }
+
         await _db.SaveChangesAsync();
         return NoContent();
     }

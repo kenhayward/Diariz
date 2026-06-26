@@ -4,6 +4,7 @@ import type {
   RecordingDetail,
   RecordingSource,
   RecordingSummary,
+  SectionDto,
   UpdateUserSettings,
   UserSettings,
 } from "./types";
@@ -85,6 +86,28 @@ export const api = {
 
   async updateSegment(id: string, segmentId: string, text: string): Promise<void> {
     await http.put(`/api/recordings/${id}/segments/${segmentId}`, { text });
+  },
+
+  async listSections(): Promise<SectionDto[]> {
+    const { data } = await http.get<SectionDto[]>("/api/sections");
+    return data;
+  },
+
+  async createSection(name: string): Promise<SectionDto> {
+    const { data } = await http.post<SectionDto>("/api/sections", { name });
+    return data;
+  },
+
+  async renameSection(id: string, name: string): Promise<void> {
+    await http.put(`/api/sections/${id}`, { name });
+  },
+
+  async deleteSection(id: string): Promise<void> {
+    await http.delete(`/api/sections/${id}`);
+  },
+
+  async moveRecording(id: string, sectionId: string | null): Promise<void> {
+    await http.put(`/api/recordings/${id}/section`, { sectionId });
   },
 
   async renameRecording(id: string, name: string | null): Promise<void> {

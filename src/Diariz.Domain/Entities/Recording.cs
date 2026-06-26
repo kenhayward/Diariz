@@ -28,6 +28,10 @@ public class Recording
     public RecordingStatus Status { get; set; } = RecordingStatus.Uploaded;
     public string? Error { get; set; }
 
+    /// <summary>Optional user-defined group; null means "Ungrouped".</summary>
+    public Guid? SectionId { get; set; }
+    public Section? Section { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public ICollection<Transcription> Transcriptions { get; set; } = new List<Transcription>();

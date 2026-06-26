@@ -3,7 +3,9 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import { createHub } from "../lib/signalr";
-import KebabMenu, { type KebabAction } from "../components/KebabMenu";
+import KebabMenu from "../components/KebabMenu";
+import MoveToSectionModal from "../components/MoveToSectionModal";
+import { recordingMenu } from "../components/recordingMenu";
 import type { SegmentDto } from "../lib/types";
 
 function fmt(ms: number): string {
@@ -26,6 +28,7 @@ export default function RecordingDetail() {
   const [requeuing, setRequeuing] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [moving, setMoving] = useState(false);
   const [editingSeg, setEditingSeg] = useState<SegmentDto | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -108,21 +111,23 @@ export default function RecordingDetail() {
   const hasTranscript = (rec.current?.segments.length ?? 0) > 0;
   const isSummarizing = rec.status === "Summarizing" || summarizing;
 
-  const menuActions: KebabAction[] = [
-    { label: "Rename", onClick: () => setRenaming(true) },
-    { label: "Download transcript (.txt)", onClick: () => void api.downloadTranscript(id, "txt"), disabled: !hasTranscript },
-    { label: "Download transcript (.srt)", onClick: () => void api.downloadTranscript(id, "srt"), disabled: !hasTranscript },
-    { label: "Download audio", onClick: () => void api.downloadAudio(id) },
-    {
-      label: "Delete",
-      danger: true,
-      onClick: async () => {
-        if (!window.confirm(`Delete "${rec.name ?? rec.title}"? This cannot be undone.`)) return;
-        await api.deleteRecording(id);
-        navigate("/");
-      },
+  const menuActions = recordingMenu({
+    onRename: () => setRenaming(true),
+    onRetranscribe: retranscribe,
+    onSummarise: summarize,
+    onMove: () => setMoving(true),
+    onPlay: () => void playFrom(0),
+    onDownloadTxt: () => void api.downloadTranscript(id, "txt"),
+    onDownloadSrt: () => void api.downloadTranscript(id, "srt"),
+    onDownloadAudio: () => void api.downloadAudio(id),
+    onDelete: async () => {
+      if (!window.confirm(`Delete "${rec.name ?? rec.title}"? This cannot be undone.`)) return;
+      await api.deleteRecording(id);
+      navigate("/");
     },
-  ];
+    hasTranscript,
+    isSummarizing,
+  });
 
   return (
     <div className="space-y-5">
@@ -144,20 +149,11 @@ export default function RecordingDetail() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <button
-            onClick={summarize}
-            disabled={isSummarizing || !hasTranscript}
-            className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-          >
-            {isSummarizing ? "Summarising…" : "Summarise"}
-          </button>
-          <button
-            onClick={retranscribe}
-            disabled={requeuing}
-            className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-          >
-            {requeuing ? "Queuing…" : "Re-transcribe"}
-          </button>
+          {(isSummarizing || requeuing) && (
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {isSummarizing ? "Summarising…" : "Queuing…"}
+            </span>
+          )}
           <KebabMenu actions={menuActions} />
         </div>
       </div>
@@ -236,6 +232,8 @@ export default function RecordingDetail() {
           }}
         />
       )}
+
+      {moving && <MoveToSectionModal recordingId={id} onClose={() => setMoving(false)} />}
     </div>
   );
 }
