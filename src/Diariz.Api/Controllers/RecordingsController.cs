@@ -120,8 +120,11 @@ public class RecordingsController : ControllerBase
         var speaker = rec.Speakers.FirstOrDefault(s => s.Label == req.Label);
         if (speaker is null)
         {
+            // Add to the DbSet (not the loaded nav collection) so EF tracks it as Added/INSERT.
+            // Adding via rec.Speakers leaves the new row in the wrong state and SaveChanges
+            // emits an UPDATE that affects 0 rows -> DbUpdateConcurrencyException.
             speaker = new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = req.Label };
-            rec.Speakers.Add(speaker);
+            _db.Speakers.Add(speaker);
         }
         speaker.DisplayName = req.DisplayName;
         await _db.SaveChangesAsync();
