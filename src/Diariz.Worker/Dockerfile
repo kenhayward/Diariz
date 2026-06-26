@@ -1,6 +1,10 @@
 # GPU-enabled transcription worker (WhisperX + pyannote).
 # Requires the NVIDIA Container Toolkit on the host to expose the GPU.
-FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+#
+# CUDA 12.8 + cuDNN 9 base: required for Blackwell GPUs (RTX 50-series, sm_120).
+# The cu121/torch 2.5.1 stack only compiles kernels up to sm_90, so model load
+# fails with "no kernel image is available for execution on the device" on a 5090.
+FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive PYTHONUNBUFFERED=1
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -9,12 +13,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# CUDA-enabled torch first (cu121 wheels), then the rest.
-RUN pip3 install --no-cache-dir torch==2.5.1 torchaudio==2.5.1 \
-    --index-url https://download.pytorch.org/whl/cu121
+# CUDA-enabled torch first (cu128 wheels include sm_120 kernels), then the rest.
+RUN pip3 install --no-cache-dir torch==2.7.1 torchaudio==2.7.1 \
+    --index-url https://download.pytorch.org/whl/cu128
 
 COPY requirements.txt ./
 RUN pip3 install --no-cache-dir -r requirements.txt
+
+# whisperx 3.3.1 conservatively pins ctranslate2<4.5.0, but Blackwell (sm_120)
+# support only landed in ctranslate2 4.6.3 (CUDA 12.8; INT8 disabled on sm_120 so
+# the worker's float16 compute_type is the supported path). Force past the cap.
+RUN pip3 install --no-cache-dir --no-deps --force-reinstall ctranslate2==4.6.3
 
 COPY . ./
 

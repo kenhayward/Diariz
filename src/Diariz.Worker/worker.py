@@ -14,6 +14,7 @@ import redis
 import callback
 import pipeline
 import storage
+import torch_compat
 from config import config
 
 logging.basicConfig(
@@ -51,6 +52,10 @@ def handle(job: dict) -> None:
 
 
 def main() -> None:
+    # Restore pre-2.6 torch.load behaviour before any model checkpoint is loaded
+    # (pyannote/whisperx checkpoints fail under torch>=2.6's weights_only=True).
+    torch_compat.restore_legacy_torch_load()
+
     r = redis.Redis.from_url(config.REDIS_URL, decode_responses=True)
     while True:
         try:

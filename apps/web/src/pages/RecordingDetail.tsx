@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../lib/api";
+import { api, apiErrorMessage } from "../lib/api";
 import { createHub } from "../lib/signalr";
 import type { SegmentDto } from "../lib/types";
 
@@ -34,9 +34,27 @@ export default function RecordingDetail() {
     return [...set];
   }, [rec]);
 
+  const [requeuing, setRequeuing] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
   async function rename(label: string, name: string) {
     await api.renameSpeaker(id, label, name);
     qc.invalidateQueries({ queryKey: ["recording", id] });
+  }
+
+  async function retranscribe() {
+    setActionError(null);
+    setRequeuing(true);
+    try {
+      await api.retranscribe(id);
+      // Refetch so the page reflects the new queued state immediately rather than
+      // waiting on a SignalR event (which may not have delivered yet).
+      await qc.invalidateQueries({ queryKey: ["recording", id] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e, "Could not start re-transcription."));
+    } finally {
+      setRequeuing(false);
+    }
   }
 
   if (!rec) return <p className="text-sm text-gray-500">Loading…</p>;
@@ -52,12 +70,17 @@ export default function RecordingDetail() {
           </p>
         </div>
         <button
-          onClick={() => api.retranscribe(id)}
-          className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50"
+          onClick={retranscribe}
+          disabled={requeuing}
+          className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Re-transcribe
+          {requeuing ? "Queuing…" : "Re-transcribe"}
         </button>
       </div>
+
+      {actionError && (
+        <p className="rounded bg-red-50 p-3 text-sm text-red-700">{actionError}</p>
+      )}
 
       {rec.status === "Failed" && (
         <p className="rounded bg-red-50 p-3 text-sm text-red-700">{rec.error}</p>

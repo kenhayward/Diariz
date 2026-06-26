@@ -85,6 +85,27 @@ public class WorkerCallbackControllerTests
     }
 
     [Fact]
+    public async Task Result_ClearsStaleErrorFromPreviousFailure()
+    {
+        var (controller, db, _) = Build(presentedSecret: Secret);
+        var userId = Guid.NewGuid();
+        var (recordingId, transcriptionId) = await SeedQueuedRecording(db, userId);
+
+        // A prior attempt failed and left an error; a successful re-transcribe must clear it
+        // so the recording does not show a stale error banner after it actually succeeds.
+        var rec = await db.Recordings.FindAsync(recordingId);
+        rec!.Error = "previous attempt blew up";
+        await db.SaveChangesAsync();
+
+        await controller.Result(new TranscriptionResult(transcriptionId, "en",
+            [new SegmentResult("SPEAKER_00", 0, 1000, "Hello")]));
+
+        var refreshed = await db.Recordings.FindAsync(recordingId);
+        Assert.Equal(RecordingStatus.Transcribed, refreshed!.Status);
+        Assert.Null(refreshed.Error);
+    }
+
+    [Fact]
     public async Task Result_BlankSpeakerLabel_StoredAsUnknown()
     {
         var (controller, db, _) = Build(presentedSecret: Secret);

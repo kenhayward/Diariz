@@ -128,10 +128,19 @@ dotnet ef migrations add <Name> --project src/Diariz.Domain --startup-project sr
 ### Worker (Python)
 ```bash
 cd src/Diariz.Worker
-pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install torch==2.7.1 torchaudio==2.7.1 --index-url https://download.pytorch.org/whl/cu128
 pip install -r requirements.txt
 HF_TOKEN=... REDIS_URL=redis://localhost:6379/0 API_BASE_URL=http://localhost:8080 python worker.py
 ```
+**GPU compatibility (Blackwell / RTX 50-series, sm_120).** The worker pins the **cu128** torch
+stack (CUDA 12.8 base image) because cu121/torch 2.5 only compiles kernels up to sm_90 — on a 5090
+every job dies at model load with *"no kernel image is available for execution on the device"*. Three
+non-obvious pins make whisperx 3.3.1 work on this stack (see `Dockerfile` / `requirements.txt`):
+`ctranslate2==4.6.3` (first version with sm_120 / CUDA 12.8; whisperx caps it at <4.5.0 so the
+Dockerfile force-installs it), `transformers==4.48.0` + `huggingface_hub==0.27.1` (hub 1.0 removed the
+`use_auth_token` kwarg pyannote 3.3.2 still passes), and `worker.py` calls `torch_compat` to restore
+`torch.load(weights_only=False)` (torch≥2.6 flipped the default and rejects the pyannote checkpoints).
+
 Diarization is gated: you **must** set `HF_TOKEN` and accept the `pyannote/speaker-diarization-3.1`
 + `pyannote/segmentation-3.0` terms on Hugging Face, or jobs fail. CPU-only: `DEVICE=cpu COMPUTE_TYPE=int8` (slow).
 
