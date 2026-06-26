@@ -5,7 +5,8 @@ export interface RecordingMenuHandlers {
   onRetranscribe: () => void;
   onSummarise: () => void;
   onMove: () => void;
-  onPlay: () => void;
+  /// Optional: the list omits Play (playback lives in the detail panel); the detail menu provides it.
+  onPlay?: () => void;
   onDownloadTxt: () => void;
   onDownloadAudio: () => void;
   onDelete: () => void;
@@ -22,7 +23,7 @@ export function recordingMenu(h: RecordingMenuHandlers): KebabAction[] {
     { label: "Re-transcribe", onClick: h.onRetranscribe },
     { label: "Summarise", onClick: h.onSummarise, disabled: !h.hasTranscript || h.isSummarizing },
     { label: "Move to section…", onClick: h.onMove },
-    { label: "Play", onClick: h.onPlay },
+    ...(h.onPlay ? [{ label: "Play", onClick: h.onPlay }] : []),
     { label: "Download transcript", onClick: h.onDownloadTxt, disabled: !h.hasTranscript },
     { label: "Download audio", onClick: h.onDownloadAudio },
     { label: "Delete", danger: true, onClick: h.onDelete },

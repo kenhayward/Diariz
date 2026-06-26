@@ -296,7 +296,6 @@ function RecordingRow({
   const qc = useQueryClient();
   const [renaming, setRenaming] = useState(false);
   const [moving, setMoving] = useState(false);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["recordings"] });
@@ -320,7 +319,6 @@ function RecordingRow({
     onRetranscribe: run(async () => { await api.retranscribe(r.id); refresh(); }),
     onSummarise: run(async () => { await api.summarize(r.id); refresh(); }),
     onMove: () => setMoving(true),
-    onPlay: run(async () => setAudioUrl(await api.audioUrl(r.id))),
     onDownloadTxt: run(() => api.downloadTranscript(r.id, "txt")),
     onDownloadAudio: run(() => api.downloadAudio(r.id)),
     onDelete: run(async () => {
@@ -388,7 +386,6 @@ function RecordingRow({
         </span>
         <KebabMenu actions={actions} />
       </div>
-      {audioUrl && <audio src={audioUrl} controls autoPlay className="mt-2 w-full" />}
       {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
       {moving && (
         <MoveToSectionModal recordingId={r.id} currentSectionId={r.sectionId} onClose={() => setMoving(false)} />

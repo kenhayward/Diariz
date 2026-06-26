@@ -28,6 +28,11 @@ describe("recordingMenu", () => {
     expect(labels).not.toContain("Download transcript (.srt)");
   });
 
+  it("omits Play when no onPlay handler is provided (the list menu)", () => {
+    const labels = build({ onPlay: undefined }).map((a) => a.label);
+    expect(labels).not.toContain("Play");
+  });
+
   it("disables transcript-dependent actions when there is no transcript", () => {
     const menu = build({ hasTranscript: false });
     const find = (label: string) => menu.find((a) => a.label === label)!;
