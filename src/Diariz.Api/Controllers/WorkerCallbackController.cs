@@ -1,6 +1,7 @@
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
+using Diariz.Api.Services;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
@@ -20,12 +21,18 @@ public class WorkerCallbackController : ControllerBase
 {
     private readonly DiarizDbContext _db;
     private readonly IHubContext<TranscriptionHub> _hub;
+    private readonly IJobQueue _queue;
+    private readonly ISummarizationSettingsResolver _summarization;
     private readonly WorkerOptions _opts;
 
-    public WorkerCallbackController(DiarizDbContext db, IHubContext<TranscriptionHub> hub, IOptions<WorkerOptions> opts)
+    public WorkerCallbackController(
+        DiarizDbContext db, IHubContext<TranscriptionHub> hub, IJobQueue queue,
+        ISummarizationSettingsResolver summarization, IOptions<WorkerOptions> opts)
     {
         _db = db;
         _hub = hub;
+        _queue = queue;
+        _summarization = summarization;
         _opts = opts.Value;
     }
 
@@ -75,11 +82,21 @@ public class WorkerCallbackController : ControllerBase
             });
         }
 
-        transcription.Recording.Status = RecordingStatus.Transcribed;
         transcription.Recording.Error = null;  // clear any error from a prior failed attempt
+
+        // Continue the pipeline: when summarisation is configured for the owner, kick it off
+        // automatically (which also auto-names the recording when it has no name yet).
+        var cfg = await _summarization.ResolveAsync(transcription.Recording.UserId);
+        var autoSummarise = cfg.Enabled;
+        transcription.Recording.Status = autoSummarise ? RecordingStatus.Summarizing : RecordingStatus.Transcribed;
+
         await _db.SaveChangesAsync();
+
+        if (autoSummarise)
+            await _queue.EnqueueSummarizationAsync(new SummarizationJob(transcription.RecordingId, transcription.Id));
+
         await _hub.NotifyStatusAsync(transcription.Recording.UserId, transcription.RecordingId,
-            RecordingStatus.Transcribed.ToString());
+            transcription.Recording.Status.ToString());
         return Ok();
     }
 

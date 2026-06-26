@@ -79,6 +79,40 @@ public class SummarizationPromptTests
     }
 
     [Fact]
+    public void ParseResponse_ExtractsJson_WrappedInModelTokens()
+    {
+        // gpt-oss "harmony" channel markers around the JSON object.
+        var json = ChatResponse("<|channel|>final <|constrain|>{\"summary\":\"All good.\",\"name\":\"Sync\"}");
+
+        var result = SummarizationPrompt.ParseResponse(json, needName: true);
+
+        Assert.Equal("All good.", result.Summary);
+        Assert.Equal("Sync", result.Name);
+    }
+
+    [Fact]
+    public void ParseResponse_ExtractsJson_WrappedInProse()
+    {
+        var json = ChatResponse("Sure! Here is the summary:\n{\"summary\":\"Done.\"}\nHope that helps.");
+
+        var result = SummarizationPrompt.ParseResponse(json, needName: false);
+
+        Assert.Equal("Done.", result.Summary);
+    }
+
+    [Fact]
+    public void ParseResponse_StripsModelTokens_InPlainTextFallback()
+    {
+        var json = ChatResponse("<|channel|>final<|message|>Just prose, no JSON here.");
+
+        var result = SummarizationPrompt.ParseResponse(json, needName: true);
+
+        Assert.DoesNotContain("<|", result.Summary);
+        Assert.Contains("Just prose", result.Summary);
+        Assert.Null(result.Name);
+    }
+
+    [Fact]
     public void ParseResponse_FallsBackToRawContent_OnMalformedJson()
     {
         var json = ChatResponse("Just a plain sentence, not JSON.");
