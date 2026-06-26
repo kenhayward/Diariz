@@ -12,6 +12,8 @@ public record SectionDto(Guid Id, string Name);
 public record CreateSectionRequest(string Name);
 public record RenameSectionRequest(string Name);
 public record MoveRecordingRequest(Guid? SectionId);
+/// <summary>Reorder/move: set each listed recording's section and position (0..n-1) in one call.</summary>
+public record ReorderRecordingsRequest(Guid? SectionId, IReadOnlyList<Guid> OrderedIds);
 
 // ---- Recordings ----
 public record RecordingSummaryDto(

@@ -3,20 +3,17 @@ import { useQuery } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import { renderMarkdown } from "../lib/markdown";
 import { useActiveRecordingId } from "../lib/useActiveRecordingId";
-import type {
-  ChatConversationSummary,
-  ChatTurn,
-  ChatUsage,
-  RecordingStatus,
-  RecordingSummary,
-} from "../lib/types";
+import { useSelection } from "../lib/selection";
+import type { ChatConversationSummary, ChatTurn, ChatUsage } from "../lib/types";
 import ContextDial from "./ContextDial";
+
+type ContextMode = "current" | "selected" | "none";
 
 /// Right-panel chat: ask questions over one or more transcripts, attach a PDF/text file as extra
 /// context, watch the reply stream in, and save / reload / delete conversations.
 export default function ChatPanel() {
   const activeId = useActiveRecordingId();
-  const { data: recordings = [] } = useQuery({ queryKey: ["recordings"], queryFn: api.listRecordings });
+  const selection = useSelection();
   // The model's context-window size for the dial (per-user override, else server default).
   const { data: settings } = useQuery({ queryKey: ["user-settings"], queryFn: api.getUserSettings });
 
@@ -26,8 +23,7 @@ export default function ChatPanel() {
   const [usage, setUsage] = useState<ChatUsage | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [pickedManually, setPickedManually] = useState(false);
+  const [contextMode, setContextMode] = useState<ContextMode>("current");
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const [attachment, setAttachment] = useState<{ name: string; text: string; chars: number } | null>(null);
@@ -43,8 +39,18 @@ export default function ChatPanel() {
   const threadRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const chattable = recordings.filter((r) => hasTranscript(r.status));
   const started = messages.length > 0;
+
+  // The transcripts used as context, from the chosen mode: the recording open in the middle panel,
+  // the ones ticked via the list's Select mode, or none.
+  const recordingIds =
+    contextMode === "current"
+      ? activeId
+        ? [activeId]
+        : []
+      : contextMode === "selected"
+        ? selection.selectedIds
+        : [];
 
   // Dial: show the configured context window from the start (used 0), then the live figures the
   // server reports on each turn via the meta/done events.
@@ -52,11 +58,6 @@ export default function ChatPanel() {
   const dialTotal = usage?.contextTotal || totalContext;
   const dialUsed = usage?.contextUsed ?? 0;
   const dialModel = usage?.model || settings?.model || settings?.defaultModel || "";
-
-  // Default the context to the recording open in the middle panel, until the user picks their own.
-  useEffect(() => {
-    if (!pickedManually && !started) setSelectedIds(activeId ? [activeId] : []);
-  }, [activeId, pickedManually, started]);
 
   // Keep the thread scrolled to the newest message as tokens stream in.
   useEffect(() => {
@@ -100,7 +101,7 @@ export default function ChatPanel() {
     api
       .chatStream(
         {
-          recordingIds: selectedIds,
+          recordingIds,
           attachmentName: attachment?.name ?? null,
           attachmentText: attachment?.text ?? null,
           messages: history,
@@ -131,12 +132,6 @@ export default function ChatPanel() {
     setOpenedId(null);
     setSaveStatus(null);
     setError(null);
-    setPickedManually(false);
-  }
-
-  function toggleRecording(id: string) {
-    setPickedManually(true);
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
   function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -169,8 +164,14 @@ export default function ChatPanel() {
     try {
       const c = await api.getChatConversation(id);
       setMessages(c.messages);
-      setSelectedIds(c.context.recordingIds ?? []);
-      setPickedManually(true);
+      // Restore the conversation's transcripts as the shared selection and switch to that mode.
+      const ids = c.context.recordingIds ?? [];
+      if (ids.length > 0) {
+        selection.set(ids);
+        setContextMode("selected");
+      } else {
+        setContextMode("none");
+      }
       setAttachment(
         c.context.attachmentName && c.context.attachmentText
           ? { name: c.context.attachmentName, text: c.context.attachmentText, chars: c.context.attachmentText.length }
@@ -191,7 +192,7 @@ export default function ChatPanel() {
     const body = {
       messages,
       context: {
-        recordingIds: selectedIds,
+        recordingIds,
         attachmentName: attachment?.name ?? null,
         attachmentText: attachment?.text ?? null,
       },
@@ -221,11 +222,11 @@ export default function ChatPanel() {
   }
 
   const contextLabel =
-    selectedIds.length === 0
-      ? "No transcripts"
-      : selectedIds.length === 1
-        ? recordingLabel(recordings, selectedIds[0])
-        : `${selectedIds.length} transcripts`;
+    contextMode === "current"
+      ? "Current transcript"
+      : contextMode === "selected"
+        ? `Selected (${selection.selectedIds.length})`
+        : "None";
 
   return (
     <div className="flex h-full flex-col">
@@ -330,25 +331,34 @@ export default function ChatPanel() {
             {pickerOpen && (
               <div
                 role="menu"
-                className="absolute bottom-full left-0 z-30 mb-1 max-h-64 w-64 overflow-y-auto rounded-md border bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800"
+                className="absolute bottom-full left-0 z-30 mb-1 w-60 overflow-hidden rounded-md border bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800"
               >
-                {chattable.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-gray-400">No transcribed recordings yet</div>
-                ) : (
-                  chattable.map((r) => (
-                    <label
-                      key={r.id}
-                      className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(r.id)}
-                        onChange={() => toggleRecording(r.id)}
-                      />
-                      <span className="truncate">{r.name || r.title}</span>
-                    </label>
-                  ))
-                )}
+                {(
+                  [
+                    { mode: "current", label: "Current transcript", hint: "The recording open in the middle panel" },
+                    { mode: "selected", label: `Selected transcript${selection.selectedIds.length === 1 ? "" : "s"}`, hint: `Ticked via the list's Select button (${selection.selectedIds.length})` },
+                    { mode: "none", label: "None", hint: "No transcript context" },
+                  ] as { mode: ContextMode; label: string; hint: string }[]
+                ).map((o) => (
+                  <button
+                    key={o.mode}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={contextMode === o.mode}
+                    onClick={() => {
+                      setContextMode(o.mode);
+                      setPickerOpen(false);
+                    }}
+                    className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                      contextMode === o.mode ? "font-medium text-blue-700 dark:text-blue-300" : "dark:text-gray-200"
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      {contextMode === o.mode ? "●" : "○"} {o.label}
+                    </span>
+                    <span className="ml-4 block text-[11px] text-gray-400">{o.hint}</span>
+                  </button>
+                ))}
               </div>
             )}
           </div>
@@ -417,15 +427,6 @@ export default function ChatPanel() {
       </div>
     </div>
   );
-}
-
-function hasTranscript(status: RecordingStatus): boolean {
-  return status === "Transcribed" || status === "Summarizing" || status === "Summarized";
-}
-
-function recordingLabel(recordings: RecordingSummary[], id: string): string {
-  const r = recordings.find((x) => x.id === id);
-  return r ? r.name || r.title : "1 transcript";
 }
 
 function IconButton({

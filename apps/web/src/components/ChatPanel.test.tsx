@@ -1,7 +1,9 @@
-import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
+import { useEffect } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { SelectionProvider, useSelection } from "../lib/selection";
 
 vi.mock("../lib/api", () => ({
   api: {
@@ -26,13 +28,26 @@ const rec = (id: string, title: string, status = "Transcribed") => ({
   createdAt: "2026-01-01T00:00:00Z", sectionId: null, sectionName: null,
 });
 
-function renderPanel(route = "/recordings/rec-1") {
+/// Seeds the shared selection (as the list's Select mode would) before ChatPanel renders.
+function Seed({ ids }: { ids: string[] }) {
+  const sel = useSelection();
+  useEffect(() => {
+    sel.set(ids);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
+}
+
+function renderPanel(route = "/recordings/rec-1", seedSelected: string[] = []) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[route]}>
-        <ChatPanel />
-      </MemoryRouter>
+      <SelectionProvider>
+        <MemoryRouter initialEntries={[route]}>
+          {seedSelected.length > 0 && <Seed ids={seedSelected} />}
+          <ChatPanel />
+        </MemoryRouter>
+      </SelectionProvider>
     </QueryClientProvider>,
   );
 }
@@ -86,17 +101,31 @@ describe("ChatPanel", () => {
     await waitFor(() => expect(screen.getByLabelText(/Context \d+% used/)).toBeTruthy());
   });
 
-  it("lets the user select multiple transcripts as context", async () => {
-    renderPanel("/recordings/rec-1");
+  it("uses the shared selection when the Selected transcripts mode is chosen", async () => {
+    renderPanel("/recordings/rec-1", ["rec-1", "rec-2"]);
     fireEvent.click(await screen.findByRole("button", { name: /context:/i }));
-    const menu = await screen.findByRole("menu");
-    fireEvent.click(within(menu).getByText("Retro"));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /selected transcript/i }));
 
     await ask("Compare them");
 
     await waitFor(() =>
       expect(api.chatStream).toHaveBeenCalledWith(
-        expect.objectContaining({ recordingIds: expect.arrayContaining(["rec-1", "rec-2"]) }),
+        expect.objectContaining({ recordingIds: ["rec-1", "rec-2"] }),
+        expect.anything(),
+      ),
+    );
+  });
+
+  it("sends no transcript context when None is chosen", async () => {
+    renderPanel("/recordings/rec-1");
+    fireEvent.click(await screen.findByRole("button", { name: /context:/i }));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: /none/i }));
+
+    await ask("General question");
+
+    await waitFor(() =>
+      expect(api.chatStream).toHaveBeenCalledWith(
+        expect.objectContaining({ recordingIds: [] }),
         expect.anything(),
       ),
     );

@@ -1,0 +1,128 @@
+using Diariz.Api.Configuration;
+using Diariz.Api.Contracts;
+using Diariz.Api.Controllers;
+using Diariz.Api.Services;
+using Diariz.Api.Tests.Infrastructure;
+using Diariz.Domain;
+using Diariz.Domain.Entities;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
+
+namespace Diariz.Api.Tests;
+
+public class RecordingsReorderTests
+{
+    private static RecordingsController Build(DiarizDbContext db, Guid userId)
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
+        var resolver = new SummarizationSettingsResolver(
+            db, Options.Create(new SummarizationOptions()), new FakeApiKeyProtector());
+        return new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config, resolver)
+        {
+            ControllerContext = Http.Context(userId),
+        };
+    }
+
+    private static async Task<Recording> Seed(DiarizDbContext db, Guid userId, Guid? sectionId = null)
+    {
+        var rec = new Recording { Id = Guid.NewGuid(), UserId = userId, BlobKey = "k", SectionId = sectionId };
+        db.Recordings.Add(rec);
+        await db.SaveChangesAsync();
+        return rec;
+    }
+
+    [Fact]
+    public async Task Reorder_SetsPositionsInOrder()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var a = await Seed(db, userId);
+        var b = await Seed(db, userId);
+        var c = await Seed(db, userId);
+
+        // New order: c, a, b
+        var res = await Build(db, userId).Reorder(new ReorderRecordingsRequest(null, [c.Id, a.Id, b.Id]));
+
+        Assert.IsType<NoContentResult>(res);
+        Assert.Equal(0, (await db.Recordings.FindAsync(c.Id))!.Position);
+        Assert.Equal(1, (await db.Recordings.FindAsync(a.Id))!.Position);
+        Assert.Equal(2, (await db.Recordings.FindAsync(b.Id))!.Position);
+    }
+
+    [Fact]
+    public async Task Reorder_MovesRecordingsIntoTargetSection()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var section = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Work" };
+        db.Sections.Add(section);
+        await db.SaveChangesAsync();
+        var a = await Seed(db, userId);
+        var b = await Seed(db, userId);
+
+        await Build(db, userId).Reorder(new ReorderRecordingsRequest(section.Id, [a.Id, b.Id]));
+
+        Assert.Equal(section.Id, (await db.Recordings.FindAsync(a.Id))!.SectionId);
+        Assert.Equal(section.Id, (await db.Recordings.FindAsync(b.Id))!.SectionId);
+    }
+
+    [Fact]
+    public async Task Reorder_ToUngrouped_ClearsSection()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var section = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Work" };
+        db.Sections.Add(section);
+        await db.SaveChangesAsync();
+        var a = await Seed(db, userId, section.Id);
+
+        await Build(db, userId).Reorder(new ReorderRecordingsRequest(null, [a.Id]));
+
+        Assert.Null((await db.Recordings.FindAsync(a.Id))!.SectionId);
+    }
+
+    [Fact]
+    public async Task Reorder_ForeignRecording_Returns404_AndChangesNothing()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var mine = await Seed(db, me);
+        var theirs = await Seed(db, Guid.NewGuid());
+
+        var res = await Build(db, me).Reorder(new ReorderRecordingsRequest(null, [mine.Id, theirs.Id]));
+
+        Assert.IsType<NotFoundResult>(res);
+        Assert.Equal(0, (await db.Recordings.FindAsync(mine.Id))!.Position); // untouched
+    }
+
+    [Fact]
+    public async Task Reorder_ForeignSection_Returns404()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var mine = await Seed(db, me);
+        var foreignSection = new Section { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Theirs" };
+        db.Sections.Add(foreignSection);
+        await db.SaveChangesAsync();
+
+        var res = await Build(db, me).Reorder(new ReorderRecordingsRequest(foreignSection.Id, [mine.Id]));
+
+        Assert.IsType<NotFoundResult>(res);
+    }
+
+    [Fact]
+    public async Task List_OrdersByPosition()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var a = await Seed(db, userId);
+        var b = await Seed(db, userId);
+        await Build(db, userId).Reorder(new ReorderRecordingsRequest(null, [b.Id, a.Id])); // b first
+
+        var list = await Build(db, userId).List();
+
+        Assert.Equal([b.Id, a.Id], list.Select(r => r.Id));
+    }
+}

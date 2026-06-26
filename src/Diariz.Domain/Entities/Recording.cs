@@ -32,6 +32,10 @@ public class Recording
     public Guid? SectionId { get; set; }
     public Section? Section { get; set; }
 
+    /// <summary>Manual sort order within its group (lower = higher in the list). Recordings with the
+    /// same position fall back to newest-first by <see cref="CreatedAt"/>.</summary>
+    public int Position { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public ICollection<Transcription> Transcriptions { get; set; } = new List<Transcription>();

@@ -151,6 +151,9 @@ namespace Diariz.Domain.Migrations
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
 
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
                     b.Property<Guid?>("SectionId")
                         .HasColumnType("uuid");
 
