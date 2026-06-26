@@ -24,11 +24,22 @@ function renderWorkspace(initial = "/") {
 describe("Workspace", () => {
   beforeEach(() => localStorage.clear());
 
-  it("shows the list by default and the chat panel starts collapsed", () => {
+  it("shows the list by default and the chat panel starts collapsed (but stays mounted)", () => {
     renderWorkspace();
     expect(screen.getByText("LIST")).toBeTruthy();
-    expect(screen.queryByText("CHAT")).toBeNull();
     expect(screen.getByRole("button", { name: /expand chat panel/i })).toBeTruthy();
+    // Mounted for state preservation, but inside the hidden container while collapsed.
+    expect(screen.getByText("CHAT").closest(".hidden")).toBeTruthy();
+  });
+
+  it("keeps the chat panel mounted across collapse/expand (preserves its state)", () => {
+    renderWorkspace();
+    // Expand → not hidden; collapse → hidden; the element is never removed from the DOM.
+    fireEvent.click(screen.getByRole("button", { name: /expand chat panel/i }));
+    expect(screen.getByText("CHAT").closest(".hidden")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /collapse chat panel/i }));
+    expect(screen.getByText("CHAT")).toBeTruthy();
+    expect(screen.getByText("CHAT").closest(".hidden")).toBeTruthy();
   });
 
   it("collapses the left panel and persists the choice", () => {
@@ -42,7 +53,7 @@ describe("Workspace", () => {
   it("expands the chat panel when requested", () => {
     renderWorkspace();
     fireEvent.click(screen.getByRole("button", { name: /expand chat panel/i }));
-    expect(screen.getByText("CHAT")).toBeTruthy();
+    expect(screen.getByText("CHAT").closest(".hidden")).toBeNull();
   });
 
   it("renders the routed detail in the middle panel", () => {

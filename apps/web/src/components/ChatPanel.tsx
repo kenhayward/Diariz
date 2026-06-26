@@ -125,7 +125,8 @@ export default function ChatPanel() {
     abortRef.current?.abort();
   }
 
-  function newChat() {
+  /// Clear the current conversation thread (stops any stream and resets to a blank chat).
+  function clearThread() {
     stop();
     setMessages([]);
     setUsage(null);
@@ -214,7 +215,7 @@ export default function ChatPanel() {
     if (!openedId) return;
     try {
       await api.deleteChatConversation(openedId);
-      newChat();
+      clearThread();
       setSavedList((prev) => prev.filter((c) => c.id !== openedId));
     } catch (e) {
       setError(apiErrorMessage(e));
@@ -259,8 +260,8 @@ export default function ChatPanel() {
             </div>
           )}
         </div>
-        <IconButton label="New chat" onClick={newChat}>
-          <PlusIcon />
+        <IconButton label="Clear conversation" onClick={clearThread} disabled={!started}>
+          <EraserIcon />
         </IconButton>
         <IconButton label="Save conversation" onClick={saveConversation} disabled={!started || streaming || saving}>
           <SaveIcon />
@@ -463,9 +464,9 @@ const BookmarkIcon = () => (
     <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
   </svg>
 );
-const PlusIcon = () => (
+const EraserIcon = () => (
   <svg {...iconProps}>
-    <path d="M12 5v14M5 12h14" />
+    <path d="M7 21h10M4 13l6 6 9-9a2 2 0 0 0 0-3l-3-3a2 2 0 0 0-3 0L4 13z" />
   </svg>
 );
 const SaveIcon = () => (

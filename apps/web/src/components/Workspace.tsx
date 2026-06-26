@@ -70,28 +70,27 @@ export default function Workspace() {
         </div>
       </main>
 
-      {rightOpen ? (
-        <div className="flex shrink-0">
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize chat panel"
-            onMouseDown={startResize}
-            className="w-1 cursor-col-resize bg-transparent transition-colors hover:bg-blue-400 dark:hover:bg-blue-600"
-          />
-          <aside
-            style={{ width: rightWidth }}
-            className="flex shrink-0 flex-col border-l bg-white dark:border-gray-700 dark:bg-gray-900"
-          >
-            <PanelHeader title="Chat" onCollapse={() => setRightOpen(false)} chevron="▶" />
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <ChatPanel />
-            </div>
-          </aside>
-        </div>
-      ) : (
-        <CollapsedRail label="Chat" onExpand={() => setRightOpen(true)} chevron="◀" />
-      )}
+      {/* The chat panel stays mounted even when collapsed (hidden via CSS) so its conversation
+          state survives collapse/expand. The rail is shown alongside when collapsed. */}
+      <div className={rightOpen ? "flex shrink-0" : "hidden"}>
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize chat panel"
+          onMouseDown={startResize}
+          className="w-1 cursor-col-resize bg-transparent transition-colors hover:bg-blue-400 dark:hover:bg-blue-600"
+        />
+        <aside
+          style={{ width: rightWidth }}
+          className="flex shrink-0 flex-col border-l bg-white dark:border-gray-700 dark:bg-gray-900"
+        >
+          <PanelHeader title="Chat" onCollapse={() => setRightOpen(false)} chevron="▶" />
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <ChatPanel />
+          </div>
+        </aside>
+      </div>
+      {!rightOpen && <CollapsedRail label="Chat" onExpand={() => setRightOpen(true)} chevron="◀" />}
     </div>
     </SelectionProvider>
   );
