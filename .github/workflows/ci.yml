@@ -20,9 +20,10 @@ jobs:
     runs-on: [self-hosted]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
+      # Uses the .NET 10 SDK pre-installed on the self-hosted runner (setup-dotnet can't
+      # write to C:\Program Files\dotnet without admin).
+      - name: dotnet version
+        run: dotnet --version
       - name: Unit tests
         run: dotnet test tests/Diariz.Api.Tests/Diariz.Api.Tests.csproj -c Release
 
@@ -31,10 +32,8 @@ jobs:
     runs-on: [self-hosted]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
       # Spins up real Postgres/pgvector, Redis, and MinIO — requires Docker on the runner.
+      # Uses the runner's pre-installed .NET 10 SDK (see note in the unit job).
       - name: Integration tests
         run: dotnet test tests/Diariz.Api.IntegrationTests/Diariz.Api.IntegrationTests.csproj -c Release
 
