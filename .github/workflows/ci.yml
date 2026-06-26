@@ -57,16 +57,19 @@ jobs:
   worker:
     name: Worker (pytest)
     runs-on: [self-hosted]
+    # Absolute path to the all-users Python. The runner runs as Network Service, which has no
+    # user PATH, so we call Python directly instead of relying on PATH (and avoid setup-python,
+    # which can't install its own build on this runner).
+    env:
+      PYTHON: 'C:\Program Files\Python313\python.exe'
     steps:
       - uses: actions/checkout@v4
-      # Uses the Python pre-installed on the self-hosted runner (setup-python can't
-      # install its own build here, same as setup-dotnet).
       - name: python version
-        run: python --version
+        run: '& "$env:PYTHON" --version'
       # whisperx/torch are stubbed in the tests, so only the lightweight deps are installed.
       - name: Install test deps
         working-directory: src/Diariz.Worker
-        run: python -m pip install -r requirements-test.txt
+        run: '& "$env:PYTHON" -m pip install -r requirements-test.txt'
       - name: Test
         working-directory: src/Diariz.Worker
-        run: python -m pytest
+        run: '& "$env:PYTHON" -m pytest'
