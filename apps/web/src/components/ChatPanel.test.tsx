@@ -144,6 +144,16 @@ describe("ChatPanel", () => {
     await waitFor(() => expect(api.deleteChatConversation).toHaveBeenCalledWith("conv-1"));
   });
 
+  it("clears the conversation thread with the Clear button", async () => {
+    renderPanel("/recordings/rec-1");
+    await ask("Tell me something");
+    await waitFor(() => expect(screen.getByText("world", { exact: false })).toBeTruthy());
+
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: /clear conversation/i })));
+
+    expect(screen.queryByText("world", { exact: false })).toBeNull();
+  });
+
   it("attaches a file and includes its text in the request", async () => {
     mock(api.uploadChatAttachment).mockResolvedValue({ name: "spec.pdf", text: "blue widget", chars: 11 });
     const { container } = renderPanel("/recordings/rec-1");

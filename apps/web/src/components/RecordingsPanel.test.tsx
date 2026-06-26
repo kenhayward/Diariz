@@ -152,6 +152,20 @@ describe("RecordingsPanel", () => {
     expect(screen.queryByRole("menuitem", { name: /\.srt/i })).toBeNull();
   });
 
+  it("hides the status pill for settled states but shows in-flight ones", async () => {
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...rec, id: "done", name: "Finished", status: "Summarized" },
+      { ...rec, id: "busy", name: "Working", status: "Summarizing" },
+      { ...rec, id: "bad", name: "Broken", status: "Failed" },
+    ]);
+    renderList();
+    await screen.findByText("Finished");
+
+    expect(screen.queryByText("Summarized")).toBeNull(); // settled → no pill
+    expect(screen.getByText("Summarizing")).toBeTruthy(); // in-flight → pill shown
+    expect(screen.getByText("Failed")).toBeTruthy(); // failures still surface
+  });
+
   it("toggles Select mode to reveal selection checkboxes", async () => {
     renderList();
     await screen.findByText("Weekly Standup");

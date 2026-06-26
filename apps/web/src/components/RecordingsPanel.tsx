@@ -28,6 +28,12 @@ export function hasTranscript(status: RecordingStatus): boolean {
   return status === "Transcribed" || status === "Summarizing" || status === "Summarized";
 }
 
+/// Show the status pill only while the pipeline is moving. The settled success states
+/// (Transcribed/Summarized) repeat on every row and truncate the name, so they're hidden.
+export function showStatusBadge(status: RecordingStatus): boolean {
+  return status !== "Transcribed" && status !== "Summarized";
+}
+
 interface Group {
   id: string | null; // section id, or null for ungrouped
   name: string;
@@ -381,9 +387,11 @@ function RecordingRow({
             </div>
           </NavLink>
         )}
-        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${statusColor[r.status]}`}>
-          {r.status}
-        </span>
+        {showStatusBadge(r.status) && (
+          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${statusColor[r.status]}`}>
+            {r.status}
+          </span>
+        )}
         <KebabMenu actions={actions} />
       </div>
       {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
