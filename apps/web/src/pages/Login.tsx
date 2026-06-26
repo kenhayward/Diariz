@@ -1,6 +1,8 @@
 import { useState } from "react";
+import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
+import { apiErrorMessage } from "../lib/api";
 
 export default function Login() {
   const { login } = useAuth();
@@ -17,8 +19,14 @@ export default function Login() {
     try {
       await login(email, password);
       navigate("/");
-    } catch {
-      setError("Invalid email or password.");
+    } catch (err) {
+      // 401 from the API has no body and genuinely means bad credentials;
+      // anything else (500, network) shows the real reason.
+      setError(
+        axios.isAxiosError(err) && err.response?.status === 401
+          ? "Invalid email or password."
+          : apiErrorMessage(err, "Invalid email or password."),
+      );
     } finally {
       setBusy(false);
     }

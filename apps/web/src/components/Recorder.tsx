@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { api } from "../lib/api";
+import { api, apiErrorMessage } from "../lib/api";
 import { getStream, isElectron, type AudioSourceKind } from "../lib/audioSource";
 
 export default function Recorder({ onUploaded }: { onUploaded: () => void }) {
@@ -55,8 +55,8 @@ export default function Recorder({ onUploaded }: { onUploaded: () => void }) {
       const title = `${source === "system" ? "System" : "Mic"} ${new Date().toLocaleString()}`;
       await api.upload(blob, title, durationMs);
       onUploaded();
-    } catch {
-      setError("Upload failed.");
+    } catch (e) {
+      setError(apiErrorMessage(e, "Upload failed."));
     } finally {
       setBusy(false);
     }
