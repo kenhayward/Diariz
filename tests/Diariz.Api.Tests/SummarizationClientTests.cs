@@ -24,15 +24,10 @@ public class SummarizationClientTests
         var handler = new FakeHttpMessageHandler(
             ChatResponse("{\"summary\":\"Quick chat.\",\"name\":\"Greeting\"}"));
         var http = new HttpClient(handler);
-        var opts = Options.Create(new SummarizationOptions
-        {
-            ApiBase = "http://llm.test/v1",
-            ApiKey = "sk-secret",
-            Model = "local-model"
-        });
-        var client = new SummarizationClient(http, opts);
+        var client = new SummarizationClient(http);
+        var config = new SummarizationRequestConfig("http://llm.test/v1", "sk-secret", "local-model", 60);
 
-        var result = await client.SummarizeAsync(Segments, needName: true);
+        var result = await client.SummarizeAsync(config, Segments, needName: true);
 
         Assert.Equal("Quick chat.", result.Summary);
         Assert.Equal("Greeting", result.Name);

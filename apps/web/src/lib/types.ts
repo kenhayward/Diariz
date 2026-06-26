@@ -62,3 +62,16 @@ export interface AuthResponse {
   accessToken: string;
   expiresAt: string;
 }
+
+export interface UserSettings {
+  apiBase: string | null;
+  model: string | null;
+  hasApiKey: boolean;
+}
+
+export interface UpdateUserSettings {
+  apiBase: string | null;
+  model: string | null;
+  /// Tri-state: undefined/null = leave unchanged, "" = clear, value = set.
+  apiKey?: string | null;
+}

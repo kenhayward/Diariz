@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Diariz.Api.Configuration;
+using Diariz.Api.Services;
 
 namespace Diariz.Api.Tests;
 
@@ -21,11 +22,11 @@ public class RecordingsControllerTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" })
             .Build();
-        var summary = Options.Create(new SummarizationOptions
-        {
-            ApiBase = summarizationEnabled ? "http://llm.test/v1" : ""
-        });
-        return new RecordingsController(db, storage ?? new FakeAudioStorage(), queue, new FakeHubContext(), config, summary)
+        var resolver = new SummarizationSettingsResolver(
+            db,
+            Options.Create(new SummarizationOptions { ApiBase = summarizationEnabled ? "http://llm.test/v1" : "" }),
+            new FakeApiKeyProtector());
+        return new RecordingsController(db, storage ?? new FakeAudioStorage(), queue, new FakeHubContext(), config, resolver)
         {
             ControllerContext = Http.Context(userId)
         };
@@ -289,6 +290,24 @@ public class RecordingsControllerTests
         Assert.Empty(queue.SummarizationEnqueued);
         var reloaded = await db.Recordings.FindAsync(rec.Id);
         Assert.NotEqual(RecordingStatus.Summarizing, reloaded!.Status);
+    }
+
+    [Fact]
+    public async Task Summarize_AllowedWhenUserConfigured_EvenIfServerEmpty()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        // The user has their own endpoint configured even though the server default is empty.
+        db.UserSettings.Add(new Diariz.Domain.Entities.UserSettings { UserId = userId, SummaryApiBase = "https://mine/v1" });
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, queue, summarizationEnabled: false); // server ApiBase empty
+
+        var result = await controller.Summarize(rec.Id);
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Single(queue.SummarizationEnqueued);
     }
 
     [Fact]

@@ -23,20 +23,20 @@ public class RecordingsController : ControllerBase
     private readonly IAudioStorage _storage;
     private readonly IJobQueue _queue;
     private readonly IHubContext<TranscriptionHub> _hub;
+    private readonly ISummarizationSettingsResolver _summarization;
     private readonly string _defaultModel;
-    private readonly bool _summarizationEnabled;
 
     public RecordingsController(
         DiarizDbContext db, IAudioStorage storage, IJobQueue queue,
         IHubContext<TranscriptionHub> hub, IConfiguration config,
-        IOptions<SummarizationOptions> summarization)
+        ISummarizationSettingsResolver summarization)
     {
         _db = db;
         _storage = storage;
         _queue = queue;
         _hub = hub;
+        _summarization = summarization;
         _defaultModel = config["Transcription:DefaultModel"] ?? "whisperx-large-v3";
-        _summarizationEnabled = summarization.Value.Enabled;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -152,8 +152,9 @@ public class RecordingsController : ControllerBase
         var current = rec.Transcriptions.FirstOrDefault();
         if (current is null) return NotFound();
 
-        if (!_summarizationEnabled)
-            return BadRequest("Summarisation is not configured on the server.");
+        var cfg = await _summarization.ResolveAsync(UserId);
+        if (!cfg.Enabled)
+            return BadRequest("Summarisation is not configured. Set an LLM endpoint in Settings.");
 
         // Idempotent: a summary is already in flight, don't enqueue a second job.
         if (rec.Status == RecordingStatus.Summarizing) return Accepted();

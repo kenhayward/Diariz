@@ -8,9 +8,6 @@ vi.mock("../lib/signalr", () => ({
   createHub: () => ({ start: () => Promise.resolve(), stop: () => Promise.resolve(), on: () => {} }),
 }));
 
-// The Recorder pulls in browser-only media APIs; stub it out for the list tests.
-vi.mock("../components/Recorder", () => ({ default: () => null }));
-
 vi.mock("../lib/api", () => ({
   api: {
     listRecordings: vi.fn(),
@@ -25,7 +22,7 @@ vi.mock("../lib/api", () => ({
 }));
 
 import { api } from "../lib/api";
-import Recordings from "./Recordings";
+import RecordingsPanel from "./RecordingsPanel";
 
 const rec: RecordingSummary = {
   id: "rec-1",
@@ -42,13 +39,13 @@ function renderList() {
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
-        <Recordings />
+        <RecordingsPanel />
       </MemoryRouter>
     </QueryClientProvider>,
   );
 }
 
-describe("Recordings list", () => {
+describe("RecordingsPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([rec]);
@@ -65,10 +62,8 @@ describe("Recordings list", () => {
   it("Summarise action calls the API", async () => {
     renderList();
     await screen.findByText("Weekly Standup");
-
     fireEvent.click(screen.getByRole("button", { name: /actions/i }));
     fireEvent.click(screen.getByRole("menuitem", { name: /summarise/i }));
-
     await waitFor(() => expect(api.summarize).toHaveBeenCalledWith("rec-1"));
   });
 
@@ -76,10 +71,8 @@ describe("Recordings list", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     renderList();
     await screen.findByText("Weekly Standup");
-
     fireEvent.click(screen.getByRole("button", { name: /actions/i }));
     fireEvent.click(screen.getByRole("menuitem", { name: /delete/i }));
-
     await waitFor(() => expect(api.deleteRecording).toHaveBeenCalledWith("rec-1"));
   });
 });

@@ -257,6 +257,27 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("Transcriptions");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.UserSettings", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SummaryApiBase")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("SummaryApiKeyEncrypted")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SummaryModel")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("UserSettings");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>
                 {
                     b.Property<Guid>("Id")
@@ -442,6 +463,17 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("Recording");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.UserSettings", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
+                        .WithOne("Settings")
+                        .HasForeignKey("Diariz.Domain.Entities.UserSettings", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", null)
@@ -496,6 +528,8 @@ namespace Diariz.Domain.Migrations
             modelBuilder.Entity("Diariz.Domain.Entities.ApplicationUser", b =>
                 {
                     b.Navigation("Recordings");
+
+                    b.Navigation("Settings");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.Recording", b =>

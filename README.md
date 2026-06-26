@@ -1,5 +1,7 @@
 # Diariz
 
+![Diariz](images/Diariz%20Backdrop.png)
+
 Personal, multi-user voice/meeting transcription platform: record audio (mic or system
 loopback), transcribe it server-side with **speaker diarization** and timestamps, summarize,
 and chat across notes. See [docs/Overall_Synopsis_of_Platform.md](docs/Overall_Synopsis_of_Platform.md)

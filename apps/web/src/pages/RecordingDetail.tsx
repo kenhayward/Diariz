@@ -102,7 +102,7 @@ export default function RecordingDetail() {
     setActiveIdx(idx >= 0 ? idx : null);
   }
 
-  if (!rec) return <p className="text-sm text-gray-500">Loading…</p>;
+  if (!rec) return <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>;
 
   const hasTranscript = (rec.current?.segments.length ?? 0) > 0;
   const isSummarizing = rec.status === "Summarizing" || summarizing;
@@ -134,9 +134,9 @@ export default function RecordingDetail() {
               onCancel={() => setRenaming(false)}
             />
           ) : (
-            <h1 className="text-lg font-semibold">{rec.name ?? rec.title}</h1>
+            <h1 className="text-lg font-semibold dark:text-gray-100">{rec.name ?? rec.title}</h1>
           )}
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
             {rec.source === "System" ? "System audio" : "Microphone"} ·{" "}
             {new Date(rec.createdAt).toLocaleString()} · {rec.status}
             {rec.current?.language ? ` · ${rec.current.language}` : ""}
@@ -146,14 +146,14 @@ export default function RecordingDetail() {
           <button
             onClick={summarize}
             disabled={isSummarizing || !hasTranscript}
-            className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
           >
             {isSummarizing ? "Summarising…" : "Summarise"}
           </button>
           <button
             onClick={retranscribe}
             disabled={requeuing}
-            className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
           >
             {requeuing ? "Queuing…" : "Re-transcribe"}
           </button>
@@ -162,26 +162,26 @@ export default function RecordingDetail() {
       </div>
 
       {actionError && (
-        <p className="rounded bg-red-50 p-3 text-sm text-red-700">{actionError}</p>
+        <p className="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{actionError}</p>
       )}
 
       {rec.status === "Failed" && rec.error && (
-        <p className="rounded bg-red-50 p-3 text-sm text-red-700">{rec.error}</p>
+        <p className="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{rec.error}</p>
       )}
 
       {isSummarizing && !rec.summary && (
-        <p className="rounded bg-amber-50 p-3 text-sm text-amber-800">Summarising…</p>
+        <p className="rounded bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">Summarising…</p>
       )}
       {rec.summary && (
-        <div className="rounded-lg border bg-white p-4">
-          <h2 className="mb-2 text-sm font-medium text-gray-500">Summary</h2>
-          <p className="whitespace-pre-wrap text-sm text-gray-800">{rec.summary.text}</p>
+        <div className="rounded-lg border bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+          <h2 className="mb-2 text-sm font-medium text-gray-500 dark:text-gray-400">Summary</h2>
+          <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{rec.summary.text}</p>
         </div>
       )}
 
       {labels.length > 0 && (
-        <div className="rounded-lg border bg-white p-4">
-          <h2 className="mb-2 text-sm font-medium text-gray-500">Speakers</h2>
+        <div className="rounded-lg border bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+          <h2 className="mb-2 text-sm font-medium text-gray-500 dark:text-gray-400">Speakers</h2>
           <div className="flex flex-wrap gap-3">
             {labels.map((label) => (
               <SpeakerInput
@@ -200,7 +200,7 @@ export default function RecordingDetail() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => playFrom(0)}
-              className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50"
+              className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
             >
               ▶ Play all
             </button>
@@ -218,7 +218,7 @@ export default function RecordingDetail() {
           </ul>
         </>
       ) : (
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
           No transcript yet — it appears here automatically when transcription finishes.
         </p>
       )}
@@ -251,9 +251,9 @@ function RecordingNameForm({
         onKeyDown={(e) => e.key === "Escape" && onCancel()}
         placeholder="Recording name"
         aria-label="Recording name"
-        className="w-64 rounded border px-2 py-1 text-base"
+        className="w-64 rounded border px-2 py-1 text-base dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
       />
-      <button type="submit" className="rounded border px-2 py-1 text-sm hover:bg-gray-50">
+      <button type="submit" className="rounded border px-2 py-1 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
         Save
       </button>
     </form>
@@ -272,12 +272,12 @@ function SpeakerInput({
   const [value, setValue] = useState(initial);
   return (
     <div className="flex items-center gap-1">
-      <span className="text-xs text-gray-400">{label}</span>
+      <span className="text-xs text-gray-400 dark:text-gray-500">{label}</span>
       <input
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onBlur={() => value !== initial && onSave(value)}
-        className="w-32 rounded border px-2 py-1 text-sm"
+        className="w-32 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
       />
     </div>
   );
@@ -295,13 +295,15 @@ function SegmentRow({
   return (
     <li
       onClick={onPlay}
-      className={`flex cursor-pointer gap-3 rounded-lg border px-4 py-2 hover:bg-gray-50 ${
-        active ? "border-blue-300 bg-blue-50" : "bg-white"
+      className={`flex cursor-pointer gap-3 rounded-lg border px-4 py-2 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800 ${
+        active
+          ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/30"
+          : "bg-white dark:bg-gray-900"
       }`}
     >
-      <span className="w-12 shrink-0 font-mono text-xs text-gray-400">{fmt(seg.startMs)}</span>
-      <span className="w-28 shrink-0 text-sm font-medium text-gray-700">{seg.speakerDisplay}</span>
-      <span className="text-sm">{seg.text}</span>
+      <span className="w-12 shrink-0 font-mono text-xs text-gray-400 dark:text-gray-500">{fmt(seg.startMs)}</span>
+      <span className="w-28 shrink-0 text-sm font-medium text-gray-700 dark:text-gray-200">{seg.speakerDisplay}</span>
+      <span className="text-sm dark:text-gray-200">{seg.text}</span>
     </li>
   );
 }

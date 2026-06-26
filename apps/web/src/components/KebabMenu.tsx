@@ -47,14 +47,14 @@ export default function KebabMenu({
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        className="rounded px-2 py-1 text-lg leading-none text-gray-500 hover:bg-gray-100"
+        className="rounded px-2 py-1 text-lg leading-none text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
       >
         ⋮
       </button>
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-10 mt-1 w-44 overflow-hidden rounded-lg border bg-white py-1 shadow-lg"
+          className="absolute right-0 z-10 mt-1 w-44 overflow-hidden rounded-lg border bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-900"
         >
           {actions.map((a) => (
             <button
@@ -68,8 +68,8 @@ export default function KebabMenu({
                 setOpen(false);
                 a.onClick();
               }}
-              className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-gray-50 disabled:opacity-40 ${
-                a.danger ? "text-red-600" : "text-gray-700"
+              className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-gray-50 disabled:opacity-40 dark:hover:bg-gray-800 ${
+                a.danger ? "text-red-600 dark:text-red-400" : "text-gray-700 dark:text-gray-200"
               }`}
             >
               {a.label}

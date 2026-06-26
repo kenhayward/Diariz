@@ -30,6 +30,32 @@ public sealed class FakeHttpMessageHandler : HttpMessageHandler
     }
 }
 
+/// <summary>Returns a fixed summarisation config and records the resolved user id.</summary>
+public sealed class FakeSummarizationSettingsResolver : ISummarizationSettingsResolver
+{
+    public SummarizationRequestConfig Config { get; set; } =
+        new("https://llm.test/v1", "sk-test", "test-model", 60);
+    public Guid? LastUserId { get; private set; }
+
+    public Task<SummarizationRequestConfig> ResolveAsync(Guid userId, CancellationToken ct = default)
+    {
+        LastUserId = userId;
+        return Task.FromResult(Config);
+    }
+}
+
+/// <summary>Reversible stand-in for the Data Protection key protector (prefixes instead of encrypts).</summary>
+public sealed class FakeApiKeyProtector : IApiKeyProtector
+{
+    public string? Protect(string? plaintext) =>
+        string.IsNullOrEmpty(plaintext) ? null : "enc:" + plaintext;
+
+    public string? Unprotect(string? ciphertext) =>
+        string.IsNullOrEmpty(ciphertext) ? null
+        : ciphertext.StartsWith("enc:") ? ciphertext["enc:".Length..]
+        : null;
+}
+
 /// <summary>Stub <see cref="ISummarizationClient"/> — returns a canned result or throws.</summary>
 public sealed class FakeSummarizationClient : ISummarizationClient
 {
@@ -37,12 +63,15 @@ public sealed class FakeSummarizationClient : ISummarizationClient
     public Exception? ThrowOnCall { get; set; }
     public int Calls { get; private set; }
     public bool LastNeedName { get; private set; }
+    public SummarizationRequestConfig? LastConfig { get; private set; }
 
     public Task<SummaryResult> SummarizeAsync(
-        IReadOnlyList<SegmentDto> segments, bool needName, CancellationToken ct = default)
+        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, bool needName,
+        CancellationToken ct = default)
     {
         Calls++;
         LastNeedName = needName;
+        LastConfig = config;
         if (ThrowOnCall is not null) throw ThrowOnCall;
         return Task.FromResult(Result);
     }

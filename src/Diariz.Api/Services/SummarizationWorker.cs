@@ -34,13 +34,8 @@ public class SummarizationWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_opts.Enabled)
-        {
-            _log.LogWarning(
-                "Summarization is disabled (no Summarization:ApiBase configured); SummarizationWorker is idle.");
-            return;
-        }
-
+        // Always listen: even with no server-default endpoint, individual users may configure their own
+        // (per-user settings). The Summarize endpoint still gates enqueue on the effective config.
         var db = _redis.GetDatabase();
         await EnsureGroupAsync(db);
         _log.LogInformation("SummarizationWorker listening on stream {Stream}", _opts.StreamKey);
@@ -83,7 +78,8 @@ public class SummarizationWorker : BackgroundService
                 using var scope = _scopes.CreateScope();
                 var ctx = scope.ServiceProvider.GetRequiredService<DiarizDbContext>();
                 var client = scope.ServiceProvider.GetRequiredService<ISummarizationClient>();
-                await SummarizationProcessor.ProcessAsync(ctx, client, _hub, _opts.Model, job, _log, ct);
+                var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
+                await SummarizationProcessor.ProcessAsync(ctx, client, resolver, _hub, job, _log, ct);
             }
         }
         catch (Exception ex)
