@@ -28,3 +28,15 @@ pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
 pip install -r requirements.txt
 HF_TOKEN=... REDIS_URL=redis://localhost:6379/0 API_BASE_URL=http://localhost:8080 python worker.py
 ```
+
+## Tests
+
+Fast, GPU-free unit tests (pytest). `whisperx`/`torch` are **not** required — the suite stubs
+`whisperx` (see `tests/conftest.py`), so it covers the callback contract, the job
+orchestration/cleanup in `worker.handle`, and the segment-shaping in `pipeline._shape_segments`.
+
+```bash
+python -m venv .venv
+.venv/Scripts/python -m pip install -r requirements-test.txt   # Linux/macOS: .venv/bin/python
+.venv/Scripts/python -m pytest
+```

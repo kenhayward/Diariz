@@ -354,6 +354,10 @@ paket-files/
 **/__pycache__/
 *.pyc
 
+# Python virtualenvs and test caches
+**/.venv/
+**/.pytest_cache/
+
 # Cake - Uncomment if you are using it
 #tools/**
 #!tools/packages.config
