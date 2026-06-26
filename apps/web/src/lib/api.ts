@@ -28,6 +28,23 @@ http.interceptors.request.use((config) => {
   return config;
 });
 
+/// On an expired/invalid token the API returns 401. Clear the stale token and send the user to
+/// login rather than leaving them on a silently-empty page. Exported for testing.
+export function handleAuthError(error: unknown): void {
+  if (axios.isAxiosError(error) && error.response?.status === 401) {
+    setToken(null);
+    if (window.location.pathname !== "/login") window.location.assign("/login");
+  }
+}
+
+http.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    handleAuthError(error);
+    return Promise.reject(error);
+  },
+);
+
 export const api = {
   async login(email: string, password: string): Promise<AuthResponse> {
     const { data } = await http.post<AuthResponse>("/api/auth/login", { email, password });
