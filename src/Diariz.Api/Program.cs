@@ -22,6 +22,8 @@ builder.Services.Configure<JobQueueOptions>(builder.Configuration.GetSection(Job
 builder.Services.Configure<WorkerOptions>(builder.Configuration.GetSection(WorkerOptions.Section));
 builder.Services.Configure<SummarizationOptions>(builder.Configuration.GetSection(SummarizationOptions.Section));
 builder.Services.Configure<ChatOptions>(builder.Configuration.GetSection(ChatOptions.Section));
+builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.Section));
+builder.Services.Configure<AppPublicOptions>(builder.Configuration.GetSection(AppPublicOptions.Section));
 
 var jwt = builder.Configuration.GetSection(JwtOptions.Section).Get<JwtOptions>() ?? new JwtOptions();
 var storage = builder.Configuration.GetSection(StorageOptions.Section).Get<StorageOptions>() ?? new StorageOptions();
@@ -37,10 +39,15 @@ builder.Services.AddDbContext<DiarizDbContext>(opt =>
 builder.Services.AddIdentityCore<ApplicationUser>(o =>
     {
         o.Password.RequiredLength = 8;
+        o.Password.RequireUppercase = true;
+        o.Password.RequireLowercase = true;
+        o.Password.RequireDigit = true;
+        o.Password.RequireNonAlphanumeric = true;
         o.User.RequireUniqueEmail = true;
     })
     .AddRoles<IdentityRole<Guid>>()
-    .AddEntityFrameworkStores<DiarizDbContext>();
+    .AddEntityFrameworkStores<DiarizDbContext>()
+    .AddDefaultTokenProviders(); // one-time account-setup token
 
 // ---- Auth (JWT) ----
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -68,7 +75,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             }
         };
     });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(o =>
+    o.AddPolicy("Admin", p => p.RequireRole(Roles.Administrator, Roles.PlatformAdministrator)));
 
 // ---- Storage (MinIO / S3) ----
 builder.Services.AddSingleton<IAmazonS3>(_ =>
@@ -97,6 +105,9 @@ var dataProtection = builder.Services.AddDataProtection();
 if (!string.IsNullOrWhiteSpace(dpKeys))
     dataProtection.PersistKeysToFileSystem(new DirectoryInfo(dpKeys));
 builder.Services.AddSingleton<IApiKeyProtector, ApiKeyProtector>();
+
+// ---- Email (account-setup link; no-op fallback when SMTP unconfigured) ----
+builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
 // ---- Summarisation (OpenAI-compatible endpoint + background consumer) ----
 builder.Services.AddHttpClient<ISummarizationClient, SummarizationClient>();
@@ -129,7 +140,8 @@ await using (var scope = app.Services.CreateAsyncScope())
     var db = sp.GetRequiredService<DiarizDbContext>();
     await db.Database.MigrateAsync();
     await sp.GetRequiredService<IAudioStorage>().EnsureBucketAsync();
-    await SeedDefaultUserAsync(sp, app.Configuration);
+    await Seeder.SeedRolesAsync(sp);
+    await Seeder.SeedDefaultUserAsync(sp, app.Configuration);
 }
 
 if (app.Environment.IsDevelopment())
@@ -144,28 +156,3 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 app.Run();
 
-static async Task SeedDefaultUserAsync(IServiceProvider sp, IConfiguration config)
-{
-    var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Seed");
-    var email = config["Seed:Email"];
-    var password = config["Seed:Password"];
-    if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
-    {
-        logger.LogWarning("Seed skipped: Seed:Email / Seed:Password not configured.");
-        return;
-    }
-
-    var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
-    if (await users.FindByEmailAsync(email) is not null)
-    {
-        logger.LogInformation("Seed user {Email} already exists; nothing to do.", email);
-        return;
-    }
-
-    var result = await users.CreateAsync(new ApplicationUser { UserName = email, Email = email }, password);
-    if (result.Succeeded)
-        logger.LogInformation("Seed user {Email} created.", email);
-    else
-        logger.LogError("Seed user {Email} creation FAILED: {Errors}", email,
-            string.Join("; ", result.Errors.Select(e => e.Description)));
-}

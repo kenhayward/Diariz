@@ -4,6 +4,7 @@ import { useTheme } from "../theme";
 import type { ThemeChoice } from "../lib/theme";
 import Avatar from "./Avatar";
 import SettingsModal from "./SettingsModal";
+import ManageUsersModal from "./ManageUsersModal";
 
 const THEMES: { value: ThemeChoice; label: string }[] = [
   { value: "auto", label: "Auto" },
@@ -12,10 +13,11 @@ const THEMES: { value: ThemeChoice; label: string }[] = [
 ];
 
 export default function UserMenu() {
-  const { initials, email, logout } = useAuth();
+  const { initials, email, fullName, isAdmin, logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [usersOpen, setUsersOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -51,8 +53,11 @@ export default function UserMenu() {
           role="menu"
           className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-lg border bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-900"
         >
-          {email && (
-            <div className="truncate px-3 py-2 text-xs text-gray-500 dark:text-gray-400">{email}</div>
+          {(fullName || email) && (
+            <div className="border-b px-3 py-2 dark:border-gray-700">
+              {fullName && <div className="truncate text-sm font-medium dark:text-gray-100">{fullName}</div>}
+              {email && <div className="truncate text-xs text-gray-500 dark:text-gray-400">{email}</div>}
+            </div>
           )}
           <button
             type="button"
@@ -65,6 +70,19 @@ export default function UserMenu() {
           >
             Settings
           </button>
+          {isAdmin && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                setUsersOpen(true);
+              }}
+              className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
+            >
+              Manage Users
+            </button>
+          )}
 
           <div className="border-t py-1 dark:border-gray-700">
             <div className="px-3 py-1 text-xs font-medium text-gray-400 dark:text-gray-500">Theme</div>
@@ -98,6 +116,7 @@ export default function UserMenu() {
       )}
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {usersOpen && <ManageUsersModal onClose={() => setUsersOpen(false)} />}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import { apiErrorMessage } from "../lib/api";
 
@@ -66,6 +66,12 @@ export default function Login() {
         >
           {busy ? "Signing in…" : "Sign in"}
         </button>
+        <p className="text-center text-sm text-gray-500 dark:text-gray-400">
+          Need an account?{" "}
+          <Link to="/request-access" className="text-blue-600 hover:underline dark:text-blue-400">
+            Request access
+          </Link>
+        </p>
       </form>
     </div>
   );

@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth";
 import Login from "./pages/Login";
+import RequestAccess from "./pages/RequestAccess";
+import Setup from "./pages/Setup";
 import RecordingDetail from "./pages/RecordingDetail";
 import WorkspaceLayout from "./components/WorkspaceLayout";
 
@@ -21,6 +23,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/request-access" element={<RequestAccess />} />
+      <Route path="/setup" element={<Setup />} />
       <Route
         path="/"
         element={

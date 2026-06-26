@@ -10,7 +10,7 @@ namespace Diariz.Api.Services;
 
 public interface ITokenService
 {
-    (string token, DateTimeOffset expiresAt) CreateAccessToken(ApplicationUser user);
+    (string token, DateTimeOffset expiresAt) CreateAccessToken(ApplicationUser user, IEnumerable<string> roles);
 }
 
 public class TokenService : ITokenService
@@ -18,16 +18,19 @@ public class TokenService : ITokenService
     private readonly JwtOptions _opts;
     public TokenService(IOptions<JwtOptions> opts) => _opts = opts.Value;
 
-    public (string token, DateTimeOffset expiresAt) CreateAccessToken(ApplicationUser user)
+    public (string token, DateTimeOffset expiresAt) CreateAccessToken(ApplicationUser user, IEnumerable<string> roles)
     {
         var expiresAt = DateTimeOffset.UtcNow.AddMinutes(_opts.AccessTokenMinutes);
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new("name", user.FullName ?? string.Empty),
         };
+        foreach (var role in roles)
+            claims.Add(new Claim(ClaimTypes.Role, role));
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_opts.Key));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

@@ -5,14 +5,21 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const logout = vi.fn();
 const setTheme = vi.fn();
 
-vi.mock("../auth", () => ({
-  useAuth: () => ({ initials: "JD", email: "jane.doe@x.com", logout }),
-}));
+// Mutable so individual tests can flip isAdmin.
+const authState: { initials: string; email: string; fullName: string | null; isAdmin: boolean; logout: () => void } = {
+  initials: "JD", email: "jane.doe@x.com", fullName: "Jane Doe", isAdmin: false, logout,
+};
+
+vi.mock("../auth", () => ({ useAuth: () => authState }));
 vi.mock("../theme", () => ({
   useTheme: () => ({ theme: "auto", setTheme }),
 }));
 vi.mock("../lib/api", () => ({
-  api: { getUserSettings: vi.fn().mockResolvedValue({ apiBase: null, model: null, hasApiKey: false }), updateUserSettings: vi.fn() },
+  api: {
+    getUserSettings: vi.fn().mockResolvedValue({ apiBase: null, model: null, hasApiKey: false }),
+    updateUserSettings: vi.fn(),
+    listUsers: vi.fn().mockResolvedValue([]),
+  },
   apiErrorMessage: (e: unknown) => String(e),
 }));
 
@@ -28,7 +35,21 @@ function renderMenu() {
 }
 
 describe("UserMenu", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authState.isAdmin = false;
+  });
+
+  it("hides Manage Users for non-admins and shows it for admins", () => {
+    renderMenu();
+    fireEvent.click(screen.getByRole("button", { name: /account/i }));
+    expect(screen.queryByRole("menuitem", { name: /manage users/i })).toBeNull();
+
+    authState.isAdmin = true;
+    renderMenu();
+    fireEvent.click(screen.getAllByRole("button", { name: /account/i })[1]);
+    expect(screen.getByRole("menuitem", { name: /manage users/i })).toBeTruthy();
+  });
 
   it("shows the initials and opens a menu with email, Settings, themes and Sign Out", () => {
     renderMenu();

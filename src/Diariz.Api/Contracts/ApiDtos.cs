@@ -3,9 +3,23 @@ using Diariz.Domain.Entities;
 namespace Diariz.Api.Contracts;
 
 // ---- Auth ----
-public record RegisterRequest(string Email, string Password);
 public record LoginRequest(string Email, string Password);
 public record AuthResponse(string AccessToken, DateTimeOffset ExpiresAt);
+
+// ---- Access requests / account setup ----
+public record RequestAccessRequest(string Email);
+/// <summary>Whether a setup link is valid (and, if so, the email it's for) — neutral when invalid.</summary>
+public record SetupValidateResponse(bool Valid, string? Email);
+public record SetupRequest(string Email, string Token, string FullName, string Password);
+
+// ---- Admin user management ----
+public record AdminUserDto(
+    Guid Id, string Email, string? FullName, string AccountType, UserStatus Status, bool IsEnabled);
+public record SetRoleRequest(string Role);
+public record SetEnabledRequest(bool IsEnabled);
+/// <summary>Result of granting access: whether the link was emailed, and (on the no-SMTP fallback)
+/// the setup URL for the admin to share manually.</summary>
+public record GrantResultDto(bool Emailed, string? SetupUrl);
 
 // ---- Sections ----
 public record SectionDto(Guid Id, string Name);

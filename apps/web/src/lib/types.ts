@@ -71,6 +71,28 @@ export interface AuthResponse {
   expiresAt: string;
 }
 
+// ---- Users / access requests ----
+export type UserAccountStatus = "Requested" | "Invited" | "Active";
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  fullName: string | null;
+  accountType: "Standard" | "Administrator" | "PlatformAdministrator";
+  status: UserAccountStatus;
+  isEnabled: boolean;
+}
+
+export interface GrantResult {
+  emailed: boolean;
+  setupUrl: string | null;
+}
+
+export interface SetupValidation {
+  valid: boolean;
+  email: string | null;
+}
+
 export interface UserSettings {
   apiBase: string | null;
   model: string | null;

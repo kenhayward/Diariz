@@ -55,7 +55,14 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         {
             e.HasIndex(s => new { s.UserId, s.Name });
             e.Property(s => s.Name).HasMaxLength(128);
+            // Explicit cascade so deleting a user removes their sections (the FK was only implicit before).
+            e.HasOne(s => s.User)
+                .WithMany()
+                .HasForeignKey(s => s.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
+
+        builder.Entity<ApplicationUser>(e => e.Property(u => u.FullName).HasMaxLength(256));
 
         builder.Entity<Transcription>(e =>
         {
