@@ -12,6 +12,7 @@ vi.mock("../lib/api", () => ({
   api: {
     listRecordings: vi.fn(),
     listSections: vi.fn().mockResolvedValue([]),
+    createSection: vi.fn(),
     retranscribe: vi.fn(),
     summarize: vi.fn(),
     deleteRecording: vi.fn(),
@@ -55,6 +56,7 @@ function renderList() {
 describe("RecordingsPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([]); // reset between tests (impl persists)
     (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([rec]);
     (api.summarize as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.deleteRecording as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
@@ -95,6 +97,27 @@ describe("RecordingsPanel", () => {
     expect(work).toBeTruthy();
     // Ungrouped heading comes after the Work heading in document order.
     expect(work.compareDocumentPosition(ungrouped) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("creates a section from the New section control", async () => {
+    (api.createSection as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "sec-9", name: "Therapy" });
+    renderList();
+    await screen.findByText("Weekly Standup");
+
+    fireEvent.click(screen.getByRole("button", { name: /new section/i }));
+    fireEvent.change(screen.getByPlaceholderText(/new section name/i), { target: { value: "Therapy" } });
+    fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
+
+    await waitFor(() => expect(api.createSection).toHaveBeenCalledWith("Therapy"));
+  });
+
+  it("shows a section heading even when it has no recordings yet", async () => {
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: "sec-1", name: "Empty Group" }]);
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([rec]); // rec is ungrouped
+    renderList();
+
+    expect(await screen.findByRole("heading", { name: "Empty Group" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Ungrouped" })).toBeTruthy();
   });
 
   it("deletes a section from its heading menu (recordings fall back to Ungrouped)", async () => {

@@ -6,7 +6,7 @@ import { createHub } from "../lib/signalr";
 import KebabMenu from "./KebabMenu";
 import MoveToSectionModal from "./MoveToSectionModal";
 import { recordingMenu } from "./recordingMenu";
-import type { RecordingStatus, RecordingSource, RecordingSummary } from "../lib/types";
+import type { RecordingStatus, RecordingSource, RecordingSummary, SectionDto } from "../lib/types";
 
 const statusColor: Record<RecordingStatus, string> = {
   Uploaded: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
@@ -40,6 +40,7 @@ export default function RecordingsPanel() {
     queryKey: ["recordings"],
     queryFn: api.listRecordings,
   });
+  const { data: sections = [] } = useQuery({ queryKey: ["sections"], queryFn: api.listSections });
 
   useEffect(() => {
     const hub = createHub(() => qc.invalidateQueries({ queryKey: ["recordings"] }));
@@ -47,16 +48,19 @@ export default function RecordingsPanel() {
     return () => void hub.stop();
   }, [qc]);
 
-  const groups = useMemo(() => groupBySection(recordings), [recordings]);
+  const groups = useMemo(() => groupBySection(recordings, sections), [recordings, sections]);
 
   if (isLoading) return <p className="p-4 text-sm text-gray-500 dark:text-gray-400">Loading…</p>;
-  if (recordings.length === 0)
-    return <p className="p-4 text-sm text-gray-500 dark:text-gray-400">No recordings yet. Hit Record above.</p>;
 
-  const grouped = groups.length > 1; // headings only matter once a section exists
+  // Show section headings whenever any section exists (so an empty, just-created section is visible).
+  const grouped = groups.some((g) => g.id !== null);
 
   return (
     <div>
+      <NewSectionBar />
+      {recordings.length === 0 && (
+        <p className="p-4 text-sm text-gray-500 dark:text-gray-400">No recordings yet. Hit Record above.</p>
+      )}
       {groups.map((g) => (
         <div key={g.id ?? "__ungrouped__"}>
           {grouped &&
@@ -78,21 +82,84 @@ export default function RecordingsPanel() {
   );
 }
 
-function groupBySection(recordings: RecordingSummary[]): Group[] {
-  const sections = new Map<string, Group>();
+function groupBySection(recordings: RecordingSummary[], sections: SectionDto[]): Group[] {
+  // Seed with every section so an empty (just-created) section still renders a heading.
+  const byId = new Map<string, Group>();
+  for (const s of sections) byId.set(s.id, { id: s.id, name: s.name, items: [] });
+
   const ungrouped: RecordingSummary[] = [];
   for (const r of recordings) {
-    if (r.sectionId) {
-      const g = sections.get(r.sectionId) ?? { id: r.sectionId, name: r.sectionName ?? "Section", items: [] };
-      g.items.push(r);
-      sections.set(r.sectionId, g);
-    } else {
+    if (!r.sectionId) {
       ungrouped.push(r);
+      continue;
     }
+    // Fall back to the recording's own sectionName if the sections list hasn't loaded yet.
+    const g = byId.get(r.sectionId) ?? { id: r.sectionId, name: r.sectionName ?? "Section", items: [] };
+    g.items.push(r);
+    byId.set(r.sectionId, g);
   }
-  const ordered = [...sections.values()].sort((a, b) => a.name.localeCompare(b.name));
+
+  const ordered = [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
   if (ungrouped.length) ordered.push({ id: null, name: "Ungrouped", items: ungrouped });
   return ordered;
+}
+
+/// Top-of-list control to create a new section (group), making grouping discoverable without
+/// digging into a per-recording menu.
+function NewSectionBar() {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function create(e: React.FormEvent) {
+    e.preventDefault();
+    const n = name.trim();
+    if (!n) return;
+    setBusy(true);
+    try {
+      await api.createSection(n);
+      qc.invalidateQueries({ queryKey: ["sections"] });
+      qc.invalidateQueries({ queryKey: ["recordings"] });
+      setName("");
+      setOpen(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="border-b px-3 py-1.5 dark:border-gray-800">
+      {open ? (
+        <form onSubmit={create} className="flex items-center gap-1">
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
+            placeholder="New section name"
+            aria-label="New section name"
+            className="min-w-0 flex-1 rounded border px-2 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          />
+          <button
+            type="submit"
+            disabled={busy || !name.trim()}
+            className="rounded border px-2 py-0.5 text-xs hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+          >
+            Create
+          </button>
+        </form>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+        >
+          + New section
+        </button>
+      )}
+    </div>
+  );
 }
 
 function SectionHeading({ id, name }: { id: string; name: string }) {

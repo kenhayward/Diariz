@@ -13,13 +13,17 @@ describe("contextFraction", () => {
 });
 
 describe("ContextDial", () => {
-  it("labels the percentage and shows model + used/total in the tooltip", () => {
-    render(<ContextDial model="openai/gpt-oss-20b" used={22541} total={131072} />);
+  it("shows used / total and the percentage inline (always visible)", () => {
+    const { container } = render(<ContextDial model="openai/gpt-oss-20b" used={22541} total={131072} />);
 
     expect(screen.getByLabelText("Context 17% used")).toBeTruthy();
-    const tip = screen.getByRole("tooltip").textContent ?? "";
-    expect(tip).toContain("openai/gpt-oss-20b");
-    expect(tip).toContain("22,541 / 131,072 tokens (17%)");
+    // The inline label (not the hover tooltip) carries the numbers.
+    expect(container.textContent).toContain("22,541 / 131,072 (17%)");
+  });
+
+  it("keeps the model name in the hover tooltip", () => {
+    render(<ContextDial model="openai/gpt-oss-20b" used={22541} total={131072} />);
+    expect(screen.getByRole("tooltip").textContent).toContain("openai/gpt-oss-20b");
   });
 
   it("turns the ring red near the limit", () => {

@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../lib/api", () => ({
   api: {
     listRecordings: vi.fn(),
+    getUserSettings: vi.fn(),
     chatStream: vi.fn(),
     uploadChatAttachment: vi.fn(),
     listChatConversations: vi.fn(),
@@ -42,6 +43,10 @@ describe("ChatPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mock(api.listRecordings).mockResolvedValue([rec("rec-1", "Standup"), rec("rec-2", "Retro", "Summarized")]);
+    mock(api.getUserSettings).mockResolvedValue({
+      apiBase: null, model: "gpt-oss", hasApiKey: false, defaultApiBase: null, defaultModel: "gpt-oss",
+      serverHasApiKey: false, contextWindow: null, defaultContextWindow: 131072,
+    });
     mock(api.chatStream).mockImplementation(async (_body: any, h: any) => {
       h.onMeta?.({ model: "gpt-oss", contextUsed: 10, contextTotal: 100 });
       h.onToken("Hello ");
@@ -61,6 +66,12 @@ describe("ChatPanel", () => {
       fireEvent.click(screen.getByRole("button", { name: /^send$/i }));
     });
   }
+
+  it("shows the context dial with the configured total before any message is sent", async () => {
+    renderPanel("/recordings/rec-1");
+    // 0 used out of the 131,072 server default, shown inline from the start.
+    expect(await screen.findByText(/0 \/ 131,072 \(0%\)/)).toBeTruthy();
+  });
 
   it("streams a reply, defaults context to the open recording, and shows the dial", async () => {
     renderPanel("/recordings/rec-1");

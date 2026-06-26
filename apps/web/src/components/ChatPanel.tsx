@@ -17,6 +17,8 @@ import ContextDial from "./ContextDial";
 export default function ChatPanel() {
   const activeId = useActiveRecordingId();
   const { data: recordings = [] } = useQuery({ queryKey: ["recordings"], queryFn: api.listRecordings });
+  // The model's context-window size for the dial (per-user override, else server default).
+  const { data: settings } = useQuery({ queryKey: ["user-settings"], queryFn: api.getUserSettings });
 
   const [messages, setMessages] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState("");
@@ -43,6 +45,13 @@ export default function ChatPanel() {
 
   const chattable = recordings.filter((r) => hasTranscript(r.status));
   const started = messages.length > 0;
+
+  // Dial: show the configured context window from the start (used 0), then the live figures the
+  // server reports on each turn via the meta/done events.
+  const totalContext = settings ? settings.contextWindow ?? settings.defaultContextWindow : 0;
+  const dialTotal = usage?.contextTotal || totalContext;
+  const dialUsed = usage?.contextUsed ?? 0;
+  const dialModel = usage?.model || settings?.model || settings?.defaultModel || "";
 
   // Default the context to the recording open in the middle panel, until the user picks their own.
   useEffect(() => {
@@ -259,7 +268,9 @@ export default function ChatPanel() {
           <TrashIcon />
         </IconButton>
         {saveStatus && <span className="ml-1 text-xs text-green-600 dark:text-green-400">{saveStatus}</span>}
-        <div className="ml-auto">{usage && <ContextDial model={usage.model} used={usage.contextUsed} total={usage.contextTotal} />}</div>
+        <div className="ml-auto">
+          {dialTotal > 0 && <ContextDial model={dialModel} used={dialUsed} total={dialTotal} />}
+        </div>
       </div>
 
       {/* Thread */}
