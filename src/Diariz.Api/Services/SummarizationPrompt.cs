@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Diariz.Api.Contracts;
 
 namespace Diariz.Api.Services;
@@ -48,26 +49,48 @@ public static class SummarizationPrompt
 
         content = StripCodeFence(content);
 
-        try
+        // Content may be wrapped in prose or model-specific tokens (e.g. gpt-oss "harmony"
+        // markers like <|channel|>final<|constrain|>{...}); pull out the embedded JSON object.
+        var json = ExtractJsonObject(content);
+        if (json is not null)
         {
-            using var inner = JsonDocument.Parse(content);
-            var summary = inner.RootElement.TryGetProperty("summary", out var s)
-                ? s.GetString()?.Trim() ?? ""
-                : content;
-            string? name = null;
-            if (needName && inner.RootElement.TryGetProperty("name", out var n))
+            try
             {
-                var raw = n.GetString()?.Trim();
-                name = string.IsNullOrWhiteSpace(raw) ? null : raw;
+                using var inner = JsonDocument.Parse(json);
+                if (inner.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    var summary = inner.RootElement.TryGetProperty("summary", out var s)
+                        && s.ValueKind == JsonValueKind.String
+                            ? s.GetString()!.Trim()
+                            : StripModelTokens(content);
+                    string? name = null;
+                    if (needName && inner.RootElement.TryGetProperty("name", out var n)
+                        && n.ValueKind == JsonValueKind.String)
+                    {
+                        var raw = n.GetString()?.Trim();
+                        name = string.IsNullOrWhiteSpace(raw) ? null : raw;
+                    }
+                    return new SummaryResult(summary, name);
+                }
             }
-            return new SummaryResult(summary, name);
+            catch (JsonException) { /* fall through to the plain-text fallback */ }
         }
-        catch (JsonException)
-        {
-            // Model didn't return JSON — use the raw text as the summary.
-            return new SummaryResult(content, null);
-        }
+
+        // No usable JSON — return the text with any model tokens stripped.
+        return new SummaryResult(StripModelTokens(content), null);
     }
+
+    /// <summary>The substring from the first "{" to the last "}", or null if there's no object.</summary>
+    private static string? ExtractJsonObject(string s)
+    {
+        var start = s.IndexOf('{');
+        var end = s.LastIndexOf('}');
+        return start >= 0 && end > start ? s[start..(end + 1)] : null;
+    }
+
+    /// <summary>Strips model control tokens like &lt;|channel|&gt; so a non-JSON fallback reads cleanly.</summary>
+    private static string StripModelTokens(string s) =>
+        Regex.Replace(s, @"<\|[^|]*\|>", " ").Trim();
 
     private static string BuildTranscript(IReadOnlyList<SegmentDto> segments, int charBudget)
     {

@@ -1,6 +1,7 @@
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
+using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
@@ -14,15 +15,29 @@ public class WorkerCallbackControllerTests
 {
     private const string Secret = "shared-secret";
 
+    // Default: summarisation NOT configured, so Result leaves the recording at Transcribed.
     private static (WorkerCallbackController controller, DiarizDbContext db, FakeHubContext hub) Build(string presentedSecret)
+    {
+        var (controller, db, hub, _) = BuildEx(presentedSecret, summarizationEnabled: false);
+        return (controller, db, hub);
+    }
+
+    private static (WorkerCallbackController controller, DiarizDbContext db, FakeHubContext hub, FakeJobQueue queue)
+        BuildEx(string presentedSecret, bool summarizationEnabled)
     {
         var db = TestDb.Create();
         var hub = new FakeHubContext();
-        var controller = new WorkerCallbackController(db, hub, Options.Create(new WorkerOptions { CallbackSecret = Secret }))
+        var queue = new FakeJobQueue();
+        var resolver = new SummarizationSettingsResolver(
+            db,
+            Options.Create(new SummarizationOptions { ApiBase = summarizationEnabled ? "http://llm.test/v1" : "" }),
+            new FakeApiKeyProtector());
+        var controller = new WorkerCallbackController(
+            db, hub, queue, resolver, Options.Create(new WorkerOptions { CallbackSecret = Secret }))
         {
             ControllerContext = Http.Context(headers: ("X-Worker-Secret", presentedSecret))
         };
-        return (controller, db, hub);
+        return (controller, db, hub, queue);
     }
 
     private static async Task<(Guid recordingId, Guid transcriptionId)> SeedQueuedRecording(DiarizDbContext db, Guid userId)
@@ -116,6 +131,38 @@ public class WorkerCallbackControllerTests
 
         var seg = await db.Segments.SingleAsync(s => s.TranscriptionId == transcriptionId);
         Assert.Equal("UNKNOWN", seg.SpeakerLabel);
+    }
+
+    [Fact]
+    public async Task Result_WhenSummarisationConfigured_MarksSummarizing_AndEnqueuesJob()
+    {
+        var (controller, db, hub, queue) = BuildEx(Secret, summarizationEnabled: true);
+        var (recordingId, transcriptionId) = await SeedQueuedRecording(db, Guid.NewGuid());
+
+        await controller.Result(new TranscriptionResult(transcriptionId, "en",
+            [new SegmentResult("SPEAKER_00", 0, 1000, "Hello")]));
+
+        // Transcript still persisted, but the pipeline auto-continues into summarisation.
+        var rec = await db.Recordings.FindAsync(recordingId);
+        Assert.Equal(RecordingStatus.Summarizing, rec!.Status);
+        var job = Assert.Single(queue.SummarizationEnqueued);
+        Assert.Equal(recordingId, job.RecordingId);
+        Assert.Equal(transcriptionId, job.TranscriptionId);
+        // The owner is notified with the new status.
+        Assert.Contains(hub.Sent, m => m.Method == "RecordingStatusChanged");
+    }
+
+    [Fact]
+    public async Task Result_WhenSummarisationNotConfigured_StaysTranscribed_AndDoesNotEnqueue()
+    {
+        var (controller, db, _, queue) = BuildEx(Secret, summarizationEnabled: false);
+        var (recordingId, transcriptionId) = await SeedQueuedRecording(db, Guid.NewGuid());
+
+        await controller.Result(new TranscriptionResult(transcriptionId, "en",
+            [new SegmentResult("SPEAKER_00", 0, 1000, "Hello")]));
+
+        Assert.Equal(RecordingStatus.Transcribed, (await db.Recordings.FindAsync(recordingId))!.Status);
+        Assert.Empty(queue.SummarizationEnqueued);
     }
 
     [Fact]
