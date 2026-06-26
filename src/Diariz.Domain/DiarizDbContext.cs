@@ -14,6 +14,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<Speaker> Speakers => Set<Speaker>();
     public DbSet<Summary> Summaries => Set<Summary>();
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
+    public DbSet<Section> Sections => Set<Section>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -42,6 +43,17 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 .WithOne(s => s.Recording!)
                 .HasForeignKey(s => s.RecordingId)
                 .OnDelete(DeleteBehavior.Cascade);
+            // Deleting a section ungroups its recordings rather than deleting them.
+            e.HasOne(r => r.Section)
+                .WithMany(s => s.Recordings)
+                .HasForeignKey(r => r.SectionId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<Section>(e =>
+        {
+            e.HasIndex(s => new { s.UserId, s.Name });
+            e.Property(s => s.Name).HasMaxLength(128);
         });
 
         builder.Entity<Transcription>(e =>

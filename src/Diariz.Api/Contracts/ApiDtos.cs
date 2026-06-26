@@ -7,6 +7,12 @@ public record RegisterRequest(string Email, string Password);
 public record LoginRequest(string Email, string Password);
 public record AuthResponse(string AccessToken, DateTimeOffset ExpiresAt);
 
+// ---- Sections ----
+public record SectionDto(Guid Id, string Name);
+public record CreateSectionRequest(string Name);
+public record RenameSectionRequest(string Name);
+public record MoveRecordingRequest(Guid? SectionId);
+
 // ---- Recordings ----
 public record RecordingSummaryDto(
     Guid Id,
@@ -15,7 +21,9 @@ public record RecordingSummaryDto(
     RecordingSource Source,
     long DurationMs,
     RecordingStatus Status,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    Guid? SectionId,
+    string? SectionName);
 
 public record SegmentDto(Guid Id, string Speaker, string SpeakerDisplay, long StartMs, long EndMs, string Text);
 

@@ -1,0 +1,44 @@
+import { describe, it, expect, vi } from "vitest";
+import { recordingMenu } from "./recordingMenu";
+
+function build(overrides: Partial<Parameters<typeof recordingMenu>[0]> = {}) {
+  const noop = vi.fn();
+  return recordingMenu({
+    onRename: noop, onRetranscribe: noop, onSummarise: noop, onMove: noop, onPlay: noop,
+    onDownloadTxt: noop, onDownloadSrt: noop, onDownloadAudio: noop, onDelete: noop,
+    hasTranscript: true,
+    ...overrides,
+  });
+}
+
+describe("recordingMenu", () => {
+  it("lists the unified actions in order, without a Download both option", () => {
+    const labels = build().map((a) => a.label);
+    expect(labels).toEqual([
+      "Rename",
+      "Re-transcribe",
+      "Summarise",
+      "Move to section…",
+      "Play",
+      "Download transcript (.txt)",
+      "Download transcript (.srt)",
+      "Download audio",
+      "Delete",
+    ]);
+    expect(labels).not.toContain("Download both");
+  });
+
+  it("disables transcript-dependent actions when there is no transcript", () => {
+    const menu = build({ hasTranscript: false });
+    const find = (label: string) => menu.find((a) => a.label === label)!;
+    expect(find("Summarise").disabled).toBe(true);
+    expect(find("Download transcript (.txt)").disabled).toBe(true);
+    expect(find("Download audio").disabled).toBeFalsy(); // audio is independent of the transcript
+    expect(find("Rename").disabled).toBeFalsy();
+  });
+
+  it("disables Summarise while summarising", () => {
+    const menu = build({ isSummarizing: true });
+    expect(menu.find((a) => a.label === "Summarise")!.disabled).toBe(true);
+  });
+});

@@ -19,6 +19,13 @@ export interface RecordingSummary {
   durationMs: number;
   status: RecordingStatus;
   createdAt: string;
+  sectionId: string | null;
+  sectionName: string | null;
+}
+
+export interface SectionDto {
+  id: string;
+  name: string;
 }
 
 export interface SummaryDto {

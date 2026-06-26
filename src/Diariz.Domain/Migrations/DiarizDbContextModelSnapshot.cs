@@ -116,6 +116,9 @@ namespace Diariz.Domain.Migrations
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
 
+                    b.Property<Guid?>("SectionId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("Source")
                         .HasColumnType("integer");
 
@@ -132,9 +135,35 @@ namespace Diariz.Domain.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SectionId");
+
                     b.HasIndex("UserId", "CreatedAt");
 
                     b.ToTable("Recordings");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.Section", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Name");
+
+                    b.ToTable("Sections");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.Segment", b =>
@@ -410,8 +439,26 @@ namespace Diariz.Domain.Migrations
 
             modelBuilder.Entity("Diariz.Domain.Entities.Recording", b =>
                 {
+                    b.HasOne("Diariz.Domain.Entities.Section", "Section")
+                        .WithMany("Recordings")
+                        .HasForeignKey("SectionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
                         .WithMany("Recordings")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Section");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.Section", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
+                        .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -537,6 +584,11 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("Speakers");
 
                     b.Navigation("Transcriptions");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.Section", b =>
+                {
+                    b.Navigation("Recordings");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.Transcription", b =>

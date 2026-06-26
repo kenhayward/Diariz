@@ -236,6 +236,71 @@ public class RecordingsControllerTests
         Assert.IsType<NotFoundResult>(result);
     }
 
+    // ---- Move to section ----
+
+    [Fact]
+    public async Task MoveToSection_SetsSectionId_OnOwnedRecordingAndSection()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var section = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = userId, Name = "Work" };
+        db.Sections.Add(section);
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.MoveToSection(rec.Id, new MoveRecordingRequest(section.Id));
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Equal(section.Id, (await db.Recordings.FindAsync(rec.Id))!.SectionId);
+    }
+
+    [Fact]
+    public async Task MoveToSection_NullSection_Ungroups()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var section = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = userId, Name = "Work" };
+        var rec = await SeedRecording(db, userId, versions: 1);
+        db.Sections.Add(section);
+        rec.SectionId = section.Id;
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.MoveToSection(rec.Id, new MoveRecordingRequest(null));
+
+        Assert.Null((await db.Recordings.FindAsync(rec.Id))!.SectionId);
+    }
+
+    [Fact]
+    public async Task MoveToSection_AnotherUsersSection_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var othersSection = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Theirs" };
+        db.Sections.Add(othersSection);
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.MoveToSection(rec.Id, new MoveRecordingRequest(othersSection.Id));
+
+        Assert.IsType<NotFoundResult>(result);
+        Assert.Null((await db.Recordings.FindAsync(rec.Id))!.SectionId);
+    }
+
+    [Fact]
+    public async Task MoveToSection_AnotherUsersRecording_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var rec = await SeedRecording(db, Guid.NewGuid(), versions: 1);
+        var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue());
+
+        var result = await controller.MoveToSection(rec.Id, new MoveRecordingRequest(null));
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
     // ---- Update segment ----
 
     [Fact]
