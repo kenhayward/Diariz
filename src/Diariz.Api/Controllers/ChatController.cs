@@ -1,0 +1,292 @@
+using System.Security.Claims;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using Diariz.Api.Contracts;
+using Diariz.Api.Services;
+using Diariz.Domain;
+using Diariz.Domain.Entities;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace Diariz.Api.Controllers;
+
+/// <summary>
+/// Multi-turn chat over the user's transcripts. Stateless per turn: each request carries the full
+/// message history and the selected context (recording ids + optional attachment text). The LLM
+/// endpoint/model/key are the per-user summarisation config (server <c>.env</c> fallback); only the
+/// context-window size is chat-specific. Conversations can be saved/loaded/deleted.
+/// </summary>
+[ApiController]
+[Authorize]
+[Route("api/chat")]
+public class ChatController : ControllerBase
+{
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly SavedChatContextDto EmptyContext = new([], null, null);
+
+    private readonly DiarizDbContext _db;
+    private readonly IChatStreamClient _chat;
+    private readonly ISummarizationSettingsResolver _settings;
+    private readonly IChatContextResolver _contextResolver;
+    private readonly IAttachmentExtractor _extractor;
+
+    public ChatController(
+        DiarizDbContext db, IChatStreamClient chat, ISummarizationSettingsResolver settings,
+        IChatContextResolver contextResolver, IAttachmentExtractor extractor)
+    {
+        _db = db;
+        _chat = chat;
+        _settings = settings;
+        _contextResolver = contextResolver;
+        _extractor = extractor;
+    }
+
+    private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    // ---- Streaming chat (SSE) ----
+
+    [HttpPost("stream")]
+    public async Task<IActionResult> Stream(ChatStreamRequest req, CancellationToken ct)
+    {
+        var cfg = await _settings.ResolveAsync(UserId, ct);
+        if (!cfg.Enabled)
+            return BadRequest("Chat is not configured. Set an LLM endpoint in Settings.");
+
+        var (contexts, allOwned) = await LoadTranscriptsAsync(req.RecordingIds ?? [], ct);
+        if (!allOwned) return NotFound(); // a selected recording isn't visible to the caller
+
+        var system = ChatContextBuilder.BuildSystemPrompt(contexts, req.AttachmentName, req.AttachmentText);
+        var history = (req.Messages ?? []).Select(m => new ChatMessage(m.Role, m.Content)).ToList();
+        var messages = ChatContextBuilder.BuildMessages(system, history);
+        var contextTotal = await _contextResolver.ResolveContextWindowAsync(UserId, ct);
+        var promptTokens = messages.Sum(m => ChatContextMeter.EstimateTokens(m.Content));
+
+        Response.Headers["Content-Type"] = "text/event-stream";
+        Response.Headers["Cache-Control"] = "no-cache";
+        Response.Headers["X-Accel-Buffering"] = "no"; // tell nginx not to buffer the stream
+        HttpContext.Features.Get<IHttpResponseBodyFeature>()?.DisableBuffering();
+
+        await WriteEventAsync(new { type = "meta", model = cfg.Model, contextUsed = promptTokens, contextTotal }, ct);
+
+        long completionChars = 0;
+        try
+        {
+            await foreach (var token in _chat.StreamAsync(cfg, messages, ct))
+            {
+                completionChars += token.Length;
+                await WriteEventAsync(new { type = "token", value = token }, ct);
+            }
+            var used = promptTokens + ChatContextMeter.EstimateFromChars(completionChars);
+            await WriteEventAsync(new { type = "done", model = cfg.Model, contextUsed = used, contextTotal }, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // Client aborted (Stop button / navigation) — stop quietly.
+        }
+        catch (ChatStreamException ex)
+        {
+            await WriteEventAsync(new { type = "error", message = ex.Message }, ct);
+        }
+        return new EmptyResult();
+    }
+
+    private async Task WriteEventAsync(object payload, CancellationToken ct)
+    {
+        // JSON-encoding the payload escapes any newlines, so each event is a single safe SSE frame.
+        var json = JsonSerializer.Serialize(payload, Json);
+        await Response.WriteAsync($"data: {json}\n\n", ct);
+        await Response.Body.FlushAsync(ct);
+    }
+
+    // ---- Attachment extraction (PDF / text) ----
+
+    [HttpPost("attachment")]
+    [RequestSizeLimit(50L * 1024 * 1024)] // 50 MiB
+    public async Task<ActionResult<ChatAttachmentDto>> Attachment([FromForm] IFormFile? file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0) return BadRequest("A file is required.");
+        if (!_extractor.IsSupported(file.FileName, file.ContentType))
+            return BadRequest("Only PDF and text-based files (.pdf, .txt, .md, …) are supported.");
+
+        byte[] bytes;
+        using (var ms = new MemoryStream())
+        {
+            await file.OpenReadStream().CopyToAsync(ms, ct);
+            bytes = ms.ToArray();
+        }
+
+        try
+        {
+            var r = _extractor.Extract(file.FileName, file.ContentType, bytes);
+            if (string.IsNullOrWhiteSpace(r.Text))
+                return BadRequest("No text could be extracted from the file.");
+            return new ChatAttachmentDto(r.Name, r.Chars, r.Text);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+
+    // ---- Saved conversations (per-user CRUD) ----
+
+    [HttpGet("conversations")]
+    public async Task<IReadOnlyList<ChatConversationSummaryDto>> ListConversations() =>
+        await _db.ChatSessions
+            .Where(c => c.UserId == UserId)
+            .OrderByDescending(c => c.UpdatedAt)
+            .Select(c => new ChatConversationSummaryDto(c.Id, c.Title, c.UpdatedAt))
+            .ToListAsync();
+
+    [HttpGet("conversations/{id:guid}")]
+    public async Task<ActionResult<ChatConversationDto>> GetConversation(Guid id)
+    {
+        var c = await _db.ChatSessions.FirstOrDefaultAsync(x => x.Id == id && x.UserId == UserId);
+        if (c is null) return NotFound();
+        return ToDto(c);
+    }
+
+    [HttpPost("conversations")]
+    public async Task<ActionResult<SaveChatConversationResult>> CreateConversation(
+        SaveChatConversationRequest req, CancellationToken ct)
+    {
+        var messages = req.Messages ?? [];
+        if (messages.Count == 0) return BadRequest("Cannot save an empty conversation.");
+
+        var title = await GenerateTitleAsync(messages, ct);
+        var now = DateTimeOffset.UtcNow;
+        var c = new ChatSession
+        {
+            Id = Guid.NewGuid(),
+            UserId = UserId,
+            Title = title,
+            MessagesJson = JsonSerializer.Serialize(messages, Json),
+            ContextJson = JsonSerializer.Serialize(req.Context ?? EmptyContext, Json),
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+        _db.ChatSessions.Add(c);
+        await _db.SaveChangesAsync(ct);
+        return new SaveChatConversationResult(c.Id, title);
+    }
+
+    [HttpPut("conversations/{id:guid}")]
+    public async Task<ActionResult<SaveChatConversationResult>> UpdateConversation(
+        Guid id, SaveChatConversationRequest req, CancellationToken ct)
+    {
+        var c = await _db.ChatSessions.FirstOrDefaultAsync(x => x.Id == id && x.UserId == UserId);
+        if (c is null) return NotFound();
+
+        var messages = req.Messages ?? [];
+        if (messages.Count == 0) return BadRequest("Cannot save an empty conversation.");
+
+        c.Title = await GenerateTitleAsync(messages, ct);
+        c.MessagesJson = JsonSerializer.Serialize(messages, Json);
+        c.ContextJson = JsonSerializer.Serialize(req.Context ?? EmptyContext, Json);
+        c.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        return new SaveChatConversationResult(c.Id, c.Title);
+    }
+
+    [HttpDelete("conversations/{id:guid}")]
+    public async Task<IActionResult> DeleteConversation(Guid id)
+    {
+        var c = await _db.ChatSessions.FirstOrDefaultAsync(x => x.Id == id && x.UserId == UserId);
+        if (c is null) return NotFound();
+        _db.ChatSessions.Remove(c);
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    // ---- helpers ----
+
+    private static ChatConversationDto ToDto(ChatSession c)
+    {
+        var messages = JsonSerializer.Deserialize<List<ChatTurnDto>>(c.MessagesJson, Json) ?? [];
+        var context = JsonSerializer.Deserialize<SavedChatContextDto>(c.ContextJson, Json) ?? EmptyContext;
+        return new ChatConversationDto(c.Id, c.Title, messages, context, c.UpdatedAt);
+    }
+
+    /// <summary>Loads owned recordings' transcripts as context. The second item is false when any
+    /// requested id isn't visible to the caller (so the endpoint can 404 before streaming).</summary>
+    private async Task<(List<TranscriptContext> Contexts, bool AllOwned)> LoadTranscriptsAsync(
+        IReadOnlyList<Guid> recordingIds, CancellationToken ct)
+    {
+        var ids = recordingIds.Distinct().ToList();
+        if (ids.Count == 0) return ([], true);
+
+        var recs = await _db.Recordings
+            .Include(r => r.Speakers)
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal))
+            .Where(r => ids.Contains(r.Id) && r.UserId == UserId)
+            .ToListAsync(ct);
+
+        var contexts = new List<TranscriptContext>();
+        foreach (var rec in recs)
+        {
+            var names = rec.Speakers.ToDictionary(s => s.Label, s => s.DisplayName);
+            var current = rec.Transcriptions.FirstOrDefault();
+            var segs = current?.Segments
+                .OrderBy(s => s.Ordinal)
+                .Select(s => new SegmentDto(
+                    s.Id, s.SpeakerLabel,
+                    names.TryGetValue(s.SpeakerLabel, out var dn) ? dn : s.SpeakerLabel,
+                    s.StartMs, s.EndMs, s.Text))
+                .ToList() ?? [];
+            contexts.Add(new TranscriptContext(rec.Name ?? rec.Title, TranscriptFormatter.ToPlainText(segs)));
+        }
+        return (contexts, recs.Count == ids.Count);
+    }
+
+    /// <summary>A short LLM-generated title (3–6 words); falls back to the first user message when
+    /// chat isn't configured or generation fails.</summary>
+    private async Task<string> GenerateTitleAsync(IReadOnlyList<ChatTurnDto> messages, CancellationToken ct)
+    {
+        var firstUser = messages.FirstOrDefault(m => RoleIs(m.Role, "user"))?.Content?.Trim() ?? "";
+        var firstAssistant = messages.FirstOrDefault(m => RoleIs(m.Role, "assistant"))?.Content?.Trim() ?? "";
+        var fallback = Truncate(firstUser.Length > 0 ? firstUser : "Saved conversation", 60);
+
+        var excerpt = Truncate((firstUser + "\n\n" + firstAssistant).Trim(), 1500);
+        if (excerpt.Length == 0) return fallback;
+
+        var cfg = await _settings.ResolveAsync(UserId, ct);
+        if (!cfg.Enabled) return fallback;
+
+        try
+        {
+            var prompt = new[]
+            {
+                new ChatMessage("system",
+                    "Generate a concise 3-6 word title for this conversation. " +
+                    "Return only the title, with no quotes or punctuation."),
+                new ChatMessage("user", excerpt),
+            };
+            var sb = new StringBuilder();
+            await foreach (var t in _chat.StreamAsync(cfg, prompt, ct))
+                sb.Append(t);
+
+            var title = StripModelTokens(sb.ToString()).Trim().Trim('"');
+            return string.IsNullOrWhiteSpace(title) ? fallback : Truncate(title, 120);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+
+    private static bool RoleIs(string? role, string expected) =>
+        string.Equals(role, expected, StringComparison.OrdinalIgnoreCase);
+
+    private static string StripModelTokens(string s) => Regex.Replace(s, @"<\|[^|]*\|>", " ").Trim();
+
+    private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max];
+}

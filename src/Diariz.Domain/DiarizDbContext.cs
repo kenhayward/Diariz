@@ -15,6 +15,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<Summary> Summaries => Set<Summary>();
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
     public DbSet<Section> Sections => Set<Section>();
+    public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -94,6 +95,23 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.HasOne(s => s.User)
                 .WithOne(u => u.Settings)
                 .HasForeignKey<UserSettings>(s => s.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Saved chat conversations. The thread + context are JSON blobs (jsonb on Postgres; plain text
+        // under the in-memory test provider). Provider-agnostic shape stays outside the Npgsql guard.
+        builder.Entity<ChatSession>(e =>
+        {
+            e.HasIndex(c => new { c.UserId, c.UpdatedAt });
+            e.Property(c => c.Title).HasMaxLength(256);
+            if (isNpgsql)
+            {
+                e.Property(c => c.MessagesJson).HasColumnType("jsonb");
+                e.Property(c => c.ContextJson).HasColumnType("jsonb");
+            }
+            e.HasOne(c => c.User)
+                .WithMany(u => u.ChatSessions)
+                .HasForeignKey(c => c.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

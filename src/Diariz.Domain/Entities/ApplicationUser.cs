@@ -7,4 +7,5 @@ public class ApplicationUser : IdentityUser<Guid>
 {
     public ICollection<Recording> Recordings { get; set; } = new List<Recording>();
     public UserSettings? Settings { get; set; }
+    public ICollection<ChatSession> ChatSessions { get; set; } = new List<ChatSession>();
 }

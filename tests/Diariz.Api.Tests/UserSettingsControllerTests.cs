@@ -11,8 +11,10 @@ namespace Diariz.Api.Tests;
 
 public class UserSettingsControllerTests
 {
-    private static UserSettingsController Build(DiarizDbContext db, Guid userId, SummarizationOptions? server = null) =>
-        new(db, new FakeApiKeyProtector(), Options.Create(server ?? new SummarizationOptions()))
+    private static UserSettingsController Build(
+        DiarizDbContext db, Guid userId, SummarizationOptions? server = null, ChatOptions? chat = null) =>
+        new(db, new FakeApiKeyProtector(), Options.Create(server ?? new SummarizationOptions()),
+            Options.Create(chat ?? new ChatOptions()))
         {
             ControllerContext = Http.Context(userId)
         };
@@ -111,6 +113,30 @@ public class UserSettingsControllerTests
         // No per-user override set, so the user's own fields stay null.
         Assert.Null(dto.ApiBase);
         Assert.False(dto.HasApiKey);
+    }
+
+    [Fact]
+    public async Task Get_ExposesServerContextWindowDefault_WhenNoOverride()
+    {
+        using var db = TestDb.Create();
+        var dto = await Build(db, Guid.NewGuid(), chat: new ChatOptions { ContextLength = 131072 }).Get();
+
+        Assert.Null(dto.ContextWindow);
+        Assert.Equal(131072, dto.DefaultContextWindow);
+    }
+
+    [Fact]
+    public async Task Put_SetsContextWindowOverride_AndClearsOnNonPositive()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+
+        await Build(db, userId).Update(new UpdateUserSettingsRequest("https://a", "m", null, ContextWindow: 8000));
+        Assert.Equal(8000, (await Build(db, userId).Get()).ContextWindow);
+
+        // 0 (or null) clears the override → falls back to the server default.
+        await Build(db, userId).Update(new UpdateUserSettingsRequest("https://a", "m", null, ContextWindow: 0));
+        Assert.Null((await Build(db, userId).Get()).ContextWindow);
     }
 
     [Fact]

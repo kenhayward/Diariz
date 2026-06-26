@@ -79,6 +79,9 @@ export interface UserSettings {
   defaultApiBase: string | null;
   defaultModel: string | null;
   serverHasApiKey: boolean;
+  /// Per-user chat context-window override (tokens); null = use the server default.
+  contextWindow: number | null;
+  defaultContextWindow: number;
 }
 
 export interface UpdateUserSettings {
@@ -86,4 +89,45 @@ export interface UpdateUserSettings {
   model: string | null;
   /// Tri-state: undefined/null = leave unchanged, "" = clear, value = set.
   apiKey?: string | null;
+  /// Context-window override; null/0 clears it (falls back to the server default).
+  contextWindow?: number | null;
+}
+
+// ---- Chat ----
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+/// Context-usage snapshot for the dial: tokens used out of the model's window.
+export interface ChatUsage {
+  model: string;
+  contextUsed: number;
+  contextTotal: number;
+}
+
+export interface SavedChatContext {
+  recordingIds: string[];
+  attachmentName: string | null;
+  attachmentText: string | null;
+}
+
+export interface ChatConversationSummary {
+  id: string;
+  title: string;
+  updatedAt: string;
+}
+
+export interface ChatConversation {
+  id: string;
+  title: string;
+  messages: ChatTurn[];
+  context: SavedChatContext;
+  updatedAt: string;
+}
+
+export interface ChatAttachment {
+  name: string;
+  chars: number;
+  text: string;
 }

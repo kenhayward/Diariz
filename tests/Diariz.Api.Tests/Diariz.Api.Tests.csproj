@@ -19,6 +19,11 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.*" />
   </ItemGroup>
 
+  <!-- Binary fixtures (e.g. a tiny PDF) copied next to the test assembly. -->
+  <ItemGroup>
+    <None Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- The API is an ASP.NET Core app; tests touch controllers/SignalR types directly. -->
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

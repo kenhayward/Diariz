@@ -54,3 +54,12 @@ public class SummarizationOptions
     /// <summary>True when an endpoint is configured; otherwise the summarise endpoint is a no-op.</summary>
     public bool Enabled => !string.IsNullOrWhiteSpace(ApiBase);
 }
+
+/// <summary>Chat-specific settings. The LLM endpoint/model/key are shared with summarisation
+/// (per-user, via <c>UserSettings</c>); only the context-window size is chat-specific.</summary>
+public class ChatOptions
+{
+    public const string Section = "Chat";
+    /// <summary>Model context window in tokens, used by the context dial. Per-user overridable in Settings.</summary>
+    public int ContextLength { get; set; } = 131072;
+}

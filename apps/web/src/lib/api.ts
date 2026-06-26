@@ -1,9 +1,15 @@
 import axios from "axios";
 import type {
   AuthResponse,
+  ChatAttachment,
+  ChatConversation,
+  ChatConversationSummary,
+  ChatTurn,
+  ChatUsage,
   RecordingDetail,
   RecordingSource,
   RecordingSummary,
+  SavedChatContext,
   SectionDto,
   UpdateUserSettings,
   UserSettings,
@@ -129,6 +135,116 @@ export const api = {
 
   async updateUserSettings(body: UpdateUserSettings): Promise<void> {
     await http.put("/api/user/settings", body);
+  },
+
+  // ---- Chat ----
+
+  /// Stream a chat reply. Uses raw fetch (not the axios instance) so the response body can be read
+  /// incrementally; the JWT bearer must therefore be attached manually here. Resolves with the final
+  /// context-usage snapshot.
+  async chatStream(
+    body: {
+      recordingIds: string[];
+      attachmentName?: string | null;
+      attachmentText?: string | null;
+      messages: ChatTurn[];
+    },
+    handlers: { onToken: (token: string) => void; onMeta?: (u: ChatUsage) => void; signal?: AbortSignal },
+  ): Promise<ChatUsage> {
+    const res = await fetch(`${baseURL}/api/chat/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken() ?? ""}` },
+      body: JSON.stringify(body),
+      signal: handlers.signal,
+    });
+
+    if (res.status === 401) {
+      setToken(null);
+      if (window.location.pathname !== "/login") window.location.assign("/login");
+      throw new Error("Session expired.");
+    }
+    if (!res.ok || !res.body) {
+      const text = await res.text().catch(() => "");
+      throw new Error(text || `Chat failed (${res.status}).`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let usage: ChatUsage = { model: "", contextUsed: 0, contextTotal: 0 };
+
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      // SSE frames are separated by a blank line.
+      let sep: number;
+      while ((sep = buffer.indexOf("\n\n")) >= 0) {
+        const frame = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        const dataLine = frame.split("\n").find((l) => l.startsWith("data:"));
+        if (!dataLine) continue;
+        const json = dataLine.slice("data:".length).trim();
+        if (!json) continue;
+        const evt = JSON.parse(json) as {
+          type: string;
+          value?: string;
+          model?: string;
+          message?: string;
+          contextUsed?: number;
+          contextTotal?: number;
+        };
+        if (evt.type === "token" && evt.value) {
+          handlers.onToken(evt.value);
+        } else if (evt.type === "meta") {
+          usage = { model: evt.model ?? "", contextUsed: evt.contextUsed ?? 0, contextTotal: evt.contextTotal ?? 0 };
+          handlers.onMeta?.(usage);
+        } else if (evt.type === "done") {
+          usage = {
+            model: evt.model ?? usage.model,
+            contextUsed: evt.contextUsed ?? usage.contextUsed,
+            contextTotal: evt.contextTotal ?? usage.contextTotal,
+          };
+        } else if (evt.type === "error") {
+          throw new Error(evt.message ?? "Chat failed.");
+        }
+      }
+    }
+    return usage;
+  },
+
+  async uploadChatAttachment(file: File): Promise<ChatAttachment> {
+    const form = new FormData();
+    form.append("file", file);
+    const { data } = await http.post<ChatAttachment>("/api/chat/attachment", form);
+    return data;
+  },
+
+  async listChatConversations(): Promise<ChatConversationSummary[]> {
+    const { data } = await http.get<ChatConversationSummary[]>("/api/chat/conversations");
+    return data;
+  },
+
+  async getChatConversation(id: string): Promise<ChatConversation> {
+    const { data } = await http.get<ChatConversation>(`/api/chat/conversations/${id}`);
+    return data;
+  },
+
+  async createChatConversation(body: { messages: ChatTurn[]; context: SavedChatContext }): Promise<{ id: string; title: string }> {
+    const { data } = await http.post<{ id: string; title: string }>("/api/chat/conversations", body);
+    return data;
+  },
+
+  async updateChatConversation(
+    id: string,
+    body: { messages: ChatTurn[]; context: SavedChatContext },
+  ): Promise<{ id: string; title: string }> {
+    const { data } = await http.put<{ id: string; title: string }>(`/api/chat/conversations/${id}`, body);
+    return data;
+  },
+
+  async deleteChatConversation(id: string): Promise<void> {
+    await http.delete(`/api/chat/conversations/${id}`);
   },
 
   async retranscribe(id: string, model?: string): Promise<void> {

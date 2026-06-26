@@ -89,6 +89,41 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.ChatSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContextJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MessagesJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "UpdatedAt");
+
+                    b.ToTable("ChatSessions");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.Recording", b =>
                 {
                     b.Property<Guid>("Id")
@@ -291,6 +326,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
+                    b.Property<int?>("ChatContextWindow")
+                        .HasColumnType("integer");
+
                     b.Property<string>("SummaryApiBase")
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
@@ -437,6 +475,17 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.ChatSession", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
+                        .WithMany("ChatSessions")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.Recording", b =>
                 {
                     b.HasOne("Diariz.Domain.Entities.Section", "Section")
@@ -574,6 +623,8 @@ namespace Diariz.Domain.Migrations
 
             modelBuilder.Entity("Diariz.Domain.Entities.ApplicationUser", b =>
                 {
+                    b.Navigation("ChatSessions");
+
                     b.Navigation("Recordings");
 
                     b.Navigation("Settings");

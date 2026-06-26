@@ -77,6 +77,32 @@ public sealed class FakeSummarizationClient : ISummarizationClient
     }
 }
 
+/// <summary>Stub <see cref="IChatStreamClient"/> — yields a canned token sequence or throws.</summary>
+public sealed class FakeChatStreamClient : IChatStreamClient
+{
+    public List<string> Tokens { get; set; } = ["Project", " Kickoff", " Recap"];
+    public Exception? ThrowOnCall { get; set; }
+    public int Calls { get; private set; }
+    public SummarizationRequestConfig? LastConfig { get; private set; }
+    public List<ChatMessage>? LastMessages { get; private set; }
+
+    public async IAsyncEnumerable<string> StreamAsync(
+        SummarizationRequestConfig config, IReadOnlyList<ChatMessage> messages,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        Calls++;
+        LastConfig = config;
+        LastMessages = messages.ToList();
+        if (ThrowOnCall is not null) throw ThrowOnCall;
+        foreach (var t in Tokens)
+        {
+            ct.ThrowIfCancellationRequested();
+            yield return t;
+            await Task.Yield();
+        }
+    }
+}
+
 /// <summary>Records the jobs that would have been pushed onto the Redis stream.</summary>
 public sealed class FakeJobQueue : IJobQueue
 {

@@ -29,6 +29,8 @@ describe("SettingsModal", () => {
       defaultApiBase: "https://server/v1",
       defaultModel: "server-model",
       serverHasApiKey: true,
+      contextWindow: null,
+      defaultContextWindow: 131072,
     });
     (api.updateUserSettings as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   });
@@ -51,6 +53,7 @@ describe("SettingsModal", () => {
         apiBase: "https://new/v1",
         model: "gpt-x",
         apiKey: null,
+        contextWindow: null,
       }),
     );
   });
@@ -78,6 +81,8 @@ describe("SettingsModal", () => {
       defaultApiBase: "https://server/v1",
       defaultModel: "server-model",
       serverHasApiKey: true,
+      contextWindow: null,
+      defaultContextWindow: 131072,
     });
     renderModal();
 
@@ -88,7 +93,25 @@ describe("SettingsModal", () => {
     // Submitting without changing anything must not persist the defaults as the user's own.
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
     await waitFor(() =>
-      expect(api.updateUserSettings).toHaveBeenCalledWith({ apiBase: null, model: null, apiKey: null }),
+      expect(api.updateUserSettings).toHaveBeenCalledWith({
+        apiBase: null,
+        model: null,
+        apiKey: null,
+        contextWindow: null,
+      }),
+    );
+  });
+
+  it("shows the server context-window default as a placeholder and saves an override", async () => {
+    renderModal();
+    const field = await screen.findByPlaceholderText(/Default: 131,072/);
+    expect((field as HTMLInputElement).value).toBe(""); // no per-user override set
+
+    fireEvent.change(field, { target: { value: "8000" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(api.updateUserSettings).toHaveBeenCalledWith(expect.objectContaining({ contextWindow: 8000 })),
     );
   });
 
