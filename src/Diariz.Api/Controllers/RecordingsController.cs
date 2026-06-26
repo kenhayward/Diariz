@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
@@ -23,16 +24,19 @@ public class RecordingsController : ControllerBase
     private readonly IJobQueue _queue;
     private readonly IHubContext<TranscriptionHub> _hub;
     private readonly string _defaultModel;
+    private readonly bool _summarizationEnabled;
 
     public RecordingsController(
         DiarizDbContext db, IAudioStorage storage, IJobQueue queue,
-        IHubContext<TranscriptionHub> hub, IConfiguration config)
+        IHubContext<TranscriptionHub> hub, IConfiguration config,
+        IOptions<SummarizationOptions> summarization)
     {
         _db = db;
         _storage = storage;
         _queue = queue;
         _hub = hub;
         _defaultModel = config["Transcription:DefaultModel"] ?? "whisperx-large-v3";
+        _summarizationEnabled = summarization.Value.Enabled;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -42,7 +46,7 @@ public class RecordingsController : ControllerBase
         await _db.Recordings
             .Where(r => r.UserId == UserId)
             .OrderByDescending(r => r.CreatedAt)
-            .Select(r => new RecordingSummaryDto(r.Id, r.Title, r.DurationMs, r.Status, r.CreatedAt))
+            .Select(r => new RecordingSummaryDto(r.Id, r.Title, r.Name, r.Source, r.DurationMs, r.Status, r.CreatedAt))
             .ToListAsync();
 
     [HttpGet("{id:guid}")]
@@ -52,6 +56,8 @@ public class RecordingsController : ControllerBase
             .Include(r => r.Speakers)
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal))
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                .ThenInclude(t => t.Summary)
             .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
 
         if (rec is null) return NotFound();
@@ -64,16 +70,19 @@ public class RecordingsController : ControllerBase
                 s.SpeakerLabel,
                 names.TryGetValue(s.SpeakerLabel, out var dn) ? dn : s.SpeakerLabel,
                 s.StartMs, s.EndMs, s.Text)).ToList());
+        SummaryDto? sDto = current?.Summary is null ? null
+            : new(current.Summary.Model, current.Summary.Text, current.Summary.CreatedAt);
 
-        return new RecordingDetailDto(rec.Id, rec.Title, rec.DurationMs, rec.Status, rec.Error,
-            rec.CreatedAt, names, tDto);
+        return new RecordingDetailDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.Status,
+            rec.Error, rec.CreatedAt, names, tDto, sDto);
     }
 
     /// <summary>Upload an audio file and kick off transcription.</summary>
     [HttpPost]
     [RequestSizeLimit(1024L * 1024 * 1024)] // 1 GiB
     public async Task<ActionResult<RecordingSummaryDto>> Upload(
-        [FromForm] IFormFile audio, [FromForm] string? title, [FromForm] long durationMs)
+        [FromForm] IFormFile audio, [FromForm] string? title, [FromForm] long durationMs,
+        [FromForm] RecordingSource source = RecordingSource.Microphone)
     {
         if (audio is null || audio.Length == 0) return BadRequest("Empty audio.");
 
@@ -82,6 +91,7 @@ public class RecordingsController : ControllerBase
             Id = Guid.NewGuid(),
             UserId = UserId,
             Title = string.IsNullOrWhiteSpace(title) ? $"Recording {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm}" : title,
+            Source = source,
             ContentType = audio.ContentType,
             DurationMs = durationMs,
             Status = RecordingStatus.Uploaded
@@ -96,7 +106,7 @@ public class RecordingsController : ControllerBase
         await _db.SaveChangesAsync();
 
         return CreatedAtAction(nameof(Get), new { id = rec.Id },
-            new RecordingSummaryDto(rec.Id, rec.Title, rec.DurationMs, rec.Status, rec.CreatedAt));
+            new RecordingSummaryDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.Status, rec.CreatedAt));
     }
 
     [HttpPost("{id:guid}/retranscribe")]
@@ -131,13 +141,104 @@ public class RecordingsController : ControllerBase
         return NoContent();
     }
 
-    [HttpGet("{id:guid}/audio-url")]
-    public async Task<ActionResult<object>> AudioUrl(Guid id)
+    [HttpPost("{id:guid}/summarize")]
+    public async Task<IActionResult> Summarize(Guid id)
+    {
+        var rec = await _db.Recordings
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+
+        var current = rec.Transcriptions.FirstOrDefault();
+        if (current is null) return NotFound();
+
+        if (!_summarizationEnabled)
+            return BadRequest("Summarisation is not configured on the server.");
+
+        // Idempotent: a summary is already in flight, don't enqueue a second job.
+        if (rec.Status == RecordingStatus.Summarizing) return Accepted();
+
+        rec.Status = RecordingStatus.Summarizing;
+        await _queue.EnqueueSummarizationAsync(new SummarizationJob(rec.Id, current.Id));
+        await _hub.NotifyStatusAsync(rec.UserId, rec.Id, rec.Status.ToString());
+        await _db.SaveChangesAsync();
+        return Accepted();
+    }
+
+    [HttpPut("{id:guid}/name")]
+    public async Task<IActionResult> Rename(Guid id, RenameRecordingRequest req)
     {
         var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
         if (rec is null) return NotFound();
-        var url = _storage.GetPresignedDownloadUrl(rec.BlobKey, TimeSpan.FromHours(1));
+
+        rec.Name = string.IsNullOrWhiteSpace(req.Name) ? null : req.Name.Trim();
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+
+        // Remove the blob first: a dangling DB row is safer (and retriable) than an orphaned blob.
+        // The DB cascade clears Transcriptions -> Segments + Summary, and Speakers.
+        await _storage.DeleteAsync(rec.BlobKey);
+        _db.Recordings.Remove(rec);
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpGet("{id:guid}/audio-url")]
+    public async Task<ActionResult<object>> AudioUrl(Guid id, [FromQuery] bool download = false)
+    {
+        var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+        var fileName = download ? $"{Slug(rec.Name ?? rec.Title)}{Path.GetExtension(rec.BlobKey)}" : null;
+        var url = _storage.GetPresignedDownloadUrl(rec.BlobKey, TimeSpan.FromHours(1), fileName);
         return new { url };
+    }
+
+    [HttpGet("{id:guid}/transcript.txt")]
+    public Task<IActionResult> TranscriptTxt(Guid id) => DownloadTranscriptAsync(id, srt: false);
+
+    [HttpGet("{id:guid}/transcript.srt")]
+    public Task<IActionResult> TranscriptSrt(Guid id) => DownloadTranscriptAsync(id, srt: true);
+
+    private async Task<IActionResult> DownloadTranscriptAsync(Guid id, bool srt)
+    {
+        var rec = await _db.Recordings
+            .Include(r => r.Speakers)
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal))
+            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+
+        var current = rec.Transcriptions.FirstOrDefault();
+        if (current is null || current.Segments.Count == 0) return NotFound();
+
+        var names = rec.Speakers.ToDictionary(s => s.Label, s => s.DisplayName);
+        var segs = current.Segments
+            .OrderBy(s => s.Ordinal)
+            .Select(s => new SegmentDto(
+                s.SpeakerLabel,
+                names.TryGetValue(s.SpeakerLabel, out var dn) ? dn : s.SpeakerLabel,
+                s.StartMs, s.EndMs, s.Text))
+            .ToList();
+
+        var text = srt ? TranscriptFormatter.ToSrt(segs) : TranscriptFormatter.ToPlainText(segs);
+        var fileName = $"{Slug(rec.Name ?? rec.Title)}.{(srt ? "srt" : "txt")}";
+        return File(Encoding.UTF8.GetBytes(text), srt ? "application/x-subrip" : "text/plain", fileName);
+    }
+
+    /// <summary>Filesystem-safe lowercase slug for download filenames.</summary>
+    private static string Slug(string? s)
+    {
+        var slug = new string((s ?? "").Trim()
+            .Select(c => char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : '-').ToArray()).Trim('-');
+        while (slug.Contains("--")) slug = slug.Replace("--", "-");
+        return string.IsNullOrEmpty(slug) ? "transcript" : slug;
     }
 
     private async Task EnqueueTranscriptionAsync(Recording rec, string? model = null)

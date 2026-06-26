@@ -38,6 +38,14 @@ API persists `Segment`s + seeds `Speaker` rows → notifies the browser over **S
   changing `TranscriptionJob` / `TranscriptionResult` / `Segment` shapes.
 - **Worker → API callback** uses route `internal/transcriptions/*` and is authenticated by a shared
   secret header `X-Worker-Secret` (= `CALLBACK_SECRET`), **not** JWT. It is not user-facing.
+- **Summarisation queue (in-process).** A second Redis stream `summarization-jobs` (consumer group
+  `summarizers`) is **produced and consumed entirely within the API** — `RedisJobQueue.EnqueueSummarizationAsync`
+  enqueues, and `Services/SummarizationWorker` (a `BackgroundService`, the API's only stream consumer)
+  reads it, calls an OpenAI-compatible `/chat/completions` endpoint (`SummarizationClient`), and writes the
+  `Summary` (+ an auto-generated `Name` when the recording has none). It is a singleton, so it opens a DI
+  scope per job; it XACKs even on failure (records a `Failed` status) to avoid poison-message loops. Configure
+  via the `Summarization` options section (`SUMMARY_API_BASE`/`SUMMARY_API_KEY`/`SUMMARY_MODEL`); an empty
+  `ApiBase` disables the Summarise button and the worker idles.
 - **SignalR auth.** The hub (`/hubs/transcription`) requires JWT; browsers can't set Authorization
   headers on the WS handshake, so the token is passed as the `access_token` query string and picked
   up in `Program.cs` `OnMessageReceived`. Clients are auto-joined to a per-user group (group name =
@@ -46,7 +54,12 @@ API persists `Segment`s + seeds `Speaker` rows → notifies the browser over **S
 ### Domain model notes
 
 - **Transcriptions are versioned per recording** (`(RecordingId, Version)` unique). `Retranscribe`
-  bumps the version; `GET /api/recordings/{id}` returns only the highest-version transcription.
+  bumps the version; `GET /api/recordings/{id}` returns only the highest-version transcription (and its
+  `Summary`, if any).
+- **Recording naming.** `Recording.Title` is the auto descriptor; `Recording.Name` (nullable) is the
+  user-editable display name (the UI shows `Name ?? Title`) and is also auto-filled by the summariser when
+  unset. `Recording.Source` (`Microphone`/`System`) is captured at upload. `RecordingStatus` gained
+  `Summarizing = 6` — **append only, never renumber** (values persist as ints in Postgres).
 - **Speaker renames are preserved across re-transcribes.** Worker emits diarization labels
   (`SPEAKER_00`...); the callback seeds a `Speaker` row per new label with `DisplayName = label`,
   and the UI's rename updates `DisplayName` only.

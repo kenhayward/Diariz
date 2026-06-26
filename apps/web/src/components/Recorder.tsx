@@ -53,7 +53,7 @@ export default function Recorder({ onUploaded }: { onUploaded: () => void }) {
       const blob = new Blob(chunksRef.current, { type: "audio/webm" });
       const durationMs = Date.now() - startRef.current;
       const title = `${source === "system" ? "System" : "Mic"} ${new Date().toLocaleString()}`;
-      await api.upload(blob, title, durationMs);
+      await api.upload(blob, title, durationMs, source === "system" ? "System" : "Microphone");
       onUploaded();
     } catch (e) {
       setError(apiErrorMessage(e, "Upload failed."));

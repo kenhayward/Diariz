@@ -16,7 +16,7 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
     {
         using var mux = await ConnectionMultiplexer.ConnectAsync(fx.RedisConnectionString);
         var opts = Options.Create(new JobQueueOptions { StreamKey = $"jobs-{Guid.NewGuid()}" });
-        var queue = new RedisJobQueue(mux, opts);
+        var queue = new RedisJobQueue(mux, opts, Options.Create(new SummarizationOptions()));
 
         var job = new TranscriptionJob(Guid.NewGuid(), Guid.NewGuid(), "user/blob.webm", "whisperx-large-v3");
         await queue.EnqueueAsync(job);
@@ -35,5 +35,23 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
 
         // Guard the wire contract: keys must stay PascalCase or the worker breaks.
         Assert.Contains("\"BlobKey\"", json);
+    }
+
+    [Fact]
+    public async Task EnqueueSummarizationAsync_AddsJsonJobToSummarizationStream()
+    {
+        using var mux = await ConnectionMultiplexer.ConnectAsync(fx.RedisConnectionString);
+        var streamKey = $"sum-{Guid.NewGuid()}";
+        var queue = new RedisJobQueue(mux, Options.Create(new JobQueueOptions()),
+            Options.Create(new SummarizationOptions { StreamKey = streamKey }));
+
+        var job = new SummarizationJob(Guid.NewGuid(), Guid.NewGuid());
+        await queue.EnqueueSummarizationAsync(job);
+
+        var entries = await mux.GetDatabase().StreamRangeAsync(streamKey, "-", "+");
+        var json = Assert.Single(entries).Values.Single(v => v.Name == "job").Value.ToString();
+        var roundTripped = JsonSerializer.Deserialize<SummarizationJob>(json);
+        Assert.Equal(job.RecordingId, roundTripped!.RecordingId);
+        Assert.Equal(job.TranscriptionId, roundTripped.TranscriptionId);
     }
 }

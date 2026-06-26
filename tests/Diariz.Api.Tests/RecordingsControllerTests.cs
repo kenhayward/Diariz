@@ -8,17 +8,24 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
+using Diariz.Api.Configuration;
 
 namespace Diariz.Api.Tests;
 
 public class RecordingsControllerTests
 {
-    private static RecordingsController Build(DiarizDbContext db, Guid userId, FakeJobQueue queue, FakeAudioStorage? storage = null)
+    private static RecordingsController Build(DiarizDbContext db, Guid userId, FakeJobQueue queue,
+        FakeAudioStorage? storage = null, bool summarizationEnabled = true)
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" })
             .Build();
-        return new RecordingsController(db, storage ?? new FakeAudioStorage(), queue, new FakeHubContext(), config)
+        var summary = Options.Create(new SummarizationOptions
+        {
+            ApiBase = summarizationEnabled ? "http://llm.test/v1" : ""
+        });
+        return new RecordingsController(db, storage ?? new FakeAudioStorage(), queue, new FakeHubContext(), config, summary)
         {
             ControllerContext = Http.Context(userId)
         };
@@ -228,7 +235,249 @@ public class RecordingsControllerTests
         Assert.IsType<NotFoundResult>(result);
     }
 
+    // ---- Summarize ----
+
+    [Fact]
+    public async Task Summarize_SetsStatusSummarizing_AndEnqueuesJob()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
+        var controller = Build(db, userId, queue);
+
+        var result = await controller.Summarize(rec.Id);
+
+        Assert.IsType<AcceptedResult>(result);
+        var reloaded = await db.Recordings.FindAsync(rec.Id);
+        Assert.Equal(RecordingStatus.Summarizing, reloaded!.Status);
+        var job = Assert.Single(queue.SummarizationEnqueued);
+        Assert.Equal(rec.Id, job.RecordingId);
+        Assert.Equal(tr.Id, job.TranscriptionId);
+    }
+
+    [Fact]
+    public async Task Summarize_WhenAlreadySummarizing_DoesNotDoubleEnqueue()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        rec.Status = RecordingStatus.Summarizing;
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, queue);
+
+        var result = await controller.Summarize(rec.Id);
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Empty(queue.SummarizationEnqueued);
+    }
+
+    [Fact]
+    public async Task Summarize_WhenNotConfigured_ReturnsBadRequest_AndDoesNotEnqueue()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var controller = Build(db, userId, queue, summarizationEnabled: false);
+
+        var result = await controller.Summarize(rec.Id);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Empty(queue.SummarizationEnqueued);
+        var reloaded = await db.Recordings.FindAsync(rec.Id);
+        Assert.NotEqual(RecordingStatus.Summarizing, reloaded!.Status);
+    }
+
+    [Fact]
+    public async Task Summarize_NoTranscription_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId); // no transcription versions
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(await controller.Summarize(rec.Id));
+    }
+
+    [Fact]
+    public async Task Summarize_OnAnotherUsersRecording_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var rec = await SeedRecording(db, Guid.NewGuid(), versions: 1);
+        var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(await controller.Summarize(rec.Id));
+    }
+
+    // ---- Rename recording ----
+
+    [Fact]
+    public async Task Rename_SetsName_OnOwnedRecording()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.Rename(rec.Id, new RenameRecordingRequest("Weekly Standup"));
+
+        Assert.IsType<NoContentResult>(result);
+        var reloaded = await db.Recordings.FindAsync(rec.Id);
+        Assert.Equal("Weekly Standup", reloaded!.Name);
+    }
+
+    [Fact]
+    public async Task Rename_BlankName_ClearsToNull()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        rec.Name = "Old name";
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.Rename(rec.Id, new RenameRecordingRequest("   "));
+
+        var reloaded = await db.Recordings.FindAsync(rec.Id);
+        Assert.Null(reloaded!.Name);
+    }
+
+    [Fact]
+    public async Task Rename_OnAnotherUsersRecording_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var rec = await SeedRecording(db, Guid.NewGuid(), versions: 1);
+        var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue());
+
+        var result = await controller.Rename(rec.Id, new RenameRecordingRequest("X"));
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    // ---- Delete recording ----
+
+    [Fact]
+    public async Task Delete_RemovesRecording_AndBlob()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        storage.Objects[rec.BlobKey] = Encoding.UTF8.GetBytes("audio");
+        var controller = Build(db, userId, new FakeJobQueue(), storage);
+
+        var result = await controller.Delete(rec.Id);
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Null(await db.Recordings.FindAsync(rec.Id));
+        Assert.False(storage.Objects.ContainsKey(rec.BlobKey));
+    }
+
+    [Fact]
+    public async Task Delete_OnAnotherUsersRecording_ReturnsNotFound_AndKeepsBlob()
+    {
+        using var db = TestDb.Create();
+        var storage = new FakeAudioStorage();
+        var rec = await SeedRecording(db, Guid.NewGuid(), versions: 1);
+        storage.Objects[rec.BlobKey] = Encoding.UTF8.GetBytes("audio");
+        var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue(), storage);
+
+        var result = await controller.Delete(rec.Id);
+
+        Assert.IsType<NotFoundResult>(result);
+        Assert.NotNull(await db.Recordings.FindAsync(rec.Id));
+        Assert.True(storage.Objects.ContainsKey(rec.BlobKey));
+    }
+
+    // ---- Transcript download ----
+
+    private static async Task<Recording> SeedTranscribedRecording(
+        DiarizDbContext db, Guid userId, string? name = null)
+    {
+        var rec = await SeedRecording(db, userId, versions: 1);
+        rec.Name = name;
+        var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
+        db.Segments.AddRange(
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 1000, Text = "Hello", Ordinal = 0 },
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 1000, EndMs = 2000, Text = "World", Ordinal = 1 });
+        db.Speakers.Add(new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Alice" });
+        await db.SaveChangesAsync();
+        return rec;
+    }
+
+    [Fact]
+    public async Task TranscriptTxt_ReturnsTextFile_WithSpeakerNames_AndSlugFilename()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId, name: "Team Sync");
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.TranscriptTxt(rec.Id);
+
+        var file = Assert.IsType<FileContentResult>(result);
+        Assert.Equal("text/plain", file.ContentType);
+        Assert.Equal("team-sync.txt", file.FileDownloadName);
+        Assert.Equal("[00:00] Alice: Hello\n[00:01] Alice: World\n", Encoding.UTF8.GetString(file.FileContents));
+    }
+
+    [Fact]
+    public async Task TranscriptSrt_ReturnsSubripFile()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId, name: "Team Sync");
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.TranscriptSrt(rec.Id);
+
+        var file = Assert.IsType<FileContentResult>(result);
+        Assert.Equal("application/x-subrip", file.ContentType);
+        Assert.Equal("team-sync.srt", file.FileDownloadName);
+        Assert.StartsWith("1\n00:00:00,000 --> 00:00:01,000\nAlice: Hello\n", Encoding.UTF8.GetString(file.FileContents));
+    }
+
+    [Fact]
+    public async Task TranscriptTxt_NoSegments_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1); // transcription row but no segments
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(await controller.TranscriptTxt(rec.Id));
+    }
+
+    [Fact]
+    public async Task TranscriptTxt_OnAnotherUsersRecording_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var rec = await SeedTranscribedRecording(db, Guid.NewGuid(), name: "x");
+        var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(await controller.TranscriptTxt(rec.Id));
+    }
+
     // ---- AudioUrl ----
+
+    [Fact]
+    public async Task AudioUrl_WithDownload_RequestsAttachmentFilenameFromName()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        rec.Name = "Demo";
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue(), storage);
+
+        await controller.AudioUrl(rec.Id, download: true);
+
+        Assert.Equal("demo.webm", storage.LastPresignDownloadFileName);
+    }
 
     [Fact]
     public async Task AudioUrl_ReturnsPresignedUrl_ForOwnedRecording()

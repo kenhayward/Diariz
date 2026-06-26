@@ -19,6 +19,7 @@ builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptio
 builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection(StorageOptions.Section));
 builder.Services.Configure<JobQueueOptions>(builder.Configuration.GetSection(JobQueueOptions.Section));
 builder.Services.Configure<WorkerOptions>(builder.Configuration.GetSection(WorkerOptions.Section));
+builder.Services.Configure<SummarizationOptions>(builder.Configuration.GetSection(SummarizationOptions.Section));
 
 var jwt = builder.Configuration.GetSection(JwtOptions.Section).Get<JwtOptions>() ?? new JwtOptions();
 var storage = builder.Configuration.GetSection(StorageOptions.Section).Get<StorageOptions>() ?? new StorageOptions();
@@ -74,7 +75,8 @@ builder.Services.AddSingleton<IAmazonS3>(_ =>
     {
         ServiceURL = storage.Endpoint,
         ForcePathStyle = storage.ForcePathStyle,
-        AuthenticationRegion = "us-east-1"
+        AuthenticationRegion = "us-east-1",
+        UseHttp = storage.Endpoint.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
     };
     return new AmazonS3Client(new BasicAWSCredentials(storage.AccessKey, storage.SecretKey), cfg);
 });
@@ -84,6 +86,10 @@ builder.Services.AddSingleton<IAudioStorage, AudioStorage>();
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
     ConnectionMultiplexer.Connect(queue.RedisConnection));
 builder.Services.AddSingleton<IJobQueue, RedisJobQueue>();
+
+// ---- Summarisation (OpenAI-compatible endpoint + background consumer) ----
+builder.Services.AddHttpClient<ISummarizationClient, SummarizationClient>();
+builder.Services.AddHostedService<SummarizationWorker>();
 
 // ---- App services ----
 builder.Services.AddScoped<ITokenService, TokenService>();

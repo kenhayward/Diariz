@@ -1,6 +1,8 @@
+using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
 using Diariz.Api.IntegrationTests.Infrastructure;
+using Microsoft.Extensions.Options;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
@@ -82,7 +84,8 @@ public class DatabaseIntegrationTests(ContainersFixture fx)
             .Build();
 
         await using var db = fx.CreateDbContext();
-        var controller = new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config)
+        var controller = new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
+            Options.Create(new SummarizationOptions()))
         {
             ControllerContext = Http.Context(user.Id)
         };

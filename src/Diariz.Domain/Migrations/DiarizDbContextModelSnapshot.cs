@@ -112,6 +112,13 @@ namespace Diariz.Domain.Migrations
                     b.Property<string>("Error")
                         .HasColumnType("text");
 
+                    b.Property<string>("Name")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 

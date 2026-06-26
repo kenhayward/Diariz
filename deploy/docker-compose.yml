@@ -59,10 +59,15 @@ services:
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=diariz;Username=diariz;Password=${POSTGRES_PASSWORD:-diariz}"
       Jwt__Key: ${JWT_KEY}
       Storage__Endpoint: "http://minio:9000"
+      # Browser-reachable MinIO address for presigned audio URLs (host-mapped S3 port, see below).
+      Storage__PublicEndpoint: ${STORAGE_PUBLIC_ENDPOINT:-http://localhost:9002}
       Storage__AccessKey: ${MINIO_ROOT_USER:-minioadmin}
       Storage__SecretKey: ${MINIO_ROOT_PASSWORD:-minioadmin}
       JobQueue__RedisConnection: "redis:6379"
       Worker__CallbackSecret: ${CALLBACK_SECRET}
+      Summarization__ApiBase: ${SUMMARY_API_BASE:-}
+      Summarization__ApiKey: ${SUMMARY_API_KEY:-}
+      Summarization__Model: ${SUMMARY_MODEL:-gpt-4o-mini}
       Seed__Email: ${SEED_EMAIL}
       Seed__Password: ${SEED_PASSWORD}
       Cors__Origins__0: "http://localhost:5173"

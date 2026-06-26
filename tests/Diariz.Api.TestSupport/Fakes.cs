@@ -1,3 +1,4 @@
+using System.Net;
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
 using Diariz.Api.Services;
@@ -5,14 +6,63 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace Diariz.Api.Tests.Infrastructure;
 
+/// <summary>Canned <see cref="HttpMessageHandler"/> that records the outgoing request so tests
+/// can assert the URL/headers/body and control the response.</summary>
+public sealed class FakeHttpMessageHandler : HttpMessageHandler
+{
+    private readonly string _responseBody;
+    private readonly HttpStatusCode _status;
+    public HttpRequestMessage? LastRequest { get; private set; }
+    public string? LastRequestBody { get; private set; }
+
+    public FakeHttpMessageHandler(string responseBody, HttpStatusCode status = HttpStatusCode.OK)
+    {
+        _responseBody = responseBody;
+        _status = status;
+    }
+
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+    {
+        LastRequest = request;
+        if (request.Content is not null)
+            LastRequestBody = await request.Content.ReadAsStringAsync(ct);
+        return new HttpResponseMessage(_status) { Content = new StringContent(_responseBody) };
+    }
+}
+
+/// <summary>Stub <see cref="ISummarizationClient"/> — returns a canned result or throws.</summary>
+public sealed class FakeSummarizationClient : ISummarizationClient
+{
+    public SummaryResult Result { get; set; } = new("A concise summary.", "Auto Name");
+    public Exception? ThrowOnCall { get; set; }
+    public int Calls { get; private set; }
+    public bool LastNeedName { get; private set; }
+
+    public Task<SummaryResult> SummarizeAsync(
+        IReadOnlyList<SegmentDto> segments, bool needName, CancellationToken ct = default)
+    {
+        Calls++;
+        LastNeedName = needName;
+        if (ThrowOnCall is not null) throw ThrowOnCall;
+        return Task.FromResult(Result);
+    }
+}
+
 /// <summary>Records the jobs that would have been pushed onto the Redis stream.</summary>
 public sealed class FakeJobQueue : IJobQueue
 {
     public List<TranscriptionJob> Enqueued { get; } = new();
+    public List<SummarizationJob> SummarizationEnqueued { get; } = new();
 
     public Task EnqueueAsync(TranscriptionJob job, CancellationToken ct = default)
     {
         Enqueued.Add(job);
+        return Task.CompletedTask;
+    }
+
+    public Task EnqueueSummarizationAsync(SummarizationJob job, CancellationToken ct = default)
+    {
+        SummarizationEnqueued.Add(job);
         return Task.CompletedTask;
     }
 }
@@ -22,6 +72,8 @@ public sealed class FakeAudioStorage : IAudioStorage
 {
     public Dictionary<string, byte[]> Objects { get; } = new();
     public string PresignedUrl { get; set; } = "https://example.test/audio";
+    /// <summary>Captures the download filename requested on the last presign call (null = inline).</summary>
+    public string? LastPresignDownloadFileName { get; private set; }
 
     public Task EnsureBucketAsync(CancellationToken ct = default) => Task.CompletedTask;
 
@@ -35,7 +87,17 @@ public sealed class FakeAudioStorage : IAudioStorage
     public Task<Stream> OpenReadAsync(string key, CancellationToken ct = default) =>
         Task.FromResult<Stream>(new MemoryStream(Objects[key]));
 
-    public string GetPresignedDownloadUrl(string key, TimeSpan expiry) => PresignedUrl;
+    public Task DeleteAsync(string key, CancellationToken ct = default)
+    {
+        Objects.Remove(key);
+        return Task.CompletedTask;
+    }
+
+    public string GetPresignedDownloadUrl(string key, TimeSpan expiry, string? downloadFileName = null)
+    {
+        LastPresignDownloadFileName = downloadFileName;
+        return PresignedUrl;
+    }
 }
 
 /// <summary>
