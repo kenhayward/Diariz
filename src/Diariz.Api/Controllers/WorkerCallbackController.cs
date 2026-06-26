@@ -76,6 +76,7 @@ public class WorkerCallbackController : ControllerBase
         }
 
         transcription.Recording.Status = RecordingStatus.Transcribed;
+        transcription.Recording.Error = null;  // clear any error from a prior failed attempt
         await _db.SaveChangesAsync();
         await _hub.NotifyStatusAsync(transcription.Recording.UserId, transcription.RecordingId,
             RecordingStatus.Transcribed.ToString());

@@ -99,6 +99,11 @@ services:
       DEVICE: ${WORKER_DEVICE:-cuda}
       COMPUTE_TYPE: ${WORKER_COMPUTE_TYPE:-float16}
       WHISPER_MODEL: ${WHISPER_MODEL:-large-v3}
+    volumes:
+      # Persist downloaded models (whisper large-v3, wav2vec2 align, pyannote) across
+      # container recreates so a rebuild doesn't re-download ~4GB. Covers both the torch
+      # hub cache (/root/.cache/torch) and the HF hub cache (/root/.cache/huggingface).
+      - workercache:/root/.cache
     # GPU access — requires the NVIDIA Container Toolkit on the host.
     # For CPU-only, comment this out and set WORKER_DEVICE=cpu, WORKER_COMPUTE_TYPE=int8.
     deploy:
@@ -112,3 +117,4 @@ services:
 volumes:
   pgdata:
   miniodata:
+  workercache:

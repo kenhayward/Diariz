@@ -88,7 +88,8 @@ builder.Services.AddSingleton<IJobQueue, RedisJobQueue>();
 // ---- App services ----
 builder.Services.AddScoped<ITokenService, TokenService>();
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(o => JsonConfig.Apply(o.JsonSerializerOptions));
 builder.Services.AddSignalR();
 builder.Services.AddOpenApi();
 
