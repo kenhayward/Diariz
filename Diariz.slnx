@@ -3,4 +3,9 @@
     <Project Path="src/Diariz.Api/Diariz.Api.csproj" />
     <Project Path="src/Diariz.Domain/Diariz.Domain.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Diariz.Api.IntegrationTests/Diariz.Api.IntegrationTests.csproj" />
+    <Project Path="tests/Diariz.Api.Tests/Diariz.Api.Tests.csproj" />
+    <Project Path="tests/Diariz.Api.TestSupport/Diariz.Api.TestSupport.csproj" />
+  </Folder>
 </Solution>
