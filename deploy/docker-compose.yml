@@ -68,10 +68,14 @@ services:
       Summarization__ApiBase: ${SUMMARY_API_BASE:-}
       Summarization__ApiKey: ${SUMMARY_API_KEY:-}
       Summarization__Model: ${SUMMARY_MODEL:-gpt-4o-mini}
+      # Persist the Data Protection keyring so encrypted per-user API keys survive container recreates.
+      DataProtection__KeysPath: /keys
       Seed__Email: ${SEED_EMAIL}
       Seed__Password: ${SEED_PASSWORD}
       Cors__Origins__0: "http://localhost:5173"
       Cors__Origins__1: "http://localhost:8081"
+    volumes:
+      - apikeys:/keys
     ports:
       - "8080:8080"
 
@@ -123,3 +127,4 @@ volumes:
   pgdata:
   miniodata:
   workercache:
+  apikeys:

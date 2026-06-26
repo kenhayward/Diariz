@@ -17,8 +17,8 @@ namespace Diariz.Api.Services;
 public static class SummarizationProcessor
 {
     public static async Task ProcessAsync(
-        DiarizDbContext db, ISummarizationClient client, IHubContext<TranscriptionHub> hub,
-        string model, SummarizationJob job, ILogger logger, CancellationToken ct = default)
+        DiarizDbContext db, ISummarizationClient client, ISummarizationSettingsResolver resolver,
+        IHubContext<TranscriptionHub> hub, SummarizationJob job, ILogger logger, CancellationToken ct = default)
     {
         var rec = await db.Recordings.FirstOrDefaultAsync(r => r.Id == job.RecordingId, ct);
         if (rec is null) return; // recording deleted before the job ran — nothing to do.
@@ -44,8 +44,12 @@ public static class SummarizationProcessor
                 .ToList();
             if (segs.Count == 0) throw new InvalidOperationException("Transcription has no segments to summarise.");
 
+            // Use the recording owner's effective config (their endpoint/key/model, else server defaults).
+            var cfg = await resolver.ResolveAsync(rec.UserId, ct);
+            if (!cfg.Enabled) throw new InvalidOperationException("Summarisation is not configured.");
+
             var needName = string.IsNullOrWhiteSpace(rec.Name);
-            var result = await client.SummarizeAsync(segs, needName, ct);
+            var result = await client.SummarizeAsync(cfg, segs, needName, ct);
 
             var summary = transcription.Summary;
             if (summary is null)
@@ -53,7 +57,7 @@ public static class SummarizationProcessor
                 summary = new Summary { Id = Guid.NewGuid(), TranscriptionId = transcription.Id };
                 db.Summaries.Add(summary);
             }
-            summary.Model = model;
+            summary.Model = cfg.Model;
             summary.Text = result.Summary;
             summary.CreatedAt = DateTimeOffset.UtcNow;
 

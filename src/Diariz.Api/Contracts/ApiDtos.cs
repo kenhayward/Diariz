@@ -45,3 +45,10 @@ public record RecordingDetailDto(
 public record RenameSpeakerRequest(string Label, string DisplayName);
 public record RenameRecordingRequest(string? Name);
 public record RetranscribeRequest(string? Model);
+
+// ---- User settings (per-user summarisation config) ----
+/// <summary>Settings returned to the client. The API key is never exposed — only whether one is set.</summary>
+public record UserSettingsDto(string? ApiBase, string? Model, bool HasApiKey);
+
+/// <summary>Update request. ApiKey is tri-state: null = leave unchanged, "" = clear, value = set.</summary>
+public record UpdateUserSettingsRequest(string? ApiBase, string? Model, string? ApiKey);

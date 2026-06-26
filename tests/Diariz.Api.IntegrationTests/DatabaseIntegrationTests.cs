@@ -1,3 +1,4 @@
+using Diariz.Api.Services;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
@@ -84,8 +85,9 @@ public class DatabaseIntegrationTests(ContainersFixture fx)
             .Build();
 
         await using var db = fx.CreateDbContext();
+        var resolver = new SummarizationSettingsResolver(db, Options.Create(new SummarizationOptions()), new FakeApiKeyProtector());
         var controller = new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
-            Options.Create(new SummarizationOptions()))
+            resolver)
         {
             ControllerContext = Http.Context(user.Id)
         };

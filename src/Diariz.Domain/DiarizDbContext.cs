@@ -13,6 +13,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<Segment> Segments => Set<Segment>();
     public DbSet<Speaker> Speakers => Set<Speaker>();
     public DbSet<Summary> Summaries => Set<Summary>();
+    public DbSet<UserSettings> UserSettings => Set<UserSettings>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -69,6 +70,19 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         {
             e.HasIndex(s => new { s.RecordingId, s.Label }).IsUnique();
             e.Property(s => s.DisplayName).HasMaxLength(256);
+        });
+
+        // Per-user settings: 1:1 with the user via a shared primary key (UserId). Provider-agnostic
+        // (no vector column), so it must stay outside the Npgsql guard or the in-memory test model breaks.
+        builder.Entity<UserSettings>(e =>
+        {
+            e.HasKey(s => s.UserId);
+            e.Property(s => s.SummaryApiBase).HasMaxLength(512);
+            e.Property(s => s.SummaryModel).HasMaxLength(256);
+            e.HasOne(s => s.User)
+                .WithOne(u => u.Settings)
+                .HasForeignKey<UserSettings>(s => s.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

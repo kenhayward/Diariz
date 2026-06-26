@@ -1,3 +1,4 @@
+using Diariz.Api.Services;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
@@ -19,8 +20,9 @@ public class RecordingsControllerIntegrationTests(ContainersFixture fx)
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" })
             .Build();
-        var summary = Options.Create(new SummarizationOptions { ApiBase = "http://llm.test/v1" });
-        return new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config, summary)
+        var resolver = new SummarizationSettingsResolver(
+            db, Options.Create(new SummarizationOptions { ApiBase = "http://llm.test/v1" }), new FakeApiKeyProtector());
+        return new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config, resolver)
         {
             ControllerContext = Http.Context(userId)
         };

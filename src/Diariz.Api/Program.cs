@@ -1,6 +1,7 @@
 using System.Text;
 using Amazon.S3;
 using Amazon.Runtime;
+using Microsoft.AspNetCore.DataProtection;
 using Diariz.Api.Configuration;
 using Diariz.Api.Hubs;
 using Diariz.Api.Services;
@@ -87,8 +88,18 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
     ConnectionMultiplexer.Connect(queue.RedisConnection));
 builder.Services.AddSingleton<IJobQueue, RedisJobQueue>();
 
+// ---- Data Protection (encrypts user-supplied API keys at rest) ----
+// In Docker, point DataProtection:KeysPath at a mounted volume so the keyring survives container
+// recreates — otherwise stored API keys become undecryptable. Locally the default per-user keyring is fine.
+var dpKeys = builder.Configuration["DataProtection:KeysPath"];
+var dataProtection = builder.Services.AddDataProtection();
+if (!string.IsNullOrWhiteSpace(dpKeys))
+    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(dpKeys));
+builder.Services.AddSingleton<IApiKeyProtector, ApiKeyProtector>();
+
 // ---- Summarisation (OpenAI-compatible endpoint + background consumer) ----
 builder.Services.AddHttpClient<ISummarizationClient, SummarizationClient>();
+builder.Services.AddScoped<ISummarizationSettingsResolver, SummarizationSettingsResolver>();
 builder.Services.AddHostedService<SummarizationWorker>();
 
 // ---- App services ----

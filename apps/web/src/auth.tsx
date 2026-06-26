@@ -1,8 +1,12 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { api, getToken, setToken } from "./lib/api";
+import { emailFromToken } from "./lib/jwt";
+import { initialsFromEmail } from "./lib/initials";
 
 interface AuthState {
   isAuthed: boolean;
+  email: string | null;
+  initials: string;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
 }
@@ -10,21 +14,24 @@ interface AuthState {
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isAuthed, setIsAuthed] = useState(() => Boolean(getToken()));
+  const [token, setTokenState] = useState<string | null>(() => getToken());
 
-  async function login(email: string, password: string) {
-    const res = await api.login(email, password);
+  const email = useMemo(() => emailFromToken(token), [token]);
+  const initials = useMemo(() => initialsFromEmail(email), [email]);
+
+  async function login(emailArg: string, password: string) {
+    const res = await api.login(emailArg, password);
     setToken(res.accessToken);
-    setIsAuthed(true);
+    setTokenState(res.accessToken);
   }
 
   function logout() {
     setToken(null);
-    setIsAuthed(false);
+    setTokenState(null);
   }
 
   return (
-    <AuthContext.Provider value={{ isAuthed, login, logout }}>
+    <AuthContext.Provider value={{ isAuthed: Boolean(token), email, initials, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

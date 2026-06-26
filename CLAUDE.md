@@ -43,9 +43,15 @@ API persists `Segment`s + seeds `Speaker` rows → notifies the browser over **S
   enqueues, and `Services/SummarizationWorker` (a `BackgroundService`, the API's only stream consumer)
   reads it, calls an OpenAI-compatible `/chat/completions` endpoint (`SummarizationClient`), and writes the
   `Summary` (+ an auto-generated `Name` when the recording has none). It is a singleton, so it opens a DI
-  scope per job; it XACKs even on failure (records a `Failed` status) to avoid poison-message loops. Configure
-  via the `Summarization` options section (`SUMMARY_API_BASE`/`SUMMARY_API_KEY`/`SUMMARY_MODEL`); an empty
-  `ApiBase` disables the Summarise button and the worker idles.
+  scope per job; it XACKs even on failure (records a `Failed` status) to avoid poison-message loops.
+- **Per-user summarisation config.** Config is resolved per recording-owner by
+  `SummarizationSettingsResolver`: each field is the user's `UserSettings` value (table is 1:1 with the user;
+  the API key is encrypted at rest via ASP.NET Data Protection — `IApiKeyProtector`, keyring persisted to the
+  `DataProtection:KeysPath` volume) **?? the server `Summarization` defaults** (`SUMMARY_API_BASE`/`SUMMARY_API_KEY`/`SUMMARY_MODEL`).
+  The resolved config flows into `SummarizationClient` (no longer reads `IOptions`). The Summarize endpoint
+  returns 400 when neither user nor server has an endpoint; the worker **always listens** (so per-user-only
+  configs work). Users manage their endpoint/model/key in the web Settings modal (`api/user/settings`); the
+  key is **write-only** (GET returns only `hasApiKey`).
 - **SignalR auth.** The hub (`/hubs/transcription`) requires JWT; browsers can't set Authorization
   headers on the WS handshake, so the token is passed as the `access_token` query string and picked
   up in `Program.cs` `OnMessageReceived`. Clients are auto-joined to a per-user group (group name =

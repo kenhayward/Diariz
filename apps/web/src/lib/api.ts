@@ -4,6 +4,8 @@ import type {
   RecordingDetail,
   RecordingSource,
   RecordingSummary,
+  UpdateUserSettings,
+  UserSettings,
 } from "./types";
 
 const TOKEN_KEY = "diariz.token";
@@ -91,6 +93,15 @@ export const api = {
 
   async summarize(id: string): Promise<void> {
     await http.post(`/api/recordings/${id}/summarize`);
+  },
+
+  async getUserSettings(): Promise<UserSettings> {
+    const { data } = await http.get<UserSettings>("/api/user/settings");
+    return data;
+  },
+
+  async updateUserSettings(body: UpdateUserSettings): Promise<void> {
+    await http.put("/api/user/settings", body);
   },
 
   async retranscribe(id: string, model?: string): Promise<void> {
