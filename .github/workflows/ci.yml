@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# One run per ref; cancel superseded runs so they don't pile up on the single runner.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet-unit:
+    name: .NET unit
+    runs-on: [self-hosted]
+    steps:
+      - uses: actions/checkout@v4
+      # Uses the .NET 10 SDK pre-installed on the self-hosted runner (setup-dotnet can't
+      # write to C:\Program Files\dotnet without admin).
+      - name: dotnet version
+        run: dotnet --version
+      - name: Unit tests
+        run: dotnet test tests/Diariz.Api.Tests/Diariz.Api.Tests.csproj -c Release
+
+  dotnet-integration:
+    name: .NET integration (Testcontainers)
+    runs-on: [self-hosted]
+    steps:
+      - uses: actions/checkout@v4
+      # Spins up real Postgres/pgvector, Redis, and MinIO — requires Docker on the runner.
+      # Uses the runner's pre-installed .NET 10 SDK (see note in the unit job).
+      - name: Integration tests
+        run: dotnet test tests/Diariz.Api.IntegrationTests/Diariz.Api.IntegrationTests.csproj -c Release
+
+  web:
+    name: Web (vitest)
+    runs-on: [self-hosted]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install
+        working-directory: apps/web
+        run: npm ci
+      - name: Test
+        working-directory: apps/web
+        run: npm test
+
+  worker:
+    name: Worker (pytest)
+    runs-on: [self-hosted]
+    # Absolute path to the all-users Python. The runner runs as Network Service, which has no
+    # user PATH, so we call Python directly instead of relying on PATH (and avoid setup-python,
+    # which can't install its own build on this runner).
+    env:
+      PYTHON: 'C:\Program Files\Python313\python.exe'
+    steps:
+      - uses: actions/checkout@v4
+      - name: python version
+        run: '& "$env:PYTHON" --version'
+      # whisperx/torch are stubbed in the tests, so only the lightweight deps are installed.
+      - name: Install test deps
+        working-directory: src/Diariz.Worker
+        run: '& "$env:PYTHON" -m pip install -r requirements-test.txt'
+      - name: Test
+        working-directory: src/Diariz.Worker
+        run: '& "$env:PYTHON" -m pytest'
