@@ -12,6 +12,8 @@ public record SectionDto(Guid Id, string Name);
 public record CreateSectionRequest(string Name);
 public record RenameSectionRequest(string Name);
 public record MoveRecordingRequest(Guid? SectionId);
+/// <summary>Reorder/move: set each listed recording's section and position (0..n-1) in one call.</summary>
+public record ReorderRecordingsRequest(Guid? SectionId, IReadOnlyList<Guid> OrderedIds);
 
 // ---- Recordings ----
 public record RecordingSummaryDto(
@@ -61,7 +63,37 @@ public record UpdateSegmentRequest(string Text);
 /// applies when they leave a field blank (without those defaults being persisted as their own).</summary>
 public record UserSettingsDto(
     string? ApiBase, string? Model, bool HasApiKey,
-    string? DefaultApiBase, string? DefaultModel, bool ServerHasApiKey);
+    string? DefaultApiBase, string? DefaultModel, bool ServerHasApiKey,
+    int? ContextWindow, int DefaultContextWindow);
 
-/// <summary>Update request. ApiKey is tri-state: null = leave unchanged, "" = clear, value = set.</summary>
-public record UpdateUserSettingsRequest(string? ApiBase, string? Model, string? ApiKey);
+/// <summary>Update request. ApiKey is tri-state: null = leave unchanged, "" = clear, value = set.
+/// ContextWindow: null/&lt;=0 clears the per-user override (falls back to the server default).</summary>
+public record UpdateUserSettingsRequest(string? ApiBase, string? Model, string? ApiKey, int? ContextWindow = null);
+
+// ---- Chat ----
+public record ChatTurnDto(string Role, string Content);
+
+/// <summary>The context a chat turn (or a saved conversation) runs against.</summary>
+public record SavedChatContextDto(
+    IReadOnlyList<Guid> RecordingIds, string? AttachmentName, string? AttachmentText);
+
+/// <summary>A streaming chat request: the selected context + the full conversation so far.</summary>
+public record ChatStreamRequest(
+    IReadOnlyList<Guid> RecordingIds,
+    string? AttachmentName,
+    string? AttachmentText,
+    IReadOnlyList<ChatTurnDto> Messages);
+
+/// <summary>Extracted attachment text returned to the client (held and resent with each turn).</summary>
+public record ChatAttachmentDto(string Name, int Chars, string Text);
+
+public record ChatConversationSummaryDto(Guid Id, string Title, DateTimeOffset UpdatedAt);
+
+public record ChatConversationDto(
+    Guid Id, string Title, IReadOnlyList<ChatTurnDto> Messages, SavedChatContextDto Context,
+    DateTimeOffset UpdatedAt);
+
+public record SaveChatConversationRequest(
+    IReadOnlyList<ChatTurnDto> Messages, SavedChatContextDto Context);
+
+public record SaveChatConversationResult(Guid Id, string Title);

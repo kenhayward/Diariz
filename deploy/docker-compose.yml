@@ -68,6 +68,7 @@ services:
       Summarization__ApiBase: ${SUMMARY_API_BASE:-}
       Summarization__ApiKey: ${SUMMARY_API_KEY:-}
       Summarization__Model: ${SUMMARY_MODEL:-gpt-4o-mini}
+      Chat__ContextLength: ${CHAT_CONTEXT_LENGTH:-131072}
       # Persist the Data Protection keyring so encrypted per-user API keys survive container recreates.
       DataProtection__KeysPath: /keys
       Seed__Email: ${SEED_EMAIL}

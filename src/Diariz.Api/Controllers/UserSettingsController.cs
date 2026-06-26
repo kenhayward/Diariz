@@ -18,13 +18,16 @@ public class UserSettingsController : ControllerBase
     private readonly DiarizDbContext _db;
     private readonly IApiKeyProtector _protector;
     private readonly SummarizationOptions _serverDefaults;
+    private readonly ChatOptions _chatDefaults;
 
     public UserSettingsController(
-        DiarizDbContext db, IApiKeyProtector protector, IOptions<SummarizationOptions> serverDefaults)
+        DiarizDbContext db, IApiKeyProtector protector, IOptions<SummarizationOptions> serverDefaults,
+        IOptions<ChatOptions> chatDefaults)
     {
         _db = db;
         _protector = protector;
         _serverDefaults = serverDefaults.Value;
+        _chatDefaults = chatDefaults.Value;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -37,7 +40,9 @@ public class UserSettingsController : ControllerBase
             s?.SummaryApiBase, s?.SummaryModel, !string.IsNullOrEmpty(s?.SummaryApiKeyEncrypted),
             DefaultApiBase: NullIfBlank(_serverDefaults.ApiBase),
             DefaultModel: NullIfBlank(_serverDefaults.Model),
-            ServerHasApiKey: !string.IsNullOrEmpty(_serverDefaults.ApiKey));
+            ServerHasApiKey: !string.IsNullOrEmpty(_serverDefaults.ApiKey),
+            ContextWindow: s?.ChatContextWindow,
+            DefaultContextWindow: _chatDefaults.ContextLength);
     }
 
     private static string? NullIfBlank(string? v) => string.IsNullOrWhiteSpace(v) ? null : v;
@@ -58,6 +63,9 @@ public class UserSettingsController : ControllerBase
         // Tri-state key: null leaves it unchanged, empty clears it, anything else replaces it.
         if (req.ApiKey is not null)
             s.SummaryApiKeyEncrypted = req.ApiKey.Length == 0 ? null : _protector.Protect(req.ApiKey);
+
+        // Context window: a positive value sets the override; null/<=0 clears it (server default applies).
+        s.ChatContextWindow = req.ContextWindow is > 0 ? req.ContextWindow : null;
 
         await _db.SaveChangesAsync();
         return NoContent();

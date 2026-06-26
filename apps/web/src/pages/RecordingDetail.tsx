@@ -118,7 +118,6 @@ export default function RecordingDetail() {
     onMove: () => setMoving(true),
     onPlay: () => void playFrom(0),
     onDownloadTxt: () => void api.downloadTranscript(id, "txt"),
-    onDownloadSrt: () => void api.downloadTranscript(id, "srt"),
     onDownloadAudio: () => void api.downloadAudio(id),
     onDelete: async () => {
       if (!window.confirm(`Delete "${rec.name ?? rec.title}"? This cannot be undone.`)) return;

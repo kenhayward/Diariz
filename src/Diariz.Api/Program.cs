@@ -21,6 +21,7 @@ builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection(Stor
 builder.Services.Configure<JobQueueOptions>(builder.Configuration.GetSection(JobQueueOptions.Section));
 builder.Services.Configure<WorkerOptions>(builder.Configuration.GetSection(WorkerOptions.Section));
 builder.Services.Configure<SummarizationOptions>(builder.Configuration.GetSection(SummarizationOptions.Section));
+builder.Services.Configure<ChatOptions>(builder.Configuration.GetSection(ChatOptions.Section));
 
 var jwt = builder.Configuration.GetSection(JwtOptions.Section).Get<JwtOptions>() ?? new JwtOptions();
 var storage = builder.Configuration.GetSection(StorageOptions.Section).Get<StorageOptions>() ?? new StorageOptions();
@@ -101,6 +102,11 @@ builder.Services.AddSingleton<IApiKeyProtector, ApiKeyProtector>();
 builder.Services.AddHttpClient<ISummarizationClient, SummarizationClient>();
 builder.Services.AddScoped<ISummarizationSettingsResolver, SummarizationSettingsResolver>();
 builder.Services.AddHostedService<SummarizationWorker>();
+
+// ---- Chat (streaming, reuses the per-user summarisation LLM config) ----
+builder.Services.AddHttpClient<IChatStreamClient, ChatStreamClient>();
+builder.Services.AddScoped<IChatContextResolver, ChatContextResolver>();
+builder.Services.AddSingleton<IAttachmentExtractor, AttachmentExtractor>();
 
 // ---- App services ----
 builder.Services.AddScoped<ITokenService, TokenService>();

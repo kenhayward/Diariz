@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Outlet } from "react-router-dom";
 import RecordingsPanel from "./RecordingsPanel";
 import ChatPanel from "./ChatPanel";
+import { SelectionProvider } from "../lib/selection";
 
 function usePersistedBool(key: string, fallback: boolean): [boolean, (v: boolean) => void] {
   const [value, setValue] = useState<boolean>(() => {
@@ -50,6 +51,7 @@ export default function Workspace() {
   }
 
   return (
+    <SelectionProvider>
     <div className="flex min-h-0 flex-1">
       {leftOpen ? (
         <aside className="flex w-72 shrink-0 flex-col border-r bg-white dark:border-gray-700 dark:bg-gray-900">
@@ -91,6 +93,7 @@ export default function Workspace() {
         <CollapsedRail label="Chat" onExpand={() => setRightOpen(true)} chevron="◀" />
       )}
     </div>
+    </SelectionProvider>
   );
 }
 

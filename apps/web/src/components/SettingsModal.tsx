@@ -11,12 +11,14 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const [apiBase, setApiBase] = useState("");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState<string | null>(null); // null = untouched, "" = clear, value = set
+  const [contextWindow, setContextWindow] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (data) {
       setApiBase(data.apiBase ?? "");
       setModel(data.model ?? "");
+      setContextWindow(data.contextWindow != null ? String(data.contextWindow) : "");
     }
   }, [data]);
 
@@ -32,6 +34,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         apiBase: apiBase.trim() || null,
         model: model.trim() || null,
         apiKey, // null leaves it unchanged; "" clears; a value sets it
+        contextWindow: contextWindow.trim() ? Number(contextWindow) : null,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["user-settings"] });
@@ -51,9 +54,10 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         className="w-full max-w-md rounded-lg border bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-1 text-base font-semibold dark:text-gray-100">Summarisation settings</h2>
+        <h2 className="mb-1 text-base font-semibold dark:text-gray-100">AI settings</h2>
         <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
-          Your own OpenAI-compatible endpoint for summaries. Leave fields blank to use the server default.
+          Your own OpenAI-compatible endpoint, used for both summaries and chat. Leave fields blank to use
+          the server default.
         </p>
         {/* autoComplete="off" + non-login field names stop password managers treating these as
             username/password login fields and autofilling stored credentials. */}
@@ -115,6 +119,22 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
           {apiKey === "" && (
             <p className="text-xs text-amber-600 dark:text-amber-400">The stored key will be cleared on save.</p>
           )}
+          <label className="block text-sm">
+            <span className="mb-1 block text-gray-600 dark:text-gray-300">Chat context window (tokens)</span>
+            <input
+              type="number"
+              min={1}
+              name="diariz-chat-context"
+              autoComplete="off"
+              value={contextWindow}
+              onChange={(e) => setContextWindow(e.target.value)}
+              placeholder={data ? `Default: ${data.defaultContextWindow.toLocaleString()}` : "131072"}
+              className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            />
+            <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">
+              Drives the chat context dial. Leave blank to use the server default.
+            </span>
+          </label>
           {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
           <div className="flex justify-end gap-2 pt-1">
             <button

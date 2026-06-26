@@ -15,4 +15,8 @@ public class UserSettings
     public string? SummaryApiKeyEncrypted { get; set; }
 
     public string? SummaryModel { get; set; }
+
+    /// <summary>Chat model's context-window size in tokens, used by the context dial. Null falls back
+    /// to the server default (<c>Chat:ContextLength</c>).</summary>
+    public int? ChatContextWindow { get; set; }
 }

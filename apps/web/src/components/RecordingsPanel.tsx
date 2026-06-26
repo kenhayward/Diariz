@@ -6,7 +6,9 @@ import { createHub } from "../lib/signalr";
 import KebabMenu from "./KebabMenu";
 import MoveToSectionModal from "./MoveToSectionModal";
 import { recordingMenu } from "./recordingMenu";
-import type { RecordingStatus, RecordingSource, RecordingSummary } from "../lib/types";
+import { useSelection } from "../lib/selection";
+import { computeReorder } from "../lib/reorder";
+import type { RecordingStatus, RecordingSource, RecordingSummary, SectionDto } from "../lib/types";
 
 const statusColor: Record<RecordingStatus, string> = {
   Uploaded: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
@@ -40,6 +42,7 @@ export default function RecordingsPanel() {
     queryKey: ["recordings"],
     queryFn: api.listRecordings,
   });
+  const { data: sections = [] } = useQuery({ queryKey: ["sections"], queryFn: api.listSections });
 
   useEffect(() => {
     const hub = createHub(() => qc.invalidateQueries({ queryKey: ["recordings"] }));
@@ -47,53 +50,158 @@ export default function RecordingsPanel() {
     return () => void hub.stop();
   }, [qc]);
 
-  const groups = useMemo(() => groupBySection(recordings), [recordings]);
+  const groups = useMemo(() => groupBySection(recordings, sections), [recordings, sections]);
+  const selection = useSelection();
+
+  /// Apply a drag-and-drop: set the dragged recording's group + order, then refresh.
+  async function drop(sectionId: string | null, groupIds: string[], draggedId: string, beforeId: string | null) {
+    if (!draggedId) return;
+    await api.reorderRecordings(sectionId, computeReorder(groupIds, draggedId, beforeId));
+    qc.invalidateQueries({ queryKey: ["recordings"] });
+  }
 
   if (isLoading) return <p className="p-4 text-sm text-gray-500 dark:text-gray-400">Loading…</p>;
-  if (recordings.length === 0)
-    return <p className="p-4 text-sm text-gray-500 dark:text-gray-400">No recordings yet. Hit Record above.</p>;
 
-  const grouped = groups.length > 1; // headings only matter once a section exists
+  // Show section headings whenever any section exists (so an empty, just-created section is visible).
+  const grouped = groups.some((g) => g.id !== null);
 
   return (
     <div>
-      {groups.map((g) => (
-        <div key={g.id ?? "__ungrouped__"}>
-          {grouped &&
-            (g.id ? (
-              <SectionHeading id={g.id} name={g.name} />
-            ) : (
-              <h3 className="bg-indigo-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
-                {g.name}
-              </h3>
-            ))}
-          <ul className="divide-y dark:divide-gray-800">
-            {g.items.map((r) => (
-              <RecordingRow key={r.id} r={r} />
-            ))}
-          </ul>
-        </div>
-      ))}
+      <ListToolbar />
+      {recordings.length === 0 && (
+        <p className="p-4 text-sm text-gray-500 dark:text-gray-400">No recordings yet. Hit Record above.</p>
+      )}
+      {groups.map((g) => {
+        const ids = g.items.map((i) => i.id);
+        return (
+          <div
+            key={g.id ?? "__ungrouped__"}
+            // Dropping anywhere in the group (incl. the heading) appends to it.
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              const dragged = e.dataTransfer.getData("text/plain");
+              if (dragged) drop(g.id, ids, dragged, null);
+            }}
+          >
+            {grouped &&
+              (g.id ? (
+                <SectionHeading id={g.id} name={g.name} />
+              ) : (
+                <h3 className="bg-indigo-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+                  {g.name}
+                </h3>
+              ))}
+            <ul className="divide-y dark:divide-gray-800">
+              {g.items.map((r) => (
+                <RecordingRow
+                  key={r.id}
+                  r={r}
+                  selectMode={selection.selectMode}
+                  selected={selection.selectedIds.includes(r.id)}
+                  onToggleSelect={() => selection.toggle(r.id)}
+                  onDropBefore={(draggedId) => drop(g.id, ids, draggedId, r.id)}
+                />
+              ))}
+            </ul>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-function groupBySection(recordings: RecordingSummary[]): Group[] {
-  const sections = new Map<string, Group>();
-  const ungrouped: RecordingSummary[] = [];
-  for (const r of recordings) {
-    if (r.sectionId) {
-      const g = sections.get(r.sectionId) ?? { id: r.sectionId, name: r.sectionName ?? "Section", items: [] };
-      g.items.push(r);
-      sections.set(r.sectionId, g);
-    } else {
-      ungrouped.push(r);
+/// Top-of-list toolbar: create a section (group) and toggle multi-select for picking chat context.
+function ListToolbar() {
+  const qc = useQueryClient();
+  const { selectMode, setSelectMode, selectedIds } = useSelection();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function create(e: React.FormEvent) {
+    e.preventDefault();
+    const n = name.trim();
+    if (!n) return;
+    setBusy(true);
+    try {
+      await api.createSection(n);
+      qc.invalidateQueries({ queryKey: ["sections"] });
+      qc.invalidateQueries({ queryKey: ["recordings"] });
+      setName("");
+      setOpen(false);
+    } finally {
+      setBusy(false);
     }
   }
-  const ordered = [...sections.values()].sort((a, b) => a.name.localeCompare(b.name));
+
+  return (
+    <div className="flex items-center justify-between gap-2 border-b px-3 py-1.5 dark:border-gray-800">
+      {open ? (
+        <form onSubmit={create} className="flex min-w-0 flex-1 items-center gap-1">
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
+            placeholder="New section name"
+            aria-label="New section name"
+            className="min-w-0 flex-1 rounded border px-2 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          />
+          <button
+            type="submit"
+            disabled={busy || !name.trim()}
+            className="rounded border px-2 py-0.5 text-xs hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+          >
+            Create
+          </button>
+        </form>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+        >
+          + New section
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => setSelectMode(!selectMode)}
+        aria-pressed={selectMode}
+        className={`shrink-0 rounded border px-2 py-0.5 text-xs dark:border-gray-700 ${
+          selectMode
+            ? "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+            : "hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
+        }`}
+      >
+        {selectMode ? `Done${selectedIds.length ? ` (${selectedIds.length})` : ""}` : "Select"}
+      </button>
+    </div>
+  );
+}
+
+function groupBySection(recordings: RecordingSummary[], sections: SectionDto[]): Group[] {
+  // Seed with every section so an empty (just-created) section still renders a heading.
+  const byId = new Map<string, Group>();
+  for (const s of sections) byId.set(s.id, { id: s.id, name: s.name, items: [] });
+
+  const ungrouped: RecordingSummary[] = [];
+  for (const r of recordings) {
+    if (!r.sectionId) {
+      ungrouped.push(r);
+      continue;
+    }
+    // Fall back to the recording's own sectionName if the sections list hasn't loaded yet.
+    const g = byId.get(r.sectionId) ?? { id: r.sectionId, name: r.sectionName ?? "Section", items: [] };
+    g.items.push(r);
+    byId.set(r.sectionId, g);
+  }
+
+  const ordered = [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
   if (ungrouped.length) ordered.push({ id: null, name: "Ungrouped", items: ungrouped });
   return ordered;
 }
+
 
 function SectionHeading({ id, name }: { id: string; name: string }) {
   const qc = useQueryClient();
@@ -172,11 +280,22 @@ function SectionRenameForm({
   );
 }
 
-function RecordingRow({ r }: { r: RecordingSummary }) {
+function RecordingRow({
+  r,
+  selectMode,
+  selected,
+  onToggleSelect,
+  onDropBefore,
+}: {
+  r: RecordingSummary;
+  selectMode: boolean;
+  selected: boolean;
+  onToggleSelect: () => void;
+  onDropBefore: (draggedId: string) => void;
+}) {
   const qc = useQueryClient();
   const [renaming, setRenaming] = useState(false);
   const [moving, setMoving] = useState(false);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["recordings"] });
@@ -200,9 +319,7 @@ function RecordingRow({ r }: { r: RecordingSummary }) {
     onRetranscribe: run(async () => { await api.retranscribe(r.id); refresh(); }),
     onSummarise: run(async () => { await api.summarize(r.id); refresh(); }),
     onMove: () => setMoving(true),
-    onPlay: run(async () => setAudioUrl(await api.audioUrl(r.id))),
     onDownloadTxt: run(() => api.downloadTranscript(r.id, "txt")),
-    onDownloadSrt: run(() => api.downloadTranscript(r.id, "srt")),
     onDownloadAudio: run(() => api.downloadAudio(r.id)),
     onDelete: run(async () => {
       if (!window.confirm(`Delete "${r.name ?? r.title}"? This cannot be undone.`)) return;
@@ -214,13 +331,43 @@ function RecordingRow({ r }: { r: RecordingSummary }) {
   });
 
   return (
-    <li className="px-3 py-2">
+    <li
+      className="px-3 py-2"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation(); // don't also trigger the group's append-drop
+        onDropBefore(e.dataTransfer.getData("text/plain"));
+      }}
+    >
       <div className="flex items-center justify-between gap-1">
+        {selectMode && (
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelect}
+            aria-label={`Select ${r.name ?? r.title}`}
+            className="shrink-0"
+          />
+        )}
+        {/* Drag handle — grab here to reorder or move between groups. */}
+        <span
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.setData("text/plain", r.id);
+            e.dataTransfer.effectAllowed = "move";
+          }}
+          aria-label="Drag to reorder"
+          className="shrink-0 cursor-grab select-none px-0.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400"
+        >
+          ⠿
+        </span>
         {renaming ? (
           <RenameForm initial={r.name ?? ""} onSave={saveName} onCancel={() => setRenaming(false)} />
         ) : (
           <NavLink
             to={`/recordings/${r.id}`}
+            draggable={false}
             className={({ isActive }) =>
               `min-w-0 flex-1 rounded px-1 py-0.5 ${
                 isActive ? "bg-blue-50 dark:bg-blue-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-800"
@@ -239,7 +386,6 @@ function RecordingRow({ r }: { r: RecordingSummary }) {
         </span>
         <KebabMenu actions={actions} />
       </div>
-      {audioUrl && <audio src={audioUrl} controls autoPlay className="mt-2 w-full" />}
       {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
       {moving && (
         <MoveToSectionModal recordingId={r.id} currentSectionId={r.sectionId} onClose={() => setMoving(false)} />

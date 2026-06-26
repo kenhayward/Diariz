@@ -45,10 +45,39 @@ public class RecordingsController : ControllerBase
     public async Task<IReadOnlyList<RecordingSummaryDto>> List() =>
         await _db.Recordings
             .Where(r => r.UserId == UserId)
-            .OrderByDescending(r => r.CreatedAt)
+            .OrderBy(r => r.Position)
+            .ThenByDescending(r => r.CreatedAt)
             .Select(r => new RecordingSummaryDto(r.Id, r.Title, r.Name, r.Source, r.DurationMs, r.Status, r.CreatedAt,
                 r.SectionId, r.Section != null ? r.Section.Name : null))
             .ToListAsync();
+
+    /// <summary>Drag-and-drop: set the section and 0-based position of each listed recording in one
+    /// call (used for both within-group sequencing and cross-group moves).</summary>
+    [HttpPut("reorder")]
+    public async Task<IActionResult> Reorder(ReorderRecordingsRequest req)
+    {
+        var ids = (req.OrderedIds ?? []).ToList();
+        if (ids.Count == 0) return NoContent();
+
+        if (req.SectionId is { } sectionId &&
+            !await _db.Sections.AnyAsync(s => s.Id == sectionId && s.UserId == UserId))
+            return NotFound(); // can't move into a section the caller doesn't own
+
+        var recs = await _db.Recordings
+            .Where(r => ids.Contains(r.Id) && r.UserId == UserId)
+            .ToListAsync();
+        if (recs.Count != ids.Count) return NotFound(); // a listed recording isn't the caller's
+
+        var byId = recs.ToDictionary(r => r.Id);
+        for (var i = 0; i < ids.Count; i++)
+        {
+            var rec = byId[ids[i]];
+            rec.SectionId = req.SectionId;
+            rec.Position = i;
+        }
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<RecordingDetailDto>> Get(Guid id)

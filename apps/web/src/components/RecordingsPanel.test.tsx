@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { SelectionProvider } from "../lib/selection";
 import type { RecordingSummary } from "../lib/types";
 
 vi.mock("../lib/signalr", () => ({
@@ -12,6 +13,8 @@ vi.mock("../lib/api", () => ({
   api: {
     listRecordings: vi.fn(),
     listSections: vi.fn().mockResolvedValue([]),
+    createSection: vi.fn(),
+    reorderRecordings: vi.fn(),
     retranscribe: vi.fn(),
     summarize: vi.fn(),
     deleteRecording: vi.fn(),
@@ -45,9 +48,11 @@ function renderList() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
-        <RecordingsPanel />
-      </MemoryRouter>
+      <SelectionProvider>
+        <MemoryRouter>
+          <RecordingsPanel />
+        </MemoryRouter>
+      </SelectionProvider>
     </QueryClientProvider>,
   );
 }
@@ -55,6 +60,7 @@ function renderList() {
 describe("RecordingsPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([]); // reset between tests (impl persists)
     (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([rec]);
     (api.summarize as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.deleteRecording as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
@@ -97,6 +103,27 @@ describe("RecordingsPanel", () => {
     expect(work.compareDocumentPosition(ungrouped) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("creates a section from the New section control", async () => {
+    (api.createSection as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "sec-9", name: "Therapy" });
+    renderList();
+    await screen.findByText("Weekly Standup");
+
+    fireEvent.click(screen.getByRole("button", { name: /new section/i }));
+    fireEvent.change(screen.getByPlaceholderText(/new section name/i), { target: { value: "Therapy" } });
+    fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
+
+    await waitFor(() => expect(api.createSection).toHaveBeenCalledWith("Therapy"));
+  });
+
+  it("shows a section heading even when it has no recordings yet", async () => {
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: "sec-1", name: "Empty Group" }]);
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([rec]); // rec is ungrouped
+    renderList();
+
+    expect(await screen.findByRole("heading", { name: "Empty Group" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Ungrouped" })).toBeTruthy();
+  });
+
   it("deletes a section from its heading menu (recordings fall back to Ungrouped)", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     (api.deleteSection as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
@@ -113,7 +140,7 @@ describe("RecordingsPanel", () => {
     await waitFor(() => expect(api.deleteSection).toHaveBeenCalledWith("sec-1"));
   });
 
-  it("kebab includes Re-transcribe, Summarise and Move (and no Download both)", async () => {
+  it("kebab includes Re-transcribe, Summarise and Move, with a single Download transcript", async () => {
     renderList();
     await screen.findByText("Weekly Standup");
     fireEvent.click(screen.getByRole("button", { name: /actions/i }));
@@ -121,6 +148,33 @@ describe("RecordingsPanel", () => {
     expect(screen.getByRole("menuitem", { name: /re-transcribe/i })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /summarise/i })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /move to section/i })).toBeTruthy();
-    expect(screen.queryByRole("menuitem", { name: /download both/i })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: /^download transcript$/i })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: /\.srt/i })).toBeNull();
+  });
+
+  it("toggles Select mode to reveal selection checkboxes", async () => {
+    renderList();
+    await screen.findByText("Weekly Standup");
+    expect(screen.queryByRole("checkbox")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /^select$/i }));
+
+    expect(screen.getByRole("checkbox", { name: /select weekly standup/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^done/i })).toBeTruthy();
+  });
+
+  it("reorders within a group via drag and drop", async () => {
+    (api.reorderRecordings as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...rec, id: "a", name: "First" },
+      { ...rec, id: "b", name: "Second" },
+    ]);
+    renderList();
+
+    const target = (await screen.findByText("First")).closest("li")!;
+    // Drop "b" onto "a" → b is inserted before a within the (ungrouped) group.
+    fireEvent.drop(target, { dataTransfer: { getData: () => "b" } });
+
+    await waitFor(() => expect(api.reorderRecordings).toHaveBeenCalledWith(null, ["b", "a"]));
   });
 });
