@@ -10,7 +10,7 @@ namespace Diariz.Api.Tests;
 public class SummarizationClientTests
 {
     private static readonly IReadOnlyList<SegmentDto> Segments =
-        [new SegmentDto("SPEAKER_00", "Alice", 0, 1000, "Hello there.")];
+        [new SegmentDto(Guid.NewGuid(), "SPEAKER_00", "Alice", 0, 1000, "Hello there.")];
 
     private static string ChatResponse(string content)
     {

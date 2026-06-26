@@ -19,6 +19,7 @@ vi.mock("../lib/api", () => ({
     audioUrl: vi.fn(),
     downloadTranscript: vi.fn(),
     downloadAudio: vi.fn(),
+    updateSegment: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -41,7 +42,7 @@ const base: RecordingDetailType = {
     model: "whisperx-large-v3",
     version: 1,
     language: "en",
-    segments: [{ speaker: "SPEAKER_00", speakerDisplay: "Alice", startMs: 0, endMs: 1000, text: "Hi" }],
+    segments: [{ id: "seg-1", speaker: "SPEAKER_00", speakerDisplay: "Alice", startMs: 0, endMs: 1000, text: "Hi" }],
   },
   summary: null,
 };
@@ -102,7 +103,7 @@ describe("RecordingDetail", () => {
       ...base,
       current: {
         ...base.current!,
-        segments: [{ speaker: "SPEAKER_00", speakerDisplay: "Alice", startMs: 1000, endMs: 2000, text: "Hello there" }],
+        segments: [{ id: "seg-9", speaker: "SPEAKER_00", speakerDisplay: "Alice", startMs: 1000, endMs: 2000, text: "Hello there" }],
       },
     });
 
@@ -110,5 +111,20 @@ describe("RecordingDetail", () => {
 
     await waitFor(() => expect(api.audioUrl).toHaveBeenCalledWith("rec-123"));
     await waitFor(() => expect(play).toHaveBeenCalled());
+  });
+
+  it("edits a segment via its kebab and saves the new text", async () => {
+    (api.updateSegment as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    renderPage(base);
+    await screen.findByText("Hi");
+
+    // Open the segment's kebab → Edit, change the text, save.
+    fireEvent.click(screen.getByRole("button", { name: /segment actions/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /edit/i }));
+    const textarea = screen.getByRole("textbox", { name: /segment text/i });
+    fireEvent.change(textarea, { target: { value: "Hi, corrected" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() => expect(api.updateSegment).toHaveBeenCalledWith("rec-123", "seg-1", "Hi, corrected"));
   });
 });

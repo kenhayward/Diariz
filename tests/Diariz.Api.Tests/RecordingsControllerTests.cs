@@ -236,6 +236,51 @@ public class RecordingsControllerTests
         Assert.IsType<NotFoundResult>(result);
     }
 
+    // ---- Update segment ----
+
+    [Fact]
+    public async Task UpdateSegment_UpdatesText_OnOwnedRecording()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        var seg = await db.Segments.FirstAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.UpdateSegment(rec.Id, seg.Id, new UpdateSegmentRequest("Corrected text"));
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Equal("Corrected text", (await db.Segments.FindAsync(seg.Id))!.Text);
+    }
+
+    [Fact]
+    public async Task UpdateSegment_OnAnotherUsersRecording_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var rec = await SeedTranscribedRecording(db, Guid.NewGuid());
+        var seg = await db.Segments.FirstAsync();
+        var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue());
+
+        var result = await controller.UpdateSegment(rec.Id, seg.Id, new UpdateSegmentRequest("hijack"));
+
+        Assert.IsType<NotFoundResult>(result);
+        Assert.NotEqual("hijack", (await db.Segments.FindAsync(seg.Id))!.Text);
+    }
+
+    [Fact]
+    public async Task UpdateSegment_WrongRecordingId_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedTranscribedRecording(db, userId);
+        var seg = await db.Segments.FirstAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.UpdateSegment(Guid.NewGuid(), seg.Id, new UpdateSegmentRequest("x"));
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
     // ---- Summarize ----
 
     [Fact]

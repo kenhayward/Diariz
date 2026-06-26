@@ -7,8 +7,8 @@ public class TranscriptFormatterTests
 {
     private static readonly IReadOnlyList<SegmentDto> Segments =
     [
-        new SegmentDto("SPEAKER_00", "Alice", 852, 3896, "So here's the thing."),
-        new SegmentDto("SPEAKER_01", "Bob", 64000, 66500, "Right, on the API."),
+        new SegmentDto(Guid.NewGuid(), "SPEAKER_00", "Alice", 852, 3896, "So here's the thing."),
+        new SegmentDto(Guid.NewGuid(), "SPEAKER_01", "Bob", 64000, 66500, "Right, on the API."),
     ];
 
     [Fact]

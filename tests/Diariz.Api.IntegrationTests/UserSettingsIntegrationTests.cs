@@ -19,7 +19,7 @@ public class UserSettingsIntegrationTests(ContainersFixture fx)
     private static readonly IApiKeyProtector Protector = new ApiKeyProtector(new EphemeralDataProtectionProvider());
 
     private static UserSettingsController Settings(Diariz.Domain.DiarizDbContext db, Guid userId) =>
-        new(db, Protector) { ControllerContext = Http.Context(userId) };
+        new(db, Protector, Options.Create(new SummarizationOptions())) { ControllerContext = Http.Context(userId) };
 
     private async Task<Guid> SeedUser()
     {

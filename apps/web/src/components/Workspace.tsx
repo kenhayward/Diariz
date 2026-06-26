@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Outlet } from "react-router-dom";
 import RecordingsPanel from "./RecordingsPanel";
 import ChatPanel from "./ChatPanel";
@@ -17,11 +17,37 @@ function usePersistedBool(key: string, fallback: boolean): [boolean, (v: boolean
   ];
 }
 
+const RIGHT_WIDTH_KEY = "diariz.panels.rightWidth";
+const RIGHT_MIN = 260;
+const RIGHT_MAX = 640;
+
 /// The three-panel workspace: recordings list · selected recording (Outlet) · chat.
-/// Left and right panels collapse to a thin rail; each panel scrolls independently.
+/// Left and right panels collapse to a thin rail; the right panel is also drag-resizable.
 export default function Workspace() {
   const [leftOpen, setLeftOpen] = usePersistedBool("diariz.panels.left", true);
   const [rightOpen, setRightOpen] = usePersistedBool("diariz.panels.right", false);
+
+  const [rightWidth, setRightWidth] = useState<number>(() => {
+    const stored = Number(localStorage.getItem(RIGHT_WIDTH_KEY));
+    return stored >= RIGHT_MIN && stored <= RIGHT_MAX ? stored : 320;
+  });
+  const widthRef = useRef(rightWidth);
+  widthRef.current = rightWidth;
+
+  function startResize(e: React.MouseEvent) {
+    e.preventDefault();
+    const onMove = (ev: MouseEvent) =>
+      setRightWidth(Math.min(RIGHT_MAX, Math.max(RIGHT_MIN, window.innerWidth - ev.clientX)));
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.userSelect = "";
+      localStorage.setItem(RIGHT_WIDTH_KEY, String(widthRef.current));
+    };
+    document.body.style.userSelect = "none"; // don't select text while dragging
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -37,18 +63,30 @@ export default function Workspace() {
       )}
 
       <main className="min-w-0 flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950">
-        <div className="mx-auto max-w-3xl p-6">
+        <div className="p-6">
           <Outlet />
         </div>
       </main>
 
       {rightOpen ? (
-        <aside className="flex w-80 shrink-0 flex-col border-l bg-white dark:border-gray-700 dark:bg-gray-900">
-          <PanelHeader title="Chat" onCollapse={() => setRightOpen(false)} chevron="▶" />
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <ChatPanel />
-          </div>
-        </aside>
+        <div className="flex shrink-0">
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize chat panel"
+            onMouseDown={startResize}
+            className="w-1 cursor-col-resize bg-transparent transition-colors hover:bg-blue-400 dark:hover:bg-blue-600"
+          />
+          <aside
+            style={{ width: rightWidth }}
+            className="flex shrink-0 flex-col border-l bg-white dark:border-gray-700 dark:bg-gray-900"
+          >
+            <PanelHeader title="Chat" onCollapse={() => setRightOpen(false)} chevron="▶" />
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <ChatPanel />
+            </div>
+          </aside>
+        </div>
       ) : (
         <CollapsedRail label="Chat" onExpand={() => setRightOpen(true)} chevron="◀" />
       )}
