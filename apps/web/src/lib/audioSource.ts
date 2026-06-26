@@ -25,3 +25,34 @@ export async function getSystemStream(): Promise<MediaStream> {
 export async function getStream(kind: AudioSourceKind): Promise<MediaStream> {
   return kind === "system" ? getSystemStream() : getMicStream();
 }
+
+/// Turn a getUserMedia/getDisplayMedia failure into an actionable message. The browser reports the
+/// cause via the DOMException `name`; the generic "could not access" hides it, which is unhelpful when
+/// capture suddenly stops working (almost always another app holding the mic, or a revoked permission).
+export function describeAudioError(e: unknown, source: AudioSourceKind, electron: boolean): string {
+  if (source === "system" && !electron) return "System audio capture needs the desktop app.";
+
+  const name = (e as { name?: string } | null)?.name;
+  switch (name) {
+    case "NotAllowedError":
+    case "SecurityError":
+    case "PermissionDeniedError":
+      return "Microphone access is blocked. Allow it for this site in your browser's address-bar/site settings, then try again.";
+    case "NotFoundError":
+    case "DevicesNotFoundError":
+    case "OverconstrainedError":
+      return "No microphone was found. Check it's connected and set as the default input device.";
+    case "NotReadableError":
+    case "TrackStartError":
+    case "AbortError":
+      return "The microphone is in use by another app, or unavailable. Close other apps using it (Zoom/Teams/another tab) and try again.";
+    default:
+      break;
+  }
+
+  // navigator.mediaDevices is undefined outside a secure context (http on a non-localhost host).
+  if (typeof navigator !== "undefined" && !navigator.mediaDevices)
+    return "Recording needs a secure page. Open the app via http://localhost (or https), not an IP address.";
+
+  return "Could not access the audio source.";
+}

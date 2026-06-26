@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { api, apiErrorMessage } from "../lib/api";
-import { getStream, isElectron, type AudioSourceKind } from "../lib/audioSource";
+import { getStream, isElectron, describeAudioError, type AudioSourceKind } from "../lib/audioSource";
 
 export default function Recorder({
   onUploaded,
@@ -41,9 +41,9 @@ export default function Recorder({
       );
       setRecording(true);
     } catch (e) {
-      setError(source === "system" && !isElectron
-        ? "System audio capture needs the desktop app."
-        : "Could not access the audio source.");
+      // Log the raw cause (DOMException name/message) so the actual failure is diagnosable.
+      console.error("Audio capture failed:", e);
+      setError(describeAudioError(e, source, isElectron));
     }
   }
 
