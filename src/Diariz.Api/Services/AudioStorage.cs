@@ -11,6 +11,8 @@ public interface IAudioStorage
     Task EnsureBucketAsync(CancellationToken ct = default);
     Task UploadAsync(string key, Stream content, string contentType, CancellationToken ct = default);
     Task<Stream> OpenReadAsync(string key, CancellationToken ct = default);
+    /// <summary>Size in bytes of the stored blob (a HEAD), or null when the key is absent.</summary>
+    Task<long?> GetSizeAsync(string key, CancellationToken ct = default);
     /// <summary>Removes the stored blob. Idempotent — succeeds even if the key is absent.</summary>
     Task DeleteAsync(string key, CancellationToken ct = default);
     /// <summary>Time-limited URL the client can use to download the original audio directly.
@@ -79,6 +81,19 @@ public class AudioStorage : IAudioStorage
     {
         var resp = await _s3.GetObjectAsync(_opts.Bucket, key, ct);
         return resp.ResponseStream;
+    }
+
+    public async Task<long?> GetSizeAsync(string key, CancellationToken ct = default)
+    {
+        try
+        {
+            var meta = await _s3.GetObjectMetadataAsync(_opts.Bucket, key, ct);
+            return meta.ContentLength;
+        }
+        catch (AmazonS3Exception e) when (e.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
     }
 
     public Task DeleteAsync(string key, CancellationToken ct = default) =>

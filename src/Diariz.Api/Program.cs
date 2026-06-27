@@ -127,6 +127,8 @@ builder.Services.AddSingleton<IAttachmentExtractor, AttachmentExtractor>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IPlatformSettingsService, PlatformSettingsService>();
 builder.Services.AddScoped<IStorageUsage, StorageUsage>();
+// One-time backfill of legacy recordings' SizeBytes (HEAD each blob), runs once after startup.
+builder.Services.AddHostedService<StorageBackfillService>();
 
 builder.Services.AddControllers()
     .AddJsonOptions(o => JsonConfig.Apply(o.JsonSerializerOptions));

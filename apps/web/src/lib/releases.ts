@@ -67,6 +67,7 @@ forms collect a name up front (pre-filled into account setup).
       "Per-user storage quota (audio): starter + maximum set by the Platform Administrator in Settings; any admin can raise a user up to the maximum in Manage Users.",
       "Storage usage in the account menu (used / quota / %) and per-recording size on the transcript page.",
       "Name field on the sign-up and add-user forms; the account menu shows the name instead of the email.",
+      "Existing recordings are backfilled with their stored size on startup, so usage is accurate from day one.",
     ],
     changed: ["Uploads that would exceed your storage quota are now rejected with a clear message."],
   },
