@@ -29,6 +29,9 @@ Current version: **0.4.1** — versioned per the rule in [CLAUDE.md](CLAUDE.md);
 - **Multi-user RBAC**: Standard / Administrator / Platform Administrator roles, an access-request →
   admin-grant → account-setup lifecycle (one-time email link, with an in-app fallback when SMTP is
   unconfigured), and admin user management. Each user's data is isolated to them. Light/Dark/Auto theming.
+- **Storage quotas**: each user gets an audio-storage quota (starter + maximum set by the Platform
+  Administrator; any admin can raise a user up to the maximum). Usage shows in the account menu and
+  per-recording; over-quota uploads are rejected.
 
 ## Architecture
 

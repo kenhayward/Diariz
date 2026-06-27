@@ -19,6 +19,7 @@ vi.mock("../lib/api", () => ({
     getUserSettings: vi.fn().mockResolvedValue({ apiBase: null, model: null, hasApiKey: false }),
     updateUserSettings: vi.fn(),
     listUsers: vi.fn().mockResolvedValue([]),
+    getUserStorage: vi.fn().mockResolvedValue({ usedBytes: 1024 ** 3, quotaBytes: 5 * 1024 ** 3 }),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -51,15 +52,24 @@ describe("UserMenu", () => {
     expect(screen.getByRole("menuitem", { name: /manage users/i })).toBeTruthy();
   });
 
-  it("shows the initials and opens a menu with email, Settings, themes and Sign Out", () => {
+  it("shows the initials and opens a menu with the user's name, Settings, themes and Sign Out", () => {
     renderMenu();
     expect(screen.getByText("JD")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /account/i }));
-    expect(screen.getByText("jane.doe@x.com")).toBeTruthy();
+    // The name is shown instead of the email.
+    expect(screen.getByText("Jane Doe")).toBeTruthy();
+    expect(screen.queryByText("jane.doe@x.com")).toBeNull();
     expect(screen.getByRole("menuitem", { name: /settings/i })).toBeTruthy();
     expect(screen.getByRole("menuitemradio", { name: /auto/i })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /sign out/i })).toBeTruthy();
+  });
+
+  it("shows the storage usage line", async () => {
+    renderMenu();
+    fireEvent.click(screen.getByRole("button", { name: /account/i }));
+    // 1 GB used of 5 GB = 20%.
+    expect(await screen.findByText(/Storage 1 GB \/ 5 GB \(20%\)/)).toBeTruthy();
   });
 
   it("Sign Out calls logout", () => {

@@ -13,11 +13,13 @@ public class AuthController : ControllerBase
 {
     private readonly UserManager<ApplicationUser> _users;
     private readonly ITokenService _tokens;
+    private readonly IPlatformSettingsService _platform;
 
-    public AuthController(UserManager<ApplicationUser> users, ITokenService tokens)
+    public AuthController(UserManager<ApplicationUser> users, ITokenService tokens, IPlatformSettingsService platform)
     {
         _users = users;
         _tokens = tokens;
+        _platform = platform;
     }
 
     [HttpPost("login")]
@@ -54,9 +56,11 @@ public class AuthController : ControllerBase
             {
                 UserName = email,
                 Email = email,
+                FullName = string.IsNullOrWhiteSpace(req.FullName) ? null : req.FullName.Trim(),
                 Status = UserStatus.Requested,
                 IsEnabled = true,
                 EmailConfirmed = false,
+                QuotaBytes = (await _platform.GetAsync()).StarterQuotaBytes,
             };
             var result = await _users.CreateAsync(user); // no password until setup
             if (result.Succeeded)
@@ -76,7 +80,7 @@ public class AuthController : ControllerBase
             return new SetupValidateResponse(false, null);
         var ok = await _users.VerifyUserTokenAsync(
             user, TokenOptions.DefaultProvider, AccountSetup.TokenPurpose, token ?? "");
-        return new SetupValidateResponse(ok, ok ? user.Email : null);
+        return new SetupValidateResponse(ok, ok ? user.Email : null, ok ? user.FullName : null);
     }
 
     /// <summary>Public: finish account setup — set full name + password, activate, auto sign-in.</summary>

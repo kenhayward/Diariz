@@ -26,7 +26,9 @@ you configure. Recordings organise into **sections** with drag-and-drop ordering
 
 Diariz is **multi-user** with role-based access: people request access (or an administrator adds them),
 an administrator approves, and each user sets up their own account and keeps their own private
-recordings, transcripts, and chats.
+recordings, transcripts, and chats. Each user has a **storage quota** (audio): the Platform
+Administrator sets the starter and maximum, any administrator can raise an individual user, and your
+usage shows in the account menu.
 `.trim();
 
 export interface Release {
@@ -42,6 +44,32 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.5.0",
+    date: "2026-06-27",
+    pr: 27,
+    headline: "Storage quotas & usage visibility",
+    summary: `
+Each user now has a **storage quota** for their recorded audio, with usage visible throughout.
+
+The **account menu** shows your storage under your name — e.g. *Storage 1.2 GB / 5 GB (24%)* — and each
+recording's size appears on its transcript page. New users are granted a **starter quota** at account
+creation; the **Platform Administrator** sets the starter amount and an overall **maximum** in Settings,
+and **any administrator** can raise an individual user's quota (up to that maximum) from Manage Users,
+where each user's used/quota is shown. Uploads that would exceed your quota are rejected with a clear
+message (delete recordings or ask an admin for more). Quota counts audio bytes only — transcripts,
+summaries, and other database data don't count against it.
+
+The account menu now shows your **name** instead of your email, and the **sign-up** and **add-user**
+forms collect a name up front (pre-filled into account setup).
+`.trim(),
+    added: [
+      "Per-user storage quota (audio): starter + maximum set by the Platform Administrator in Settings; any admin can raise a user up to the maximum in Manage Users.",
+      "Storage usage in the account menu (used / quota / %) and per-recording size on the transcript page.",
+      "Name field on the sign-up and add-user forms; the account menu shows the name instead of the email.",
+    ],
+    changed: ["Uploads that would exceed your storage quota are now rejected with a clear message."],
+  },
   {
     version: "0.4.1",
     date: "2026-06-27",

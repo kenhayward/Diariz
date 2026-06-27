@@ -74,6 +74,11 @@ namespace Diariz.Domain.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("boolean");
 
+                    b.Property<long>("QuotaBytes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(5368709120L);
+
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");
 
@@ -132,6 +137,33 @@ namespace Diariz.Domain.Migrations
                     b.HasIndex("UserId", "UpdatedAt");
 
                     b.ToTable("ChatSessions");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.PlatformSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<long>("MaxQuotaBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("StarterQuotaBytes")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PlatformSettings");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            MaxQuotaBytes = 53687091200L,
+                            StarterQuotaBytes = 5368709120L
+                        });
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.ProfileContribution", b =>
@@ -197,6 +229,9 @@ namespace Diariz.Domain.Migrations
 
                     b.Property<Guid?>("SectionId")
                         .HasColumnType("uuid");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
 
                     b.Property<int>("Source")
                         .HasColumnType("integer");

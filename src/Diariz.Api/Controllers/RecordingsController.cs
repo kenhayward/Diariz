@@ -108,8 +108,8 @@ public class RecordingsController : ControllerBase
         SummaryDto? sDto = current?.Summary is null ? null
             : new(current.Summary.Model, current.Summary.Text, current.Summary.CreatedAt);
 
-        return new RecordingDetailDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.Status,
-            rec.Error, rec.CreatedAt, names, speakers, tDto, sDto);
+        return new RecordingDetailDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.SizeBytes,
+            rec.Status, rec.Error, rec.CreatedAt, names, speakers, tDto, sDto);
     }
 
     /// <summary>Upload an audio file and kick off transcription.</summary>
@@ -121,6 +121,13 @@ public class RecordingsController : ControllerBase
     {
         if (audio is null || audio.Length == 0) return BadRequest("Empty audio.");
 
+        // Enforce the owner's storage quota (audio bytes only — DB rows don't count).
+        var quota = await _db.Users.Where(u => u.Id == UserId).Select(u => u.QuotaBytes).FirstOrDefaultAsync();
+        var used = await _db.Recordings.Where(r => r.UserId == UserId).SumAsync(r => r.SizeBytes);
+        if (used + audio.Length > quota)
+            return StatusCode(413,
+                "Storage quota exceeded. Delete some recordings or ask an administrator to raise your quota.");
+
         var rec = new Recording
         {
             Id = Guid.NewGuid(),
@@ -128,6 +135,7 @@ public class RecordingsController : ControllerBase
             Title = string.IsNullOrWhiteSpace(title) ? $"Recording {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm}" : title,
             Source = source,
             ContentType = audio.ContentType,
+            SizeBytes = audio.Length,
             DurationMs = durationMs,
             Status = RecordingStatus.Uploaded
         };

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../auth";
 import { api, apiErrorMessage } from "../lib/api";
+import { bytesToGb, formatBytes, gbToBytes } from "../lib/format";
 import type { AdminUser } from "../lib/types";
 
 /// Admin-only user management: grant/deny access requests, change account type, enable/disable, and
@@ -11,9 +12,11 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const { email: myEmail } = useAuth();
   const { data: users = [], isLoading } = useQuery({ queryKey: ["admin-users"], queryFn: api.listUsers });
+  const { data: platform } = useQuery({ queryKey: ["platform-settings"], queryFn: api.getPlatformSettings });
   const [error, setError] = useState<string | null>(null);
   const [grantLink, setGrantLink] = useState<string | null>(null);
   const [newEmail, setNewEmail] = useState("");
+  const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
@@ -53,9 +56,10 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
     setError(null);
     setGrantLink(null);
     try {
-      const r = await api.addUser(email);
+      const r = await api.addUser(email, newName.trim() || undefined);
       refresh();
       setNewEmail("");
+      setNewName("");
       if (!r.emailed && r.setupUrl) setGrantLink(r.setupUrl);
     } catch (err) {
       setError(apiErrorMessage(err));
@@ -77,8 +81,16 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
       >
         <h2 className="mb-3 text-base font-semibold dark:text-gray-100">Manage users</h2>
 
-        {/* Add a user by email — creates the account and emails them a setup link (or shows it below). */}
-        <form onSubmit={addUser} className="mb-3 flex items-center gap-2">
+        {/* Add a user by name + email — creates the account and emails them a setup link (or shows it below). */}
+        <form onSubmit={addUser} className="mb-3 flex flex-wrap items-center gap-2">
+          <input
+            type="text"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Full name"
+            aria-label="New user name"
+            className="min-w-0 flex-1 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          />
           <input
             type="email"
             value={newEmail}
@@ -144,9 +156,11 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
                 key={u.id}
                 u={u}
                 isSelf={!!myEmail && u.email === myEmail}
+                maxQuotaBytes={platform?.maxQuotaBytes ?? null}
                 onPromote={run(() => api.setUserRole(u.id, "Administrator"))}
                 onDemote={run(() => api.setUserRole(u.id, "Standard"))}
                 onSetEnabled={(v) => run(() => api.setUserEnabled(u.id, v))()}
+                onSetQuota={(bytes) => run(() => api.setUserQuota(u.id, bytes))()}
                 onDelete={run(async () => {
                   if (window.confirm(`Delete ${u.email}? This removes all their recordings.`)) await api.deleteUser(u.id);
                 })}
@@ -182,20 +196,27 @@ function StatusPill({ status }: { status: AdminUser["status"] }) {
 function UserRow({
   u,
   isSelf,
+  maxQuotaBytes,
   onPromote,
   onDemote,
   onSetEnabled,
+  onSetQuota,
   onDelete,
 }: {
   u: AdminUser;
   isSelf: boolean;
+  maxQuotaBytes: number | null;
   onPromote: () => void;
   onDemote: () => void;
   onSetEnabled: (v: boolean) => void;
+  onSetQuota: (bytes: number) => void;
   onDelete: () => void;
 }) {
   const isPlatform = u.accountType === "PlatformAdministrator";
   const protectedRow = isPlatform || isSelf; // no destructive/role actions
+  const [editingQuota, setEditingQuota] = useState(false);
+  const [quotaGb, setQuotaGb] = useState(String(bytesToGb(u.quotaBytes)));
+  const maxGb = maxQuotaBytes != null ? bytesToGb(maxQuotaBytes) : undefined;
   return (
     <li className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm dark:text-gray-200">
       <span className="min-w-0">
@@ -210,6 +231,52 @@ function UserRow({
         </span>
         <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
           {u.email} · {u.accountType}
+        </span>
+        <span className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+          {editingQuota ? (
+            <>
+              <span>Quota</span>
+              <input
+                type="number"
+                min={0}
+                step={0.5}
+                max={maxGb}
+                value={quotaGb}
+                onChange={(e) => setQuotaGb(e.target.value)}
+                aria-label={`Quota for ${u.email} (GB)`}
+                className="w-20 rounded border px-1 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              />
+              <span>GB</span>
+              <button
+                onClick={() => {
+                  onSetQuota(gbToBytes(Number(quotaGb)));
+                  setEditingQuota(false);
+                }}
+                className="rounded border px-1.5 py-0.5 text-[11px] dark:border-gray-700"
+              >
+                Save
+              </button>
+              <button onClick={() => setEditingQuota(false)} className="text-[11px] hover:underline">
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <span>
+                Storage {formatBytes(u.usedBytes)} / {formatBytes(u.quotaBytes)}
+              </span>
+              <button
+                onClick={() => {
+                  setQuotaGb(String(bytesToGb(u.quotaBytes)));
+                  setEditingQuota(true);
+                }}
+                className="text-[11px] text-blue-600 hover:underline dark:text-blue-400"
+              >
+                Edit quota
+              </button>
+              {maxGb != null && <span className="text-gray-400 dark:text-gray-500">(max {maxGb} GB)</span>}
+            </>
+          )}
         </span>
       </span>
       {!protectedRow && (

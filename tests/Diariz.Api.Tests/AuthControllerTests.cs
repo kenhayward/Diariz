@@ -22,7 +22,7 @@ public class AuthControllerTests
             Key = "test-signing-key-at-least-32-bytes-long!!",
             AccessTokenMinutes = 60,
         }));
-        return new AuthController(host.Users, tokens);
+        return new AuthController(host.Users, tokens, new PlatformSettingsService(host.Db));
     }
 
     private static async Task<ApplicationUser> CreateUser(

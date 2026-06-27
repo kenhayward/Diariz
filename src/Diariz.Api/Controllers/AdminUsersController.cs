@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Services;
+using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -24,13 +25,18 @@ public class AdminUsersController : ControllerBase
 {
     private readonly UserManager<ApplicationUser> _users;
     private readonly IEmailSender _email;
+    private readonly DiarizDbContext _db;
+    private readonly IPlatformSettingsService _platform;
     private readonly AppPublicOptions _appOpts;
 
     public AdminUsersController(
-        UserManager<ApplicationUser> users, IEmailSender email, IOptions<AppPublicOptions> appOpts)
+        UserManager<ApplicationUser> users, IEmailSender email, DiarizDbContext db,
+        IPlatformSettingsService platform, IOptions<AppPublicOptions> appOpts)
     {
         _users = users;
         _email = email;
+        _db = db;
+        _platform = platform;
         _appOpts = appOpts.Value;
     }
 
@@ -40,9 +46,18 @@ public class AdminUsersController : ControllerBase
     public async Task<IReadOnlyList<AdminUserDto>> List()
     {
         var users = await _users.Users.OrderBy(u => u.Email).ToListAsync();
+
+        // Used storage per user in one grouped query, then zip with the user rows.
+        var usage = (await _db.Recordings
+                .GroupBy(r => r.UserId)
+                .Select(g => new { UserId = g.Key, Used = g.Sum(r => r.SizeBytes) })
+                .ToListAsync())
+            .ToDictionary(x => x.UserId, x => x.Used);
+
         var dtos = new List<AdminUserDto>(users.Count);
         foreach (var u in users)
-            dtos.Add(new AdminUserDto(u.Id, u.Email ?? "", u.FullName, await AccountTypeOf(u), u.Status, u.IsEnabled));
+            dtos.Add(new AdminUserDto(u.Id, u.Email ?? "", u.FullName, await AccountTypeOf(u), u.Status, u.IsEnabled,
+                u.QuotaBytes, usage.TryGetValue(u.Id, out var used) ? used : 0));
         return dtos;
     }
 
@@ -58,13 +73,33 @@ public class AdminUsersController : ControllerBase
 
         var user = new ApplicationUser
         {
-            UserName = email, Email = email, Status = UserStatus.Invited, IsEnabled = true, EmailConfirmed = false,
+            UserName = email, Email = email,
+            FullName = string.IsNullOrWhiteSpace(req.FullName) ? null : req.FullName.Trim(),
+            Status = UserStatus.Invited, IsEnabled = true, EmailConfirmed = false,
+            QuotaBytes = (await _platform.GetAsync()).StarterQuotaBytes,
         };
         var result = await _users.CreateAsync(user); // no password until setup
         if (!result.Succeeded) return BadRequest(result.Errors.Select(e => e.Description));
         await _users.AddToRoleAsync(user, Roles.Standard);
 
         return await IssueSetupLinkAsync(user);
+    }
+
+    /// <summary>Raise (or lower) a user's storage quota. Any administrator may do this, up to the
+    /// platform maximum set by the Platform Administrator.</summary>
+    [HttpPut("{id:guid}/quota")]
+    public async Task<IActionResult> SetQuota(Guid id, SetQuotaRequest req)
+    {
+        if (req.QuotaBytes < 0) return BadRequest("Quota can't be negative.");
+        var max = (await _platform.GetAsync()).MaxQuotaBytes;
+        if (req.QuotaBytes > max)
+            return BadRequest($"Quota can't exceed the platform maximum of {max} bytes.");
+
+        var user = await _users.FindByIdAsync(id.ToString());
+        if (user is null) return NotFound();
+        user.QuotaBytes = req.QuotaBytes;
+        await _users.UpdateAsync(user);
+        return NoContent();
     }
 
     [HttpPost("{id:guid}/grant")]

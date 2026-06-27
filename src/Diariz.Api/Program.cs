@@ -125,6 +125,8 @@ builder.Services.AddSingleton<IAttachmentExtractor, AttachmentExtractor>();
 
 // ---- App services ----
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IPlatformSettingsService, PlatformSettingsService>();
+builder.Services.AddScoped<IStorageUsage, StorageUsage>();
 
 builder.Services.AddControllers()
     .AddJsonOptions(o => JsonConfig.Apply(o.JsonSerializerOptions));

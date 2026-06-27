@@ -16,6 +16,10 @@ public class ApplicationUser : IdentityUser<Guid>
     /// cannot sign in.</summary>
     public bool IsEnabled { get; set; } = true;
 
+    /// <summary>Storage quota in bytes (of recorded audio). Granted at account creation from the
+    /// platform starter amount; any administrator may raise it up to the platform maximum.</summary>
+    public long QuotaBytes { get; set; } = PlatformSettings.DefaultStarterQuotaBytes;
+
     public ICollection<Recording> Recordings { get; set; } = new List<Recording>();
     public UserSettings? Settings { get; set; }
     public ICollection<ChatSession> ChatSessions { get; set; } = new List<ChatSession>();

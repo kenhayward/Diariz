@@ -24,6 +24,9 @@ public class Recording
     /// <summary>MIME / container of the stored audio, e.g. audio/webm, audio/wav.</summary>
     public string ContentType { get; set; } = "audio/webm";
 
+    /// <summary>Size in bytes of the stored audio blob (counts toward the owner's storage quota).</summary>
+    public long SizeBytes { get; set; }
+
     public long DurationMs { get; set; }
     public RecordingStatus Status { get; set; } = RecordingStatus.Uploaded;
     public string? Error { get; set; }

@@ -11,7 +11,9 @@ vi.mock("../lib/api", () => ({
     denyUser: vi.fn(),
     setUserRole: vi.fn(),
     setUserEnabled: vi.fn(),
+    setUserQuota: vi.fn(),
     deleteUser: vi.fn(),
+    getPlatformSettings: vi.fn().mockResolvedValue({ starterQuotaBytes: 5 * 1024 ** 3, maxQuotaBytes: 50 * 1024 ** 3 }),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -21,7 +23,8 @@ import ManageUsersModal from "./ManageUsersModal";
 import type { AdminUser } from "../lib/types";
 
 const u = (over: Partial<AdminUser>): AdminUser => ({
-  id: "id", email: "e@x.test", fullName: null, accountType: "Standard", status: "Active", isEnabled: true, ...over,
+  id: "id", email: "e@x.test", fullName: null, accountType: "Standard", status: "Active", isEnabled: true,
+  quotaBytes: 5 * 1024 ** 3, usedBytes: 0, ...over,
 });
 
 const mock = (f: unknown) => f as ReturnType<typeof vi.fn>;
@@ -52,7 +55,7 @@ describe("ManageUsersModal", () => {
     fireEvent.change(await screen.findByLabelText(/new user email/i), { target: { value: "new@x.test" } });
     fireEvent.click(screen.getByRole("button", { name: /add user/i }));
 
-    await waitFor(() => expect(api.addUser).toHaveBeenCalledWith("new@x.test"));
+    await waitFor(() => expect(api.addUser).toHaveBeenCalledWith("new@x.test", undefined));
     expect(await screen.findByText(/setup\?email=new&token=abc/)).toBeTruthy();
   });
 
@@ -67,6 +70,19 @@ describe("ManageUsersModal", () => {
     render_();
     fireEvent.click(await screen.findByRole("button", { name: /make admin/i }));
     await waitFor(() => expect(api.setUserRole).toHaveBeenCalledWith("s1", "Administrator"));
+  });
+
+  it("edits a user's storage quota (GB → bytes)", async () => {
+    mock(api.listUsers).mockResolvedValue([u({ id: "s1", email: "std@x.test", quotaBytes: 5 * 1024 ** 3 })]);
+    mock(api.setUserQuota).mockResolvedValue(undefined);
+    render_();
+
+    fireEvent.click(await screen.findByRole("button", { name: /edit quota/i }));
+    const input = screen.getByLabelText(/quota for std@x.test/i);
+    fireEvent.change(input, { target: { value: "10" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() => expect(api.setUserQuota).toHaveBeenCalledWith("s1", 10 * 1024 ** 3));
   });
 
   it("deletes a user after confirmation", async () => {

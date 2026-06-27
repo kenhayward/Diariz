@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
+import { useAuth } from "../auth";
+import { bytesToGb, gbToBytes } from "../lib/format";
 
 /// Per-user summarisation settings. The API key is write-only: the server returns only whether one
 /// is set, so an untouched field leaves it unchanged.
 export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
+  const { isPlatformAdmin } = useAuth();
   const { data } = useQuery({ queryKey: ["user-settings"], queryFn: api.getUserSettings });
 
   const [apiBase, setApiBase] = useState("");
@@ -153,7 +156,88 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         </form>
+
+        {isPlatformAdmin && <PlatformQuotaSection />}
       </div>
+    </div>
+  );
+}
+
+/// Platform Administrator only: the storage-quota defaults applied to new users (entered in GB).
+function PlatformQuotaSection() {
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ["platform-settings"], queryFn: api.getPlatformSettings });
+  const [starterGb, setStarterGb] = useState("");
+  const [maxGb, setMaxGb] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (data) {
+      setStarterGb(String(bytesToGb(data.starterQuotaBytes)));
+      setMaxGb(String(bytesToGb(data.maxQuotaBytes)));
+    }
+  }, [data]);
+
+  const save = useMutation({
+    mutationFn: () =>
+      api.updatePlatformSettings({
+        starterQuotaBytes: gbToBytes(Number(starterGb)),
+        maxQuotaBytes: gbToBytes(Number(maxGb)),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["platform-settings"] }),
+    onError: (e) => setError(apiErrorMessage(e)),
+  });
+
+  return (
+    <div className="mt-5 border-t pt-4 dark:border-gray-700">
+      <h3 className="mb-1 text-sm font-semibold dark:text-gray-100">Storage quotas (platform)</h3>
+      <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+        New users start with the starter quota; administrators can raise a user up to the maximum.
+      </p>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          setError(null);
+          save.mutate();
+        }}
+        className="space-y-3"
+      >
+        <label className="block text-sm">
+          <span className="mb-1 block text-gray-600 dark:text-gray-300">Starter quota (GB)</span>
+          <input
+            type="number"
+            min={1}
+            step={0.5}
+            value={starterGb}
+            onChange={(e) => setStarterGb(e.target.value)}
+            aria-label="Starter quota (GB)"
+            className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          />
+        </label>
+        <label className="block text-sm">
+          <span className="mb-1 block text-gray-600 dark:text-gray-300">Maximum quota (GB)</span>
+          <input
+            type="number"
+            min={1}
+            step={0.5}
+            value={maxGb}
+            onChange={(e) => setMaxGb(e.target.value)}
+            aria-label="Maximum quota (GB)"
+            className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          />
+        </label>
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        <div className="flex items-center justify-end gap-2">
+          {save.isSuccess && <span className="text-xs text-green-600 dark:text-green-400">Saved</span>}
+          <button
+            type="submit"
+            disabled={save.isPending}
+            className="rounded bg-gray-900 px-3 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
+          >
+            {save.isPending ? "Saving…" : "Save quotas"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
