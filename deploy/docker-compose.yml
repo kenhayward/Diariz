@@ -92,6 +92,8 @@ services:
   web:
     build:
       context: ../apps/web
+      args:
+        BUILD_COMMIT: ${BUILD_COMMIT:-}
     depends_on:
       api:
         condition: service_started

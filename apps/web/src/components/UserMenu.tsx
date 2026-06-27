@@ -5,6 +5,7 @@ import type { ThemeChoice } from "../lib/theme";
 import Avatar from "./Avatar";
 import SettingsModal from "./SettingsModal";
 import ManageUsersModal from "./ManageUsersModal";
+import AboutModal from "./AboutModal";
 
 const THEMES: { value: ThemeChoice; label: string }[] = [
   { value: "auto", label: "Auto" },
@@ -18,6 +19,7 @@ export default function UserMenu() {
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [usersOpen, setUsersOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -84,6 +86,18 @@ export default function UserMenu() {
             </button>
           )}
 
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              setAboutOpen(true);
+            }}
+            className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
+          >
+            About
+          </button>
+
           <div className="border-t py-1 dark:border-gray-700">
             <div className="px-3 py-1 text-xs font-medium text-gray-400 dark:text-gray-500">Theme</div>
             {THEMES.map((t) => (
@@ -117,6 +131,7 @@ export default function UserMenu() {
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       {usersOpen && <ManageUsersModal onClose={() => setUsersOpen(false)} />}
+      {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
     </div>
   );
 }

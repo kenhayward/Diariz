@@ -152,7 +152,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<TranscriptionHub>("/hubs/transcription");
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+var appVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+app.MapGet("/health", () => Results.Ok(new { status = "ok", version = appVersion }));
 
 app.Run();
 

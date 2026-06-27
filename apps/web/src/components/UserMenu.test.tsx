@@ -82,4 +82,11 @@ describe("UserMenu", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: /settings/i }));
     expect(screen.getByRole("dialog", { name: /settings/i })).toBeTruthy();
   });
+
+  it("About opens the about box", () => {
+    renderMenu();
+    fireEvent.click(screen.getByRole("button", { name: /account/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /^about$/i }));
+    expect(screen.getByRole("dialog", { name: /about diariz/i })).toBeTruthy();
+  });
 });
