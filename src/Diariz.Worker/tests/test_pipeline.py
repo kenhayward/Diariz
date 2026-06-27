@@ -77,3 +77,30 @@ def test_speaker_embeddings_pools_segments_and_caps_at_max_seconds():
 
 def test_speaker_embeddings_empty_when_no_segments():
     assert pipeline._speaker_embeddings(np.ones(16000, dtype="float32"), [], lambda w: [1.0]) == []
+
+
+# ---- _diarize speaker-count hint forwarding ----
+
+def test_diarize_forwards_only_supplied_hints(monkeypatch):
+    calls = {}
+
+    def fake_diarizer(audio, **kwargs):
+        calls.update(audio=audio, kwargs=kwargs)
+        return "diarization"
+
+    monkeypatch.setattr(pipeline, "_get_diarizer", lambda: fake_diarizer)
+
+    out = pipeline._diarize("AUDIO", min_speakers=2, max_speakers=None)
+
+    assert out == "diarization"
+    assert calls["audio"] == "AUDIO"
+    assert calls["kwargs"] == {"min_speakers": 2}  # max omitted when None
+
+
+def test_diarize_passes_no_hints_when_none(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(pipeline, "_get_diarizer", lambda: lambda audio, **kw: calls.update(kw=kw))
+
+    pipeline._diarize("AUDIO")
+
+    assert calls["kw"] == {}

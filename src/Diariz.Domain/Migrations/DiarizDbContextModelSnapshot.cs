@@ -220,6 +220,12 @@ namespace Diariz.Domain.Migrations
                     b.Property<string>("Error")
                         .HasColumnType("text");
 
+                    b.Property<int?>("MaxSpeakers")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MinSpeakers")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Name")
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");

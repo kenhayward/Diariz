@@ -391,8 +391,16 @@ export const api = {
     await http.delete(`/api/chat/conversations/${id}`);
   },
 
-  async retranscribe(id: string, model?: string): Promise<void> {
-    await http.post(`/api/recordings/${id}/retranscribe`, { model: model ?? null });
+  /// Re-transcribe. `speakers` is tri-state: omit to keep the recording's existing diarization hints,
+  /// or pass an object (null bounds = automatic) to set them.
+  async retranscribe(
+    id: string,
+    opts?: { model?: string | null; speakers?: { min: number | null; max: number | null } },
+  ): Promise<void> {
+    await http.post(`/api/recordings/${id}/retranscribe`, {
+      model: opts?.model ?? null,
+      speakers: opts?.speakers ?? null,
+    });
   },
 
   async audioUrl(id: string, opts?: { download?: boolean }): Promise<string> {

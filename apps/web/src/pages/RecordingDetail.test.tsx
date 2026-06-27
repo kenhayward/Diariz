@@ -42,6 +42,8 @@ const base: RecordingDetailType = {
   status: "Transcribed",
   error: null,
   createdAt: new Date("2026-06-26T12:00:00Z").toISOString(),
+  minSpeakers: null,
+  maxSpeakers: null,
   speakerNames: {},
   speakers: [],
   current: {
@@ -144,6 +146,19 @@ describe("RecordingDetail", () => {
     fireEvent.click(screen.getByRole("button", { name: /merge same-speaker rows/i }));
 
     await waitFor(() => expect(api.mergeSegments).toHaveBeenCalledWith("rec-123"));
+  });
+
+  it("applies expected-speaker hints and re-transcribes", async () => {
+    (api.retranscribe as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    renderPage(base);
+    await screen.findByText("Hi");
+
+    fireEvent.change(screen.getByLabelText(/minimum speakers/i), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /apply & re-transcribe/i }));
+
+    await waitFor(() =>
+      expect(api.retranscribe).toHaveBeenCalledWith("rec-123", { speakers: { min: 2, max: null } }),
+    );
   });
 
   it("re-identifies speakers via the kebab", async () => {

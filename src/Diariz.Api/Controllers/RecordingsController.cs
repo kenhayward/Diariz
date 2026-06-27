@@ -113,7 +113,7 @@ public class RecordingsController : ControllerBase
             : new(current.Summary.Model, current.Summary.Text, current.Summary.CreatedAt);
 
         return new RecordingDetailDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.SizeBytes,
-            rec.Status, rec.Error, rec.CreatedAt, names, speakers, tDto, sDto);
+            rec.Status, rec.Error, rec.CreatedAt, rec.MinSpeakers, rec.MaxSpeakers, names, speakers, tDto, sDto);
     }
 
     /// <summary>Upload an audio file and kick off transcription.</summary>
@@ -162,6 +162,17 @@ public class RecordingsController : ControllerBase
     {
         var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
         if (rec is null) return NotFound();
+
+        // Tri-state: a present Speakers object sets the diarization hints (null bounds = automatic);
+        // an absent one leaves the recording's existing hints untouched (e.g. the list re-transcribe).
+        if (req.Speakers is { } hints)
+        {
+            if (hints.Min is < 1 || hints.Max is < 1) return BadRequest("Speaker counts must be at least 1.");
+            if (hints.Min is { } mn && hints.Max is { } mx && mn > mx)
+                return BadRequest("Minimum speakers can't exceed the maximum.");
+            rec.MinSpeakers = hints.Min;
+            rec.MaxSpeakers = hints.Max;
+        }
 
         await EnqueueTranscriptionAsync(rec, req.Model);
         await _db.SaveChangesAsync();
@@ -500,7 +511,8 @@ public class RecordingsController : ControllerBase
         _db.Transcriptions.Add(transcription);
 
         rec.Status = RecordingStatus.Queued;
-        await _queue.EnqueueAsync(new TranscriptionJob(rec.Id, transcription.Id, rec.BlobKey, transcription.Model));
+        await _queue.EnqueueAsync(new TranscriptionJob(rec.Id, transcription.Id, rec.BlobKey, transcription.Model,
+            rec.MinSpeakers, rec.MaxSpeakers));
         await _hub.NotifyStatusAsync(rec.UserId, rec.Id, rec.Status.ToString());
     }
 }
