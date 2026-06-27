@@ -63,6 +63,7 @@ A batch of interface refinements.
 `.trim(),
     changed: [
       "Recording groups collapse/expand from their header (remembered).",
+      "The speakers panel on a recording collapses from an arrow in its top-right.",
       "The recordings list and the Release Notes list are drag-resizable.",
       "Settings split into AI Settings / Storage Quotas tabs with one OK/Cancel.",
       "Wider About box; Release Notes list shows release titles.",

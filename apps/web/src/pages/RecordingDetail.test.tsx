@@ -70,6 +70,7 @@ function renderPage(rec: RecordingDetailType) {
 describe("RecordingDetail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear(); // speakers-panel collapse state persists
     (api.retranscribe as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.summarize as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.audioUrl as ReturnType<typeof vi.fn>).mockResolvedValue("blob:audio");
@@ -119,6 +120,18 @@ describe("RecordingDetail", () => {
 
     await waitFor(() => expect(api.audioUrl).toHaveBeenCalledWith("rec-123"));
     await waitFor(() => expect(play).toHaveBeenCalled());
+  });
+
+  it("collapses and expands the speakers panel", async () => {
+    renderPage(base);
+    await screen.findByText("Hi");
+    expect(screen.getByLabelText(/assign SPEAKER_00 to a person/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /collapse speakers panel/i }));
+    expect(screen.queryByLabelText(/assign SPEAKER_00 to a person/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /expand speakers panel/i }));
+    expect(screen.getByLabelText(/assign SPEAKER_00 to a person/i)).toBeTruthy();
   });
 
   it("merges same-speaker rows via the button (after confirm)", async () => {

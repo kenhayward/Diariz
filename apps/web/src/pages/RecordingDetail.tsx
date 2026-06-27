@@ -37,6 +37,15 @@ export default function RecordingDetail() {
   const [editingSeg, setEditingSeg] = useState<SegmentDto | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionInfo, setActionInfo] = useState<string | null>(null);
+  const [speakersCollapsed, setSpeakersCollapsed] = useState<boolean>(
+    () => localStorage.getItem("diariz.detail.speakersCollapsed") === "true",
+  );
+  function toggleSpeakers() {
+    setSpeakersCollapsed((v) => {
+      localStorage.setItem("diariz.detail.speakersCollapsed", String(!v));
+      return !v;
+    });
+  }
 
   useEffect(() => {
     const hub = createHub((e) => {
@@ -235,8 +244,20 @@ export default function RecordingDetail() {
 
       {labels.length > 0 && (
         <div className="rounded-lg border bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
-          <h2 className="mb-2 text-sm font-medium text-gray-500 dark:text-gray-400">Speakers</h2>
-          <div className="flex flex-wrap gap-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Speakers</h2>
+            <button
+              type="button"
+              aria-label={speakersCollapsed ? "Expand speakers panel" : "Collapse speakers panel"}
+              aria-expanded={!speakersCollapsed}
+              onClick={toggleSpeakers}
+              className="rounded px-1 text-xs text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+            >
+              {speakersCollapsed ? "▸" : "▾"}
+            </button>
+          </div>
+          {!speakersCollapsed && (
+          <div className="mt-2 flex flex-wrap gap-4">
             {labels.map((label) => {
               const info = rec.speakers.find((s) => s.label === label);
               return (
@@ -253,6 +274,7 @@ export default function RecordingDetail() {
               );
             })}
           </div>
+          )}
         </div>
       )}
 
