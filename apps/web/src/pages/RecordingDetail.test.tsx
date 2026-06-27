@@ -80,14 +80,18 @@ describe("RecordingDetail", () => {
     (api.listSpeakerProfiles as ReturnType<typeof vi.fn>).mockResolvedValue([]);
   });
 
-  it("re-transcribe (kebab) enqueues and refetches the recording", async () => {
+  it("re-transcribe (kebab) opens a modal and re-transcribes on confirm", async () => {
     renderPage(base);
     await waitFor(() => expect(api.getRecording).toHaveBeenCalledTimes(1));
 
     fireEvent.click(await screen.findByRole("button", { name: "Actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /re-transcribe/i }));
+    // Confirm without entering any hints.
+    fireEvent.click(screen.getByRole("button", { name: /^re-transcribe$/i }));
 
-    await waitFor(() => expect(api.retranscribe).toHaveBeenCalledWith("rec-123"));
+    await waitFor(() =>
+      expect(api.retranscribe).toHaveBeenCalledWith("rec-123", { speakers: { min: null, max: null } }),
+    );
     await waitFor(() => expect(api.getRecording).toHaveBeenCalledTimes(2));
   });
 
@@ -148,13 +152,15 @@ describe("RecordingDetail", () => {
     await waitFor(() => expect(api.mergeSegments).toHaveBeenCalledWith("rec-123"));
   });
 
-  it("applies expected-speaker hints and re-transcribes", async () => {
+  it("re-transcribes with speaker hints entered in the modal", async () => {
     (api.retranscribe as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     renderPage(base);
     await screen.findByText("Hi");
 
+    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /re-transcribe/i }));
     fireEvent.change(screen.getByLabelText(/minimum speakers/i), { target: { value: "2" } });
-    fireEvent.click(screen.getByRole("button", { name: /apply & re-transcribe/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^re-transcribe$/i }));
 
     await waitFor(() =>
       expect(api.retranscribe).toHaveBeenCalledWith("rec-123", { speakers: { min: 2, max: null } }),
