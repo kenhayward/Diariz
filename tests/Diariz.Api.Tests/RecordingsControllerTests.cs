@@ -527,7 +527,7 @@ public class RecordingsControllerTests
         Assert.IsType<NoContentResult>(result);
         var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
         var seg = Assert.Single(await db.Segments.Where(s => s.TranscriptionId == tr.Id).ToListAsync());
-        Assert.Equal("Hello World", seg.Text);
+        Assert.Equal("Hello\n\nWorld", seg.Text); // paragraph break between merged sections
         Assert.Equal(0, seg.StartMs);
         Assert.Equal(2000, seg.EndMs);
         Assert.Equal(0, seg.Ordinal);

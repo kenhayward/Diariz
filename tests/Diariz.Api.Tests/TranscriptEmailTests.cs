@@ -40,6 +40,13 @@ public class TranscriptEmailTests
     }
 
     [Fact]
+    public void BuildHtml_RendersParagraphBreaksFromMergedText()
+    {
+        var html = TranscriptEmail.BuildHtml("X", null, [Seg("A", 0, "para one\n\npara two")]);
+        Assert.Contains("para one<br><br>para two", html);
+    }
+
+    [Fact]
     public void BuildHtml_EscapesHtmlInContent()
     {
         var html = TranscriptEmail.BuildHtml("X", null, [Seg("<b>evil</b>", 0, "a & b <script>")]);

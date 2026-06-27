@@ -26,7 +26,9 @@ public static class TranscriptEmail
         sb.Append("<tr><th align=\"left\">Time</th><th align=\"left\">Speaker</th><th align=\"left\">Text</th></tr>");
         foreach (var s in segments)
             sb.Append("<tr><td>").Append(Clock(s.StartMs)).Append("</td><td>")
-              .Append(Enc(s.SpeakerDisplay)).Append("</td><td>").Append(Enc(s.Text)).Append("</td></tr>");
+              .Append(Enc(s.SpeakerDisplay)).Append("</td><td>")
+              .Append(Enc(s.Text).Replace("\n", "<br>")) // preserve paragraph breaks from merged segments
+              .Append("</td></tr>");
         sb.Append("</table>");
 
         sb.Append("<p style=\"color:#888;font-size:12px;margin-top:16px;\">Sent from Diariz</p>");

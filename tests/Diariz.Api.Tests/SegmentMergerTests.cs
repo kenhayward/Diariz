@@ -19,7 +19,7 @@ public class SegmentMergerTests
         var merged = Merge(parts);
 
         Assert.Equal(3, merged.Count);
-        Assert.Equal(new Part("SPEAKER_00", 0, 2000, "Hello there"), merged[0]);
+        Assert.Equal(new Part("SPEAKER_00", 0, 2000, "Hello\n\nthere"), merged[0]);
         Assert.Equal(new Part("SPEAKER_01", 2000, 3000, "Hi"), merged[1]);
         Assert.Equal(new Part("SPEAKER_00", 3000, 4000, "Bye"), merged[2]);
     }
@@ -37,7 +37,7 @@ public class SegmentMergerTests
         var merged = Merge(parts);
 
         Assert.Single(merged);
-        Assert.Equal(new Part("S", 0, 3000, "a b c"), merged[0]);
+        Assert.Equal(new Part("S", 0, 3000, "a\n\nb\n\nc"), merged[0]);
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public class SegmentMergerTests
             new("S", 2000, 3000, "world"),
         };
 
-        Assert.Equal("hello world", Merge(parts).Single().Text);
+        Assert.Equal("hello\n\nworld", Merge(parts).Single().Text);
     }
 
     [Fact]
