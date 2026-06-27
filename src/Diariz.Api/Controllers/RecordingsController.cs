@@ -25,12 +25,13 @@ public class RecordingsController : ControllerBase
     private readonly IHubContext<TranscriptionHub> _hub;
     private readonly ISummarizationSettingsResolver _summarization;
     private readonly IEmailSender _email;
+    private readonly ISpeakerIdentifier _identifier;
     private readonly string _defaultModel;
 
     public RecordingsController(
         DiarizDbContext db, IAudioStorage storage, IJobQueue queue,
         IHubContext<TranscriptionHub> hub, IConfiguration config,
-        ISummarizationSettingsResolver summarization, IEmailSender email)
+        ISummarizationSettingsResolver summarization, IEmailSender email, ISpeakerIdentifier identifier)
     {
         _db = db;
         _storage = storage;
@@ -38,6 +39,7 @@ public class RecordingsController : ControllerBase
         _hub = hub;
         _summarization = summarization;
         _email = email;
+        _identifier = identifier;
         _defaultModel = config["Transcription:DefaultModel"] ?? "whisperx-large-v3";
     }
 
@@ -288,6 +290,21 @@ public class RecordingsController : ControllerBase
                 Text = p.Text,
                 Ordinal = ordinal++
             });
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>Re-run speaker identification against the owner's current voiceprints, using the speakers'
+    /// already-stored embeddings (no re-transcription). Anonymous/auto speakers are (re)labelled; manual
+    /// names are left alone.</summary>
+    [HttpPost("{id:guid}/reidentify")]
+    public async Task<IActionResult> Reidentify(Guid id)
+    {
+        var rec = await _db.Recordings.Include(r => r.Speakers)
+            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+
+        await SpeakerLabeling.ApplyAsync(rec.Speakers, rec.UserId, _identifier);
         await _db.SaveChangesAsync();
         return NoContent();
     }

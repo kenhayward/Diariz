@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import type { SpeakerProfile } from "../lib/types";
@@ -37,6 +37,25 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
     await act(() => api.deleteAllSpeakerProfiles());
   }
 
+  // Shared audio element so playing one sample stops the previous; resolve the presigned URL lazily.
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioSrcRecording = useRef<string | null>(null);
+  async function playSample(recordingId: string, startMs: number) {
+    const el = audioRef.current;
+    if (!el) return;
+    setError(null);
+    try {
+      if (audioSrcRecording.current !== recordingId) {
+        el.src = await api.audioUrl(recordingId);
+        audioSrcRecording.current = recordingId;
+      }
+      el.currentTime = startMs / 1000;
+      await el.play();
+    } catch (e) {
+      setError(apiErrorMessage(e, "Could not play the sample."));
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
@@ -68,9 +87,13 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
               expanded={expandedId === p.id}
               onToggle={() => setExpandedId((cur) => (cur === p.id ? null : p.id))}
               act={act}
+              onPlay={playSample}
             />
           ))}
         </ul>
+
+        {/* Shared player for listening to training samples. */}
+        <audio ref={audioRef} controls className="mt-3 w-full" />
 
         <div className="mt-4 flex items-center justify-between border-t pt-3 dark:border-gray-700">
           {people.length > 0 ? (
@@ -101,12 +124,14 @@ function PersonRow({
   expanded,
   onToggle,
   act,
+  onPlay,
 }: {
   person: SpeakerProfile;
   others: SpeakerProfile[];
   expanded: boolean;
   onToggle: () => void;
   act: (fn: () => Promise<unknown>, detailId?: string) => Promise<void>;
+  onPlay: (recordingId: string, startMs: number) => void;
 }) {
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(person.name);
@@ -208,13 +233,22 @@ function PersonRow({
                   <span className="font-medium">{c.recordingName}</span>
                   <span className="text-gray-500 dark:text-gray-400"> · {c.speakerLabel}</span>
                 </span>
-                <button
-                  aria-label={`Remove training sample from ${c.recordingName}`}
-                  onClick={() => act(() => api.removeProfileContribution(person.id, c.id), person.id)}
-                  className="shrink-0 rounded border px-2 py-0.5 text-[11px] dark:border-gray-700"
-                >
-                  Remove
-                </button>
+                <span className="flex shrink-0 gap-1.5">
+                  <button
+                    aria-label={`Play sample from ${c.recordingName}`}
+                    onClick={() => onPlay(c.recordingId, c.startMs)}
+                    className="rounded border px-2 py-0.5 text-[11px] dark:border-gray-700"
+                  >
+                    ▶ Play
+                  </button>
+                  <button
+                    aria-label={`Remove training sample from ${c.recordingName}`}
+                    onClick={() => act(() => api.removeProfileContribution(person.id, c.id), person.id)}
+                    className="rounded border px-2 py-0.5 text-[11px] dark:border-gray-700"
+                  >
+                    Remove
+                  </button>
+                </span>
               </li>
             ))}
           </ul>

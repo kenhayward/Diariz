@@ -46,6 +46,27 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.8.0",
+    date: "2026-06-27",
+    pr: 30,
+    headline: "Re-identify speakers on demand & listen to training samples",
+    summary: `
+Two improvements for curating speaker identification.
+
+- **Re-identify speakers** — a new action on a recording (kebab menu) re-runs identification against your
+  **current** voiceprints using the speakers' already-computed embeddings, **without a full
+  re-transcription**. After you add/curate training samples, run it to relabel a recording instantly.
+  Manually-named speakers are never overwritten.
+- **Listen to training samples** — in the **People** screen, each training contribution now has a **▶ Play**
+  button that plays that recording from the start of the contributed speaker, so you can tell by ear who a
+  sample actually is before keeping or removing it.
+`.trim(),
+    added: [
+      "“Re-identify speakers” action — re-applies voiceprint matching to a recording without re-transcribing.",
+      "Play button on each training contribution in People, to hear the sample.",
+    ],
+  },
+  {
     version: "0.7.0",
     date: "2026-06-27",
     pr: 29,

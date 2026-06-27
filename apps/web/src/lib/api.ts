@@ -161,6 +161,11 @@ export const api = {
     await http.post(`/api/recordings/${id}/merge-segments`);
   },
 
+  /// Re-run speaker identification against current voiceprints (no re-transcription).
+  async reidentify(id: string): Promise<void> {
+    await http.post(`/api/recordings/${id}/reidentify`);
+  },
+
   /// Email the current transcript to the signed-in user's account address.
   async emailTranscript(id: string): Promise<void> {
     await http.post(`/api/recordings/${id}/email`);

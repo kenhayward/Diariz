@@ -11,6 +11,7 @@ vi.mock("../lib/api", () => ({
     mergeSpeakerProfiles: vi.fn(),
     deleteSpeakerProfile: vi.fn(),
     deleteAllSpeakerProfiles: vi.fn(),
+    audioUrl: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -93,7 +94,7 @@ describe("PeopleModal", () => {
       sampleCount: 2,
       identifiedCount: 3,
       contributions: [
-        { id: "c1", recordingId: "r1", recordingName: "Team Sync", speakerLabel: "SPEAKER_00", createdAt: "2026-06-27T00:00:00Z" },
+        { id: "c1", recordingId: "r1", recordingName: "Team Sync", speakerLabel: "SPEAKER_00", startMs: 3000, createdAt: "2026-06-27T00:00:00Z" },
       ],
     };
     mock(api.getSpeakerProfile).mockResolvedValue(detail);
@@ -103,5 +104,27 @@ describe("PeopleModal", () => {
     fireEvent.click(await screen.findByLabelText("Remove training sample from Team Sync"));
 
     await waitFor(() => expect(api.removeProfileContribution).toHaveBeenCalledWith("p1", "c1"));
+  });
+
+  it("plays a training sample (resolves the recording's audio and seeks)", async () => {
+    const detail: SpeakerProfileDetail = {
+      id: "p1",
+      name: "Alice",
+      sampleCount: 1,
+      identifiedCount: 1,
+      contributions: [
+        { id: "c1", recordingId: "r1", recordingName: "Team Sync", speakerLabel: "SPEAKER_00", startMs: 3000, createdAt: "2026-06-27T00:00:00Z" },
+      ],
+    };
+    mock(api.getSpeakerProfile).mockResolvedValue(detail);
+    mock(api.audioUrl).mockResolvedValue("blob:audio");
+    const play = vi.spyOn(window.HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    render_();
+
+    fireEvent.click(await screen.findByLabelText("Expand Alice"));
+    fireEvent.click(await screen.findByLabelText(/play sample from team sync/i));
+
+    await waitFor(() => expect(api.audioUrl).toHaveBeenCalledWith("r1"));
+    await waitFor(() => expect(play).toHaveBeenCalled());
   });
 });

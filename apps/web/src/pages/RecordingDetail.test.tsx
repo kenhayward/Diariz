@@ -22,6 +22,7 @@ vi.mock("../lib/api", () => ({
     updateSegment: vi.fn(),
     mergeSegments: vi.fn(),
     emailTranscript: vi.fn(),
+    reidentify: vi.fn(),
     listSpeakerProfiles: vi.fn(),
     assignSpeaker: vi.fn(),
     createSpeakerProfile: vi.fn(),
@@ -143,6 +144,17 @@ describe("RecordingDetail", () => {
     fireEvent.click(screen.getByRole("button", { name: /merge same-speaker rows/i }));
 
     await waitFor(() => expect(api.mergeSegments).toHaveBeenCalledWith("rec-123"));
+  });
+
+  it("re-identifies speakers via the kebab", async () => {
+    (api.reidentify as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    renderPage(base);
+    await screen.findByText("Hi");
+
+    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /re-identify speakers/i }));
+
+    await waitFor(() => expect(api.reidentify).toHaveBeenCalledWith("rec-123"));
   });
 
   it("emails the transcript via the kebab and confirms", async () => {

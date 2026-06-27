@@ -56,11 +56,32 @@ public class SpeakerProfilesController : ControllerBase
             .Select(s => new { s.Id, s.Label }).ToListAsync())
             .ToDictionary(s => s.Id, s => s.Label);
 
-        var contributions = raw.Select(c => new ProfileContributionDto(
-            c.Id, c.RecordingId,
-            recMap.TryGetValue(c.RecordingId, out var d) ? d : "(deleted recording)",
-            spMap.TryGetValue(c.SpeakerId, out var l) ? l : "",
-            c.CreatedAt)).ToList();
+        // Earliest segment start (ms) for each contributed speaker in its recording's current
+        // transcription, so the UI can play a sample of that voice. Computed in memory (provider-agnostic).
+        var currentTrByRecording = (await _db.Transcriptions
+                .Where(t => recIds.Contains(t.RecordingId))
+                .Select(t => new { t.Id, t.RecordingId, t.Version }).ToListAsync())
+            .GroupBy(t => t.RecordingId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(t => t.Version).First().Id);
+        var trIds = currentTrByRecording.Values.ToList();
+        var minStart = (await _db.Segments
+                .Where(s => trIds.Contains(s.TranscriptionId))
+                .Select(s => new { s.TranscriptionId, s.SpeakerLabel, s.StartMs }).ToListAsync())
+            .GroupBy(s => (s.TranscriptionId, s.SpeakerLabel))
+            .ToDictionary(g => g.Key, g => g.Min(s => s.StartMs));
+
+        long StartFor(Guid recordingId, string label) =>
+            currentTrByRecording.TryGetValue(recordingId, out var trId)
+            && minStart.TryGetValue((trId, label), out var ms) ? ms : 0;
+
+        var contributions = raw.Select(c =>
+        {
+            var label = spMap.TryGetValue(c.SpeakerId, out var l) ? l : "";
+            return new ProfileContributionDto(
+                c.Id, c.RecordingId,
+                recMap.TryGetValue(c.RecordingId, out var d) ? d : "(deleted recording)",
+                label, StartFor(c.RecordingId, label), c.CreatedAt);
+        }).ToList();
 
         return new SpeakerProfileDetailDto(profile.Id, profile.Name, profile.SampleCount, identifiedCount, contributions);
     }

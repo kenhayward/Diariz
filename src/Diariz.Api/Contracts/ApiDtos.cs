@@ -86,8 +86,10 @@ public record CreateSpeakerProfileRequest(string Name, Guid RecordingId, string 
 public record AssignSpeakerRequest(Guid? ProfileId);
 public record RenameSpeakerProfileRequest(string Name);
 public record MergeSpeakerProfilesRequest(Guid SourceId);
-/// <summary>One enrolled training sample feeding a voiceprint: the recording/speaker it came from.</summary>
-public record ProfileContributionDto(Guid Id, Guid RecordingId, string RecordingName, string SpeakerLabel, DateTimeOffset CreatedAt);
+/// <summary>One enrolled training sample feeding a voiceprint: the recording/speaker it came from, and
+/// the start (ms) of that speaker's first segment so the UI can play a sample to identify them.</summary>
+public record ProfileContributionDto(
+    Guid Id, Guid RecordingId, string RecordingName, string SpeakerLabel, long StartMs, DateTimeOffset CreatedAt);
 /// <summary>A voiceprint with its training provenance and how many recording-speakers it currently labels.</summary>
 public record SpeakerProfileDetailDto(
     Guid Id, string Name, int SampleCount, int IdentifiedCount, IReadOnlyList<ProfileContributionDto> Contributions);
