@@ -5,6 +5,7 @@ import type { ThemeChoice } from "../lib/theme";
 import Avatar from "./Avatar";
 import SettingsModal from "./SettingsModal";
 import ManageUsersModal from "./ManageUsersModal";
+import PeopleModal from "./PeopleModal";
 import AboutModal from "./AboutModal";
 
 const THEMES: { value: ThemeChoice; label: string }[] = [
@@ -19,6 +20,7 @@ export default function UserMenu() {
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [usersOpen, setUsersOpen] = useState(false);
+  const [peopleOpen, setPeopleOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -91,6 +93,18 @@ export default function UserMenu() {
             role="menuitem"
             onClick={() => {
               setOpen(false);
+              setPeopleOpen(true);
+            }}
+            className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
+          >
+            People
+          </button>
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
               setAboutOpen(true);
             }}
             className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
@@ -131,6 +145,7 @@ export default function UserMenu() {
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       {usersOpen && <ManageUsersModal onClose={() => setUsersOpen(false)} />}
+      {peopleOpen && <PeopleModal onClose={() => setPeopleOpen(false)} />}
       {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
     </div>
   );
