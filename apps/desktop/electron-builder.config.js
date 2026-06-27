@@ -6,6 +6,12 @@
 //   DIARIZ_PUBLISH=generic + DIARIZ_UPDATE_URL=...   → a self-hosted feed (e.g. your own server)
 const generic = process.env.DIARIZ_PUBLISH === "generic";
 
+// electron-builder only looks for `.git/config` in this package's own dir (apps/desktop),
+// not the monorepo root, so it can't auto-detect owner/repo for the GitHub publish provider.
+// In CI, derive them from the Actions environment (`GITHUB_REPOSITORY=owner/repo`) — this also
+// keeps the repo fork-friendly: a fork's CI publishes to *its* Releases without editing this file.
+const [ghOwner, ghRepo] = (process.env.GITHUB_REPOSITORY || "").split("/");
+
 module.exports = {
   appId: "com.diariz.desktop",
   productName: "Diariz",
@@ -24,5 +30,9 @@ module.exports = {
   },
   publish: generic
     ? { provider: "generic", url: process.env.DIARIZ_UPDATE_URL || "https://example.invalid/updates/", channel: "latest" }
-    : { provider: "github", releaseType: "release" },
+    : {
+        provider: "github",
+        releaseType: "release",
+        ...(ghOwner && ghRepo ? { owner: ghOwner, repo: ghRepo } : {}),
+      },
 };

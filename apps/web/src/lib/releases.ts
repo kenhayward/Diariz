@@ -47,6 +47,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.12.2",
+    date: "2026-06-28",
+    pr: 39,
+    headline: "Fix the desktop release publish step",
+    summary: `
+The desktop release build packaged the app but then failed to publish: electron-builder couldn't determine
+the GitHub repository (it only looks for \`.git/config\` in \`apps/desktop\`, not the monorepo root). The
+release config now takes the owner/repo from the CI environment (\`GITHUB_REPOSITORY\`), which also keeps the
+repo fork-friendly — a fork's CI publishes to its own Releases without editing the config.
+`.trim(),
+    fixed: [
+      "Desktop release: set the GitHub publish owner/repo from $GITHUB_REPOSITORY (electron-builder can't detect it from a monorepo subdirectory).",
+    ],
+  },
+  {
     version: "0.12.1",
     date: "2026-06-28",
     pr: 38,
