@@ -18,6 +18,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
     public DbSet<SpeakerProfile> SpeakerProfiles => Set<SpeakerProfile>();
     public DbSet<ProfileContribution> ProfileContributions => Set<ProfileContribution>();
+    public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -64,7 +65,20 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        builder.Entity<ApplicationUser>(e => e.Property(u => u.FullName).HasMaxLength(256));
+        builder.Entity<ApplicationUser>(e =>
+        {
+            e.Property(u => u.FullName).HasMaxLength(256);
+            // Default backfills existing rows on migration and any user created without an explicit quota.
+            e.Property(u => u.QuotaBytes).HasDefaultValue(Entities.PlatformSettings.DefaultStarterQuotaBytes);
+        });
+
+        // Platform-wide settings: a single seeded row (Id = 1).
+        builder.Entity<PlatformSettings>().HasData(new PlatformSettings
+        {
+            Id = Entities.PlatformSettings.SingletonId,
+            StarterQuotaBytes = Entities.PlatformSettings.DefaultStarterQuotaBytes,
+            MaxQuotaBytes = Entities.PlatformSettings.DefaultMaxQuotaBytes,
+        });
 
         builder.Entity<Transcription>(e =>
         {

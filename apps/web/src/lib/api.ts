@@ -8,6 +8,7 @@ import type {
   ChatTurn,
   ChatUsage,
   GrantResult,
+  PlatformSettings,
   RecordingDetail,
   RecordingSource,
   RecordingSummary,
@@ -18,6 +19,7 @@ import type {
   SpeakerProfileDetail,
   UpdateUserSettings,
   UserSettings,
+  UserStorage,
 } from "./types";
 
 const TOKEN_KEY = "diariz.token";
@@ -67,8 +69,8 @@ export const api = {
 
   // ---- Access requests / account setup (public) ----
 
-  async requestAccess(email: string): Promise<void> {
-    await http.post("/api/auth/request-access", { email });
+  async requestAccess(email: string, fullName?: string): Promise<void> {
+    await http.post("/api/auth/request-access", { email, fullName: fullName ?? null });
   },
 
   async validateSetup(email: string, token: string): Promise<SetupValidation> {
@@ -89,9 +91,14 @@ export const api = {
   },
 
   /// Admin creates a user by email and kicks off onboarding (setup link emailed, or returned to show).
-  async addUser(email: string): Promise<GrantResult> {
-    const { data } = await http.post<GrantResult>("/api/admin/users", { email });
+  async addUser(email: string, fullName?: string): Promise<GrantResult> {
+    const { data } = await http.post<GrantResult>("/api/admin/users", { email, fullName: fullName ?? null });
     return data;
+  },
+
+  /// Raise/lower a user's storage quota (bytes), up to the platform maximum.
+  async setUserQuota(id: string, quotaBytes: number): Promise<void> {
+    await http.put(`/api/admin/users/${id}/quota`, { quotaBytes });
   },
 
   async grantUser(id: string): Promise<GrantResult> {
@@ -240,6 +247,23 @@ export const api = {
 
   async updateUserSettings(body: UpdateUserSettings): Promise<void> {
     await http.put("/api/user/settings", body);
+  },
+
+  // ---- Storage quotas ----
+
+  async getUserStorage(): Promise<UserStorage> {
+    const { data } = await http.get<UserStorage>("/api/user/storage");
+    return data;
+  },
+
+  async getPlatformSettings(): Promise<PlatformSettings> {
+    const { data } = await http.get<PlatformSettings>("/api/platform/settings");
+    return data;
+  },
+
+  async updatePlatformSettings(body: PlatformSettings): Promise<PlatformSettings> {
+    const { data } = await http.put<PlatformSettings>("/api/platform/settings", body);
+    return data;
   },
 
   // ---- Chat ----

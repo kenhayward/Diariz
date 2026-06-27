@@ -7,20 +7,29 @@ public record LoginRequest(string Email, string Password);
 public record AuthResponse(string AccessToken, DateTimeOffset ExpiresAt);
 
 // ---- Access requests / account setup ----
-public record RequestAccessRequest(string Email);
-/// <summary>Whether a setup link is valid (and, if so, the email it's for) — neutral when invalid.</summary>
-public record SetupValidateResponse(bool Valid, string? Email);
+public record RequestAccessRequest(string Email, string? FullName = null);
+/// <summary>Whether a setup link is valid (and, if so, the email + any pre-filled name it's for) — neutral when invalid.</summary>
+public record SetupValidateResponse(bool Valid, string? Email, string? FullName = null);
 public record SetupRequest(string Email, string Token, string FullName, string Password);
 
 // ---- Admin user management ----
 public record AdminUserDto(
-    Guid Id, string Email, string? FullName, string AccountType, UserStatus Status, bool IsEnabled);
-public record AddUserRequest(string Email);
+    Guid Id, string Email, string? FullName, string AccountType, UserStatus Status, bool IsEnabled,
+    long QuotaBytes, long UsedBytes);
+public record AddUserRequest(string Email, string? FullName = null);
+public record SetQuotaRequest(long QuotaBytes);
 public record SetRoleRequest(string Role);
 public record SetEnabledRequest(bool IsEnabled);
 /// <summary>Result of granting access: whether the link was emailed, and (on the no-SMTP fallback)
 /// the setup URL for the admin to share manually.</summary>
 public record GrantResultDto(bool Emailed, string? SetupUrl);
+
+// ---- Platform settings & storage quotas ----
+/// <summary>Platform-wide storage-quota defaults (bytes), edited by the Platform Administrator.</summary>
+public record PlatformSettingsDto(long StarterQuotaBytes, long MaxQuotaBytes);
+public record UpdatePlatformSettingsRequest(long StarterQuotaBytes, long MaxQuotaBytes);
+/// <summary>The signed-in user's storage usage vs their quota (bytes).</summary>
+public record StorageUsageDto(long UsedBytes, long QuotaBytes);
 
 // ---- Sections ----
 public record SectionDto(Guid Id, string Name);
@@ -60,6 +69,7 @@ public record RecordingDetailDto(
     string? Name,
     RecordingSource Source,
     long DurationMs,
+    long SizeBytes,
     RecordingStatus Status,
     string? Error,
     DateTimeOffset CreatedAt,

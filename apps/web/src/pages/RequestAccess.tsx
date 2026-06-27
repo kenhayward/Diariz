@@ -7,6 +7,7 @@ import AuthShell from "../components/AuthShell";
 /// whether the email already has an account); an administrator reviews and grants the request.
 export default function RequestAccess() {
   const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -16,7 +17,7 @@ export default function RequestAccess() {
     setBusy(true);
     setError(null);
     try {
-      await api.requestAccess(email.trim());
+      await api.requestAccess(email.trim(), fullName.trim() || undefined);
       setDone(true);
     } catch (err) {
       setError(apiErrorMessage(err, "Could not submit your request."));
@@ -45,6 +46,14 @@ export default function RequestAccess() {
           </div>
         ) : (
           <form onSubmit={onSubmit} className="space-y-4">
+            <input
+              type="text"
+              placeholder="Your name"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              aria-label="Your name"
+              className="w-full rounded border px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            />
             <input
               type="email"
               placeholder="Your email"

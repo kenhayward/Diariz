@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { api, getToken, setToken } from "./lib/api";
-import { emailFromToken, fullNameFromToken, rolesFromToken, isAdminFromToken } from "./lib/jwt";
+import { emailFromToken, fullNameFromToken, rolesFromToken, isAdminFromToken, isPlatformAdminFromToken } from "./lib/jwt";
 import { initialsFromName, initialsFromEmail } from "./lib/initials";
 
 interface AuthState {
@@ -9,6 +9,7 @@ interface AuthState {
   fullName: string | null;
   roles: string[];
   isAdmin: boolean;
+  isPlatformAdmin: boolean;
   initials: string;
   login: (email: string, password: string) => Promise<void>;
   /// Adopt an access token directly (e.g. after account setup auto-signs the user in).
@@ -25,6 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fullName = useMemo(() => fullNameFromToken(token), [token]);
   const roles = useMemo(() => rolesFromToken(token), [token]);
   const isAdmin = useMemo(() => isAdminFromToken(token), [token]);
+  const isPlatformAdmin = useMemo(() => isPlatformAdminFromToken(token), [token]);
   const initials = useMemo(() => (fullName ? initialsFromName(fullName) : initialsFromEmail(email)), [fullName, email]);
 
   function setSession(accessToken: string) {
@@ -44,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ isAuthed: Boolean(token), email, fullName, roles, isAdmin, initials, login, setSession, logout }}
+      value={{ isAuthed: Boolean(token), email, fullName, roles, isAdmin, isPlatformAdmin, initials, login, setSession, logout }}
     >
       {children}
     </AuthContext.Provider>

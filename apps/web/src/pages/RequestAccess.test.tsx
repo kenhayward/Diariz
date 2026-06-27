@@ -20,10 +20,11 @@ describe("RequestAccess", () => {
     mock(api.requestAccess).mockResolvedValue(undefined);
     render_();
 
+    fireEvent.change(screen.getByPlaceholderText(/your name/i), { target: { value: "New Person" } });
     fireEvent.change(screen.getByPlaceholderText(/your email/i), { target: { value: "new@x.test" } });
     fireEvent.click(screen.getByRole("button", { name: /request access/i }));
 
-    await waitFor(() => expect(api.requestAccess).toHaveBeenCalledWith("new@x.test"));
+    await waitFor(() => expect(api.requestAccess).toHaveBeenCalledWith("new@x.test", "New Person"));
     expect(await screen.findByText(/an administrator will review/i)).toBeTruthy();
   });
 });

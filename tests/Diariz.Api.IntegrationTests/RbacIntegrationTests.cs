@@ -78,7 +78,9 @@ public class RbacIntegrationTests(ContainersFixture fx)
         await using var sp = BuildIdentity();
         await Seeder.SeedRolesAsync(sp);
         var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
-        var auth = new AuthController(users, Tokens());
+        var db = sp.GetRequiredService<DiarizDbContext>();
+        var platform = new PlatformSettingsService(db);
+        var auth = new AuthController(users, Tokens(), platform);
 
         var email = $"life-{Guid.NewGuid():N}@x.test";
 
@@ -90,7 +92,7 @@ public class RbacIntegrationTests(ContainersFixture fx)
         var admin = new ApplicationUser { UserName = $"adm-{Guid.NewGuid():N}@x.test", Email = $"adm-{Guid.NewGuid():N}@x.test" };
         await users.CreateAsync(admin);
         await users.AddToRoleAsync(admin, Roles.Administrator);
-        var adminCtrl = new AdminUsersController(users, new FakeEmailSender { Sent = false },
+        var adminCtrl = new AdminUsersController(users, new FakeEmailSender { Sent = false }, db, platform,
             Options.Create(new AppPublicOptions { PublicUrl = "http://localhost:8081" }))
         {
             ControllerContext = Http.Context(admin.Id, [Roles.Administrator]),

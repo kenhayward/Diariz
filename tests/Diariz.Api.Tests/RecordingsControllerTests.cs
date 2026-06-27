@@ -32,6 +32,14 @@ public class RecordingsControllerTests
         };
     }
 
+    private static async Task SeedUser(DiarizDbContext db, Guid userId, long? quotaBytes = null)
+    {
+        var u = new ApplicationUser { Id = userId, UserName = $"{userId}@x.test", Email = $"{userId}@x.test" };
+        if (quotaBytes is not null) u.QuotaBytes = quotaBytes.Value;
+        db.Users.Add(u);
+        await db.SaveChangesAsync();
+    }
+
     private static async Task<Recording> SeedRecording(DiarizDbContext db, Guid userId, params int[] versions)
     {
         var rec = new Recording
@@ -136,6 +144,7 @@ public class RecordingsControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
         var queue = new FakeJobQueue();
         var storage = new FakeAudioStorage();
         var controller = Build(db, userId, queue, storage);
@@ -151,6 +160,7 @@ public class RecordingsControllerTests
         var rec = await db.Recordings.SingleAsync();
         Assert.Equal(userId, rec.UserId);
         Assert.Equal(4200, rec.DurationMs);
+        Assert.Equal(bytes.Length, rec.SizeBytes); // audio size recorded for quota accounting
         Assert.True(storage.Objects.ContainsKey(rec.BlobKey));
         Assert.Equal(bytes, storage.Objects[rec.BlobKey]);
 
@@ -181,12 +191,49 @@ public class RecordingsControllerTests
     public async Task Upload_BlankTitle_GetsGeneratedDefaultTitle()
     {
         using var db = TestDb.Create();
-        var controller = Build(db, Guid.NewGuid(), new FakeJobQueue());
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
 
         var result = await controller.Upload(FakeAudio(), title: null, durationMs: 1000);
 
         var summary = Assert.IsType<RecordingSummaryDto>(Assert.IsType<CreatedAtActionResult>(result.Result).Value);
         Assert.StartsWith("Recording ", summary.Title);
+    }
+
+    [Fact]
+    public async Task Upload_OverQuota_Returns413_AndStoresNothing()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId, quotaBytes: 10); // tiny quota
+        var queue = new FakeJobQueue();
+        var storage = new FakeAudioStorage();
+        var controller = Build(db, userId, queue, storage);
+
+        var result = await controller.Upload(FakeAudio(Encoding.UTF8.GetBytes("more-than-ten-bytes")), title: "x", durationMs: 1);
+
+        var obj = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(413, obj.StatusCode);
+        Assert.Empty(await db.Recordings.ToListAsync());
+        Assert.Empty(queue.Enqueued);
+        Assert.Empty(storage.Objects);
+    }
+
+    [Fact]
+    public async Task Upload_WithinQuota_CountsExistingUsage()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId, quotaBytes: 100);
+        // 95 bytes already used; a 10-byte upload would exceed the 100-byte quota.
+        db.Recordings.Add(new Recording { Id = Guid.NewGuid(), UserId = userId, BlobKey = "k", SizeBytes = 95 });
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue(), new FakeAudioStorage());
+
+        var result = await controller.Upload(FakeAudio(new byte[10]), title: "x", durationMs: 1);
+
+        Assert.Equal(413, Assert.IsType<ObjectResult>(result.Result).StatusCode);
     }
 
     // ---- RenameSpeaker ----

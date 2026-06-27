@@ -6,6 +6,7 @@ import { createHub } from "../lib/signalr";
 import KebabMenu from "../components/KebabMenu";
 import MoveToSectionModal from "../components/MoveToSectionModal";
 import { recordingMenu } from "../components/recordingMenu";
+import { formatBytes } from "../lib/format";
 import type { SegmentDto, SpeakerInfo, SpeakerProfile } from "../lib/types";
 
 function fmt(ms: number): string {
@@ -171,6 +172,7 @@ export default function RecordingDetail() {
           <p className="text-xs text-gray-500 dark:text-gray-400">
             {rec.source === "System" ? "System audio" : "Microphone"} ·{" "}
             {new Date(rec.createdAt).toLocaleString()} · {rec.status}
+            {rec.sizeBytes > 0 ? ` · ${formatBytes(rec.sizeBytes)}` : ""}
             {rec.current?.language ? ` · ${rec.current.language}` : ""}
           </p>
         </div>

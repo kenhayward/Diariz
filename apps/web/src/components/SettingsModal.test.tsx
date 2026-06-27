@@ -2,8 +2,15 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const authState = { isPlatformAdmin: false };
+vi.mock("../auth", () => ({ useAuth: () => authState }));
 vi.mock("../lib/api", () => ({
-  api: { getUserSettings: vi.fn(), updateUserSettings: vi.fn() },
+  api: {
+    getUserSettings: vi.fn(),
+    updateUserSettings: vi.fn(),
+    getPlatformSettings: vi.fn().mockResolvedValue({ starterQuotaBytes: 5 * 1024 ** 3, maxQuotaBytes: 50 * 1024 ** 3 }),
+    updatePlatformSettings: vi.fn().mockResolvedValue({ starterQuotaBytes: 0, maxQuotaBytes: 0 }),
+  },
   apiErrorMessage: (e: unknown) => String(e),
 }));
 
@@ -22,6 +29,7 @@ function renderModal() {
 describe("SettingsModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    authState.isPlatformAdmin = false;
     (api.getUserSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
       apiBase: "https://existing/v1",
       model: "gpt-x",
@@ -125,6 +133,31 @@ describe("SettingsModal", () => {
       expect(api.updateUserSettings).toHaveBeenCalledWith(
         expect.objectContaining({ apiKey: "" }),
       ),
+    );
+  });
+
+  it("hides the platform quota section for non-platform admins", async () => {
+    renderModal();
+    await screen.findByDisplayValue("https://existing/v1");
+    expect(screen.queryByText(/storage quotas \(platform\)/i)).toBeNull();
+  });
+
+  it("lets a Platform Administrator edit the quota defaults (GB → bytes)", async () => {
+    authState.isPlatformAdmin = true;
+    renderModal();
+
+    // Starter pre-filled at 5 GB (once the query resolves); change it and the max, then save.
+    const starter = await screen.findByLabelText(/starter quota \(GB\)/i);
+    await waitFor(() => expect((starter as HTMLInputElement).value).toBe("5"));
+    fireEvent.change(starter, { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText(/maximum quota \(GB\)/i), { target: { value: "20" } });
+    fireEvent.click(screen.getByRole("button", { name: /save quotas/i }));
+
+    await waitFor(() =>
+      expect(api.updatePlatformSettings).toHaveBeenCalledWith({
+        starterQuotaBytes: 2 * 1024 ** 3,
+        maxQuotaBytes: 20 * 1024 ** 3,
+      }),
     );
   });
 });

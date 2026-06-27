@@ -40,3 +40,7 @@ export function isAdminFromToken(token: string | null | undefined): boolean {
   const roles = rolesFromToken(token);
   return roles.includes("Administrator") || roles.includes("PlatformAdministrator");
 }
+
+export function isPlatformAdminFromToken(token: string | null | undefined): boolean {
+  return rolesFromToken(token).includes("PlatformAdministrator");
+}

@@ -1,6 +1,7 @@
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
+using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
@@ -12,7 +13,7 @@ namespace Diariz.Api.Tests;
 public class AdminUsersControllerTests
 {
     private static AdminUsersController Build(IdentityTestHost host, Guid adminId, FakeEmailSender? email = null) =>
-        new(host.Users, email ?? new FakeEmailSender(),
+        new(host.Users, email ?? new FakeEmailSender(), host.Db, new PlatformSettingsService(host.Db),
             Options.Create(new AppPublicOptions { PublicUrl = "http://localhost:8081" }))
         {
             ControllerContext = Http.Context(adminId, [Roles.Administrator]),
@@ -66,6 +67,60 @@ public class AdminUsersControllerTests
         Assert.Equal(UserStatus.Invited, created!.Status);
         Assert.False(await host.Users.HasPasswordAsync(created)); // awaits setup
         Assert.Contains(Roles.Standard, await host.Users.GetRolesAsync(created));
+    }
+
+    [Fact]
+    public async Task Add_SetsFullName_AndStarterQuota()
+    {
+        using var host = new IdentityTestHost();
+        await host.SeedRolesAsync();
+        var admin = await Seed(host, "admin@x.test", Roles.Administrator);
+
+        await Build(host, admin.Id).Add(new AddUserRequest("new@x.test", "New Person"));
+
+        var created = await host.Users.FindByEmailAsync("new@x.test");
+        Assert.Equal("New Person", created!.FullName);
+        Assert.Equal(PlatformSettings.DefaultStarterQuotaBytes, created.QuotaBytes);
+    }
+
+    // ---- Quota ----
+
+    [Fact]
+    public async Task SetQuota_RaisesQuota_WithinMax()
+    {
+        using var host = new IdentityTestHost();
+        await host.SeedRolesAsync();
+        var admin = await Seed(host, "admin@x.test", Roles.Administrator);
+        var target = await Seed(host, "std@x.test", Roles.Standard);
+
+        var result = await Build(host, admin.Id).SetQuota(target.Id, new SetQuotaRequest(10L * 1024 * 1024 * 1024));
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Equal(10L * 1024 * 1024 * 1024, (await host.Users.FindByIdAsync(target.Id.ToString()))!.QuotaBytes);
+    }
+
+    [Fact]
+    public async Task SetQuota_AboveMax_ReturnsBadRequest()
+    {
+        using var host = new IdentityTestHost();
+        await host.SeedRolesAsync();
+        var admin = await Seed(host, "admin@x.test", Roles.Administrator);
+        var target = await Seed(host, "std@x.test", Roles.Standard);
+
+        var result = await Build(host, admin.Id)
+            .SetQuota(target.Id, new SetQuotaRequest(PlatformSettings.DefaultMaxQuotaBytes + 1));
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task SetQuota_UnknownUser_ReturnsNotFound()
+    {
+        using var host = new IdentityTestHost();
+        await host.SeedRolesAsync();
+        var admin = await Seed(host, "admin@x.test", Roles.Administrator);
+
+        Assert.IsType<NotFoundResult>(await Build(host, admin.Id).SetQuota(Guid.NewGuid(), new SetQuotaRequest(1024)));
     }
 
     [Fact]

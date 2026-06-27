@@ -170,6 +170,9 @@ public sealed class FakeAudioStorage : IAudioStorage
     public Task<Stream> OpenReadAsync(string key, CancellationToken ct = default) =>
         Task.FromResult<Stream>(new MemoryStream(Objects[key]));
 
+    public Task<long?> GetSizeAsync(string key, CancellationToken ct = default) =>
+        Task.FromResult(Objects.TryGetValue(key, out var bytes) ? bytes.Length : (long?)null);
+
     public Task DeleteAsync(string key, CancellationToken ct = default)
     {
         Objects.Remove(key);

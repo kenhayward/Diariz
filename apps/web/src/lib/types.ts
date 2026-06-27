@@ -92,6 +92,7 @@ export interface RecordingDetail {
   name: string | null;
   source: RecordingSource;
   durationMs: number;
+  sizeBytes: number;
   status: RecordingStatus;
   error: string | null;
   createdAt: string;
@@ -116,6 +117,20 @@ export interface AdminUser {
   accountType: "Standard" | "Administrator" | "PlatformAdministrator";
   status: UserAccountStatus;
   isEnabled: boolean;
+  quotaBytes: number;
+  usedBytes: number;
+}
+
+/// The signed-in user's storage usage vs quota (bytes).
+export interface UserStorage {
+  usedBytes: number;
+  quotaBytes: number;
+}
+
+/// Platform-wide storage-quota defaults (bytes), edited by the Platform Administrator.
+export interface PlatformSettings {
+  starterQuotaBytes: number;
+  maxQuotaBytes: number;
 }
 
 export interface GrantResult {
@@ -126,6 +141,7 @@ export interface GrantResult {
 export interface SetupValidation {
   valid: boolean;
   email: string | null;
+  fullName: string | null;
 }
 
 export interface UserSettings {

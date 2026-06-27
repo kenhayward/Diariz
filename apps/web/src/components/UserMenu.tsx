@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../auth";
 import { useTheme } from "../theme";
+import { api } from "../lib/api";
+import { formatBytes, storagePercent } from "../lib/format";
 import type { ThemeChoice } from "../lib/theme";
 import Avatar from "./Avatar";
 import SettingsModal from "./SettingsModal";
@@ -17,6 +20,7 @@ const THEMES: { value: ThemeChoice; label: string }[] = [
 export default function UserMenu() {
   const { initials, email, fullName, isAdmin, logout } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { data: storage } = useQuery({ queryKey: ["user-storage"], queryFn: api.getUserStorage });
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [usersOpen, setUsersOpen] = useState(false);
@@ -59,8 +63,13 @@ export default function UserMenu() {
         >
           {(fullName || email) && (
             <div className="border-b px-3 py-2 dark:border-gray-700">
-              {fullName && <div className="truncate text-sm font-medium dark:text-gray-100">{fullName}</div>}
-              {email && <div className="truncate text-xs text-gray-500 dark:text-gray-400">{email}</div>}
+              <div className="truncate text-sm font-medium dark:text-gray-100">{fullName ?? email}</div>
+              {storage && (
+                <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  Storage {formatBytes(storage.usedBytes)} / {formatBytes(storage.quotaBytes)} (
+                  {storagePercent(storage.usedBytes, storage.quotaBytes)}%)
+                </div>
+              )}
             </div>
           )}
           <button

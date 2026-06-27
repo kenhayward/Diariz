@@ -25,7 +25,11 @@ export default function Setup() {
     let active = true;
     api
       .validateSetup(email, token)
-      .then((r) => active && setValid(r.valid))
+      .then((r) => {
+        if (!active) return;
+        setValid(r.valid);
+        if (r.fullName) setFullName(r.fullName); // pre-fill the name captured at request/add time
+      })
       .catch(() => active && setValid(false))
       .finally(() => active && setChecking(false));
     return () => {
