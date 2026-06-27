@@ -5,6 +5,7 @@ const { app, BrowserWindow, Tray, Menu, Notification, desktopCapturer, ipcMain, 
 const Store = require("electron-store");
 const { normalizeServerUrl } = require("./url");
 const { trayRecorderItems, trayTooltip, notificationFor } = require("./recorderState");
+const { updateRestartItem, notificationForUpdate } = require("./updateState");
 
 // In dev we load the Vite dev server directly and skip first-run setup.
 const DEV_URL = process.env.DIARIZ_DEV ? "http://localhost:5173" : null;
@@ -22,6 +23,11 @@ let isQuitting = false;
 let recorder = { phase: "idle", source: null, ready: false };
 let recordingStartedAt = 0;
 let recordingTicker = null;
+
+// Auto-update state. `autoUpdater` is lazily required (packaged builds only).
+let autoUpdater = null;
+let update = { ready: false, version: null };
+let pendingManualCheck = false;
 
 /// The origin the web app is loaded from (dev server, or the configured server).
 function targetUrl() {
@@ -212,6 +218,74 @@ function setRecorderReady(ready) {
   refreshTray();
 }
 
+// ---- Auto-update (packaged builds only) ----
+
+function notifyUpdate(kind, opts) {
+  const note = notificationForUpdate(kind, opts);
+  if (!note || !Notification.isSupported()) return;
+  const n = new Notification(note);
+  if (kind === "downloaded") n.on("click", restartToUpdate);
+  n.show();
+}
+
+function restartToUpdate() {
+  if (!autoUpdater) return;
+  isQuitting = true;
+  autoUpdater.quitAndInstall();
+}
+
+function checkForUpdates(manual) {
+  if (!autoUpdater) {
+    if (manual) notifyUpdate("not-available", { manual: true });
+    return;
+  }
+  pendingManualCheck = manual;
+  autoUpdater.checkForUpdates().catch(() => {
+    notifyUpdate("error", { manual });
+    pendingManualCheck = false;
+  });
+}
+
+function setupAutoUpdater() {
+  // electron-updater only works in a packaged build (it reads app-update.yml).
+  if (!app.isPackaged) return;
+  autoUpdater = require("electron-updater").autoUpdater;
+  autoUpdater.autoDownload = true; // fetch in the background
+  autoUpdater.autoInstallOnAppQuit = true; // also apply on a normal quit
+
+  autoUpdater.on("update-available", (info) =>
+    notifyUpdate("available", { version: info?.version, manual: pendingManualCheck }),
+  );
+  autoUpdater.on("update-not-available", () => {
+    notifyUpdate("not-available", { manual: pendingManualCheck });
+    pendingManualCheck = false;
+  });
+  autoUpdater.on("error", () => {
+    notifyUpdate("error", { manual: pendingManualCheck });
+    pendingManualCheck = false;
+  });
+  autoUpdater.on("update-downloaded", (info) => {
+    update = { ready: true, version: info?.version || null };
+    refreshTray();
+    notifyUpdate("downloaded", { version: info?.version });
+    pendingManualCheck = false;
+  });
+
+  checkForUpdates(false);
+  setInterval(() => checkForUpdates(false), 6 * 60 * 60 * 1000); // every 6 hours
+}
+
+// ---- Launch at login ----
+
+function openAtLogin() {
+  return app.getLoginItemSettings().openAtLogin;
+}
+
+function toggleOpenAtLogin() {
+  app.setLoginItemSettings({ openAtLogin: !openAtLogin() });
+  refreshTray();
+}
+
 // ---- Tray ----
 
 function refreshTray() {
@@ -227,13 +301,18 @@ function refreshTray() {
     },
   }));
 
+  const restart = updateRestartItem(update);
+
   tray.setToolTip(trayTooltip(recorder));
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "Open Diariz", click: () => showMainWindow() },
+      ...(restart ? [{ label: restart.label, click: restartToUpdate }] : []),
       { type: "separator" },
       ...recordItems,
       { type: "separator" },
+      { label: "Start with Windows", type: "checkbox", checked: openAtLogin(), click: toggleOpenAtLogin },
+      { label: "Check for Updates…", click: () => checkForUpdates(true) },
       { label: "Settings…", click: () => showSetupWindow() },
       { label: "Quit", click: () => { isQuitting = true; app.quit(); } },
     ]),
@@ -270,6 +349,7 @@ if (!app.requestSingleInstanceLock()) {
     if (targetUrl()) createMainWindow(targetUrl());
     else showSetupWindow();
 
+    setupAutoUpdater();
     app.on("activate", () => showMainWindow());
   });
 
