@@ -1,10 +1,11 @@
 {
   "name": "diariz-desktop",
   "private": true,
-  "version": "0.12.1",
+  "version": "0.12.2",
   "description": "Diariz Windows desktop app — a system-tray shell that loads your Diariz server, with mic + Windows system/loopback audio capture.",
   "main": "src/main.js",
   "author": "Ken Hayward",
+  "repository": { "type": "git", "url": "https://github.com/kenhayward/Diariz.git", "directory": "apps/desktop" },
   "scripts": {
     "dev": "cross-env DIARIZ_DEV=1 electron .",
     "start": "electron .",
