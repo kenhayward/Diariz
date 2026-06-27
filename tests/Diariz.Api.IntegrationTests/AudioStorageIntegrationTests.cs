@@ -60,14 +60,30 @@ public class AudioStorageIntegrationTests(ContainersFixture fx)
     }
 
     [Fact]
-    public async Task GetPresignedDownloadUrl_TargetsBucketAndKey()
+    public async Task OpenAsync_WithByteRange_ReturnsThatSlice()
     {
-        var storage = CreateStorage(out var opts);
+        var storage = CreateStorage(out _);
         await storage.EnsureBucketAsync();
 
-        var url = storage.GetPresignedDownloadUrl("some/object.webm", TimeSpan.FromMinutes(5));
+        var key = $"{Guid.NewGuid()}/audio.webm";
+        var payload = Encoding.UTF8.GetBytes("0123456789");
+        using (var input = new MemoryStream(payload))
+            await storage.UploadAsync(key, input, "audio/webm");
 
-        Assert.Contains(opts.Bucket, url);          // path-style => bucket is in the URL path
-        Assert.Contains("some/object.webm", url);
+        var blob = await storage.OpenAsync(key, 2, 5);
+        Assert.NotNull(blob);
+        using var output = new MemoryStream();
+        await blob!.Content.CopyToAsync(output);
+
+        Assert.Equal("2345", Encoding.UTF8.GetString(output.ToArray())); // inclusive byte range 2..5
+        Assert.Equal(4, blob.Length);
+    }
+
+    [Fact]
+    public async Task OpenAsync_MissingKey_ReturnsNull()
+    {
+        var storage = CreateStorage(out _);
+        await storage.EnsureBucketAsync();
+        Assert.Null(await storage.OpenAsync($"{Guid.NewGuid()}/missing.webm"));
     }
 }

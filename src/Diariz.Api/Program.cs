@@ -69,8 +69,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             OnMessageReceived = ctx =>
             {
+                // Allow query-string auth for connections that can't set an Authorization header:
+                // the SignalR WS handshake, and the <audio> element streaming a recording.
                 var token = ctx.Request.Query["access_token"];
-                if (!string.IsNullOrEmpty(token) && ctx.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                var path = ctx.HttpContext.Request.Path;
+                var isAudio = path.StartsWithSegments("/api/recordings")
+                    && path.Value!.EndsWith("/audio", StringComparison.OrdinalIgnoreCase);
+                if (!string.IsNullOrEmpty(token) && (path.StartsWithSegments("/hubs") || isAudio))
                     ctx.Token = token;
                 return Task.CompletedTask;
             }

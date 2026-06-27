@@ -443,14 +443,71 @@ public class RecordingsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Returns a same-origin URL the browser can stream/download the audio from. The audio is
+    /// served by the API itself (see <see cref="GetAudio"/>), so MinIO never has to be reachable from the
+    /// client. The &lt;audio&gt; element / download link can't send an Authorization header, so the caller's
+    /// bearer is carried as <c>access_token</c> (the same approach SignalR uses for its WS handshake).</summary>
     [HttpGet("{id:guid}/audio-url")]
     public async Task<ActionResult<object>> AudioUrl(Guid id, [FromQuery] bool download = false)
     {
-        var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
-        if (rec is null) return NotFound();
-        var fileName = download ? $"{Slug(rec.Name ?? rec.Title)}{Path.GetExtension(rec.BlobKey)}" : null;
-        var url = _storage.GetPresignedDownloadUrl(rec.BlobKey, TimeSpan.FromHours(1), fileName);
+        var owned = await _db.Recordings.AnyAsync(r => r.Id == id && r.UserId == UserId);
+        if (!owned) return NotFound();
+
+        var bearer = Request.Headers.Authorization.ToString();
+        var token = bearer.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? bearer["Bearer ".Length..] : bearer;
+        var url = $"/api/recordings/{id}/audio?access_token={Uri.EscapeDataString(token)}" + (download ? "&download=true" : "");
         return new { url };
+    }
+
+    /// <summary>Streams the original audio (with HTTP Range support for seeking). Authenticated like any
+    /// other endpoint, but also accepts the bearer via <c>access_token</c> (see Program.cs) so the
+    /// &lt;audio&gt; element can load it.</summary>
+    [HttpGet("{id:guid}/audio")]
+    public async Task<IActionResult> GetAudio(Guid id, [FromQuery] bool download = false, CancellationToken ct = default)
+    {
+        var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId, ct);
+        if (rec is null) return NotFound();
+
+        var total = rec.SizeBytes > 0 ? rec.SizeBytes : (await _storage.GetSizeAsync(rec.BlobKey, ct) ?? 0);
+        Response.Headers.AcceptRanges = "bytes";
+        if (download)
+            Response.Headers.ContentDisposition =
+                $"attachment; filename=\"{Slug(rec.Name ?? rec.Title)}{Path.GetExtension(rec.BlobKey)}\"";
+
+        long start = 0, end = 0;
+        var hasRange = total > 0 && TryParseRange(Request.Headers.Range.ToString(), total, out start, out end);
+        var blob = hasRange
+            ? await _storage.OpenAsync(rec.BlobKey, start, end, ct)
+            : await _storage.OpenAsync(rec.BlobKey, ct: ct);
+        if (blob is null) return NotFound();
+
+        await using var content = blob.Content;
+        Response.ContentType = string.IsNullOrEmpty(rec.ContentType) ? blob.ContentType : rec.ContentType;
+        if (hasRange)
+        {
+            Response.StatusCode = 206; // Partial Content
+            Response.Headers.ContentRange = $"bytes {start}-{end}/{total}";
+        }
+        Response.ContentLength = blob.Length;
+        await content.CopyToAsync(Response.Body, ct);
+        return new EmptyResult();
+    }
+
+    /// <summary>Parse a single byte range ("bytes=start-end", end optional) against the known total.</summary>
+    private static bool TryParseRange(string header, long total, out long start, out long end)
+    {
+        start = 0;
+        end = total - 1;
+        if (string.IsNullOrWhiteSpace(header) || !header.StartsWith("bytes=", StringComparison.OrdinalIgnoreCase))
+            return false;
+        var spec = header["bytes=".Length..].Split(',')[0]; // honour only the first range
+        var dash = spec.IndexOf('-');
+        if (dash <= 0) return false; // require an explicit start (no suffix-range support)
+        if (!long.TryParse(spec[..dash], out start)) return false;
+        var endStr = spec[(dash + 1)..];
+        if (endStr.Length > 0 && long.TryParse(endStr, out var e)) end = e;
+        if (end > total - 1) end = total - 1;
+        return start <= end;
     }
 
     [HttpGet("{id:guid}/transcript.txt")]

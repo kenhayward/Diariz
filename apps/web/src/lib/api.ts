@@ -407,7 +407,9 @@ export const api = {
     const { data } = await http.get<{ url: string }>(`/api/recordings/${id}/audio-url`, {
       params: opts?.download ? { download: true } : undefined,
     });
-    return data.url;
+    // The API returns a same-origin relative path (`/api/recordings/.../audio?...`). Prefix the axios
+    // baseURL so it resolves against the API in the Electron shell (where the SPA isn't same-origin).
+    return baseURL + data.url;
   },
 
   /// Transcript endpoints are JWT-protected, so fetch the bytes (carrying the bearer) and

@@ -13,10 +13,6 @@ public class StorageOptions
 {
     public const string Section = "Storage";
     public string Endpoint { get; set; } = "http://minio:9000";
-    /// <summary>Browser-reachable base URL used when signing presigned URLs handed to clients.
-    /// Defaults to <see cref="Endpoint"/>; in Docker the internal `minio:9000` host isn't reachable
-    /// from the browser, so set this to the host-mapped address (e.g. http://localhost:9002).</summary>
-    public string PublicEndpoint { get; set; } = "";
     public string AccessKey { get; set; } = "minioadmin";
     public string SecretKey { get; set; } = "minioadmin";
     public string Bucket { get; set; } = "recordings";

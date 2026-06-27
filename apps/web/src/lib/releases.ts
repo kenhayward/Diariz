@@ -46,6 +46,27 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.9.1",
+    date: "2026-06-27",
+    pr: 32,
+    headline: "Fix: audio playback & download work over a domain (not just localhost)",
+    summary: `
+Playing a recording and downloading its audio previously used a presigned MinIO URL pointing at
+\`localhost\`, so they failed when the app was accessed from another machine over a domain. The API now
+**streams the audio itself, same-origin** (with HTTP range support for seeking) — so playback and download
+work behind any reverse proxy / TLS, and MinIO no longer needs to be reachable from the browser.
+
+The \`STORAGE_PUBLIC_ENDPOINT\` setting is no longer needed and has been removed. (Transcript download was
+already same-origin and unaffected.)
+`.trim(),
+    fixed: [
+      "Audio playback and “Download audio” work when the app is accessed over a domain/reverse proxy, not only on localhost — the API streams audio same-origin instead of via presigned MinIO URLs.",
+    ],
+    changed: [
+      "Removed the STORAGE_PUBLIC_ENDPOINT / Storage:PublicEndpoint setting (no longer required).",
+    ],
+  },
+  {
     version: "0.9.0",
     date: "2026-06-27",
     pr: 31,

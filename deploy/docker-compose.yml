@@ -58,9 +58,9 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=diariz;Username=diariz;Password=${POSTGRES_PASSWORD:-diariz}"
       Jwt__Key: ${JWT_KEY}
+      # The API streams audio to the browser itself (same-origin), so MinIO never needs to be
+      # browser-reachable — only the API reaches it at minio:9000.
       Storage__Endpoint: "http://minio:9000"
-      # Browser-reachable MinIO address for presigned audio URLs (host-mapped S3 port, see below).
-      Storage__PublicEndpoint: ${STORAGE_PUBLIC_ENDPOINT:-http://localhost:9002}
       Storage__AccessKey: ${MINIO_ROOT_USER:-minioadmin}
       Storage__SecretKey: ${MINIO_ROOT_PASSWORD:-minioadmin}
       JobQueue__RedisConnection: "redis:6379"
