@@ -21,6 +21,8 @@ The app lives in the system tray (closing the window hides it; it keeps running)
 - **Record Microphone** / **Record System Audio** — start a recording in the background (no need to open
   the window); while recording these collapse to **Stop Recording (mm:ss)** with a live timer. Windows
   notifications confirm when recording starts and when the clip has uploaded.
+- **Start with Windows** — launch Diariz automatically at login (off by default)
+- **Check for Updates…** — check the release feed now (see Auto-update below)
 - **Settings…** — change the server address
 - **Quit**
 
@@ -30,7 +32,16 @@ reports its phase back so the tray label, tooltip, and notifications stay in syn
 recorder as the on-screen **Record** button. The **System audio** option appears because the shell sets
 `window.diariz.isElectron`.
 
-> Auto-update and launch-on-startup land in a later phase.
+## Auto-update
+
+In a **packaged** build the app checks the release feed (the same one it was published to — GitHub Releases
+by default, or a fork's self-hosted feed) on launch and every few hours, and downloads new versions in the
+background. When one is ready, a notification appears and the tray gains a **Restart to update (x.y.z)** item;
+clicking it (or the notification) relaunches into the new version. It also installs on the next normal quit.
+Updates are a no-op in `npm start` / `npm run dev` (electron-updater only runs in packaged builds).
+
+> Builds are currently **unsigned**, so Windows SmartScreen may warn on first install/update. Code signing
+> is a later addition.
 
 ## Develop
 

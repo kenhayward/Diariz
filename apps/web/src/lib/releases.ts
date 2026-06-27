@@ -47,6 +47,27 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.12.0",
+    date: "2026-06-28",
+    pr: 37,
+    headline: "Desktop auto-update + launch-at-startup — phase 3",
+    summary: `
+The Windows desktop app now **keeps itself up to date**. It checks for new releases in the background (on
+launch and every few hours, plus a manual **Check for Updates…** in the tray), downloads them quietly, and
+when one is ready raises a notification and a tray item — **Restart to update (x.y.z)** — so you apply it
+when it suits you (it also installs on the next normal quit). Updates come from the same feed the installer
+publishes to (GitHub Releases by default, or a fork's self-hosted feed).
+
+A new **Start with Windows** checkbox in the tray menu lets the app launch automatically at login (off by
+default). Builds are still unsigned for now, so Windows SmartScreen may warn on first install — code signing
+is a later addition.
+`.trim(),
+    added: [
+      "Desktop auto-update (electron-updater): background checks, a manual “Check for Updates…”, and a “Restart to update” tray item with a notification when a new version is ready.",
+      "“Start with Windows” tray toggle to launch Diariz at login (off by default).",
+    ],
+  },
+  {
     version: "0.11.1",
     date: "2026-06-27",
     pr: 36,

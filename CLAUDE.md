@@ -239,7 +239,18 @@ reports `idle/recording/uploading/error` back. `main.js` keeps the recorder stat
 dynamic menu/tooltip from the **pure** `src/recorderState.js` model (`trayRecorderItems`/`trayTooltip`/
 `notificationFor`, unit-tested with `node --test`), runs a 1 s ticker to keep the `Stop Recording (mm:ss)`
 label live, and raises Windows `Notification`s on start/upload. The record items are disabled until the
-renderer reports `ready` (loaded + signed in). Auto-update + launch-on-startup are a later phase.
+renderer reports `ready` (loaded + signed in).
+
+**Auto-update + launch-at-login (phase 3).** `setupAutoUpdater()` runs **only in a packaged build**
+(`app.isPackaged`; it lazily `require`s `electron-updater`, so dev `npm start` never loads it) and uses the
+**same publish feed** electron-builder ships in `app-update.yml` (GitHub Releases, or a fork's generic feed).
+It auto-downloads in the background (on launch + every 6 h + a manual **Check for Updates…** tray item); on
+`update-downloaded` it shows a notification and a **Restart to update (x.y.z)** tray item (→
+`autoUpdater.quitAndInstall()`; `autoInstallOnAppQuit` also applies it on a normal quit). The user-facing
+copy/menu item come from the **pure** `src/updateState.js` model (`updateRestartItem`/`notificationForUpdate`,
+unit-tested) — automatic checks stay silent, manual checks always give feedback. A **Start with Windows**
+tray checkbox toggles `app.setLoginItemSettings({ openAtLogin })` (off by default). Builds are **unsigned**
+for now (code signing is deferred), so SmartScreen may warn on first install.
 
 ### Full stack (Docker)
 ```bash
