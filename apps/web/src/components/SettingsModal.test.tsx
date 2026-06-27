@@ -54,7 +54,7 @@ describe("SettingsModal", () => {
     renderModal();
     const endpoint = await screen.findByDisplayValue("https://existing/v1");
     fireEvent.change(endpoint, { target: { value: "https://new/v1" } });
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^ok$/i }));
 
     await waitFor(() =>
       expect(api.updateUserSettings).toHaveBeenCalledWith({
@@ -72,7 +72,7 @@ describe("SettingsModal", () => {
     fireEvent.change(screen.getByPlaceholderText(/leave blank to keep/i), {
       target: { value: "sk-new" },
     });
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^ok$/i }));
 
     await waitFor(() =>
       expect(api.updateUserSettings).toHaveBeenCalledWith(
@@ -99,7 +99,7 @@ describe("SettingsModal", () => {
     expect((endpoint as HTMLInputElement).value).toBe("");
 
     // Submitting without changing anything must not persist the defaults as the user's own.
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^ok$/i }));
     await waitFor(() =>
       expect(api.updateUserSettings).toHaveBeenCalledWith({
         apiBase: null,
@@ -116,7 +116,7 @@ describe("SettingsModal", () => {
     expect((field as HTMLInputElement).value).toBe(""); // no per-user override set
 
     fireEvent.change(field, { target: { value: "8000" } });
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^ok$/i }));
 
     await waitFor(() =>
       expect(api.updateUserSettings).toHaveBeenCalledWith(expect.objectContaining({ contextWindow: 8000 })),
@@ -127,7 +127,7 @@ describe("SettingsModal", () => {
     renderModal();
     await screen.findByDisplayValue("https://existing/v1");
     fireEvent.click(screen.getByRole("button", { name: /clear stored key/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^ok$/i }));
 
     await waitFor(() =>
       expect(api.updateUserSettings).toHaveBeenCalledWith(
@@ -136,22 +136,24 @@ describe("SettingsModal", () => {
     );
   });
 
-  it("hides the platform quota section for non-platform admins", async () => {
+  it("hides the Storage Quotas tab for non-platform admins", async () => {
     renderModal();
     await screen.findByDisplayValue("https://existing/v1");
-    expect(screen.queryByText(/storage quotas \(platform\)/i)).toBeNull();
+    expect(screen.queryByRole("tab", { name: /storage quotas/i })).toBeNull();
   });
 
-  it("lets a Platform Administrator edit the quota defaults (GB → bytes)", async () => {
+  it("lets a Platform Administrator edit the quota defaults (GB → bytes) and saves on OK", async () => {
     authState.isPlatformAdmin = true;
     renderModal();
 
-    // Starter pre-filled at 5 GB (once the query resolves); change it and the max, then save.
+    // Switch to the Storage Quotas tab; starter pre-filled at 5 GB once the query resolves.
+    fireEvent.click(await screen.findByRole("tab", { name: /storage quotas/i }));
     const starter = await screen.findByLabelText(/starter quota \(GB\)/i);
     await waitFor(() => expect((starter as HTMLInputElement).value).toBe("5"));
     fireEvent.change(starter, { target: { value: "2" } });
     fireEvent.change(screen.getByLabelText(/maximum quota \(GB\)/i), { target: { value: "20" } });
-    fireEvent.click(screen.getByRole("button", { name: /save quotas/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /^ok$/i }));
 
     await waitFor(() =>
       expect(api.updatePlatformSettings).toHaveBeenCalledWith({
@@ -159,5 +161,7 @@ describe("SettingsModal", () => {
         maxQuotaBytes: 20 * 1024 ** 3,
       }),
     );
+    // OK also saves the AI settings in the same action.
+    expect(api.updateUserSettings).toHaveBeenCalled();
   });
 });

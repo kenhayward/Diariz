@@ -12,9 +12,9 @@ describe("ReleaseNotes", () => {
     expect(screen.getByText(/smart meeting transcription/i)).toBeTruthy();
 
     const newest = RELEASES[0];
-    // The list shows every release version; the detail shows the newest's headline by default.
+    // The list shows every release version + headline; the detail also shows the newest's headline.
     for (const r of RELEASES) expect(screen.getAllByText(`v${r.version}`).length).toBeGreaterThan(0);
-    expect(screen.getByText(newest.headline)).toBeTruthy();
+    expect(screen.getAllByText(newest.headline).length).toBeGreaterThan(0);
   });
 
   it("selecting a release shows its notes (with a PR link when present)", () => {
@@ -23,7 +23,7 @@ describe("ReleaseNotes", () => {
 
     // Click the list entry (first matching button) to select it.
     fireEvent.click(screen.getAllByText(`v${target.version}`)[0]);
-    expect(screen.getByText(target.headline)).toBeTruthy();
+    expect(screen.getAllByText(target.headline).length).toBeGreaterThan(0);
 
     if (target.pr != null) {
       const link = screen.getByRole("link", { name: `#${target.pr}` });

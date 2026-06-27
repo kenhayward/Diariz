@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 import RecordingsPanel from "./RecordingsPanel";
 import ChatPanel from "./ChatPanel";
 import { SelectionProvider } from "../lib/selection";
+import { useResizableWidth } from "../lib/useResizableWidth";
 
 function usePersistedBool(key: string, fallback: boolean): [boolean, (v: boolean) => void] {
   const [value, setValue] = useState<boolean>(() => {
@@ -27,6 +28,11 @@ const RIGHT_MAX = 640;
 export default function Workspace() {
   const [leftOpen, setLeftOpen] = usePersistedBool("diariz.panels.left", true);
   const [rightOpen, setRightOpen] = usePersistedBool("diariz.panels.right", false);
+  const { width: leftWidth, startResize: startLeftResize } = useResizableWidth("diariz.panels.leftWidth", {
+    min: 200,
+    max: 560,
+    initial: 288,
+  });
 
   const [rightWidth, setRightWidth] = useState<number>(() => {
     const stored = Number(localStorage.getItem(RIGHT_WIDTH_KEY));
@@ -54,12 +60,24 @@ export default function Workspace() {
     <SelectionProvider>
     <div className="flex min-h-0 flex-1">
       {leftOpen ? (
-        <aside className="flex w-72 shrink-0 flex-col border-r bg-white dark:border-gray-700 dark:bg-gray-900">
-          <PanelHeader title="Recordings" onCollapse={() => setLeftOpen(false)} chevron="◀" />
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <RecordingsPanel />
-          </div>
-        </aside>
+        <>
+          <aside
+            style={{ width: leftWidth }}
+            className="flex shrink-0 flex-col border-r bg-white dark:border-gray-700 dark:bg-gray-900"
+          >
+            <PanelHeader title="Recordings" onCollapse={() => setLeftOpen(false)} chevron="◀" />
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <RecordingsPanel />
+            </div>
+          </aside>
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize recordings panel"
+            onMouseDown={(e) => startLeftResize(e, "left")}
+            className="w-1 shrink-0 cursor-col-resize bg-transparent transition-colors hover:bg-blue-400 dark:hover:bg-blue-600"
+          />
+        </>
       ) : (
         <CollapsedRail label="Recordings" onExpand={() => setLeftOpen(true)} chevron="▶" />
       )}

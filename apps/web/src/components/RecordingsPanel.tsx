@@ -20,6 +20,9 @@ const statusColor: Record<RecordingStatus, string> = {
   Failed: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
 };
 
+const COLLAPSE_KEY = "diariz.recordings.collapsedGroups";
+const UNGROUPED_KEY = "__ungrouped__";
+
 function sourceLabel(s: RecordingSource): string {
   return s === "System" ? "System audio" : "Microphone";
 }
@@ -58,6 +61,22 @@ export default function RecordingsPanel() {
 
   const groups = useMemo(() => groupBySection(recordings, sections), [recordings, sections]);
   const selection = useSelection();
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    try {
+      return new Set<string>(JSON.parse(localStorage.getItem(COLLAPSE_KEY) ?? "[]"));
+    } catch {
+      return new Set<string>();
+    }
+  });
+  function toggleGroup(key: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  }
 
   /// Apply a drag-and-drop: set the dragged recording's group + order, then refresh.
   async function drop(sectionId: string | null, groupIds: string[], draggedId: string, beforeId: string | null) {
@@ -79,9 +98,11 @@ export default function RecordingsPanel() {
       )}
       {groups.map((g) => {
         const ids = g.items.map((i) => i.id);
+        const key = g.id ?? UNGROUPED_KEY;
+        const isCollapsed = collapsed.has(key);
         return (
           <div
-            key={g.id ?? "__ungrouped__"}
+            key={key}
             // Dropping anywhere in the group (incl. the heading) appends to it.
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
@@ -91,24 +112,36 @@ export default function RecordingsPanel() {
           >
             {grouped &&
               (g.id ? (
-                <SectionHeading id={g.id} name={g.name} />
+                <SectionHeading
+                  id={g.id}
+                  name={g.name}
+                  count={g.items.length}
+                  collapsed={isCollapsed}
+                  onToggle={() => toggleGroup(key)}
+                />
               ) : (
-                <h3 className="bg-indigo-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
-                  {g.name}
-                </h3>
-              ))}
-            <ul className="divide-y dark:divide-gray-800">
-              {g.items.map((r) => (
-                <RecordingRow
-                  key={r.id}
-                  r={r}
-                  selectMode={selection.selectMode}
-                  selected={selection.selectedIds.includes(r.id)}
-                  onToggleSelect={() => selection.toggle(r.id)}
-                  onDropBefore={(draggedId) => drop(g.id, ids, draggedId, r.id)}
+                <GroupHeadingButton
+                  name={g.name}
+                  count={g.items.length}
+                  collapsed={isCollapsed}
+                  onToggle={() => toggleGroup(key)}
+                  withBg
                 />
               ))}
-            </ul>
+            {!isCollapsed && (
+              <ul className="divide-y dark:divide-gray-800">
+                {g.items.map((r) => (
+                  <RecordingRow
+                    key={r.id}
+                    r={r}
+                    selectMode={selection.selectMode}
+                    selected={selection.selectedIds.includes(r.id)}
+                    onToggleSelect={() => selection.toggle(r.id)}
+                    onDropBefore={(draggedId) => drop(g.id, ids, draggedId, r.id)}
+                  />
+                ))}
+              </ul>
+            )}
           </div>
         );
       })}
@@ -209,7 +242,53 @@ function groupBySection(recordings: RecordingSummary[], sections: SectionDto[]):
 }
 
 
-function SectionHeading({ id, name }: { id: string; name: string }) {
+/// A clickable group header (chevron + name + count) that collapses/expands the group.
+/// `withBg` makes it a full-width bar (used for the headingless Ungrouped group); inside a
+/// SectionHeading the surrounding row already provides the background.
+function GroupHeadingButton({
+  name,
+  count,
+  collapsed,
+  onToggle,
+  withBg = false,
+}: {
+  name: string;
+  count: number;
+  collapsed: boolean;
+  onToggle: () => void;
+  withBg?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={!collapsed}
+      className={`flex min-w-0 items-center gap-1 text-left ${
+        withBg ? "w-full bg-indigo-50 px-3 py-1 dark:bg-indigo-950/40" : "flex-1"
+      }`}
+    >
+      <span aria-hidden className="text-[10px] text-indigo-400">{collapsed ? "▸" : "▾"}</span>
+      <h3 className="truncate text-xs font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+        {name}
+      </h3>
+      <span className="text-[10px] font-normal text-indigo-400 dark:text-indigo-500">{count}</span>
+    </button>
+  );
+}
+
+function SectionHeading({
+  id,
+  name,
+  count,
+  collapsed,
+  onToggle,
+}: {
+  id: string;
+  name: string;
+  count: number;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
   const qc = useQueryClient();
   const [renaming, setRenaming] = useState(false);
   const refresh = () => {
@@ -244,9 +323,7 @@ function SectionHeading({ id, name }: { id: string; name: string }) {
       {renaming ? (
         <SectionRenameForm initial={name} onSave={save} onCancel={() => setRenaming(false)} />
       ) : (
-        <h3 className="truncate text-xs font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
-          {name}
-        </h3>
+        <GroupHeadingButton name={name} count={count} collapsed={collapsed} onToggle={onToggle} />
       )}
       <KebabMenu actions={actions} label="Section actions" />
     </div>

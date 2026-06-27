@@ -46,6 +46,30 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.7.0",
+    date: "2026-06-27",
+    pr: 29,
+    headline: "Interface tune-up: resizable panels, collapsible groups, tabbed settings",
+    summary: `
+A batch of interface refinements.
+
+- **Collapsible recording groups** — click a section header to collapse or expand it; your choices are
+  remembered.
+- **Resizable recordings list** — drag its right edge to widen or narrow the left panel.
+- **Settings in tabs** — **AI Settings** and (for the Platform Administrator) **Storage Quotas** are now
+  separate tabs with a single **OK / Cancel** at the bottom that saves everything at once.
+- **Release Notes** — the list now shows each release's title, and you can drag to resize it.
+- **About** box is wider, so the capabilities and disclaimers read more comfortably.
+`.trim(),
+    changed: [
+      "Recording groups collapse/expand from their header (remembered).",
+      "The speakers panel on a recording collapses from an arrow in its top-right.",
+      "The recordings list and the Release Notes list are drag-resizable.",
+      "Settings split into AI Settings / Storage Quotas tabs with one OK/Cancel.",
+      "Wider About box; Release Notes list shows release titles.",
+    ],
+  },
+  {
     version: "0.6.0",
     date: "2026-06-27",
     pr: 28,
