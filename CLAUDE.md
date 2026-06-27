@@ -220,7 +220,7 @@ via `tsconfig.json`. No DOM/component testing library is wired yet — add `@tes
 cd apps/desktop && npm run dev    # DIARIZ_DEV=1 → loads the Vite dev server, skips first-run setup
 npm test                          # pure unit tests (node --test, no Electron); npm run dist → NSIS installer
 ```
-A **thin tray shell** (`apps/desktop/src/`): `main.js` owns the tray (Open/Settings/Quit), single-instance
+A **thin tray shell** (`apps/desktop/src/`): `main.js` owns the tray, single-instance
 lock, close-to-tray, and a **first-run setup window** (`setup.html`) that stores the **server address**
 (validated via `GET {url}/health`) in `electron-store`. The main window then **loads the web app from that
 server origin** (so the SPA is same-origin — no bundled SPA, no API-base override needed; the old
@@ -228,7 +228,18 @@ server origin** (so the SPA is same-origin — no bundled SPA, no API-base overr
 (`setDisplayMediaRequestHandler` → `audio: "loopback"`, Windows only); it exposes `window.diariz.isElectron`
 to enable the "System audio" recorder option. Releases: `electron-builder` (NSIS) via
 `.github/workflows/desktop-release.yml` on a `v*` tag → GitHub Releases (or a self-hosted feed when
-`DIARIZ_PUBLISH=generic`). Tray recording + auto-update are later phases.
+`DIARIZ_PUBLISH=generic`).
+
+**Tray-driven recording (phase 2).** The tray menu can start/stop recording. Recording itself always
+happens in the **web app's** `MediaRecorder` (the desktop has no recorder of its own), so the two sides
+talk over IPC: the preload exposes `window.diariz.onTrayCommand(cb)` (tray → renderer `start`/`stop`) and
+`reportRecorderState(state)` (renderer → tray phase). The web `Recorder` connects them via
+`apps/web/src/lib/trayRecorder.ts` and drives the **same single recorder** as the on-screen button; it
+reports `idle/recording/uploading/error` back. `main.js` keeps the recorder state machine, renders the
+dynamic menu/tooltip from the **pure** `src/recorderState.js` model (`trayRecorderItems`/`trayTooltip`/
+`notificationFor`, unit-tested with `node --test`), runs a 1 s ticker to keep the `Stop Recording (mm:ss)`
+label live, and raises Windows `Notification`s on start/upload. The record items are disabled until the
+renderer reports `ready` (loaded + signed in). Auto-update + launch-on-startup are a later phase.
 
 ### Full stack (Docker)
 ```bash

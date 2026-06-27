@@ -8,13 +8,14 @@
 [docs/Overall_Synopsis_of_Platform.md](docs/Overall_Synopsis_of_Platform.md) for the original brief and the
 architecture plan for the full design.
 
-Current version: **0.4.1** — versioned per the rule in [CLAUDE.md](CLAUDE.md); per-release notes live in
+Current version: **0.11.0** — versioned per the rule in [CLAUDE.md](CLAUDE.md); per-release notes live in
 [`apps/web/src/lib/releases.ts`](apps/web/src/lib/releases.ts) and on the in-app **Release Notes** page
 (`/release-notes`), reachable from **About** in the account menu.
 
 ## Features
 
-- **Capture** audio from the browser microphone, or Windows system/loopback audio via the Electron desktop shell.
+- **Capture** audio from the browser microphone, or Windows system/loopback audio via the Electron desktop
+  shell — which can also **start/stop recording from its system-tray menu** (in the background, with notifications).
 - **Transcribe + diarize** server-side with WhisperX (large-v3, word-level timestamps) and pyannote 3.1,
   producing speaker-labelled, timestamped segments you can rename, edit, and play back (per segment or whole).
   Re-transcribe with a chosen model at any time (with optional **min/max speaker hints** for pyannote when
@@ -42,7 +43,7 @@ Current version: **0.4.1** — versioned per the rule in [CLAUDE.md](CLAUDE.md);
 | Domain model + migrations | EF Core + Postgres/pgvector | [src/Diariz.Domain](src/Diariz.Domain) |
 | Transcription + diarization + voiceprints | Python: WhisperX (large-v3) + pyannote 3.1 + SpeechBrain ECAPA (GPU) | [src/Diariz.Worker](src/Diariz.Worker) |
 | Web UI | React + TypeScript + Vite + Tailwind | [apps/web](apps/web) |
-| Desktop app | Electron — Windows system-tray shell (first-run server config, mic + Windows loopback) | [apps/desktop](apps/desktop) |
+| Desktop app | Electron — Windows system-tray shell (first-run server config, mic + Windows loopback, tray recording) | [apps/desktop](apps/desktop) |
 | Orchestration | docker-compose (postgres/pgvector, redis, minio) | [deploy](deploy) |
 
 Summaries and chat use any OpenAI-compatible LLM endpoint you configure (OpenAI, or a local server such

@@ -10,7 +10,8 @@ export const LICENSE = "Apache-2.0";
 /// Short summary of what the app does today, shown in the About box (markdown). Update this whenever
 /// the app's scope changes.
 export const CAPABILITIES = `
-Diariz records audio — from your microphone, or Windows system/loopback audio via the desktop app —
+Diariz records audio — from your microphone, or Windows system/loopback audio via the desktop app
+(which can also **start and stop recording straight from its system-tray menu**) —
 and transcribes it server-side with **WhisperX** (word-level timestamps) and **pyannote** speaker
 diarization. You get speaker-labelled, timestamped segments you can rename, edit, and play back
 (per segment or the whole recording), and can re-transcribe at any time. You can **merge** consecutive
@@ -45,6 +46,26 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.11.0",
+    date: "2026-06-27",
+    pr: 35,
+    headline: "Record from the desktop tray menu — phase 2",
+    summary: `
+The Windows desktop app can now **start and stop recording from its system-tray menu**, without opening
+the window. The tray shows **Record Microphone** and **Record System Audio**; while recording they collapse
+to a single **Stop Recording (mm:ss)** item with a live timer, and the tray tooltip reflects the state.
+
+Recording runs in the **background** — Windows notifications confirm when it starts and when the finished
+clip has uploaded, so you can capture a meeting without leaving the tray. The same recorder powers the
+on-screen button, so there's only ever one recording at a time. (The record items are disabled until the
+app is loaded and signed in.)
+`.trim(),
+    added: [
+      "Tray-driven recording: Record Microphone / Record System Audio in the tray menu, a live Stop Recording (mm:ss) item while active, and a state-aware tooltip.",
+      "Background recording with Windows notifications on start and on upload completion.",
+    ],
+  },
   {
     version: "0.10.0",
     date: "2026-06-27",

@@ -1,9 +1,10 @@
 "use strict";
 
 const path = require("node:path");
-const { app, BrowserWindow, Tray, Menu, session, desktopCapturer, ipcMain, shell, nativeImage } = require("electron");
+const { app, BrowserWindow, Tray, Menu, Notification, desktopCapturer, ipcMain, shell, nativeImage } = require("electron");
 const Store = require("electron-store");
 const { normalizeServerUrl } = require("./url");
+const { trayRecorderItems, trayTooltip, notificationFor } = require("./recorderState");
 
 // In dev we load the Vite dev server directly and skip first-run setup.
 const DEV_URL = process.env.DIARIZ_DEV ? "http://localhost:5173" : null;
@@ -15,6 +16,12 @@ let tray = null;
 let mainWindow = null;
 let setupWindow = null;
 let isQuitting = false;
+
+// Tray-driven recording state. `ready` flips true once the web app's recorder has
+// mounted (i.e. the user is loaded and signed in) and can be driven from the tray.
+let recorder = { phase: "idle", source: null, ready: false };
+let recordingStartedAt = 0;
+let recordingTicker = null;
 
 /// The origin the web app is loaded from (dev server, or the configured server).
 function targetUrl() {
@@ -72,7 +79,12 @@ function createMainWindow(url) {
   });
   mainWindow.on("closed", () => {
     mainWindow = null;
+    setRecorderReady(false);
   });
+
+  // The recorder lives in the web app; until it (re)mounts and reports in, the tray
+  // can't drive it. Any fresh navigation/reload drops readiness until it reports again.
+  mainWindow.webContents.on("did-start-loading", () => setRecorderReady(false));
 
   mainWindow.loadURL(url);
   if (DEV_URL) mainWindow.webContents.openDevTools({ mode: "detach" });
@@ -151,21 +163,93 @@ ipcMain.handle("setup:save", async (_e, rawUrl) => {
   return result;
 });
 
+// ---- Tray-driven recording ----
+
+// Tell the renderer to start/stop. Recording happens in the web app's MediaRecorder
+// and keeps running while the window is hidden, so we don't reveal it (background
+// recording). If nothing is ready to drive, open the app so the user can sign in.
+function startRecording(source) {
+  if (!recorder.ready || !mainWindow) {
+    showMainWindow();
+    return;
+  }
+  mainWindow.webContents.send("tray:command", { type: "start", source });
+}
+
+function stopRecording() {
+  if (mainWindow) mainWindow.webContents.send("tray:command", { type: "stop" });
+}
+
+// Apply a phase report from the renderer: raise a notification on meaningful
+// transitions, then refresh the tray. An "error" report settles back to idle.
+function applyRecorderState(next) {
+  const prev = recorder;
+  const note = notificationFor(prev, next);
+
+  if (next.phase === "recording" && prev.phase !== "recording") recordingStartedAt = Date.now();
+  recorder = { ...recorder, phase: next.phase, source: next.source ?? null };
+  // The renderer's mount ping carries ready:true; active phases imply readiness too.
+  if (typeof next.ready === "boolean") recorder.ready = next.ready;
+  else if (next.phase === "recording" || next.phase === "uploading") recorder.ready = true;
+
+  if (note && Notification.isSupported()) new Notification(note).show();
+
+  // A 1s ticker keeps the "Stop Recording (mm:ss)" label live while recording.
+  if (recorder.phase === "recording" && !recordingTicker) {
+    recordingTicker = setInterval(refreshTray, 1000);
+  } else if (recorder.phase !== "recording" && recordingTicker) {
+    clearInterval(recordingTicker);
+    recordingTicker = null;
+  }
+
+  if (next.phase === "error") recorder.phase = "idle";
+  refreshTray();
+}
+
+function setRecorderReady(ready) {
+  if (recorder.ready === ready) return;
+  recorder.ready = ready;
+  refreshTray();
+}
+
 // ---- Tray ----
+
+function refreshTray() {
+  if (!tray) return;
+  const elapsedMs = recorder.phase === "recording" ? Date.now() - recordingStartedAt : 0;
+  const recordItems = trayRecorderItems(recorder, elapsedMs).map((item) => ({
+    label: item.label,
+    enabled: item.enabled,
+    click: () => {
+      if (item.id === "record-mic") startRecording("mic");
+      else if (item.id === "record-system") startRecording("system");
+      else if (item.id === "stop") stopRecording();
+    },
+  }));
+
+  tray.setToolTip(trayTooltip(recorder));
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: "Open Diariz", click: () => showMainWindow() },
+      { type: "separator" },
+      ...recordItems,
+      { type: "separator" },
+      { label: "Settings…", click: () => showSetupWindow() },
+      { label: "Quit", click: () => { isQuitting = true; app.quit(); } },
+    ]),
+  );
+}
 
 function buildTray() {
   const trayIcon = ICON.isEmpty() ? ICON : ICON.resize({ width: 16, height: 16 });
   tray = new Tray(trayIcon);
-  tray.setToolTip("Diariz");
-  const menu = Menu.buildFromTemplate([
-    { label: "Open Diariz", click: () => showMainWindow() },
-    { label: "Settings…", click: () => showSetupWindow() },
-    { type: "separator" },
-    { label: "Quit", click: () => { isQuitting = true; app.quit(); } },
-  ]);
-  tray.setContextMenu(menu);
   tray.on("click", () => showMainWindow());
+  refreshTray();
 }
+
+ipcMain.on("recorder:state", (_event, state) => {
+  if (state && typeof state.phase === "string") applyRecorderState(state);
+});
 
 // ---- App lifecycle ----
 

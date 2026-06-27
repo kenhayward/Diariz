@@ -18,11 +18,19 @@ later from the tray's **Settings…**.
 The app lives in the system tray (closing the window hides it; it keeps running):
 
 - **Open Diariz** — show/focus the window
+- **Record Microphone** / **Record System Audio** — start a recording in the background (no need to open
+  the window); while recording these collapse to **Stop Recording (mm:ss)** with a live timer. Windows
+  notifications confirm when recording starts and when the clip has uploaded.
 - **Settings…** — change the server address
 - **Quit**
 
-> Recording from the tray (mic / system audio) lands in a later phase; for now record from inside the app
-> window as usual. The **System audio** option appears because the shell sets `window.diariz.isElectron`.
+The record items are disabled until the app is loaded and you're signed in (the recorder lives in the web
+app). Recording is driven over IPC — the tray sends start/stop to the web app's `MediaRecorder` and it
+reports its phase back so the tray label, tooltip, and notifications stay in sync; it's the **same** single
+recorder as the on-screen **Record** button. The **System audio** option appears because the shell sets
+`window.diariz.isElectron`.
+
+> Auto-update and launch-on-startup land in a later phase.
 
 ## Develop
 
