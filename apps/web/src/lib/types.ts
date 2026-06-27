@@ -74,6 +74,8 @@ export interface SpeakerProfileContribution {
   recordingId: string;
   recordingName: string;
   speakerLabel: string;
+  /// Start (ms) of that speaker's first segment, so the UI can play a sample of the voice.
+  startMs: number;
   createdAt: string;
 }
 

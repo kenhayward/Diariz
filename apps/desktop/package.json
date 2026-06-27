@@ -1,7 +1,7 @@
 {
   "name": "diariz-desktop",
   "private": true,
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Diariz Electron desktop shell (mic + Windows system/loopback audio capture)",
   "main": "main.js",
   "scripts": {

@@ -17,7 +17,8 @@ namespace Diariz.Api.Tests;
 public class RecordingsControllerTests
 {
     private static RecordingsController Build(DiarizDbContext db, Guid userId, FakeJobQueue queue,
-        FakeAudioStorage? storage = null, bool summarizationEnabled = true, FakeEmailSender? email = null)
+        FakeAudioStorage? storage = null, bool summarizationEnabled = true, FakeEmailSender? email = null,
+        FakeSpeakerIdentifier? identifier = null)
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" })
@@ -27,7 +28,7 @@ public class RecordingsControllerTests
             Options.Create(new SummarizationOptions { ApiBase = summarizationEnabled ? "http://llm.test/v1" : "" }),
             new FakeApiKeyProtector());
         return new RecordingsController(db, storage ?? new FakeAudioStorage(), queue, new FakeHubContext(), config,
-            resolver, email ?? new FakeEmailSender())
+            resolver, email ?? new FakeEmailSender(), identifier ?? new FakeSpeakerIdentifier())
         {
             ControllerContext = Http.Context(userId)
         };
@@ -541,6 +542,29 @@ public class RecordingsControllerTests
         var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue());
 
         Assert.IsType<NotFoundResult>(await controller.MergeSegments(rec.Id));
+    }
+
+    // ---- Re-identify ----
+
+    [Fact]
+    public async Task Reidentify_OnOwnedRecording_ReturnsNoContent()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<NoContentResult>(await controller.Reidentify(rec.Id));
+    }
+
+    [Fact]
+    public async Task Reidentify_OnAnotherUsersRecording_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var rec = await SeedTranscribedRecording(db, Guid.NewGuid());
+        var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(await controller.Reidentify(rec.Id));
     }
 
     // ---- Email transcript ----

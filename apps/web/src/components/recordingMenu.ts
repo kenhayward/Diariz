@@ -5,6 +5,8 @@ export interface RecordingMenuHandlers {
   onRetranscribe: () => void;
   onSummarise: () => void;
   onMove: () => void;
+  /// Optional (detail page only): re-run speaker identification against current voiceprints.
+  onReidentify?: () => void;
   /// Optional: the list omits Play (playback lives in the detail panel); the detail menu provides it.
   onPlay?: () => void;
   onDownloadTxt: () => void;
@@ -24,6 +26,9 @@ export function recordingMenu(h: RecordingMenuHandlers): KebabAction[] {
     { label: "Rename", onClick: h.onRename },
     { label: "Re-transcribe", onClick: h.onRetranscribe },
     { label: "Summarise", onClick: h.onSummarise, disabled: !h.hasTranscript || h.isSummarizing },
+    ...(h.onReidentify
+      ? [{ label: "Re-identify speakers", onClick: h.onReidentify, disabled: !h.hasTranscript }]
+      : []),
     { label: "Move to section…", onClick: h.onMove },
     ...(h.onPlay ? [{ label: "Play", onClick: h.onPlay }] : []),
     { label: "Download transcript", onClick: h.onDownloadTxt, disabled: !h.hasTranscript },

@@ -259,6 +259,12 @@ public class SpeakerProfilesControllerTests
         {
             Id = Guid.NewGuid(), ProfileId = profile.Id, SpeakerId = speaker.Id, RecordingId = rec.Id
         });
+        // The speaker's first segment is at 3s — that's the play offset surfaced to the UI.
+        var tr = new Transcription { Id = Guid.NewGuid(), RecordingId = rec.Id, Model = "m", Version = 1 };
+        db.Transcriptions.Add(tr);
+        db.Segments.AddRange(
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 5000, EndMs = 6000, Text = "later", Ordinal = 1 },
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 3000, EndMs = 4000, Text = "first", Ordinal = 0 });
         await db.SaveChangesAsync();
         var controller = Build(db, userId);
 
@@ -269,6 +275,7 @@ public class SpeakerProfilesControllerTests
         var c = Assert.Single(dto.Contributions);
         Assert.Equal("Team Sync", c.RecordingName);
         Assert.Equal("SPEAKER_00", c.SpeakerLabel);
+        Assert.Equal(3000, c.StartMs); // earliest segment for that speaker
     }
 
     [Fact]

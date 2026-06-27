@@ -144,6 +144,18 @@ export default function RecordingDetail() {
     }
   }
 
+  async function reidentify() {
+    setActionError(null);
+    setActionInfo(null);
+    try {
+      await api.reidentify(id);
+      await qc.invalidateQueries({ queryKey: ["recording", id] });
+      setActionInfo("Re-ran speaker identification against your current voiceprints.");
+    } catch (e) {
+      setActionError(apiErrorMessage(e, "Could not re-identify speakers."));
+    }
+  }
+
   // Lazily resolve the presigned URL and seek the shared <audio> element.
   async function playFrom(startMs: number) {
     const el = audioRef.current;
@@ -176,6 +188,7 @@ export default function RecordingDetail() {
     onRename: () => setRenaming(true),
     onRetranscribe: retranscribe,
     onSummarise: summarize,
+    onReidentify: reidentify,
     onMove: () => setMoving(true),
     onPlay: () => void playFrom(0),
     onDownloadTxt: () => void api.downloadTranscript(id, "txt"),

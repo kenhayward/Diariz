@@ -83,31 +83,13 @@ public class WorkerCallbackController : ControllerBase
             byLabel[label] = sp;
         }
 
-        // Attach the worker's per-speaker embeddings and auto-identify against the owner's voiceprints.
-        var userId = transcription.Recording.UserId;
+        // Attach the worker's per-speaker embeddings, then auto-identify against the owner's voiceprints.
         foreach (var se in body.Speakers ?? [])
         {
             if (se.Embedding is not { Length: > 0 } || !byLabel.TryGetValue(se.Speaker, out var sp)) continue;
             sp.Embedding = new Vector(se.Embedding);
-
-            // Only auto-label when the speaker isn't manually named (anonymous, or a previous auto label to refresh).
-            if (!(sp.IdentifiedAuto || sp.DisplayName == sp.Label)) continue;
-
-            var match = await _identifier.IdentifyAsync(userId, sp.Embedding);
-            if (match is not null)
-            {
-                sp.ProfileId = match.ProfileId;
-                sp.DisplayName = match.Name;
-                sp.IdentifiedAuto = true;
-            }
-            else if (sp.IdentifiedAuto)
-            {
-                // Previously auto-identified but no longer matches → revert to anonymous.
-                sp.ProfileId = null;
-                sp.DisplayName = sp.Label;
-                sp.IdentifiedAuto = false;
-            }
         }
+        await SpeakerLabeling.ApplyAsync(byLabel.Values, transcription.Recording.UserId, _identifier);
 
         transcription.Recording.Error = null;  // clear any error from a prior failed attempt
 

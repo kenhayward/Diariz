@@ -281,6 +281,39 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
     }
 
     [Fact]
+    public async Task Reidentify_LabelsAnonymousSpeaker_AgainstStoredEmbedding()
+    {
+        var user = await SeedUser();
+        var recId = Guid.NewGuid();
+        var speakerId = Guid.NewGuid();
+
+        await using (var db = fx.CreateDbContext())
+        {
+            db.SpeakerProfiles.Add(new SpeakerProfile { Id = Guid.NewGuid(), UserId = user.Id, Name = "Alice", Embedding = Vec((0, 1f)) });
+            db.Recordings.Add(new Recording { Id = recId, UserId = user.Id, BlobKey = "k" });
+            db.Speakers.Add(new Speaker
+            {
+                Id = speakerId, RecordingId = recId, Label = "SPEAKER_00", DisplayName = "SPEAKER_00",
+                Embedding = Vec((0, 1f)) // close to Alice's voiceprint
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // Re-identify uses the speakers' stored embeddings (no re-transcription).
+        await using (var db = fx.CreateDbContext())
+        {
+            var speakers = await db.Speakers.Where(s => s.RecordingId == recId).ToListAsync();
+            await SpeakerLabeling.ApplyAsync(speakers, user.Id, Identifier(db));
+            await db.SaveChangesAsync();
+        }
+
+        await using var db2 = fx.CreateDbContext();
+        var sp = await db2.Speakers.SingleAsync(s => s.Id == speakerId);
+        Assert.Equal("Alice", sp.DisplayName);
+        Assert.True(sp.IdentifiedAuto);
+    }
+
+    [Fact]
     public async Task DeletingRecording_CascadesSpeakers()
     {
         var user = await SeedUser();
