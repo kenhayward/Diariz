@@ -13,7 +13,8 @@ export const CAPABILITIES = `
 Diariz records audio — from your microphone, or Windows system/loopback audio via the desktop app —
 and transcribes it server-side with **WhisperX** (word-level timestamps) and **pyannote** speaker
 diarization. You get speaker-labelled, timestamped segments you can rename, edit, and play back
-(per segment or the whole recording), and can re-transcribe at any time.
+(per segment or the whole recording), and can re-transcribe at any time. You can **merge** consecutive
+same-speaker rows into single blocks and **email yourself the transcript**.
 
 It can **identify speakers** across recordings: enrol a person from a recording's speaker and Diariz
 recognises that voice in later recordings automatically (using **SpeechBrain ECAPA** voiceprints), with
@@ -44,6 +45,28 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.6.0",
+    date: "2026-06-27",
+    pr: 28,
+    headline: "Merge same-speaker rows & email yourself the transcript",
+    summary: `
+Two additions to the transcript page.
+
+**Merge same-speaker rows** collapses consecutive segments from the same speaker into single, larger
+blocks — run it once you've finished correcting speaker assignments to get a cleaner, easier-to-read
+transcript. Each block grows to fit its text. It's permanent for that transcript version; re-transcribe
+to regenerate the original granular segments.
+
+**Email me the transcript** sends the current transcript to your account's email address, formatted with
+bold headings (name, summary, transcript) and a table of timestamp, speaker, and text — handy for
+sharing or keeping a copy. Requires the server's email (SMTP) to be configured.
+`.trim(),
+    added: [
+      "“Merge same-speaker rows” on the transcript page — collapses consecutive same-speaker segments into single blocks (permanent; re-transcribe to undo).",
+      "“Email me the transcript” — emails the formatted transcript (headings + timestamp/speaker/text table) to your account address.",
+    ],
+  },
   {
     version: "0.5.0",
     date: "2026-06-27",

@@ -19,7 +19,8 @@ public class RecordingsReorderTests
         var config = new ConfigurationBuilder().AddInMemoryCollection().Build();
         var resolver = new SummarizationSettingsResolver(
             db, Options.Create(new SummarizationOptions()), new FakeApiKeyProtector());
-        return new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config, resolver)
+        return new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
+            resolver, new FakeEmailSender())
         {
             ControllerContext = Http.Context(userId),
         };

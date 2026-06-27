@@ -9,6 +9,8 @@ export interface RecordingMenuHandlers {
   onPlay?: () => void;
   onDownloadTxt: () => void;
   onDownloadAudio: () => void;
+  /// Optional (detail page only): email the transcript to the signed-in user.
+  onEmailTranscript?: () => void;
   onDelete: () => void;
   /// Transcript-dependent actions are disabled until a transcript exists.
   hasTranscript: boolean;
@@ -25,6 +27,9 @@ export function recordingMenu(h: RecordingMenuHandlers): KebabAction[] {
     { label: "Move to section…", onClick: h.onMove },
     ...(h.onPlay ? [{ label: "Play", onClick: h.onPlay }] : []),
     { label: "Download transcript", onClick: h.onDownloadTxt, disabled: !h.hasTranscript },
+    ...(h.onEmailTranscript
+      ? [{ label: "Email me the transcript", onClick: h.onEmailTranscript, disabled: !h.hasTranscript }]
+      : []),
     { label: "Download audio", onClick: h.onDownloadAudio },
     { label: "Delete", danger: true, onClick: h.onDelete },
   ];
