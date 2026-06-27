@@ -215,13 +215,20 @@ build doesn't depend on vitest). Tests are `src/**/*.test.ts(x)`, excluded from 
 via `tsconfig.json`. No DOM/component testing library is wired yet — add `@testing-library/react`
 (+ the react plugin in `vitest.config.ts`) when you start testing components.
 
-### Desktop (Electron)
+### Desktop (Electron — Windows system-tray app)
 ```bash
-cd apps/desktop && npm run dev    # sets DIARIZ_DEV=1, loads the Vite dev server
+cd apps/desktop && npm run dev    # DIARIZ_DEV=1 → loads the Vite dev server, skips first-run setup
+npm test                          # pure unit tests (node --test, no Electron); npm run dist → NSIS installer
 ```
-Only the Electron shell can capture **system/loopback** audio (`setDisplayMediaRequestHandler` →
-`audio: "loopback"`, Windows only). It exposes `window.diariz.isElectron` to enable the "System
-audio" recorder option, and can override the API base via `window.__DIARIZ_API_BASE__`.
+A **thin tray shell** (`apps/desktop/src/`): `main.js` owns the tray (Open/Settings/Quit), single-instance
+lock, close-to-tray, and a **first-run setup window** (`setup.html`) that stores the **server address**
+(validated via `GET {url}/health`) in `electron-store`. The main window then **loads the web app from that
+server origin** (so the SPA is same-origin — no bundled SPA, no API-base override needed; the old
+`__DIARIZ_API_BASE__` is gone). Only the shell can capture **system/loopback** audio
+(`setDisplayMediaRequestHandler` → `audio: "loopback"`, Windows only); it exposes `window.diariz.isElectron`
+to enable the "System audio" recorder option. Releases: `electron-builder` (NSIS) via
+`.github/workflows/desktop-release.yml` on a `v*` tag → GitHub Releases (or a self-hosted feed when
+`DIARIZ_PUBLISH=generic`). Tray recording + auto-update are later phases.
 
 ### Full stack (Docker)
 ```bash

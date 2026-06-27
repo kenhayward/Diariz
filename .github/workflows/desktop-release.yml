@@ -1,0 +1,38 @@
+name: Desktop release
+
+# Builds the Windows desktop installer and publishes it to this repo's GitHub Releases.
+# Trigger by pushing a version tag (e.g. v0.10.0) that matches apps/desktop/package.json.
+#
+# Self-hosted feed instead of GitHub: a fork can host its own update feed by building with
+# `DIARIZ_PUBLISH=generic DIARIZ_UPDATE_URL=https://your-server/updates/ npm run dist` and
+# uploading apps/desktop/release/* (incl. latest.yml) to that URL — adjust the publish step below.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write # create/upload the GitHub Release
+
+jobs:
+  build:
+    name: Build Windows installer
+    runs-on: [self-hosted]
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Unit tests
+        run: npm test
+      - name: Build + publish installer (GitHub Releases)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run publish

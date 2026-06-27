@@ -42,7 +42,7 @@ Current version: **0.4.1** — versioned per the rule in [CLAUDE.md](CLAUDE.md);
 | Domain model + migrations | EF Core + Postgres/pgvector | [src/Diariz.Domain](src/Diariz.Domain) |
 | Transcription + diarization + voiceprints | Python: WhisperX (large-v3) + pyannote 3.1 + SpeechBrain ECAPA (GPU) | [src/Diariz.Worker](src/Diariz.Worker) |
 | Web UI | React + TypeScript + Vite + Tailwind | [apps/web](apps/web) |
-| Desktop shell | Electron (mic + Windows loopback) | [apps/desktop](apps/desktop) |
+| Desktop app | Electron — Windows system-tray shell (first-run server config, mic + Windows loopback) | [apps/desktop](apps/desktop) |
 | Orchestration | docker-compose (postgres/pgvector, redis, minio) | [deploy](deploy) |
 
 Summaries and chat use any OpenAI-compatible LLM endpoint you configure (OpenAI, or a local server such

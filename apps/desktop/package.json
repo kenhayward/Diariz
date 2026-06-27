@@ -1,15 +1,23 @@
 {
   "name": "diariz-desktop",
   "private": true,
-  "version": "0.9.2",
-  "description": "Diariz Electron desktop shell (mic + Windows system/loopback audio capture)",
-  "main": "main.js",
+  "version": "0.10.0",
+  "description": "Diariz Windows desktop app — a system-tray shell that loads your Diariz server, with mic + Windows system/loopback audio capture.",
+  "main": "src/main.js",
+  "author": "Ken Hayward",
   "scripts": {
     "dev": "cross-env DIARIZ_DEV=1 electron .",
-    "start": "electron ."
+    "start": "electron .",
+    "test": "node --test \"src/**/*.test.js\"",
+    "dist": "electron-builder --config electron-builder.config.js",
+    "publish": "electron-builder --config electron-builder.config.js --publish always"
+  },
+  "dependencies": {
+    "electron-store": "^8.2.0"
   },
   "devDependencies": {
     "cross-env": "^7.0.3",
-    "electron": "^33.2.1"
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
   }
 }

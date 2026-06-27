@@ -46,6 +46,29 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.10.0",
+    date: "2026-06-27",
+    pr: 34,
+    headline: "Windows desktop app (system tray) — phase 1",
+    summary: `
+A new **Windows desktop app** — a system-tray shell that loads your Diariz server in a native window and
+adds microphone + Windows **system/loopback** audio capture (which a browser can't do).
+
+On first run it asks for your **server address** (validated against \`/health\`) and remembers it; the app
+then lives in the **system tray** with **Open Diariz**, **Settings…** (change server), and **Quit**, and
+closing the window hides it rather than quitting. Because it loads the web app from your server's origin,
+everything is same-origin and it rarely needs updating when the web app changes.
+
+It ships as an NSIS installer built on CI and published to GitHub Releases (a fork can point the update
+feed at its own server instead). Recording straight from the tray menu, and auto-update, come in later
+phases.
+`.trim(),
+    added: [
+      "Windows desktop app: system-tray shell, first-run server-address setup, loads the web app from your server, with mic + system-audio capture.",
+      "electron-builder NSIS installer + a tag-triggered GitHub Actions release workflow (provider-configurable: GitHub Releases or a self-hosted feed).",
+    ],
+  },
+  {
     version: "0.9.2",
     date: "2026-06-27",
     pr: 33,
