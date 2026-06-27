@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
+import AuthShell from "../components/AuthShell";
 
 /// Public page: anyone can request access. The response is intentionally neutral (it never reveals
 /// whether the email already has an account); an administrator reviews and grants the request.
@@ -25,8 +26,8 @@ export default function RequestAccess() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4 dark:bg-gray-950">
-      <div className="w-full max-w-sm space-y-4 rounded-lg border bg-white p-6 dark:border-gray-700 dark:bg-gray-900">
+    <AuthShell>
+      <div className="w-full max-w-sm space-y-4 rounded-lg border bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900">
         <div className="flex items-center gap-2">
           <img src="/logo.png" alt="" className="h-8 w-auto" />
           <h1 className="text-lg font-semibold dark:text-gray-100">Request access to Diariz</h1>
@@ -66,6 +67,6 @@ export default function RequestAccess() {
           </form>
         )}
       </div>
-    </div>
+    </AuthShell>
   );
 }
