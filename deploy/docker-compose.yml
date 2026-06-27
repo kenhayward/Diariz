@@ -68,6 +68,10 @@ services:
       Summarization__ApiBase: ${SUMMARY_API_BASE:-}
       Summarization__ApiKey: ${SUMMARY_API_KEY:-}
       Summarization__Model: ${SUMMARY_MODEL:-gpt-4o-mini}
+      # Speaker identification (voiceprints). Threshold is the max cosine distance for an
+      # auto-match — conservative by default; tune per your audio (lower = stricter).
+      Identification__Enabled: ${IDENTIFICATION_ENABLED:-true}
+      Identification__Threshold: ${IDENTIFICATION_THRESHOLD:-0.4}
       Chat__ContextLength: ${CHAT_CONTEXT_LENGTH:-131072}
       # Persist the Data Protection keyring so encrypted per-user API keys survive container recreates.
       DataProtection__KeysPath: /keys
@@ -119,6 +123,8 @@ services:
       DEVICE: ${WORKER_DEVICE:-cuda}
       COMPUTE_TYPE: ${WORKER_COMPUTE_TYPE:-float16}
       WHISPER_MODEL: ${WHISPER_MODEL:-large-v3}
+      # Per-speaker ECAPA voiceprint embeddings (for identification). Set to 0 to disable.
+      ENABLE_SPEAKER_EMBEDDINGS: ${ENABLE_SPEAKER_EMBEDDINGS:-1}
     volumes:
       # Persist downloaded models (whisper large-v3, wav2vec2 align, pyannote) across
       # container recreates so a rebuild doesn't re-download ~4GB. Covers both the torch

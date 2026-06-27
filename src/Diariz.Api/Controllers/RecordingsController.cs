@@ -93,6 +93,10 @@ public class RecordingsController : ControllerBase
         if (rec is null) return NotFound();
 
         var names = rec.Speakers.ToDictionary(s => s.Label, s => s.DisplayName);
+        var speakers = rec.Speakers
+            .OrderBy(s => s.Label)
+            .Select(s => new SpeakerInfoDto(s.Label, s.DisplayName, s.ProfileId, s.IdentifiedAuto))
+            .ToList();
         var current = rec.Transcriptions.FirstOrDefault();
         TranscriptionDto? tDto = current is null ? null : new(
             current.Id, current.Model, current.Version, current.Language, current.CreatedAt,
@@ -105,7 +109,7 @@ public class RecordingsController : ControllerBase
             : new(current.Summary.Model, current.Summary.Text, current.Summary.CreatedAt);
 
         return new RecordingDetailDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.Status,
-            rec.Error, rec.CreatedAt, names, tDto, sDto);
+            rec.Error, rec.CreatedAt, names, speakers, tDto, sDto);
     }
 
     /// <summary>Upload an audio file and kick off transcription.</summary>
@@ -168,7 +172,74 @@ public class RecordingsController : ControllerBase
             speaker = new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = req.Label };
             _db.Speakers.Add(speaker);
         }
+        // A free-text rename detaches the speaker from any voiceprint (it's now hand-typed text).
         speaker.DisplayName = req.DisplayName;
+        speaker.ProfileId = null;
+        speaker.IdentifiedAuto = false;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>Reassign a recording's speaker to an enrolled voiceprint (or unassign with profileId=null).
+    /// Assigning adds the speaker as a training contribution and recomputes the profile centroid.</summary>
+    [HttpPut("{id:guid}/speakers/{label}/assign")]
+    public async Task<IActionResult> AssignSpeaker(Guid id, string label, AssignSpeakerRequest req)
+    {
+        var rec = await _db.Recordings.Include(r => r.Speakers)
+            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+
+        var speaker = rec.Speakers.FirstOrDefault(s => s.Label == label);
+        if (speaker is null) return NotFound();
+
+        if (req.ProfileId is null)
+        {
+            // Unassign → revert to the anonymous label.
+            speaker.ProfileId = null;
+            speaker.DisplayName = speaker.Label;
+            speaker.IdentifiedAuto = false;
+            await _db.SaveChangesAsync();
+            return NoContent();
+        }
+
+        var profile = await _db.SpeakerProfiles
+            .FirstOrDefaultAsync(p => p.Id == req.ProfileId && p.UserId == UserId);
+        if (profile is null) return NotFound();
+
+        speaker.ProfileId = profile.Id;
+        speaker.DisplayName = profile.Name;
+        speaker.IdentifiedAuto = false; // an explicit manual assignment
+
+        // Train "by whole speakers": record this speaker as a contribution (once) and recompute the
+        // centroid from all of the profile's contribution snapshots. Requires the speaker embedding,
+        // which only exists once the worker has run — skip gracefully when it hasn't.
+        if (speaker.Embedding is not null)
+        {
+            var already = await _db.ProfileContributions
+                .AnyAsync(c => c.ProfileId == profile.Id && c.SpeakerId == speaker.Id);
+            if (!already)
+            {
+                _db.ProfileContributions.Add(new ProfileContribution
+                {
+                    Id = Guid.NewGuid(),
+                    ProfileId = profile.Id,
+                    SpeakerId = speaker.Id,
+                    RecordingId = rec.Id,
+                    Embedding = speaker.Embedding,
+                });
+
+                var snapshots = await _db.ProfileContributions
+                    .Where(c => c.ProfileId == profile.Id)
+                    .Select(c => c.Embedding)
+                    .ToListAsync();
+                snapshots.Add(speaker.Embedding); // the not-yet-saved contribution
+                var centroid = Voiceprints.Centroid(snapshots.Select(v => v.ToArray()).ToList());
+                if (centroid is not null) profile.Embedding = centroid;
+                profile.SampleCount = snapshots.Count;
+                profile.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+        }
+
         await _db.SaveChangesAsync();
         return NoContent();
     }

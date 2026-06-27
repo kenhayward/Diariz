@@ -16,6 +16,8 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
     public DbSet<Section> Sections => Set<Section>();
     public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
+    public DbSet<SpeakerProfile> SpeakerProfiles => Set<SpeakerProfile>();
+    public DbSet<ProfileContribution> ProfileContributions => Set<ProfileContribution>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -90,6 +92,49 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         {
             e.HasIndex(s => new { s.RecordingId, s.Label }).IsUnique();
             e.Property(s => s.DisplayName).HasMaxLength(256);
+            if (isNpgsql)
+                e.Property(s => s.Embedding).HasColumnType("vector(192)"); // ECAPA-TDNN dimension
+            else
+                e.Ignore(s => s.Embedding);
+            // Identifying a speaker links it to a profile; deleting the profile just unlinks (SetNull).
+            e.HasOne(s => s.Profile)
+                .WithMany()
+                .HasForeignKey(s => s.ProfileId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // Enrolled voiceprints (per-user). The centroid is a pgvector column on Postgres; ignored under
+        // the in-memory test provider (matching is integration-tested only).
+        builder.Entity<SpeakerProfile>(e =>
+        {
+            e.HasIndex(p => p.UserId);
+            e.Property(p => p.Name).HasMaxLength(256);
+            if (isNpgsql)
+                e.Property(p => p.Embedding).HasColumnType("vector(192)");
+            else
+                e.Ignore(p => p.Embedding);
+            e.HasOne(p => p.User)
+                .WithMany()
+                .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<ProfileContribution>(e =>
+        {
+            e.HasIndex(c => c.ProfileId);
+            if (isNpgsql)
+                e.Property(c => c.Embedding).HasColumnType("vector(192)");
+            else
+                e.Ignore(c => c.Embedding);
+            e.HasOne(c => c.Profile)
+                .WithMany(p => p.Contributions)
+                .HasForeignKey(c => c.ProfileId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // The contributing speaker; deleting the recording's speaker drops the contribution.
+            e.HasOne(c => c.Speaker)
+                .WithMany()
+                .HasForeignKey(c => c.SpeakerId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // Per-user settings: 1:1 with the user via a shared primary key (UserId). Provider-agnostic

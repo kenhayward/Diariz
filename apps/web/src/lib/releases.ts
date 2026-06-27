@@ -15,6 +15,10 @@ and transcribes it server-side with **WhisperX** (word-level timestamps) and **p
 diarization. You get speaker-labelled, timestamped segments you can rename, edit, and play back
 (per segment or the whole recording), and can re-transcribe at any time.
 
+It can **identify speakers** across recordings: enrol a person from a recording's speaker and Diariz
+recognises that voice in later recordings automatically (using **SpeechBrain ECAPA** voiceprints), with
+manual reassignment and GDPR-style erasure of the stored voiceprint.
+
 It can **summarise** recordings and let you **chat across one or more transcripts** — with file
 attachments, a context-usage dial, and saved conversations — using an OpenAI-compatible LLM endpoint
 you configure. Recordings organise into **sections** with drag-and-drop ordering.
@@ -37,6 +41,35 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.3.0",
+    date: "2026-06-27",
+    pr: 24,
+    headline: "Speaker identification — recognise enrolled people across recordings",
+    summary: `
+Diariz now **identifies speakers**, not just diarizes them. Diarization groups a recording into
+anonymous, recording-local speakers (\`SPEAKER_00\`…); identification recognises a **known person** across
+recordings by their voice.
+
+The transcription worker now computes a per-speaker **voiceprint** — a **SpeechBrain ECAPA-TDNN**
+embedding (192-dimensional, Apache-2.0) — stored in pgvector alongside each speaker. Tag a recording's
+speaker as a person ("Alice") to **enrol** their voiceprint; in later recordings, a matching speaker is
+**labelled automatically** (shown with an *auto* badge) when the cosine similarity clears a configurable
+threshold, and stays anonymous otherwise. You can **reassign** any speaker to a different enrolled person
+or unassign them, and a free-text rename always detaches the voiceprint.
+
+Voiceprints are biometric data, so **erasure is first-class**: deleting a person removes their voiceprint
+and all training data, unlinks them from past recordings, and reverts only the **auto-applied** labels to
+the anonymous speaker — names you typed by hand are kept. Identification is per-user (your voiceprints
+only ever match your own recordings) and can be turned off via \`ENABLE_SPEAKER_EMBEDDINGS\` /
+\`Identification__Enabled\`.
+`.trim(),
+    added: [
+      "Per-speaker ECAPA voiceprint embeddings computed by the worker and stored in pgvector.",
+      "Automatic speaker identification against your enrolled people (tunable cosine threshold, *auto* badge).",
+      "Enrol a person from a recording's speaker, reassign/unassign speakers, and GDPR-erase a voiceprint (auto-labels revert, manual names kept).",
+    ],
+  },
   {
     version: "0.2.1",
     date: "2026-06-27",

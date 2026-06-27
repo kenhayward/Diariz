@@ -13,3 +13,6 @@ from unittest.mock import MagicMock
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 sys.modules.setdefault("whisperx", MagicMock())
+# speechbrain (+torch) are imported lazily inside pipeline._get_embedder(), which the
+# tests never call (they pass a stub embedder), so a top-level stub is enough for safety.
+sys.modules.setdefault("speechbrain", MagicMock())

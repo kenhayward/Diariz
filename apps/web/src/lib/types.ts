@@ -52,6 +52,22 @@ export interface TranscriptionDto {
   segments: SegmentDto[];
 }
 
+/// A diarized speaker in a recording: its label, shown name, the enrolled voiceprint it's
+/// linked to (if any), and whether the name was applied automatically by identification.
+export interface SpeakerInfo {
+  label: string;
+  displayName: string;
+  profileId: string | null;
+  identifiedAuto: boolean;
+}
+
+/// An enrolled person/voiceprint (per user).
+export interface SpeakerProfile {
+  id: string;
+  name: string;
+  sampleCount: number;
+}
+
 export interface RecordingDetail {
   id: string;
   title: string;
@@ -62,6 +78,7 @@ export interface RecordingDetail {
   error: string | null;
   createdAt: string;
   speakerNames: Record<string, string>;
+  speakers: SpeakerInfo[];
   current: TranscriptionDto | null;
   summary: SummaryDto | null;
 }

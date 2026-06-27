@@ -91,6 +91,20 @@ public sealed class FakeEmailSender : IEmailSender
     }
 }
 
+/// <summary>Stub <see cref="ISpeakerIdentifier"/> — returns a canned match (or none) and records the
+/// embeddings it was asked about, so the callback's auto-identification can be unit-tested without pgvector.</summary>
+public sealed class FakeSpeakerIdentifier : ISpeakerIdentifier
+{
+    public SpeakerMatch? Match { get; set; }
+    public int Calls { get; private set; }
+
+    public Task<SpeakerMatch?> IdentifyAsync(Guid userId, Pgvector.Vector embedding, CancellationToken ct = default)
+    {
+        Calls++;
+        return Task.FromResult(Match);
+    }
+}
+
 /// <summary>Stub <see cref="IChatStreamClient"/> — yields a canned token sequence or throws.</summary>
 public sealed class FakeChatStreamClient : IChatStreamClient
 {

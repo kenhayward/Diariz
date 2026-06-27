@@ -14,6 +14,7 @@ import type {
   SavedChatContext,
   SectionDto,
   SetupValidation,
+  SpeakerProfile,
   UpdateUserSettings,
   UserSettings,
 } from "./types";
@@ -145,6 +146,28 @@ export const api = {
 
   async updateSegment(id: string, segmentId: string, text: string): Promise<void> {
     await http.put(`/api/recordings/${id}/segments/${segmentId}`, { text });
+  },
+
+  // ---- Speaker identification (voiceprints) ----
+
+  async listSpeakerProfiles(): Promise<SpeakerProfile[]> {
+    const { data } = await http.get<SpeakerProfile[]>("/api/speaker-profiles");
+    return data;
+  },
+
+  /// Enrol a new person from one of a recording's diarized speakers (its embedding seeds the voiceprint).
+  async createSpeakerProfile(name: string, recordingId: string, label: string): Promise<SpeakerProfile> {
+    const { data } = await http.post<SpeakerProfile>("/api/speaker-profiles", { name, recordingId, label });
+    return data;
+  },
+
+  /// Reassign a recording's speaker to an enrolled voiceprint, or pass null to unassign.
+  async assignSpeaker(id: string, label: string, profileId: string | null): Promise<void> {
+    await http.put(`/api/recordings/${id}/speakers/${encodeURIComponent(label)}/assign`, { profileId });
+  },
+
+  async deleteSpeakerProfile(profileId: string): Promise<void> {
+    await http.delete(`/api/speaker-profiles/${profileId}`);
   },
 
   async listSections(): Promise<SectionDto[]> {

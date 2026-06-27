@@ -32,8 +32,21 @@ def test_post_result_sends_pascalcase_body_and_secret_header(monkeypatch):
         "TranscriptionId": "tid-1",
         "Language": "en",
         "Segments": segments,
+        "Speakers": [],
     }
     assert captured["headers"]["X-Worker-Secret"] == callback.config.CALLBACK_SECRET
+
+
+def test_post_result_includes_speaker_embeddings(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        callback.requests, "post",
+        lambda url, json=None, headers=None, timeout=None: captured.update(json=json) or _OkResponse())
+
+    speakers = [{"Speaker": "SPEAKER_00", "Embedding": [0.1, 0.2, 0.3]}]
+    callback.post_result("tid-1", "en", [], speakers)
+
+    assert captured["json"]["Speakers"] == speakers
 
 
 def test_post_result_raises_on_http_error(monkeypatch):

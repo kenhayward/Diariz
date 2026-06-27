@@ -19,11 +19,17 @@ public record SegmentResult(
     long EndMs,
     string Text);
 
+/// <summary>One diarized speaker's voice embedding (ECAPA, 192-d) for identification.</summary>
+public record SpeakerEmbeddingResult(
+    string Speaker,
+    float[] Embedding);
+
 /// <summary>Callback body the worker POSTs back to the API when a job completes.</summary>
 public record TranscriptionResult(
     Guid TranscriptionId,
     string? Language,
-    IReadOnlyList<SegmentResult> Segments);
+    IReadOnlyList<SegmentResult> Segments,
+    IReadOnlyList<SpeakerEmbeddingResult>? Speakers = null);
 
 /// <summary>Callback body the worker POSTs when a job fails.</summary>
 public record TranscriptionFailure(

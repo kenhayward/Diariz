@@ -6,7 +6,7 @@ import { createHub } from "../lib/signalr";
 import KebabMenu from "../components/KebabMenu";
 import MoveToSectionModal from "../components/MoveToSectionModal";
 import { recordingMenu } from "../components/recordingMenu";
-import type { SegmentDto } from "../lib/types";
+import type { SegmentDto, SpeakerInfo, SpeakerProfile } from "../lib/types";
 
 function fmt(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -21,6 +21,10 @@ export default function RecordingDetail() {
     queryKey: ["recording", id],
     queryFn: () => api.getRecording(id),
     enabled: Boolean(id),
+  });
+  const { data: profiles = [] } = useQuery({
+    queryKey: ["speaker-profiles"],
+    queryFn: api.listSpeakerProfiles,
   });
 
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -49,6 +53,29 @@ export default function RecordingDetail() {
   async function rename(label: string, name: string) {
     await api.renameSpeaker(id, label, name);
     qc.invalidateQueries({ queryKey: ["recording", id] });
+  }
+
+  async function assignSpeaker(label: string, profileId: string | null) {
+    setActionError(null);
+    try {
+      await api.assignSpeaker(id, label, profileId);
+      qc.invalidateQueries({ queryKey: ["recording", id] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e, "Could not reassign the speaker."));
+    }
+  }
+
+  async function newPerson(label: string) {
+    const name = window.prompt("Name for this person?")?.trim();
+    if (!name) return;
+    setActionError(null);
+    try {
+      await api.createSpeakerProfile(name, id, label);
+      qc.invalidateQueries({ queryKey: ["recording", id] });
+      qc.invalidateQueries({ queryKey: ["speaker-profiles"] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e, "Could not create the person."));
+    }
   }
 
   async function saveRecordingName(name: string) {
@@ -178,15 +205,22 @@ export default function RecordingDetail() {
       {labels.length > 0 && (
         <div className="rounded-lg border bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
           <h2 className="mb-2 text-sm font-medium text-gray-500 dark:text-gray-400">Speakers</h2>
-          <div className="flex flex-wrap gap-3">
-            {labels.map((label) => (
-              <SpeakerInput
-                key={label}
-                label={label}
-                initial={rec.speakerNames[label] ?? label}
-                onSave={(name) => rename(label, name)}
-              />
-            ))}
+          <div className="flex flex-wrap gap-4">
+            {labels.map((label) => {
+              const info = rec.speakers.find((s) => s.label === label);
+              return (
+                <SpeakerRow
+                  key={label}
+                  label={label}
+                  info={info}
+                  initial={rec.speakerNames[label] ?? info?.displayName ?? label}
+                  profiles={profiles}
+                  onRename={(name) => rename(label, name)}
+                  onAssign={(profileId) => assignSpeaker(label, profileId)}
+                  onNewPerson={() => newPerson(label)}
+                />
+              );
+            })}
           </div>
         </div>
       )}
@@ -341,25 +375,67 @@ function RecordingNameForm({
   );
 }
 
-function SpeakerInput({
+const NEW_PERSON = "__new__";
+
+export function SpeakerRow({
   label,
+  info,
   initial,
-  onSave,
+  profiles,
+  onRename,
+  onAssign,
+  onNewPerson,
 }: {
   label: string;
+  info: SpeakerInfo | undefined;
   initial: string;
-  onSave: (name: string) => void;
+  profiles: SpeakerProfile[];
+  onRename: (name: string) => void;
+  onAssign: (profileId: string | null) => void;
+  onNewPerson: () => void;
 }) {
   const [value, setValue] = useState(initial);
+  // Keep the field in sync when identification/reassignment changes the name out from under us.
+  useEffect(() => setValue(initial), [initial]);
+
   return (
-    <div className="flex items-center gap-1">
-      <span className="text-xs text-gray-400 dark:text-gray-500">{label}</span>
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-1">
+        <span className="text-xs text-gray-400 dark:text-gray-500">{label}</span>
+        {info?.identifiedAuto && (
+          <span
+            title="Name applied automatically by speaker identification"
+            className="rounded bg-blue-100 px-1 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+          >
+            auto
+          </span>
+        )}
+      </div>
       <input
         value={value}
+        aria-label={`Name for ${label}`}
         onChange={(e) => setValue(e.target.value)}
-        onBlur={() => value !== initial && onSave(value)}
-        className="w-32 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+        onBlur={() => value !== initial && onRename(value)}
+        className="w-40 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
       />
+      <select
+        value={info?.profileId ?? ""}
+        aria-label={`Assign ${label} to a person`}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === NEW_PERSON) onNewPerson();
+          else onAssign(v || null);
+        }}
+        className="w-40 rounded border px-2 py-1 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+      >
+        <option value="">Unassigned</option>
+        {profiles.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+        <option value={NEW_PERSON}>+ New person…</option>
+      </select>
     </div>
   );
 }

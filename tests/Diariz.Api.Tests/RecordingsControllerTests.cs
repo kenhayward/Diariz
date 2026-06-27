@@ -209,6 +209,30 @@ public class RecordingsControllerTests
     }
 
     [Fact]
+    public async Task RenameSpeaker_DetachesFromVoiceprint()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Alice" };
+        db.SpeakerProfiles.Add(profile);
+        db.Speakers.Add(new Speaker
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00",
+            DisplayName = "Alice", ProfileId = profile.Id, IdentifiedAuto = true
+        });
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.RenameSpeaker(rec.Id, new RenameSpeakerRequest("SPEAKER_00", "Carol"));
+
+        var sp = await db.Speakers.SingleAsync(s => s.RecordingId == rec.Id);
+        Assert.Equal("Carol", sp.DisplayName);
+        Assert.Null(sp.ProfileId);
+        Assert.False(sp.IdentifiedAuto);
+    }
+
+    [Fact]
     public async Task RenameSpeaker_CreatesSpeaker_WhenLabelNotYetPresent()
     {
         using var db = TestDb.Create();
@@ -232,6 +256,100 @@ public class RecordingsControllerTests
         var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue());
 
         var result = await controller.RenameSpeaker(rec.Id, new RenameSpeakerRequest("SPEAKER_00", "X"));
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    // ---- AssignSpeaker (voiceprints) ----
+
+    [Fact]
+    public async Task AssignSpeaker_LinksSpeakerToProfile_AndSetsDisplayName()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        db.Speakers.Add(new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "SPEAKER_00" });
+        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Alice" };
+        db.SpeakerProfiles.Add(profile);
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.AssignSpeaker(rec.Id, "SPEAKER_00", new AssignSpeakerRequest(profile.Id));
+
+        Assert.IsType<NoContentResult>(result);
+        var sp = await db.Speakers.SingleAsync(s => s.RecordingId == rec.Id);
+        Assert.Equal(profile.Id, sp.ProfileId);
+        Assert.Equal("Alice", sp.DisplayName);
+        Assert.False(sp.IdentifiedAuto); // explicit manual assignment
+    }
+
+    [Fact]
+    public async Task AssignSpeaker_WithNullProfile_RevertsToAnonymousLabel()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Alice" };
+        db.SpeakerProfiles.Add(profile);
+        db.Speakers.Add(new Speaker
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00",
+            DisplayName = "Alice", ProfileId = profile.Id, IdentifiedAuto = true
+        });
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.AssignSpeaker(rec.Id, "SPEAKER_00", new AssignSpeakerRequest(null));
+
+        Assert.IsType<NoContentResult>(result);
+        var sp = await db.Speakers.SingleAsync(s => s.RecordingId == rec.Id);
+        Assert.Null(sp.ProfileId);
+        Assert.Equal("SPEAKER_00", sp.DisplayName);
+        Assert.False(sp.IdentifiedAuto);
+    }
+
+    [Fact]
+    public async Task AssignSpeaker_ToProfileOwnedByAnotherUser_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        db.Speakers.Add(new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "SPEAKER_00" });
+        var othersProfile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Theirs" };
+        db.SpeakerProfiles.Add(othersProfile);
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.AssignSpeaker(rec.Id, "SPEAKER_00", new AssignSpeakerRequest(othersProfile.Id));
+
+        Assert.IsType<NotFoundResult>(result);
+        Assert.Null((await db.Speakers.SingleAsync(s => s.RecordingId == rec.Id)).ProfileId);
+    }
+
+    [Fact]
+    public async Task AssignSpeaker_OnAnotherUsersRecording_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var rec = await SeedRecording(db, Guid.NewGuid(), versions: 1);
+        var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue());
+
+        var result = await controller.AssignSpeaker(rec.Id, "SPEAKER_00", new AssignSpeakerRequest(Guid.NewGuid()));
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task AssignSpeaker_UnknownLabel_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Alice" };
+        db.SpeakerProfiles.Add(profile);
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.AssignSpeaker(rec.Id, "SPEAKER_99", new AssignSpeakerRequest(profile.Id));
 
         Assert.IsType<NotFoundResult>(result);
     }

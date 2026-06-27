@@ -134,6 +134,37 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("ChatSessions");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.ProfileContribution", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Vector>("Embedding")
+                        .IsRequired()
+                        .HasColumnType("vector(192)");
+
+                    b.Property<Guid>("ProfileId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RecordingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SpeakerId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProfileId");
+
+                    b.HasIndex("SpeakerId");
+
+                    b.ToTable("ProfileContributions");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.Recording", b =>
                 {
                     b.Property<Guid>("Id")
@@ -261,19 +292,64 @@ namespace Diariz.Domain.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<Vector>("Embedding")
+                        .HasColumnType("vector(192)");
+
+                    b.Property<bool>("IdentifiedAuto")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Label")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<Guid?>("ProfileId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("RecordingId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ProfileId");
+
                     b.HasIndex("RecordingId", "Label")
                         .IsUnique();
 
                     b.ToTable("Speakers");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.SpeakerProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Vector>("Embedding")
+                        .IsRequired()
+                        .HasColumnType("vector(192)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int>("SampleCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("SpeakerProfiles");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.Summary", b =>
@@ -499,6 +575,25 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.ProfileContribution", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.SpeakerProfile", "Profile")
+                        .WithMany("Contributions")
+                        .HasForeignKey("ProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Diariz.Domain.Entities.Speaker", "Speaker")
+                        .WithMany()
+                        .HasForeignKey("SpeakerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Profile");
+
+                    b.Navigation("Speaker");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.Recording", b =>
                 {
                     b.HasOne("Diariz.Domain.Entities.Section", "Section")
@@ -541,13 +636,31 @@ namespace Diariz.Domain.Migrations
 
             modelBuilder.Entity("Diariz.Domain.Entities.Speaker", b =>
                 {
+                    b.HasOne("Diariz.Domain.Entities.SpeakerProfile", "Profile")
+                        .WithMany()
+                        .HasForeignKey("ProfileId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Diariz.Domain.Entities.Recording", "Recording")
                         .WithMany("Speakers")
                         .HasForeignKey("RecordingId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.Navigation("Profile");
+
                     b.Navigation("Recording");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.SpeakerProfile", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.Summary", b =>
@@ -653,6 +766,11 @@ namespace Diariz.Domain.Migrations
             modelBuilder.Entity("Diariz.Domain.Entities.Section", b =>
                 {
                     b.Navigation("Recordings");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.SpeakerProfile", b =>
+                {
+                    b.Navigation("Contributions");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.Transcription", b =>
