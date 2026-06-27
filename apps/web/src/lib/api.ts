@@ -15,6 +15,7 @@ import type {
   SectionDto,
   SetupValidation,
   SpeakerProfile,
+  SpeakerProfileDetail,
   UpdateUserSettings,
   UserSettings,
 } from "./types";
@@ -168,6 +169,29 @@ export const api = {
 
   async deleteSpeakerProfile(profileId: string): Promise<void> {
     await http.delete(`/api/speaker-profiles/${profileId}`);
+  },
+
+  /// People management (PR2): detail with training contributions, rename, merge, and full erase.
+  async getSpeakerProfile(id: string): Promise<SpeakerProfileDetail> {
+    const { data } = await http.get<SpeakerProfileDetail>(`/api/speaker-profiles/${id}`);
+    return data;
+  },
+
+  async renameSpeakerProfile(id: string, name: string): Promise<void> {
+    await http.put(`/api/speaker-profiles/${id}`, { name });
+  },
+
+  async removeProfileContribution(id: string, contributionId: string): Promise<void> {
+    await http.delete(`/api/speaker-profiles/${id}/contributions/${contributionId}`);
+  },
+
+  async mergeSpeakerProfiles(id: string, sourceId: string): Promise<void> {
+    await http.post(`/api/speaker-profiles/${id}/merge`, { sourceId });
+  },
+
+  /// GDPR: erase all of the caller's voiceprints (auto-labels revert; manual names kept).
+  async deleteAllSpeakerProfiles(): Promise<void> {
+    await http.delete("/api/speaker-profiles");
   },
 
   async listSections(): Promise<SectionDto[]> {

@@ -17,7 +17,8 @@ diarization. You get speaker-labelled, timestamped segments you can rename, edit
 
 It can **identify speakers** across recordings: enrol a person from a recording's speaker and Diariz
 recognises that voice in later recordings automatically (using **SpeechBrain ECAPA** voiceprints), with
-manual reassignment and GDPR-style erasure of the stored voiceprint.
+manual reassignment. A **People** screen manages enrolled voiceprints — rename, prune training samples,
+merge duplicates, and erase one or all (GDPR) of the stored biometric voiceprints.
 
 It can **summarise** recordings and let you **chat across one or more transcripts** — with file
 attachments, a context-usage dial, and saved conversations — using an OpenAI-compatible LLM endpoint
@@ -41,6 +42,31 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.4.0",
+    date: "2026-06-27",
+    pr: 25,
+    headline: "Manage enrolled people — rename, merge, prune, and erase voiceprints",
+    summary: `
+Builds on speaker identification with a **People** screen (account menu → **People**) for managing your
+enrolled voiceprints in one place.
+
+For each person you can **rename** them (linked speakers update to match), expand to see the **training
+contributions** that feed their voiceprint — which recording and speaker each came from — and **remove**
+any sample, which recomputes the voiceprint from what remains. You can **merge** two people (e.g. a
+duplicate enrolled under a slightly different name): the source's training samples and labelled speakers
+move to the target, the voiceprint is recomputed, and the duplicate is removed.
+
+Erasure is now complete: delete a single person, or **erase all your voiceprints** at once. Either way the
+stored biometric data and training samples are deleted, past recordings are unlinked, and only the
+**auto-applied** labels revert to the anonymous speaker — names you typed by hand are kept.
+`.trim(),
+    added: [
+      "People management screen (account menu → People): list enrolled voiceprints with their sample counts.",
+      "Per-person rename (linked speakers follow), view/remove individual training contributions (recomputes the voiceprint), and merge two people.",
+      "Erase a single voiceprint or all of them at once (GDPR) — auto-labels revert, hand-typed names kept.",
+    ],
+  },
   {
     version: "0.3.0",
     date: "2026-06-27",

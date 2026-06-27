@@ -9,8 +9,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Diariz.Api.Controllers;
 
-/// <summary>Enrolled voiceprints (per-user). Create a profile from a recording's speaker, list them for
-/// reassignment, and erase one (GDPR) — which also reverts any auto-applied labels.</summary>
+/// <summary>Enrolled voiceprints (per-user). Create a profile from a recording's speaker, list/rename/merge
+/// them, manage their training contributions, and erase one or all (GDPR) — which also reverts any
+/// auto-applied labels.</summary>
 [ApiController]
 [Authorize]
 [Route("api/speaker-profiles")]
@@ -29,6 +30,59 @@ public class SpeakerProfilesController : ControllerBase
             .OrderBy(p => p.Name)
             .Select(p => new SpeakerProfileDto(p.Id, p.Name, p.SampleCount))
             .ToListAsync();
+
+    /// <summary>A voiceprint's training contributions (which recording-speakers feed it) and how many
+    /// recording-speakers it currently labels.</summary>
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<SpeakerProfileDetailDto>> Get(Guid id)
+    {
+        var profile = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == id && p.UserId == UserId);
+        if (profile is null) return NotFound();
+
+        var identifiedCount = await _db.Speakers.CountAsync(s => s.ProfileId == id);
+
+        // Stitch recording display names + speaker labels in memory (provider-agnostic; no FK on RecordingId).
+        var raw = await _db.ProfileContributions
+            .Where(c => c.ProfileId == id)
+            .OrderBy(c => c.CreatedAt)
+            .Select(c => new { c.Id, c.RecordingId, c.SpeakerId, c.CreatedAt })
+            .ToListAsync();
+        var recIds = raw.Select(c => c.RecordingId).ToList();
+        var spIds = raw.Select(c => c.SpeakerId).ToList();
+        var recMap = (await _db.Recordings.Where(r => recIds.Contains(r.Id))
+            .Select(r => new { r.Id, Display = r.Name ?? r.Title }).ToListAsync())
+            .ToDictionary(r => r.Id, r => r.Display);
+        var spMap = (await _db.Speakers.Where(s => spIds.Contains(s.Id))
+            .Select(s => new { s.Id, s.Label }).ToListAsync())
+            .ToDictionary(s => s.Id, s => s.Label);
+
+        var contributions = raw.Select(c => new ProfileContributionDto(
+            c.Id, c.RecordingId,
+            recMap.TryGetValue(c.RecordingId, out var d) ? d : "(deleted recording)",
+            spMap.TryGetValue(c.SpeakerId, out var l) ? l : "",
+            c.CreatedAt)).ToList();
+
+        return new SpeakerProfileDetailDto(profile.Id, profile.Name, profile.SampleCount, identifiedCount, contributions);
+    }
+
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Rename(Guid id, RenameSpeakerProfileRequest req)
+    {
+        var name = req.Name?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(name)) return BadRequest("A name is required.");
+
+        var profile = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == id && p.UserId == UserId);
+        if (profile is null) return NotFound();
+
+        profile.Name = name;
+        profile.UpdatedAt = DateTimeOffset.UtcNow;
+        // Keep the linked recording-speakers' shown name in sync with the person's new name.
+        foreach (var s in await _db.Speakers.Where(s => s.ProfileId == id).ToListAsync())
+            s.DisplayName = name;
+
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
 
     /// <summary>Create a voiceprint from a recording's diarized speaker (its embedding becomes the centroid).</summary>
     [HttpPost]
@@ -74,6 +128,56 @@ public class SpeakerProfilesController : ControllerBase
         return new SpeakerProfileDto(profile.Id, profile.Name, profile.SampleCount);
     }
 
+    /// <summary>Remove one training contribution and recompute the centroid from the remaining snapshots.
+    /// The last contribution can't be removed — delete the person instead (a voiceprint needs a sample).</summary>
+    [HttpDelete("{id:guid}/contributions/{contributionId:guid}")]
+    public async Task<IActionResult> RemoveContribution(Guid id, Guid contributionId)
+    {
+        var profile = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == id && p.UserId == UserId);
+        if (profile is null) return NotFound();
+
+        var contribution = await _db.ProfileContributions
+            .FirstOrDefaultAsync(c => c.Id == contributionId && c.ProfileId == id);
+        if (contribution is null) return NotFound();
+
+        var remaining = await _db.ProfileContributions
+            .Where(c => c.ProfileId == id && c.Id != contributionId).ToListAsync();
+        if (remaining.Count == 0)
+            return BadRequest("A voiceprint needs at least one sample. Delete the person instead.");
+
+        _db.ProfileContributions.Remove(contribution);
+        RecomputeCentroid(profile, remaining);
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>Merge <c>sourceId</c> into this profile: move its training contributions, reassign its
+    /// linked recording-speakers, recompute the centroid, and delete the source.</summary>
+    [HttpPost("{id:guid}/merge")]
+    public async Task<IActionResult> Merge(Guid id, MergeSpeakerProfilesRequest req)
+    {
+        if (req.SourceId == id) return BadRequest("Cannot merge a person into itself.");
+
+        var target = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == id && p.UserId == UserId);
+        var source = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == req.SourceId && p.UserId == UserId);
+        if (target is null || source is null) return NotFound();
+
+        var targetContribs = await _db.ProfileContributions.Where(c => c.ProfileId == target.Id).ToListAsync();
+        var sourceContribs = await _db.ProfileContributions.Where(c => c.ProfileId == source.Id).ToListAsync();
+        foreach (var c in sourceContribs) c.ProfileId = target.Id;
+
+        foreach (var s in await _db.Speakers.Where(s => s.ProfileId == source.Id).ToListAsync())
+        {
+            s.ProfileId = target.Id;
+            s.DisplayName = target.Name;
+        }
+
+        RecomputeCentroid(target, targetContribs.Concat(sourceContribs).ToList());
+        _db.SpeakerProfiles.Remove(source);
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     /// <summary>GDPR erase: delete the voiceprint + training data, unlink it from recordings, and revert
     /// auto-applied names to the anonymous label (manual names are kept).</summary>
     [HttpDelete("{id:guid}")]
@@ -82,7 +186,32 @@ public class SpeakerProfilesController : ControllerBase
         var profile = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == id && p.UserId == UserId);
         if (profile is null) return NotFound();
 
-        var linked = await _db.Speakers.Where(s => s.ProfileId == id).ToListAsync();
+        await UnlinkAndRevertAsync([id]);
+        _db.SpeakerProfiles.Remove(profile); // cascades ProfileContributions
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>GDPR erase-all: delete every one of the caller's voiceprints + training data and revert
+    /// all auto-applied labels (manual names kept).</summary>
+    [HttpDelete]
+    public async Task<IActionResult> DeleteAll()
+    {
+        var profiles = await _db.SpeakerProfiles.Where(p => p.UserId == UserId).ToListAsync();
+        if (profiles.Count == 0) return NoContent();
+
+        await UnlinkAndRevertAsync(profiles.Select(p => p.Id).ToList());
+        _db.SpeakerProfiles.RemoveRange(profiles); // cascades ProfileContributions
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>Unlink every speaker pointing at the given profiles and revert auto-applied names to the
+    /// anonymous label; hand-typed/assigned names are left intact.</summary>
+    private async Task UnlinkAndRevertAsync(IReadOnlyCollection<Guid> profileIds)
+    {
+        var linked = await _db.Speakers
+            .Where(s => s.ProfileId != null && profileIds.Contains(s.ProfileId.Value)).ToListAsync();
         foreach (var s in linked)
         {
             s.ProfileId = null;
@@ -92,9 +221,17 @@ public class SpeakerProfilesController : ControllerBase
                 s.IdentifiedAuto = false;
             }
         }
+    }
 
-        _db.SpeakerProfiles.Remove(profile); // cascades ProfileContributions
-        await _db.SaveChangesAsync();
-        return NoContent();
+    /// <summary>Set the profile's centroid to the L2-normalised mean of the given contributions and
+    /// update its sample count. Embeddings are only present under the real provider (vector(192)); when
+    /// absent (the in-memory unit provider) the centroid is left unchanged but the count is still updated.</summary>
+    private static void RecomputeCentroid(SpeakerProfile profile, IReadOnlyCollection<ProfileContribution> contributions)
+    {
+        var snapshots = contributions.Where(c => c.Embedding is not null).Select(c => c.Embedding.ToArray()).ToList();
+        var centroid = Voiceprints.Centroid(snapshots);
+        if (centroid is not null) profile.Embedding = centroid;
+        profile.SampleCount = contributions.Count;
+        profile.UpdatedAt = DateTimeOffset.UtcNow;
     }
 }

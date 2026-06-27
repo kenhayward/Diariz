@@ -68,6 +68,24 @@ export interface SpeakerProfile {
   sampleCount: number;
 }
 
+/// One training sample feeding a voiceprint (the recording-speaker it came from).
+export interface SpeakerProfileContribution {
+  id: string;
+  recordingId: string;
+  recordingName: string;
+  speakerLabel: string;
+  createdAt: string;
+}
+
+/// A voiceprint with its training provenance and how many recording-speakers it currently labels.
+export interface SpeakerProfileDetail {
+  id: string;
+  name: string;
+  sampleCount: number;
+  identifiedCount: number;
+  contributions: SpeakerProfileContribution[];
+}
+
 export interface RecordingDetail {
   id: string;
   title: string;
