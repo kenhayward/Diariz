@@ -46,6 +46,27 @@ public class AdminUsersController : ControllerBase
         return dtos;
     }
 
+    /// <summary>Admin-created user: provide an email, the account is created and onboarded (a one-time
+    /// setup link is emailed, or returned for the admin to share when SMTP is unconfigured).</summary>
+    [HttpPost]
+    public async Task<ActionResult<GrantResultDto>> Add(AddUserRequest req)
+    {
+        var email = req.Email?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(email)) return BadRequest("An email address is required.");
+        if (await _users.FindByEmailAsync(email) is not null)
+            return BadRequest("A user with that email already exists.");
+
+        var user = new ApplicationUser
+        {
+            UserName = email, Email = email, Status = UserStatus.Invited, IsEnabled = true, EmailConfirmed = false,
+        };
+        var result = await _users.CreateAsync(user); // no password until setup
+        if (!result.Succeeded) return BadRequest(result.Errors.Select(e => e.Description));
+        await _users.AddToRoleAsync(user, Roles.Standard);
+
+        return await IssueSetupLinkAsync(user);
+    }
+
     [HttpPost("{id:guid}/grant")]
     public async Task<ActionResult<GrantResultDto>> Grant(Guid id)
     {
@@ -56,13 +77,16 @@ public class AdminUsersController : ControllerBase
 
         user.Status = UserStatus.Invited;
         await _users.UpdateAsync(user);
+        return await IssueSetupLinkAsync(user);
+    }
 
+    /// <summary>Generates the one-time setup link and emails it; returns the link on the no-SMTP fallback.</summary>
+    private async Task<GrantResultDto> IssueSetupLinkAsync(ApplicationUser user)
+    {
         var token = await _users.GenerateUserTokenAsync(user, TokenOptions.DefaultProvider, AccountSetup.TokenPurpose);
         var url = AccountSetup.BuildUrl(BaseUrl(), user.Email!, token);
         var emailed = await _email.SendAsync(user.Email!, "Set up your Diariz account",
             $"You've been granted access to Diariz. Set up your account here: <a href=\"{url}\">{url}</a>");
-
-        // On the no-SMTP fallback, return the link so the admin can share it (and it's logged below).
         return new GrantResultDto(emailed, emailed ? null : url);
     }
 

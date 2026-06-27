@@ -6,6 +6,7 @@ vi.mock("../auth", () => ({ useAuth: () => ({ email: "me@x.test" }) }));
 vi.mock("../lib/api", () => ({
   api: {
     listUsers: vi.fn(),
+    addUser: vi.fn(),
     grantUser: vi.fn(),
     denyUser: vi.fn(),
     setUserRole: vi.fn(),
@@ -41,6 +42,24 @@ describe("ManageUsersModal", () => {
 
     await waitFor(() => expect(api.grantUser).toHaveBeenCalledWith("req1"));
     expect(await screen.findByText(/setup\?email=want&token=abc/)).toBeTruthy();
+  });
+
+  it("adds a user by email and shows the fallback link when email is unconfigured", async () => {
+    mock(api.listUsers).mockResolvedValue([]);
+    mock(api.addUser).mockResolvedValue({ emailed: false, setupUrl: "http://x/setup?email=new&token=abc" });
+    render_();
+
+    fireEvent.change(await screen.findByLabelText(/new user email/i), { target: { value: "new@x.test" } });
+    fireEvent.click(screen.getByRole("button", { name: /add user/i }));
+
+    await waitFor(() => expect(api.addUser).toHaveBeenCalledWith("new@x.test"));
+    expect(await screen.findByText(/setup\?email=new&token=abc/)).toBeTruthy();
+  });
+
+  it("shows an onboarding status pill for invited users", async () => {
+    mock(api.listUsers).mockResolvedValue([u({ id: "i1", email: "inv@x.test", status: "Invited" })]);
+    render_();
+    expect(await screen.findByText(/awaiting setup/i)).toBeTruthy();
   });
 
   it("promotes a standard user", async () => {

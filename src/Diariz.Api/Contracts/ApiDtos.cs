@@ -15,6 +15,7 @@ public record SetupRequest(string Email, string Token, string FullName, string P
 // ---- Admin user management ----
 public record AdminUserDto(
     Guid Id, string Email, string? FullName, string AccountType, UserStatus Status, bool IsEnabled);
+public record AddUserRequest(string Email);
 public record SetRoleRequest(string Role);
 public record SetEnabledRequest(bool IsEnabled);
 /// <summary>Result of granting access: whether the link was emailed, and (on the no-SMTP fallback)

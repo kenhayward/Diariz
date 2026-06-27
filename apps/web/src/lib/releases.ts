@@ -19,8 +19,9 @@ It can **summarise** recordings and let you **chat across one or more transcript
 attachments, a context-usage dial, and saved conversations — using an OpenAI-compatible LLM endpoint
 you configure. Recordings organise into **sections** with drag-and-drop ordering.
 
-Diariz is **multi-user** with role-based access: people request access, an administrator grants it,
-and each user sets up their own account and keeps their own private recordings, transcripts, and chats.
+Diariz is **multi-user** with role-based access: people request access (or an administrator adds them),
+an administrator approves, and each user sets up their own account and keeps their own private
+recordings, transcripts, and chats.
 `.trim();
 
 export interface Release {
@@ -36,6 +37,26 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.2.0",
+    date: "2026-06-27",
+    pr: 22,
+    headline: "Admins can add users directly from Manage Users",
+    summary: `
+Administrators can now **create a user by email** from the **Manage Users** modal, without waiting for
+that person to request access. Adding a user creates the account and runs the same onboarding as an
+approved request: a **one-time setup link** is emailed to them (or shown to the admin to share when SMTP
+isn't configured), and they finish by setting their full name and password.
+
+Each user's **onboarding status** is now surfaced as a pill in the modal — *Requested* (awaiting an
+admin's grant), *Awaiting setup* (invited, link sent, not yet completed), or *Active* — so it's clear at
+a glance where everyone is in the process.
+`.trim(),
+    added: [
+      "“Add user” by email in the Manage Users modal — creates the account and sends the setup link (with the no-SMTP fallback link shown to the admin).",
+      "Onboarding status pill per user (Requested / Awaiting setup / Active).",
+    ],
+  },
   {
     version: "0.1.0",
     date: "2026-06-27",
