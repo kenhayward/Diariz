@@ -98,6 +98,9 @@ export interface RecordingDetail {
   status: RecordingStatus;
   error: string | null;
   createdAt: string;
+  /// Optional pyannote diarization hints (null = automatic).
+  minSpeakers: number | null;
+  maxSpeakers: number | null;
   speakerNames: Record<string, string>;
   speakers: SpeakerInfo[];
   current: TranscriptionDto | null;

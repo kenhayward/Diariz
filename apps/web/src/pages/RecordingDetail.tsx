@@ -37,6 +37,8 @@ export default function RecordingDetail() {
   const [editingSeg, setEditingSeg] = useState<SegmentDto | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionInfo, setActionInfo] = useState<string | null>(null);
+  const [minSpk, setMinSpk] = useState("");
+  const [maxSpk, setMaxSpk] = useState("");
   const [speakersCollapsed, setSpeakersCollapsed] = useState<boolean>(
     () => localStorage.getItem("diariz.detail.speakersCollapsed") === "true",
   );
@@ -60,6 +62,12 @@ export default function RecordingDetail() {
     rec?.current?.segments.forEach((s) => set.add(s.speaker));
     return [...set];
   }, [rec]);
+
+  // Pre-fill the expected-speakers inputs from the recording's saved hints.
+  useEffect(() => {
+    setMinSpk(rec?.minSpeakers != null ? String(rec.minSpeakers) : "");
+    setMaxSpk(rec?.maxSpeakers != null ? String(rec.maxSpeakers) : "");
+  }, [rec?.minSpeakers, rec?.maxSpeakers]);
 
   async function rename(label: string, name: string) {
     await api.renameSpeaker(id, label, name);
@@ -141,6 +149,23 @@ export default function RecordingDetail() {
       setActionInfo("Transcript emailed to your account address.");
     } catch (e) {
       setActionError(apiErrorMessage(e, "Could not email the transcript."));
+    }
+  }
+
+  async function applySpeakerHints() {
+    setActionError(null);
+    setActionInfo(null);
+    setRequeuing(true);
+    try {
+      const min = minSpk.trim() ? Number(minSpk) : null;
+      const max = maxSpk.trim() ? Number(maxSpk) : null;
+      await api.retranscribe(id, { speakers: { min, max } });
+      await qc.invalidateQueries({ queryKey: ["recording", id] });
+      setActionInfo("Re-transcribing with the new speaker hints…");
+    } catch (e) {
+      setActionError(apiErrorMessage(e, "Could not re-transcribe."));
+    } finally {
+      setRequeuing(false);
     }
   }
 
@@ -240,6 +265,44 @@ export default function RecordingDetail() {
       {actionInfo && (
         <p className="rounded bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/30 dark:text-green-300">{actionInfo}</p>
       )}
+
+      <div className="rounded-lg border bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="font-medium text-gray-500 dark:text-gray-400">Expected speakers</span>
+          <label className="flex items-center gap-1 text-gray-600 dark:text-gray-300">
+            min
+            <input
+              type="number"
+              min={1}
+              value={minSpk}
+              onChange={(e) => setMinSpk(e.target.value)}
+              aria-label="Minimum speakers"
+              className="w-16 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            />
+          </label>
+          <label className="flex items-center gap-1 text-gray-600 dark:text-gray-300">
+            max
+            <input
+              type="number"
+              min={1}
+              value={maxSpk}
+              onChange={(e) => setMaxSpk(e.target.value)}
+              aria-label="Maximum speakers"
+              className="w-16 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            />
+          </label>
+          <button
+            onClick={applySpeakerHints}
+            disabled={requeuing}
+            className="rounded border px-3 py-1 text-sm hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+          >
+            Apply &amp; re-transcribe
+          </button>
+        </div>
+        <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+          If two people were merged into one speaker, set min to 2 and re-transcribe. Leave blank for automatic.
+        </p>
+      </div>
 
       {rec.status === "Failed" && rec.error && (
         <p className="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{rec.error}</p>

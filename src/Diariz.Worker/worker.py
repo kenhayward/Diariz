@@ -41,7 +41,7 @@ def handle(job: dict) -> None:
     audio_path = None
     try:
         audio_path = storage.download(blob_key)
-        result = pipeline.transcribe(audio_path)
+        result = pipeline.transcribe(audio_path, job.get("MinSpeakers"), job.get("MaxSpeakers"))
         callback.post_result(transcription_id, result["language"], result["segments"],
                              result.get("speakers"))
     except Exception as e:  # noqa: BLE001 - report and continue

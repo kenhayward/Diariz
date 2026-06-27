@@ -1,11 +1,14 @@
 namespace Diariz.Api.Contracts;
 
-/// <summary>Job payload enqueued onto the Redis stream and consumed by the Python worker.</summary>
+/// <summary>Job payload enqueued onto the Redis stream and consumed by the Python worker.
+/// <paramref name="MinSpeakers"/>/<paramref name="MaxSpeakers"/> are optional pyannote hints (null = auto).</summary>
 public record TranscriptionJob(
     Guid RecordingId,
     Guid TranscriptionId,
     string BlobKey,
-    string Model);
+    string Model,
+    int? MinSpeakers = null,
+    int? MaxSpeakers = null);
 
 /// <summary>Job payload for async summarisation, consumed by the API's SummarizationWorker.</summary>
 public record SummarizationJob(

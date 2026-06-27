@@ -145,9 +145,21 @@ def _shape_segments(raw_segments: list[dict]) -> list[dict]:
     return segments
 
 
-def transcribe(audio_path: str) -> dict:
+def _diarize(audio, min_speakers=None, max_speakers=None):
+    """Run pyannote diarization, forwarding optional speaker-count hints. Only non-None hints are
+    passed through, so a recording with two people merged into one speaker can be split by setting
+    min_speakers=2. Separated out so the hint forwarding is unit-testable without the models."""
+    kwargs = {}
+    if min_speakers is not None:
+        kwargs["min_speakers"] = min_speakers
+    if max_speakers is not None:
+        kwargs["max_speakers"] = max_speakers
+    return _get_diarizer()(audio, **kwargs)
+
+
+def transcribe(audio_path: str, min_speakers=None, max_speakers=None) -> dict:
     """Run transcription -> alignment -> diarization -> per-speaker embeddings.
-    Returns {language, segments, speakers}."""
+    Returns {language, segments, speakers}. min/max_speakers are optional pyannote hints."""
     audio = whisperx.load_audio(audio_path)
 
     # 1. Transcribe
@@ -160,8 +172,8 @@ def transcribe(audio_path: str) -> dict:
         result["segments"], align_model, metadata, audio, config.DEVICE,
         return_char_alignments=False)
 
-    # 3. Diarization + speaker assignment
-    diarize_segments = _get_diarizer()(audio)
+    # 3. Diarization (with optional speaker-count hints) + speaker assignment
+    diarize_segments = _diarize(audio, min_speakers, max_speakers)
     result = whisperx.assign_word_speakers(diarize_segments, result)
 
     segments = _shape_segments(result["segments"])

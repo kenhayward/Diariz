@@ -84,6 +84,68 @@ public class RecordingsControllerTests
     }
 
     [Fact]
+    public async Task Retranscribe_WithSpeakerHints_PersistsThem_AndCarriesInJob()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var controller = Build(db, userId, queue);
+
+        await controller.Retranscribe(rec.Id, new RetranscribeRequest(Model: null, Speakers: new SpeakerHints(2, null)));
+
+        var reloaded = await db.Recordings.FindAsync(rec.Id);
+        Assert.Equal(2, reloaded!.MinSpeakers);
+        Assert.Null(reloaded.MaxSpeakers);
+        var job = Assert.Single(queue.Enqueued);
+        Assert.Equal(2, job.MinSpeakers);
+        Assert.Null(job.MaxSpeakers);
+    }
+
+    [Fact]
+    public async Task Retranscribe_WithoutSpeakers_PreservesExistingHints()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        rec.MinSpeakers = 3;
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, queue);
+
+        // No Speakers object → the list/menu re-transcribe must not wipe the recording's hint.
+        await controller.Retranscribe(rec.Id, new RetranscribeRequest(Model: null));
+
+        Assert.Equal(3, (await db.Recordings.FindAsync(rec.Id))!.MinSpeakers);
+        Assert.Equal(3, Assert.Single(queue.Enqueued).MinSpeakers);
+    }
+
+    [Fact]
+    public async Task Retranscribe_MinAboveMax_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.Retranscribe(rec.Id, new RetranscribeRequest(null, new SpeakerHints(5, 2)));
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task Retranscribe_NonPositiveSpeakers_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<BadRequestObjectResult>(
+            await controller.Retranscribe(rec.Id, new RetranscribeRequest(null, new SpeakerHints(0, null))));
+    }
+
+    [Fact]
     public async Task Retranscribe_UsesRequestedModel_WhenProvided()
     {
         using var db = TestDb.Create();

@@ -31,6 +31,12 @@ public class Recording
     public RecordingStatus Status { get; set; } = RecordingStatus.Uploaded;
     public string? Error { get; set; }
 
+    /// <summary>Optional diarization hints passed to pyannote: force at least/at most this many speakers.
+    /// Null = automatic. Used to split two people the diarizer lumped into one (set <see cref="MinSpeakers"/>
+    /// = 2). Applied on the next (re-)transcription.</summary>
+    public int? MinSpeakers { get; set; }
+    public int? MaxSpeakers { get; set; }
+
     /// <summary>Optional user-defined group; null means "Ungrouped".</summary>
     public Guid? SectionId { get; set; }
     public Section? Section { get; set; }

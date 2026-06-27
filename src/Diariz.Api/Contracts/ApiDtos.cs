@@ -73,6 +73,8 @@ public record RecordingDetailDto(
     RecordingStatus Status,
     string? Error,
     DateTimeOffset CreatedAt,
+    int? MinSpeakers,
+    int? MaxSpeakers,
     IReadOnlyDictionary<string, string> SpeakerNames,
     IReadOnlyList<SpeakerInfoDto> Speakers,
     TranscriptionDto? Current,
@@ -97,7 +99,11 @@ public record SpeakerProfileDetailDto(
 /// the name was set automatically.</summary>
 public record SpeakerInfoDto(string Label, string DisplayName, Guid? ProfileId, bool IdentifiedAuto);
 public record RenameRecordingRequest(string? Name);
-public record RetranscribeRequest(string? Model);
+/// <summary>Diarization speaker-count hints. Either bound may be null (= no bound / auto).</summary>
+public record SpeakerHints(int? Min, int? Max);
+/// <summary>Re-transcribe options. <see cref="Speakers"/> is tri-state: omit/null = keep the recording's
+/// existing hints; present = set them (an object with null Min/Max means "back to automatic").</summary>
+public record RetranscribeRequest(string? Model, SpeakerHints? Speakers = null);
 public record UpdateSegmentRequest(string Text);
 
 // ---- User settings (per-user summarisation config) ----

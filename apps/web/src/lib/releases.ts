@@ -46,6 +46,25 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.9.0",
+    date: "2026-06-27",
+    pr: 31,
+    headline: "Tell the diarizer how many speakers to expect",
+    summary: `
+When the diarizer **lumps two people into a single speaker**, you can now give it a hint. The recording
+page has an **Expected speakers** control — set a **minimum** (e.g. 2) and/or **maximum**, then
+re-transcribe, and pyannote is forced to split (or cap) accordingly.
+
+The hints are saved on the recording and re-applied on every re-transcription until you change them; leave
+both blank for automatic detection. A normal re-transcribe (from the list/menu) keeps whatever hints you've
+set. This biases the diarization rather than guaranteeing it, but it's the direct fix for "two voices, one
+speaker label".
+`.trim(),
+    added: [
+      "“Expected speakers” min/max hints on the recording page, forwarded to pyannote on re-transcription, to split speakers it merged (or cap over-splitting).",
+    ],
+  },
+  {
     version: "0.8.0",
     date: "2026-06-27",
     pr: 30,
