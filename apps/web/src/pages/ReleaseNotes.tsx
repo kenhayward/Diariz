@@ -1,12 +1,19 @@
 import { useState } from "react";
 import { renderMarkdown } from "../lib/markdown";
+import { useResizableWidth } from "../lib/useResizableWidth";
 import { RELEASES, TAGLINE, GITHUB_URL, type Release } from "../lib/releases";
 
 /// Public page (new-tab friendly): a fixed header, a left list of releases, and the selected
 /// release's notes on the right. The two panels scroll independently; the header stays put.
+/// The list is drag-resizable.
 export default function ReleaseNotes() {
   const [selected, setSelected] = useState(RELEASES[0]?.version ?? "");
   const release = RELEASES.find((r) => r.version === selected) ?? RELEASES[0];
+  const { width, startResize } = useResizableWidth("diariz.releaseNotes.listWidth", {
+    min: 220,
+    max: 560,
+    initial: 320,
+  });
 
   return (
     <div className="flex h-screen flex-col bg-gray-50 dark:bg-gray-950">
@@ -23,8 +30,11 @@ export default function ReleaseNotes() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        {/* Left: release list (independent scroll) */}
-        <nav className="w-56 shrink-0 overflow-y-auto border-r bg-white dark:border-gray-700 dark:bg-gray-900">
+        {/* Left: release list (independent scroll), drag-resizable via the separator below. */}
+        <nav
+          style={{ width }}
+          className="shrink-0 overflow-y-auto border-r bg-white dark:border-gray-700 dark:bg-gray-900"
+        >
           <ul className="divide-y dark:divide-gray-800">
             {RELEASES.map((r) => (
               <li key={r.version}>
@@ -37,13 +47,24 @@ export default function ReleaseNotes() {
                       : "hover:bg-gray-50 dark:hover:bg-gray-800"
                   }`}
                 >
-                  <div className="text-sm font-medium dark:text-gray-100">v{r.version}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">{r.date}</div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-sm font-medium dark:text-gray-100">v{r.version}</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{r.date}</span>
+                  </div>
+                  <div className="truncate text-xs text-gray-600 dark:text-gray-300">{r.headline}</div>
                 </button>
               </li>
             ))}
           </ul>
         </nav>
+
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize release list"
+          onMouseDown={(e) => startResize(e, "left")}
+          className="w-1 shrink-0 cursor-col-resize bg-transparent transition-colors hover:bg-blue-400 dark:hover:bg-blue-600"
+        />
 
         {/* Right: selected release (independent scroll) */}
         <main className="min-w-0 flex-1 overflow-y-auto p-6">

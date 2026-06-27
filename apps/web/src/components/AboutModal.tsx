@@ -16,7 +16,7 @@ export default function AboutModal({ onClose }: { onClose: () => void }) {
       <div
         role="dialog"
         aria-label="About Diariz"
-        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-lg border bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900"
+        className="max-h-[85vh] w-[60vw] min-w-80 max-w-5xl overflow-y-auto rounded-lg border bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Identity */}

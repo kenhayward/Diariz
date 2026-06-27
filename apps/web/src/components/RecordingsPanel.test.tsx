@@ -60,10 +60,26 @@ function renderList() {
 describe("RecordingsPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear(); // collapse state persists to localStorage
     (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([]); // reset between tests (impl persists)
     (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([rec]);
     (api.summarize as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.deleteRecording as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+  });
+
+  it("collapses and expands a group when its header is clicked", async () => {
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: "sec1", name: "Work" }]);
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([{ ...rec, sectionId: "sec1", sectionName: "Work" }]);
+    renderList();
+
+    expect(await screen.findByText("Weekly Standup")).toBeTruthy();
+    const header = screen.getByRole("button", { name: /work/i });
+
+    fireEvent.click(header); // collapse
+    await waitFor(() => expect(screen.queryByText("Weekly Standup")).toBeNull());
+
+    fireEvent.click(header); // expand
+    expect(await screen.findByText("Weekly Standup")).toBeTruthy();
   });
 
   it("shows the name as primary and the source label as secondary", async () => {
