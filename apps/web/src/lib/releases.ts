@@ -38,6 +38,26 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.2.1",
+    date: "2026-06-27",
+    pr: 23,
+    headline: "Research note: speaker identification & verification options",
+    summary: `
+A documentation-only release. Adds a research note,
+\`docs/Speaker_Identification_and_Verification.md\`, surveying open-source options for **speaker
+identification and verification by embedding comparison** — recognising an enrolled person ("is this Alice?")
+across recordings, beyond anonymous diarization.
+
+It covers how embedding-based recognition works (enrol → cosine-match → threshold, with open-set "unknown"),
+compares the main toolkits (SpeechBrain ECAPA-TDNN, WeSpeaker, NVIDIA NeMo TitaNet, 3D-Speaker, WavLM,
+Resemblyzer), untangles the code / weights / training-data licensing layers (the VoxCeleb non-commercial
+caveat), and sketches how identification could reuse the embedding pyannote already computes plus the existing
+pgvector storage. Recommendation: **SpeechBrain ECAPA-TDNN** for a true-open-source, lightweight start. No app
+behaviour changes.
+`.trim(),
+    added: ["Research note on open-source speaker-embedding identification/verification (`docs/`)."],
+  },
+  {
     version: "0.2.0",
     date: "2026-06-27",
     pr: 22,
