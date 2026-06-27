@@ -1,0 +1,28 @@
+import { render, screen, within } from "@testing-library/react";
+import { describe, it, expect } from "vitest";
+import AboutModal from "./AboutModal";
+
+describe("AboutModal", () => {
+  it("shows identity, version, links, disclaimers and copyright", () => {
+    render(<AboutModal onClose={() => {}} />);
+
+    const dialog = screen.getByRole("dialog", { name: /about diariz/i });
+    expect(within(dialog).getByText("Diariz")).toBeTruthy();
+    expect(within(dialog).getByText(/smart meeting transcription/i)).toBeTruthy();
+    // Version is injected (vitest define → "0.1.0").
+    expect(within(dialog).getByText(/version 0\.1\.0/i)).toBeTruthy();
+
+    // Release notes opens in a new tab; GitHub link present.
+    const notes = within(dialog).getByRole("link", { name: /release notes/i });
+    expect(notes.getAttribute("href")).toBe("/release-notes");
+    expect(notes.getAttribute("target")).toBe("_blank");
+    expect(within(dialog).getByRole("link", { name: /github/i }).getAttribute("href")).toMatch(/github\.com/);
+
+    // Key disclaimers + copyright.
+    expect(within(dialog).getByText(/non-commercial/i)).toBeTruthy();
+    expect(within(dialog).getByText(/OpenAI-compatible LLM endpoint you configure/i)).toBeTruthy();
+    expect(within(dialog).getByText(/ken hayward/i)).toBeTruthy();
+  });
+});
+
+import { within } from "@testing-library/react";

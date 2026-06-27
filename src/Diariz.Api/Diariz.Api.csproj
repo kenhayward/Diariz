@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- App version — keep in sync with /version.json (see CLAUDE.md versioning rule). -->
+    <Version>0.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

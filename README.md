@@ -2,10 +2,14 @@
 
 ![Diariz](images/Diariz%20Backdrop.png)
 
-Personal, multi-user voice/meeting transcription platform: record audio (mic or system
-loopback), transcribe it server-side with **speaker diarization** and timestamps, summarize,
+**Smart Meeting Transcription.** Personal, multi-user voice/meeting transcription platform: record audio
+(mic or system loopback), transcribe it server-side with **speaker diarization** and timestamps, summarize,
 and chat across notes. See [docs/Overall_Synopsis_of_Platform.md](docs/Overall_Synopsis_of_Platform.md)
 for the original brief and the architecture plan for the full design.
+
+Current version: **0.1.0** — versioned per the rule in [CLAUDE.md](CLAUDE.md); per-release notes live in
+[`apps/web/src/lib/releases.ts`](apps/web/src/lib/releases.ts) and on the in-app **Release Notes** page
+(`/release-notes`), reachable from **About** in the account menu.
 
 ## Architecture
 

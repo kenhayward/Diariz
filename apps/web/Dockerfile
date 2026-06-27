@@ -1,6 +1,9 @@
 # Build the static SPA.
 FROM node:20-alpine AS build
 WORKDIR /app
+# Optional build-time stamp shown in the About box (best-effort; blank if not provided).
+ARG BUILD_COMMIT=""
+ENV BUILD_COMMIT=$BUILD_COMMIT
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .

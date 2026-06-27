@@ -3,6 +3,7 @@ import { useAuth } from "./auth";
 import Login from "./pages/Login";
 import RequestAccess from "./pages/RequestAccess";
 import Setup from "./pages/Setup";
+import ReleaseNotes from "./pages/ReleaseNotes";
 import RecordingDetail from "./pages/RecordingDetail";
 import WorkspaceLayout from "./components/WorkspaceLayout";
 
@@ -25,6 +26,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/request-access" element={<RequestAccess />} />
       <Route path="/setup" element={<Setup />} />
+      <Route path="/release-notes" element={<ReleaseNotes />} />
       <Route
         path="/"
         element={

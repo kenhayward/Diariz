@@ -86,6 +86,28 @@ fix (green). Exceptions (throwaway spikes, generated code, pure config) need a h
 
 Keep test output pristine — a passing run has no errors or warnings.
 
+## Versioning & release notes (required)
+
+**Every PR ships exactly one release: bump the version and add one release-notes entry.** The scheme
+is **Major.Minor.Build** (currently `0.x`).
+
+- **Bump rule:** a **functional enhancement** bumps **Minor +1 and resets Build to 0** (e.g. `0.1.2`
+  → `0.2.0`); any other PR (fix / chore / docs / refactor) bumps **Build +1** (e.g. `0.2.0` → `0.2.1`).
+  **Only bump Major when the user explicitly asks.**
+- **The canonical version is `/version.json`.** Bump it in lockstep with its mirrors:
+  `apps/web/package.json`, `apps/desktop/package.json`, and `src/Diariz.Api/Diariz.Api.csproj`
+  (`<Version>`). The web build injects it (`__APP_VERSION__` via `vite.config.ts`/`vitest.config.ts`)
+  and the API reports it at `GET /health`. `RELEASES[0].version` in `apps/web/src/lib/releases.ts`
+  **must equal** `version.json` (asserted by `releases.test.ts`).
+- **Add a release entry** to the top of `RELEASES` in `apps/web/src/lib/releases.ts` with: `version`,
+  `date`, `pr` (the GitHub PR number), `headline`, a **PR-level prose `summary`** (enough for a user to
+  understand the impact), and `added`/`changed`/`fixed` bullet lists as applicable.
+- **When the app's scope changes**, update the About-box `CAPABILITIES` summary in the same file (and
+  the disclaimers list in `apps/web/src/components/AboutModal.tsx` if a new third-party library/model
+  is introduced).
+
+The About box (account menu → About) and the `/release-notes` page render from this data.
+
 ## Commands
 
 ### Backend (.NET API + Domain)
