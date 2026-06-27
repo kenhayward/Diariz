@@ -46,6 +46,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.9.2",
+    date: "2026-06-27",
+    pr: 33,
+    headline: "Move speaker-count hints into the re-transcribe dialog",
+    summary: `
+The always-visible **Expected speakers** panel is gone from the recording page. Instead, choosing
+**Re-transcribe** from the kebab menu now opens a small dialog that asks for the optional min/max speaker
+hints (pre-filled from the recording) before re-transcribing — keeping that exception-case control out of
+the way for the normal case.
+`.trim(),
+    changed: [
+      "Speaker-count hints (min/max) are now set in the Re-transcribe dialog instead of an always-on panel.",
+    ],
+  },
+  {
     version: "0.9.1",
     date: "2026-06-27",
     pr: 32,
