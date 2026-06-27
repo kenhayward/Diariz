@@ -3,6 +3,7 @@ import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import { apiErrorMessage } from "../lib/api";
+import AuthShell from "../components/AuthShell";
 
 export default function Login() {
   const { login } = useAuth();
@@ -33,10 +34,10 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4 dark:bg-gray-950">
+    <AuthShell>
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-sm space-y-4 rounded-lg border bg-white p-6 dark:border-gray-700 dark:bg-gray-900"
+        className="w-full max-w-sm space-y-4 rounded-lg border bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900"
       >
         <div className="flex items-center gap-2">
           <img src="/logo.png" alt="" className="h-8 w-auto" />
@@ -73,6 +74,6 @@ export default function Login() {
           </Link>
         </p>
       </form>
-    </div>
+    </AuthShell>
   );
 }

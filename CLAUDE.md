@@ -113,6 +113,10 @@ is **Major.Minor.Build** (currently `0.x`).
 - **When the app's scope changes**, update the About-box `CAPABILITIES` summary in the same file (and
   the disclaimers list in `apps/web/src/components/AboutModal.tsx` if a new third-party library/model
   is introduced).
+- **Keep `README.md` current.** When a PR changes what the app does — a new user-facing feature, a stack
+  change, or a shipped roadmap milestone — update the README's **Features**, **Architecture**, and
+  **Roadmap** sections and its version line in the same PR (it mirrors the `CAPABILITIES`/release-notes
+  edits above).
 
 The About box (account menu → About) and the `/release-notes` page render from this data.
 

@@ -43,6 +43,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.4.1",
+    date: "2026-06-27",
+    pr: 26,
+    headline: "Photographic backdrop on the sign-in pages",
+    summary: `
+A visual polish release. The unauthenticated pages — **Sign in**, **Request access**, and **Account
+setup** — now share a photographic backdrop behind their cards, via a small shared \`AuthShell\` wrapper.
+The README was also brought up to date with the current feature set (speaker identification, the People
+screen, chat, sections, and multi-user roles).
+`.trim(),
+    changed: ["Sign-in / request-access / account-setup pages now render over a shared background image."],
+  },
+  {
     version: "0.4.0",
     date: "2026-06-27",
     pr: 25,

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth";
 import { api, apiErrorMessage } from "../lib/api";
+import AuthShell from "../components/AuthShell";
 
 /// Public page reached from the one-time setup link. Validates the link, then collects a full name
 /// and password to activate the account and sign the user in.
@@ -52,8 +53,8 @@ export default function Setup() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4 dark:bg-gray-950">
-      <div className="w-full max-w-sm space-y-4 rounded-lg border bg-white p-6 dark:border-gray-700 dark:bg-gray-900">
+    <AuthShell>
+      <div className="w-full max-w-sm space-y-4 rounded-lg border bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900">
         <div className="flex items-center gap-2">
           <img src="/logo.png" alt="" className="h-8 w-auto" />
           <h1 className="text-lg font-semibold dark:text-gray-100">Set up your account</h1>
@@ -113,6 +114,6 @@ export default function Setup() {
           </form>
         )}
       </div>
-    </div>
+    </AuthShell>
   );
 }
