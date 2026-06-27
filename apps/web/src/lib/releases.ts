@@ -47,6 +47,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.12.1",
+    date: "2026-06-28",
+    pr: 38,
+    headline: "Fix the desktop release build",
+    summary: `
+The desktop installer's CI build failed before producing an installer: its unit-test step
+(\`node --test "src/**/*.test.js"\`) needs the Node test runner's glob support, which only exists on
+Node ≥ 21, but the workflow ran Node 20. The release workflow now builds on **Node 22**, and pins
+electron-builder's tool cache to a writable directory so the self-hosted runner can package the installer.
+`.trim(),
+    fixed: [
+      "Desktop release workflow: build on Node 22 so the unit-test glob runs, and pin the electron-builder cache to a writable path.",
+    ],
+  },
+  {
     version: "0.12.0",
     date: "2026-06-28",
     pr: 37,
