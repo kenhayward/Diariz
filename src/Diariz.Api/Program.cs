@@ -24,6 +24,7 @@ builder.Services.Configure<SummarizationOptions>(builder.Configuration.GetSectio
 builder.Services.Configure<ChatOptions>(builder.Configuration.GetSection(ChatOptions.Section));
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.Section));
 builder.Services.Configure<AppPublicOptions>(builder.Configuration.GetSection(AppPublicOptions.Section));
+builder.Services.Configure<IdentificationOptions>(builder.Configuration.GetSection(IdentificationOptions.Section));
 
 var jwt = builder.Configuration.GetSection(JwtOptions.Section).Get<JwtOptions>() ?? new JwtOptions();
 var storage = builder.Configuration.GetSection(StorageOptions.Section).Get<StorageOptions>() ?? new StorageOptions();
@@ -108,6 +109,9 @@ builder.Services.AddSingleton<IApiKeyProtector, ApiKeyProtector>();
 
 // ---- Email (account-setup link; no-op fallback when SMTP unconfigured) ----
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+
+// ---- Speaker identification (match recording speakers to enrolled voiceprints) ----
+builder.Services.AddScoped<ISpeakerIdentifier, SpeakerIdentifier>();
 
 // ---- Summarisation (OpenAI-compatible endpoint + background consumer) ----
 builder.Services.AddHttpClient<ISummarizationClient, SummarizationClient>();

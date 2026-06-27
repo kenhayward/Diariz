@@ -64,10 +64,19 @@ public record RecordingDetailDto(
     string? Error,
     DateTimeOffset CreatedAt,
     IReadOnlyDictionary<string, string> SpeakerNames,
+    IReadOnlyList<SpeakerInfoDto> Speakers,
     TranscriptionDto? Current,
     SummaryDto? Summary);
 
 public record RenameSpeakerRequest(string Label, string DisplayName);
+
+// ---- Speaker identification (voiceprints) ----
+public record SpeakerProfileDto(Guid Id, string Name, int SampleCount);
+public record CreateSpeakerProfileRequest(string Name, Guid RecordingId, string Label);
+public record AssignSpeakerRequest(Guid? ProfileId);
+/// <summary>Per-recording speaker: its label, shown name, the matched voiceprint (if any), and whether
+/// the name was set automatically.</summary>
+public record SpeakerInfoDto(string Label, string DisplayName, Guid? ProfileId, bool IdentifiedAuto);
 public record RenameRecordingRequest(string? Name);
 public record RetranscribeRequest(string? Model);
 public record UpdateSegmentRequest(string Text);

@@ -86,3 +86,14 @@ public class AppPublicOptions
     /// <summary>Browser-reachable base URL, e.g. http://localhost:8081. Empty = derive from the request.</summary>
     public string PublicUrl { get; set; } = "";
 }
+
+/// <summary>Automatic speaker identification (matching new recordings' speakers to enrolled voiceprints).</summary>
+public class IdentificationOptions
+{
+    public const string Section = "Identification";
+    /// <summary>Master switch for auto-identification.</summary>
+    public bool Enabled { get; set; } = true;
+    /// <summary>Max cosine distance (0..2) to accept a match — lower is stricter. A starting point;
+    /// calibrate per docs/Speaker_Identification_and_Verification.md (false-accepts attach a wrong identity).</summary>
+    public double Threshold { get; set; } = 0.4;
+}

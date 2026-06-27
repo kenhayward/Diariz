@@ -13,11 +13,13 @@ def test_handle_success_posts_result_and_removes_temp_file(monkeypatch, tmp_path
     audio.write_text("fake")
     monkeypatch.setattr(worker.storage, "download", lambda key: str(audio))
     monkeypatch.setattr(worker.pipeline, "transcribe",
-                        lambda path: {"language": "en", "segments": [{"Text": "hi"}]})
+                        lambda path: {"language": "en", "segments": [{"Text": "hi"}],
+                                      "speakers": [{"Speaker": "SPEAKER_00", "Embedding": [0.1]}]})
 
     posted = {}
     monkeypatch.setattr(worker.callback, "post_result",
-                        lambda tid, lang, segs: posted.update(tid=tid, lang=lang, segs=segs))
+                        lambda tid, lang, segs, speakers=None: posted.update(
+                            tid=tid, lang=lang, segs=segs, speakers=speakers))
     monkeypatch.setattr(worker.callback, "post_failure",
                         lambda *a, **k: posted.update(failed=True))
 
@@ -25,6 +27,7 @@ def test_handle_success_posts_result_and_removes_temp_file(monkeypatch, tmp_path
 
     assert posted["tid"] == "tid-1"
     assert posted["lang"] == "en"
+    assert posted["speakers"] == [{"Speaker": "SPEAKER_00", "Embedding": [0.1]}]
     assert "failed" not in posted
     assert not os.path.exists(str(audio))  # temp file cleaned up
 

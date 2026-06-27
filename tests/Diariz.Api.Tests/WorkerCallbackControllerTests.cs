@@ -23,7 +23,7 @@ public class WorkerCallbackControllerTests
     }
 
     private static (WorkerCallbackController controller, DiarizDbContext db, FakeHubContext hub, FakeJobQueue queue)
-        BuildEx(string presentedSecret, bool summarizationEnabled)
+        BuildEx(string presentedSecret, bool summarizationEnabled, FakeSpeakerIdentifier? identifier = null)
     {
         var db = TestDb.Create();
         var hub = new FakeHubContext();
@@ -33,7 +33,8 @@ public class WorkerCallbackControllerTests
             Options.Create(new SummarizationOptions { ApiBase = summarizationEnabled ? "http://llm.test/v1" : "" }),
             new FakeApiKeyProtector());
         var controller = new WorkerCallbackController(
-            db, hub, queue, resolver, Options.Create(new WorkerOptions { CallbackSecret = Secret }))
+            db, hub, queue, resolver, identifier ?? new FakeSpeakerIdentifier(),
+            Options.Create(new WorkerOptions { CallbackSecret = Secret }))
         {
             ControllerContext = Http.Context(headers: ("X-Worker-Secret", presentedSecret))
         };
@@ -163,6 +164,63 @@ public class WorkerCallbackControllerTests
 
         Assert.Equal(RecordingStatus.Transcribed, (await db.Recordings.FindAsync(recordingId))!.Status);
         Assert.Empty(queue.SummarizationEnqueued);
+    }
+
+    [Fact]
+    public async Task Result_StoresSpeakerEmbedding_AndAutoIdentifies()
+    {
+        var profileId = Guid.NewGuid();
+        var identifier = new FakeSpeakerIdentifier { Match = new SpeakerMatch(profileId, "Alice", 0.1) };
+        var (controller, db, _, _) = BuildEx(Secret, summarizationEnabled: false, identifier);
+        var (recordingId, transcriptionId) = await SeedQueuedRecording(db, Guid.NewGuid());
+
+        await controller.Result(new TranscriptionResult(transcriptionId, "en",
+            [new SegmentResult("SPEAKER_00", 0, 1000, "Hello")],
+            Speakers: [new SpeakerEmbeddingResult("SPEAKER_00", [0.1f, 0.2f, 0.3f])]));
+
+        var sp = await db.Speakers.SingleAsync(s => s.RecordingId == recordingId && s.Label == "SPEAKER_00");
+        Assert.NotNull(sp.Embedding);
+        Assert.Equal(profileId, sp.ProfileId);
+        Assert.Equal("Alice", sp.DisplayName);
+        Assert.True(sp.IdentifiedAuto);
+    }
+
+    [Fact]
+    public async Task Result_NoMatch_LeavesSpeakerAnonymous()
+    {
+        var identifier = new FakeSpeakerIdentifier { Match = null };
+        var (controller, db, _, _) = BuildEx(Secret, summarizationEnabled: false, identifier);
+        var (recordingId, transcriptionId) = await SeedQueuedRecording(db, Guid.NewGuid());
+
+        await controller.Result(new TranscriptionResult(transcriptionId, "en",
+            [new SegmentResult("SPEAKER_00", 0, 1000, "Hello")],
+            Speakers: [new SpeakerEmbeddingResult("SPEAKER_00", [0.1f, 0.2f])]));
+
+        var sp = await db.Speakers.SingleAsync(s => s.RecordingId == recordingId);
+        Assert.Null(sp.ProfileId);
+        Assert.Equal("SPEAKER_00", sp.DisplayName);
+        Assert.False(sp.IdentifiedAuto);
+        Assert.NotNull(sp.Embedding); // embedding still stored for later enrolment
+    }
+
+    [Fact]
+    public async Task Result_DoesNotOverrideManuallyNamedSpeaker()
+    {
+        var identifier = new FakeSpeakerIdentifier { Match = new SpeakerMatch(Guid.NewGuid(), "Alice", 0.1) };
+        var (controller, db, _, _) = BuildEx(Secret, summarizationEnabled: false, identifier);
+        var (recordingId, transcriptionId) = await SeedQueuedRecording(db, Guid.NewGuid());
+        // Pre-existing manual rename.
+        db.Speakers.Add(new Speaker { Id = Guid.NewGuid(), RecordingId = recordingId, Label = "SPEAKER_00", DisplayName = "Bob" });
+        await db.SaveChangesAsync();
+
+        await controller.Result(new TranscriptionResult(transcriptionId, "en",
+            [new SegmentResult("SPEAKER_00", 0, 1000, "Hello")],
+            Speakers: [new SpeakerEmbeddingResult("SPEAKER_00", [0.1f])]));
+
+        var sp = await db.Speakers.SingleAsync(s => s.RecordingId == recordingId);
+        Assert.Equal("Bob", sp.DisplayName); // manual name preserved
+        Assert.False(sp.IdentifiedAuto);
+        Assert.NotNull(sp.Embedding); // embedding refreshed
     }
 
     [Fact]

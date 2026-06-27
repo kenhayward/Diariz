@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Pgvector;
 
 namespace Diariz.Api.Controllers;
 
@@ -23,16 +24,18 @@ public class WorkerCallbackController : ControllerBase
     private readonly IHubContext<TranscriptionHub> _hub;
     private readonly IJobQueue _queue;
     private readonly ISummarizationSettingsResolver _summarization;
+    private readonly ISpeakerIdentifier _identifier;
     private readonly WorkerOptions _opts;
 
     public WorkerCallbackController(
         DiarizDbContext db, IHubContext<TranscriptionHub> hub, IJobQueue queue,
-        ISummarizationSettingsResolver summarization, IOptions<WorkerOptions> opts)
+        ISummarizationSettingsResolver summarization, ISpeakerIdentifier identifier, IOptions<WorkerOptions> opts)
     {
         _db = db;
         _hub = hub;
         _queue = queue;
         _summarization = summarization;
+        _identifier = identifier;
         _opts = opts.Value;
     }
 
@@ -67,19 +70,43 @@ public class WorkerCallbackController : ControllerBase
         }
 
         // Seed Speaker rows for any new labels (default display = label), preserving renames.
-        var existing = await _db.Speakers
+        var speakers = await _db.Speakers
             .Where(sp => sp.RecordingId == transcription.RecordingId)
-            .Select(sp => sp.Label).ToListAsync();
-        foreach (var label in body.Segments.Select(s => s.Speaker).Distinct())
+            .ToListAsync();
+        var byLabel = speakers.ToDictionary(sp => sp.Label);
+        foreach (var label in body.Segments.Select(s => s.Speaker)
+            .Where(l => !string.IsNullOrWhiteSpace(l)).Distinct())
         {
-            if (string.IsNullOrWhiteSpace(label) || existing.Contains(label)) continue;
-            _db.Speakers.Add(new Speaker
+            if (byLabel.ContainsKey(label)) continue;
+            var sp = new Speaker { Id = Guid.NewGuid(), RecordingId = transcription.RecordingId, Label = label, DisplayName = label };
+            _db.Speakers.Add(sp);
+            byLabel[label] = sp;
+        }
+
+        // Attach the worker's per-speaker embeddings and auto-identify against the owner's voiceprints.
+        var userId = transcription.Recording.UserId;
+        foreach (var se in body.Speakers ?? [])
+        {
+            if (se.Embedding is not { Length: > 0 } || !byLabel.TryGetValue(se.Speaker, out var sp)) continue;
+            sp.Embedding = new Vector(se.Embedding);
+
+            // Only auto-label when the speaker isn't manually named (anonymous, or a previous auto label to refresh).
+            if (!(sp.IdentifiedAuto || sp.DisplayName == sp.Label)) continue;
+
+            var match = await _identifier.IdentifyAsync(userId, sp.Embedding);
+            if (match is not null)
             {
-                Id = Guid.NewGuid(),
-                RecordingId = transcription.RecordingId,
-                Label = label,
-                DisplayName = label
-            });
+                sp.ProfileId = match.ProfileId;
+                sp.DisplayName = match.Name;
+                sp.IdentifiedAuto = true;
+            }
+            else if (sp.IdentifiedAuto)
+            {
+                // Previously auto-identified but no longer matches → revert to anonymous.
+                sp.ProfileId = null;
+                sp.DisplayName = sp.Label;
+                sp.IdentifiedAuto = false;
+            }
         }
 
         transcription.Recording.Error = null;  // clear any error from a prior failed attempt

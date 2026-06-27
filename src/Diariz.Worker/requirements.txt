@@ -9,6 +9,9 @@ whisperx==3.3.1
 transformers==4.48.0
 huggingface_hub==0.27.1
 
+# Speaker embeddings (voiceprints): ECAPA-TDNN, 192-d, Apache-2.0 code + weights.
+speechbrain==1.0.2
+
 matplotlib==3.9.4
 redis==5.2.1
 boto3==1.35.99

@@ -26,5 +26,13 @@ class Config:
     BATCH_SIZE = int(os.getenv("BATCH_SIZE", "16"))
     HF_TOKEN = os.getenv("HF_TOKEN", "")  # required for pyannote diarization
 
+    # Speaker embeddings (voiceprints): per-speaker ECAPA vectors for identification.
+    # Gated so it degrades gracefully when off (the API simply skips identification).
+    SAMPLE_RATE = 16000  # whisperx.load_audio resamples to 16 kHz
+    ENABLE_SPEAKER_EMBEDDINGS = os.getenv("ENABLE_SPEAKER_EMBEDDINGS", "1") not in ("0", "false", "False", "")
+    EMBED_MODEL = os.getenv("EMBED_MODEL", "speechbrain/spkrec-ecapa-voxceleb")  # 192-d, Apache-2.0
+    EMBED_MAX_SECONDS = float(os.getenv("EMBED_MAX_SECONDS", "30"))  # cap pooled audio per speaker
+    EMBED_CACHE_DIR = os.getenv("EMBED_CACHE_DIR", "")  # speechbrain savedir (blank => default)
+
 
 config = Config()

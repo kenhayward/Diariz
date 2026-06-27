@@ -38,6 +38,14 @@ API persists `Segment`s + seeds `Speaker` rows → notifies the browser over **S
   changing `TranscriptionJob` / `TranscriptionResult` / `Segment` shapes.
 - **Worker → API callback** uses route `internal/transcriptions/*` and is authenticated by a shared
   secret header `X-Worker-Secret` (= `CALLBACK_SECRET`), **not** JWT. It is not user-facing.
+- **Speaker identification (voiceprints).** The worker also emits a per-speaker **ECAPA embedding**
+  (SpeechBrain `spkrec-ecapa-voxceleb`, 192-d) in the callback's `Speakers: [{Speaker, Embedding}]`
+  (gated by `ENABLE_SPEAKER_EMBEDDINGS`; `pipeline._speaker_embeddings` pools each speaker's segment audio
+  and L2-normalises). `WorkerCallbackController` stores it on `Speaker.Embedding` (`vector(192)`) and
+  **auto-identifies** against the owner's enrolled `SpeakerProfile`s via `ISpeakerIdentifier` (pgvector
+  cosine distance ≤ `Identification:Threshold`) — but never overrides a manually-named speaker.
+  Enrolment/reassignment/erasure live in `SpeakerProfilesController` + `RecordingsController` (the
+  `vector(192)` cosine match is Postgres-only, so it's faked in unit tests and verified in integration).
 - **Summarisation queue (in-process).** A second Redis stream `summarization-jobs` (consumer group
   `summarizers`) is **produced and consumed entirely within the API** — `RedisJobQueue.EnqueueSummarizationAsync`
   enqueues, and `Services/SummarizationWorker` (a `BackgroundService`, the API's only stream consumer)

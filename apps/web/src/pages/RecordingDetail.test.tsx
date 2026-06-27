@@ -20,6 +20,9 @@ vi.mock("../lib/api", () => ({
     downloadTranscript: vi.fn(),
     downloadAudio: vi.fn(),
     updateSegment: vi.fn(),
+    listSpeakerProfiles: vi.fn(),
+    assignSpeaker: vi.fn(),
+    createSpeakerProfile: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -37,6 +40,7 @@ const base: RecordingDetailType = {
   error: null,
   createdAt: new Date("2026-06-26T12:00:00Z").toISOString(),
   speakerNames: {},
+  speakers: [],
   current: {
     id: "t1",
     model: "whisperx-large-v3",
@@ -67,6 +71,7 @@ describe("RecordingDetail", () => {
     (api.retranscribe as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.summarize as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.audioUrl as ReturnType<typeof vi.fn>).mockResolvedValue("blob:audio");
+    (api.listSpeakerProfiles as ReturnType<typeof vi.fn>).mockResolvedValue([]);
   });
 
   it("re-transcribe (kebab) enqueues and refetches the recording", async () => {

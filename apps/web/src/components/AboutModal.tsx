@@ -63,13 +63,18 @@ export default function AboutModal({ onClose }: { onClose: () => void }) {
         <div className="mt-4 border-t pt-3 text-xs leading-relaxed text-gray-500 dark:border-gray-700 dark:text-gray-400">
           <p>
             Diariz is built on open-source software — including ASP.NET Core, React, WhisperX,
-            pyannote.audio, PostgreSQL/pgvector, Redis, MinIO/S3, MailKit, PdfPig, marked, and
-            DOMPurify — each under its own licence.
+            pyannote.audio, SpeechBrain, PostgreSQL/pgvector, Redis, MinIO/S3, MailKit, PdfPig, marked,
+            and DOMPurify — each under its own licence.
           </p>
           <p className="mt-2">
             Speaker diarization uses the gated <strong>pyannote</strong> models
             (<code>speaker-diarization-3.1</code>, <code>segmentation-3.0</code>), licensed for
             <strong> non-commercial use (CC-BY-NC)</strong>; ensure your use complies with their terms.
+          </p>
+          <p className="mt-2">
+            Speaker identification stores <strong>voiceprints</strong> (SpeechBrain ECAPA embeddings) —
+            biometric data. Only enrol people with their consent, and use “delete person” to erase a
+            voiceprint when required.
           </p>
           <p className="mt-2">
             Summaries and chat use an OpenAI-compatible LLM endpoint you configure; that provider's terms
