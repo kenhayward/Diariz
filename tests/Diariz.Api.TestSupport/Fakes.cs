@@ -77,6 +77,20 @@ public sealed class FakeSummarizationClient : ISummarizationClient
     }
 }
 
+/// <summary>Records emails it was asked to send; <see cref="Sent"/> toggles the return value to
+/// simulate "SMTP configured" (true) vs the unconfigured fallback (false).</summary>
+public sealed class FakeEmailSender : IEmailSender
+{
+    public bool Sent { get; set; } = true;
+    public List<(string To, string Subject, string Body)> Messages { get; } = new();
+
+    public Task<bool> SendAsync(string to, string subject, string htmlBody, CancellationToken ct = default)
+    {
+        Messages.Add((to, subject, htmlBody));
+        return Task.FromResult(Sent);
+    }
+}
+
 /// <summary>Stub <see cref="IChatStreamClient"/> — yields a canned token sequence or throws.</summary>
 public sealed class FakeChatStreamClient : IChatStreamClient
 {

@@ -63,3 +63,26 @@ public class ChatOptions
     /// <summary>Model context window in tokens, used by the context dial. Per-user overridable in Settings.</summary>
     public int ContextLength { get; set; } = 131072;
 }
+
+/// <summary>SMTP settings for transactional email (the account-setup link). When <see cref="Enabled"/>
+/// is false (no host), the grant flow falls back to showing the admin the link instead of emailing it.</summary>
+public class EmailOptions
+{
+    public const string Section = "Email";
+    public string SmtpHost { get; set; } = "";
+    public int SmtpPort { get; set; } = 587;
+    public string User { get; set; } = "";
+    public string Password { get; set; } = "";
+    public string From { get; set; } = "";
+    public bool UseStartTls { get; set; } = true;
+
+    public bool Enabled => !string.IsNullOrWhiteSpace(SmtpHost);
+}
+
+/// <summary>Public-facing app settings — the browser origin used to build links in emails.</summary>
+public class AppPublicOptions
+{
+    public const string Section = "App";
+    /// <summary>Browser-reachable base URL, e.g. http://localhost:8081. Empty = derive from the request.</summary>
+    public string PublicUrl { get; set; } = "";
+}

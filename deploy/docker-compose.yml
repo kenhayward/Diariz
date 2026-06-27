@@ -73,6 +73,14 @@ services:
       DataProtection__KeysPath: /keys
       Seed__Email: ${SEED_EMAIL}
       Seed__Password: ${SEED_PASSWORD}
+      Seed__FullName: ${SEED_FULL_NAME:-Platform Administrator}
+      App__PublicUrl: ${APP_PUBLIC_URL:-http://localhost:8081}
+      Email__SmtpHost: ${SMTP_HOST:-}
+      Email__SmtpPort: ${SMTP_PORT:-587}
+      Email__User: ${SMTP_USER:-}
+      Email__Password: ${SMTP_PASSWORD:-}
+      Email__From: ${SMTP_FROM:-}
+      Email__UseStartTls: ${SMTP_USE_STARTTLS:-true}
       Cors__Origins__0: "http://localhost:5173"
       Cors__Origins__1: "http://localhost:8081"
     volumes:

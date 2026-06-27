@@ -1,16 +1,19 @@
 import axios from "axios";
 import type {
+  AdminUser,
   AuthResponse,
   ChatAttachment,
   ChatConversation,
   ChatConversationSummary,
   ChatTurn,
   ChatUsage,
+  GrantResult,
   RecordingDetail,
   RecordingSource,
   RecordingSummary,
   SavedChatContext,
   SectionDto,
+  SetupValidation,
   UpdateUserSettings,
   UserSettings,
 } from "./types";
@@ -58,6 +61,50 @@ export const api = {
   async login(email: string, password: string): Promise<AuthResponse> {
     const { data } = await http.post<AuthResponse>("/api/auth/login", { email, password });
     return data;
+  },
+
+  // ---- Access requests / account setup (public) ----
+
+  async requestAccess(email: string): Promise<void> {
+    await http.post("/api/auth/request-access", { email });
+  },
+
+  async validateSetup(email: string, token: string): Promise<SetupValidation> {
+    const { data } = await http.get<SetupValidation>("/api/auth/setup/validate", { params: { email, token } });
+    return data;
+  },
+
+  async setup(body: { email: string; token: string; fullName: string; password: string }): Promise<AuthResponse> {
+    const { data } = await http.post<AuthResponse>("/api/auth/setup", body);
+    return data;
+  },
+
+  // ---- Admin user management ----
+
+  async listUsers(): Promise<AdminUser[]> {
+    const { data } = await http.get<AdminUser[]>("/api/admin/users");
+    return data;
+  },
+
+  async grantUser(id: string): Promise<GrantResult> {
+    const { data } = await http.post<GrantResult>(`/api/admin/users/${id}/grant`);
+    return data;
+  },
+
+  async denyUser(id: string): Promise<void> {
+    await http.post(`/api/admin/users/${id}/deny`);
+  },
+
+  async setUserRole(id: string, role: "Standard" | "Administrator"): Promise<void> {
+    await http.put(`/api/admin/users/${id}/role`, { role });
+  },
+
+  async setUserEnabled(id: string, isEnabled: boolean): Promise<void> {
+    await http.put(`/api/admin/users/${id}/enabled`, { isEnabled });
+  },
+
+  async deleteUser(id: string): Promise<void> {
+    await http.delete(`/api/admin/users/${id}`);
   },
 
   async listRecordings(): Promise<RecordingSummary[]> {
