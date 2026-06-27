@@ -154,9 +154,6 @@ public sealed class FakeJobQueue : IJobQueue
 public sealed class FakeAudioStorage : IAudioStorage
 {
     public Dictionary<string, byte[]> Objects { get; } = new();
-    public string PresignedUrl { get; set; } = "https://example.test/audio";
-    /// <summary>Captures the download filename requested on the last presign call (null = inline).</summary>
-    public string? LastPresignDownloadFileName { get; private set; }
 
     public Task EnsureBucketAsync(CancellationToken ct = default) => Task.CompletedTask;
 
@@ -170,6 +167,15 @@ public sealed class FakeAudioStorage : IAudioStorage
     public Task<Stream> OpenReadAsync(string key, CancellationToken ct = default) =>
         Task.FromResult<Stream>(new MemoryStream(Objects[key]));
 
+    public Task<AudioBlob?> OpenAsync(string key, long? from = null, long? to = null, CancellationToken ct = default)
+    {
+        if (!Objects.TryGetValue(key, out var bytes)) return Task.FromResult<AudioBlob?>(null);
+        var start = (int)Math.Clamp(from ?? 0, 0, Math.Max(0, bytes.Length - 1));
+        var end = (int)Math.Clamp(to ?? bytes.Length - 1, start, bytes.Length - 1);
+        var len = end - start + 1;
+        return Task.FromResult<AudioBlob?>(new AudioBlob(new MemoryStream(bytes, start, len), len, "audio/webm"));
+    }
+
     public Task<long?> GetSizeAsync(string key, CancellationToken ct = default) =>
         Task.FromResult(Objects.TryGetValue(key, out var bytes) ? bytes.Length : (long?)null);
 
@@ -177,12 +183,6 @@ public sealed class FakeAudioStorage : IAudioStorage
     {
         Objects.Remove(key);
         return Task.CompletedTask;
-    }
-
-    public string GetPresignedDownloadUrl(string key, TimeSpan expiry, string? downloadFileName = null)
-    {
-        LastPresignDownloadFileName = downloadFileName;
-        return PresignedUrl;
     }
 }
 

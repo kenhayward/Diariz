@@ -917,38 +917,35 @@ public class RecordingsControllerTests
         Assert.IsType<NotFoundResult>(await controller.TranscriptTxt(rec.Id));
     }
 
-    // ---- AudioUrl ----
+    // ---- AudioUrl (same-origin streaming URL) ----
+
+    private static string UrlOf(Microsoft.AspNetCore.Mvc.ActionResult<object> result) =>
+        (string)result.Value!.GetType().GetProperty("url")!.GetValue(result.Value)!;
 
     [Fact]
-    public async Task AudioUrl_WithDownload_RequestsAttachmentFilenameFromName()
+    public async Task AudioUrl_ReturnsSameOriginStreamingUrl_ForOwnedRecording()
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        var storage = new FakeAudioStorage();
         var rec = await SeedRecording(db, userId, versions: 1);
-        rec.Name = "Demo";
-        await db.SaveChangesAsync();
-        var controller = Build(db, userId, new FakeJobQueue(), storage);
-
-        await controller.AudioUrl(rec.Id, download: true);
-
-        Assert.Equal("demo.webm", storage.LastPresignDownloadFileName);
-    }
-
-    [Fact]
-    public async Task AudioUrl_ReturnsPresignedUrl_ForOwnedRecording()
-    {
-        using var db = TestDb.Create();
-        var userId = Guid.NewGuid();
-        var storage = new FakeAudioStorage { PresignedUrl = "https://minio.test/recordings/abc?sig=1" };
-        var rec = await SeedRecording(db, userId, versions: 1);
-        var controller = Build(db, userId, new FakeJobQueue(), storage);
+        var controller = Build(db, userId, new FakeJobQueue());
 
         var result = await controller.AudioUrl(rec.Id);
 
         Assert.Null(result.Result); // not a NotFound
-        var url = result.Value!.GetType().GetProperty("url")!.GetValue(result.Value);
-        Assert.Equal(storage.PresignedUrl, url);
+        Assert.StartsWith($"/api/recordings/{rec.Id}/audio?access_token=", UrlOf(result));
+        Assert.DoesNotContain("download=true", UrlOf(result));
+    }
+
+    [Fact]
+    public async Task AudioUrl_WithDownload_AddsDownloadFlag()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.Contains("download=true", UrlOf(await controller.AudioUrl(rec.Id, download: true)));
     }
 
     [Fact]
@@ -958,8 +955,86 @@ public class RecordingsControllerTests
         var rec = await SeedRecording(db, Guid.NewGuid(), versions: 1);
         var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue());
 
-        var result = await controller.AudioUrl(rec.Id);
+        Assert.IsType<NotFoundResult>((await controller.AudioUrl(rec.Id)).Result);
+    }
 
-        Assert.IsType<NotFoundResult>(result.Result);
+    // ---- GetAudio (streaming) ----
+
+    [Fact]
+    public async Task GetAudio_StreamsWholeBlob_WithAcceptRanges()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var bytes = Encoding.UTF8.GetBytes("hello-audio-data");
+        storage.Objects[rec.BlobKey] = bytes;
+        rec.SizeBytes = bytes.Length;
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue(), storage);
+        var body = new MemoryStream();
+        controller.ControllerContext.HttpContext.Response.Body = body;
+
+        var result = await controller.GetAudio(rec.Id);
+
+        Assert.IsType<EmptyResult>(result);
+        Assert.Equal(bytes, body.ToArray());
+        var resp = controller.ControllerContext.HttpContext.Response;
+        Assert.Equal(200, resp.StatusCode);
+        Assert.Equal("bytes", resp.Headers.AcceptRanges.ToString());
+        Assert.Equal(bytes.Length, resp.ContentLength);
+    }
+
+    [Fact]
+    public async Task GetAudio_WithRange_Returns206PartialContent()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        storage.Objects[rec.BlobKey] = Encoding.UTF8.GetBytes("0123456789");
+        rec.SizeBytes = 10;
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue(), storage);
+        var http = controller.ControllerContext.HttpContext;
+        http.Request.Headers.Range = "bytes=2-5";
+        var body = new MemoryStream();
+        http.Response.Body = body;
+
+        await controller.GetAudio(rec.Id);
+
+        Assert.Equal(206, http.Response.StatusCode);
+        Assert.Equal("bytes 2-5/10", http.Response.Headers.ContentRange.ToString());
+        Assert.Equal("2345", Encoding.UTF8.GetString(body.ToArray()));
+    }
+
+    [Fact]
+    public async Task GetAudio_Download_SetsAttachmentFilename()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        rec.Name = "Demo";
+        rec.SizeBytes = 3;
+        storage.Objects[rec.BlobKey] = Encoding.UTF8.GetBytes("abc");
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue(), storage);
+        controller.ControllerContext.HttpContext.Response.Body = new MemoryStream();
+
+        await controller.GetAudio(rec.Id, download: true);
+
+        Assert.Contains("demo.webm",
+            controller.ControllerContext.HttpContext.Response.Headers.ContentDisposition.ToString());
+    }
+
+    [Fact]
+    public async Task GetAudio_OnAnotherUsersRecording_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var rec = await SeedRecording(db, Guid.NewGuid(), versions: 1);
+        var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(await controller.GetAudio(rec.Id));
     }
 }
