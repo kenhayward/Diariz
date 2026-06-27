@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self';" />
+    <title>Connect to Diariz</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        font-family: "Segoe UI", system-ui, sans-serif;
+        margin: 0; padding: 24px;
+        background: Canvas; color: CanvasText;
+      }
+      h1 { font-size: 16px; margin: 0 0 4px; }
+      p.help { font-size: 12px; opacity: 0.7; margin: 0 0 16px; }
+      label { display: block; font-size: 13px; margin-bottom: 6px; }
+      input {
+        width: 100%; box-sizing: border-box; padding: 8px 10px;
+        font-size: 14px; border: 1px solid GrayText; border-radius: 6px;
+        background: Field; color: FieldText;
+      }
+      .error { color: #d33; font-size: 12px; min-height: 16px; margin-top: 8px; }
+      .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+      button {
+        padding: 8px 14px; font-size: 13px; border-radius: 6px;
+        border: 1px solid GrayText; background: ButtonFace; color: ButtonText; cursor: pointer;
+      }
+      button.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+      button:disabled { opacity: 0.5; cursor: default; }
+    </style>
+  </head>
+  <body>
+    <h1>Connect to your Diariz server</h1>
+    <p class="help">Enter the address of your Diariz server (the same URL you open in a browser).</p>
+    <label for="url">Server address</label>
+    <input id="url" type="text" placeholder="https://diariz.example.com" autocomplete="off" spellcheck="false" />
+    <div class="error" id="error"></div>
+    <div class="row">
+      <button id="connect" class="primary">Connect</button>
+    </div>
+    <script src="setup.js"></script>
+  </body>
+</html>
