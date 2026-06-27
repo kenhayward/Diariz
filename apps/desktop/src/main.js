@@ -257,9 +257,15 @@ ipcMain.on("recorder:state", (_event, state) => {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
+  // Windows shows this as the toast attribution and groups taskbar/notifications;
+  // without it, notifications are titled "Electron". Match the installer's appId.
+  app.setAppUserModelId("com.diariz.desktop");
+
   app.on("second-instance", () => showMainWindow());
 
   app.whenReady().then(() => {
+    // No app menu — this is a tray-resident shell; keep just the window's title bar.
+    Menu.setApplicationMenu(null);
     buildTray();
     if (targetUrl()) createMainWindow(targetUrl());
     else showSetupWindow();

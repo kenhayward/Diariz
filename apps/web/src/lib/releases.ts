@@ -47,6 +47,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.11.1",
+    date: "2026-06-27",
+    pr: 36,
+    headline: "Desktop polish: no menu bar, correctly-titled notifications",
+    summary: `
+Two small fixes to the Windows desktop app: the unused application **menu bar** is hidden (just the window
+title bar remains), and the recording **notifications are now titled "Diariz"** instead of "Electron" (the
+app now sets its Windows AppUserModelID).
+`.trim(),
+    fixed: [
+      "Hide the desktop app's menu bar — it's a tray shell and didn't need one.",
+      "Desktop notifications are titled \"Diariz\" rather than \"Electron\" (sets the Windows AppUserModelID).",
+    ],
+  },
+  {
     version: "0.11.0",
     date: "2026-06-27",
     pr: 35,
