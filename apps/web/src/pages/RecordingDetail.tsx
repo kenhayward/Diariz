@@ -36,6 +36,7 @@ export default function RecordingDetail() {
   const [moving, setMoving] = useState(false);
   const [editingSeg, setEditingSeg] = useState<SegmentDto | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionInfo, setActionInfo] = useState<string | null>(null);
 
   useEffect(() => {
     const hub = createHub((e) => {
@@ -111,6 +112,29 @@ export default function RecordingDetail() {
     }
   }
 
+  async function mergeSegments() {
+    if (!window.confirm("Merge consecutive rows from the same speaker into single blocks? Re-transcribe to undo.")) return;
+    setActionError(null);
+    setActionInfo(null);
+    try {
+      await api.mergeSegments(id);
+      await qc.invalidateQueries({ queryKey: ["recording", id] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e, "Could not merge the transcript."));
+    }
+  }
+
+  async function emailTranscript() {
+    setActionError(null);
+    setActionInfo(null);
+    try {
+      await api.emailTranscript(id);
+      setActionInfo("Transcript emailed to your account address.");
+    } catch (e) {
+      setActionError(apiErrorMessage(e, "Could not email the transcript."));
+    }
+  }
+
   // Lazily resolve the presigned URL and seek the shared <audio> element.
   async function playFrom(startMs: number) {
     const el = audioRef.current;
@@ -146,6 +170,7 @@ export default function RecordingDetail() {
     onMove: () => setMoving(true),
     onPlay: () => void playFrom(0),
     onDownloadTxt: () => void api.downloadTranscript(id, "txt"),
+    onEmailTranscript: emailTranscript,
     onDownloadAudio: () => void api.downloadAudio(id),
     onDelete: async () => {
       if (!window.confirm(`Delete "${rec.name ?? rec.title}"? This cannot be undone.`)) return;
@@ -190,6 +215,10 @@ export default function RecordingDetail() {
         <p className="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{actionError}</p>
       )}
 
+      {actionInfo && (
+        <p className="rounded bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/30 dark:text-green-300">{actionInfo}</p>
+      )}
+
       {rec.status === "Failed" && rec.error && (
         <p className="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{rec.error}</p>
       )}
@@ -229,14 +258,21 @@ export default function RecordingDetail() {
 
       {rec.current ? (
         <>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => playFrom(0)}
               className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
             >
               ▶ Play all
             </button>
-            <audio ref={audioRef} controls onTimeUpdate={onTimeUpdate} className="h-8 flex-1" />
+            <button
+              onClick={mergeSegments}
+              title="Combine consecutive rows from the same speaker into single blocks"
+              className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+            >
+              Merge same-speaker rows
+            </button>
+            <audio ref={audioRef} controls onTimeUpdate={onTimeUpdate} className="h-8 min-w-48 flex-1" />
           </div>
           <ul className="space-y-2">
             {rec.current.segments.map((s, i) => (
@@ -464,7 +500,8 @@ function SegmentRow({
     >
       <span className="w-12 shrink-0 font-mono text-xs text-gray-400 dark:text-gray-500">{fmt(seg.startMs)}</span>
       <span className="w-28 shrink-0 text-sm font-medium text-gray-700 dark:text-gray-200">{seg.speakerDisplay}</span>
-      <span className="flex-1 text-sm dark:text-gray-200">{seg.text}</span>
+      {/* Auto-expands vertically to show the full (possibly merged) block of text. */}
+      <span className="flex-1 whitespace-pre-wrap break-words text-sm dark:text-gray-200">{seg.text}</span>
       <KebabMenu actions={[{ label: "Edit", onClick: onEdit }]} label="Segment actions" />
     </li>
   );

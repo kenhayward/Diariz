@@ -156,6 +156,16 @@ export const api = {
     await http.put(`/api/recordings/${id}/segments/${segmentId}`, { text });
   },
 
+  /// Collapse consecutive same-speaker segments in the current transcription (permanent for this version).
+  async mergeSegments(id: string): Promise<void> {
+    await http.post(`/api/recordings/${id}/merge-segments`);
+  },
+
+  /// Email the current transcript to the signed-in user's account address.
+  async emailTranscript(id: string): Promise<void> {
+    await http.post(`/api/recordings/${id}/email`);
+  },
+
   // ---- Speaker identification (voiceprints) ----
 
   async listSpeakerProfiles(): Promise<SpeakerProfile[]> {

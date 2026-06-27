@@ -17,7 +17,8 @@ Current version: **0.4.1** — versioned per the rule in [CLAUDE.md](CLAUDE.md);
 - **Capture** audio from the browser microphone, or Windows system/loopback audio via the Electron desktop shell.
 - **Transcribe + diarize** server-side with WhisperX (large-v3, word-level timestamps) and pyannote 3.1,
   producing speaker-labelled, timestamped segments you can rename, edit, and play back (per segment or whole).
-  Re-transcribe with a chosen model at any time.
+  Re-transcribe with a chosen model at any time, **merge** consecutive same-speaker rows, and **email
+  yourself** the formatted transcript.
 - **Identify speakers** across recordings: enrol a person from a recording's speaker and Diariz recognises
   that voice automatically in later recordings (SpeechBrain ECAPA voiceprints in pgvector, cosine matching),
   with manual reassignment. A **People** screen renames, prunes training samples, merges duplicates, and

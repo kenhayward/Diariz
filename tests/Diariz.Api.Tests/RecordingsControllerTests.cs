@@ -17,7 +17,7 @@ namespace Diariz.Api.Tests;
 public class RecordingsControllerTests
 {
     private static RecordingsController Build(DiarizDbContext db, Guid userId, FakeJobQueue queue,
-        FakeAudioStorage? storage = null, bool summarizationEnabled = true)
+        FakeAudioStorage? storage = null, bool summarizationEnabled = true, FakeEmailSender? email = null)
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" })
@@ -26,7 +26,8 @@ public class RecordingsControllerTests
             db,
             Options.Create(new SummarizationOptions { ApiBase = summarizationEnabled ? "http://llm.test/v1" : "" }),
             new FakeApiKeyProtector());
-        return new RecordingsController(db, storage ?? new FakeAudioStorage(), queue, new FakeHubContext(), config, resolver)
+        return new RecordingsController(db, storage ?? new FakeAudioStorage(), queue, new FakeHubContext(), config,
+            resolver, email ?? new FakeEmailSender())
         {
             ControllerContext = Http.Context(userId)
         };
@@ -509,6 +510,81 @@ public class RecordingsControllerTests
         var result = await controller.UpdateSegment(Guid.NewGuid(), seg.Id, new UpdateSegmentRequest("x"));
 
         Assert.IsType<NotFoundResult>(result);
+    }
+
+    // ---- Merge segments ----
+
+    [Fact]
+    public async Task MergeSegments_CollapsesConsecutiveSameSpeaker()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId); // two consecutive SPEAKER_00 segments
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.MergeSegments(rec.Id);
+
+        Assert.IsType<NoContentResult>(result);
+        var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
+        var seg = Assert.Single(await db.Segments.Where(s => s.TranscriptionId == tr.Id).ToListAsync());
+        Assert.Equal("Hello World", seg.Text);
+        Assert.Equal(0, seg.StartMs);
+        Assert.Equal(2000, seg.EndMs);
+        Assert.Equal(0, seg.Ordinal);
+    }
+
+    [Fact]
+    public async Task MergeSegments_OnAnotherUsersRecording_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var rec = await SeedTranscribedRecording(db, Guid.NewGuid());
+        var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(await controller.MergeSegments(rec.Id));
+    }
+
+    // ---- Email transcript ----
+
+    [Fact]
+    public async Task EmailTranscript_SendsToUsersAddress_WithSubjectAndBody()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var rec = await SeedTranscribedRecording(db, userId, name: "Team Sync");
+        var email = new FakeEmailSender { Sent = true };
+        var controller = Build(db, userId, new FakeJobQueue(), email: email);
+
+        var result = await controller.EmailTranscript(rec.Id);
+
+        Assert.IsType<OkResult>(result);
+        var msg = Assert.Single(email.Messages);
+        Assert.Equal($"{userId}@x.test", msg.To);
+        Assert.Equal("Transcript for Team Sync", msg.Subject);
+        Assert.Contains("Alice", msg.Body);            // speaker display name
+        Assert.Contains("Sent from Diariz", msg.Body);
+    }
+
+    [Fact]
+    public async Task EmailTranscript_WhenEmailUnconfigured_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var rec = await SeedTranscribedRecording(db, userId, name: "X");
+        var controller = Build(db, userId, new FakeJobQueue(), email: new FakeEmailSender { Sent = false });
+
+        Assert.IsType<BadRequestObjectResult>(await controller.EmailTranscript(rec.Id));
+    }
+
+    [Fact]
+    public async Task EmailTranscript_OnAnotherUsersRecording_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var rec = await SeedTranscribedRecording(db, Guid.NewGuid(), name: "X");
+        var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(await controller.EmailTranscript(rec.Id));
     }
 
     // ---- Summarize ----

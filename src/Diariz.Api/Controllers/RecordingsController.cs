@@ -24,18 +24,20 @@ public class RecordingsController : ControllerBase
     private readonly IJobQueue _queue;
     private readonly IHubContext<TranscriptionHub> _hub;
     private readonly ISummarizationSettingsResolver _summarization;
+    private readonly IEmailSender _email;
     private readonly string _defaultModel;
 
     public RecordingsController(
         DiarizDbContext db, IAudioStorage storage, IJobQueue queue,
         IHubContext<TranscriptionHub> hub, IConfiguration config,
-        ISummarizationSettingsResolver summarization)
+        ISummarizationSettingsResolver summarization, IEmailSender email)
     {
         _db = db;
         _storage = storage;
         _queue = queue;
         _hub = hub;
         _summarization = summarization;
+        _email = email;
         _defaultModel = config["Transcription:DefaultModel"] ?? "whisperx-large-v3";
     }
 
@@ -250,6 +252,79 @@ public class RecordingsController : ControllerBase
 
         await _db.SaveChangesAsync();
         return NoContent();
+    }
+
+    /// <summary>Collapse consecutive same-speaker segments in the current transcription into single
+    /// blocks (run after fixing speaker assignments). Permanent for this version; re-transcribe to
+    /// regenerate granular segments.</summary>
+    [HttpPost("{id:guid}/merge-segments")]
+    public async Task<IActionResult> MergeSegments(Guid id)
+    {
+        var owned = await _db.Recordings.AnyAsync(r => r.Id == id && r.UserId == UserId);
+        if (!owned) return NotFound();
+
+        var current = await _db.Transcriptions.Where(t => t.RecordingId == id)
+            .OrderByDescending(t => t.Version).FirstOrDefaultAsync();
+        if (current is null) return NotFound();
+
+        var segments = await _db.Segments.Where(s => s.TranscriptionId == current.Id)
+            .OrderBy(s => s.Ordinal).ToListAsync();
+        if (segments.Count == 0) return NotFound();
+
+        var merged = SegmentMerger.Merge(segments
+            .Select(s => new SegmentMerger.Part(s.SpeakerLabel, s.StartMs, s.EndMs, s.Text)).ToList());
+        if (merged.Count == segments.Count) return NoContent(); // nothing adjacent to merge
+
+        _db.Segments.RemoveRange(segments);
+        var ordinal = 0;
+        foreach (var p in merged)
+            _db.Segments.Add(new Segment
+            {
+                Id = Guid.NewGuid(),
+                TranscriptionId = current.Id,
+                SpeakerLabel = p.SpeakerLabel,
+                StartMs = p.StartMs,
+                EndMs = p.EndMs,
+                Text = p.Text,
+                Ordinal = ordinal++
+            });
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>Email the current transcript to the signed-in user's account address.</summary>
+    [HttpPost("{id:guid}/email")]
+    public async Task<IActionResult> EmailTranscript(Guid id)
+    {
+        var rec = await _db.Recordings
+            .Include(r => r.Speakers)
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal))
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                .ThenInclude(t => t.Summary)
+            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+
+        var current = rec.Transcriptions.FirstOrDefault();
+        if (current is null || current.Segments.Count == 0) return NotFound();
+
+        var address = await _db.Users.Where(u => u.Id == UserId).Select(u => u.Email).FirstOrDefaultAsync();
+        if (string.IsNullOrWhiteSpace(address)) return BadRequest("Your account has no email address.");
+
+        var names = rec.Speakers.ToDictionary(s => s.Label, s => s.DisplayName);
+        var segs = current.Segments
+            .OrderBy(s => s.Ordinal)
+            .Select(s => new SegmentDto(
+                s.Id, s.SpeakerLabel,
+                names.TryGetValue(s.SpeakerLabel, out var dn) ? dn : s.SpeakerLabel,
+                s.StartMs, s.EndMs, s.Text))
+            .ToList();
+
+        var name = rec.Name ?? rec.Title;
+        var html = TranscriptEmail.BuildHtml(name, current.Summary?.Text, segs);
+        var sent = await _email.SendAsync(address!, TranscriptEmail.Subject(name), html);
+        if (!sent) return BadRequest("Email isn't configured on the server. Contact an administrator.");
+        return Ok();
     }
 
     [HttpPut("{id:guid}/segments/{segmentId:guid}")]

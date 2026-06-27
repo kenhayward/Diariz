@@ -20,6 +20,8 @@ vi.mock("../lib/api", () => ({
     downloadTranscript: vi.fn(),
     downloadAudio: vi.fn(),
     updateSegment: vi.fn(),
+    mergeSegments: vi.fn(),
+    emailTranscript: vi.fn(),
     listSpeakerProfiles: vi.fn(),
     assignSpeaker: vi.fn(),
     createSpeakerProfile: vi.fn(),
@@ -117,6 +119,29 @@ describe("RecordingDetail", () => {
 
     await waitFor(() => expect(api.audioUrl).toHaveBeenCalledWith("rec-123"));
     await waitFor(() => expect(play).toHaveBeenCalled());
+  });
+
+  it("merges same-speaker rows via the button (after confirm)", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    (api.mergeSegments as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    renderPage(base);
+    await screen.findByText("Hi");
+
+    fireEvent.click(screen.getByRole("button", { name: /merge same-speaker rows/i }));
+
+    await waitFor(() => expect(api.mergeSegments).toHaveBeenCalledWith("rec-123"));
+  });
+
+  it("emails the transcript via the kebab and confirms", async () => {
+    (api.emailTranscript as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    renderPage(base);
+    await screen.findByText("Hi");
+
+    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /email me the transcript/i }));
+
+    await waitFor(() => expect(api.emailTranscript).toHaveBeenCalledWith("rec-123"));
+    expect(await screen.findByText(/emailed to your account/i)).toBeTruthy();
   });
 
   it("edits a segment via its kebab and saves the new text", async () => {
