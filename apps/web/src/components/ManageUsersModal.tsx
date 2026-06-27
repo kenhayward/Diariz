@@ -13,6 +13,8 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
   const { data: users = [], isLoading } = useQuery({ queryKey: ["admin-users"], queryFn: api.listUsers });
   const [error, setError] = useState<string | null>(null);
   const [grantLink, setGrantLink] = useState<string | null>(null);
+  const [newEmail, setNewEmail] = useState("");
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -43,6 +45,25 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
     }
   }
 
+  async function addUser(e: React.FormEvent) {
+    e.preventDefault();
+    const email = newEmail.trim();
+    if (!email || adding) return;
+    setAdding(true);
+    setError(null);
+    setGrantLink(null);
+    try {
+      const r = await api.addUser(email);
+      refresh();
+      setNewEmail("");
+      if (!r.emailed && r.setupUrl) setGrantLink(r.setupUrl);
+    } catch (err) {
+      setError(apiErrorMessage(err));
+    } finally {
+      setAdding(false);
+    }
+  }
+
   const pending = users.filter((u) => u.status === "Requested");
   const others = users.filter((u) => u.status !== "Requested");
 
@@ -55,6 +76,25 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="mb-3 text-base font-semibold dark:text-gray-100">Manage users</h2>
+
+        {/* Add a user by email — creates the account and emails them a setup link (or shows it below). */}
+        <form onSubmit={addUser} className="mb-3 flex items-center gap-2">
+          <input
+            type="email"
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            placeholder="new.user@example.com"
+            aria-label="New user email"
+            className="min-w-0 flex-1 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          />
+          <button
+            type="submit"
+            disabled={adding || !newEmail.trim()}
+            className="shrink-0 rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+          >
+            {adding ? "Adding…" : "Add user"}
+          </button>
+        </form>
 
         {grantLink && (
           <div className="mb-3 rounded border border-blue-300 bg-blue-50 p-2 text-xs dark:border-blue-800 dark:bg-blue-950/40">
@@ -73,7 +113,10 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
             <ul className="divide-y dark:divide-gray-800">
               {pending.map((u) => (
                 <li key={u.id} className="flex items-center justify-between gap-2 py-2 text-sm dark:text-gray-200">
-                  <span className="min-w-0 truncate">{u.email}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate">{u.email}</span>
+                    <StatusPill status={u.status} />
+                  </span>
                   <span className="flex shrink-0 gap-2">
                     <button onClick={() => grant(u.id)} className="rounded bg-blue-600 px-2 py-1 text-xs text-white">
                       Grant
@@ -125,6 +168,17 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+/// Onboarding status pill: Requested (awaiting grant) → Awaiting setup (granted) → Active.
+function StatusPill({ status }: { status: AdminUser["status"] }) {
+  const styles: Record<AdminUser["status"], string> = {
+    Requested: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+    Invited: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+    Active: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
+  };
+  const label = status === "Invited" ? "Awaiting setup" : status;
+  return <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${styles[status]}`}>{label}</span>;
+}
+
 function UserRow({
   u,
   isSelf,
@@ -145,11 +199,17 @@ function UserRow({
   return (
     <li className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm dark:text-gray-200">
       <span className="min-w-0">
-        <span className="block truncate font-medium">{u.fullName || u.email}</span>
+        <span className="flex items-center gap-2">
+          <span className="truncate font-medium">{u.fullName || u.email}</span>
+          <StatusPill status={u.status} />
+          {!u.isEnabled && (
+            <span className="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-[10px] text-red-800 dark:bg-red-900/40 dark:text-red-300">
+              disabled
+            </span>
+          )}
+        </span>
         <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
           {u.email} · {u.accountType}
-          {u.status !== "Active" ? ` · ${u.status}` : ""}
-          {!u.isEnabled ? " · disabled" : ""}
         </span>
       </span>
       {!protectedRow && (

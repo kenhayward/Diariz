@@ -86,6 +86,12 @@ export const api = {
     return data;
   },
 
+  /// Admin creates a user by email and kicks off onboarding (setup link emailed, or returned to show).
+  async addUser(email: string): Promise<GrantResult> {
+    const { data } = await http.post<GrantResult>("/api/admin/users", { email });
+    return data;
+  },
+
   async grantUser(id: string): Promise<GrantResult> {
     const { data } = await http.post<GrantResult>(`/api/admin/users/${id}/grant`);
     return data;

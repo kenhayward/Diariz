@@ -4,6 +4,7 @@ using Diariz.Api.Controllers;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Tests;
@@ -43,6 +44,65 @@ public class AdminUsersControllerTests
 
         Assert.Equal(Roles.PlatformAdministrator, list.Single(u => u.Email == "plat@x.test").AccountType);
         Assert.Equal(Roles.Standard, list.Single(u => u.Email == "std@x.test").AccountType);
+    }
+
+    // ---- Add user ----
+
+    [Fact]
+    public async Task Add_CreatesInvitedStandardUser_AndReturnsLink_WhenEmailUnconfigured()
+    {
+        using var host = new IdentityTestHost();
+        await host.SeedRolesAsync();
+        var admin = await Seed(host, "admin@x.test", Roles.Administrator);
+        var email = new FakeEmailSender { Sent = false };
+
+        var res = await Build(host, admin.Id, email).Add(new AddUserRequest("new@x.test"));
+
+        var grant = Assert.IsType<GrantResultDto>(res.Value);
+        Assert.False(grant.Emailed);
+        Assert.Contains("/setup?email=", grant.SetupUrl);
+        var created = await host.Users.FindByEmailAsync("new@x.test");
+        Assert.NotNull(created);
+        Assert.Equal(UserStatus.Invited, created!.Status);
+        Assert.False(await host.Users.HasPasswordAsync(created)); // awaits setup
+        Assert.Contains(Roles.Standard, await host.Users.GetRolesAsync(created));
+    }
+
+    [Fact]
+    public async Task Add_EmailsWhenConfigured()
+    {
+        using var host = new IdentityTestHost();
+        await host.SeedRolesAsync();
+        var admin = await Seed(host, "admin@x.test", Roles.Administrator);
+        var email = new FakeEmailSender { Sent = true };
+
+        var grant = (await Build(host, admin.Id, email).Add(new AddUserRequest("new@x.test"))).Value!;
+
+        Assert.True(grant.Emailed);
+        Assert.Null(grant.SetupUrl);
+        Assert.Single(email.Messages);
+    }
+
+    [Fact]
+    public async Task Add_DuplicateEmail_BadRequest_AndNoSecondUser()
+    {
+        using var host = new IdentityTestHost();
+        await host.SeedRolesAsync();
+        var admin = await Seed(host, "admin@x.test", Roles.Administrator);
+        await Seed(host, "dupe@x.test", Roles.Standard);
+
+        Assert.IsType<BadRequestObjectResult>((await Build(host, admin.Id).Add(new AddUserRequest("dupe@x.test"))).Result);
+        Assert.Equal(1, await host.Users.Users.CountAsync(u => u.Email == "dupe@x.test"));
+    }
+
+    [Fact]
+    public async Task Add_BlankEmail_BadRequest()
+    {
+        using var host = new IdentityTestHost();
+        await host.SeedRolesAsync();
+        var admin = await Seed(host, "admin@x.test", Roles.Administrator);
+
+        Assert.IsType<BadRequestObjectResult>((await Build(host, admin.Id).Add(new AddUserRequest("  "))).Result);
     }
 
     // ---- Grant ----
