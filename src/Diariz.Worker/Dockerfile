@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # GPU-enabled transcription worker (WhisperX + pyannote).
 # Requires the NVIDIA Container Toolkit on the host to expose the GPU.
 #
@@ -14,16 +15,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # CUDA-enabled torch first (cu128 wheels include sm_120 kernels), then the rest.
-RUN pip3 install --no-cache-dir torch==2.7.1 torchaudio==2.7.1 \
+# The pip cache mount keeps downloaded wheels on the BuildKit cache, so a rebuild of this
+# (multi-GB) layer reinstalls from cache instead of re-downloading ~10 GB.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install torch==2.7.1 torchaudio==2.7.1 \
     --index-url https://download.pytorch.org/whl/cu128
 
 COPY requirements.txt ./
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install -r requirements.txt
 
 # whisperx 3.3.1 conservatively pins ctranslate2<4.5.0, but Blackwell (sm_120)
 # support only landed in ctranslate2 4.6.3 (CUDA 12.8; INT8 disabled on sm_120 so
 # the worker's float16 compute_type is the supported path). Force past the cap.
-RUN pip3 install --no-cache-dir --no-deps --force-reinstall ctranslate2==4.6.3
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install --no-deps --force-reinstall ctranslate2==4.6.3
 
 COPY . ./
 
