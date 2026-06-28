@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Diariz.Api.Contracts;
@@ -18,7 +17,7 @@ public record SummaryResult(string Summary, string? Name);
 public static class SummarizationPrompt
 {
     /// <summary>Upper bound on transcript characters sent to the model (keeps requests bounded).</summary>
-    public const int DefaultTranscriptCharBudget = 24000;
+    public const int DefaultTranscriptCharBudget = PromptTranscript.DefaultCharBudget;
 
     public static IReadOnlyList<ChatMessage> BuildMessages(
         IReadOnlyList<SegmentDto> segments, bool needName, int charBudget = DefaultTranscriptCharBudget)
@@ -31,7 +30,7 @@ public static class SummarizationPrompt
             "covering the key points and any decisions or action items. " +
             $"Respond with ONLY strict minified JSON of the form {shape}. Do not wrap it in code fences.";
 
-        var user = "Transcript:\n" + BuildTranscript(segments, charBudget);
+        var user = "Transcript:\n" + PromptTranscript.Build(segments, charBudget);
         return [new ChatMessage("system", system), new ChatMessage("user", user)];
     }
 
@@ -91,18 +90,6 @@ public static class SummarizationPrompt
     /// <summary>Strips model control tokens like &lt;|channel|&gt; so a non-JSON fallback reads cleanly.</summary>
     private static string StripModelTokens(string s) =>
         Regex.Replace(s, @"<\|[^|]*\|>", " ").Trim();
-
-    private static string BuildTranscript(IReadOnlyList<SegmentDto> segments, int charBudget)
-    {
-        var sb = new StringBuilder();
-        foreach (var s in segments)
-        {
-            if (sb.Length >= charBudget) break;
-            sb.Append(s.SpeakerDisplay).Append(": ").Append(s.Text).Append('\n');
-        }
-        if (sb.Length > charBudget) sb.Length = charBudget;
-        return sb.ToString();
-    }
 
     private static string StripCodeFence(string s)
     {

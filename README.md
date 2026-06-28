@@ -29,7 +29,10 @@ the in-app **Release Notes** page (`/release-notes`), reachable from **About** i
 - **Summarize** recordings (with automatic naming) and **chat across one or more transcripts** — streaming
   replies, a context-usage dial, PDF/text attachments, and saved conversations — via a per-user (or
   server-default) OpenAI-compatible LLM endpoint, with the API key encrypted at rest.
-- **Organise** recordings into sections with drag-and-drop ordering and cross-group moves.
+- **Extract action items** from a transcript (Action / Actor / Deadline) with that same LLM, into an
+  editable table shown by exception (only after you run it).
+- **Organise** recordings into sections with drag-and-drop ordering and cross-group moves; select a whole
+  group at once to build chat context.
 - **Multi-user RBAC**: Standard / Administrator / Platform Administrator roles, an access-request →
   admin-grant → account-setup lifecycle (one-time email link, with an in-app fallback when SMTP is
   unconfigured), and admin user management. Each user's data is isolated to them. Light/Dark/Auto theming.

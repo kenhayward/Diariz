@@ -88,6 +88,16 @@ export interface SpeakerProfileDetail {
   contributions: SpeakerProfileContribution[];
 }
 
+/// An action item extracted from (or hand-added to) a transcript. All fields are free text; `text` is
+/// the action itself (shown as the "Action" column); `actor`/`deadline` may be empty.
+export interface RecordingAction {
+  id: string;
+  text: string;
+  actor: string;
+  deadline: string;
+  ordinal: number;
+}
+
 export interface RecordingDetail {
   id: string;
   title: string;
@@ -105,6 +115,10 @@ export interface RecordingDetail {
   speakers: SpeakerInfo[];
   current: TranscriptionDto | null;
   summary: SummaryDto | null;
+  /// Extracted action items (only meaningful once `actionsExtracted` is true).
+  actions: RecordingAction[];
+  /// Whether action extraction has been run — drives the "show the Actions panel by exception" rule.
+  actionsExtracted: boolean;
 }
 
 export interface AuthResponse {

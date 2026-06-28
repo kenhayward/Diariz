@@ -77,6 +77,26 @@ public sealed class FakeSummarizationClient : ISummarizationClient
     }
 }
 
+/// <summary>Stub <see cref="IActionsClient"/> — returns a canned action list or throws.</summary>
+public sealed class FakeActionsClient : IActionsClient
+{
+    public List<ExtractedAction> Result { get; set; } = new();
+    public Exception? ThrowOnCall { get; set; }
+    public int Calls { get; private set; }
+    public SummarizationRequestConfig? LastConfig { get; private set; }
+    public IReadOnlyList<SegmentDto>? LastSegments { get; private set; }
+
+    public Task<IReadOnlyList<ExtractedAction>> ExtractAsync(
+        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, CancellationToken ct = default)
+    {
+        Calls++;
+        LastConfig = config;
+        LastSegments = segments;
+        if (ThrowOnCall is not null) throw ThrowOnCall;
+        return Task.FromResult<IReadOnlyList<ExtractedAction>>(Result);
+    }
+}
+
 /// <summary>Records emails it was asked to send; <see cref="Sent"/> toggles the return value to
 /// simulate "SMTP configured" (true) vs the unconfigured fallback (false).</summary>
 public sealed class FakeEmailSender : IEmailSender

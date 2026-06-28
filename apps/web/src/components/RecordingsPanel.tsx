@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import { createHub } from "../lib/signalr";
 import KebabMenu from "./KebabMenu";
+import ToolbarButton, { iconProps } from "./ToolbarButton";
 import MoveToSectionModal from "./MoveToSectionModal";
 import DownloadTranscriptModal from "./DownloadTranscriptModal";
 import { recordingMenu } from "./recordingMenu";
@@ -148,6 +149,20 @@ export default function RecordingsPanel() {
         const ids = g.items.map((i) => i.id);
         const key = g.id ?? UNGROUPED_KEY;
         const isCollapsed = collapsed.has(key);
+        // Select mode only: a checkbox that selects/deselects every recording in the group at once.
+        const selectAll = selection.selectMode && ids.length > 0 ? (
+          <GroupSelectCheckbox
+            groupName={g.name}
+            ids={ids}
+            selectedIds={selection.selectedIds}
+            onChange={(checkAll) => {
+              const next = new Set(selection.selectedIds);
+              if (checkAll) ids.forEach((id) => next.add(id));
+              else ids.forEach((id) => next.delete(id));
+              selection.set([...next]);
+            }}
+          />
+        ) : undefined;
         return (
           <div
             key={key}
@@ -166,6 +181,7 @@ export default function RecordingsPanel() {
                   count={g.items.length}
                   collapsed={isCollapsed}
                   onToggle={() => toggleGroup(key)}
+                  leading={selectAll}
                 />
               ) : (
                 <GroupHeadingButton
@@ -174,6 +190,7 @@ export default function RecordingsPanel() {
                   collapsed={isCollapsed}
                   onToggle={() => toggleGroup(key)}
                   withBg
+                  leading={selectAll}
                 />
               ))}
             {!isCollapsed && (
@@ -243,29 +260,36 @@ function ListToolbar() {
           </button>
         </form>
       ) : (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
-        >
-          + New section
-        </button>
+        <div className="flex items-center gap-0.5">
+          <ToolbarButton label="New section" onClick={() => setOpen(true)} icon={<FolderPlusIcon />} />
+          <ToolbarButton
+            label={selectMode ? "Done selecting" : "Select recordings"}
+            onClick={() => setSelectMode(!selectMode)}
+            active={selectMode}
+            icon={<SelectIcon />}
+          />
+          {selectMode && selectedIds.length > 0 && (
+            <span className="text-xs text-blue-700 dark:text-blue-300">{selectedIds.length}</span>
+          )}
+        </div>
       )}
-      <button
-        type="button"
-        onClick={() => setSelectMode(!selectMode)}
-        aria-pressed={selectMode}
-        className={`shrink-0 rounded border px-2 py-0.5 text-xs dark:border-gray-700 ${
-          selectMode
-            ? "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
-            : "hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
-        }`}
-      >
-        {selectMode ? `Done${selectedIds.length ? ` (${selectedIds.length})` : ""}` : "Select"}
-      </button>
     </div>
   );
 }
+
+const FolderPlusIcon = () => (
+  <svg {...iconProps}>
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+    <line x1="12" y1="11" x2="12" y2="17" />
+    <line x1="9" y1="14" x2="15" y2="14" />
+  </svg>
+);
+const SelectIcon = () => (
+  <svg {...iconProps}>
+    <path d="M9 11l3 3L22 4" />
+    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+  </svg>
+);
 
 /// Per-file status for the current upload batch (queued/uploading/done/failed). Tolerant of partial
 /// failures — a rejected file shows its reason and the rest still upload.
@@ -338,28 +362,70 @@ function GroupHeadingButton({
   collapsed,
   onToggle,
   withBg = false,
+  leading,
 }: {
   name: string;
   count: number;
   collapsed: boolean;
   onToggle: () => void;
   withBg?: boolean;
+  /// Optional control rendered left of the chevron (the group select-all checkbox in Select mode). Kept
+  /// outside the toggle button so it isn't a nested interactive element.
+  leading?: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-expanded={!collapsed}
-      className={`flex min-w-0 items-center gap-1 text-left ${
+    <div
+      className={`flex min-w-0 items-center gap-1 ${
         withBg ? "w-full bg-indigo-50 px-3 py-1 dark:bg-indigo-950/40" : "flex-1"
       }`}
     >
-      <span aria-hidden className="text-[10px] text-indigo-400">{collapsed ? "▸" : "▾"}</span>
-      <h3 className="truncate text-xs font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
-        {name}
-      </h3>
-      <span className="text-[10px] font-normal text-indigo-400 dark:text-indigo-500">{count}</span>
-    </button>
+      {leading}
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={!collapsed}
+        className="flex min-w-0 flex-1 items-center gap-1 text-left"
+      >
+        <span aria-hidden className="text-[10px] text-indigo-400">{collapsed ? "▸" : "▾"}</span>
+        <h3 className="truncate text-xs font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+          {name}
+        </h3>
+        <span className="text-[10px] font-normal text-indigo-400 dark:text-indigo-500">({count})</span>
+      </button>
+    </div>
+  );
+}
+
+/// The group-level select-all checkbox shown in Select mode: checked when every recording in the group is
+/// selected, indeterminate when only some are. Toggling selects/deselects the whole group at once.
+function GroupSelectCheckbox({
+  groupName,
+  ids,
+  selectedIds,
+  onChange,
+}: {
+  groupName: string;
+  ids: string[];
+  selectedIds: string[];
+  onChange: (selectAll: boolean) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const selected = ids.filter((id) => selectedIds.includes(id)).length;
+  const all = ids.length > 0 && selected === ids.length;
+  const some = selected > 0 && !all;
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = some;
+  }, [some]);
+
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={all}
+      aria-label={`Select all in ${groupName}`}
+      onChange={() => onChange(!all)}
+      className="shrink-0"
+    />
   );
 }
 
@@ -369,12 +435,14 @@ function SectionHeading({
   count,
   collapsed,
   onToggle,
+  leading,
 }: {
   id: string;
   name: string;
   count: number;
   collapsed: boolean;
   onToggle: () => void;
+  leading?: React.ReactNode;
 }) {
   const qc = useQueryClient();
   const [renaming, setRenaming] = useState(false);
@@ -410,7 +478,7 @@ function SectionHeading({
       {renaming ? (
         <SectionRenameForm initial={name} onSave={save} onCancel={() => setRenaming(false)} />
       ) : (
-        <GroupHeadingButton name={name} count={count} collapsed={collapsed} onToggle={onToggle} />
+        <GroupHeadingButton name={name} count={count} collapsed={collapsed} onToggle={onToggle} leading={leading} />
       )}
       <KebabMenu actions={actions} label="Section actions" />
     </div>

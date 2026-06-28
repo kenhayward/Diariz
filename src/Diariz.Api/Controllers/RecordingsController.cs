@@ -91,6 +91,7 @@ public class RecordingsController : ControllerBase
     {
         var rec = await _db.Recordings
             .Include(r => r.Speakers)
+            .Include(r => r.Actions)
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal))
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
@@ -100,6 +101,10 @@ public class RecordingsController : ControllerBase
         if (rec is null) return NotFound();
 
         var names = rec.Speakers.ToDictionary(s => s.Label, s => s.DisplayName);
+        var actions = rec.Actions
+            .OrderBy(a => a.Ordinal)
+            .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal))
+            .ToList();
         var speakers = rec.Speakers
             .OrderBy(s => s.Label)
             .Select(s => new SpeakerInfoDto(s.Label, s.DisplayName, s.ProfileId, s.IdentifiedAuto))
@@ -116,7 +121,8 @@ public class RecordingsController : ControllerBase
             : new(current.Summary.Model, current.Summary.Text, current.Summary.CreatedAt);
 
         return new RecordingDetailDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.SizeBytes,
-            rec.Status, rec.Error, rec.CreatedAt, rec.MinSpeakers, rec.MaxSpeakers, names, speakers, tDto, sDto);
+            rec.Status, rec.Error, rec.CreatedAt, rec.MinSpeakers, rec.MaxSpeakers, names, speakers, tDto, sDto,
+            actions, rec.ActionsExtractedAt != null);
     }
 
     /// <summary>Upload an audio file and kick off transcription.</summary>

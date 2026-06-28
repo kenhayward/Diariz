@@ -5,6 +5,8 @@ export interface RecordingMenuHandlers {
   onRetranscribe: () => void;
   onSummarise: () => void;
   onMove: () => void;
+  /// Optional (detail page only): extract action items from the transcript with the LLM.
+  onExtractActions?: () => void;
   /// Optional (detail page only): re-run speaker identification against current voiceprints.
   onReidentify?: () => void;
   /// Optional: the list omits Play (playback lives in the detail panel); the detail menu provides it.
@@ -27,6 +29,9 @@ export function recordingMenu(h: RecordingMenuHandlers): KebabAction[] {
     { label: "Rename", onClick: h.onRename },
     { label: "Re-transcribe", onClick: h.onRetranscribe },
     { label: "Summarise", onClick: h.onSummarise, disabled: !h.hasTranscript || h.isSummarizing },
+    ...(h.onExtractActions
+      ? [{ label: "Extract actions", onClick: h.onExtractActions, disabled: !h.hasTranscript }]
+      : []),
     ...(h.onReidentify
       ? [{ label: "Re-identify speakers", onClick: h.onReidentify, disabled: !h.hasTranscript }]
       : []),

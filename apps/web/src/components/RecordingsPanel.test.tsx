@@ -187,10 +187,46 @@ describe("RecordingsPanel", () => {
     await screen.findByText("Weekly Standup");
     expect(screen.queryByRole("checkbox")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /^select$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
 
     expect(screen.getByRole("checkbox", { name: /select weekly standup/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /^done/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /done selecting/i })).toBeTruthy();
+  });
+
+  it("renders the top controls as icon buttons with hover text", async () => {
+    renderList();
+    await screen.findByText("Weekly Standup");
+    for (const name of ["New section", "Select recordings"]) {
+      const btn = screen.getByRole("button", { name });
+      expect(btn.getAttribute("title")).toBe(name);
+      expect(btn.querySelector("svg")).toBeTruthy();
+    }
+  });
+
+  it("shows each group's recording count in brackets", async () => {
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...rec, id: "a", name: "Grouped", sectionId: "sec-1", sectionName: "Work" },
+      { ...rec, id: "b", name: "Loose", sectionId: null, sectionName: null },
+    ]);
+    renderList();
+    await screen.findByRole("heading", { name: "Work" });
+    // Work (1) and Ungrouped (1).
+    expect(screen.getAllByText("(1)").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("selects every recording in a group from its header checkbox", async () => {
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...rec, id: "a", name: "Alpha", sectionId: "sec-1", sectionName: "Work" },
+      { ...rec, id: "b", name: "Bravo", sectionId: "sec-1", sectionName: "Work" },
+    ]);
+    renderList();
+    await screen.findByText("Alpha");
+
+    fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /select all in work/i }));
+
+    expect((screen.getByRole("checkbox", { name: /select alpha/i }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole("checkbox", { name: /select bravo/i }) as HTMLInputElement).checked).toBe(true);
   });
 
   it("reorders within a group via drag and drop", async () => {

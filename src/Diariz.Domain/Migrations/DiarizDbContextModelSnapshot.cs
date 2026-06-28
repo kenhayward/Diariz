@@ -203,6 +203,9 @@ namespace Diariz.Domain.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("ActionsExtractedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("BlobKey")
                         .IsRequired()
                         .HasColumnType("text");
@@ -260,6 +263,40 @@ namespace Diariz.Domain.Migrations
                     b.HasIndex("UserId", "CreatedAt");
 
                     b.ToTable("Recordings");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.RecordingAction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Deadline")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("RecordingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecordingId", "Ordinal");
+
+                    b.ToTable("RecordingActions");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.Section", b =>
@@ -653,6 +690,17 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.RecordingAction", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.Recording", "Recording")
+                        .WithMany("Actions")
+                        .HasForeignKey("RecordingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Recording");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.Section", b =>
                 {
                     b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
@@ -799,6 +847,8 @@ namespace Diariz.Domain.Migrations
 
             modelBuilder.Entity("Diariz.Domain.Entities.Recording", b =>
                 {
+                    b.Navigation("Actions");
+
                     b.Navigation("Speakers");
 
                     b.Navigation("Transcriptions");
