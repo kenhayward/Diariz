@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import { createHub } from "../lib/signalr";
 import KebabMenu from "../components/KebabMenu";
+import DetailToolbar from "../components/DetailToolbar";
 import MoveToSectionModal from "../components/MoveToSectionModal";
 import DownloadTranscriptModal from "../components/DownloadTranscriptModal";
 import { recordingMenu } from "../components/recordingMenu";
@@ -239,6 +240,14 @@ export default function RecordingDetail() {
               {isSummarizing ? "Summarising…" : "Queuing…"}
             </span>
           )}
+          <DetailToolbar
+            onRename={() => setRenaming(true)}
+            onRetranscribe={() => setRetranscribeOpen(true)}
+            onMove={() => setMoving(true)}
+            onEmailTranscript={emailTranscript}
+            onDownloadTranscript={() => setDownloading(true)}
+            hasTranscript={hasTranscript}
+          />
           <KebabMenu actions={menuActions} />
         </div>
       </div>

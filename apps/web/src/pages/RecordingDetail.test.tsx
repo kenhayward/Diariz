@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -86,8 +86,9 @@ describe("RecordingDetail", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /re-transcribe/i }));
-    // Confirm without entering any hints.
-    fireEvent.click(screen.getByRole("button", { name: /^re-transcribe$/i }));
+    // Confirm without entering any hints (scope to the dialog — the toolbar also has a Re-transcribe button).
+    const dialog = screen.getByRole("dialog", { name: /re-transcribe/i });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^re-transcribe$/i }));
 
     await waitFor(() =>
       expect(api.retranscribe).toHaveBeenCalledWith("rec-123", { speakers: { min: null, max: null } }),
@@ -160,7 +161,8 @@ describe("RecordingDetail", () => {
     fireEvent.click(screen.getByRole("button", { name: "Actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /re-transcribe/i }));
     fireEvent.change(screen.getByLabelText(/minimum speakers/i), { target: { value: "2" } });
-    fireEvent.click(screen.getByRole("button", { name: /^re-transcribe$/i }));
+    const dialog = screen.getByRole("dialog", { name: /re-transcribe/i });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^re-transcribe$/i }));
 
     await waitFor(() =>
       expect(api.retranscribe).toHaveBeenCalledWith("rec-123", { speakers: { min: 2, max: null } }),
