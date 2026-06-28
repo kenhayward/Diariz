@@ -45,8 +45,13 @@ public class Recording
     /// same position fall back to newest-first by <see cref="CreatedAt"/>.</summary>
     public int Position { get; set; }
 
+    /// <summary>When action items were last extracted for this recording (null = never). Drives the
+    /// "show the Actions panel by exception" rule — an extraction that found zero actions still sets it.</summary>
+    public DateTimeOffset? ActionsExtractedAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public ICollection<Transcription> Transcriptions { get; set; } = new List<Transcription>();
     public ICollection<Speaker> Speakers { get; set; } = new List<Speaker>();
+    public ICollection<RecordingAction> Actions { get; set; } = new List<RecordingAction>();
 }

@@ -5,6 +5,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { createHub } from "../lib/signalr";
 import KebabMenu from "../components/KebabMenu";
 import DetailToolbar from "../components/DetailToolbar";
+import ActionsPanel from "../components/ActionsPanel";
 import MoveToSectionModal from "../components/MoveToSectionModal";
 import DownloadTranscriptModal from "../components/DownloadTranscriptModal";
 import { recordingMenu } from "../components/recordingMenu";
@@ -35,6 +36,7 @@ export default function RecordingDetail() {
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
   const [requeuing, setRequeuing] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
+  const [extracting, setExtracting] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [moving, setMoving] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -132,6 +134,56 @@ export default function RecordingDetail() {
     }
   }
 
+  // Extract action items from the current transcript via the LLM, then show the Actions panel.
+  // Re-extracting replaces the existing list — confirm first if there's anything to lose.
+  async function extractActions() {
+    if (rec?.actionsExtracted && rec.actions.length > 0 &&
+        !window.confirm("Replace the current actions with a fresh extraction?")) return;
+    setActionError(null);
+    setActionInfo(null);
+    setExtracting(true);
+    try {
+      const actions = await api.extractActions(id);
+      await qc.invalidateQueries({ queryKey: ["recording", id] });
+      setActionInfo(actions.length ? `Extracted ${actions.length} action${actions.length === 1 ? "" : "s"}.`
+                                   : "No actions were found in this transcript.");
+    } catch (e) {
+      setActionError(apiErrorMessage(e, "Could not extract actions."));
+    } finally {
+      setExtracting(false);
+    }
+  }
+
+  async function addAction() {
+    setActionError(null);
+    try {
+      await api.createAction(id, { text: "", actor: "", deadline: "" });
+      qc.invalidateQueries({ queryKey: ["recording", id] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e, "Could not add the action."));
+    }
+  }
+
+  async function updateAction(actionId: string, patch: { text?: string; actor?: string; deadline?: string }) {
+    setActionError(null);
+    try {
+      await api.updateAction(id, actionId, patch);
+      qc.invalidateQueries({ queryKey: ["recording", id] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e, "Could not update the action."));
+    }
+  }
+
+  async function removeAction(actionId: string) {
+    setActionError(null);
+    try {
+      await api.deleteAction(id, actionId);
+      qc.invalidateQueries({ queryKey: ["recording", id] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e, "Could not remove the action."));
+    }
+  }
+
   async function mergeSegments() {
     if (!window.confirm("Merge consecutive rows from the same speaker into single blocks? Re-transcribe to undo.")) return;
     setActionError(null);
@@ -199,6 +251,7 @@ export default function RecordingDetail() {
     onRename: () => setRenaming(true),
     onRetranscribe: () => setRetranscribeOpen(true),
     onSummarise: summarize,
+    onExtractActions: extractActions,
     onReidentify: reidentify,
     onMove: () => setMoving(true),
     onPlay: () => void playFrom(0),
@@ -235,15 +288,16 @@ export default function RecordingDetail() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {(isSummarizing || requeuing) && (
+          {(isSummarizing || requeuing || extracting) && (
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {isSummarizing ? "Summarising…" : "Queuing…"}
+              {isSummarizing ? "Summarising…" : extracting ? "Extracting actions…" : "Queuing…"}
             </span>
           )}
           <DetailToolbar
             onRename={() => setRenaming(true)}
             onRetranscribe={() => setRetranscribeOpen(true)}
             onMove={() => setMoving(true)}
+            onExtractActions={extractActions}
             onEmailTranscript={emailTranscript}
             onDownloadTranscript={() => setDownloading(true)}
             hasTranscript={hasTranscript}
@@ -272,6 +326,16 @@ export default function RecordingDetail() {
           <h2 className="mb-2 text-sm font-medium text-gray-500 dark:text-gray-400">Summary</h2>
           <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{rec.summary.text}</p>
         </div>
+      )}
+
+      {/* Shown by exception — only once the user has run "Extract actions" for this recording. */}
+      {rec.actionsExtracted && (
+        <ActionsPanel
+          actions={rec.actions}
+          onAdd={addAction}
+          onUpdate={updateAction}
+          onDelete={removeAction}
+        />
       )}
 
       {labels.length > 0 && (

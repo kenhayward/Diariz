@@ -23,6 +23,10 @@ vi.mock("../lib/api", () => ({
     mergeSegments: vi.fn(),
     emailTranscript: vi.fn(),
     reidentify: vi.fn(),
+    extractActions: vi.fn(),
+    createAction: vi.fn(),
+    updateAction: vi.fn(),
+    deleteAction: vi.fn(),
     listSpeakerProfiles: vi.fn(),
     assignSpeaker: vi.fn(),
     createSpeakerProfile: vi.fn(),
@@ -54,6 +58,8 @@ const base: RecordingDetailType = {
     segments: [{ id: "seg-1", speaker: "SPEAKER_00", speakerDisplay: "Alice", startMs: 0, endMs: 1000, text: "Hi" }],
   },
   summary: null,
+  actions: [],
+  actionsExtracted: false,
 };
 
 function renderPage(rec: RecordingDetailType) {
@@ -190,6 +196,32 @@ describe("RecordingDetail", () => {
 
     await waitFor(() => expect(api.emailTranscript).toHaveBeenCalledWith("rec-123"));
     expect(await screen.findByText(/emailed to your account/i)).toBeTruthy();
+  });
+
+  it("extracts actions via the toolbar and shows the actions panel", async () => {
+    (api.extractActions as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "act-1", text: "Send the report", actor: "Bob", deadline: "Friday", ordinal: 0 },
+    ]);
+    renderPage(base);
+    await screen.findByText("Hi");
+
+    // After extraction the page refetches; the recording now reports actionsExtracted = true with the action.
+    (api.getRecording as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...base,
+      actionsExtracted: true,
+      actions: [{ id: "act-1", text: "Send the report", actor: "Bob", deadline: "Friday", ordinal: 0 }],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Extract actions" }));
+
+    await waitFor(() => expect(api.extractActions).toHaveBeenCalledWith("rec-123"));
+    expect(await screen.findByRole("heading", { name: /actions/i })).toBeTruthy();
+    expect((await screen.findByLabelText("Action 1") as HTMLInputElement).value).toBe("Send the report");
+  });
+
+  it("does not show the actions panel until extraction has run", async () => {
+    renderPage(base);
+    await screen.findByText("Hi");
+    expect(screen.queryByRole("heading", { name: /^actions$/i })).toBeNull();
   });
 
   it("edits a segment via its kebab and saves the new text", async () => {

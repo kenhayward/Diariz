@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import ToolbarButton, { iconProps } from "./ToolbarButton";
 
 /// A row of graphical shortcut buttons for the most common recording actions, shown on the detail
 /// header just left of the kebab menu. Every action here is also available in the kebab (see
@@ -7,6 +7,7 @@ export default function DetailToolbar({
   onRename,
   onRetranscribe,
   onMove,
+  onExtractActions,
   onEmailTranscript,
   onDownloadTranscript,
   hasTranscript,
@@ -14,6 +15,7 @@ export default function DetailToolbar({
   onRename: () => void;
   onRetranscribe: () => void;
   onMove: () => void;
+  onExtractActions: () => void;
   onEmailTranscript: () => void;
   onDownloadTranscript: () => void;
   hasTranscript: boolean;
@@ -23,6 +25,12 @@ export default function DetailToolbar({
       <ToolbarButton label="Rename" onClick={onRename} icon={<EditIcon />} />
       <ToolbarButton label="Re-transcribe" onClick={onRetranscribe} icon={<RefreshIcon />} />
       <ToolbarButton label="Move to section" onClick={onMove} icon={<FolderIcon />} />
+      <ToolbarButton
+        label="Extract actions"
+        onClick={onExtractActions}
+        icon={<ChecklistIcon />}
+        disabled={!hasTranscript}
+      />
       <ToolbarButton
         label="Email me the transcript"
         onClick={onEmailTranscript}
@@ -39,43 +47,6 @@ export default function DetailToolbar({
   );
 }
 
-function ToolbarButton({
-  label,
-  onClick,
-  icon,
-  disabled,
-}: {
-  label: string;
-  onClick: () => void;
-  icon: ReactNode;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-      className="rounded px-1.5 py-1 text-gray-500 hover:bg-gray-100 disabled:pointer-events-none disabled:opacity-40 dark:text-gray-400 dark:hover:bg-gray-800"
-    >
-      {icon}
-    </button>
-  );
-}
-
-// Feather-style icons (stroke, 24-grid), matching the icon convention used elsewhere in the app.
-const iconProps = {
-  width: 18,
-  height: 18,
-  viewBox: "0 0 24 24",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 2,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-};
-
 const EditIcon = () => (
   <svg {...iconProps}>
     <path d="M12 20h9" />
@@ -91,6 +62,12 @@ const RefreshIcon = () => (
 const FolderIcon = () => (
   <svg {...iconProps}>
     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+  </svg>
+);
+const ChecklistIcon = () => (
+  <svg {...iconProps}>
+    <path d="M9 11l3 3L22 4" />
+    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
   </svg>
 );
 const MailIcon = () => (

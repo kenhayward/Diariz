@@ -67,6 +67,33 @@ public class DatabaseIntegrationTests(ContainersFixture fx)
     }
 
     [Fact]
+    public async Task DeletingRecording_CascadesItsActions()
+    {
+        var user = await SeedUser();
+        var recId = Guid.NewGuid();
+        var actionId = Guid.NewGuid();
+
+        await using (var db = fx.CreateDbContext())
+        {
+            db.Recordings.Add(new Recording { Id = recId, UserId = user.Id, BlobKey = "k" });
+            db.RecordingActions.Add(new RecordingAction
+            {
+                Id = actionId, RecordingId = recId, Text = "Send the report", Actor = "Bob", Deadline = "Fri", Ordinal = 0,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = fx.CreateDbContext())
+        {
+            db.Recordings.Remove(await db.Recordings.SingleAsync(r => r.Id == recId));
+            await db.SaveChangesAsync();
+        }
+
+        await using var verify = fx.CreateDbContext();
+        Assert.False(await verify.RecordingActions.AnyAsync(a => a.Id == actionId));
+    }
+
+    [Fact]
     public async Task Get_ReturnsOnlyHighestVersionTranscription()
     {
         var user = await SeedUser();

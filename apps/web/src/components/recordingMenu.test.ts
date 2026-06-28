@@ -33,6 +33,12 @@ describe("recordingMenu", () => {
     expect(labels).not.toContain("Play");
   });
 
+  it("includes Extract actions only when an onExtractActions handler is provided (detail menu)", () => {
+    expect(build().map((a) => a.label)).not.toContain("Extract actions");
+    const labels = build({ onExtractActions: () => {} }).map((a) => a.label);
+    expect(labels).toContain("Extract actions");
+  });
+
   it("disables transcript-dependent actions when there is no transcript", () => {
     const menu = build({ hasTranscript: false });
     const find = (label: string) => menu.find((a) => a.label === label)!;

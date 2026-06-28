@@ -23,9 +23,10 @@ recognises that voice in later recordings automatically (using **SpeechBrain ECA
 manual reassignment. A **People** screen manages enrolled voiceprints — rename, prune training samples,
 merge duplicates, and erase one or all (GDPR) of the stored biometric voiceprints.
 
-It can **summarise** recordings and let you **chat across one or more transcripts** — with file
-attachments, a context-usage dial, and saved conversations — using an OpenAI-compatible LLM endpoint
-you configure. Recordings organise into **sections** with drag-and-drop ordering.
+It can **summarise** recordings, **extract action items** (with actor and deadline) into an editable
+table, and let you **chat across one or more transcripts** — with file attachments, a context-usage dial,
+and saved conversations — using an OpenAI-compatible LLM endpoint you configure. Recordings organise into
+**sections** with drag-and-drop ordering.
 
 Diariz is **multi-user** with role-based access: people request access (or an administrator adds them),
 an administrator approves, and each user sets up their own account and keeps their own private
@@ -47,6 +48,32 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.19.0",
+    date: "2026-06-28",
+    pr: 54,
+    headline: "Extract action items from a transcript",
+    summary: `
+A new **Extract actions** button on the recording page asks your summarisation model to pull **action
+items** out of the transcript — each with an action, an actor, and a deadline (any of which may be blank).
+The results appear in an editable **Actions** table below the summary, which you can add to, edit inline,
+and prune. It's shown **by exception** — only once you've run it — so meetings without actions (webinars,
+town halls) stay uncluttered.
+
+The recordings list also gets a tidy-up: the **New section** and **Select** controls are now icon buttons
+with tooltips, in Select mode you can **tick a whole group at once** (handy for picking chat context), and
+each group header shows its **recording count in brackets**.
+`.trim(),
+    added: [
+      "Extract actions: pull action items (Action / Actor / Deadline) from a transcript with the configured LLM, shown as an editable table below the summary (only after you run it).",
+      "Add, inline-edit, and remove action items by hand.",
+      "Select an entire group at once when picking recordings for chat context.",
+    ],
+    changed: [
+      "The recordings list's New section and Select controls are now icon buttons with hover text.",
+      "Group headers show their recording count in brackets, e.g. (3).",
+    ],
+  },
   {
     version: "0.18.0",
     date: "2026-06-28",

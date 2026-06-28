@@ -21,7 +21,8 @@ describe("AboutModal", () => {
 
     // Key disclaimers + copyright.
     expect(within(dialog).getByText(/non-commercial/i)).toBeTruthy();
-    expect(within(dialog).getByText(/OpenAI-compatible LLM endpoint you configure/i)).toBeTruthy();
+    // The LLM disclaimer (distinct from the capabilities blurb, which also mentions the endpoint).
+    expect(within(dialog).getByText(/Summaries and chat use an OpenAI-compatible LLM endpoint/i)).toBeTruthy();
     expect(within(dialog).getByText(/ken hayward/i)).toBeTruthy();
   });
 });

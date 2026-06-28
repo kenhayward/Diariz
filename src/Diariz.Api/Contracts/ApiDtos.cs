@@ -78,9 +78,16 @@ public record RecordingDetailDto(
     IReadOnlyDictionary<string, string> SpeakerNames,
     IReadOnlyList<SpeakerInfoDto> Speakers,
     TranscriptionDto? Current,
-    SummaryDto? Summary);
+    SummaryDto? Summary,
+    IReadOnlyList<RecordingActionDto> Actions,
+    bool ActionsExtracted);
 
 public record RenameSpeakerRequest(string Label, string DisplayName);
+
+// ---- Action items (extracted from a transcript; user-editable) ----
+public record RecordingActionDto(Guid Id, string Text, string Actor, string Deadline, int Ordinal);
+public record CreateRecordingActionRequest(string? Text, string? Actor, string? Deadline);
+public record UpdateRecordingActionRequest(string? Text, string? Actor, string? Deadline);
 
 // ---- Speaker identification (voiceprints) ----
 public record SpeakerProfileDto(Guid Id, string Name, int SampleCount);

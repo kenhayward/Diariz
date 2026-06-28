@@ -9,6 +9,7 @@ import type {
   ChatUsage,
   GrantResult,
   PlatformSettings,
+  RecordingAction,
   RecordingDetail,
   RecordingSource,
   RecordingSummary,
@@ -181,6 +182,34 @@ export const api = {
   /// Email the current transcript to the signed-in user's account address.
   async emailTranscript(id: string): Promise<void> {
     await http.post(`/api/recordings/${id}/email`);
+  },
+
+  // ---- Action items ----
+
+  /// Run the LLM over the current transcript and replace the recording's action list (may be empty).
+  async extractActions(id: string): Promise<RecordingAction[]> {
+    const { data } = await http.post<RecordingAction[]>(`/api/recordings/${id}/actions/extract`);
+    return data;
+  },
+
+  async createAction(
+    id: string,
+    body: { text: string; actor: string; deadline: string },
+  ): Promise<RecordingAction> {
+    const { data } = await http.post<RecordingAction>(`/api/recordings/${id}/actions`, body);
+    return data;
+  },
+
+  async updateAction(
+    id: string,
+    actionId: string,
+    body: { text?: string; actor?: string; deadline?: string },
+  ): Promise<void> {
+    await http.put(`/api/recordings/${id}/actions/${actionId}`, body);
+  },
+
+  async deleteAction(id: string, actionId: string): Promise<void> {
+    await http.delete(`/api/recordings/${id}/actions/${actionId}`);
   },
 
   // ---- Speaker identification (voiceprints) ----
