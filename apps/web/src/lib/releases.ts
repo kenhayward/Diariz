@@ -48,6 +48,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.17.2",
+    date: "2026-06-28",
+    pr: 52,
+    headline: "Cleaner Markdown transcript table",
+    summary: `
+The Markdown transcript no longer appends a separate \`{: col-widths }\` attribute line after the table
+(which some editors rendered as a stray paragraph). The 13/16/71 column widths are now carried by the
+separator row's dash counts — how pandoc and MultiMarkdown size columns — so the file stays a clean table.
+`.trim(),
+    fixed: [
+      "Markdown transcript: removed the trailing column-width attribute line that some editors showed as an extra paragraph; column widths are now encoded in the separator-row dashes.",
+    ],
+  },
+  {
     version: "0.17.1",
     date: "2026-06-28",
     pr: 51,

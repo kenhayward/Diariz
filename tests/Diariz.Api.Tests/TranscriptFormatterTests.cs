@@ -45,9 +45,11 @@ public class TranscriptFormatterTests
 
         Assert.Contains("# Team Sync", md);
         Assert.Contains("## Summary\n\nThe summary.", md);
-        Assert.Contains("## Transcript\n\n| Time | Speaker | Text |\n| --- | --- | --- |", md);
+        // 13/16/71% widths carried by proportional dash counts in the separator row (no stray IAL line).
+        var sep = "| " + new string('-', 13) + " | " + new string('-', 16) + " | " + new string('-', 71) + " |";
+        Assert.Contains("## Transcript\n\n| Time | Speaker | Text |\n" + sep + "\n", md);
         Assert.Contains("| 00:00 | Al\\|ce | a \\| b |", md); // pipes escaped so they don't break the table
-        Assert.Contains("{: col-widths=\"13,16,71\" }", md); // column-width hint after the table
+        Assert.DoesNotContain("col-widths", md); // no attribute-list line that editors render as a stray paragraph
     }
 
     [Fact]
