@@ -288,9 +288,9 @@ export default function RecordingDetail() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {(isSummarizing || requeuing || extracting) && (
+          {(isSummarizing || requeuing) && (
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {isSummarizing ? "Summarising…" : extracting ? "Extracting actions…" : "Queuing…"}
+              {isSummarizing ? "Summarising…" : "Queuing…"}
             </span>
           )}
           <DetailToolbar
@@ -312,6 +312,12 @@ export default function RecordingDetail() {
 
       {actionInfo && (
         <p className="rounded bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/30 dark:text-green-300">{actionInfo}</p>
+      )}
+
+      {extracting && (
+        <p className="rounded bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+          Extracting actions from the transcript…
+        </p>
       )}
 
       {rec.status === "Failed" && rec.error && (
