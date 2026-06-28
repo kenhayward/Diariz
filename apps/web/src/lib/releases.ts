@@ -47,6 +47,27 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.13.0",
+    date: "2026-06-28",
+    pr: 41,
+    headline: "Tidier speaker panel + smarter transcript merge",
+    summary: `
+Two refinements to the recording view. The **Speakers** panel now starts **collapsed** when every speaker
+has already been named or identified (so there's nothing left to label) and stays expanded when speakers
+still need assigning — you can still toggle it either way.
+
+And **merging consecutive same-speaker segments** now follows the *assigned* speaker, not just the raw
+diarization label: if two stretches were diarized as different speakers but you reassigned them to the same
+person, they now merge into one block too.
+`.trim(),
+    changed: [
+      "The detail page's Speakers panel starts collapsed once all speakers are assigned.",
+    ],
+    fixed: [
+      "Merge consecutive same-speaker segments now also merges runs that were diarized as different speakers but reassigned to the same person.",
+    ],
+  },
+  {
     version: "0.12.2",
     date: "2026-06-28",
     pr: 39,
