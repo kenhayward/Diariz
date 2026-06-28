@@ -1,0 +1,12 @@
+# Keep the build context (and the final COPY layer) free of local dev junk so it
+# doesn't bust the cache or bloat the image. Tests run on the host/CI, not in the image.
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+env/
+tests/
+requirements-test.txt
+*.md
+.git/
