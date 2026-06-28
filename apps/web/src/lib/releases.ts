@@ -49,19 +49,29 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
-    version: "0.20.1",
+    version: "0.21.0",
     date: "2026-06-28",
     pr: 57,
-    headline: "Tidier panel toolbars",
+    headline: "Recording-list polish + UI alignment fixes",
     summary: `
-A couple of small layout fixes: the chat toolbar's context-usage dial now lines up vertically with the
-bookmark/clear/save/delete icons next to it, and the recordings and chat toolbars now share the same height
-and bottom-border colour.
+The recordings list now shows each clip's **duration** as a tidy **m:ss / h:mm:ss** value (no zero-padded
+leading unit), right-aligned so the times line up down the list. Its ⋮ menu also gains the actions that were
+only on the detail page — **Extract actions**, **Re-identify speakers**, and **Email me the transcript**.
+
+Plus a few small layout fixes: the chat context-usage dial now lines up with the toolbar icons, the
+"Attach file" button lines up with the context-picker pill, and the recordings and chat panel toolbars share
+the same height and bottom-border colour.
 `.trim(),
+    added: [
+      "The recordings list ⋮ menu now offers Extract actions, Re-identify speakers, and Email me the transcript (parity with the detail page).",
+    ],
+    changed: [
+      "Recording durations in the list show as m:ss / h:mm:ss (right-aligned to line up) instead of raw seconds.",
+    ],
     fixed: [
       "The chat context-usage dial is now vertically aligned with the toolbar icons.",
-      "The recordings and chat panel toolbars now have a consistent height and bottom-border colour.",
       "The chat 'Attach file' button now lines up with the context-picker pill next to it.",
+      "The recordings and chat panel toolbars now have a consistent height and bottom-border colour.",
     ],
   },
   {

@@ -25,6 +25,9 @@ vi.mock("../lib/api", () => ({
     audioUrl: vi.fn(),
     downloadTranscript: vi.fn(),
     downloadAudio: vi.fn(),
+    extractActions: vi.fn(),
+    reidentify: vi.fn(),
+    emailTranscript: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -166,6 +169,22 @@ describe("RecordingsPanel", () => {
     expect(screen.getByRole("menuitem", { name: /move to section/i })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /^download transcript$/i })).toBeTruthy();
     expect(screen.queryByRole("menuitem", { name: /\.srt/i })).toBeNull();
+  });
+
+  it("kebab also offers Extract actions, Re-identify and Email (parity with the detail menu)", async () => {
+    renderList();
+    await screen.findByText("Weekly Standup");
+    fireEvent.click(screen.getByRole("button", { name: /actions/i }));
+
+    expect(screen.getByRole("menuitem", { name: /extract actions/i })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /re-identify speakers/i })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /email me the transcript/i })).toBeTruthy();
+  });
+
+  it("shows the duration as m:ss", async () => {
+    renderList();
+    await screen.findByText("Weekly Standup");
+    expect(screen.getByText("0:09")).toBeTruthy(); // 9000 ms
   });
 
   it("hides the status pill for settled states but shows in-flight ones", async () => {

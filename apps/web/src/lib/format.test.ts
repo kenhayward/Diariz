@@ -1,5 +1,25 @@
 import { describe, it, expect } from "vitest";
-import { formatBytes, storagePercent, bytesToGb, gbToBytes } from "./format";
+import { formatBytes, storagePercent, bytesToGb, gbToBytes, formatDuration } from "./format";
+
+describe("formatDuration", () => {
+  it("formats as m:ss under an hour, with no leading-zero minutes", () => {
+    expect(formatDuration(419_000)).toBe("6:59");
+    expect(formatDuration(819_000)).toBe("13:39");
+    expect(formatDuration(45_000)).toBe("0:45");
+    expect(formatDuration(0)).toBe("0:00");
+  });
+
+  it("includes hours (no leading zero) once past an hour", () => {
+    expect(formatDuration(3_661_000)).toBe("1:01:01");
+    expect(formatDuration(3_600_000)).toBe("1:00:00");
+    expect(formatDuration(36_000_000)).toBe("10:00:00");
+  });
+
+  it("rounds to the nearest second and clamps negatives to 0:00", () => {
+    expect(formatDuration(1_500)).toBe("0:02"); // 1.5s → 2s
+    expect(formatDuration(-5)).toBe("0:00");
+  });
+});
 
 describe("formatBytes", () => {
   it("formats zero / negatives as 0 B", () => {

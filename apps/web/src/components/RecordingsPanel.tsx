@@ -9,6 +9,7 @@ import MoveToSectionModal from "./MoveToSectionModal";
 import DownloadTranscriptModal from "./DownloadTranscriptModal";
 import { recordingMenu } from "./recordingMenu";
 import { useSelection } from "../lib/selection";
+import { formatDuration } from "../lib/format";
 import { computeReorder } from "../lib/reorder";
 import { useUpload } from "../lib/uploadContext";
 import type { UploadItem } from "../lib/uploadQueue";
@@ -557,8 +558,11 @@ function RecordingRow({
     onRename: () => setRenaming(true),
     onRetranscribe: run(async () => { await api.retranscribe(r.id); refresh(); }),
     onSummarise: run(async () => { await api.summarize(r.id); refresh(); }),
+    onExtractActions: run(async () => { await api.extractActions(r.id); refresh(); }),
+    onReidentify: run(async () => { await api.reidentify(r.id); refresh(); }),
     onMove: () => setMoving(true),
     onDownloadTranscript: () => setDownloading(true),
+    onEmailTranscript: run(() => api.emailTranscript(r.id)),
     onDownloadAudio: run(() => api.downloadAudio(r.id)),
     onDelete: run(async () => {
       if (!window.confirm(`Delete "${r.name ?? r.title}"? This cannot be undone.`)) return;
@@ -615,9 +619,12 @@ function RecordingRow({
             }
           >
             <div className="truncate text-sm font-medium dark:text-gray-100">{r.name ?? r.title}</div>
-            <div className="truncate text-xs text-gray-500 dark:text-gray-400">
-              {sourceLabel(r.source)} · {new Date(r.createdAt).toLocaleDateString()} ·{" "}
-              {Math.round(r.durationMs / 1000)}s
+            {/* Source · date on the left; duration right-aligned (tabular-nums) so durations line up down the list. */}
+            <div className="flex items-baseline justify-between gap-2 text-xs text-gray-500 dark:text-gray-400">
+              <span className="truncate">
+                {sourceLabel(r.source)} · {new Date(r.createdAt).toLocaleDateString()}
+              </span>
+              <span className="shrink-0 tabular-nums">{formatDuration(r.durationMs)}</span>
             </div>
           </NavLink>
         )}
