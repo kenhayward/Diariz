@@ -25,6 +25,9 @@ class Config:
     WHISPER_MODEL = os.getenv("WHISPER_MODEL", "large-v3")
     BATCH_SIZE = int(os.getenv("BATCH_SIZE", "16"))
     HF_TOKEN = os.getenv("HF_TOKEN", "")  # required for pyannote diarization
+    # Reject audio longer than this many seconds (protects the GPU worker from huge uploads).
+    # 0 disables the cap. 14400 = 4 h, matching the API's default upload size limit.
+    MAX_AUDIO_SECONDS = float(os.getenv("MAX_AUDIO_SECONDS", "14400"))
 
     # Speaker embeddings (voiceprints): per-speaker ECAPA vectors for identification.
     # Gated so it degrades gracefully when off (the API simply skips identification).

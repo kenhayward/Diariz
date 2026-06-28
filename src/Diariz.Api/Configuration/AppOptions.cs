@@ -83,6 +83,18 @@ public class AppPublicOptions
     public string PublicUrl { get; set; } = "";
 }
 
+/// <summary>Limits and codec policy for user-uploaded audio files (the "Upload" button). Recorded clips
+/// from the browser are not gated by these.</summary>
+public class UploadOptions
+{
+    public const string Section = "Uploads";
+    /// <summary>Max size of a single uploaded file, in bytes (in addition to the per-user storage quota).</summary>
+    public long MaxBytes { get; set; } = 500L * 1024 * 1024; // 500 MB (~4 h of typical voice audio)
+    /// <summary>Accept M4A/AAC uploads. AAC has active patents, so it can be disabled for maximum
+    /// commercial caution; the royalty-free formats (WAV/MP3/FLAC/Ogg/Opus/WebM) are always accepted.</summary>
+    public bool AllowAac { get; set; } = true;
+}
+
 /// <summary>Automatic speaker identification (matching new recordings' speakers to enrolled voiceprints).</summary>
 public class IdentificationOptions
 {

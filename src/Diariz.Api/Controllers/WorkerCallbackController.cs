@@ -54,6 +54,10 @@ public class WorkerCallbackController : ControllerBase
 
         transcription.Language = body.Language;
 
+        // The worker measures the real duration from the decoded audio — authoritative, and the only
+        // source for uploaded files (whose client-side duration is unknown).
+        if (body.DurationMs is > 0) transcription.Recording.DurationMs = body.DurationMs.Value;
+
         var ordinal = 0;
         foreach (var s in body.Segments)
         {

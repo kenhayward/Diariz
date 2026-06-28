@@ -15,7 +15,8 @@ the in-app **Release Notes** page (`/release-notes`), reachable from **About** i
 ## Features
 
 - **Capture** audio from the browser microphone, or Windows system/loopback audio via the Electron desktop
-  shell — which can also **start/stop recording from its system-tray menu** (in the background, with notifications).
+  shell — which can also **start/stop recording from its system-tray menu** (in the background, with
+  notifications). Or **upload an existing audio file** to transcribe (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A).
 - **Transcribe + diarize** server-side with WhisperX (large-v3, word-level timestamps) and pyannote 3.1,
   producing speaker-labelled, timestamped segments you can rename, edit, and play back (per segment or whole).
   Re-transcribe with a chosen model at any time (with optional **min/max speaker hints** for pyannote when
@@ -118,3 +119,8 @@ deployment. *This is a summary for orientation, not legal advice.*
   S3, Cloudflare R2, …) and drop MinIO entirely.
 - **Summaries & chat** send transcript text to whatever **OpenAI-compatible LLM endpoint** you configure;
   that provider's terms and privacy policy govern the text you send.
+- **Uploaded audio formats.** Decoding is done by ffmpeg in the worker (Diariz ships no codec). The
+  royalty-free formats — **WAV, FLAC, Ogg Vorbis, Opus, WebM** — plus **MP3** (its patents expired in 2017)
+  are always accepted. **M4A/AAC** is accepted by default but AAC still carries active patents, so it can be
+  disabled (`UPLOAD_ALLOW_AAC=false`) for maximum commercial caution. Operators are responsible for their
+  ffmpeg build's codec licensing.

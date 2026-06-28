@@ -18,7 +18,7 @@ public class RecordingsControllerTests
 {
     private static RecordingsController Build(DiarizDbContext db, Guid userId, FakeJobQueue queue,
         FakeAudioStorage? storage = null, bool summarizationEnabled = true, FakeEmailSender? email = null,
-        FakeSpeakerIdentifier? identifier = null)
+        FakeSpeakerIdentifier? identifier = null, UploadOptions? uploads = null)
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" })
@@ -28,7 +28,8 @@ public class RecordingsControllerTests
             Options.Create(new SummarizationOptions { ApiBase = summarizationEnabled ? "http://llm.test/v1" : "" }),
             new FakeApiKeyProtector());
         return new RecordingsController(db, storage ?? new FakeAudioStorage(), queue, new FakeHubContext(), config,
-            resolver, email ?? new FakeEmailSender(), identifier ?? new FakeSpeakerIdentifier())
+            resolver, email ?? new FakeEmailSender(), identifier ?? new FakeSpeakerIdentifier(),
+            Options.Create(uploads ?? new UploadOptions()))
         {
             ControllerContext = Http.Context(userId)
         };
@@ -282,6 +283,77 @@ public class RecordingsControllerTests
         Assert.Empty(await db.Recordings.ToListAsync());
         Assert.Empty(queue.Enqueued);
         Assert.Empty(storage.Objects);
+    }
+
+    // A minimal valid WAV header ("RIFF....WAVEfmt ") so source=Upload validation passes.
+    private static byte[] WavBytes() => Encoding.ASCII.GetBytes("RIFF\0\0\0\0WAVEfmt ");
+
+    [Fact]
+    public async Task Upload_SourceUpload_ValidWav_Succeeds()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var storage = new FakeAudioStorage();
+        var controller = Build(db, userId, new FakeJobQueue(), storage);
+
+        var result = await controller.Upload(
+            FakeAudio(WavBytes(), fileName: "memo.wav", contentType: "audio/wav"),
+            title: "Memo", durationMs: 0, source: RecordingSource.Upload);
+
+        var summary = Assert.IsType<RecordingSummaryDto>(Assert.IsType<CreatedAtActionResult>(result.Result).Value);
+        Assert.Equal(RecordingSource.Upload, summary.Source);
+        var rec = await db.Recordings.SingleAsync();
+        Assert.True(storage.Objects.ContainsKey(rec.BlobKey));
+        Assert.Equal(WavBytes(), storage.Objects[rec.BlobKey]); // whole stream stored after the head peek
+    }
+
+    [Fact]
+    public async Task Upload_SourceUpload_UnsupportedBytes_Returns415_StoresNothing()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var storage = new FakeAudioStorage();
+        var controller = Build(db, userId, new FakeJobQueue(), storage);
+
+        var result = await controller.Upload(
+            FakeAudio(Encoding.ASCII.GetBytes("%PDF-1.7 not audio!"), fileName: "evil.wav"),
+            title: "x", durationMs: 0, source: RecordingSource.Upload);
+
+        Assert.Equal(415, Assert.IsType<ObjectResult>(result.Result).StatusCode);
+        Assert.Empty(await db.Recordings.ToListAsync());
+        Assert.Empty(storage.Objects);
+    }
+
+    [Fact]
+    public async Task Upload_SourceUpload_M4a_RejectedWhenAacDisabled()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue(), uploads: new UploadOptions { AllowAac = false });
+
+        var result = await controller.Upload(
+            FakeAudio(Encoding.ASCII.GetBytes("\0\0\0ftypM4A \0\0"), fileName: "voice.m4a"),
+            title: "x", durationMs: 0, source: RecordingSource.Upload);
+
+        Assert.Equal(415, Assert.IsType<ObjectResult>(result.Result).StatusCode);
+    }
+
+    [Fact]
+    public async Task Upload_SourceUpload_OverMaxBytes_Returns413()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue(), uploads: new UploadOptions { MaxBytes = 8 });
+
+        var result = await controller.Upload(
+            FakeAudio(WavBytes(), fileName: "big.wav"), // 16 bytes > 8
+            title: "x", durationMs: 0, source: RecordingSource.Upload);
+
+        Assert.Equal(413, Assert.IsType<ObjectResult>(result.Result).StatusCode);
     }
 
     [Fact]

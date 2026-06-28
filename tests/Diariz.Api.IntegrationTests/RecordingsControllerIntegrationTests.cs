@@ -23,7 +23,7 @@ public class RecordingsControllerIntegrationTests(ContainersFixture fx)
         var resolver = new SummarizationSettingsResolver(
             db, Options.Create(new SummarizationOptions { ApiBase = "http://llm.test/v1" }), new FakeApiKeyProtector());
         return new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
-            resolver, new FakeEmailSender(), new FakeSpeakerIdentifier())
+            resolver, new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()))
         {
             ControllerContext = Http.Context(userId)
         };

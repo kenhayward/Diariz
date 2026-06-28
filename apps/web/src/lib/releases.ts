@@ -11,8 +11,9 @@ export const LICENSE = "Apache-2.0";
 /// the app's scope changes.
 export const CAPABILITIES = `
 Diariz records audio — from your microphone, or Windows system/loopback audio via the desktop app
-(which can also **start and stop recording straight from its system-tray menu**) —
-and transcribes it server-side with **WhisperX** (word-level timestamps) and **pyannote** speaker
+(which can also **start and stop recording straight from its system-tray menu**) — or you can **upload
+an existing audio file** (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A), and it transcribes it server-side with
+**WhisperX** (word-level timestamps) and **pyannote** speaker
 diarization. You get speaker-labelled, timestamped segments you can rename, edit, and play back
 (per segment or the whole recording), and can re-transcribe at any time. You can **merge** consecutive
 same-speaker rows into single blocks and **email yourself the transcript**.
@@ -46,6 +47,27 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.14.0",
+    date: "2026-06-28",
+    pr: 45,
+    headline: "Upload an audio file to transcribe",
+    summary: `
+A new **Upload** button next to Record lets you transcribe an **existing audio file** instead of recording —
+**WAV, MP3, FLAC, Ogg/Opus, WebM, and M4A** are accepted. The file runs through the same pipeline as a
+recording (transcription, diarization, speaker identification, summarise), and its duration is filled in once
+the worker has processed it.
+
+Uploads are validated by their **actual bytes** (not the filename), size-capped (500 MB by default), and
+counted against your storage quota. The royalty-free formats plus MP3 are always accepted; **M4A/AAC** is on
+by default but can be disabled server-side for commercial caution (it still carries patents). Upload is
+disabled while a live recording is in progress.
+`.trim(),
+    added: [
+      "Upload button: transcribe an existing audio file (WAV/MP3/FLAC/Ogg/Opus/WebM/M4A), validated by content, size-capped, and quota-counted.",
+      "Worker reports the measured audio duration (backfilled onto uploads) and rejects audio over a configurable maximum length.",
+    ],
+  },
   {
     version: "0.13.1",
     date: "2026-06-28",

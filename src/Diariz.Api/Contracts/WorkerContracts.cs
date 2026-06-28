@@ -32,7 +32,8 @@ public record TranscriptionResult(
     Guid TranscriptionId,
     string? Language,
     IReadOnlyList<SegmentResult> Segments,
-    IReadOnlyList<SpeakerEmbeddingResult>? Speakers = null);
+    IReadOnlyList<SpeakerEmbeddingResult>? Speakers = null,
+    long? DurationMs = null);
 
 /// <summary>Callback body the worker POSTs when a job fails.</summary>
 public record TranscriptionFailure(

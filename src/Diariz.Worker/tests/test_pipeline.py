@@ -5,6 +5,19 @@ import pytest
 import pipeline
 
 
+def test_duration_ms_from_sample_count():
+    # 16 kHz mono: 16000 samples == 1000 ms.
+    assert pipeline._duration_ms(np.zeros(16000)) == 1000
+    assert pipeline._duration_ms(np.zeros(8000)) == 500
+    assert pipeline._duration_ms(np.zeros(0)) == 0
+
+
+def test_too_long_respects_cap_and_unlimited():
+    assert pipeline._too_long(5000, max_seconds=4) is True       # 5 s > 4 s cap
+    assert pipeline._too_long(3000, max_seconds=4) is False      # 3 s <= 4 s cap
+    assert pipeline._too_long(10**9, max_seconds=0) is False     # 0 = unlimited
+
+
 def test_converts_seconds_to_ms_and_keeps_pascalcase_keys():
     raw = [{"text": " Hello world ", "speaker": "SPEAKER_00", "start": 1.2, "end": 2.5}]
     assert pipeline._shape_segments(raw) == [

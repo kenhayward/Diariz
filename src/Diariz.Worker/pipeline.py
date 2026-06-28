@@ -157,10 +157,25 @@ def _diarize(audio, min_speakers=None, max_speakers=None):
     return _get_diarizer()(audio, **kwargs)
 
 
+def _duration_ms(audio) -> int:
+    """Duration of the loaded 16 kHz waveform, in milliseconds. Pure (testable without models)."""
+    return int(round(len(audio) / config.SAMPLE_RATE * 1000))
+
+
+def _too_long(duration_ms: int, max_seconds: float) -> bool:
+    """Whether the audio exceeds the configured cap (0 = unlimited). Pure."""
+    return max_seconds > 0 and duration_ms > max_seconds * 1000
+
+
 def transcribe(audio_path: str, min_speakers=None, max_speakers=None) -> dict:
     """Run transcription -> alignment -> diarization -> per-speaker embeddings.
-    Returns {language, segments, speakers}. min/max_speakers are optional pyannote hints."""
+    Returns {language, segments, speakers, duration_ms}. min/max_speakers are optional pyannote hints."""
     audio = whisperx.load_audio(audio_path)
+
+    duration_ms = _duration_ms(audio)
+    if _too_long(duration_ms, config.MAX_AUDIO_SECONDS):
+        raise ValueError(
+            f"Audio is too long ({duration_ms // 1000}s); the limit is {int(config.MAX_AUDIO_SECONDS)}s.")
 
     # 1. Transcribe
     result = _get_whisper().transcribe(audio, batch_size=config.BATCH_SIZE)
@@ -181,4 +196,4 @@ def transcribe(audio_path: str, min_speakers=None, max_speakers=None) -> dict:
     # 4. Per-speaker voiceprint embeddings (for identification against enrolled people)
     speakers = _extract_speakers(audio, segments)
 
-    return {"language": language, "segments": segments, "speakers": speakers}
+    return {"language": language, "segments": segments, "speakers": speakers, "duration_ms": duration_ms}

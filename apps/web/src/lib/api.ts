@@ -148,6 +148,18 @@ export const api = {
     return data;
   },
 
+  /// Upload an existing audio file for transcription (the "Upload" button). The worker backfills the
+  /// duration, so we send 0; the server validates the file's actual bytes + size.
+  async uploadFile(file: File, title: string): Promise<RecordingSummary> {
+    const form = new FormData();
+    form.append("audio", file, file.name);
+    form.append("title", title);
+    form.append("durationMs", "0");
+    form.append("source", "Upload");
+    const { data } = await http.post<RecordingSummary>("/api/recordings", form);
+    return data;
+  },
+
   async renameSpeaker(id: string, label: string, displayName: string): Promise<void> {
     await http.put(`/api/recordings/${id}/speakers`, { label, displayName });
   },
