@@ -11,6 +11,12 @@ public class TranscriptFormatterTests
         new SegmentDto(Guid.NewGuid(), "SPEAKER_01", "Bob", 64000, 66500, "Right, on the API."),
     ];
 
+    private static readonly IReadOnlyList<RecordingActionDto> Actions =
+    [
+        new RecordingActionDto(Guid.NewGuid(), "Send the report", "Bob", "Friday", 0),
+        new RecordingActionDto(Guid.NewGuid(), "Book the room", "", "", 1),
+    ];
+
     [Fact]
     public void ToText_HasHeadings_Summary_AndOneParagraphPerSegment()
     {
@@ -81,6 +87,70 @@ public class TranscriptFormatterTests
         Assert.Equal(
             "[00:00] Alice: So here's the thing.\n[01:04] Bob: Right, on the API.\n",
             TranscriptFormatter.ToPlainText(Segments));
+    }
+
+    [Fact]
+    public void ToText_WithActions_InsertsActionsAfterSummary_BeforeTranscript()
+    {
+        var text = TranscriptFormatter.ToText("Team Sync", "We discussed the API.", Segments, Actions);
+
+        Assert.Contains("Summary\nWe discussed the API.", text);
+        Assert.Contains("Actions\n", text);
+        Assert.Contains("Send the report\nActor: Bob   Deadline: Friday", text);
+        Assert.Contains("Book the room\nActor: —   Deadline: —", text); // empty fields → em-dash
+        // Actions come before the Transcript heading.
+        Assert.True(text.IndexOf("Actions\n", StringComparison.Ordinal) < text.IndexOf("Transcript\n", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ToText_NoActions_OmitsTheActionsHeading()
+    {
+        Assert.DoesNotContain("Actions", TranscriptFormatter.ToText("x", "s", Segments));
+        Assert.DoesNotContain("Actions", TranscriptFormatter.ToText("x", "s", Segments, []));
+    }
+
+    [Fact]
+    public void ToMarkdown_WithActions_HasAnActionsTable_BeforeTheTranscript()
+    {
+        var md = TranscriptFormatter.ToMarkdown("Team Sync", "The summary.", Segments, Actions);
+
+        Assert.Contains("## Actions\n\n| Action | Actor | Deadline |", md);
+        Assert.Contains("| Send the report | Bob | Friday |", md);
+        Assert.True(md.IndexOf("## Actions", StringComparison.Ordinal) < md.IndexOf("## Transcript", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ToMarkdown_NoActions_OmitsTheActionsTable()
+    {
+        Assert.DoesNotContain("## Actions", TranscriptFormatter.ToMarkdown("x", "s", Segments));
+    }
+
+    [Fact]
+    public void ToRtf_WithActions_HasABoldActionsTable_BeforeTheTranscript()
+    {
+        var rtf = TranscriptFormatter.ToRtf("Team Sync", "Sum", Segments, Actions);
+
+        Assert.Contains(@"{\b Actions}\par", rtf);
+        Assert.Contains(@"{\b Action}\cell {\b Actor}\cell {\b Deadline}", rtf);
+        Assert.Contains(@"\cellx5760\cellx7488\cellx9600", rtf); // 60/18/22% action columns
+        Assert.True(rtf.IndexOf(@"{\b Actions}", StringComparison.Ordinal) < rtf.IndexOf(@"{\b Transcript}", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ToRtf_NoActions_OmitsTheActionsTable()
+    {
+        Assert.DoesNotContain(@"{\b Actions}", TranscriptFormatter.ToRtf("x", "s", Segments));
+    }
+
+    [Fact]
+    public void ActionsForChat_FormatsActorAndDeadline_AndIsEmptyWithoutActions()
+    {
+        Assert.Equal("", TranscriptFormatter.ActionsForChat([]));
+
+        var text = TranscriptFormatter.ActionsForChat(Actions);
+        Assert.StartsWith("Actions:\n", text);
+        Assert.Contains("- Send the report (Actor: Bob; Deadline: Friday)", text);
+        Assert.Contains("- Book the room\n", text); // no actor/deadline → no parenthetical
     }
 
     [Fact]

@@ -40,6 +40,29 @@ public class TranscriptEmailTests
     }
 
     [Fact]
+    public void BuildHtml_WithActions_InsertsAnActionsTable_AfterTheSummary()
+    {
+        var html = TranscriptEmail.BuildHtml("X", "Sum", [Seg("A", 0, "hi")],
+        [
+            new RecordingActionDto(Guid.NewGuid(), "Send the report", "Bob", "Friday", 0),
+        ]);
+
+        Assert.Contains("<strong>Actions</strong>", html);
+        Assert.Contains("<th align=\"left\">Action</th><th align=\"left\">Actor</th><th align=\"left\">Deadline</th>", html);
+        Assert.Contains("<td>Send the report</td><td>Bob</td><td>Friday</td>", html);
+        // Actions table comes before the Transcript heading.
+        Assert.True(html.IndexOf("<strong>Actions</strong>", StringComparison.Ordinal)
+                    < html.IndexOf("<strong>Transcript</strong>", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void BuildHtml_NoActions_OmitsTheActionsTable()
+    {
+        var html = TranscriptEmail.BuildHtml("X", "Sum", [Seg("A", 0, "hi")]);
+        Assert.DoesNotContain("<strong>Actions</strong>", html);
+    }
+
+    [Fact]
     public void BuildHtml_RendersParagraphBreaksFromMergedText()
     {
         var html = TranscriptEmail.BuildHtml("X", null, [Seg("A", 0, "para one\n\npara two")]);
