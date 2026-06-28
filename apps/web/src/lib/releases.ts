@@ -48,6 +48,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.16.0",
+    date: "2026-06-28",
+    pr: 49,
+    headline: "Welcome screen + guided tour for new users",
+    summary: `
+First-time users no longer land on a blank "select a recording" screen. The empty detail page now shows
+the Diariz backdrop with a friendly welcome — "press Record or Upload to add your first recording" — and a
+**guided tour** kicks off on first sign-in, walking through each area one at a time (capture, recordings,
+transcript, chat, account) with a quick explanation. You can skip it (and turn it off) at any point, and
+replay it whenever from **Show guided tour** in the account menu. Once you have recordings, the empty page
+just prompts you to pick one or record/upload another.
+`.trim(),
+    added: [
+      "First-run guided tour highlighting each part of the app, with skip/turn-off and a replay option in the account menu.",
+      "Welcoming empty-state screen (with the app backdrop) instead of a blank panel.",
+    ],
+  },
+  {
     version: "0.15.0",
     date: "2026-06-28",
     pr: 46,
