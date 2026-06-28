@@ -48,6 +48,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.17.0",
+    date: "2026-06-28",
+    pr: 50,
+    headline: "Choose a transcript download format",
+    summary: `
+"Download transcript" now opens a **"Download as …"** chooser with three formats — **Plain Text**,
+**Markdown**, and **Rich Text Format** — plus OK/Cancel. Every format is structured like the emailed
+transcript: a name heading, the summary, then the transcript itself — as readable paragraphs in plain text,
+and as a Time / Speaker / Text **table** in Markdown and RTF.
+`.trim(),
+    changed: [
+      "Download transcript now offers Plain Text, Markdown, or Rich Text Format, each laid out like the emailed transcript (name, summary, then the transcript — paragraphs for text, a table for Markdown/RTF).",
+    ],
+  },
+  {
     version: "0.16.0",
     date: "2026-06-28",
     pr: 49,

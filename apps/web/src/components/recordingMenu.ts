@@ -9,7 +9,8 @@ export interface RecordingMenuHandlers {
   onReidentify?: () => void;
   /// Optional: the list omits Play (playback lives in the detail panel); the detail menu provides it.
   onPlay?: () => void;
-  onDownloadTxt: () => void;
+  /// Opens the "Download as…" format chooser (Plain Text / Markdown / RTF).
+  onDownloadTranscript: () => void;
   onDownloadAudio: () => void;
   /// Optional (detail page only): email the transcript to the signed-in user.
   onEmailTranscript?: () => void;
@@ -31,7 +32,7 @@ export function recordingMenu(h: RecordingMenuHandlers): KebabAction[] {
       : []),
     { label: "Move to section…", onClick: h.onMove },
     ...(h.onPlay ? [{ label: "Play", onClick: h.onPlay }] : []),
-    { label: "Download transcript", onClick: h.onDownloadTxt, disabled: !h.hasTranscript },
+    { label: "Download transcript", onClick: h.onDownloadTranscript, disabled: !h.hasTranscript },
     ...(h.onEmailTranscript
       ? [{ label: "Email me the transcript", onClick: h.onEmailTranscript, disabled: !h.hasTranscript }]
       : []),

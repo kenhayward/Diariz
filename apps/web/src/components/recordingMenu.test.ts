@@ -5,7 +5,7 @@ function build(overrides: Partial<Parameters<typeof recordingMenu>[0]> = {}) {
   const noop = vi.fn();
   return recordingMenu({
     onRename: noop, onRetranscribe: noop, onSummarise: noop, onMove: noop, onPlay: noop,
-    onDownloadTxt: noop, onDownloadAudio: noop, onDelete: noop,
+    onDownloadTranscript: noop, onDownloadAudio: noop, onDelete: noop,
     hasTranscript: true,
     ...overrides,
   });

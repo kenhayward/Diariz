@@ -978,7 +978,42 @@ public class RecordingsControllerTests
         var file = Assert.IsType<FileContentResult>(result);
         Assert.Equal("text/plain", file.ContentType);
         Assert.Equal("team-sync.txt", file.FileDownloadName);
-        Assert.Equal("[00:00] Alice: Hello\n[00:01] Alice: World\n", Encoding.UTF8.GetString(file.FileContents));
+        var text = Encoding.UTF8.GetString(file.FileContents);
+        Assert.Contains("Transcript Name\nTeam Sync", text); // mirrors the emailed layout
+        Assert.Contains("Summary\n—", text);
+        Assert.Contains("[00:00] Alice\nHello", text);
+        Assert.Contains("[00:01] Alice\nWorld", text);
+    }
+
+    [Fact]
+    public async Task TranscriptMd_ReturnsMarkdownTable()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId, name: "Team Sync");
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var file = Assert.IsType<FileContentResult>(await controller.TranscriptMd(rec.Id));
+        Assert.Equal("text/markdown", file.ContentType);
+        Assert.Equal("team-sync.md", file.FileDownloadName);
+        var md = Encoding.UTF8.GetString(file.FileContents);
+        Assert.Contains("# Team Sync", md);
+        Assert.Contains("| Time | Speaker | Text |", md);
+        Assert.Contains("| 00:00 | Alice | Hello |", md);
+    }
+
+    [Fact]
+    public async Task TranscriptRtf_ReturnsRtfDocument()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId, name: "Team Sync");
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var file = Assert.IsType<FileContentResult>(await controller.TranscriptRtf(rec.Id));
+        Assert.Equal("application/rtf", file.ContentType);
+        Assert.Equal("team-sync.rtf", file.FileDownloadName);
+        Assert.StartsWith("{\\rtf1", Encoding.UTF8.GetString(file.FileContents));
     }
 
     [Fact]
