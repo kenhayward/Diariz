@@ -36,18 +36,22 @@ part shrinks with the tuning knobs; the alignment + diarization models are a **f
 | SpeechBrain ECAPA voiceprints | ~0.5 GB | `ENABLE_SPEAKER_EMBEDDINGS=0` |
 | CUDA context + PyTorch caching allocator | ~2 GB+ | — |
 
-**In practice the footprint runs well above the sum of the weights** — PyTorch's caching allocator reserves
-memory in large blocks, and on Windows that reserved memory counts as GPU usage. Measured on an RTX 4070
-Laptop (8 GB): the full pipeline needs roughly **~13–16 GB** total. Because the **alignment + diarization
-models dominate and don't shrink with `COMPUTE_TYPE`/`BATCH_SIZE`/`WHISPER_MODEL`** (those only touch
-Whisper), lowering the batch size won't move the peak if the peak is the diarization stage.
+**The real working set at defaults is ~9 GB.** Measured cleanly on an RTX 3090 (24 GB): ~0.9 GB at idle,
+**~9.2 GB during transcription, no spill**. The **alignment + diarization models dominate and don't shrink
+with `COMPUTE_TYPE`/`BATCH_SIZE`/`WHISPER_MODEL`** (those only touch Whisper), so lowering the batch size
+won't move the peak if the peak is the diarization stage.
+
+> ⚠️ On a card that's *too small* (e.g. an 8 GB laptop), the numbers in Task Manager balloon and mislead:
+> once the ~9 GB working set won't fit, PyTorch spills into Windows "shared GPU memory" and reserves in large
+> blocks, and Windows counts dedicated + reserved-shared together — so an 8 GB 4070 *reports* ~13–16 GB total
+> even though the genuine requirement is ~9 GB. Don't size from those inflated figures; size from the ~9 GB.
 
 Guidance:
-- **≥ 12 GB** — runs the defaults (`large-v3`, `float16`) comfortably.
-- **8 GB** — the **full pipeline exceeds VRAM and spills into shared/system memory**. It still works and
-  isn't necessarily slow (see the 4070 Laptop row below). You can **reduce** the spill but not eliminate it
-  while keeping diarization. To minimise it: `WHISPER_MODEL=medium`, `COMPUTE_TYPE=int8_float16`, and
-  `ENABLE_SPEAKER_EMBEDDINGS=0` if you don't need cross-recording speaker identification.
+- **≥ 10 GB** — runs the defaults (`large-v3`, `float16`) **entirely in VRAM**, no spill (≈9 GB used). 12 GB+
+  is comfortable.
+- **8 GB** — just under the working set, so it **spills a little into shared/system memory**. It still works
+  and isn't necessarily slow. To minimise the spill: `WHISPER_MODEL=medium`, `COMPUTE_TYPE=int8_float16`
+  (and `ENABLE_SPEAKER_EMBEDDINGS=0` if you don't need cross-recording speaker identification).
 
 ### Tuning for less VRAM
 
@@ -60,7 +64,7 @@ All via env vars on the worker (see `config.py`):
 | `BATCH_SIZE` | `16` | lower it (`8`/`4`) to cut *transcription* activations — **no effect if the peak is diarization** |
 | `ENABLE_SPEAKER_EMBEDDINGS` | `1` | `0` drops the voiceprint model (you keep transcription + diarization) |
 
-On 8 GB the goal is to *minimise* spill, not eliminate it (the diarization floor alone exceeds 8 GB):
+On 8 GB the goal is to *minimise* spill — the ~9 GB working set just exceeds 8 GB:
 `WHISPER_MODEL=medium COMPUTE_TYPE=int8_float16`.
 
 ### GPU architecture support
@@ -77,11 +81,11 @@ not recommended.
 | GPU | VRAM | Architecture | Status |
 |---|---|---|---|
 | **RTX 5090** | 32 GB | Blackwell (sm_120) | **Tested** — runs the defaults with large headroom |
-| RTX 3090 | 24 GB | Ampere (sm_86) | Expected — defaults should run with headroom |
-| **RTX 4070 Laptop** | 8 GB | Ada (sm_89) | **Tested** — works, but the full pipeline spills into shared memory (8 GB < the ~13–16 GB footprint). Not slow. `WHISPER_MODEL=medium` + `COMPUTE_TYPE=int8_float16` cut the spill to ~5 GB shared (vs ~7.8 GB at defaults); `int8`/`int8_float16` are fine on Ada. |
+| **RTX 3090** | 24 GB | Ampere (sm_86) | **Tested** — defaults, **~9.2 GB during transcription, no spill** (~0.9 GB idle). Lots of headroom. |
+| **RTX 4070 Laptop** | 8 GB | Ada (sm_89) | **Tested** — works, but the ~9 GB working set just exceeds 8 GB, so it spills into shared memory (Task Manager *reports* ~13–16 GB, inflated by the allocator + WDDM accounting — the genuine need is ~9 GB). Not slow. `WHISPER_MODEL=medium` + `COMPUTE_TYPE=int8_float16` cut the spill; `int8`/`int8_float16` are fine on Ada. |
 
-> RTX 5090 and RTX 4070 Laptop are confirmed by testing; the RTX 3090 is a reasoned estimate. If you run
-> Diariz on another card, a PR updating this table (with your settings and rough VRAM headroom) is welcome.
+> RTX 5090, RTX 3090, and RTX 4070 Laptop are confirmed by testing. If you run Diariz on another card, a PR
+> updating this table (with your settings and rough VRAM headroom) is welcome.
 
 ### CPU-only
 
