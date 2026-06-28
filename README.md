@@ -8,9 +8,9 @@
 [docs/Overall_Synopsis_of_Platform.md](docs/Overall_Synopsis_of_Platform.md) for the original brief and the
 architecture plan for the full design.
 
-Current version: **0.12.0** — versioned per the rule in [CLAUDE.md](CLAUDE.md); per-release notes live in
-[`apps/web/src/lib/releases.ts`](apps/web/src/lib/releases.ts) and on the in-app **Release Notes** page
-(`/release-notes`), reachable from **About** in the account menu.
+Versioned per the rule in [CLAUDE.md](CLAUDE.md); the current version and per-release notes live in
+[`apps/web/src/lib/releases.ts`](apps/web/src/lib/releases.ts) (and [`/version.json`](version.json)) and on
+the in-app **Release Notes** page (`/release-notes`), reachable from **About** in the account menu.
 
 ## Features
 
@@ -88,6 +88,31 @@ transcript appears automatically when the worker finishes.
 - **M4 — in progress:** macOS/mobile, TLS via Caddy, packaging, live streaming.
 
 > **Keep this README current.** When a PR changes what the app does (a new feature, a stack change, or a
-> shipped roadmap item), update the **Features**, **Architecture**, and **Roadmap** sections and the version
-> line above in the same PR — alongside the [`releases.ts`](apps/web/src/lib/releases.ts) entry required by
-> [CLAUDE.md](CLAUDE.md).
+> shipped roadmap item), update the **Features**, **Architecture**, and **Roadmap** sections in the same PR —
+> alongside the [`releases.ts`](apps/web/src/lib/releases.ts) entry required by [CLAUDE.md](CLAUDE.md). (The
+> version isn't repeated here on purpose — it lives in `version.json` / `releases.ts` so it can't drift.)
+
+## Licensing & commercial use
+
+Diariz's own code is **Apache-2.0** (see [LICENSE](LICENSE)), and all of its software dependencies are
+permissive (MIT / Apache-2.0 / BSD), so the application is free to use, modify, and self-host — including
+commercially. A few parts of the ML/storage stack carry caveats worth understanding before a **commercial**
+deployment. *This is a summary for orientation, not legal advice.*
+
+- **Transcription & diarization — clear for commercial use.** Whisper large-v3 (MIT) and the **pyannote**
+  models (`speaker-diarization-3.1`, `segmentation-3.0`) are **MIT-licensed**. They are *gated* — you must
+  accept their terms on Hugging Face and supply an `HF_TOKEN` — but gating is an access step, not a licence
+  restriction.
+- **Speaker identification / voiceprints — the main caveat.** Recognising known speakers across recordings
+  uses **SpeechBrain ECAPA** embeddings. The model code is Apache-2.0, but the weights are **trained on the
+  VoxCeleb dataset, which is published for research / non-commercial use**. Whether a dataset's terms bind
+  the trained weights is legally unsettled; for a commercial deployment, get your own legal read, **or** swap
+  the embedder for one trained on commercially-cleared data (e.g. NVIDIA NeMo TitaNet, WeSpeaker), **or**
+  simply disable the feature with `ENABLE_SPEAKER_EMBEDDINGS=false` on the worker — transcription and
+  diarization still work, you just lose cross-recording speaker identification. Voiceprints are **biometric
+  data**: only enrol people with their consent, and use the People screen to erase them on request.
+- **Object storage (MinIO) is AGPL-3.0.** Used unmodified as a separate container it does **not** impose
+  copyleft on Diariz's own code, but if AGPL is a concern, point storage at **any S3-compatible store** (AWS
+  S3, Cloudflare R2, …) and drop MinIO entirely.
+- **Summaries & chat** send transcript text to whatever **OpenAI-compatible LLM endpoint** you configure;
+  that provider's terms and privacy policy govern the text you send.
