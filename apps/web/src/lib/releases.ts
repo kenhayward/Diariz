@@ -52,21 +52,26 @@ export const RELEASES: Release[] = [
     version: "0.21.0",
     date: "2026-06-28",
     pr: 57,
-    headline: "Recording-list polish + UI alignment fixes",
+    headline: "Collapsible detail panels + recording-list polish",
     summary: `
-The recordings list now shows each clip's **duration** as a tidy **m:ss / h:mm:ss** value (no zero-padded
-leading unit), right-aligned so the times line up down the list. Its ⋮ menu also gains the actions that were
-only on the detail page — **Extract actions**, **Re-identify speakers**, and **Email me the transcript**.
+The recording detail page's **Summary**, **Speakers**, **Actions**, and the new **Transcript** panel are now
+**collapsible** — click anywhere along the shaded header strip (title to chevron) to fold a section away. The
+whole transcript (player + segments) lives in its own "Transcript" panel, and the detail subtitle now shows the
+**local date** and the **clip duration** (h:mm:ss).
 
-Plus a few small layout fixes: the chat context-usage dial now lines up with the toolbar icons, the
-"Attach file" button lines up with the context-picker pill, and the recordings and chat panel toolbars share
-the same height and bottom-border colour.
+The recordings list shows each clip's **duration** as a tidy **m:ss / h:mm:ss** value, right-aligned so the
+times line up, and its ⋮ menu gains the detail-only actions — **Extract actions** (with a replace-confirm when
+actions already exist), **Re-identify speakers**, and **Email me the transcript**.
+
+Plus small layout fixes: the chat context dial and "Attach file" button line up with their neighbours, and the
+recordings/chat panel toolbars share the same height and bottom-border colour.
 `.trim(),
     added: [
-      "The recordings list ⋮ menu now offers Extract actions, Re-identify speakers, and Email me the transcript (parity with the detail page).",
+      "The Summary, Speakers, Actions, and a new Transcript panel on the detail page are collapsible — click anywhere on the header strip to fold them.",
+      "The recordings list ⋮ menu now offers Extract actions (with a replace-confirm), Re-identify speakers, and Email me the transcript (parity with the detail page).",
     ],
     changed: [
-      "Recording durations in the list show as m:ss / h:mm:ss (right-aligned to line up) instead of raw seconds.",
+      "Recording durations show as m:ss / h:mm:ss (right-aligned in the list), and the detail subtitle now shows the local date plus the clip duration.",
     ],
     fixed: [
       "The chat context-usage dial is now vertically aligned with the toolbar icons.",

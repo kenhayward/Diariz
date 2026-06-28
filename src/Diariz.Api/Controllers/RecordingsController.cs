@@ -55,7 +55,7 @@ public class RecordingsController : ControllerBase
             .OrderBy(r => r.Position)
             .ThenByDescending(r => r.CreatedAt)
             .Select(r => new RecordingSummaryDto(r.Id, r.Title, r.Name, r.Source, r.DurationMs, r.Status, r.CreatedAt,
-                r.SectionId, r.Section != null ? r.Section.Name : null))
+                r.SectionId, r.Section != null ? r.Section.Name : null, r.Actions.Any()))
             .ToListAsync();
 
     /// <summary>Drag-and-drop: set the section and 0-based position of each listed recording in one
@@ -178,7 +178,7 @@ public class RecordingsController : ControllerBase
 
         return CreatedAtAction(nameof(Get), new { id = rec.Id },
             new RecordingSummaryDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.Status, rec.CreatedAt,
-                rec.SectionId, null));
+                rec.SectionId, null, false));
     }
 
     [HttpPost("{id:guid}/retranscribe")]

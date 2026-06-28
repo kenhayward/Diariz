@@ -45,6 +45,7 @@ const rec: RecordingSummary = {
   createdAt: new Date("2026-06-26T12:00:00Z").toISOString(),
   sectionId: null,
   sectionName: null,
+  hasActions: false,
 };
 
 function renderList() {
@@ -185,6 +186,20 @@ describe("RecordingsPanel", () => {
     renderList();
     await screen.findByText("Weekly Standup");
     expect(screen.getByText("0:09")).toBeTruthy(); // 9000 ms
+  });
+
+  it("Extract actions confirms before replacing when the recording already has actions", async () => {
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([{ ...rec, hasActions: true }]);
+    (api.extractActions as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    renderList();
+    await screen.findByText("Weekly Standup");
+
+    fireEvent.click(screen.getByRole("button", { name: /actions/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /extract actions/i }));
+
+    expect(confirm).toHaveBeenCalled();
+    expect(api.extractActions).not.toHaveBeenCalled(); // declined
   });
 
   it("hides the status pill for settled states but shows in-flight ones", async () => {

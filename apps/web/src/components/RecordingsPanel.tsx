@@ -558,7 +558,11 @@ function RecordingRow({
     onRename: () => setRenaming(true),
     onRetranscribe: run(async () => { await api.retranscribe(r.id); refresh(); }),
     onSummarise: run(async () => { await api.summarize(r.id); refresh(); }),
-    onExtractActions: run(async () => { await api.extractActions(r.id); refresh(); }),
+    onExtractActions: run(async () => {
+      if (r.hasActions && !window.confirm("Replace the current actions with a fresh extraction?")) return;
+      await api.extractActions(r.id);
+      refresh();
+    }),
     onReidentify: run(async () => { await api.reidentify(r.id); refresh(); }),
     onMove: () => setMoving(true),
     onDownloadTranscript: () => setDownloading(true),
