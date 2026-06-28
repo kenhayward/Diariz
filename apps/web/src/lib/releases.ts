@@ -49,6 +49,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.21.1",
+    date: "2026-06-28",
+    pr: 58,
+    headline: "Toolbar layout fixups",
+    summary: `
+The recordings list's toolbar (New section / Select) now stays pinned at the top while the list scrolls
+beneath it — matching the chat panel. Also finishes the chat-toolbar alignment: the context-usage dial, the
+"Attach file" button, and the saved-conversations icon now line up exactly with their neighbours (their
+wrapper elements were nudging them off-centre).
+`.trim(),
+    fixed: [
+      "The recordings list toolbar stays fixed at the top instead of scrolling away with the list.",
+      "The chat context dial, 'Attach file' button, and saved-conversations icon now align precisely with the rest of their toolbars.",
+    ],
+  },
+  {
     version: "0.21.0",
     date: "2026-06-28",
     pr: 57,

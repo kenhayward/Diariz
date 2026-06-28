@@ -127,26 +127,29 @@ export default function RecordingsPanel() {
   const grouped = groups.some((g) => g.id !== null);
 
   return (
+    // Flex column so the toolbar stays pinned at the top while only the list below it scrolls (mirrors
+    // the chat panel). The drop-zone ring sits on the outer frame.
     <div
       onDragEnter={onFileDragEnter}
       onDragLeave={onFileDragLeave}
       onDragOver={onFileDragOver}
       onDrop={onFileDrop}
-      className={dragging ? "rounded-md ring-2 ring-inset ring-blue-400 dark:ring-blue-500" : ""}
+      className={`flex h-full flex-col ${dragging ? "rounded-md ring-2 ring-inset ring-blue-400 dark:ring-blue-500" : ""}`}
     >
       <ListToolbar />
-      <UploadStatusList items={upload.items} onClear={upload.clearFinished} />
-      {dragging && (
-        <p className="px-3 py-2 text-center text-xs font-medium text-blue-600 dark:text-blue-400">
-          Drop audio files to upload
-        </p>
-      )}
-      {recordings.length === 0 && !dragging && (
-        <p className="p-4 text-sm text-gray-500 dark:text-gray-400">
-          No recordings yet. Hit Record above, or drop audio files here.
-        </p>
-      )}
-      {groups.map((g) => {
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <UploadStatusList items={upload.items} onClear={upload.clearFinished} />
+        {dragging && (
+          <p className="px-3 py-2 text-center text-xs font-medium text-blue-600 dark:text-blue-400">
+            Drop audio files to upload
+          </p>
+        )}
+        {recordings.length === 0 && !dragging && (
+          <p className="p-4 text-sm text-gray-500 dark:text-gray-400">
+            No recordings yet. Hit Record above, or drop audio files here.
+          </p>
+        )}
+        {groups.map((g) => {
         const ids = g.items.map((i) => i.id);
         const key = g.id ?? UNGROUPED_KEY;
         const isCollapsed = collapsed.has(key);
@@ -211,6 +214,7 @@ export default function RecordingsPanel() {
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
