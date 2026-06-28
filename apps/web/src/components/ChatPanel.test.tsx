@@ -131,6 +131,27 @@ describe("ChatPanel", () => {
     );
   });
 
+  it("refreshes the saved-conversations list after saving, so a new one appears in an open dropdown", async () => {
+    mock(api.listChatConversations).mockResolvedValue([]); // initially empty
+    renderPanel("/recordings/rec-1");
+    await ask("Summarise");
+    await waitFor(() => expect(screen.getByText("world", { exact: false })).toBeTruthy());
+
+    // Open the dropdown (empty) and leave it open.
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: /saved conversations/i })));
+    expect(screen.getByText(/no saved conversations/i)).toBeTruthy();
+
+    // After saving, the server now lists the conversation.
+    mock(api.listChatConversations).mockResolvedValue([
+      { id: "conv-1", title: "Standup Recap", updatedAt: "2026-01-01T00:00:00Z" },
+    ]);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: /save conversation/i })));
+    await waitFor(() => expect(api.createChatConversation).toHaveBeenCalled());
+
+    // The still-open dropdown reflects the save without re-toggling.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Standup Recap" })).toBeTruthy());
+  });
+
   it("saves the conversation then enables and performs delete", async () => {
     renderPanel("/recordings/rec-1");
     await ask("Summarise");

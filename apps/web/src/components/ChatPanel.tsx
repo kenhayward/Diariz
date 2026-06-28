@@ -148,16 +148,18 @@ export default function ChatPanel() {
       .finally(() => setUploading(false));
   }
 
+  async function refreshSavedList() {
+    try {
+      setSavedList(await api.listChatConversations());
+    } catch (e) {
+      setError(apiErrorMessage(e));
+    }
+  }
+
   async function toggleSavedList() {
     const next = !listOpen;
     setListOpen(next);
-    if (next) {
-      try {
-        setSavedList(await api.listChatConversations());
-      } catch (e) {
-        setError(apiErrorMessage(e));
-      }
-    }
+    if (next) await refreshSavedList();
   }
 
   async function openConversation(id: string) {
@@ -204,6 +206,8 @@ export default function ChatPanel() {
         : await api.createChatConversation(body);
       setOpenedId(res.id);
       setSaveStatus("Saved");
+      // Keep the saved-conversations dropdown current (it may be open, and isn't otherwise refreshed).
+      await refreshSavedList();
     } catch (e) {
       setError(apiErrorMessage(e));
     } finally {

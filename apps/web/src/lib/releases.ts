@@ -49,6 +49,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.21.2",
+    date: "2026-06-28",
+    pr: 60,
+    headline: "Saved chat appears in the list right away",
+    summary: `
+After you **Save** a chat conversation, it now shows up in the saved-conversations dropdown immediately —
+previously the dropdown could keep showing a stale list (missing the one you'd just saved) until it was
+closed and reopened.
+`.trim(),
+    fixed: [
+      "Saving a chat conversation now refreshes the saved-conversations dropdown so the new one appears straight away.",
+    ],
+  },
+  {
     version: "0.21.1",
     date: "2026-06-28",
     pr: 58,
