@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
@@ -8,7 +8,11 @@ import MoveToSectionModal from "./MoveToSectionModal";
 import { recordingMenu } from "./recordingMenu";
 import { useSelection } from "../lib/selection";
 import { computeReorder } from "../lib/reorder";
+import { useUpload } from "../lib/uploadContext";
+import type { UploadItem } from "../lib/uploadQueue";
 import type { RecordingStatus, RecordingSource, RecordingSummary, SectionDto } from "../lib/types";
+
+const dragHasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types ?? []).includes("Files");
 
 const statusColor: Record<RecordingStatus, string> = {
   Uploaded: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
@@ -24,7 +28,9 @@ const COLLAPSE_KEY = "diariz.recordings.collapsedGroups";
 const UNGROUPED_KEY = "__ungrouped__";
 
 function sourceLabel(s: RecordingSource): string {
-  return s === "System" ? "System audio" : "Microphone";
+  if (s === "System") return "System audio";
+  if (s === "Upload") return "Uploaded";
+  return "Microphone";
 }
 
 export function hasTranscript(status: RecordingStatus): boolean {
@@ -85,16 +91,57 @@ export default function RecordingsPanel() {
     qc.invalidateQueries({ queryKey: ["recordings"] });
   }
 
+  // Drag audio files anywhere onto the panel to upload them (distinct from the reorder DnD, which uses
+  // the "text/plain" payload — file drags carry "Files"). A depth counter keeps the highlight stable as
+  // the cursor moves over child rows.
+  const upload = useUpload();
+  const [dragging, setDragging] = useState(false);
+  const dragDepth = useRef(0);
+  function onFileDragEnter(e: React.DragEvent) {
+    if (!dragHasFiles(e)) return;
+    dragDepth.current += 1;
+    setDragging(true);
+  }
+  function onFileDragLeave(e: React.DragEvent) {
+    if (!dragHasFiles(e)) return;
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setDragging(false);
+  }
+  function onFileDragOver(e: React.DragEvent) {
+    if (dragHasFiles(e)) e.preventDefault(); // allow drop
+  }
+  function onFileDrop(e: React.DragEvent) {
+    if (!dragHasFiles(e)) return; // a reorder drop — leave it to the row/group handlers
+    e.preventDefault();
+    setDragging(false);
+    dragDepth.current = 0;
+    upload.uploadFiles(Array.from(e.dataTransfer.files));
+  }
+
   if (isLoading) return <p className="p-4 text-sm text-gray-500 dark:text-gray-400">Loading…</p>;
 
   // Show section headings whenever any section exists (so an empty, just-created section is visible).
   const grouped = groups.some((g) => g.id !== null);
 
   return (
-    <div>
+    <div
+      onDragEnter={onFileDragEnter}
+      onDragLeave={onFileDragLeave}
+      onDragOver={onFileDragOver}
+      onDrop={onFileDrop}
+      className={dragging ? "rounded-md ring-2 ring-inset ring-blue-400 dark:ring-blue-500" : ""}
+    >
       <ListToolbar />
-      {recordings.length === 0 && (
-        <p className="p-4 text-sm text-gray-500 dark:text-gray-400">No recordings yet. Hit Record above.</p>
+      <UploadStatusList items={upload.items} onClear={upload.clearFinished} />
+      {dragging && (
+        <p className="px-3 py-2 text-center text-xs font-medium text-blue-600 dark:text-blue-400">
+          Drop audio files to upload
+        </p>
+      )}
+      {recordings.length === 0 && !dragging && (
+        <p className="p-4 text-sm text-gray-500 dark:text-gray-400">
+          No recordings yet. Hit Record above, or drop audio files here.
+        </p>
       )}
       {groups.map((g) => {
         const ids = g.items.map((i) => i.id);
@@ -215,6 +262,45 @@ function ListToolbar() {
       >
         {selectMode ? `Done${selectedIds.length ? ` (${selectedIds.length})` : ""}` : "Select"}
       </button>
+    </div>
+  );
+}
+
+/// Per-file status for the current upload batch (queued/uploading/done/failed). Tolerant of partial
+/// failures — a rejected file shows its reason and the rest still upload.
+function UploadStatusList({ items, onClear }: { items: UploadItem[]; onClear: () => void }) {
+  if (items.length === 0) return null;
+  const settled = items.every((i) => i.status === "done" || i.status === "failed");
+  const tag: Record<UploadItem["status"], string> = {
+    queued: "text-gray-400",
+    uploading: "text-amber-600 dark:text-amber-400",
+    done: "text-green-600 dark:text-green-400",
+    failed: "text-red-600 dark:text-red-400",
+  };
+  const label: Record<UploadItem["status"], string> = {
+    queued: "Queued",
+    uploading: "Uploading…",
+    done: "✓ Done",
+    failed: "✕ Failed",
+  };
+  return (
+    <div className="border-b px-3 py-2 dark:border-gray-800">
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Uploads</span>
+        {settled && (
+          <button type="button" onClick={onClear} className="text-xs text-gray-400 hover:underline">
+            Clear
+          </button>
+        )}
+      </div>
+      <ul className="space-y-0.5">
+        {items.map((i) => (
+          <li key={i.id} className="flex items-center justify-between gap-2 text-xs">
+            <span className="truncate dark:text-gray-300" title={i.name}>{i.name}</span>
+            <span className={`shrink-0 ${tag[i.status]}`} title={i.error}>{label[i.status]}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -418,6 +504,7 @@ function RecordingRow({
       className="px-3 py-2"
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
+        if (e.dataTransfer.files?.length) return; // a file upload — let it bubble to the panel drop zone
         e.preventDefault();
         e.stopPropagation(); // don't also trigger the group's append-drop
         onDropBefore(e.dataTransfer.getData("text/plain"));

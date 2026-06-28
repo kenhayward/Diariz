@@ -16,7 +16,8 @@ the in-app **Release Notes** page (`/release-notes`), reachable from **About** i
 
 - **Capture** audio from the browser microphone, or Windows system/loopback audio via the Electron desktop
   shell — which can also **start/stop recording from its system-tray menu** (in the background, with
-  notifications). Or **upload an existing audio file** to transcribe (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A).
+  notifications). Or **upload existing audio files** to transcribe (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A) —
+  via the Upload button or by **dragging several onto the recordings list**, with per-file status.
 - **Transcribe + diarize** server-side with WhisperX (large-v3, word-level timestamps) and pyannote 3.1,
   producing speaker-labelled, timestamped segments you can rename, edit, and play back (per segment or whole).
   Re-transcribe with a chosen model at any time (with optional **min/max speaker hints** for pyannote when
