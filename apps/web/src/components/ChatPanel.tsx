@@ -38,6 +38,29 @@ export default function ChatPanel() {
   const abortRef = useRef<AbortController | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const savedRef = useRef<HTMLDivElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  // Close the saved-conversations / context dropdowns on an outside click or Escape.
+  useEffect(() => {
+    if (!listOpen && !pickerOpen) return;
+    function onDown(e: MouseEvent) {
+      if (listOpen && savedRef.current && !savedRef.current.contains(e.target as Node)) setListOpen(false);
+      if (pickerOpen && pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setListOpen(false);
+        setPickerOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [listOpen, pickerOpen]);
 
   const started = messages.length > 0;
 
@@ -237,7 +260,7 @@ export default function ChatPanel() {
     <div className="flex h-full flex-col">
       {/* Toolbar */}
       <div className="flex h-9 shrink-0 items-center gap-1 border-b px-2 dark:border-gray-700">
-        <div className="relative flex items-center">
+        <div ref={savedRef} className="relative flex items-center">
           <IconButton label="Saved conversations" onClick={toggleSavedList} aria-expanded={listOpen}>
             <BookmarkIcon />
           </IconButton>
@@ -323,7 +346,7 @@ export default function ChatPanel() {
       {/* Context + attachment */}
       <div className="shrink-0 border-t px-2 py-1.5 dark:border-gray-700">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex items-center">
+          <div ref={pickerRef} className="relative flex items-center">
             <button
               type="button"
               onClick={() => setPickerOpen((v) => !v)}

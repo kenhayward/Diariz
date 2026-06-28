@@ -60,6 +60,7 @@ closed and reopened.
 `.trim(),
     fixed: [
       "Saving a chat conversation now refreshes the saved-conversations dropdown so the new one appears straight away.",
+      "The saved-conversations and context dropdowns now close on an outside click or Escape.",
     ],
   },
   {
