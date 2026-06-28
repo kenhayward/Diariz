@@ -49,6 +49,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.19.2",
+    date: "2026-06-28",
+    pr: 56,
+    headline: "Roomier segment-edit dialog",
+    summary: `
+The "Edit segment" dialog is now wider and grows to fit longer text — it auto-sizes to the content and only
+starts scrolling once it would run off-screen.
+`.trim(),
+    changed: [
+      "The edit-segment dialog is wider and auto-sizes its height to the text (capped to stay on-screen).",
+    ],
+  },
+  {
     version: "0.19.1",
     date: "2026-06-28",
     pr: 55,
