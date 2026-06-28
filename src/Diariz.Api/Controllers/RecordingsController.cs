@@ -284,8 +284,19 @@ public class RecordingsController : ControllerBase
             .OrderBy(s => s.Ordinal).ToListAsync();
         if (segments.Count == 0) return NotFound();
 
+        // Group by the speaker's effective identity (assigned profile, else display name), not the raw
+        // diarization label — so two labels reassigned to the same person merge together.
+        var speakers = await _db.Speakers.Where(s => s.RecordingId == id)
+            .ToDictionaryAsync(s => s.Label, s => s);
+        string KeyFor(string label)
+        {
+            if (!speakers.TryGetValue(label, out var sp)) return $"l:{label}";
+            if (sp.ProfileId is Guid pid) return $"p:{pid}";
+            return string.IsNullOrEmpty(sp.DisplayName) ? $"l:{label}" : $"n:{sp.DisplayName}";
+        }
+
         var merged = SegmentMerger.Merge(segments
-            .Select(s => new SegmentMerger.Part(s.SpeakerLabel, s.StartMs, s.EndMs, s.Text)).ToList());
+            .Select(s => new SegmentMerger.Part(KeyFor(s.SpeakerLabel), s.SpeakerLabel, s.StartMs, s.EndMs, s.Text)).ToList());
         if (merged.Count == segments.Count) return NoContent(); // nothing adjacent to merge
 
         _db.Segments.RemoveRange(segments);

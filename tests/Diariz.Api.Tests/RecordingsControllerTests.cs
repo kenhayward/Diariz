@@ -606,6 +606,35 @@ public class RecordingsControllerTests
         Assert.IsType<NotFoundResult>(await controller.MergeSegments(rec.Id));
     }
 
+    [Fact]
+    public async Task MergeSegments_MergesDifferentLabelsAssignedToTheSamePerson()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
+        // Two consecutive segments diarized as different speakers...
+        db.Segments.AddRange(
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 1000, Text = "Hello", Ordinal = 0 },
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_01", StartMs = 1000, EndMs = 2000, Text = "World", Ordinal = 1 });
+        // ...but both reassigned to the same person.
+        var profileId = Guid.NewGuid();
+        db.Speakers.AddRange(
+            new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Alice", ProfileId = profileId },
+            new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_01", DisplayName = "Alice", ProfileId = profileId });
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.MergeSegments(rec.Id);
+
+        Assert.IsType<NoContentResult>(result);
+        var seg = Assert.Single(await db.Segments.Where(s => s.TranscriptionId == tr.Id).ToListAsync());
+        Assert.Equal("Hello\n\nWorld", seg.Text);
+        Assert.Equal("SPEAKER_00", seg.SpeakerLabel); // keeps the first run's label
+        Assert.Equal(0, seg.StartMs);
+        Assert.Equal(2000, seg.EndMs);
+    }
+
     // ---- Re-identify ----
 
     [Fact]

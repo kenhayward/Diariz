@@ -7,6 +7,7 @@ import KebabMenu from "../components/KebabMenu";
 import MoveToSectionModal from "../components/MoveToSectionModal";
 import { recordingMenu } from "../components/recordingMenu";
 import { formatBytes } from "../lib/format";
+import { allSpeakersAssigned } from "../lib/speakers";
 import type { SegmentDto, SpeakerInfo, SpeakerProfile } from "../lib/types";
 
 function fmt(ms: number): string {
@@ -38,14 +39,12 @@ export default function RecordingDetail() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionInfo, setActionInfo] = useState<string | null>(null);
   const [retranscribeOpen, setRetranscribeOpen] = useState(false);
-  const [speakersCollapsed, setSpeakersCollapsed] = useState<boolean>(
-    () => localStorage.getItem("diariz.detail.speakersCollapsed") === "true",
-  );
+  // Default the speaker panel collapsed when every speaker is already assigned (nothing left to label),
+  // expanded otherwise. Decided once when the recording first loads; manual toggles win after that.
+  const [speakersCollapsed, setSpeakersCollapsed] = useState<boolean | null>(null);
+  const collapsed = speakersCollapsed ?? false;
   function toggleSpeakers() {
-    setSpeakersCollapsed((v) => {
-      localStorage.setItem("diariz.detail.speakersCollapsed", String(!v));
-      return !v;
-    });
+    setSpeakersCollapsed((v) => !(v ?? false));
   }
 
   useEffect(() => {
@@ -55,6 +54,10 @@ export default function RecordingDetail() {
     hub.start().catch(() => {});
     return () => void hub.stop();
   }, [id, qc]);
+
+  useEffect(() => {
+    if (speakersCollapsed === null && rec) setSpeakersCollapsed(allSpeakersAssigned(rec.speakers));
+  }, [rec, speakersCollapsed]);
 
   const labels = useMemo(() => {
     const set = new Set<string>();
@@ -266,15 +269,15 @@ export default function RecordingDetail() {
             <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Speakers</h2>
             <button
               type="button"
-              aria-label={speakersCollapsed ? "Expand speakers panel" : "Collapse speakers panel"}
-              aria-expanded={!speakersCollapsed}
+              aria-label={collapsed ? "Expand speakers panel" : "Collapse speakers panel"}
+              aria-expanded={!collapsed}
               onClick={toggleSpeakers}
               className="rounded px-1 text-xs text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
             >
-              {speakersCollapsed ? "▸" : "▾"}
+              {collapsed ? "▸" : "▾"}
             </button>
           </div>
-          {!speakersCollapsed && (
+          {!collapsed && (
           <div className="mt-2 flex flex-wrap gap-4">
             {labels.map((label) => {
               const info = rec.speakers.find((s) => s.label === label);
