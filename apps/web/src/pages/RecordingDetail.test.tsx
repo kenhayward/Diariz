@@ -141,10 +141,10 @@ describe("RecordingDetail", () => {
     await screen.findByText("Hi");
     expect(screen.getByLabelText(/assign SPEAKER_00 to a person/i)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /collapse speakers panel/i }));
+    fireEvent.click(screen.getByRole("button", { name: /collapse speakers section/i }));
     expect(screen.queryByLabelText(/assign SPEAKER_00 to a person/i)).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /expand speakers panel/i }));
+    fireEvent.click(screen.getByRole("button", { name: /expand speakers section/i }));
     expect(screen.getByLabelText(/assign SPEAKER_00 to a person/i)).toBeTruthy();
   });
 

@@ -25,6 +25,9 @@ vi.mock("../lib/api", () => ({
     audioUrl: vi.fn(),
     downloadTranscript: vi.fn(),
     downloadAudio: vi.fn(),
+    extractActions: vi.fn(),
+    reidentify: vi.fn(),
+    emailTranscript: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -42,6 +45,7 @@ const rec: RecordingSummary = {
   createdAt: new Date("2026-06-26T12:00:00Z").toISOString(),
   sectionId: null,
   sectionName: null,
+  hasActions: false,
 };
 
 function renderList() {
@@ -166,6 +170,36 @@ describe("RecordingsPanel", () => {
     expect(screen.getByRole("menuitem", { name: /move to section/i })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /^download transcript$/i })).toBeTruthy();
     expect(screen.queryByRole("menuitem", { name: /\.srt/i })).toBeNull();
+  });
+
+  it("kebab also offers Extract actions, Re-identify and Email (parity with the detail menu)", async () => {
+    renderList();
+    await screen.findByText("Weekly Standup");
+    fireEvent.click(screen.getByRole("button", { name: /actions/i }));
+
+    expect(screen.getByRole("menuitem", { name: /extract actions/i })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /re-identify speakers/i })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /email me the transcript/i })).toBeTruthy();
+  });
+
+  it("shows the duration as m:ss", async () => {
+    renderList();
+    await screen.findByText("Weekly Standup");
+    expect(screen.getByText("0:09")).toBeTruthy(); // 9000 ms
+  });
+
+  it("Extract actions confirms before replacing when the recording already has actions", async () => {
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([{ ...rec, hasActions: true }]);
+    (api.extractActions as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    renderList();
+    await screen.findByText("Weekly Standup");
+
+    fireEvent.click(screen.getByRole("button", { name: /actions/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /extract actions/i }));
+
+    expect(confirm).toHaveBeenCalled();
+    expect(api.extractActions).not.toHaveBeenCalled(); // declined
   });
 
   it("hides the status pill for settled states but shows in-flight ones", async () => {

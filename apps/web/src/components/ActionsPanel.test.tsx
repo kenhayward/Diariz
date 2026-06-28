@@ -64,13 +64,13 @@ describe("ActionsPanel", () => {
     build([action()]);
     expect(screen.getByLabelText("Action 1")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /collapse actions panel/i }));
+    fireEvent.click(screen.getByRole("button", { name: /collapse actions section/i }));
     expect(screen.queryByLabelText("Action 1")).toBeNull();
     expect(screen.queryByRole("button", { name: /add action/i })).toBeNull();
     // The heading stays visible while collapsed.
     expect(screen.getByRole("heading", { name: /actions/i })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /expand actions panel/i }));
+    fireEvent.click(screen.getByRole("button", { name: /expand actions section/i }));
     expect(screen.getByLabelText("Action 1")).toBeTruthy();
   });
 

@@ -232,7 +232,7 @@ export default function ChatPanel() {
   return (
     <div className="flex h-full flex-col">
       {/* Toolbar */}
-      <div className="flex shrink-0 items-center gap-1 border-b px-2 py-1.5 dark:border-gray-700">
+      <div className="flex h-9 shrink-0 items-center gap-1 border-b px-2 dark:border-gray-700">
         <div className="relative">
           <IconButton label="Saved conversations" onClick={toggleSavedList} aria-expanded={listOpen}>
             <BookmarkIcon />
@@ -383,7 +383,7 @@ export default function ChatPanel() {
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={uploading}
-              className="rounded-full border px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+              className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
             >
               {uploading ? "Reading…" : "+ Attach file"}
             </button>
@@ -440,7 +440,9 @@ function IconButton({
       type="button"
       aria-label={label}
       title={label}
-      className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-40 dark:text-gray-400 dark:hover:bg-gray-700"
+      // inline-flex centres the SVG (avoids the inline baseline gap) so the icons line up vertically
+      // with the context dial, which is itself an inline-flex.
+      className="inline-flex items-center justify-center rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-40 dark:text-gray-400 dark:hover:bg-gray-700"
       {...rest}
     >
       {children}

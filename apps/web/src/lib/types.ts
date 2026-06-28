@@ -21,6 +21,8 @@ export interface RecordingSummary {
   createdAt: string;
   sectionId: string | null;
   sectionName: string | null;
+  /// Whether the recording already has extracted action items (drives the list's re-extract confirm).
+  hasActions: boolean;
 }
 
 export interface SectionDto {

@@ -49,7 +49,8 @@ public record RecordingSummaryDto(
     RecordingStatus Status,
     DateTimeOffset CreatedAt,
     Guid? SectionId,
-    string? SectionName);
+    string? SectionName,
+    bool HasActions);
 
 public record SegmentDto(Guid Id, string Speaker, string SpeakerDisplay, long StartMs, long EndMs, string Text);
 

@@ -49,6 +49,38 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.21.0",
+    date: "2026-06-28",
+    pr: 57,
+    headline: "Collapsible detail panels + recording-list polish",
+    summary: `
+The recording detail page's **Summary**, **Speakers**, **Actions**, and the new **Transcript** panel are now
+**collapsible** — click anywhere along the shaded header strip (title to chevron) to fold a section away. The
+whole transcript (player + segments) lives in its own "Transcript" panel, and the detail subtitle now shows the
+**local date** and the **clip duration** (h:mm:ss).
+
+The recordings list shows each clip's **duration** as a tidy **m:ss / h:mm:ss** value, right-aligned so the
+times line up, and its ⋮ menu gains the detail-only actions — **Extract actions** (with a replace-confirm when
+actions already exist), **Re-identify speakers**, and **Email me the transcript**.
+
+Plus small layout fixes: the chat context dial and "Attach file" button line up with their neighbours, and the
+recordings/chat panel toolbars share the same height and bottom-border colour.
+`.trim(),
+    added: [
+      "The Summary, Speakers, Actions, and a new Transcript panel on the detail page are collapsible — click anywhere on the header strip to fold them.",
+      "The recordings list ⋮ menu now offers Extract actions (with a replace-confirm), Re-identify speakers, and Email me the transcript (parity with the detail page).",
+    ],
+    changed: [
+      "Recording durations show as m:ss / h:mm:ss (right-aligned in the list), and the detail subtitle now shows the local date plus the clip duration.",
+    ],
+    fixed: [
+      "The chat context-usage dial is now vertically aligned with the toolbar icons.",
+      "The chat 'Attach file' button now lines up with the context-picker pill next to it.",
+      "The recordings and chat panel toolbars now have a consistent height and bottom-border colour.",
+      "Uploaded recordings now read \"Uploaded\" (not \"Microphone\") in the detail subtitle.",
+    ],
+  },
+  {
     version: "0.20.0",
     date: "2026-06-28",
     pr: 56,

@@ -6,10 +6,11 @@ import { createHub } from "../lib/signalr";
 import KebabMenu from "../components/KebabMenu";
 import DetailToolbar from "../components/DetailToolbar";
 import ActionsPanel from "../components/ActionsPanel";
+import CollapsibleSection from "../components/CollapsibleSection";
 import MoveToSectionModal from "../components/MoveToSectionModal";
 import DownloadTranscriptModal from "../components/DownloadTranscriptModal";
 import { recordingMenu } from "../components/recordingMenu";
-import { formatBytes } from "../lib/format";
+import { formatBytes, formatDuration } from "../lib/format";
 import { allSpeakersAssigned } from "../lib/speakers";
 import type { SegmentDto, SpeakerInfo, SpeakerProfile } from "../lib/types";
 
@@ -44,13 +45,6 @@ export default function RecordingDetail() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionInfo, setActionInfo] = useState<string | null>(null);
   const [retranscribeOpen, setRetranscribeOpen] = useState(false);
-  // Default the speaker panel collapsed when every speaker is already assigned (nothing left to label),
-  // expanded otherwise. Decided once when the recording first loads; manual toggles win after that.
-  const [speakersCollapsed, setSpeakersCollapsed] = useState<boolean | null>(null);
-  const collapsed = speakersCollapsed ?? false;
-  function toggleSpeakers() {
-    setSpeakersCollapsed((v) => !(v ?? false));
-  }
 
   useEffect(() => {
     const hub = createHub((e) => {
@@ -59,10 +53,6 @@ export default function RecordingDetail() {
     hub.start().catch(() => {});
     return () => void hub.stop();
   }, [id, qc]);
-
-  useEffect(() => {
-    if (speakersCollapsed === null && rec) setSpeakersCollapsed(allSpeakersAssigned(rec.speakers));
-  }, [rec, speakersCollapsed]);
 
   const labels = useMemo(() => {
     const set = new Set<string>();
@@ -281,8 +271,9 @@ export default function RecordingDetail() {
             <h1 className="text-lg font-semibold dark:text-gray-100">{rec.name ?? rec.title}</h1>
           )}
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            {rec.source === "System" ? "System audio" : "Microphone"} ·{" "}
-            {new Date(rec.createdAt).toLocaleString()} · {rec.status}
+            {rec.source === "System" ? "System audio" : rec.source === "Upload" ? "Uploaded" : "Microphone"} ·{" "}
+            {new Date(rec.createdAt).toLocaleDateString()}
+            {rec.durationMs > 0 ? ` · ${formatDuration(rec.durationMs)}` : ""} · {rec.status}
             {rec.sizeBytes > 0 ? ` · ${formatBytes(rec.sizeBytes)}` : ""}
             {rec.current?.language ? ` · ${rec.current.language}` : ""}
           </p>
@@ -328,10 +319,9 @@ export default function RecordingDetail() {
         <p className="rounded bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">Summarising…</p>
       )}
       {rec.summary && (
-        <div className="rounded-lg border bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
-          <h2 className="mb-2 text-sm font-medium text-gray-500 dark:text-gray-400">Summary</h2>
+        <CollapsibleSection title="Summary">
           <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{rec.summary.text}</p>
-        </div>
+        </CollapsibleSection>
       )}
 
       {/* Shown by exception — only once the user has run "Extract actions" for this recording. */}
@@ -345,21 +335,9 @@ export default function RecordingDetail() {
       )}
 
       {labels.length > 0 && (
-        <div className="rounded-lg border bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Speakers</h2>
-            <button
-              type="button"
-              aria-label={collapsed ? "Expand speakers panel" : "Collapse speakers panel"}
-              aria-expanded={!collapsed}
-              onClick={toggleSpeakers}
-              className="rounded px-2 py-1 text-lg leading-none text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
-            >
-              {collapsed ? "▸" : "▾"}
-            </button>
-          </div>
-          {!collapsed && (
-          <div className="mt-2 flex flex-wrap gap-4">
+        // Default collapsed when every speaker is already assigned (nothing left to label).
+        <CollapsibleSection title="Speakers" defaultCollapsed={allSpeakersAssigned(rec.speakers)}>
+          <div className="flex flex-wrap gap-4">
             {labels.map((label) => {
               const info = rec.speakers.find((s) => s.label === label);
               return (
@@ -376,13 +354,13 @@ export default function RecordingDetail() {
               );
             })}
           </div>
-          )}
-        </div>
+        </CollapsibleSection>
       )}
 
       {rec.current ? (
-        <>
-          <div className="flex flex-wrap items-center gap-3">
+        // The body is flush (no horizontal padding) so the segment rows keep the panel's full width.
+        <CollapsibleSection title="Transcript" bodyClassName="space-y-3 pb-2">
+          <div className="flex flex-wrap items-center gap-3 px-4">
             <button
               onClick={() => playFrom(0)}
               className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
@@ -409,7 +387,7 @@ export default function RecordingDetail() {
               />
             ))}
           </ul>
-        </>
+        </CollapsibleSection>
       ) : (
         <p className="text-sm text-gray-500 dark:text-gray-400">
           No transcript yet — it appears here automatically when transcription finishes.
