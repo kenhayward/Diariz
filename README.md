@@ -58,7 +58,9 @@ SignalR → note view shows speaker-labelled, timestamped segments.
 
 Prerequisites: Docker (+ NVIDIA Container Toolkit for the GPU worker), .NET 10 SDK, Node 20+.
 For diarization you need a Hugging Face token with the `pyannote/speaker-diarization-3.1`
-terms accepted — see [src/Diariz.Worker/README.md](src/Diariz.Worker/README.md).
+terms accepted — see [src/Diariz.Worker/README.md](src/Diariz.Worker/README.md). For **GPU/VRAM
+requirements, tuning for smaller cards, and known-working GPUs**, see the worker's
+[GPU and hardware requirements](src/Diariz.Worker/README.md#gpu-and-hardware-requirements).
 
 ```bash
 # 1. Whole stack — web UI, API, Postgres, Redis, MinIO, GPU worker.
