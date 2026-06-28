@@ -13,7 +13,9 @@ export default function TopBar() {
         <span className="text-lg font-semibold dark:text-gray-100">Diariz</span>
       </Link>
 
-      <Recorder compact onUploaded={() => qc.invalidateQueries({ queryKey: ["recordings"] })} />
+      <div data-tour="capture">
+        <Recorder compact onUploaded={() => qc.invalidateQueries({ queryKey: ["recordings"] })} />
+      </div>
 
       <UserMenu />
     </header>

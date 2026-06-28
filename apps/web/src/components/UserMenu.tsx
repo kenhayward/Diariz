@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../auth";
 import { useTheme } from "../theme";
 import { api } from "../lib/api";
+import { useTour } from "../lib/tour";
 import { formatBytes, storagePercent } from "../lib/format";
 import type { ThemeChoice } from "../lib/theme";
 import Avatar from "./Avatar";
@@ -20,6 +21,7 @@ const THEMES: { value: ThemeChoice; label: string }[] = [
 export default function UserMenu() {
   const { initials, email, fullName, isAdmin, logout } = useAuth();
   const { theme, setTheme } = useTheme();
+  const tour = useTour();
   const { data: storage } = useQuery({ queryKey: ["user-storage"], queryFn: api.getUserStorage });
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -51,6 +53,7 @@ export default function UserMenu() {
         aria-label="Account"
         aria-haspopup="menu"
         aria-expanded={open}
+        data-tour="account"
         onClick={() => setOpen((v) => !v)}
       >
         <Avatar initials={initials} />
@@ -107,6 +110,18 @@ export default function UserMenu() {
             className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
           >
             People
+          </button>
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              tour.start();
+            }}
+            className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
+          >
+            Show guided tour
           </button>
 
           <button

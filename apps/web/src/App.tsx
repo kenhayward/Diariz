@@ -6,18 +6,11 @@ import Setup from "./pages/Setup";
 import ReleaseNotes from "./pages/ReleaseNotes";
 import RecordingDetail from "./pages/RecordingDetail";
 import WorkspaceLayout from "./components/WorkspaceLayout";
+import EmptyDetail from "./components/EmptyDetail";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isAuthed } = useAuth();
   return isAuthed ? <>{children}</> : <Navigate to="/login" replace />;
-}
-
-function EmptyDetail() {
-  return (
-    <div className="flex h-full items-center justify-center pt-20 text-sm text-gray-400 dark:text-gray-500">
-      Select a recording from the list.
-    </div>
-  );
 }
 
 export default function App() {

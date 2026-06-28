@@ -62,6 +62,7 @@ export default function Workspace() {
       {leftOpen ? (
         <>
           <aside
+            data-tour="recordings"
             style={{ width: leftWidth }}
             className="flex shrink-0 flex-col border-r bg-white dark:border-gray-700 dark:bg-gray-900"
           >
@@ -79,10 +80,10 @@ export default function Workspace() {
           />
         </>
       ) : (
-        <CollapsedRail label="Recordings" onExpand={() => setLeftOpen(true)} chevron="▶" />
+        <CollapsedRail label="Recordings" onExpand={() => setLeftOpen(true)} chevron="▶" tour="recordings" />
       )}
 
-      <main className="min-w-0 flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950">
+      <main data-tour="detail" className="min-w-0 flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950">
         <div className="p-6">
           <Outlet />
         </div>
@@ -90,7 +91,7 @@ export default function Workspace() {
 
       {/* The chat panel stays mounted even when collapsed (hidden via CSS) so its conversation
           state survives collapse/expand. The rail is shown alongside when collapsed. */}
-      <div className={rightOpen ? "flex shrink-0" : "hidden"}>
+      <div data-tour="chat" className={rightOpen ? "flex shrink-0" : "hidden"}>
         <div
           role="separator"
           aria-orientation="vertical"
@@ -108,7 +109,7 @@ export default function Workspace() {
           </div>
         </aside>
       </div>
-      {!rightOpen && <CollapsedRail label="Chat" onExpand={() => setRightOpen(true)} chevron="◀" />}
+      {!rightOpen && <CollapsedRail label="Chat" onExpand={() => setRightOpen(true)} chevron="◀" tour="chat" />}
     </div>
     </SelectionProvider>
   );
@@ -144,13 +145,18 @@ function CollapsedRail({
   label,
   onExpand,
   chevron,
+  tour,
 }: {
   label: string;
   onExpand: () => void;
   chevron: string;
+  tour?: string;
 }) {
   return (
-    <div className="flex w-9 shrink-0 flex-col items-center border-r bg-white py-2 dark:border-gray-700 dark:bg-gray-900">
+    <div
+      data-tour={tour}
+      className="flex w-9 shrink-0 flex-col items-center border-r bg-white py-2 dark:border-gray-700 dark:bg-gray-900"
+    >
       <button
         type="button"
         aria-label={`Expand ${label} panel`}
