@@ -117,6 +117,14 @@ is **Major.Minor.Build** (currently `0.x`).
   change, or a shipped roadmap milestone — update the README's **Features**, **Architecture**, and
   **Roadmap** sections and its version line in the same PR (it mirrors the `CAPABILITIES`/release-notes
   edits above).
+- **State the deployment surface in every PR.** When opening a PR, say whether shipping it needs a
+  **desktop release** (a new installer, cut by pushing a `v*` tag) or just a **server redeploy**. The
+  desktop app is a thin shell that loads the web app from the server origin, so it only needs a new release
+  when the PR touches the **desktop shell** — `apps/desktop/src/**`, `electron-builder.config.js`, or desktop
+  dependencies. **Web (`apps/web`) and API (`src/Diariz.Api`) changes ship by redeploying the server** and
+  are picked up by installed desktop apps automatically. A lockstep version bump to `apps/desktop/package.json`
+  alone does **not** require a desktop release (desktop version numbers may skip). Docs/CI-only PRs need
+  neither — say so.
 
 The About box (account menu → About) and the `/release-notes` page render from this data.
 
