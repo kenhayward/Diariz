@@ -48,6 +48,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.15.0",
+    date: "2026-06-28",
+    pr: 46,
+    headline: "Drag-and-drop + multi-file uploads",
+    summary: `
+Uploading is now a batch affair. You can **drag audio files straight onto the recordings list** (it
+highlights as you drag over it), and the **Upload** button accepts **several files at once**. A small status
+list shows each file as **queued → uploading → done/failed**, and it's tolerant of partial failures — an
+unsupported or oversized file is skipped with a reason while the rest carry on. Uploaded recordings now also
+show an **"Uploaded"** source label.
+`.trim(),
+    added: [
+      "Drag-and-drop audio files onto the recordings panel, and pick multiple files from the Upload button — with a per-file queued/uploading/done/failed status list.",
+    ],
+  },
+  {
     version: "0.14.0",
     date: "2026-06-28",
     pr: 45,
