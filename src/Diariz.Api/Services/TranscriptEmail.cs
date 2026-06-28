@@ -10,7 +10,8 @@ public static class TranscriptEmail
 {
     public static string Subject(string name) => $"Transcript for {name}";
 
-    public static string BuildHtml(string name, string? summary, IReadOnlyList<SegmentDto> segments)
+    public static string BuildHtml(string name, string? summary, IReadOnlyList<SegmentDto> segments,
+        IReadOnlyList<RecordingActionDto>? actions = null)
     {
         var sb = new StringBuilder();
         sb.Append("<div style=\"font-family:Arial,Helvetica,sans-serif;color:#111;\">");
@@ -20,6 +21,18 @@ public static class TranscriptEmail
         sb.Append("<p><strong>Summary</strong><br>")
           .Append(string.IsNullOrWhiteSpace(summary) ? "&mdash;" : Enc(summary!).Replace("\n", "<br>"))
           .Append("</p>");
+
+        if (actions is { Count: > 0 })
+        {
+            sb.Append("<p><strong>Actions</strong></p>");
+            sb.Append("<table border=\"1\" cellpadding=\"6\" cellspacing=\"0\" style=\"border-collapse:collapse;\">");
+            sb.Append("<tr><th align=\"left\">Action</th><th align=\"left\">Actor</th><th align=\"left\">Deadline</th></tr>");
+            foreach (var a in actions)
+                sb.Append("<tr><td>").Append(Enc(a.Text).Replace("\n", "<br>")).Append("</td><td>")
+                  .Append(Enc(a.Actor)).Append("</td><td>")
+                  .Append(Enc(a.Deadline)).Append("</td></tr>");
+            sb.Append("</table>");
+        }
 
         sb.Append("<p><strong>Transcript</strong></p>");
         sb.Append("<table border=\"1\" cellpadding=\"6\" cellspacing=\"0\" style=\"border-collapse:collapse;\">");

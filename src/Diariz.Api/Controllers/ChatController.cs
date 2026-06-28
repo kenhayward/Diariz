@@ -221,6 +221,7 @@ public class ChatController : ControllerBase
 
         var recs = await _db.Recordings
             .Include(r => r.Speakers)
+            .Include(r => r.Actions)
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal))
             .Where(r => ids.Contains(r.Id) && r.UserId == UserId)
@@ -238,7 +239,17 @@ public class ChatController : ControllerBase
                     names.TryGetValue(s.SpeakerLabel, out var dn) ? dn : s.SpeakerLabel,
                     s.StartMs, s.EndMs, s.Text))
                 .ToList() ?? [];
-            contexts.Add(new TranscriptContext(rec.Name ?? rec.Title, TranscriptFormatter.ToPlainText(segs)));
+            var actions = rec.Actions
+                .OrderBy(a => a.Ordinal)
+                .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal))
+                .ToList();
+
+            // Include any extracted actions alongside the transcript so the model can answer about them.
+            var text = TranscriptFormatter.ToPlainText(segs);
+            var actionsText = TranscriptFormatter.ActionsForChat(actions);
+            if (actionsText.Length > 0) text = text + "\n" + actionsText;
+
+            contexts.Add(new TranscriptContext(rec.Name ?? rec.Title, text));
         }
         return (contexts, recs.Count == ids.Count);
     }

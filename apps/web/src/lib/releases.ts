@@ -49,6 +49,29 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.20.0",
+    date: "2026-06-28",
+    pr: 56,
+    headline: "Action items everywhere they belong",
+    summary: `
+Extracted **action items** now travel with the transcript. When a recording has actions, an **Actions**
+section (with the same Action / Actor / Deadline layout) is inserted right after the summary in every
+**downloaded transcript** (Plain Text, Markdown, RTF) and in the **emailed transcript** — and the actions are
+included in the **chat context** for the current and selected transcripts, so you can ask the assistant about
+them. The section is omitted entirely when a recording has no actions.
+
+Also: the **Edit segment** dialog is wider and auto-sizes to fit longer text (capped to stay on-screen).
+`.trim(),
+    added: [
+      "Downloaded transcripts (Text/Markdown/RTF) and the emailed transcript now include an Actions section after the summary when actions are present.",
+      "Chat includes a recording's action items in its context (current and selected transcripts).",
+    ],
+    changed: [
+      "The edit-segment dialog is wider and auto-sizes its height to the text (capped to stay on-screen).",
+      "The Actions panel is collapsible, and the Actions/Speakers expand toggles are larger and easier to hit.",
+    ],
+  },
+  {
     version: "0.19.1",
     date: "2026-06-28",
     pr: 55,

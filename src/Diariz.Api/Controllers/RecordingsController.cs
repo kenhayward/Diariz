@@ -361,6 +361,7 @@ public class RecordingsController : ControllerBase
     {
         var rec = await _db.Recordings
             .Include(r => r.Speakers)
+            .Include(r => r.Actions)
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal))
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
@@ -382,9 +383,13 @@ public class RecordingsController : ControllerBase
                 names.TryGetValue(s.SpeakerLabel, out var dn) ? dn : s.SpeakerLabel,
                 s.StartMs, s.EndMs, s.Text))
             .ToList();
+        var actions = rec.Actions
+            .OrderBy(a => a.Ordinal)
+            .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal))
+            .ToList();
 
         var name = rec.Name ?? rec.Title;
-        var html = TranscriptEmail.BuildHtml(name, current.Summary?.Text, segs);
+        var html = TranscriptEmail.BuildHtml(name, current.Summary?.Text, segs, actions);
         var sent = await _email.SendAsync(address!, TranscriptEmail.Subject(name), html);
         if (!sent) return BadRequest("Email isn't configured on the server. Contact an administrator.");
         return Ok();
@@ -563,6 +568,7 @@ public class RecordingsController : ControllerBase
     {
         var rec = await _db.Recordings
             .Include(r => r.Speakers)
+            .Include(r => r.Actions)
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal))
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
@@ -584,13 +590,17 @@ public class RecordingsController : ControllerBase
 
         var name = rec.Name ?? rec.Title;
         var summary = current.Summary?.Text;
+        var actions = rec.Actions
+            .OrderBy(a => a.Ordinal)
+            .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal))
+            .ToList();
 
         var (body, mime, ext) = format switch
         {
-            "md" => (TranscriptFormatter.ToMarkdown(name, summary, segs), "text/markdown", "md"),
-            "rtf" => (TranscriptFormatter.ToRtf(name, summary, segs), "application/rtf", "rtf"),
+            "md" => (TranscriptFormatter.ToMarkdown(name, summary, segs, actions), "text/markdown", "md"),
+            "rtf" => (TranscriptFormatter.ToRtf(name, summary, segs, actions), "application/rtf", "rtf"),
             "srt" => (TranscriptFormatter.ToSrt(segs), "application/x-subrip", "srt"),
-            _ => (TranscriptFormatter.ToText(name, summary, segs), "text/plain", "txt"),
+            _ => (TranscriptFormatter.ToText(name, summary, segs, actions), "text/plain", "txt"),
         };
         return File(Encoding.UTF8.GetBytes(body), mime, $"{Slug(name)}.{ext}");
     }

@@ -353,7 +353,7 @@ export default function RecordingDetail() {
               aria-label={collapsed ? "Expand speakers panel" : "Collapse speakers panel"}
               aria-expanded={!collapsed}
               onClick={toggleSpeakers}
-              className="rounded px-1 text-xs text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+              className="rounded px-2 py-1 text-lg leading-none text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
             >
               {collapsed ? "▸" : "▾"}
             </button>
@@ -543,6 +543,17 @@ function SegmentEditModal({
   const [text, setText] = useState(seg.text);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // Grow the textarea to fit its content; CSS max-height keeps the modal on-screen (it scrolls past that).
+  function autosize() {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }
+  // Size to the initial text once mounted.
+  useEffect(() => autosize(), []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -566,17 +577,20 @@ function SegmentEditModal({
       <div
         role="dialog"
         aria-label="Edit segment"
-        className="w-full max-w-lg rounded-lg border bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900"
+        className="w-full max-w-3xl rounded-lg border bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="mb-3 text-base font-semibold dark:text-gray-100">Edit segment</h2>
         <textarea
+          ref={taRef}
           autoFocus
           value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={4}
+          onChange={(e) => {
+            setText(e.target.value);
+            autosize();
+          }}
           aria-label="Segment text"
-          className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          className="block max-h-[60vh] min-h-[8rem] w-full resize-none overflow-y-auto rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         />
         {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
         <div className="mt-3 flex justify-end gap-2">

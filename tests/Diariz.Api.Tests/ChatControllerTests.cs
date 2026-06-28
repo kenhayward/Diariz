@@ -239,6 +239,27 @@ public class ChatControllerTests
         Assert.Equal("text/event-stream", controller.ControllerContext.HttpContext.Response.Headers["Content-Type"]);
     }
 
+    [Fact]
+    public async Task Stream_IncludesExtractedActions_InTheSystemContext()
+    {
+        var me = Guid.NewGuid();
+        var (controller, db, chat) = Build(me);
+        var rid = await SeedTranscribedRecording(db, me);
+        db.RecordingActions.Add(new RecordingAction
+        {
+            Id = Guid.NewGuid(), RecordingId = rid, Text = "Ship the widget", Actor = "Alice", Deadline = "Friday", Ordinal = 0,
+        });
+        await db.SaveChangesAsync();
+
+        controller.ControllerContext.HttpContext.Response.Body = new MemoryStream();
+        await controller.Stream(
+            new ChatStreamRequest([rid], null, null, [new ChatTurnDto("user", "What are the actions?")]), default);
+
+        var system = chat.LastMessages![0].Content;
+        Assert.Contains("Actions:", system);
+        Assert.Contains("Ship the widget (Actor: Alice; Deadline: Friday)", system);
+    }
+
     // ---- Attachment ----
 
     [Fact]
