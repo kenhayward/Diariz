@@ -25,21 +25,33 @@ in `docker-compose.yml` requests the GPU). CPU-only works but is far slower — 
 
 ### VRAM
 
-With the defaults (`WHISPER_MODEL=large-v3`, `COMPUTE_TYPE=float16`, `BATCH_SIZE=16`, diarization +
-voiceprints on) all of the above are resident at once:
+The worker keeps Whisper + alignment + diarization (+ optional ECAPA) resident at once. Only the **Whisper**
+part shrinks with the tuning knobs; the alignment + diarization models are a **fixed floor**:
 
-| Component | Approx VRAM (fp16) |
-|---|---|
-| Whisper large-v3 (faster-whisper / CTranslate2) | ~4.5–5 GB |
-| WhisperX alignment (wav2vec2) | ~1–2 GB |
-| pyannote diarization 3.1 (segmentation + embedding) | ~2–3 GB |
-| SpeechBrain ECAPA voiceprints | ~0.5 GB |
-| CUDA context + batch-16 activations | ~1–2 GB |
-| **Peak (defaults)** | **~10–12 GB** |
+| Component | Approx VRAM | Shrinks with |
+|---|---|---|
+| Whisper (faster-whisper / CTranslate2) | large-v3 fp16 ~3 GB · int8_float16 ~1.5 GB · medium ~0.8 GB | `COMPUTE_TYPE`, `WHISPER_MODEL`, `BATCH_SIZE` |
+| wav2vec2 alignment | ~1–2 GB | — (fixed) |
+| pyannote 3.1 diarization | ~2–3 GB | — (fixed) |
+| SpeechBrain ECAPA voiceprints | ~0.5 GB | `ENABLE_SPEAKER_EMBEDDINGS=0` |
+| CUDA context + PyTorch caching allocator | ~2 GB+ | — |
 
-- **≥ 12 GB** — runs the defaults comfortably, with headroom.
-- **8–12 GB** — works with light tuning (int8 compute and/or a smaller batch).
-- **~6 GB** — the practical floor: trim features (int8 + small batch + voiceprints off, or a smaller model).
+**The real working set at defaults is ~9 GB.** Measured cleanly on an RTX 3090 (24 GB): ~0.9 GB at idle,
+**~9.2 GB during transcription, no spill**. The **alignment + diarization models dominate and don't shrink
+with `COMPUTE_TYPE`/`BATCH_SIZE`/`WHISPER_MODEL`** (those only touch Whisper), so lowering the batch size
+won't move the peak if the peak is the diarization stage.
+
+> ⚠️ On a card that's *too small* (e.g. an 8 GB laptop), the numbers in Task Manager balloon and mislead:
+> once the ~9 GB working set won't fit, PyTorch spills into Windows "shared GPU memory" and reserves in large
+> blocks, and Windows counts dedicated + reserved-shared together — so an 8 GB 4070 *reports* ~13–16 GB total
+> even though the genuine requirement is ~9 GB. Don't size from those inflated figures; size from the ~9 GB.
+
+Guidance:
+- **≥ 10 GB** — runs the defaults (`large-v3`, `float16`) **entirely in VRAM**, no spill (≈9 GB used). 12 GB+
+  is comfortable.
+- **8 GB** — just under the working set, so it **spills a little into shared/system memory**. It still works
+  and isn't necessarily slow. To minimise the spill: `WHISPER_MODEL=medium`, `COMPUTE_TYPE=int8_float16`
+  (and `ENABLE_SPEAKER_EMBEDDINGS=0` if you don't need cross-recording speaker identification).
 
 ### Tuning for less VRAM
 
@@ -47,12 +59,13 @@ All via env vars on the worker (see `config.py`):
 
 | Var | Default | Effect |
 |---|---|---|
-| `COMPUTE_TYPE` | `float16` | `int8` (or `int8_float16`) — biggest single saving; large-v3 weights drop to ~2–3 GB |
-| `BATCH_SIZE` | `16` | lower it (e.g. `4`–`8`) to cut activation memory (slightly slower) |
-| `ENABLE_SPEAKER_EMBEDDINGS` | `1` | `0` drops the voiceprint model (you keep transcription + diarization) |
+| `COMPUTE_TYPE` | `float16` | `int8_float16` (or `int8`) — biggest single saving; large-v3 weights ~3 GB → ~1.5 GB |
 | `WHISPER_MODEL` | `large-v3` | `medium` / `small` — lighter + faster, lower accuracy |
+| `BATCH_SIZE` | `16` | lower it (`8`/`4`) to cut *transcription* activations — **no effect if the peak is diarization** |
+| `ENABLE_SPEAKER_EMBEDDINGS` | `1` | `0` drops the voiceprint model (you keep transcription + diarization) |
 
-Example, to fit ~8 GB: `COMPUTE_TYPE=int8 BATCH_SIZE=8`.
+On 8 GB the goal is to *minimise* spill — the ~9 GB working set just exceeds 8 GB:
+`WHISPER_MODEL=medium COMPUTE_TYPE=int8_float16`.
 
 ### GPU architecture support
 
@@ -68,12 +81,11 @@ not recommended.
 | GPU | VRAM | Architecture | Status |
 |---|---|---|---|
 | **RTX 5090** | 32 GB | Blackwell (sm_120) | **Tested** — runs the defaults with large headroom |
-| RTX 3090 | 24 GB | Ampere (sm_86) | Expected — defaults should run with headroom |
-| RTX 4070 Laptop | 8 GB | Ada (sm_89) | Expected — tune for 8 GB (`COMPUTE_TYPE=int8`, `BATCH_SIZE=4`–`8`); defaults will be tight |
+| **RTX 3090** | 24 GB | Ampere (sm_86) | **Tested** — defaults, **~9.2 GB during transcription, no spill** (~0.9 GB idle). Lots of headroom. |
+| **RTX 4070 Laptop** | 8 GB | Ada (sm_89) | **Tested** — works, but the ~9 GB working set just exceeds 8 GB, so it spills into shared memory (Task Manager *reports* ~13–16 GB, inflated by the allocator + WDDM accounting — the genuine need is ~9 GB). Not slow. `WHISPER_MODEL=medium` + `COMPUTE_TYPE=int8_float16` cut the spill; `int8`/`int8_float16` are fine on Ada. |
 
-> Only the RTX 5090 is confirmed by testing so far; the others are reasoned estimates from VRAM and
-> architecture. If you run Diariz on another card, a PR updating this table (with your settings and
-> rough VRAM headroom) is welcome.
+> RTX 5090, RTX 3090, and RTX 4070 Laptop are confirmed by testing. If you run Diariz on another card, a PR
+> updating this table (with your settings and rough VRAM headroom) is welcome.
 
 ### CPU-only
 

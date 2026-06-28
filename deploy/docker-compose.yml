@@ -126,6 +126,8 @@ services:
       DEVICE: ${WORKER_DEVICE:-cuda}
       COMPUTE_TYPE: ${WORKER_COMPUTE_TYPE:-float16}
       WHISPER_MODEL: ${WHISPER_MODEL:-large-v3}
+      # WhisperX transcription batch size. Lower it (8/4) to cut peak VRAM on smaller GPUs.
+      BATCH_SIZE: ${BATCH_SIZE:-16}
       # Reject audio longer than this many seconds (0 = unlimited). 14400 = 4 h.
       MAX_AUDIO_SECONDS: ${MAX_AUDIO_SECONDS:-14400}
       # Per-speaker ECAPA voiceprint embeddings (for identification). Set to 0 to disable.
