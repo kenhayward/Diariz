@@ -218,6 +218,19 @@ describe("RecordingDetail", () => {
     expect((await screen.findByLabelText("Action 1") as HTMLInputElement).value).toBe("Send the report");
   });
 
+  it("shows a banner while extraction is in flight", async () => {
+    let resolve!: (v: unknown[]) => void;
+    (api.extractActions as ReturnType<typeof vi.fn>).mockReturnValue(new Promise((r) => (resolve = r)));
+    renderPage(base);
+    await screen.findByText("Hi");
+
+    fireEvent.click(screen.getByRole("button", { name: "Extract actions" }));
+    expect(await screen.findByText(/extracting actions from the transcript/i)).toBeTruthy();
+
+    resolve([]); // finish the extraction → banner clears
+    await waitFor(() => expect(screen.queryByText(/extracting actions from the transcript/i)).toBeNull());
+  });
+
   it("does not show the actions panel until extraction has run", async () => {
     renderPage(base);
     await screen.findByText("Hi");

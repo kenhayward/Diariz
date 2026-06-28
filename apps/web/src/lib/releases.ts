@@ -49,6 +49,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.19.1",
+    date: "2026-06-28",
+    pr: 55,
+    headline: "Clearer progress while extracting actions",
+    summary: `
+While **Extract actions** is running, the recording page now shows a prominent progress banner (like the
+re-transcribe one) instead of a small label, so it's obvious the model is working.
+`.trim(),
+    changed: [
+      "Extracting actions now shows a progress banner instead of a small header label.",
+    ],
+  },
+  {
     version: "0.19.0",
     date: "2026-06-28",
     pr: 54,
