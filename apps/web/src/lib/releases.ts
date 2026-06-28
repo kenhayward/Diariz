@@ -77,6 +77,7 @@ recordings/chat panel toolbars share the same height and bottom-border colour.
       "The chat context-usage dial is now vertically aligned with the toolbar icons.",
       "The chat 'Attach file' button now lines up with the context-picker pill next to it.",
       "The recordings and chat panel toolbars now have a consistent height and bottom-border colour.",
+      "Uploaded recordings now read \"Uploaded\" (not \"Microphone\") in the detail subtitle.",
     ],
   },
   {

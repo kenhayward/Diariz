@@ -271,7 +271,7 @@ export default function RecordingDetail() {
             <h1 className="text-lg font-semibold dark:text-gray-100">{rec.name ?? rec.title}</h1>
           )}
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            {rec.source === "System" ? "System audio" : "Microphone"} ·{" "}
+            {rec.source === "System" ? "System audio" : rec.source === "Upload" ? "Uploaded" : "Microphone"} ·{" "}
             {new Date(rec.createdAt).toLocaleDateString()}
             {rec.durationMs > 0 ? ` · ${formatDuration(rec.durationMs)}` : ""} · {rec.status}
             {rec.sizeBytes > 0 ? ` · ${formatBytes(rec.sizeBytes)}` : ""}
