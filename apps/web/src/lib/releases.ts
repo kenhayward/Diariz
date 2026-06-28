@@ -61,6 +61,7 @@ and bottom-border colour.
     fixed: [
       "The chat context-usage dial is now vertically aligned with the toolbar icons.",
       "The recordings and chat panel toolbars now have a consistent height and bottom-border colour.",
+      "The chat 'Attach file' button now lines up with the context-picker pill next to it.",
     ],
   },
   {
