@@ -1,0 +1,95 @@
+# Building a macOS Desktop App
+
+Planning notes for porting the Windows desktop shell (`apps/desktop`) to macOS. No code yet — this is a
+design/decision guide for when the work is scheduled.
+
+## TL;DR
+
+- The desktop app is an **Electron thin shell** that loads the web app from the server origin, so **most of
+  `apps/desktop/src` runs on macOS unchanged** (first-run setup window, server-URL storage, tray state
+  machine, IPC bridge to the web recorder, auto-updater wiring, launch-at-login). Porting = adding a macOS
+  **target** + handling a few platform differences, not rebuilding.
+- **You must build/sign/notarize on macOS.** electron-builder shells out to Apple's `codesign` / `notarytool`,
+  which only exist on macOS — you cannot produce or sign a `.dmg`/`.app` from Windows or Linux.
+- The one real **functional gap** is **system/loopback audio** — the Windows path is Windows-only.
+
+## Do we need a Mac with Xcode?
+
+**Yes, for the build/sign/notarize stage.** You need:
+
+- **macOS** to run `electron-builder --mac`.
+- **Xcode Command Line Tools** (provides `codesign`; `notarytool` ships with Xcode 13+). The full Xcode IDE is
+  not required.
+
+Two ways to run that stage:
+
+1. **Local Mac** — simplest to start. `electron-builder --mac` produces the artifacts directly.
+2. **CI on a macOS runner** — GitHub Actions has hosted macOS runners (e.g. `macos-14` = Apple Silicon), or
+   point a **self-hosted runner at your Mac** (mirrors the existing self-hosted Windows runner). Hosted macOS
+   minutes are billed ~10× Linux, so for a hobby cadence your own Mac as a runner is cheapest. The job is a
+   near-copy of the existing `.github/workflows/desktop-release.yml`, just a mac variant.
+
+## The functional gap: system / loopback audio
+
+The Windows shell captures system audio via `setDisplayMediaRequestHandler` with `audio: "loopback"`, which is
+**Windows-only**. macOS has no built-in loopback. Options, in increasing effort:
+
+1. **Mic-only on macOS first** — disable the "System" source on mac. Simplest; ship this initially.
+2. **ScreenCaptureKit system audio** — modern Chromium/Electron can capture system audio through
+   `getDisplayMedia` on **macOS 13+**, but it needs the **Screen Recording** permission and a recent-enough
+   Electron. Verify the current Electron version supports it before committing.
+3. **Virtual audio device** (e.g. BlackHole, free) — reliable but asks the user to install an audio driver;
+   document it as a prerequisite.
+
+Recommendation: start with #1 and treat system audio as a separate milestone.
+
+## Other macOS-specific work (all small)
+
+- **Permissions / Info.plist** — macOS needs usage-description strings (`NSMicrophoneUsageDescription`, plus
+  screen-recording text if doing system audio). electron-builder injects these via `mac.extendInfo`.
+- **Menu-bar (tray) icon** — macOS wants a monochrome **Template image** (`...Template.png` @1x/@2x) so it
+  adapts to light/dark menu bars; the colored Windows tray icon won't look right.
+- **App lifecycle** — macOS apps keep running when windows close (close-to-tray already handled). Consider
+  `app.dock.hide()` for a true menu-bar-only app, and handle the dock `activate` event.
+- **Signing & notarization** — to avoid Gatekeeper blocking the app you need:
+  - an **Apple Developer Program** membership (~$99/yr),
+  - a **"Developer ID Application"** certificate (sign), and
+  - **notarization** (electron-builder runs `notarytool` for you via its `mac.notarize` config, authenticated
+    with an Apple ID app-specific password or an App Store Connect API key).
+  - Unsigned apps run only via right-click → Open — a poor UX; not worth shipping unsigned beyond local testing.
+
+## Auto-update on macOS
+
+- electron-updater supports macOS (Squirrel.Mac) and can reuse the **same GitHub Releases feed**.
+- Caveats: it updates from the **`.zip`** target (build `dmg` **and** `zip`), and **the app must be signed** —
+  Squirrel.Mac refuses unsigned updates.
+- **Architecture**: build a **universal** binary (`--universal`) to cover Intel + Apple Silicon in one
+  artifact — least hassle for distribution.
+
+## Tooling summary
+
+| Concern | Tool |
+|---|---|
+| App framework / packaging | Electron + **electron-builder** (already in use) — add `mac` targets (`dmg` + `zip`, `universal`) |
+| Auto-update | **electron-updater** (already in use) — works once signed |
+| Signing / notarization | **Developer ID Application** cert + **notarytool** (notarization built into electron-builder) |
+| Build prerequisites | **Xcode Command Line Tools** on the build Mac |
+| System audio (later) | **ScreenCaptureKit** (via `getDisplayMedia`) or **BlackHole** virtual device |
+
+## Suggested phased plan
+
+1. **Unsigned proof of concept** — add the macOS target to electron-builder, build an unsigned `.dmg` on the
+   Mac, confirm the shell loads the web app and that mic recording + tray work. (No Apple account needed.)
+2. **Signed + notarized** — enroll in the Apple Developer Program; add the Developer ID cert + notarization;
+   produce a signed, notarized **universal** `.dmg`/`.zip`.
+3. **Release pipeline** — add a `macos-release` CI job (the Mac as a self-hosted runner) and confirm
+   **auto-update** end-to-end.
+4. **System audio** — ScreenCaptureKit or document BlackHole, as a separate milestone.
+
+## Repo conventions when this ships
+
+- A macOS build is a **desktop release** (new artifacts cut from a `v*` tag); the lockstep version bump to
+  `apps/desktop/package.json` rides along. The **web/API side needs nothing** — installed apps load the web app
+  from the server.
+- Reuse the existing tray/setup/updater modules; the platform-specific edits are the loopback handler
+  (Windows-only branch), the tray Template icon assets, and the electron-builder `mac` config.
