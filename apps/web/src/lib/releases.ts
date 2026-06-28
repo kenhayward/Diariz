@@ -49,6 +49,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.21.1",
+    date: "2026-06-28",
+    pr: 58,
+    headline: "Pin the recordings toolbar",
+    summary: `
+The recordings list's toolbar (New section / Select) now stays pinned at the top while the list scrolls
+beneath it — matching the chat panel, where the toolbar was already fixed.
+`.trim(),
+    fixed: [
+      "The recordings list toolbar stays fixed at the top instead of scrolling away with the list.",
+    ],
+  },
+  {
     version: "0.21.0",
     date: "2026-06-28",
     pr: 57,
