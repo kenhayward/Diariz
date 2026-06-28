@@ -93,7 +93,7 @@ transcript appears automatically when the worker finishes.
 - **M1 — done:** capture → transcribe (timestamps + diarization) → view.
 - **M2 — done:** multi-user auth + RBAC, LLM summaries, transcript export, re-transcribe with model choice.
 - **M3 — done:** chat across transcripts; speaker identification via enrolled voiceprints (pgvector).
-- **M4 — in progress:** macOS/mobile, TLS via Caddy, packaging, live streaming.
+- **M4 — in progress:** windows desktop app, macOS/mobile,  packaging, live streaming.
 
 > **Keep this README current.** When a PR changes what the app does (a new feature, a stack change, or a
 > shipped roadmap item), update the **Features**, **Architecture**, and **Roadmap** sections in the same PR —
@@ -102,10 +102,19 @@ transcript appears automatically when the worker finishes.
 
 ## Licensing & commercial use
 
-Diariz's own code is **Apache-2.0** (see [LICENSE](LICENSE)), and all of its software dependencies are
-permissive (MIT / Apache-2.0 / BSD), so the application is free to use, modify, and self-host — including
-commercially. A few parts of the ML/storage stack carry caveats worth understanding before a **commercial**
-deployment. *This is a summary for orientation, not legal advice.*
+This software is **dual-licensed**. Depending on your use case, you may use it under one of two options:
+
+### 1. Open Source (GNU AGPLv3)
+This project is completely free for **personal, academic, or non-profit use** under the terms of the GNU Affero General Public License v3.0. 
+* Anyone using, modifying, or hosting this code under this license must also make their entire project's source code publicly available under the same AGPLv3 terms.
+
+### 2. Commercial License
+**For-profit companies** or commercial projects that wish to use, integrate, or build upon this software *without* being bound by the AGPLv3 open-source requirements must secure a private commercial agreement. 
+
+To discuss commercial licensing, custom terms, or to obtain an exception, please contact me directly at: **ken@stocks-hayward.com**
+
+A few parts of the ML/storage stack carry caveats worth understanding before a **commercial**
+license is requested. *This is a summary for orientation, not legal advice.*
 
 - **Transcription & diarization — clear for commercial use.** Whisper large-v3 (MIT) and the **pyannote**
   models (`speaker-diarization-3.1`, `segmentation-3.0`) are **MIT-licensed**. They are *gated* — you must
