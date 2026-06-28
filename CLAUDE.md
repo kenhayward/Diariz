@@ -115,8 +115,9 @@ is **Major.Minor.Build** (currently `0.x`).
   is introduced).
 - **Keep `README.md` current.** When a PR changes what the app does — a new user-facing feature, a stack
   change, or a shipped roadmap milestone — update the README's **Features**, **Architecture**, and
-  **Roadmap** sections and its version line in the same PR (it mirrors the `CAPABILITIES`/release-notes
-  edits above).
+  **Roadmap** sections in the same PR (it mirrors the `CAPABILITIES`/release-notes edits above). The README
+  deliberately does **not** carry a version number (it would drift) — the version lives only in `version.json`
+  / `releases.ts`.
 - **State the deployment surface in every PR.** When opening a PR, say whether shipping it needs a
   **desktop release** (a new installer, cut by pushing a `v*` tag) or just a **server redeploy**. The
   desktop app is a thin shell that loads the web app from the server origin, so it only needs a new release

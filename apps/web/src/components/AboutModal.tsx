@@ -67,14 +67,17 @@ export default function AboutModal({ onClose }: { onClose: () => void }) {
             and DOMPurify — each under its own licence.
           </p>
           <p className="mt-2">
-            Speaker diarization uses the gated <strong>pyannote</strong> models
-            (<code>speaker-diarization-3.1</code>, <code>segmentation-3.0</code>), licensed for
-            <strong> non-commercial use (CC-BY-NC)</strong>; ensure your use complies with their terms.
+            Speaker diarization uses the <strong>gated</strong> pyannote models
+            (<code>speaker-diarization-3.1</code>, <code>segmentation-3.0</code>): they are
+            <strong> MIT-licensed</strong> but gated — you must accept the model terms on Hugging Face and
+            supply an access token (<code>HF_TOKEN</code>).
           </p>
           <p className="mt-2">
             Speaker identification stores <strong>voiceprints</strong> (SpeechBrain ECAPA embeddings) —
             biometric data. Only enrol people with their consent, and use “delete person” to erase a
-            voiceprint when required.
+            voiceprint when required. The ECAPA model is Apache-2.0 but trained on <strong>VoxCeleb</strong>,
+            which is published for <strong>research / non-commercial</strong> use — review those terms before
+            any commercial deployment.
           </p>
           <p className="mt-2">
             Summaries and chat use an OpenAI-compatible LLM endpoint you configure; that provider's terms
