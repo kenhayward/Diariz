@@ -49,6 +49,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.20.1",
+    date: "2026-06-28",
+    pr: 57,
+    headline: "Align the chat context dial with the toolbar",
+    summary: `
+The chat toolbar's context-usage dial now lines up vertically with the bookmark/clear/save/delete icons
+next to it (they were a hair off).
+`.trim(),
+    fixed: [
+      "The chat context-usage dial is now vertically aligned with the toolbar icons.",
+    ],
+  },
+  {
     version: "0.20.0",
     date: "2026-06-28",
     pr: 56,

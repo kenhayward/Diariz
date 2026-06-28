@@ -440,7 +440,9 @@ function IconButton({
       type="button"
       aria-label={label}
       title={label}
-      className="rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-40 dark:text-gray-400 dark:hover:bg-gray-700"
+      // inline-flex centres the SVG (avoids the inline baseline gap) so the icons line up vertically
+      // with the context dial, which is itself an inline-flex.
+      className="inline-flex items-center justify-center rounded p-1 text-gray-500 hover:bg-gray-100 disabled:opacity-40 dark:text-gray-400 dark:hover:bg-gray-700"
       {...rest}
     >
       {children}
