@@ -68,6 +68,7 @@ Also: the **Edit segment** dialog is wider and auto-sizes to fit longer text (ca
     ],
     changed: [
       "The edit-segment dialog is wider and auto-sizes its height to the text (capped to stay on-screen).",
+      "The Actions panel is collapsible, and the Actions/Speakers expand toggles are larger and easier to hit.",
     ],
   },
   {

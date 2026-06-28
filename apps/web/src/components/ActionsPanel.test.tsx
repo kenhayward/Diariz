@@ -60,6 +60,20 @@ describe("ActionsPanel", () => {
     expect(h.onAdd).toHaveBeenCalledTimes(1);
   });
 
+  it("collapses and expands the panel via its toggle", () => {
+    build([action()]);
+    expect(screen.getByLabelText("Action 1")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /collapse actions panel/i }));
+    expect(screen.queryByLabelText("Action 1")).toBeNull();
+    expect(screen.queryByRole("button", { name: /add action/i })).toBeNull();
+    // The heading stays visible while collapsed.
+    expect(screen.getByRole("heading", { name: /actions/i })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /expand actions panel/i }));
+    expect(screen.getByLabelText("Action 1")).toBeTruthy();
+  });
+
   it("shows an empty state but still offers Add when there are no actions", () => {
     const h = build([]);
     expect(screen.getByText(/no actions identified/i)).toBeTruthy();

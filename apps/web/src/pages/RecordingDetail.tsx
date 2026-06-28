@@ -353,7 +353,7 @@ export default function RecordingDetail() {
               aria-label={collapsed ? "Expand speakers panel" : "Collapse speakers panel"}
               aria-expanded={!collapsed}
               onClick={toggleSpeakers}
-              className="rounded px-1 text-xs text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+              className="rounded px-2 py-1 text-lg leading-none text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
             >
               {collapsed ? "▸" : "▾"}
             </button>
