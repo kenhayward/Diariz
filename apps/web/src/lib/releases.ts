@@ -47,6 +47,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.13.1",
+    date: "2026-06-28",
+    pr: 43,
+    headline: "Correct the licence disclaimer + scrub default seed email",
+    summary: `
+Housekeeping ahead of open-sourcing. The About box wrongly stated the **pyannote** diarization models were
+"non-commercial (CC-BY-NC)" — they are in fact **MIT-licensed** (just *gated*: you must accept the terms on
+Hugging Face and supply an \`HF_TOKEN\`). The genuine non-commercial caveat belongs to **VoxCeleb**, the data
+behind the SpeechBrain ECAPA voiceprints, so the disclaimer now says that instead. The default seed-admin
+email also changes from a personal address to \`admin@example.com\`.
+`.trim(),
+    fixed: [
+      "About box: pyannote models are MIT (gated), not CC-BY-NC; the non-commercial note now correctly refers to VoxCeleb (speaker-identification training data).",
+      "Default seed-admin email is now admin@example.com (was a personal address) in appsettings + .env.example.",
+    ],
+  },
+  {
     version: "0.13.0",
     date: "2026-06-28",
     pr: 41,
