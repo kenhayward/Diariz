@@ -64,9 +64,28 @@ npm run dist       # builds release/Diariz Setup <version>.exe (NSIS), no publis
 
 ## Release
 
+> **📌 Release reminder — temporary, remove once it's muscle memory.**
+> A version bump alone does **not** publish an installer — you must push a matching **tag**. Whenever the
+> desktop app changes and you want a downloadable build:
+>
+> 1. Land the change on `main` first, **including the version bump** (`version.json` + the web/desktop
+>    `package.json` + the API `<Version>`), exactly like any other PR — then merge it.
+> 2. From an up-to-date `main`, tag that commit and push the tag. **The tag must equal `version.json`,
+>    prefixed with `v`:**
+>    ```bash
+>    git checkout main && git pull
+>    git tag v0.12.3            # ← use the version from version.json
+>    git push origin v0.12.3    # this push is what triggers the release build
+>    ```
+> 3. The push runs `desktop-release.yml` → builds and publishes `Diariz-Setup-<version>.exe` (+ `latest.yml`)
+>    straight to GitHub Releases (no draft step; `releaseType: "release"`).
+>
+> If a tagged build fails: fix it, **bump to a new version**, and tag *that* — never reuse a tag. Delete a
+> bad tag with `git push origin :refs/tags/v0.12.3 && git tag -d v0.12.3`.
+
 Pushing a `v*` tag (matching `package.json` / `version.json`) runs `.github/workflows/desktop-release.yml`
 on the self-hosted Windows runner, which builds the installer and publishes it to this repo's **GitHub
-Releases** (+ `latest.yml` for auto-update in a later phase).
+Releases** (+ `latest.yml`, which the app's auto-updater reads).
 
 **Self-hosted feed** (no GitHub dependency, e.g. for a private fork): build with
 `DIARIZ_PUBLISH=generic DIARIZ_UPDATE_URL=https://your-server/updates/ npm run dist` and upload
