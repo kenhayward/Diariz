@@ -48,6 +48,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.18.0",
+    date: "2026-06-28",
+    pr: 53,
+    headline: "Quick-action toolbar on the recording page",
+    summary: `
+The recording detail page now has a small **toolbar of graphical buttons** next to the ⋮ menu, for the
+actions you reach for most: **Rename**, **Re-transcribe**, **Move to section**, **Email me the transcript**,
+and **Download transcript**. Each button has a hover tooltip, and every action is still available in the ⋮
+menu as before.
+`.trim(),
+    added: [
+      "Quick-action toolbar on the recording detail page (Rename, Re-transcribe, Move to section, Email me the transcript, Download transcript) with hover tooltips; all actions remain in the ⋮ menu.",
+    ],
+  },
+  {
     version: "0.17.2",
     date: "2026-06-28",
     pr: 52,
