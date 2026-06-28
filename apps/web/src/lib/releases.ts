@@ -48,6 +48,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.17.1",
+    date: "2026-06-28",
+    pr: 51,
+    headline: "Tidier transcript downloads",
+    summary: `
+Polish for the transcript download formats: the **plain-text** file no longer has a blank line between
+every segment, **Markdown** carries a column-width hint for renderers that honour it, and the **RTF**
+table now has a proper repeating header row, sensible column widths, and a little more space after the
+summary.
+`.trim(),
+    fixed: [
+      "Plain-text transcript: collapsed the extra blank line after each segment.",
+      "Markdown transcript: added a 13/16/71 column-width hint for the Time/Speaker/Text table.",
+      "RTF transcript: marked the first table row as a repeating header, set 13/16/71% column widths, and added a paragraph break after the summary.",
+    ],
+  },
+  {
     version: "0.17.0",
     date: "2026-06-28",
     pr: 50,

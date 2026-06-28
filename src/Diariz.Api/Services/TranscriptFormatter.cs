@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using Diariz.Api.Contracts;
 
 namespace Diariz.Api.Services;
@@ -20,7 +21,8 @@ public static class TranscriptFormatter
         foreach (var s in segments)
             sb.Append("\n[").Append(Clock(s.StartMs)).Append("] ").Append(s.SpeakerDisplay).Append('\n')
               .Append(s.Text.Trim()).Append('\n');
-        return sb.ToString();
+        // Collapse any run of blank lines (CRLF/LF/CR) into a single line break — text only.
+        return Regex.Replace(sb.ToString(), @"(\r\n|\r|\n){2,}", "\n");
     }
 
     /// <summary>Markdown: headings, the summary, then a Time/Speaker/Text table.</summary>
@@ -34,6 +36,7 @@ public static class TranscriptFormatter
         foreach (var s in segments)
             sb.Append("| ").Append(Clock(s.StartMs)).Append(" | ").Append(Md(s.SpeakerDisplay))
               .Append(" | ").Append(Md(s.Text)).Append(" |\n");
+        sb.Append("{: col-widths=\"13,16,71\" }\n"); // column-width hint (Time/Speaker/Text)
         return sb.ToString();
     }
 
@@ -43,17 +46,21 @@ public static class TranscriptFormatter
         var sb = new StringBuilder();
         sb.Append(@"{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0 Arial;}}\f0\fs22").Append('\n');
         sb.Append(@"{\b Transcript Name}\line ").Append(Rtf(name)).Append(@"\par").Append('\n');
+        // Extra paragraph mark after the summary for breathing room before the table.
         sb.Append(@"{\b Summary}\line ")
-          .Append(string.IsNullOrWhiteSpace(summary) ? Rtf(EmDash) : Rtf(summary!.Trim())).Append(@"\par").Append('\n');
+          .Append(string.IsNullOrWhiteSpace(summary) ? Rtf(EmDash) : Rtf(summary!.Trim())).Append(@"\par\par").Append('\n');
         sb.Append(@"{\b Transcript}\par").Append('\n');
-        sb.Append(Row(@"{\b Time}", @"{\b Speaker}", @"{\b Text}"));
+        sb.Append(Row(true, @"{\b Time}", @"{\b Speaker}", @"{\b Text}"));
         foreach (var s in segments)
-            sb.Append(Row(Clock(s.StartMs), Rtf(s.SpeakerDisplay), Rtf(s.Text)));
+            sb.Append(Row(false, Clock(s.StartMs), Rtf(s.SpeakerDisplay), Rtf(s.Text)));
         sb.Append('}');
         return sb.ToString();
 
-        static string Row(string a, string b, string c) =>
-            @"\trowd\trgaph100\cellx1500\cellx4800\cellx9600 " + a + @"\cell " + b + @"\cell " + c + @"\cell\row" + "\n";
+        // Column widths are 13/16/71% of a ~9600-twip table; the header row uses \trhdr so it
+        // repeats on every page (\trkeep keeps each row off a page break).
+        static string Row(bool header, string a, string b, string c) =>
+            @"\trowd\trgaph100\trkeep" + (header ? @"\trhdr" : "") +
+            @"\cellx1248\cellx2784\cellx9600 " + a + @"\cell " + b + @"\cell " + c + @"\cell\row" + "\n";
     }
 
     /// <summary>Compact "[mm:ss] Speaker: text" lines — used to feed transcripts to the chat LLM.</summary>
