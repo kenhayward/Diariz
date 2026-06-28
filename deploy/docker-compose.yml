@@ -73,6 +73,9 @@ services:
       Identification__Enabled: ${IDENTIFICATION_ENABLED:-true}
       Identification__Threshold: ${IDENTIFICATION_THRESHOLD:-0.4}
       Chat__ContextLength: ${CHAT_CONTEXT_LENGTH:-131072}
+      # Uploaded-audio limits (the "Upload" button). AllowAac=false drops M4A/AAC for commercial caution.
+      Uploads__MaxBytes: ${UPLOAD_MAX_BYTES:-524288000}
+      Uploads__AllowAac: ${UPLOAD_ALLOW_AAC:-true}
       # Persist the Data Protection keyring so encrypted per-user API keys survive container recreates.
       DataProtection__KeysPath: /keys
       Seed__Email: ${SEED_EMAIL}
@@ -123,6 +126,8 @@ services:
       DEVICE: ${WORKER_DEVICE:-cuda}
       COMPUTE_TYPE: ${WORKER_COMPUTE_TYPE:-float16}
       WHISPER_MODEL: ${WHISPER_MODEL:-large-v3}
+      # Reject audio longer than this many seconds (0 = unlimited). 14400 = 4 h.
+      MAX_AUDIO_SECONDS: ${MAX_AUDIO_SECONDS:-14400}
       # Per-speaker ECAPA voiceprint embeddings (for identification). Set to 0 to disable.
       ENABLE_SPEAKER_EMBEDDINGS: ${ENABLE_SPEAKER_EMBEDDINGS:-1}
     volumes:

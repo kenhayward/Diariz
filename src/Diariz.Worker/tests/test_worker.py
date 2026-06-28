@@ -38,8 +38,8 @@ def test_handle_success_posts_result_and_removes_temp_file(monkeypatch, tmp_path
 
     posted = {}
     monkeypatch.setattr(worker.callback, "post_result",
-                        lambda tid, lang, segs, speakers=None: posted.update(
-                            tid=tid, lang=lang, segs=segs, speakers=speakers))
+                        lambda tid, lang, segs, speakers=None, duration_ms=None: posted.update(
+                            tid=tid, lang=lang, segs=segs, speakers=speakers, duration_ms=duration_ms))
     monkeypatch.setattr(worker.callback, "post_failure",
                         lambda *a, **k: posted.update(failed=True))
 

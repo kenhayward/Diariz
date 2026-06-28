@@ -9,7 +9,7 @@ export type RecordingStatus =
   | "Summarized"
   | "Failed";
 
-export type RecordingSource = "Microphone" | "System";
+export type RecordingSource = "Microphone" | "System" | "Upload";
 
 export interface RecordingSummary {
   id: string;

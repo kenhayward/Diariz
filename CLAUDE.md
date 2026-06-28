@@ -72,8 +72,15 @@ API persists `Segment`s + seeds `Speaker` rows → notifies the browser over **S
   `Summary`, if any).
 - **Recording naming.** `Recording.Title` is the auto descriptor; `Recording.Name` (nullable) is the
   user-editable display name (the UI shows `Name ?? Title`) and is also auto-filled by the summariser when
-  unset. `Recording.Source` (`Microphone`/`System`) is captured at upload. `RecordingStatus` gained
-  `Summarizing = 6` — **append only, never renumber** (values persist as ints in Postgres).
+  unset. `Recording.Source` (`Microphone`/`System`/`Upload`) is captured at upload — **append only, never
+  renumber** (ints in Postgres). `RecordingStatus` gained `Summarizing = 6` — same append-only rule.
+- **File uploads** (the web "Upload" button) reuse `POST /api/recordings` with `source=Upload`. Only that
+  source is gated: `AudioFormats` (pure, magic-byte sniff — never trusts the client extension/MIME) +
+  `UploadOptions` (`Uploads:MaxBytes` 500 MB, `Uploads:AllowAac` — M4A/AAC is patented, so toggleable;
+  royalty-free formats + MP3 always pass). Decoding is ffmpeg in the worker, so no new formats need worker
+  changes. Uploads carry no client duration: the worker measures it (`pipeline._duration_ms`) and returns
+  `TranscriptionResult.DurationMs`, which the callback backfills onto `Recording.DurationMs`; the worker also
+  rejects audio over `MAX_AUDIO_SECONDS`.
 - **Speaker renames are preserved across re-transcribes.** Worker emits diarization labels
   (`SPEAKER_00`...); the callback seeds a `Speaker` row per new label with `DisplayName = label`,
   and the UI's rename updates `DisplayName` only.

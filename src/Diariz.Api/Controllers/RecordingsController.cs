@@ -26,12 +26,14 @@ public class RecordingsController : ControllerBase
     private readonly ISummarizationSettingsResolver _summarization;
     private readonly IEmailSender _email;
     private readonly ISpeakerIdentifier _identifier;
+    private readonly UploadOptions _uploads;
     private readonly string _defaultModel;
 
     public RecordingsController(
         DiarizDbContext db, IAudioStorage storage, IJobQueue queue,
         IHubContext<TranscriptionHub> hub, IConfiguration config,
-        ISummarizationSettingsResolver summarization, IEmailSender email, ISpeakerIdentifier identifier)
+        ISummarizationSettingsResolver summarization, IEmailSender email, ISpeakerIdentifier identifier,
+        IOptions<UploadOptions> uploads)
     {
         _db = db;
         _storage = storage;
@@ -40,6 +42,7 @@ public class RecordingsController : ControllerBase
         _summarization = summarization;
         _email = email;
         _identifier = identifier;
+        _uploads = uploads.Value;
         _defaultModel = config["Transcription:DefaultModel"] ?? "whisperx-large-v3";
     }
 
@@ -125,12 +128,28 @@ public class RecordingsController : ControllerBase
     {
         if (audio is null || audio.Length == 0) return BadRequest("Empty audio.");
 
+        // User-uploaded files (vs. browser recordings) are size-capped and format-gated by their actual
+        // bytes — never trust the client extension/MIME.
+        if (source == RecordingSource.Upload && audio.Length > _uploads.MaxBytes)
+            return StatusCode(413, $"File too large. The maximum upload size is {_uploads.MaxBytes / (1024 * 1024)} MB.");
+
         // Enforce the owner's storage quota (audio bytes only — DB rows don't count).
         var quota = await _db.Users.Where(u => u.Id == UserId).Select(u => u.QuotaBytes).FirstOrDefaultAsync();
         var used = await _db.Recordings.Where(r => r.UserId == UserId).SumAsync(r => r.SizeBytes);
         if (used + audio.Length > quota)
             return StatusCode(413,
                 "Storage quota exceeded. Delete some recordings or ask an administrator to raise your quota.");
+
+        await using var stream = audio.OpenReadStream();
+
+        if (source == RecordingSource.Upload)
+        {
+            var head = new byte[16];
+            var read = await stream.ReadAsync(head);
+            if (stream.CanSeek) stream.Position = 0;
+            var (ok, _, reason) = AudioFormats.Validate(head.AsSpan(0, read), _uploads.AllowAac);
+            if (!ok) return StatusCode(StatusCodes.Status415UnsupportedMediaType, reason);
+        }
 
         var rec = new Recording
         {
@@ -145,8 +164,7 @@ public class RecordingsController : ControllerBase
         };
         rec.BlobKey = $"{UserId}/{rec.Id}{Path.GetExtension(audio.FileName)}";
 
-        await using (var stream = audio.OpenReadStream())
-            await _storage.UploadAsync(rec.BlobKey, stream, rec.ContentType);
+        await _storage.UploadAsync(rec.BlobKey, stream, rec.ContentType);
 
         _db.Recordings.Add(rec);
         await EnqueueTranscriptionAsync(rec);

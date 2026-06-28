@@ -43,7 +43,7 @@ def handle(job: dict) -> None:
         audio_path = storage.download(blob_key)
         result = pipeline.transcribe(audio_path, job.get("MinSpeakers"), job.get("MaxSpeakers"))
         callback.post_result(transcription_id, result["language"], result["segments"],
-                             result.get("speakers"))
+                             result.get("speakers"), result.get("duration_ms"))
     except Exception as e:  # noqa: BLE001 - report and continue
         log.exception("Job failed for transcription %s", transcription_id)
         callback.post_failure(transcription_id, str(e))

@@ -11,13 +11,14 @@ _HEADERS = {"X-Worker-Secret": config.CALLBACK_SECRET}
 
 
 def post_result(transcription_id: str, language: str, segments: list[dict],
-                speakers: list[dict] | None = None) -> None:
+                speakers: list[dict] | None = None, duration_ms: int | None = None) -> None:
     url = f"{config.API_BASE_URL}/internal/transcriptions/result"
     body = {
         "TranscriptionId": transcription_id,
         "Language": language,
         "Segments": segments,
         "Speakers": speakers or [],
+        "DurationMs": duration_ms,
     }
     resp = requests.post(url, json=body, headers=_HEADERS, timeout=60)
     resp.raise_for_status()

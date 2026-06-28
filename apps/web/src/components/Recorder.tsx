@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { api, apiErrorMessage } from "../lib/api";
 import { getStream, isElectron, describeAudioError, type AudioSourceKind } from "../lib/audioSource";
 import { connectTrayRecorder, type RecorderState, type TrayBridge } from "../lib/trayRecorder";
+import { AUDIO_ACCEPT_ATTR, precheckUpload, titleFromFilename } from "../lib/audioFormats";
 
 export default function Recorder({
   onUploaded,
@@ -84,6 +85,30 @@ export default function Recorder({
     }
   }
 
+  // Upload an existing audio file (the "Upload" button). Server validates the bytes + size; this just
+  // pre-checks for instant feedback. Disabled while recording (and recording is disabled while busy).
+  const fileRef = useRef<HTMLInputElement>(null);
+  async function onPickFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // let the user re-pick the same file later
+    if (!file) return;
+    const problem = precheckUpload(file);
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    try {
+      await api.uploadFile(file, titleFromFilename(file.name));
+      onUploaded();
+    } catch (err) {
+      setError(apiErrorMessage(err, "Upload failed."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // Keep the tray bridge pointed at the latest start/stop without reconnecting.
   const startFn = useRef(start);
   startFn.current = start;
@@ -135,6 +160,24 @@ export default function Recorder({
             {busy ? "Uploading…" : "Record"}
           </button>
         )}
+
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={recording || busy}
+          title="Upload an audio file to transcribe"
+          className="rounded border px-3 py-1.5 text-sm disabled:opacity-50 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
+        >
+          Upload
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept={AUDIO_ACCEPT_ATTR}
+          onChange={onPickFile}
+          className="hidden"
+          data-testid="upload-input"
+        />
 
         {recording && <span className="font-mono text-sm text-red-600">● {mmss}</span>}
         {error && compact && <span className="text-xs text-red-600">{error}</span>}
