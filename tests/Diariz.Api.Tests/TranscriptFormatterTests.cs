@@ -24,6 +24,14 @@ public class TranscriptFormatterTests
     }
 
     [Fact]
+    public void ToText_CollapsesBlankLines_NoDoubleLineBreaks()
+    {
+        var text = TranscriptFormatter.ToText("Team Sync", "We discussed the API.", Segments);
+
+        Assert.DoesNotContain("\n\n", text); // runs of blank lines collapsed to one
+    }
+
+    [Fact]
     public void ToText_NoSummary_ShowsEmDash()
     {
         Assert.Contains("Summary\n—", TranscriptFormatter.ToText("x", null, Segments));
@@ -39,6 +47,7 @@ public class TranscriptFormatterTests
         Assert.Contains("## Summary\n\nThe summary.", md);
         Assert.Contains("## Transcript\n\n| Time | Speaker | Text |\n| --- | --- | --- |", md);
         Assert.Contains("| 00:00 | Al\\|ce | a \\| b |", md); // pipes escaped so they don't break the table
+        Assert.Contains("{: col-widths=\"13,16,71\" }", md); // column-width hint after the table
     }
 
     [Fact]
@@ -56,7 +65,9 @@ public class TranscriptFormatterTests
         Assert.StartsWith(@"{\rtf1", rtf);
         Assert.EndsWith("}", rtf);
         Assert.Contains(@"{\b Transcript Name}\line Team Sync", rtf);
-        Assert.Contains(@"{\b Summary}\line Sum", rtf);
+        Assert.Contains(@"{\b Summary}\line Sum\par\par", rtf); // extra para mark after the summary
+        Assert.Contains(@"\trhdr", rtf); // first table row marked as a repeating header
+        Assert.Contains(@"\cellx1248\cellx2784\cellx9600", rtf); // 13/16/71% column widths
         Assert.Contains(@"\cell", rtf); // table cells present
         Assert.Contains(@"A\{B\}", rtf); // braces escaped
         Assert.Contains(@"caf\u233?", rtf); // é -> unicode escape
