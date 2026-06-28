@@ -32,11 +32,14 @@ public static class TranscriptFormatter
         sb.Append("# ").Append(name).Append("\n\n");
         sb.Append("## Summary\n\n").Append(string.IsNullOrWhiteSpace(summary) ? "_(none)_" : summary!.Trim()).Append("\n\n");
         sb.Append("## Transcript\n\n");
-        sb.Append("| Time | Speaker | Text |\n| --- | --- | --- |\n");
+        // 13/16/71% column widths are carried by the separator-row dash counts (how pandoc/MultiMarkdown
+        // size columns); GFM/kramdown ignore the extra dashes, so no stray attribute line is needed.
+        sb.Append("| Time | Speaker | Text |\n")
+          .Append("| ").Append(new string('-', 13)).Append(" | ").Append(new string('-', 16))
+          .Append(" | ").Append(new string('-', 71)).Append(" |\n");
         foreach (var s in segments)
             sb.Append("| ").Append(Clock(s.StartMs)).Append(" | ").Append(Md(s.SpeakerDisplay))
               .Append(" | ").Append(Md(s.Text)).Append(" |\n");
-        sb.Append("{: col-widths=\"13,16,71\" }\n"); // column-width hint (Time/Speaker/Text)
         return sb.ToString();
     }
 
