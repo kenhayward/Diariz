@@ -233,7 +233,7 @@ export default function ChatPanel() {
     <div className="flex h-full flex-col">
       {/* Toolbar */}
       <div className="flex h-9 shrink-0 items-center gap-1 border-b px-2 dark:border-gray-700">
-        <div className="relative">
+        <div className="relative flex items-center">
           <IconButton label="Saved conversations" onClick={toggleSavedList} aria-expanded={listOpen}>
             <BookmarkIcon />
           </IconButton>
@@ -270,7 +270,8 @@ export default function ChatPanel() {
           <TrashIcon />
         </IconButton>
         {saveStatus && <span className="ml-1 text-xs text-green-600 dark:text-green-400">{saveStatus}</span>}
-        <div className="ml-auto">
+        {/* flex so the inline-flex dial is a flex item (centred) rather than baseline-aligned in a line box. */}
+        <div className="ml-auto flex items-center">
           {dialTotal > 0 && <ContextDial model={dialModel} used={dialUsed} total={dialTotal} />}
         </div>
       </div>
@@ -318,7 +319,7 @@ export default function ChatPanel() {
       {/* Context + attachment */}
       <div className="shrink-0 border-t px-2 py-1.5 dark:border-gray-700">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
+          <div className="relative flex items-center">
             <button
               type="button"
               onClick={() => setPickerOpen((v) => !v)}

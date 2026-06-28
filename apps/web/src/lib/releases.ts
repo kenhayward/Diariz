@@ -52,13 +52,16 @@ export const RELEASES: Release[] = [
     version: "0.21.1",
     date: "2026-06-28",
     pr: 58,
-    headline: "Pin the recordings toolbar",
+    headline: "Toolbar layout fixups",
     summary: `
 The recordings list's toolbar (New section / Select) now stays pinned at the top while the list scrolls
-beneath it — matching the chat panel, where the toolbar was already fixed.
+beneath it — matching the chat panel. Also finishes the chat-toolbar alignment: the context-usage dial, the
+"Attach file" button, and the saved-conversations icon now line up exactly with their neighbours (their
+wrapper elements were nudging them off-centre).
 `.trim(),
     fixed: [
       "The recordings list toolbar stays fixed at the top instead of scrolling away with the list.",
+      "The chat context dial, 'Attach file' button, and saved-conversations icon now align precisely with the rest of their toolbars.",
     ],
   },
   {
