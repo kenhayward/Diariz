@@ -232,7 +232,7 @@ export default function ChatPanel() {
   return (
     <div className="flex h-full flex-col">
       {/* Toolbar */}
-      <div className="flex shrink-0 items-center gap-1 border-b px-2 py-1.5 dark:border-gray-700">
+      <div className="flex h-9 shrink-0 items-center gap-1 border-b px-2 dark:border-gray-700">
         <div className="relative">
           <IconButton label="Saved conversations" onClick={toggleSavedList} aria-expanded={listOpen}>
             <BookmarkIcon />

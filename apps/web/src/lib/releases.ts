@@ -52,13 +52,15 @@ export const RELEASES: Release[] = [
     version: "0.20.1",
     date: "2026-06-28",
     pr: 57,
-    headline: "Align the chat context dial with the toolbar",
+    headline: "Tidier panel toolbars",
     summary: `
-The chat toolbar's context-usage dial now lines up vertically with the bookmark/clear/save/delete icons
-next to it (they were a hair off).
+A couple of small layout fixes: the chat toolbar's context-usage dial now lines up vertically with the
+bookmark/clear/save/delete icons next to it, and the recordings and chat toolbars now share the same height
+and bottom-border colour.
 `.trim(),
     fixed: [
       "The chat context-usage dial is now vertically aligned with the toolbar icons.",
+      "The recordings and chat panel toolbars now have a consistent height and bottom-border colour.",
     ],
   },
   {

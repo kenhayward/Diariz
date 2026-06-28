@@ -239,7 +239,7 @@ function ListToolbar() {
   }
 
   return (
-    <div className="flex items-center justify-between gap-2 border-b px-3 py-1.5 dark:border-gray-800">
+    <div className="flex h-9 items-center justify-between gap-2 border-b px-3 dark:border-gray-700">
       {open ? (
         <form onSubmit={create} className="flex min-w-0 flex-1 items-center gap-1">
           <input
