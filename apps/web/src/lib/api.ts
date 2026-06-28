@@ -426,7 +426,7 @@ export const api = {
 
   /// Transcript endpoints are JWT-protected, so fetch the bytes (carrying the bearer) and
   /// trigger a client-side download rather than navigating to a bare URL.
-  async downloadTranscript(id: string, format: "txt" | "srt"): Promise<void> {
+  async downloadTranscript(id: string, format: "txt" | "md" | "rtf"): Promise<void> {
     const { data, headers } = await http.get(`/api/recordings/${id}/transcript.${format}`, {
       responseType: "blob",
     });

@@ -5,6 +5,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { createHub } from "../lib/signalr";
 import KebabMenu from "./KebabMenu";
 import MoveToSectionModal from "./MoveToSectionModal";
+import DownloadTranscriptModal from "./DownloadTranscriptModal";
 import { recordingMenu } from "./recordingMenu";
 import { useSelection } from "../lib/selection";
 import { computeReorder } from "../lib/reorder";
@@ -465,6 +466,7 @@ function RecordingRow({
   const qc = useQueryClient();
   const [renaming, setRenaming] = useState(false);
   const [moving, setMoving] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["recordings"] });
@@ -488,7 +490,7 @@ function RecordingRow({
     onRetranscribe: run(async () => { await api.retranscribe(r.id); refresh(); }),
     onSummarise: run(async () => { await api.summarize(r.id); refresh(); }),
     onMove: () => setMoving(true),
-    onDownloadTxt: run(() => api.downloadTranscript(r.id, "txt")),
+    onDownloadTranscript: () => setDownloading(true),
     onDownloadAudio: run(() => api.downloadAudio(r.id)),
     onDelete: run(async () => {
       if (!window.confirm(`Delete "${r.name ?? r.title}"? This cannot be undone.`)) return;
@@ -562,6 +564,7 @@ function RecordingRow({
       {moving && (
         <MoveToSectionModal recordingId={r.id} currentSectionId={r.sectionId} onClose={() => setMoving(false)} />
       )}
+      {downloading && <DownloadTranscriptModal recordingId={r.id} onClose={() => setDownloading(false)} />}
     </li>
   );
 }

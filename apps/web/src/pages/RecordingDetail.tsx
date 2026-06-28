@@ -5,6 +5,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { createHub } from "../lib/signalr";
 import KebabMenu from "../components/KebabMenu";
 import MoveToSectionModal from "../components/MoveToSectionModal";
+import DownloadTranscriptModal from "../components/DownloadTranscriptModal";
 import { recordingMenu } from "../components/recordingMenu";
 import { formatBytes } from "../lib/format";
 import { allSpeakersAssigned } from "../lib/speakers";
@@ -35,6 +36,7 @@ export default function RecordingDetail() {
   const [summarizing, setSummarizing] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [moving, setMoving] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [editingSeg, setEditingSeg] = useState<SegmentDto | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionInfo, setActionInfo] = useState<string | null>(null);
@@ -199,7 +201,7 @@ export default function RecordingDetail() {
     onReidentify: reidentify,
     onMove: () => setMoving(true),
     onPlay: () => void playFrom(0),
-    onDownloadTxt: () => void api.downloadTranscript(id, "txt"),
+    onDownloadTranscript: () => setDownloading(true),
     onEmailTranscript: emailTranscript,
     onDownloadAudio: () => void api.downloadAudio(id),
     onDelete: async () => {
@@ -348,6 +350,7 @@ export default function RecordingDetail() {
       )}
 
       {moving && <MoveToSectionModal recordingId={id} onClose={() => setMoving(false)} />}
+      {downloading && <DownloadTranscriptModal recordingId={id} onClose={() => setDownloading(false)} />}
 
       {retranscribeOpen && (
         <RetranscribeModal

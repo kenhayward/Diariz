@@ -540,17 +540,27 @@ public class RecordingsController : ControllerBase
     }
 
     [HttpGet("{id:guid}/transcript.txt")]
-    public Task<IActionResult> TranscriptTxt(Guid id) => DownloadTranscriptAsync(id, srt: false);
+    public Task<IActionResult> TranscriptTxt(Guid id) => RenderTranscriptAsync(id, "txt");
+
+    [HttpGet("{id:guid}/transcript.md")]
+    public Task<IActionResult> TranscriptMd(Guid id) => RenderTranscriptAsync(id, "md");
+
+    [HttpGet("{id:guid}/transcript.rtf")]
+    public Task<IActionResult> TranscriptRtf(Guid id) => RenderTranscriptAsync(id, "rtf");
 
     [HttpGet("{id:guid}/transcript.srt")]
-    public Task<IActionResult> TranscriptSrt(Guid id) => DownloadTranscriptAsync(id, srt: true);
+    public Task<IActionResult> TranscriptSrt(Guid id) => RenderTranscriptAsync(id, "srt");
 
-    private async Task<IActionResult> DownloadTranscriptAsync(Guid id, bool srt)
+    /// <summary>Render the current transcript as a download. txt/md/rtf mirror the emailed layout
+    /// (name + summary + transcript); srt is subtitle cues only.</summary>
+    private async Task<IActionResult> RenderTranscriptAsync(Guid id, string format)
     {
         var rec = await _db.Recordings
             .Include(r => r.Speakers)
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal))
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                .ThenInclude(t => t.Summary)
             .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
         if (rec is null) return NotFound();
 
@@ -561,15 +571,22 @@ public class RecordingsController : ControllerBase
         var segs = current.Segments
             .OrderBy(s => s.Ordinal)
             .Select(s => new SegmentDto(
-                s.Id,
-                s.SpeakerLabel,
+                s.Id, s.SpeakerLabel,
                 names.TryGetValue(s.SpeakerLabel, out var dn) ? dn : s.SpeakerLabel,
                 s.StartMs, s.EndMs, s.Text))
             .ToList();
 
-        var text = srt ? TranscriptFormatter.ToSrt(segs) : TranscriptFormatter.ToPlainText(segs);
-        var fileName = $"{Slug(rec.Name ?? rec.Title)}.{(srt ? "srt" : "txt")}";
-        return File(Encoding.UTF8.GetBytes(text), srt ? "application/x-subrip" : "text/plain", fileName);
+        var name = rec.Name ?? rec.Title;
+        var summary = current.Summary?.Text;
+
+        var (body, mime, ext) = format switch
+        {
+            "md" => (TranscriptFormatter.ToMarkdown(name, summary, segs), "text/markdown", "md"),
+            "rtf" => (TranscriptFormatter.ToRtf(name, summary, segs), "application/rtf", "rtf"),
+            "srt" => (TranscriptFormatter.ToSrt(segs), "application/x-subrip", "srt"),
+            _ => (TranscriptFormatter.ToText(name, summary, segs), "text/plain", "txt"),
+        };
+        return File(Encoding.UTF8.GetBytes(body), mime, $"{Slug(name)}.{ext}");
     }
 
     /// <summary>Filesystem-safe lowercase slug for download filenames.</summary>
