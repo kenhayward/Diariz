@@ -1597,17 +1597,73 @@ public class RecordingsControllerTests
     }
 
     [Fact]
-    public async Task Merge_WhenAnyAudioDeleted_ReturnsBadRequest()
+    public async Task Merge_WhenOneSourceHasNoAudio_StillEnqueues_WithOnlyAudioPresentBlobs()
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        var a = await SeedMergeable(db, userId, DateTimeOffset.UtcNow.AddMinutes(-1), 1000, "a");
-        var b = await SeedMergeable(db, userId, DateTimeOffset.UtcNow, 1000, "b");
-        b.AudioDeletedAt = DateTimeOffset.UtcNow; // its audio is gone, can't concatenate
+        var queue = new FakeJobQueue();
+        var early = await SeedMergeable(db, userId, DateTimeOffset.UtcNow.AddMinutes(-5), 1000, "Hello"); // has audio
+        var later = await SeedMergeable(db, userId, DateTimeOffset.UtcNow, 2000, "World");
+        later.AudioDeletedAt = DateTimeOffset.UtcNow; later.SizeBytes = 0; // audio gone — transcript only
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, queue);
+
+        var result = await controller.Merge(new MergeRecordingsRequest([later.Id, early.Id]));
+
+        Assert.IsType<AcceptedResult>(result);
+        var survivor = (await db.Recordings.FindAsync(early.Id))!;
+        Assert.Equal(RecordingStatus.Merging, survivor.Status);
+        // The transcript still lays both end-to-end (offset by the audio-less source's retained duration)...
+        var merged = await db.Transcriptions.Where(t => t.RecordingId == early.Id).OrderByDescending(t => t.Version).FirstAsync();
+        var segs = await db.Segments.Where(s => s.TranscriptionId == merged.Id).OrderBy(s => s.Ordinal).ToListAsync();
+        Assert.Equal(["Hello", "World"], segs.Select(s => s.Original));
+        // ...but only the audio-present source's blob is concatenated.
+        var job = Assert.Single(queue.AudioMergeEnqueued);
+        Assert.Equal([early.BlobKey], job.BlobKeys);
+        Assert.Equal([later.Id], job.DeleteRecordingIds);
+    }
+
+    [Fact]
+    public async Task Merge_WhenNoSourceHasAudio_FinishesSynchronously_AndDeletesSources()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var early = await SeedMergeable(db, userId, DateTimeOffset.UtcNow.AddMinutes(-5), 1000, "Hello");
+        var later = await SeedMergeable(db, userId, DateTimeOffset.UtcNow, 2000, "World");
+        foreach (var r in new[] { early, later }) { r.AudioDeletedAt = DateTimeOffset.UtcNow; r.SizeBytes = 0; }
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, queue);
+
+        var result = await controller.Merge(new MergeRecordingsRequest([later.Id, early.Id]));
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Empty(queue.AudioMergeEnqueued);                          // no audio to stitch
+        var survivor = (await db.Recordings.FindAsync(early.Id))!;
+        Assert.Equal(RecordingStatus.Transcribed, survivor.Status);      // settled immediately
+        Assert.Null(await db.Recordings.FindAsync(later.Id));            // source deleted synchronously
+        var merged = await db.Transcriptions.Where(t => t.RecordingId == early.Id).OrderByDescending(t => t.Version).FirstAsync();
+        var segs = await db.Segments.Where(s => s.TranscriptionId == merged.Id).OrderBy(s => s.Ordinal).ToListAsync();
+        Assert.Equal(["Hello", "World"], segs.Select(s => s.Original));
+    }
+
+    [Fact]
+    public async Task Merge_AppendsActionItemsFromTheOtherSources()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var early = await SeedMergeable(db, userId, DateTimeOffset.UtcNow.AddMinutes(-5), 1000, "Hello");
+        var later = await SeedMergeable(db, userId, DateTimeOffset.UtcNow, 2000, "World");
+        db.RecordingActions.Add(new RecordingAction { Id = Guid.NewGuid(), RecordingId = early.Id, Text = "Survivor task", Ordinal = 0 });
+        db.RecordingActions.Add(new RecordingAction { Id = Guid.NewGuid(), RecordingId = later.Id, Text = "Folded-in task", Ordinal = 0 });
         await db.SaveChangesAsync();
         var controller = Build(db, userId, new FakeJobQueue());
 
-        Assert.IsType<BadRequestObjectResult>(await controller.Merge(new MergeRecordingsRequest([a.Id, b.Id])));
+        await controller.Merge(new MergeRecordingsRequest([later.Id, early.Id]));
+
+        var actions = await db.RecordingActions.Where(a => a.RecordingId == early.Id).OrderBy(a => a.Ordinal).ToListAsync();
+        Assert.Equal(["Survivor task", "Folded-in task"], actions.Select(a => a.Text));
+        Assert.NotNull((await db.Recordings.FindAsync(early.Id))!.ActionsExtractedAt);
     }
 
     [Fact]

@@ -47,7 +47,8 @@ invites, images, …) or add URLs, then rename, open, and remove them from an "A
 behind SSRF guards).
 - **Manage audio & merge**: **delete a recording's audio** to reclaim its storage while keeping the
 transcript, and **merge** several recordings into the earliest one — their transcripts are laid end-to-end
-and their audio is concatenated server-side (ffmpeg).
+and their action items are folded in. Audio is concatenated server-side (ffmpeg) for the recordings that
+still have it; recordings whose audio was deleted merge their transcript only (the summary is regenerated).
 - **Multi-user RBAC**: Standard / Administrator / Platform Administrator roles, an access-request →
 admin-grant → account-setup lifecycle (one-time email link, with an in-app fallback when SMTP is
 unconfigured), and admin user management. Each user's data is isolated to them. Light/Dark/Auto theming.

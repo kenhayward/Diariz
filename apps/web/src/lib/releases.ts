@@ -59,6 +59,26 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.38.0",
+    date: "2026-06-29",
+    pr: 82,
+    headline: "Merge recordings even after their audio is gone; indented list",
+    summary:
+      "You can now **merge recordings whose audio has been deleted** — that restriction is lifted. " +
+      "Recordings that still have audio are stitched together exactly as before; ones without audio " +
+      "contribute their **transcript and action items** only (the action items from every recording are " +
+      "now folded into the survivor). The **summary isn't merged** — re-generate it on the combined " +
+      "transcript. Separately, the recordings list now **indents recordings under their section heading** " +
+      "(and a little more under a sub-section).",
+    added: [
+      "Action items from every merged recording are appended to the survivor.",
+    ],
+    changed: [
+      "Merge no longer requires audio: audio-less recordings merge their transcript + actions; audio is still concatenated when present (none → the merge finishes immediately). The summary is not merged.",
+      "Recordings in the list are slightly indented under their section (more so under a sub-section).",
+    ],
+  },
+  {
     version: "0.37.1",
     date: "2026-06-29",
     pr: 81,

@@ -635,9 +635,11 @@ public class RecordingsController : ControllerBase
     }
 
     /// <summary>Merge 2+ recordings into the earliest-created one: concatenate their transcripts (with
-    /// timestamps laid end-to-end) into a new transcription version on the survivor, then enqueue an
-    /// audio-concatenation job. The worker stitches the audio and calls back to swap in the combined blob
-    /// and delete the other recordings. All sources must still have their audio.</summary>
+    /// timestamps laid end-to-end) into a new transcription version on the survivor and append the others'
+    /// action items. Recordings may have had their audio deleted — those contribute only their transcript
+    /// and actions. When at least one source still has audio, an audio-concatenation job stitches the
+    /// available audio and the worker callback swaps in the combined blob and deletes the other recordings;
+    /// when none has audio the merge finishes synchronously. The summary is not merged (regenerate it).</summary>
     [HttpPost("merge")]
     public async Task<IActionResult> Merge(MergeRecordingsRequest req)
     {
@@ -646,11 +648,11 @@ public class RecordingsController : ControllerBase
 
         var recs = await _db.Recordings
             .Include(r => r.Speakers)
+            .Include(r => r.Actions)
             .Include(r => r.Transcriptions).ThenInclude(t => t.Segments)
             .Where(r => ids.Contains(r.Id) && r.UserId == UserId)
             .ToListAsync();
         if (recs.Count != ids.Count) return NotFound();                 // some aren't the caller's
-        if (recs.Any(r => !r.HasAudio)) return BadRequest("Every recording being merged must still have its audio.");
 
         // Earliest-created recording survives; the rest are folded into it (chronological order).
         var ordered = recs.OrderBy(r => r.CreatedAt).ToList();
@@ -703,14 +705,44 @@ public class RecordingsController : ControllerBase
                 Id = Guid.NewGuid(), RecordingId = survivor.Id, Label = sp.Label, DisplayName = sp.DisplayName,
             });
 
-        survivor.Status = RecordingStatus.Merging;
         survivor.Error = null;
 
-        // The worker writes the combined audio to a fresh key (the survivor's old blob is one of the inputs).
-        var ext = Path.GetExtension(survivor.BlobKey);
-        var outputKey = $"{UserId}/{survivor.Id}-merged-{Guid.NewGuid():N}{(string.IsNullOrEmpty(ext) ? ".webm" : ext)}";
-        var blobKeys = ordered.Select(r => r.BlobKey).ToList();
+        // Append the other recordings' action items to the survivor (after its own). The summary is left
+        // out deliberately — the merged transcript can be re-summarised.
+        var nextActionOrdinal = survivor.Actions.Count == 0 ? 0 : survivor.Actions.Max(a => a.Ordinal) + 1;
+        var mergedAnyAction = false;
+        foreach (var a in ordered.Skip(1).SelectMany(r => r.Actions.OrderBy(x => x.Ordinal)))
+        {
+            _db.RecordingActions.Add(new RecordingAction
+            {
+                Id = Guid.NewGuid(), RecordingId = survivor.Id,
+                Text = a.Text, Actor = a.Actor, Deadline = a.Deadline, Ordinal = nextActionOrdinal++,
+            });
+            mergedAnyAction = true;
+        }
+        if (mergedAnyAction) survivor.ActionsExtractedAt ??= DateTimeOffset.UtcNow;
+
         var deleteIds = ordered.Skip(1).Select(r => r.Id).ToList();
+        var audioSources = ordered.Where(r => r.HasAudio).ToList();
+
+        if (audioSources.Count == 0)
+        {
+            // No audio to stitch — finish synchronously: the merged transcript + actions are already on the
+            // survivor; just drop the source recordings (their audio is already gone).
+            survivor.Status = RecordingStatus.Transcribed;
+            _db.Recordings.RemoveRange(ordered.Skip(1));
+            await _db.SaveChangesAsync();
+            await _hub.NotifyStatusAsync(UserId, survivor.Id, survivor.Status.ToString());
+            return Accepted();
+        }
+
+        // At least one source still has audio — concatenate the available audio as before (audio-less
+        // sources contribute only transcript/actions). The worker writes the combined audio to a fresh key
+        // and the callback swaps it onto the survivor and deletes the other recordings.
+        survivor.Status = RecordingStatus.Merging;
+        var ext = Path.GetExtension(audioSources[0].BlobKey);
+        var outputKey = $"{UserId}/{survivor.Id}-merged-{Guid.NewGuid():N}{(string.IsNullOrEmpty(ext) ? ".webm" : ext)}";
+        var blobKeys = audioSources.Select(r => r.BlobKey).ToList();
 
         await _db.SaveChangesAsync();
         await _queue.EnqueueAudioMergeAsync(new AudioMergeJob(survivor.Id, blobKeys, outputKey, deleteIds));

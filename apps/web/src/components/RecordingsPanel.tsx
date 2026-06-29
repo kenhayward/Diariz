@@ -199,7 +199,7 @@ export default function RecordingsPanel() {
     );
   };
 
-  const rowList = (sectionId: string | null, items: RecordingSummary[]) => {
+  const rowList = (sectionId: string | null, items: RecordingSummary[], indentClass = "pl-3") => {
     const ids = items.map((i) => i.id);
     return (
       <ul className="divide-y dark:divide-gray-800">
@@ -207,6 +207,7 @@ export default function RecordingsPanel() {
           <RecordingRow
             key={r.id}
             r={r}
+            indentClass={indentClass}
             selectMode={selection.selectMode}
             selected={selection.selectedIds.includes(r.id)}
             onToggleSelect={() => selection.toggle(r.id)}
@@ -252,7 +253,8 @@ export default function RecordingsPanel() {
         )}
         {!isCollapsed && (
           <>
-            {node.items.length > 0 && rowList(node.id, node.items)}
+            {/* Recordings sit slightly indented under their section heading; deeper under a sub-section. */}
+            {node.items.length > 0 && rowList(node.id, node.items, nested ? "pl-10" : "pl-6")}
             {node.children.map((child) => renderSection(child, true))}
           </>
         )}
@@ -311,7 +313,7 @@ export default function RecordingsPanel() {
                     leading={selectAllFor({ id: UNGROUPED_KEY, name: t("ungrouped"), items: tree.ungrouped, children: [] })}
                   />
                 )}
-                {!collapsed.has(UNGROUPED_KEY) && rowList(null, tree.ungrouped)}
+                {!collapsed.has(UNGROUPED_KEY) && rowList(null, tree.ungrouped, showHeadings ? "pl-6" : "pl-3")}
               </div>
             )}
           </div>
@@ -814,12 +816,15 @@ function SectionRenameForm({
 
 function RecordingRow({
   r,
+  indentClass,
   selectMode,
   selected,
   onToggleSelect,
   onDropBefore,
 }: {
   r: RecordingSummary;
+  /// Left-padding class that indents the row under its section heading (e.g. "pl-6" / "pl-10").
+  indentClass: string;
   selectMode: boolean;
   selected: boolean;
   onToggleSelect: () => void;
@@ -885,7 +890,7 @@ function RecordingRow({
     // disabled while renaming so text can be selected in the input. The inner NavLink keeps draggable=false
     // so grabbing the name still drags the row, not the link.
     <li
-      className="px-3 py-2"
+      className={`py-2 pr-3 ${indentClass}`}
       draggable={!renaming}
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", r.id);
