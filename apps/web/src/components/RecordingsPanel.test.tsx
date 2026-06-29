@@ -25,6 +25,7 @@ vi.mock("../lib/api", () => ({
     moveRecording: vi.fn(),
     renameSection: vi.fn(),
     deleteSection: vi.fn(),
+    reorderSections: vi.fn(),
     audioUrl: vi.fn(),
     downloadTranscript: vi.fn(),
     downloadAudio: vi.fn(),
@@ -377,6 +378,41 @@ describe("RecordingsPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: /calendar/i }));
     // The month heading (a calendar-only element) appears; the prev/next nav is present.
     expect(screen.getByRole("button", { name: /next month/i })).toBeTruthy();
+  });
+
+  it("nests a section when dropped onto a top-level section header", async () => {
+    (api.reorderSections as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "cust", name: "Customers", parentId: null, position: 0 },
+      { id: "loose", name: "Loose", parentId: null, position: 1 },
+    ]);
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    renderList();
+    await screen.findByRole("heading", { name: "Customers" });
+
+    // Drop the "Loose" section onto the "Customers" header → Loose becomes a sub-section of Customers.
+    const header = screen.getByLabelText(/drag customers/i).closest("div")!;
+    fireEvent.drop(header, {
+      dataTransfer: { getData: (type: string) => (type === "application/x-diariz-section" ? "loose" : "") },
+    });
+    await waitFor(() => expect(api.reorderSections).toHaveBeenCalledWith("cust", ["loose"]));
+  });
+
+  it("surfaces an error when merging fails", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    (api.mergeRecordings as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("merge boom"));
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...rec, id: "a", name: "First" },
+      { ...rec, id: "b", name: "Second" },
+    ]);
+    renderList();
+    await screen.findByText("First");
+    fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /select first/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /select second/i }));
+    fireEvent.click(screen.getByRole("button", { name: /merge transcripts/i }));
+
+    expect(await screen.findByText(/merge boom/i)).toBeTruthy();
   });
 
   it("reorders within a group via drag and drop", async () => {

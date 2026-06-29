@@ -246,6 +246,7 @@ export default function RecordingsPanel() {
             onToggle={() => toggleGroup(node.id)}
             leading={selectAllFor(node)}
             onSectionDropBefore={(draggedId) => dropSectionBefore(node.id, draggedId)}
+            onSectionDropNest={(draggedId) => nestSection(node.id, draggedId)}
           />
         )}
         {!isCollapsed && (
@@ -268,7 +269,7 @@ export default function RecordingsPanel() {
       onDrop={onFileDrop}
       className={`flex h-full flex-col ${dragging ? "rounded-md ring-2 ring-inset ring-blue-400 dark:ring-blue-500" : ""}`}
     >
-      <ListToolbar recordings={recordings} listMode={tab === "list"} />
+      <ListToolbar recordings={recordings} listMode={tab === "list"} onError={setOpError} />
       <div className="flex min-h-0 flex-1">
         <TabStrip tab={tab} onSelect={selectTab} />
         {tab === "list" ? (
@@ -368,7 +369,15 @@ function TabStrip({ tab, onSelect }: { tab: PanelTab; onSelect: (t: PanelTab) =>
 
 /// Top-of-list toolbar: create a section (group), toggle multi-select, bulk-delete audio for the
 /// selection, and refresh the list (picks up changes made on another machine/browser).
-function ListToolbar({ recordings, listMode }: { recordings: RecordingSummary[]; listMode: boolean }) {
+function ListToolbar({
+  recordings,
+  listMode,
+  onError,
+}: {
+  recordings: RecordingSummary[];
+  listMode: boolean;
+  onError: (msg: string | null) => void;
+}) {
   const { t } = useTranslation("workspace");
   const qc = useQueryClient();
   const { selectMode, setSelectMode, selectedIds, clear } = useSelection();
@@ -399,17 +408,29 @@ function ListToolbar({ recordings, listMode }: { recordings: RecordingSummary[];
     const ids = selectedWithAudio.map((r) => r.id);
     if (ids.length === 0) return;
     if (!window.confirm(t("confirmDeleteAudioBulk", { count: ids.length }))) return;
-    await api.deleteAudioBulk(ids);
-    clear();
-    qc.invalidateQueries({ queryKey: ["recordings"] });
+    onError(null);
+    try {
+      await api.deleteAudioBulk(ids);
+      clear();
+      qc.invalidateQueries({ queryKey: ["recordings"] });
+      qc.invalidateQueries({ queryKey: ["user-storage"] }); // freed quota → refresh the account menu
+    } catch (e) {
+      onError(apiErrorMessage(e));
+    }
   }
 
   async function mergeSelected() {
     if (selectedIds.length < 2) return;
     if (!window.confirm(t("confirmMergeRecordings", { count: selectedIds.length }))) return;
-    await api.mergeRecordings(selectedIds);
-    clear();
-    qc.invalidateQueries({ queryKey: ["recordings"] });
+    onError(null);
+    try {
+      await api.mergeRecordings(selectedIds);
+      clear();
+      qc.invalidateQueries({ queryKey: ["recordings"] }); // survivor flips to "Merging" until the worker finishes
+      qc.invalidateQueries({ queryKey: ["user-storage"] });
+    } catch (e) {
+      onError(apiErrorMessage(e));
+    }
   }
 
   return (
@@ -662,6 +683,7 @@ function SectionHeading({
   onToggle,
   leading,
   onSectionDropBefore,
+  onSectionDropNest,
 }: {
   id: string;
   name: string;
@@ -671,8 +693,10 @@ function SectionHeading({
   nested: boolean;
   onToggle: () => void;
   leading?: React.ReactNode;
-  /// A section header was dropped onto this one — reorder it before this section (at this section's level).
+  /// A section header was dropped onto this sub-section — reorder it before this one (within its parent).
   onSectionDropBefore: (draggedSectionId: string) => void;
+  /// A section header was dropped onto this top-level section — nest it under here as a sub-section.
+  onSectionDropNest: (draggedSectionId: string) => void;
 }) {
   const { t } = useTranslation("workspace");
   const qc = useQueryClient();
@@ -725,15 +749,17 @@ function SectionHeading({
       }`}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
-        // A section dropped onto this header reorders it here; recordings fall through to the section body.
         const draggedSection = e.dataTransfer.getData(SECTION_MIME);
         if (draggedSection) {
           e.stopPropagation();
-          onSectionDropBefore(draggedSection);
+          // Dropping a section onto a top-level header nests it; onto a sub-section header reorders it.
+          if (nested) onSectionDropBefore(draggedSection);
+          else onSectionDropNest(draggedSection);
         }
       }}
     >
-      {/* Drag handle to reorder this section or move it between parents. */}
+      {/* Select-all checkbox first (matching the recording rows), then the drag handle. */}
+      {leading}
       <span
         draggable
         onDragStart={(e) => {
@@ -748,7 +774,7 @@ function SectionHeading({
       {renaming ? (
         <SectionRenameForm initial={name} onSave={save} onCancel={() => setRenaming(false)} />
       ) : (
-        <GroupHeadingButton name={name} count={count} collapsed={collapsed} onToggle={onToggle} leading={leading} />
+        <GroupHeadingButton name={name} count={count} collapsed={collapsed} onToggle={onToggle} />
       )}
       <KebabMenu actions={actions} label={t("sectionActions")} />
     </div>
@@ -843,11 +869,13 @@ function RecordingRow({
       if (!window.confirm(t("workspace:confirmDeleteAudio", { name: r.name ?? r.title }))) return;
       await api.deleteAudio(r.id);
       refresh();
+      qc.invalidateQueries({ queryKey: ["user-storage"] }); // freed quota → refresh the account menu
     }),
     onDelete: run(async () => {
       if (!window.confirm(t("workspace:confirmDelete", { name: r.name ?? r.title }))) return;
       await api.deleteRecording(r.id);
       refresh();
+      qc.invalidateQueries({ queryKey: ["user-storage"] });
     }),
     hasTranscript: hasTranscript(r.status),
     hasAudio: r.hasAudio,

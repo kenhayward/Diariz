@@ -303,6 +303,7 @@ export default function RecordingDetail() {
       await api.deleteAudio(id);
       qc.invalidateQueries({ queryKey: ["recording", id] });
       qc.invalidateQueries({ queryKey: ["recordings"] });
+      qc.invalidateQueries({ queryKey: ["user-storage"] });
     },
     onDelete: async () => {
       if (!window.confirm(t("workspace:confirmDelete", { name: rec.name ?? rec.title }))) return;
@@ -336,9 +337,15 @@ export default function RecordingDetail() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {(isSummarizing || requeuing || translating) && (
+          {(isSummarizing || requeuing || translating || rec.status === "Merging") && (
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {translating ? t("workspace:translating") : isSummarizing ? t("workspace:summarising") : t("workspace:queuing")}
+              {rec.status === "Merging"
+                ? t("workspace:merging")
+                : translating
+                  ? t("workspace:translating")
+                  : isSummarizing
+                    ? t("workspace:summarising")
+                    : t("workspace:queuing")}
             </span>
           )}
           <DetailToolbar
