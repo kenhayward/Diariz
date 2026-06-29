@@ -46,6 +46,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddSectionParentAndPosition` | `Section.ParentId` (self-ref, cascade) + `Section.Position` — two-level sub-grouping |
 | `AddSpeakerMultiSpeaker` | `Speaker.IsMultiSpeaker` (bool) — "Multiple Speakers" slots excluded from voiceprints |
 | `AddSummaryUserEdited` | `Summary.IsUserEdited` (bool) + `Summary.UpdatedAt` (nullable) — manual/protected summary edits |
+| `AddTranscriptionProcessingMs` | `Transcription.ProcessingMs` (nullable) — full-pipeline wall-clock time the worker spent |
 
 ### Entity-relationship overview
 
@@ -112,6 +113,7 @@ One transcription pass; recordings are **versioned**.
 | `Model` | text | e.g. `whisperx-large-v3` |
 | `Version` | int | monotonic per recording, starting at 1; highest = current |
 | `Language` | text null | ISO-639-1 if detected |
+| `ProcessingMs` | bigint null | full-pipeline wall-clock time the worker spent (download+transcribe+diarize+embed) |
 | `CreatedAt` | timestamptz | |
 
 Unique index: `(RecordingId, Version)`. Children: `Segments` (cascade), `Summary` (1:1, cascade).

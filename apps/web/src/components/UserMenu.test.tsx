@@ -19,7 +19,7 @@ vi.mock("../lib/api", () => ({
     getUserSettings: vi.fn().mockResolvedValue({ apiBase: null, model: null, hasApiKey: false }),
     updateUserSettings: vi.fn(),
     listUsers: vi.fn().mockResolvedValue([]),
-    getUserStorage: vi.fn().mockResolvedValue({ usedBytes: 1024 ** 3, quotaBytes: 5 * 1024 ** 3 }),
+    getUserStorage: vi.fn().mockResolvedValue({ usedBytes: 1024 ** 3, quotaBytes: 5 * 1024 ** 3, totalTranscriptionMs: 3_661_000 }),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -70,6 +70,13 @@ describe("UserMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: /account/i }));
     // 1 GB used of 5 GB = 20%.
     expect(await screen.findByText(/Storage 1 GB \/ 5 GB \(20%\)/)).toBeTruthy();
+  });
+
+  it("shows the total transcription time below the storage line", async () => {
+    renderMenu();
+    fireEvent.click(screen.getByRole("button", { name: /account/i }));
+    // 3,661,000 ms = 1:01:01, no day part.
+    expect(await screen.findByText(/Transcription 1:01:01/)).toBeTruthy();
   });
 
   it("Sign Out calls logout", () => {

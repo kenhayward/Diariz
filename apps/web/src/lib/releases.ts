@@ -57,6 +57,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.35.0",
+    date: "2026-06-29",
+    pr: 78,
+    headline: "See how long transcription took",
+    summary:
+      "Diariz now records the **full-pipeline wall-clock time** the worker spends on each transcription " +
+      "(download + transcribe + diarize + voiceprint). It shows in the recording’s **subtitle** (e.g. " +
+      "“transcribed in 4:12”), and your **account menu** shows a running **total transcription time** below " +
+      "the storage line (`Transcription d days hh:mm:ss`). Useful for gauging throughput and capacity.",
+    added: [
+      "The worker measures and reports each job’s processing time; it’s stored per transcription version.",
+      "Detail subtitle shows the transcription time; the account menu shows your total across all transcriptions.",
+    ],
+  },
+  {
     version: "0.34.0",
     date: "2026-06-29",
     pr: 77,

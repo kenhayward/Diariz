@@ -1,5 +1,7 @@
 {
   "storageUsage": "Storage {{used}} / {{total}} ({{percent}}%)",
+  "transcriptionTotal": "Transcription {{clock}}",
+  "transcriptionTotalDays": "Transcription {{days}} days {{clock}}",
   "preferences": "Preferences",
   "settings": "Settings",
   "manageUsers": "Manage Users",

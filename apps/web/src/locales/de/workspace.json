@@ -85,6 +85,7 @@
   "unassigned": "Nicht zugewiesen",
   "newPerson": "+ Neue Person…",
   "multipleSpeakers": "Mehrere Sprecher",
+  "processedIn": "transkribiert in {{time}}",
   "confirmDeleteSegment": "Dieses Segment löschen? Erneut transkribieren, um es wiederherzustellen.",
   "revisedTitle": "Dieses Segment wurde bearbeitet oder übersetzt",
   "editedAria": "Bearbeitet",

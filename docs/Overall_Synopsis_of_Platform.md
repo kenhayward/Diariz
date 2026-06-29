@@ -99,13 +99,14 @@ services address each other by Compose service name (`minio:9000`, `redis:6379`,
    It measures duration and rejects audio over `MAX_AUDIO_SECONDS`.
 4. **Callback.** The worker `POST`s to **`internal/transcriptions/result`**, authenticated by the shared
    header **`X-Worker-Secret`** (= `CALLBACK_SECRET`), not JWT. Body (PascalCase) carries
-   `{ TranscriptionId, Language, DurationMs, Segments[], Speakers[] }`, where each `Speaker` may include a
-   192-d `Embedding`.
+   `{ TranscriptionId, Language, DurationMs, ProcessingMs, Segments[], Speakers[] }`, where each `Speaker`
+   may include a 192-d `Embedding`. `ProcessingMs` is the worker's full-pipeline wall-clock time.
 5. **Persist + identify.** The API writes the **`Segment`** rows (the worker's text lands in `Segment.Original`;
    a later user edit or translation goes in `Segment.Revised`, and the effective text shown/exported is
    `Revised ?? Original`), seeds a **`Speaker`** row per new
    diarization label (`DisplayName = label`), stores each speaker's embedding, backfills the recording's
-   duration, and runs **auto-identification**: for any speaker not manually named, it matches the embedding
+   duration, records the transcription's **`ProcessingMs`** (surfaced in the detail subtitle and summed into
+   the account-menu total), and runs **auto-identification**: for any speaker not manually named, it matches the embedding
    against the owner's enrolled **`SpeakerProfile`** voiceprints by **pgvector cosine distance** (≤
    `Identification:Threshold`) and, on a hit, sets `ProfileId` + `DisplayName` + `IdentifiedAuto = true` —
    never overriding a manual name, and **skipping any speaker the user flagged `IsMultiSpeaker`**

@@ -33,7 +33,10 @@ public record TranscriptionResult(
     string? Language,
     IReadOnlyList<SegmentResult> Segments,
     IReadOnlyList<SpeakerEmbeddingResult>? Speakers = null,
-    long? DurationMs = null);
+    long? DurationMs = null,
+    /// <summary>Full-pipeline wall-clock time the worker spent on this job (download + transcribe +
+    /// diarize + embed), in milliseconds.</summary>
+    long? ProcessingMs = null);
 
 /// <summary>Callback body the worker POSTs when a job fails.</summary>
 public record TranscriptionFailure(

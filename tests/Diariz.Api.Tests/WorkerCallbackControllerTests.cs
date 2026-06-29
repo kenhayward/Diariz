@@ -114,6 +114,19 @@ public class WorkerCallbackControllerTests
     }
 
     [Fact]
+    public async Task Result_PersistsProcessingTimeFromWorker()
+    {
+        var (controller, db, _) = Build(presentedSecret: Secret);
+        var (_, transcriptionId) = await SeedQueuedRecording(db, Guid.NewGuid());
+
+        await controller.Result(new TranscriptionResult(transcriptionId, "en",
+            [new SegmentResult("SPEAKER_00", 0, 5000, "hi")], Speakers: null, DurationMs: 5000, ProcessingMs: 42000));
+
+        var tr = await db.Transcriptions.FindAsync(transcriptionId);
+        Assert.Equal(42000, tr!.ProcessingMs);
+    }
+
+    [Fact]
     public async Task Result_ClearsStaleErrorFromPreviousFailure()
     {
         var (controller, db, _) = Build(presentedSecret: Secret);

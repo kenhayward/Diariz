@@ -34,6 +34,7 @@ def test_post_result_sends_pascalcase_body_and_secret_header(monkeypatch):
         "Segments": segments,
         "Speakers": [],
         "DurationMs": None,
+        "ProcessingMs": None,
     }
     assert captured["headers"]["X-Worker-Secret"] == callback.config.CALLBACK_SECRET
 
@@ -47,6 +48,17 @@ def test_post_result_includes_duration(monkeypatch):
     callback.post_result("tid-1", "en", [], None, duration_ms=5000)
 
     assert captured["json"]["DurationMs"] == 5000
+
+
+def test_post_result_includes_processing_ms(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        callback.requests, "post",
+        lambda url, json=None, headers=None, timeout=None: captured.update(json=json) or _OkResponse())
+
+    callback.post_result("tid-1", "en", [], None, duration_ms=5000, processing_ms=42000)
+
+    assert captured["json"]["ProcessingMs"] == 42000
 
 
 def test_post_result_includes_speaker_embeddings(monkeypatch):
