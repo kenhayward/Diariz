@@ -187,14 +187,16 @@ public record ChatTurnDto(string Role, string Content);
 
 /// <summary>The context a chat turn (or a saved conversation) runs against.</summary>
 public record SavedChatContextDto(
-    IReadOnlyList<Guid> RecordingIds, string? AttachmentName, string? AttachmentText);
+    IReadOnlyList<Guid> RecordingIds, string? AttachmentName, string? AttachmentText,
+    bool IncludeAttachments = false);
 
 /// <summary>A streaming chat request: the selected context + the full conversation so far.</summary>
 public record ChatStreamRequest(
     IReadOnlyList<Guid> RecordingIds,
     string? AttachmentName,
     string? AttachmentText,
-    IReadOnlyList<ChatTurnDto> Messages);
+    IReadOnlyList<ChatTurnDto> Messages,
+    bool IncludeAttachments = false);
 
 /// <summary>Extracted attachment text returned to the client (held and resent with each turn).</summary>
 public record ChatAttachmentDto(string Name, int Chars, string Text);

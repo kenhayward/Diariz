@@ -239,6 +239,19 @@ public sealed class FakeAudioStorage : IAudioStorage
     }
 }
 
+/// <summary>Stub URL fetcher: returns canned text per URL (or null for "blocked/unreachable").</summary>
+public sealed class FakeUrlFetcher : IUrlFetcher
+{
+    public Dictionary<string, string?> Texts { get; } = new();
+    public List<string> Requested { get; } = new();
+
+    public Task<string?> FetchTextAsync(string url, CancellationToken ct = default)
+    {
+        Requested.Add(url);
+        return Task.FromResult(Texts.TryGetValue(url, out var text) ? text : null);
+    }
+}
+
 /// <summary>
 /// No-op <see cref="IHubContext{THub}"/> that records every message sent so tests can assert
 /// which SignalR notifications a controller pushed, without a real hub connection.

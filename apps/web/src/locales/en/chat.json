@@ -16,6 +16,8 @@
   "pickSelected_other": "Selected transcripts",
   "pickSelectedHint": "Ticked via the list's Select button ({{n}})",
   "pickNoneHint": "No transcript context",
+  "includeAttachments": "Include attachments",
+  "includeAttachmentsHint": "Add the selected recordings' files & links to the context",
   "removeAttachment": "Remove attachment",
   "reading": "Reading…",
   "attachFile": "+ Attach file",

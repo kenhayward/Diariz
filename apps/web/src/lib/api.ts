@@ -432,6 +432,7 @@ export const api = {
       attachmentName?: string | null;
       attachmentText?: string | null;
       messages: ChatTurn[];
+      includeAttachments?: boolean;
     },
     handlers: { onToken: (token: string) => void; onMeta?: (u: ChatUsage) => void; signal?: AbortSignal },
   ): Promise<ChatUsage> {

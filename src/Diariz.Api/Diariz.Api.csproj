@@ -5,12 +5,16 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- App version — keep in sync with /version.json (see CLAUDE.md versioning rule). -->
-    <Version>0.36.0</Version>
+    <Version>0.37.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="AWSSDK.S3" Version="4.0.24.4" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.1.0" />
+    <!-- Pin a patched System.IO.Packaging (OpenXml pulls a transitive 8.0.0 with a high-severity advisory). -->
+    <PackageReference Include="System.IO.Packaging" Version="9.0.9" />
     <PackageReference Include="MailKit" Version="4.17.0" />
+    <PackageReference Include="MimeKit" Version="4.17.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.*" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.*" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />

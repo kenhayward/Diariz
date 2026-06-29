@@ -29,9 +29,10 @@ It can **summarise** recordings, **extract action items** (with actor and deadli
 table, **translate** a transcript (segments, summary, and actions) into your chosen language, and let you
 **chat across one or more transcripts** — with file attachments, a context-usage dial, and saved
 conversations — using an OpenAI-compatible LLM endpoint you configure. You can **attach supporting
-documents** (files or URLs) to a recording and open them from the transcript page. Recordings organise
-into **sections** (with sub-sections) and drag-and-drop ordering, can be **merged** into one, and can be
-browsed as a **list or a calendar**.
+documents** (files or URLs) to a recording, open them from the transcript page, and optionally **feed them
+to the chat** (PDFs, text, Office docs, emails/calendar invites are read into text; URLs are fetched).
+Recordings organise into **sections** (with sub-sections) and drag-and-drop ordering, can be **merged**
+into one, and can be browsed as a **list or a calendar**.
 
 Diariz is **multi-user** with role-based access: people request access (or an administrator adds them),
 an administrator approves, and each user sets up their own account and keeps their own private
@@ -57,6 +58,22 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.37.0",
+    date: "2026-06-29",
+    pr: 80,
+    headline: "Chat with a transcript's attachments",
+    summary:
+      "Turn on **Include attachments** in the chat context picker and the selected recordings' " +
+      "attachments are fed to the model alongside the transcript. Uploaded **PDFs, text, Office docs " +
+      "(.docx/.xlsx/.pptx) and emails/calendar invites (.eml/.ics)** are read into text; **URL " +
+      "attachments are fetched** (behind safety guards that block private/internal addresses, cap the " +
+      "size, and strip HTML to text). Unsupported or unreachable attachments are simply skipped.",
+    added: [
+      "“Include attachments” toggle in chat — adds the selected recordings' files & links to the LLM context.",
+      "Attachment text extraction for Office (.docx/.xlsx/.pptx) and email/calendar (.eml/.ics), plus URL fetching with SSRF guards.",
+    ],
+  },
   {
     version: "0.36.0",
     date: "2026-06-29",

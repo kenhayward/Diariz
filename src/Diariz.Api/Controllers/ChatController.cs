@@ -33,16 +33,21 @@ public class ChatController : ControllerBase
     private readonly ISummarizationSettingsResolver _settings;
     private readonly IChatContextResolver _contextResolver;
     private readonly IAttachmentExtractor _extractor;
+    private readonly IAudioStorage _storage;
+    private readonly IUrlFetcher _urlFetcher;
 
     public ChatController(
         DiarizDbContext db, IChatStreamClient chat, ISummarizationSettingsResolver settings,
-        IChatContextResolver contextResolver, IAttachmentExtractor extractor)
+        IChatContextResolver contextResolver, IAttachmentExtractor extractor,
+        IAudioStorage storage, IUrlFetcher urlFetcher)
     {
         _db = db;
         _chat = chat;
         _settings = settings;
         _contextResolver = contextResolver;
         _extractor = extractor;
+        _storage = storage;
+        _urlFetcher = urlFetcher;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -59,7 +64,13 @@ public class ChatController : ControllerBase
         var (contexts, allOwned) = await LoadTranscriptsAsync(req.RecordingIds ?? [], ct);
         if (!allOwned) return NotFound(); // a selected recording isn't visible to the caller
 
-        var system = ChatContextBuilder.BuildSystemPrompt(contexts, req.AttachmentName, req.AttachmentText);
+        // Optionally pull the selected recordings' attachments into the context (extracted file text +
+        // fetched URL text). Recordings were already ownership-checked by LoadTranscriptsAsync above.
+        var documents = req.IncludeAttachments
+            ? await LoadAttachmentDocumentsAsync(req.RecordingIds ?? [], ct)
+            : [];
+
+        var system = ChatContextBuilder.BuildSystemPrompt(contexts, req.AttachmentName, req.AttachmentText, documents);
         var history = (req.Messages ?? []).Select(m => new ChatMessage(m.Role, m.Content)).ToList();
         var messages = ChatContextBuilder.BuildMessages(system, history);
         var contextTotal = await _contextResolver.ResolveContextWindowAsync(UserId, ct);
@@ -252,6 +263,49 @@ public class ChatController : ControllerBase
             contexts.Add(new TranscriptContext(rec.Name ?? rec.Title, text));
         }
         return (contexts, recs.Count == ids.Count);
+    }
+
+    /// <summary>Resolve the selected recordings' attachments into text documents for chat context: uploaded
+    /// files are downloaded and extracted (supported types only); URL attachments are fetched (behind SSRF
+    /// guards). An attachment that fails or is unsupported is skipped.</summary>
+    private async Task<List<TranscriptContext>> LoadAttachmentDocumentsAsync(
+        IReadOnlyList<Guid> recordingIds, CancellationToken ct)
+    {
+        var ids = recordingIds.Distinct().ToList();
+        if (ids.Count == 0) return [];
+
+        var attachments = await _db.Attachments
+            .Where(a => ids.Contains(a.RecordingId) && a.Recording!.UserId == UserId)
+            .OrderBy(a => a.RecordingId).ThenBy(a => a.Ordinal)
+            .ToListAsync(ct);
+
+        var docs = new List<TranscriptContext>();
+        foreach (var a in attachments)
+        {
+            try
+            {
+                if (a.Kind == AttachmentKind.Url && a.Url is not null)
+                {
+                    var text = await _urlFetcher.FetchTextAsync(a.Url, ct);
+                    if (!string.IsNullOrWhiteSpace(text)) docs.Add(new TranscriptContext(a.Name, text!));
+                }
+                else if (a.Kind == AttachmentKind.File && a.BlobKey is not null
+                         && _extractor.IsSupported(a.Name, a.ContentType))
+                {
+                    await using var stream = await _storage.OpenReadAsync(a.BlobKey, ct);
+                    using var buffer = new MemoryStream();
+                    await stream.CopyToAsync(buffer, ct);
+                    var extracted = _extractor.Extract(a.Name, a.ContentType, buffer.ToArray());
+                    if (!string.IsNullOrWhiteSpace(extracted.Text))
+                        docs.Add(new TranscriptContext(extracted.Name, extracted.Text));
+                }
+            }
+            catch
+            {
+                // Skip an attachment that can't be fetched/extracted — never fail the whole chat turn.
+            }
+        }
+        return docs;
     }
 
     /// <summary>A short LLM-generated title (3–6 words); falls back to the first user message when

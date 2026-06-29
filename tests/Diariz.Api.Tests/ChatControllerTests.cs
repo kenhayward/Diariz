@@ -16,7 +16,7 @@ namespace Diariz.Api.Tests;
 public class ChatControllerTests
 {
     private static (ChatController controller, DiarizDbContext db, FakeChatStreamClient chat) Build(
-        Guid userId, bool llmEnabled = true)
+        Guid userId, bool llmEnabled = true, FakeAudioStorage? storage = null, FakeUrlFetcher? urlFetcher = null)
     {
         var db = TestDb.Create();
         var chat = new FakeChatStreamClient();
@@ -27,7 +27,8 @@ public class ChatControllerTests
                 : new SummarizationRequestConfig("", "", "test-model", 60),
         };
         var ctxResolver = new ChatContextResolver(db, Options.Create(new ChatOptions { ContextLength = 40000 }));
-        var controller = new ChatController(db, chat, settings, ctxResolver, new AttachmentExtractor())
+        var controller = new ChatController(db, chat, settings, ctxResolver, new AttachmentExtractor(),
+            storage ?? new FakeAudioStorage(), urlFetcher ?? new FakeUrlFetcher())
         {
             ControllerContext = Http.Context(userId),
         };
@@ -288,5 +289,64 @@ public class ChatControllerTests
     {
         var bytes = Encoding.UTF8.GetBytes(content);
         return new FormFile(new MemoryStream(bytes), 0, bytes.Length, "file", name) { Headers = new HeaderDictionary(), ContentType = contentType };
+    }
+
+    // ---- Attachments as chat context ----
+
+    [Fact]
+    public async Task Stream_IncludeAttachments_AddsFileAndUrlTextToTheSystemPrompt()
+    {
+        var me = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var fetcher = new FakeUrlFetcher();
+        var (controller, db, chat) = Build(me, storage: storage, urlFetcher: fetcher);
+        var rid = await SeedTranscribedRecording(db, me);
+
+        storage.Objects["k1"] = Encoding.UTF8.GetBytes("The widget must be blue.");
+        db.Attachments.Add(new Attachment
+        {
+            Id = Guid.NewGuid(), RecordingId = rid, Kind = AttachmentKind.File,
+            Name = "spec.txt", ContentType = "text/plain", BlobKey = "k1", SizeBytes = 10, Ordinal = 0,
+        });
+        db.Attachments.Add(new Attachment
+        {
+            Id = Guid.NewGuid(), RecordingId = rid, Kind = AttachmentKind.Url,
+            Name = "Roadmap", Url = "https://example.com/roadmap", Ordinal = 1,
+        });
+        await db.SaveChangesAsync();
+        fetcher.Texts["https://example.com/roadmap"] = "Ship in Q3.";
+
+        controller.ControllerContext.HttpContext.Response.Body = new MemoryStream();
+        await controller.Stream(
+            new ChatStreamRequest([rid], null, null, [new ChatTurnDto("user", "What colour?")], IncludeAttachments: true),
+            default);
+
+        var system = chat.LastMessages![0].Content;
+        Assert.Contains("The widget must be blue.", system);
+        Assert.Contains("Ship in Q3.", system);
+        Assert.Contains("Roadmap", system);
+        Assert.Contains("spec.txt", system);
+    }
+
+    [Fact]
+    public async Task Stream_WithoutIncludeAttachments_OmitsAttachmentText()
+    {
+        var me = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var (controller, db, chat) = Build(me, storage: storage);
+        var rid = await SeedTranscribedRecording(db, me);
+        storage.Objects["k1"] = Encoding.UTF8.GetBytes("The widget must be blue.");
+        db.Attachments.Add(new Attachment
+        {
+            Id = Guid.NewGuid(), RecordingId = rid, Kind = AttachmentKind.File,
+            Name = "spec.txt", ContentType = "text/plain", BlobKey = "k1", SizeBytes = 10, Ordinal = 0,
+        });
+        await db.SaveChangesAsync();
+
+        controller.ControllerContext.HttpContext.Response.Body = new MemoryStream();
+        await controller.Stream(
+            new ChatStreamRequest([rid], null, null, [new ChatTurnDto("user", "What colour?")]), default);
+
+        Assert.DoesNotContain("The widget must be blue.", chat.LastMessages![0].Content);
     }
 }

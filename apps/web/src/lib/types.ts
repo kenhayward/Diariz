@@ -260,6 +260,8 @@ export interface SavedChatContext {
   recordingIds: string[];
   attachmentName: string | null;
   attachmentText: string | null;
+  /// Pull the selected recordings' attachments (files + URLs) into the chat context.
+  includeAttachments?: boolean;
 }
 
 export interface ChatConversationSummary {

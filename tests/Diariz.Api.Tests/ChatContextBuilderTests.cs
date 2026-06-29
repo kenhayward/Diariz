@@ -38,6 +38,23 @@ public class ChatContextBuilderTests
     }
 
     [Fact]
+    public void BuildSystemPrompt_AppendsEachAttachmentDocument()
+    {
+        var documents = new[]
+        {
+            new TranscriptContext("spec.docx", "Ship in Q3."),
+            new TranscriptContext("roadmap-url", "Then Q4."),
+        };
+
+        var prompt = ChatContextBuilder.BuildSystemPrompt([Standup], null, null, documents);
+
+        Assert.Contains("Attached document: spec.docx", prompt);
+        Assert.Contains("Ship in Q3.", prompt);
+        Assert.Contains("Attached document: roadmap-url", prompt);
+        Assert.Contains("Then Q4.", prompt);
+    }
+
+    [Fact]
     public void BuildSystemPrompt_OmitsAttachment_WhenEmpty()
     {
         var prompt = ChatContextBuilder.BuildSystemPrompt([Standup], "spec.pdf", "   ");
