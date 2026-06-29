@@ -353,6 +353,32 @@ describe("RecordingsPanel", () => {
     await waitFor(() => expect(api.mergeRecordings).toHaveBeenCalledWith(["a", "b"]));
   });
 
+  it("Calendar tab shows the selected day's recordings and disables list-only toolbar buttons", async () => {
+    localStorage.setItem("diariz.recordings.tab", "calendar");
+    const today = new Date();
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...rec, id: "today", name: "Today call", createdAt: today.toISOString() },
+    ]);
+    renderList();
+
+    // Today is selected by default, so its recording shows in the day list.
+    expect(await screen.findByText("Today call")).toBeTruthy();
+    // List-only toolbar actions are disabled in Calendar; Refresh stays usable.
+    expect((screen.getByRole("button", { name: /new section/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /select recordings/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /refresh/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("switches from List to Calendar via the tab strip", async () => {
+    localStorage.removeItem("diariz.recordings.tab"); // start on List
+    renderList();
+    await screen.findByText("Weekly Standup");
+
+    fireEvent.click(screen.getByRole("button", { name: /calendar/i }));
+    // The month heading (a calendar-only element) appears; the prev/next nav is present.
+    expect(screen.getByRole("button", { name: /next month/i })).toBeTruthy();
+  });
+
   it("reorders within a group via drag and drop", async () => {
     (api.reorderRecordings as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([

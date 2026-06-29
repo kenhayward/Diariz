@@ -14,6 +14,8 @@ import { useSelection } from "../lib/selection";
 import { formatDuration } from "../lib/format";
 import { computeReorder } from "../lib/reorder";
 import { buildRecordingTree, reorderBeforeSection, appendSectionUnder, type SectionNode } from "../lib/recordingTree";
+import MonthCalendar from "./MonthCalendar";
+import { recordingDayKeys, recordingsForDay, dayKey } from "../lib/calendar";
 import { useUpload } from "../lib/uploadContext";
 import type { UploadItem } from "../lib/uploadQueue";
 import type { RecordingStatus, RecordingSource, RecordingSummary } from "../lib/types";
@@ -33,6 +35,8 @@ const statusColor: Record<RecordingStatus, string> = {
 
 const COLLAPSE_KEY = "diariz.recordings.collapsedGroups";
 const UNGROUPED_KEY = "__ungrouped__";
+const TAB_KEY = "diariz.recordings.tab";
+type PanelTab = "list" | "calendar";
 /// Drag payload type marking a section-header drag (vs a recording's "text/plain" id or a file drop).
 const SECTION_MIME = "application/x-diariz-section";
 
@@ -72,6 +76,28 @@ export default function RecordingsPanel() {
   const tree = useMemo(() => buildRecordingTree(recordings, sections), [recordings, sections]);
   const selection = useSelection();
   const [opError, setOpError] = useState<string | null>(null);
+
+  // List vs Calendar tab (persisted). The calendar shows the month, focused on today, and lists the
+  // selected day's recordings below it.
+  const [tab, setTab] = useState<PanelTab>(() =>
+    localStorage.getItem(TAB_KEY) === "calendar" ? "calendar" : "list");
+  function selectTab(next: PanelTab) {
+    localStorage.setItem(TAB_KEY, next);
+    setTab(next);
+  }
+  const [month, setMonth] = useState(() => {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() };
+  });
+  const [selectedDay, setSelectedDay] = useState<string | null>(() => dayKey(new Date()));
+  const dayKeys = useMemo(() => recordingDayKeys(recordings), [recordings]);
+  const dayRecordings = selectedDay ? recordingsForDay(recordings, selectedDay) : [];
+  function stepMonth(delta: number) {
+    setMonth((m) => {
+      const d = new Date(m.year, m.month + delta, 1);
+      return { year: d.getFullYear(), month: d.getMonth() };
+    });
+  }
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     try {
       return new Set<string>(JSON.parse(localStorage.getItem(COLLAPSE_KEY) ?? "[]"));
@@ -242,45 +268,72 @@ export default function RecordingsPanel() {
       onDrop={onFileDrop}
       className={`flex h-full flex-col ${dragging ? "rounded-md ring-2 ring-inset ring-blue-400 dark:ring-blue-500" : ""}`}
     >
-      <ListToolbar recordings={recordings} />
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <UploadStatusList items={upload.items} onClear={upload.clearFinished} />
-        {dragging && (
-          <p className="px-3 py-2 text-center text-xs font-medium text-blue-600 dark:text-blue-400">
-            {t("dropToUpload")}
-          </p>
-        )}
-        {recordings.length === 0 && !dragging && (
-          <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("noRecordings")}</p>
-        )}
-        {opError && <p className="px-3 py-1 text-xs text-red-600 dark:text-red-400">{opError}</p>}
-        {tree.sections.map((node) => renderSection(node, false))}
-        {tree.ungrouped.length > 0 && (
-          <div
-            // Dropping a recording here ungroups it; dropping a section here promotes it to top-level.
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.stopPropagation();
-              const draggedSection = e.dataTransfer.getData(SECTION_MIME);
-              if (draggedSection) {
-                nestSection(null, draggedSection);
-                return;
-              }
-              const dragged = e.dataTransfer.getData("text/plain");
-              if (dragged) drop(null, tree.ungrouped.map((i) => i.id), dragged, null);
-            }}
-          >
-            {showHeadings && (
-              <GroupHeadingButton
-                name={t("ungrouped")}
-                count={tree.ungrouped.length}
-                collapsed={collapsed.has(UNGROUPED_KEY)}
-                onToggle={() => toggleGroup(UNGROUPED_KEY)}
-                withBg
-                leading={selectAllFor({ id: UNGROUPED_KEY, name: t("ungrouped"), items: tree.ungrouped, children: [] })}
-              />
+      <ListToolbar recordings={recordings} listMode={tab === "list"} />
+      <div className="flex min-h-0 flex-1">
+        <TabStrip tab={tab} onSelect={selectTab} />
+        {tab === "list" ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <UploadStatusList items={upload.items} onClear={upload.clearFinished} />
+            {dragging && (
+              <p className="px-3 py-2 text-center text-xs font-medium text-blue-600 dark:text-blue-400">
+                {t("dropToUpload")}
+              </p>
             )}
-            {!collapsed.has(UNGROUPED_KEY) && rowList(null, tree.ungrouped)}
+            {recordings.length === 0 && !dragging && (
+              <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("noRecordings")}</p>
+            )}
+            {opError && <p className="px-3 py-1 text-xs text-red-600 dark:text-red-400">{opError}</p>}
+            {tree.sections.map((node) => renderSection(node, false))}
+            {tree.ungrouped.length > 0 && (
+              <div
+                // Dropping a recording here ungroups it; dropping a section here promotes it to top-level.
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.stopPropagation();
+                  const draggedSection = e.dataTransfer.getData(SECTION_MIME);
+                  if (draggedSection) {
+                    nestSection(null, draggedSection);
+                    return;
+                  }
+                  const dragged = e.dataTransfer.getData("text/plain");
+                  if (dragged) drop(null, tree.ungrouped.map((i) => i.id), dragged, null);
+                }}
+              >
+                {showHeadings && (
+                  <GroupHeadingButton
+                    name={t("ungrouped")}
+                    count={tree.ungrouped.length}
+                    collapsed={collapsed.has(UNGROUPED_KEY)}
+                    onToggle={() => toggleGroup(UNGROUPED_KEY)}
+                    withBg
+                    leading={selectAllFor({ id: UNGROUPED_KEY, name: t("ungrouped"), items: tree.ungrouped, children: [] })}
+                  />
+                )}
+                {!collapsed.has(UNGROUPED_KEY) && rowList(null, tree.ungrouped)}
+              </div>
+            )}
+          </div>
+        ) : (
+          // Calendar: the month grid stays fixed at the top; only the selected day's list scrolls.
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="shrink-0 border-b dark:border-gray-800">
+              <MonthCalendar
+                year={month.year}
+                month={month.month}
+                daysWithRecordings={dayKeys}
+                selectedKey={selectedDay}
+                onSelect={setSelectedDay}
+                onPrev={() => stepMonth(-1)}
+                onNext={() => stepMonth(1)}
+              />
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {dayRecordings.length === 0 ? (
+                <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("calNoRecordings")}</p>
+              ) : (
+                rowList(null, dayRecordings)
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -288,9 +341,34 @@ export default function RecordingsPanel() {
   );
 }
 
+/// Vertical List / Calendar tabs, sitting to the left of the panel's scroll area (below the toolbar).
+function TabStrip({ tab, onSelect }: { tab: PanelTab; onSelect: (t: PanelTab) => void }) {
+  const { t } = useTranslation("workspace");
+  const item = (key: PanelTab, label: string) => (
+    <button
+      type="button"
+      onClick={() => onSelect(key)}
+      aria-pressed={tab === key}
+      className={`w-full px-2 py-2 text-[11px] font-medium [writing-mode:vertical-rl] ${
+        tab === key
+          ? "bg-white text-blue-700 dark:bg-gray-900 dark:text-blue-300"
+          : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+      }`}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div className="flex w-7 shrink-0 flex-col items-stretch border-r bg-gray-50 dark:border-gray-800 dark:bg-gray-950/40">
+      {item("list", t("tabList"))}
+      {item("calendar", t("tabCalendar"))}
+    </div>
+  );
+}
+
 /// Top-of-list toolbar: create a section (group), toggle multi-select, bulk-delete audio for the
 /// selection, and refresh the list (picks up changes made on another machine/browser).
-function ListToolbar({ recordings }: { recordings: RecordingSummary[] }) {
+function ListToolbar({ recordings, listMode }: { recordings: RecordingSummary[]; listMode: boolean }) {
   const { t } = useTranslation("workspace");
   const qc = useQueryClient();
   const { selectMode, setSelectMode, selectedIds, clear } = useSelection();
@@ -357,18 +435,20 @@ function ListToolbar({ recordings }: { recordings: RecordingSummary[] }) {
         </form>
       ) : (
         <div className="flex items-center gap-0.5">
-          <ToolbarButton label={t("newSection")} onClick={() => setOpen(true)} icon={<FolderPlusIcon />} />
+          {/* New Section / Select / bulk actions apply to the List tab only; Refresh works in both. */}
+          <ToolbarButton label={t("newSection")} onClick={() => setOpen(true)} disabled={!listMode} icon={<FolderPlusIcon />} />
           <ToolbarButton
             label={selectMode ? t("doneSelecting") : t("selectRecordings")}
             onClick={() => setSelectMode(!selectMode)}
             active={selectMode}
+            disabled={!listMode}
             icon={<SelectIcon />}
           />
           {selectMode && (
             <ToolbarButton
               label={t("mergeTranscripts")}
               onClick={mergeSelected}
-              disabled={selectedIds.length < 2}
+              disabled={!listMode || selectedIds.length < 2}
               icon={<MergeIcon />}
             />
           )}
@@ -376,7 +456,7 @@ function ListToolbar({ recordings }: { recordings: RecordingSummary[] }) {
             <ToolbarButton
               label={t("recordings:deleteAudio")}
               onClick={deleteSelectedAudio}
-              disabled={selectedWithAudio.length === 0}
+              disabled={!listMode || selectedWithAudio.length === 0}
               icon={<TrashIcon />}
             />
           )}
