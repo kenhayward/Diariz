@@ -56,6 +56,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.27.0",
+    date: "2026-06-29",
+    pr: 68,
+    headline: "The recording workspace is fully localized",
+    summary:
+      "Localization now reaches the main workspace: the **recording detail view** (its toolbar, section " +
+      "headings, status banners, confirmation prompts, the re-transcribe / edit-segment / rename dialogs, " +
+      "and the speaker-labelling controls), the **recordings list** (sections, multi-select, the upload " +
+      "tray and drop zone), and the **empty landing screen** all appear in your chosen language — English, " +
+      "Spanish, French, or German. Like the rest of the UI, the new strings live in a `workspace` JSON " +
+      "catalog that contributors can translate without code changes.",
+    added: [
+      "Full translation of the recording detail view, the recordings list panel, and the empty-state screen, plus the move-to-section and download-format dialogs.",
+      "A new `workspace` translation namespace (en + es/fr/de) covering these screens.",
+    ],
+  },
+  {
     version: "0.26.0",
     date: "2026-06-29",
     pr: 67,

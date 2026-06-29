@@ -4,5 +4,7 @@
   "saving": "Guardando…",
   "ok": "Aceptar",
   "close": "Cerrar",
-  "loading": "Cargando…"
+  "loading": "Cargando…",
+  "create": "Crear",
+  "remove": "Quitar"
 }

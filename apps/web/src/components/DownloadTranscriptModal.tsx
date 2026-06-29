@@ -1,10 +1,11 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 
 const FORMATS = [
-  { value: "txt", label: "Plain Text", ext: ".txt" },
-  { value: "md", label: "Markdown", ext: ".md" },
-  { value: "rtf", label: "Rich Text Format", ext: ".rtf" },
+  { value: "txt", labelKey: "formatPlainText", ext: ".txt" },
+  { value: "md", labelKey: "formatMarkdown", ext: ".md" },
+  { value: "rtf", labelKey: "formatRtf", ext: ".rtf" },
 ] as const;
 type Format = (typeof FORMATS)[number]["value"];
 
@@ -18,6 +19,7 @@ export default function DownloadTranscriptModal({
   recordingId: string;
   onClose: () => void;
 }) {
+  const { t } = useTranslation("workspace");
   const [format, setFormat] = useState<Format>("txt");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +31,7 @@ export default function DownloadTranscriptModal({
       await api.downloadTranscript(recordingId, format);
       onClose();
     } catch (e) {
-      setError(apiErrorMessage(e, "Download failed."));
+      setError(apiErrorMessage(e, t("downloadFailed")));
       setBusy(false);
     }
   }
@@ -38,11 +40,11 @@ export default function DownloadTranscriptModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         role="dialog"
-        aria-label="Download transcript"
+        aria-label={t("recordings:downloadTranscript")}
         className="w-80 rounded-lg border bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-base font-semibold dark:text-gray-100">Download as …</h2>
+        <h2 className="text-base font-semibold dark:text-gray-100">{t("downloadAsTitle")}</h2>
         <div className="mt-3 space-y-1">
           {FORMATS.map((f) => (
             <label
@@ -56,7 +58,7 @@ export default function DownloadTranscriptModal({
                 checked={format === f.value}
                 onChange={() => setFormat(f.value)}
               />
-              <span>{f.label}</span>
+              <span>{t(f.labelKey)}</span>
               <span className="ml-auto text-xs text-gray-400 dark:text-gray-500">{f.ext}</span>
             </label>
           ))}
@@ -70,7 +72,7 @@ export default function DownloadTranscriptModal({
             onClick={onClose}
             className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
           >
-            Cancel
+            {t("common:cancel")}
           </button>
           <button
             type="button"
@@ -78,7 +80,7 @@ export default function DownloadTranscriptModal({
             disabled={busy}
             className="rounded bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {busy ? "Downloading…" : "OK"}
+            {busy ? t("downloading") : t("common:ok")}
           </button>
         </div>
       </div>

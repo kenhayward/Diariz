@@ -45,4 +45,4 @@ folder here (intersected with `languages.json`).
 
 When you add UI text, add the key to the relevant **`en/`** namespace (and ideally the flagship locales).
 Use `useTranslation("<namespace>")` and `t("key")`, or the fully-qualified `t("namespace:key")`. The
-namespaces today are `common`, `auth`, `account`, and `recordings`.
+namespaces today are `common`, `auth`, `account`, `recordings`, and `workspace`.

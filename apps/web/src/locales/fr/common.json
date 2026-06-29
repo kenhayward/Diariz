@@ -4,5 +4,7 @@
   "saving": "Enregistrement…",
   "ok": "OK",
   "close": "Fermer",
-  "loading": "Chargement…"
+  "loading": "Chargement…",
+  "create": "Créer",
+  "remove": "Retirer"
 }

@@ -4,5 +4,7 @@
   "saving": "Saving…",
   "ok": "OK",
   "close": "Close",
-  "loading": "Loading…"
+  "loading": "Loading…",
+  "create": "Create",
+  "remove": "Remove"
 }
