@@ -43,6 +43,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddSegmentOriginalRevised` | renames `Segment.Text` → `Original`, adds `Segment.Revised` (nullable) |
 | `AddUserLanguagePreferences` | `UserSettings.NativeLanguage`, `UserSettings.UiLanguage` (both nullable) |
 | `AddRecordingAudioDeleted` | `Recording.AudioDeletedAt` (nullable) — audio deleted while keeping the transcript |
+| `AddSectionParentAndPosition` | `Section.ParentId` (self-ref, cascade) + `Section.Position` — two-level sub-grouping |
 
 ### Entity-relationship overview
 
@@ -207,9 +208,13 @@ User-defined group recordings are filed under.
 | `Id` | uuid PK | |
 | `UserId` | uuid FK → AspNetUsers | cascade |
 | `Name` | varchar(128) | |
+| `ParentId` | uuid FK → Sections null | null = top-level; non-null = a sub-section (one level only). **Cascade** on parent delete |
+| `Position` | int | manual sort order among siblings (drag-to-reorder; replaces alphabetical) |
 | `CreatedAt` | timestamptz | |
 
-Index: `(UserId, Name)`. Deleting a section **SetNull**s its recordings' `SectionId` (ungroups, not deletes).
+Index: `(UserId, Name)`, `(ParentId)`. Sections nest **one level deep** (a sub-section can't be a parent;
+enforced in `SectionsController`). Deleting a section **Cascade**-deletes its sub-sections and **SetNull**s
+the recordings of itself and those sub-sections (ungroups, not deletes).
 
 #### `ChatSessions`
 Saved chat conversations; stateless server (thread + context stored as JSON).

@@ -254,7 +254,8 @@ CI runs all four suites on a self-hosted Windows runner.
 
 - **M1 — done:** capture → transcribe (WhisperX + pyannote) → view speaker-labelled segments.
 - **M2 — done:** multi-user auth + RBAC, LLM summaries, action extraction, transcript export/email,
-  re-transcribe with model choice, sections, speaker identification.
+  re-transcribe with model choice, sections (**two-level nesting**: `Section.ParentId`, drag-to-reorder),
+  speaker identification, delete-audio (keep transcript, free quota).
 - **M3 — partial:** chat across transcripts (shipped); full embedding-backed RAG over `Segment.Embedding`
   (`vector(768)`, sized for `nomic-embed-text`) is scaffolded but not yet populated.
 - **M4 — planned:** packaging/TLS hardening, macOS desktop build (see the macOS guide).

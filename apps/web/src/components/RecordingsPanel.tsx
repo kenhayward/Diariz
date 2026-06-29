@@ -13,9 +13,10 @@ import { recordingMenu } from "./recordingMenu";
 import { useSelection } from "../lib/selection";
 import { formatDuration } from "../lib/format";
 import { computeReorder } from "../lib/reorder";
+import { buildRecordingTree, reorderBeforeSection, appendSectionUnder, type SectionNode } from "../lib/recordingTree";
 import { useUpload } from "../lib/uploadContext";
 import type { UploadItem } from "../lib/uploadQueue";
-import type { RecordingStatus, RecordingSource, RecordingSummary, SectionDto } from "../lib/types";
+import type { RecordingStatus, RecordingSource, RecordingSummary } from "../lib/types";
 
 const dragHasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types ?? []).includes("Files");
 
@@ -31,6 +32,8 @@ const statusColor: Record<RecordingStatus, string> = {
 
 const COLLAPSE_KEY = "diariz.recordings.collapsedGroups";
 const UNGROUPED_KEY = "__ungrouped__";
+/// Drag payload type marking a section-header drag (vs a recording's "text/plain" id or a file drop).
+const SECTION_MIME = "application/x-diariz-section";
 
 function sourceLabel(s: RecordingSource, t: TFunction): string {
   if (s === "System") return t("workspace:sourceSystem");
@@ -46,12 +49,6 @@ export function hasTranscript(status: RecordingStatus): boolean {
 /// (Transcribed/Summarized) repeat on every row and truncate the name, so they're hidden.
 export function showStatusBadge(status: RecordingStatus): boolean {
   return status !== "Transcribed" && status !== "Summarized";
-}
-
-interface Group {
-  id: string | null; // section id, or null for ungrouped
-  name: string;
-  items: RecordingSummary[];
 }
 
 /// The recordings list for the left panel, grouped into user sections (Ungrouped last).
@@ -71,8 +68,9 @@ export default function RecordingsPanel() {
     return () => void hub.stop();
   }, [qc]);
 
-  const groups = useMemo(() => groupBySection(recordings, sections), [recordings, sections]);
+  const tree = useMemo(() => buildRecordingTree(recordings, sections), [recordings, sections]);
   const selection = useSelection();
+  const [opError, setOpError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     try {
       return new Set<string>(JSON.parse(localStorage.getItem(COLLAPSE_KEY) ?? "[]"));
@@ -95,6 +93,31 @@ export default function RecordingsPanel() {
     if (!draggedId) return;
     await api.reorderRecordings(sectionId, computeReorder(groupIds, draggedId, beforeId));
     qc.invalidateQueries({ queryKey: ["recordings"] });
+  }
+
+  /// Section drag-and-drop. The server may reject a move that would nest more than one level deep
+  /// (e.g. a section with sub-sections dropped under another) — surface that in the banner.
+  async function runSection(fn: () => Promise<unknown>) {
+    setOpError(null);
+    try {
+      await fn();
+      qc.invalidateQueries({ queryKey: ["sections"] });
+      qc.invalidateQueries({ queryKey: ["recordings"] });
+    } catch (e) {
+      setOpError(apiErrorMessage(e));
+    }
+  }
+  /// Drop a section header onto another section header: reorder before it (adopting its level/parent).
+  function dropSectionBefore(targetId: string, draggedId: string) {
+    if (!draggedId || draggedId === targetId) return;
+    const payload = reorderBeforeSection(sections, draggedId, targetId);
+    if (payload) runSection(() => api.reorderSections(payload.parentId, payload.orderedIds));
+  }
+  /// Drop a section into a top-level section's body (nest it) or onto the Ungrouped bar (promote to top).
+  function nestSection(parentId: string | null, draggedId: string) {
+    if (!draggedId || draggedId === parentId) return;
+    const payload = appendSectionUnder(sections, draggedId, parentId);
+    runSection(() => api.reorderSections(payload.parentId, payload.orderedIds));
   }
 
   // Drag audio files anywhere onto the panel to upload them (distinct from the reorder DnD, which uses
@@ -126,8 +149,87 @@ export default function RecordingsPanel() {
 
   if (isLoading) return <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>;
 
-  // Show section headings whenever any section exists (so an empty, just-created section is visible).
-  const grouped = groups.some((g) => g.id !== null);
+  // Show section headings whenever any (real or just-created) section exists; a flat list otherwise.
+  const showHeadings = tree.sections.length > 0;
+
+  // Select mode: a checkbox that selects/deselects every recording directly in this section at once.
+  const selectAllFor = (node: SectionNode) => {
+    const ids = node.items.map((i) => i.id);
+    if (!selection.selectMode || ids.length === 0) return undefined;
+    return (
+      <GroupSelectCheckbox
+        groupName={node.name}
+        ids={ids}
+        selectedIds={selection.selectedIds}
+        onChange={(checkAll) => {
+          const next = new Set(selection.selectedIds);
+          if (checkAll) ids.forEach((id) => next.add(id));
+          else ids.forEach((id) => next.delete(id));
+          selection.set([...next]);
+        }}
+      />
+    );
+  };
+
+  const rowList = (sectionId: string | null, items: RecordingSummary[]) => {
+    const ids = items.map((i) => i.id);
+    return (
+      <ul className="divide-y dark:divide-gray-800">
+        {items.map((r) => (
+          <RecordingRow
+            key={r.id}
+            r={r}
+            selectMode={selection.selectMode}
+            selected={selection.selectedIds.includes(r.id)}
+            onToggleSelect={() => selection.toggle(r.id)}
+            onDropBefore={(draggedId) => drop(sectionId, ids, draggedId, r.id)}
+          />
+        ))}
+      </ul>
+    );
+  };
+
+  // Render one section node (top-level or a sub-section). The wrapping div is the drop target: a section
+  // payload nests the dragged section here (top-level only); a recording payload appends to this section.
+  const renderSection = (node: SectionNode, nested: boolean): React.ReactNode => {
+    const ids = node.items.map((i) => i.id);
+    const isCollapsed = collapsed.has(node.id);
+    return (
+      <div
+        key={node.id}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.stopPropagation();
+          const draggedSection = e.dataTransfer.getData(SECTION_MIME);
+          if (draggedSection) {
+            if (!nested) nestSection(node.id, draggedSection); // nest a section into this top-level section
+            return;
+          }
+          const dragged = e.dataTransfer.getData("text/plain");
+          if (dragged) drop(node.id, ids, dragged, null);
+        }}
+      >
+        {showHeadings && (
+          <SectionHeading
+            id={node.id}
+            name={node.name}
+            count={node.items.length}
+            collapsed={isCollapsed}
+            nested={nested}
+            onToggle={() => toggleGroup(node.id)}
+            leading={selectAllFor(node)}
+            onSectionDropBefore={(draggedId) => dropSectionBefore(node.id, draggedId)}
+          />
+        )}
+        {!isCollapsed && (
+          <>
+            {node.items.length > 0 && rowList(node.id, node.items)}
+            {node.children.map((child) => renderSection(child, true))}
+          </>
+        )}
+      </div>
+    );
+  };
 
   return (
     // Flex column so the toolbar stays pinned at the top while only the list below it scrolls (mirrors
@@ -150,71 +252,36 @@ export default function RecordingsPanel() {
         {recordings.length === 0 && !dragging && (
           <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("noRecordings")}</p>
         )}
-        {groups.map((g) => {
-        const ids = g.items.map((i) => i.id);
-        const key = g.id ?? UNGROUPED_KEY;
-        const isCollapsed = collapsed.has(key);
-        // Select mode only: a checkbox that selects/deselects every recording in the group at once.
-        const selectAll = selection.selectMode && ids.length > 0 ? (
-          <GroupSelectCheckbox
-            groupName={g.id === null ? t("ungrouped") : g.name}
-            ids={ids}
-            selectedIds={selection.selectedIds}
-            onChange={(checkAll) => {
-              const next = new Set(selection.selectedIds);
-              if (checkAll) ids.forEach((id) => next.add(id));
-              else ids.forEach((id) => next.delete(id));
-              selection.set([...next]);
-            }}
-          />
-        ) : undefined;
-        return (
+        {opError && <p className="px-3 py-1 text-xs text-red-600 dark:text-red-400">{opError}</p>}
+        {tree.sections.map((node) => renderSection(node, false))}
+        {tree.ungrouped.length > 0 && (
           <div
-            key={key}
-            // Dropping anywhere in the group (incl. the heading) appends to it.
+            // Dropping a recording here ungroups it; dropping a section here promotes it to top-level.
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
+              e.stopPropagation();
+              const draggedSection = e.dataTransfer.getData(SECTION_MIME);
+              if (draggedSection) {
+                nestSection(null, draggedSection);
+                return;
+              }
               const dragged = e.dataTransfer.getData("text/plain");
-              if (dragged) drop(g.id, ids, dragged, null);
+              if (dragged) drop(null, tree.ungrouped.map((i) => i.id), dragged, null);
             }}
           >
-            {grouped &&
-              (g.id ? (
-                <SectionHeading
-                  id={g.id}
-                  name={g.name}
-                  count={g.items.length}
-                  collapsed={isCollapsed}
-                  onToggle={() => toggleGroup(key)}
-                  leading={selectAll}
-                />
-              ) : (
-                <GroupHeadingButton
-                  name={t("ungrouped")}
-                  count={g.items.length}
-                  collapsed={isCollapsed}
-                  onToggle={() => toggleGroup(key)}
-                  withBg
-                  leading={selectAll}
-                />
-              ))}
-            {!isCollapsed && (
-              <ul className="divide-y dark:divide-gray-800">
-                {g.items.map((r) => (
-                  <RecordingRow
-                    key={r.id}
-                    r={r}
-                    selectMode={selection.selectMode}
-                    selected={selection.selectedIds.includes(r.id)}
-                    onToggleSelect={() => selection.toggle(r.id)}
-                    onDropBefore={(draggedId) => drop(g.id, ids, draggedId, r.id)}
-                  />
-                ))}
-              </ul>
+            {showHeadings && (
+              <GroupHeadingButton
+                name={t("ungrouped")}
+                count={tree.ungrouped.length}
+                collapsed={collapsed.has(UNGROUPED_KEY)}
+                onToggle={() => toggleGroup(UNGROUPED_KEY)}
+                withBg
+                leading={selectAllFor({ id: UNGROUPED_KEY, name: t("ungrouped"), items: tree.ungrouped, children: [] })}
+              />
             )}
+            {!collapsed.has(UNGROUPED_KEY) && rowList(null, tree.ungrouped)}
           </div>
-        );
-      })}
+        )}
       </div>
     </div>
   );
@@ -406,29 +473,6 @@ function UploadStatusList({ items, onClear }: { items: UploadItem[]; onClear: ()
   );
 }
 
-function groupBySection(recordings: RecordingSummary[], sections: SectionDto[]): Group[] {
-  // Seed with every section so an empty (just-created) section still renders a heading.
-  const byId = new Map<string, Group>();
-  for (const s of sections) byId.set(s.id, { id: s.id, name: s.name, items: [] });
-
-  const ungrouped: RecordingSummary[] = [];
-  for (const r of recordings) {
-    if (!r.sectionId) {
-      ungrouped.push(r);
-      continue;
-    }
-    // Fall back to the recording's own sectionName if the sections list hasn't loaded yet.
-    const g = byId.get(r.sectionId) ?? { id: r.sectionId, name: r.sectionName ?? "Section", items: [] };
-    g.items.push(r);
-    byId.set(r.sectionId, g);
-  }
-
-  const ordered = [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
-  if (ungrouped.length) ordered.push({ id: null, name: "Ungrouped", items: ungrouped });
-  return ordered;
-}
-
-
 /// A clickable group header (chevron + name + count) that collapses/expands the group.
 /// `withBg` makes it a full-width bar (used for the headingless Ungrouped group); inside a
 /// SectionHeading the surrounding row already provides the background.
@@ -511,15 +555,21 @@ function SectionHeading({
   name,
   count,
   collapsed,
+  nested,
   onToggle,
   leading,
+  onSectionDropBefore,
 }: {
   id: string;
   name: string;
   count: number;
   collapsed: boolean;
+  /// A sub-section header: indented under its parent (rows below it still span the full panel width).
+  nested: boolean;
   onToggle: () => void;
   leading?: React.ReactNode;
+  /// A section header was dropped onto this one — reorder it before this section (at this section's level).
+  onSectionDropBefore: (draggedSectionId: string) => void;
 }) {
   const { t } = useTranslation("workspace");
   const qc = useQueryClient();
@@ -540,6 +590,20 @@ function SectionHeading({
 
   const actions = [
     { label: t("recordings:rename"), onClick: () => setRenaming(true) },
+    // Only top-level sections can hold sub-sections (the hierarchy is two levels deep).
+    ...(nested
+      ? []
+      : [
+          {
+            label: t("newSubSection"),
+            onClick: async () => {
+              const sub = window.prompt(t("newSubSectionPlaceholder", { parent: name }))?.trim();
+              if (!sub) return;
+              await api.createSection(sub, id);
+              refresh();
+            },
+          },
+        ]),
     {
       label: t("recordings:delete"),
       danger: true,
@@ -552,7 +616,32 @@ function SectionHeading({
   ];
 
   return (
-    <div className="flex items-center justify-between bg-indigo-50 px-3 py-1 dark:bg-indigo-950/40">
+    <div
+      className={`flex items-center justify-between bg-indigo-50 py-1 pr-3 dark:bg-indigo-950/40 ${
+        nested ? "pl-7" : "pl-3"
+      }`}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        // A section dropped onto this header reorders it here; recordings fall through to the section body.
+        const draggedSection = e.dataTransfer.getData(SECTION_MIME);
+        if (draggedSection) {
+          e.stopPropagation();
+          onSectionDropBefore(draggedSection);
+        }
+      }}
+    >
+      {/* Drag handle to reorder this section or move it between parents. */}
+      <span
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData(SECTION_MIME, id);
+          e.dataTransfer.effectAllowed = "move";
+        }}
+        aria-label={t("dragSection", { name })}
+        className="shrink-0 cursor-grab select-none px-0.5 text-indigo-300 hover:text-indigo-500 dark:text-indigo-700 dark:hover:text-indigo-400"
+      >
+        ⠿
+      </span>
       {renaming ? (
         <SectionRenameForm initial={name} onSave={save} onCancel={() => setRenaming(false)} />
       ) : (

@@ -69,6 +69,12 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 .WithMany()
                 .HasForeignKey(s => s.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+            // Self-referential parent for one level of nesting. Deleting a parent cascades to its
+            // sub-sections; each sub-section's recordings then drop to Ungrouped via the SetNull FK above.
+            e.HasOne(s => s.Parent)
+                .WithMany(s => s.Children)
+                .HasForeignKey(s => s.ParentId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<RecordingAction>(e =>

@@ -107,18 +107,140 @@ public class SectionsControllerTests
     }
 
     [Fact]
-    public async Task List_ReturnsOwnSections_OrderedByName()
+    public async Task List_ReturnsOwnSections_OrderedByPositionThenName()
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         db.Sections.AddRange(
-            new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Zeta" },
-            new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Alpha" },
+            new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Zeta", Position = 0 },
+            new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Alpha", Position = 0 },
+            new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Beta", Position = 1 },
             new Section { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Other" });
         await db.SaveChangesAsync();
 
         var list = await Build(db, userId).List();
 
-        Assert.Equal(["Alpha", "Zeta"], list.Select(s => s.Name));
+        // Position first (so Beta@1 sorts after the @0 pair), Name as the tiebreak within a position.
+        Assert.Equal(["Alpha", "Zeta", "Beta"], list.Select(s => s.Name));
+    }
+
+    // ---- Sub-grouping (two levels) ----
+
+    [Fact]
+    public async Task Create_UnderParent_SetsParentId()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var parent = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Customers" };
+        db.Sections.Add(parent);
+        await db.SaveChangesAsync();
+
+        var result = await Build(db, userId).Create(new CreateSectionRequest("Acme", parent.Id));
+
+        var dto = Assert.IsType<SectionDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(parent.Id, dto.ParentId);
+    }
+
+    [Fact]
+    public async Task Create_UnderASubSection_RejectsThirdLevel()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var parent = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Customers" };
+        var child = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Acme", ParentId = parent.Id };
+        db.Sections.AddRange(parent, child);
+        await db.SaveChangesAsync();
+
+        var result = await Build(db, userId).Create(new CreateSectionRequest("Project X", child.Id));
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Create_UnderAnotherUsersParent_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var parent = new Section { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Theirs" };
+        db.Sections.Add(parent);
+        await db.SaveChangesAsync();
+
+        Assert.IsType<NotFoundResult>(
+            (await Build(db, Guid.NewGuid()).Create(new CreateSectionRequest("Mine", parent.Id))).Result);
+    }
+
+    [Fact]
+    public async Task Reorder_SetsParentAndPosition()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var parent = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Customers" };
+        var a = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Acme" };
+        var b = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Beta" };
+        db.Sections.AddRange(parent, a, b);
+        await db.SaveChangesAsync();
+
+        var result = await Build(db, userId).Reorder(new ReorderSectionsRequest(parent.Id, [b.Id, a.Id]));
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Equal((parent.Id, 0), ((await db.Sections.FindAsync(b.Id))!.ParentId, (await db.Sections.FindAsync(b.Id))!.Position));
+        Assert.Equal((parent.Id, 1), ((await db.Sections.FindAsync(a.Id))!.ParentId, (await db.Sections.FindAsync(a.Id))!.Position));
+    }
+
+    [Fact]
+    public async Task Reorder_ToTopLevel_ClearsParent()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var parent = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Customers" };
+        var child = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Acme", ParentId = parent.Id };
+        db.Sections.AddRange(parent, child);
+        await db.SaveChangesAsync();
+
+        await Build(db, userId).Reorder(new ReorderSectionsRequest(null, [child.Id]));
+
+        Assert.Null((await db.Sections.FindAsync(child.Id))!.ParentId);
+    }
+
+    [Fact]
+    public async Task Reorder_UnderASubSection_RejectsThirdLevel()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var parent = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Customers" };
+        var child = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Acme", ParentId = parent.Id };
+        var loose = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Loose" };
+        db.Sections.AddRange(parent, child, loose);
+        await db.SaveChangesAsync();
+
+        Assert.IsType<BadRequestObjectResult>(
+            await Build(db, userId).Reorder(new ReorderSectionsRequest(child.Id, [loose.Id])));
+    }
+
+    [Fact]
+    public async Task Reorder_MovingAParentWithChildren_UnderAnother_IsRejected()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var top = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Top" };
+        var hasChild = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "HasChild" };
+        var grandchild = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Kid", ParentId = hasChild.Id };
+        db.Sections.AddRange(top, hasChild, grandchild);
+        await db.SaveChangesAsync();
+
+        // Moving HasChild under Top would make Kid a third level → rejected.
+        Assert.IsType<BadRequestObjectResult>(
+            await Build(db, userId).Reorder(new ReorderSectionsRequest(top.Id, [hasChild.Id])));
+    }
+
+    [Fact]
+    public async Task Reorder_AnotherUsersSection_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var theirs = new Section { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Theirs" };
+        db.Sections.Add(theirs);
+        await db.SaveChangesAsync();
+
+        Assert.IsType<NotFoundResult>(
+            await Build(db, Guid.NewGuid()).Reorder(new ReorderSectionsRequest(null, [theirs.Id])));
     }
 }

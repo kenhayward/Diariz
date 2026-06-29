@@ -277,8 +277,9 @@ export const api = {
     return data;
   },
 
-  async createSection(name: string): Promise<SectionDto> {
-    const { data } = await http.post<SectionDto>("/api/sections", { name });
+  /// Create a section. Pass `parentId` to create a sub-section (one level of nesting).
+  async createSection(name: string, parentId: string | null = null): Promise<SectionDto> {
+    const { data } = await http.post<SectionDto>("/api/sections", { name, parentId });
     return data;
   },
 
@@ -288,6 +289,11 @@ export const api = {
 
   async deleteSection(id: string): Promise<void> {
     await http.delete(`/api/sections/${id}`);
+  },
+
+  /// Set the parent + 0-based order of each listed section in one call (drag-and-drop reorder/reparent).
+  async reorderSections(parentId: string | null, orderedIds: string[]): Promise<void> {
+    await http.put("/api/sections/reorder", { parentId, orderedIds });
   },
 
   async moveRecording(id: string, sectionId: string | null): Promise<void> {
