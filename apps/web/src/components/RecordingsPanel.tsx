@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import { createHub } from "../lib/signalr";
@@ -31,10 +32,10 @@ const statusColor: Record<RecordingStatus, string> = {
 const COLLAPSE_KEY = "diariz.recordings.collapsedGroups";
 const UNGROUPED_KEY = "__ungrouped__";
 
-function sourceLabel(s: RecordingSource): string {
-  if (s === "System") return "System audio";
-  if (s === "Upload") return "Uploaded";
-  return "Microphone";
+function sourceLabel(s: RecordingSource, t: TFunction): string {
+  if (s === "System") return t("workspace:sourceSystem");
+  if (s === "Upload") return t("workspace:sourceUpload");
+  return t("workspace:sourceMicrophone");
 }
 
 export function hasTranscript(status: RecordingStatus): boolean {
@@ -56,6 +57,7 @@ interface Group {
 /// The recordings list for the left panel, grouped into user sections (Ungrouped last).
 /// Selecting a row routes to /recordings/:id (middle panel).
 export default function RecordingsPanel() {
+  const { t } = useTranslation("workspace");
   const qc = useQueryClient();
   const { data: recordings = [], isLoading } = useQuery({
     queryKey: ["recordings"],
@@ -122,7 +124,7 @@ export default function RecordingsPanel() {
     upload.uploadFiles(Array.from(e.dataTransfer.files));
   }
 
-  if (isLoading) return <p className="p-4 text-sm text-gray-500 dark:text-gray-400">Loading…</p>;
+  if (isLoading) return <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>;
 
   // Show section headings whenever any section exists (so an empty, just-created section is visible).
   const grouped = groups.some((g) => g.id !== null);
@@ -142,13 +144,11 @@ export default function RecordingsPanel() {
         <UploadStatusList items={upload.items} onClear={upload.clearFinished} />
         {dragging && (
           <p className="px-3 py-2 text-center text-xs font-medium text-blue-600 dark:text-blue-400">
-            Drop audio files to upload
+            {t("dropToUpload")}
           </p>
         )}
         {recordings.length === 0 && !dragging && (
-          <p className="p-4 text-sm text-gray-500 dark:text-gray-400">
-            No recordings yet. Hit Record above, or drop audio files here.
-          </p>
+          <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("noRecordings")}</p>
         )}
         {groups.map((g) => {
         const ids = g.items.map((i) => i.id);
@@ -157,7 +157,7 @@ export default function RecordingsPanel() {
         // Select mode only: a checkbox that selects/deselects every recording in the group at once.
         const selectAll = selection.selectMode && ids.length > 0 ? (
           <GroupSelectCheckbox
-            groupName={g.name}
+            groupName={g.id === null ? t("ungrouped") : g.name}
             ids={ids}
             selectedIds={selection.selectedIds}
             onChange={(checkAll) => {
@@ -190,7 +190,7 @@ export default function RecordingsPanel() {
                 />
               ) : (
                 <GroupHeadingButton
-                  name={g.name}
+                  name={t("ungrouped")}
                   count={g.items.length}
                   collapsed={isCollapsed}
                   onToggle={() => toggleGroup(key)}
@@ -222,6 +222,7 @@ export default function RecordingsPanel() {
 
 /// Top-of-list toolbar: create a section (group) and toggle multi-select for picking chat context.
 function ListToolbar() {
+  const { t } = useTranslation("workspace");
   const qc = useQueryClient();
   const { selectMode, setSelectMode, selectedIds } = useSelection();
   const [open, setOpen] = useState(false);
@@ -253,8 +254,8 @@ function ListToolbar() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
-            placeholder="New section name"
-            aria-label="New section name"
+            placeholder={t("newSectionPlaceholder")}
+            aria-label={t("newSectionPlaceholder")}
             className="min-w-0 flex-1 rounded border px-2 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           />
           <button
@@ -262,14 +263,14 @@ function ListToolbar() {
             disabled={busy || !name.trim()}
             className="rounded border px-2 py-0.5 text-xs hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
           >
-            Create
+            {t("common:create")}
           </button>
         </form>
       ) : (
         <div className="flex items-center gap-0.5">
-          <ToolbarButton label="New section" onClick={() => setOpen(true)} icon={<FolderPlusIcon />} />
+          <ToolbarButton label={t("newSection")} onClick={() => setOpen(true)} icon={<FolderPlusIcon />} />
           <ToolbarButton
-            label={selectMode ? "Done selecting" : "Select recordings"}
+            label={selectMode ? t("doneSelecting") : t("selectRecordings")}
             onClick={() => setSelectMode(!selectMode)}
             active={selectMode}
             icon={<SelectIcon />}
@@ -300,6 +301,7 @@ const SelectIcon = () => (
 /// Per-file status for the current upload batch (queued/uploading/done/failed). Tolerant of partial
 /// failures — a rejected file shows its reason and the rest still upload.
 function UploadStatusList({ items, onClear }: { items: UploadItem[]; onClear: () => void }) {
+  const { t } = useTranslation("workspace");
   if (items.length === 0) return null;
   const settled = items.every((i) => i.status === "done" || i.status === "failed");
   const tag: Record<UploadItem["status"], string> = {
@@ -309,18 +311,18 @@ function UploadStatusList({ items, onClear }: { items: UploadItem[]; onClear: ()
     failed: "text-red-600 dark:text-red-400",
   };
   const label: Record<UploadItem["status"], string> = {
-    queued: "Queued",
-    uploading: "Uploading…",
-    done: "✓ Done",
-    failed: "✕ Failed",
+    queued: t("uploadQueued"),
+    uploading: t("uploadUploading"),
+    done: t("uploadDone"),
+    failed: t("uploadFailed"),
   };
   return (
     <div className="border-b px-3 py-2 dark:border-gray-800">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Uploads</span>
+        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{t("uploadsHeader")}</span>
         {settled && (
           <button type="button" onClick={onClear} className="text-xs text-gray-400 hover:underline">
-            Clear
+            {t("clear")}
           </button>
         )}
       </div>
@@ -415,6 +417,7 @@ function GroupSelectCheckbox({
   selectedIds: string[];
   onChange: (selectAll: boolean) => void;
 }) {
+  const { t } = useTranslation("workspace");
   const ref = useRef<HTMLInputElement>(null);
   const selected = ids.filter((id) => selectedIds.includes(id)).length;
   const all = ids.length > 0 && selected === ids.length;
@@ -428,7 +431,7 @@ function GroupSelectCheckbox({
       ref={ref}
       type="checkbox"
       checked={all}
-      aria-label={`Select all in ${groupName}`}
+      aria-label={t("selectAllIn", { section: groupName })}
       onChange={() => onChange(!all)}
       className="shrink-0"
     />
@@ -450,6 +453,7 @@ function SectionHeading({
   onToggle: () => void;
   leading?: React.ReactNode;
 }) {
+  const { t } = useTranslation("workspace");
   const qc = useQueryClient();
   const [renaming, setRenaming] = useState(false);
   const refresh = () => {
@@ -467,12 +471,12 @@ function SectionHeading({
   }
 
   const actions = [
-    { label: "Rename", onClick: () => setRenaming(true) },
+    { label: t("recordings:rename"), onClick: () => setRenaming(true) },
     {
-      label: "Delete",
+      label: t("recordings:delete"),
       danger: true,
       onClick: async () => {
-        if (!window.confirm(`Delete section "${name}"? Its recordings move to Ungrouped.`)) return;
+        if (!window.confirm(t("confirmDeleteSection", { name }))) return;
         await api.deleteSection(id);
         refresh();
       },
@@ -486,7 +490,7 @@ function SectionHeading({
       ) : (
         <GroupHeadingButton name={name} count={count} collapsed={collapsed} onToggle={onToggle} leading={leading} />
       )}
-      <KebabMenu actions={actions} label="Section actions" />
+      <KebabMenu actions={actions} label={t("sectionActions")} />
     </div>
   );
 }
@@ -500,6 +504,7 @@ function SectionRenameForm({
   onSave: (name: string) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation("workspace");
   const [value, setValue] = useState(initial);
   return (
     <form
@@ -514,11 +519,11 @@ function SectionRenameForm({
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => e.key === "Escape" && onCancel()}
-        aria-label="Section name"
+        aria-label={t("sectionNameAria")}
         className="min-w-0 flex-1 rounded border px-2 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
       />
       <button type="submit" className="rounded border px-2 py-0.5 text-xs hover:bg-white/50 dark:border-gray-700 dark:hover:bg-gray-800">
-        Save
+        {t("common:save")}
       </button>
     </form>
   );
@@ -537,7 +542,7 @@ function RecordingRow({
   onToggleSelect: () => void;
   onDropBefore: (draggedId: string) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const qc = useQueryClient();
   const [renaming, setRenaming] = useState(false);
   const [moving, setMoving] = useState(false);
@@ -565,7 +570,7 @@ function RecordingRow({
     onRetranscribe: run(async () => { await api.retranscribe(r.id); refresh(); }),
     onSummarise: run(async () => { await api.summarize(r.id); refresh(); }),
     onExtractActions: run(async () => {
-      if (r.hasActions && !window.confirm("Replace the current actions with a fresh extraction?")) return;
+      if (r.hasActions && !window.confirm(t("workspace:confirmReextract"))) return;
       await api.extractActions(r.id);
       refresh();
     }),
@@ -575,7 +580,7 @@ function RecordingRow({
     onEmailTranscript: run(() => api.emailTranscript(r.id)),
     onDownloadAudio: run(() => api.downloadAudio(r.id)),
     onDelete: run(async () => {
-      if (!window.confirm(`Delete "${r.name ?? r.title}"? This cannot be undone.`)) return;
+      if (!window.confirm(t("workspace:confirmDelete", { name: r.name ?? r.title }))) return;
       await api.deleteRecording(r.id);
       refresh();
     }),
@@ -600,7 +605,7 @@ function RecordingRow({
             type="checkbox"
             checked={selected}
             onChange={onToggleSelect}
-            aria-label={`Select ${r.name ?? r.title}`}
+            aria-label={t("workspace:selectRecordingAria", { name: r.name ?? r.title })}
             className="shrink-0"
           />
         )}
@@ -611,7 +616,7 @@ function RecordingRow({
             e.dataTransfer.setData("text/plain", r.id);
             e.dataTransfer.effectAllowed = "move";
           }}
-          aria-label="Drag to reorder"
+          aria-label={t("workspace:dragToReorder")}
           className="shrink-0 cursor-grab select-none px-0.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400"
         >
           ⠿
@@ -632,7 +637,7 @@ function RecordingRow({
             {/* Source · date on the left; duration right-aligned (tabular-nums) so durations line up down the list. */}
             <div className="flex items-baseline justify-between gap-2 text-xs text-gray-500 dark:text-gray-400">
               <span className="truncate">
-                {sourceLabel(r.source)} · {new Date(r.createdAt).toLocaleDateString()}
+                {sourceLabel(r.source, t)} · {new Date(r.createdAt).toLocaleDateString(i18n.language)}
               </span>
               <span className="shrink-0 tabular-nums">{formatDuration(r.durationMs)}</span>
             </div>
@@ -663,6 +668,7 @@ function RenameForm({
   onSave: (name: string) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation("workspace");
   const [value, setValue] = useState(initial);
   return (
     <form
@@ -677,12 +683,12 @@ function RenameForm({
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => e.key === "Escape" && onCancel()}
-        placeholder="Recording name"
-        aria-label="Recording name"
+        placeholder={t("recordingNamePlaceholder")}
+        aria-label={t("recordingNamePlaceholder")}
         className="min-w-0 flex-1 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
       />
       <button type="submit" className="rounded border px-2 py-1 text-xs hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800 dark:text-gray-200">
-        Save
+        {t("common:save")}
       </button>
     </form>
   );

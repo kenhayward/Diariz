@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 
 /// Move a recording into an existing section, ungroup it, or create a new section and move into it.
@@ -12,6 +13,7 @@ export default function MoveToSectionModal({
   currentSectionId?: string | null; // undefined = unknown (mark nothing)
   onClose: () => void;
 }) {
+  const { t } = useTranslation("workspace");
   const qc = useQueryClient();
   const { data: sections = [] } = useQuery({ queryKey: ["sections"], queryFn: api.listSections });
   const [newName, setNewName] = useState("");
@@ -63,11 +65,11 @@ export default function MoveToSectionModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         role="dialog"
-        aria-label="Move to section"
+        aria-label={t("moveToSectionTitle")}
         className="w-full max-w-sm rounded-lg border bg-white p-4 shadow-xl dark:border-gray-700 dark:bg-gray-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-2 text-base font-semibold dark:text-gray-100">Move to section</h2>
+        <h2 className="mb-2 text-base font-semibold dark:text-gray-100">{t("moveToSectionTitle")}</h2>
 
         <div className="max-h-64 overflow-y-auto">
           <button
@@ -76,7 +78,7 @@ export default function MoveToSectionModal({
             onClick={() => move(null)}
             className={itemClass(currentSectionId === null)}
           >
-            Ungrouped {currentSectionId === null && <span aria-hidden>✓</span>}
+            {t("ungrouped")} {currentSectionId === null && <span aria-hidden>✓</span>}
           </button>
           {sections.map((s) => (
             <button
@@ -101,8 +103,8 @@ export default function MoveToSectionModal({
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="New section name"
-            aria-label="New section name"
+            placeholder={t("newSectionPlaceholder")}
+            aria-label={t("newSectionPlaceholder")}
             className="min-w-0 flex-1 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           />
           <button
@@ -110,7 +112,7 @@ export default function MoveToSectionModal({
             disabled={busy || !newName.trim()}
             className="shrink-0 rounded border px-2 py-1 text-sm hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
           >
-            Create &amp; move
+            {t("createAndMove")}
           </button>
         </form>
 

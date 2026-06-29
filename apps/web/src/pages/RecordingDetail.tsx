@@ -88,7 +88,7 @@ export default function RecordingDetail() {
   }
 
   async function newPerson(label: string) {
-    const name = window.prompt("Name for this person?")?.trim();
+    const name = window.prompt(t("workspace:namePrompt"))?.trim();
     if (!name) return;
     setActionError(null);
     try {
@@ -115,9 +115,9 @@ export default function RecordingDetail() {
       await api.retranscribe(id, { speakers: { min, max } });
       await qc.invalidateQueries({ queryKey: ["recording", id] });
       setRetranscribeOpen(false);
-      setActionInfo("Re-transcribing…");
+      setActionInfo(t("workspace:retranscribing"));
     } catch (e) {
-      setActionError(apiErrorMessage(e, "Could not start re-transcription."));
+      setActionError(apiErrorMessage(e, t("workspace:errRetranscribe")));
     } finally {
       setRequeuing(false);
     }
@@ -130,7 +130,7 @@ export default function RecordingDetail() {
       await api.summarize(id);
       await qc.invalidateQueries({ queryKey: ["recording", id] });
     } catch (e) {
-      setActionError(apiErrorMessage(e, "Could not start summarisation."));
+      setActionError(apiErrorMessage(e, t("workspace:errSummarise")));
     } finally {
       setSummarizing(false);
     }
@@ -140,17 +140,17 @@ export default function RecordingDetail() {
   // Re-extracting replaces the existing list — confirm first if there's anything to lose.
   async function extractActions() {
     if (rec?.actionsExtracted && rec.actions.length > 0 &&
-        !window.confirm("Replace the current actions with a fresh extraction?")) return;
+        !window.confirm(t("workspace:confirmReextract"))) return;
     setActionError(null);
     setActionInfo(null);
     setExtracting(true);
     try {
       const actions = await api.extractActions(id);
       await qc.invalidateQueries({ queryKey: ["recording", id] });
-      setActionInfo(actions.length ? `Extracted ${actions.length} action${actions.length === 1 ? "" : "s"}.`
-                                   : "No actions were found in this transcript.");
+      setActionInfo(actions.length ? t("workspace:extractedActions", { count: actions.length })
+                                   : t("workspace:noActionsFound"));
     } catch (e) {
-      setActionError(apiErrorMessage(e, "Could not extract actions."));
+      setActionError(apiErrorMessage(e, t("workspace:errExtract")));
     } finally {
       setExtracting(false);
     }
@@ -161,7 +161,7 @@ export default function RecordingDetail() {
   async function translateRecording() {
     if (!nativeLang) return;
     if (rec?.current && hasRevisions(rec.current.segments) &&
-        !window.confirm(`Translate to ${nativeLang.englishName}? This replaces any edited or previously translated text.`))
+        !window.confirm(t("workspace:confirmTranslate", { language: nativeLang.englishName })))
       return;
     setActionError(null);
     setActionInfo(null);
@@ -169,9 +169,9 @@ export default function RecordingDetail() {
     try {
       await api.translateRecording(id, nativeLang.code);
       await qc.invalidateQueries({ queryKey: ["recording", id] });
-      setActionInfo(`Translated to ${nativeLang.englishName}.`);
+      setActionInfo(t("workspace:translatedTo", { language: nativeLang.englishName }));
     } catch (e) {
-      setActionError(apiErrorMessage(e, "Could not translate the transcript."));
+      setActionError(apiErrorMessage(e, t("workspace:errTranslateTranscript")));
     } finally {
       setTranslating(false);
     }
@@ -186,7 +186,7 @@ export default function RecordingDetail() {
       await api.translateSegment(id, segmentId, nativeLang.code);
       await qc.invalidateQueries({ queryKey: ["recording", id] });
     } catch (e) {
-      setActionError(apiErrorMessage(e, "Could not translate the segment."));
+      setActionError(apiErrorMessage(e, t("workspace:errTranslateSegment")));
     } finally {
       setTranslating(false);
     }
@@ -198,7 +198,7 @@ export default function RecordingDetail() {
       await api.createAction(id, { text: "", actor: "", deadline: "" });
       qc.invalidateQueries({ queryKey: ["recording", id] });
     } catch (e) {
-      setActionError(apiErrorMessage(e, "Could not add the action."));
+      setActionError(apiErrorMessage(e, t("workspace:errAddAction")));
     }
   }
 
@@ -208,7 +208,7 @@ export default function RecordingDetail() {
       await api.updateAction(id, actionId, patch);
       qc.invalidateQueries({ queryKey: ["recording", id] });
     } catch (e) {
-      setActionError(apiErrorMessage(e, "Could not update the action."));
+      setActionError(apiErrorMessage(e, t("workspace:errUpdateAction")));
     }
   }
 
@@ -218,19 +218,19 @@ export default function RecordingDetail() {
       await api.deleteAction(id, actionId);
       qc.invalidateQueries({ queryKey: ["recording", id] });
     } catch (e) {
-      setActionError(apiErrorMessage(e, "Could not remove the action."));
+      setActionError(apiErrorMessage(e, t("workspace:errRemoveAction")));
     }
   }
 
   async function mergeSegments() {
-    if (!window.confirm("Merge consecutive rows from the same speaker into single blocks? Re-transcribe to undo.")) return;
+    if (!window.confirm(t("workspace:confirmMerge"))) return;
     setActionError(null);
     setActionInfo(null);
     try {
       await api.mergeSegments(id);
       await qc.invalidateQueries({ queryKey: ["recording", id] });
     } catch (e) {
-      setActionError(apiErrorMessage(e, "Could not merge the transcript."));
+      setActionError(apiErrorMessage(e, t("workspace:errMerge")));
     }
   }
 
@@ -239,9 +239,9 @@ export default function RecordingDetail() {
     setActionInfo(null);
     try {
       await api.emailTranscript(id);
-      setActionInfo("Transcript emailed to your account address.");
+      setActionInfo(t("workspace:emailedTranscript"));
     } catch (e) {
-      setActionError(apiErrorMessage(e, "Could not email the transcript."));
+      setActionError(apiErrorMessage(e, t("workspace:errEmail")));
     }
   }
 
@@ -251,9 +251,9 @@ export default function RecordingDetail() {
     try {
       await api.reidentify(id);
       await qc.invalidateQueries({ queryKey: ["recording", id] });
-      setActionInfo("Re-ran speaker identification against your current voiceprints.");
+      setActionInfo(t("workspace:reidentified"));
     } catch (e) {
-      setActionError(apiErrorMessage(e, "Could not re-identify speakers."));
+      setActionError(apiErrorMessage(e, t("workspace:errReidentify")));
     }
   }
 
@@ -267,7 +267,7 @@ export default function RecordingDetail() {
       el.currentTime = startMs / 1000;
       await el.play();
     } catch (e) {
-      setActionError(apiErrorMessage(e, "Could not play audio."));
+      setActionError(apiErrorMessage(e, t("workspace:errPlayAudio")));
     }
   }
 
@@ -280,7 +280,7 @@ export default function RecordingDetail() {
     setActiveIdx(idx >= 0 ? idx : null);
   }
 
-  if (!rec) return <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>;
+  if (!rec) return <p className="text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>;
 
   const hasTranscript = (rec.current?.segments.length ?? 0) > 0;
   const isSummarizing = rec.status === "Summarizing" || summarizing;
@@ -299,7 +299,7 @@ export default function RecordingDetail() {
     onEmailTranscript: emailTranscript,
     onDownloadAudio: () => void api.downloadAudio(id),
     onDelete: async () => {
-      if (!window.confirm(`Delete "${rec.name ?? rec.title}"? This cannot be undone.`)) return;
+      if (!window.confirm(t("workspace:confirmDelete", { name: rec.name ?? rec.title }))) return;
       await api.deleteRecording(id);
       navigate("/");
     },
@@ -321,7 +321,7 @@ export default function RecordingDetail() {
             <h1 className="text-lg font-semibold dark:text-gray-100">{rec.name ?? rec.title}</h1>
           )}
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            {rec.source === "System" ? "System audio" : rec.source === "Upload" ? "Uploaded" : "Microphone"} ·{" "}
+            {rec.source === "System" ? t("workspace:sourceSystem") : rec.source === "Upload" ? t("workspace:sourceUpload") : t("workspace:sourceMicrophone")} ·{" "}
             {formatDate(rec.createdAt, i18n.language)}
             {rec.durationMs > 0 ? ` · ${formatDuration(rec.durationMs)}` : ""} · {rec.status}
             {rec.sizeBytes > 0 ? ` · ${formatBytes(rec.sizeBytes)}` : ""}
@@ -331,7 +331,7 @@ export default function RecordingDetail() {
         <div className="flex shrink-0 items-center gap-2">
           {(isSummarizing || requeuing || translating) && (
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {translating ? "Translating…" : isSummarizing ? "Summarising…" : "Queuing…"}
+              {translating ? t("workspace:translating") : isSummarizing ? t("workspace:summarising") : t("workspace:queuing")}
             </span>
           )}
           <DetailToolbar
@@ -357,7 +357,7 @@ export default function RecordingDetail() {
 
       {extracting && (
         <p className="rounded bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-          Extracting actions from the transcript…
+          {t("workspace:extractingActions")}
         </p>
       )}
 
@@ -366,10 +366,10 @@ export default function RecordingDetail() {
       )}
 
       {isSummarizing && !rec.summary && (
-        <p className="rounded bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">Summarising…</p>
+        <p className="rounded bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">{t("workspace:summarising")}</p>
       )}
       {rec.summary && (
-        <CollapsibleSection title="Summary">
+        <CollapsibleSection title={t("workspace:sectionSummary")}>
           <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{rec.summary.text}</p>
         </CollapsibleSection>
       )}
@@ -386,7 +386,7 @@ export default function RecordingDetail() {
 
       {labels.length > 0 && (
         // Default collapsed when every speaker is already assigned (nothing left to label).
-        <CollapsibleSection title="Speakers" defaultCollapsed={allSpeakersAssigned(rec.speakers)}>
+        <CollapsibleSection title={t("workspace:sectionSpeakers")} defaultCollapsed={allSpeakersAssigned(rec.speakers)}>
           <div className="flex flex-wrap gap-4">
             {labels.map((label) => {
               const info = rec.speakers.find((s) => s.label === label);
@@ -409,25 +409,25 @@ export default function RecordingDetail() {
 
       {rec.current ? (
         // The body is flush (no horizontal padding) so the segment rows keep the panel's full width.
-        <CollapsibleSection title="Transcript" bodyClassName="space-y-3 pb-2">
+        <CollapsibleSection title={t("workspace:sectionTranscript")} bodyClassName="space-y-3 pb-2">
           <div className="flex flex-wrap items-center gap-3 px-4">
             <button
               onClick={() => playFrom(0)}
               className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
             >
-              ▶ Play all
+              ▶ {t("workspace:playAll")}
             </button>
             <button
               onClick={mergeSegments}
-              title="Combine consecutive rows from the same speaker into single blocks"
+              title={t("workspace:mergeRowsTitle")}
               className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
             >
-              Merge same-speaker rows
+              {t("workspace:mergeRows")}
             </button>
             {hasRevisions(rec.current.segments) && (
               <button
                 onClick={() => setShowOriginal((v) => !v)}
-                title="Switch between the model's original words and your edited/translated version"
+                title={t("workspace:toggleViewTitle")}
                 className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
               >
                 {toggleLabel(showOriginal)}
@@ -452,9 +452,7 @@ export default function RecordingDetail() {
           </ul>
         </CollapsibleSection>
       ) : (
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          No transcript yet — it appears here automatically when transcription finishes.
-        </p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">{t("workspace:noTranscriptYet")}</p>
       )}
 
       {editingSeg && (
@@ -503,6 +501,7 @@ function RetranscribeModal({
   onCancel: () => void;
   onConfirm: (min: number | null, max: number | null) => void;
 }) {
+  const { t } = useTranslation("workspace");
   const [min, setMin] = useState(initialMin != null ? String(initialMin) : "");
   const [max, setMax] = useState(initialMax != null ? String(initialMax) : "");
 
@@ -520,41 +519,37 @@ function RetranscribeModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCancel}>
       <div
         role="dialog"
-        aria-label="Re-transcribe"
+        aria-label={t("retranscribeTitle")}
         className="w-full max-w-md rounded-lg border bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-1 text-base font-semibold dark:text-gray-100">Re-transcribe</h2>
-        <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
-          Optionally tell the diarizer how many speakers to expect. If two people were merged into one
-          speaker, set the minimum to 2. Leave blank for automatic detection.
-        </p>
+        <h2 className="mb-1 text-base font-semibold dark:text-gray-100">{t("retranscribeTitle")}</h2>
+        <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">{t("retranscribeHelp")}</p>
         {hasRevisions && (
           <p className="mb-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700/60 dark:bg-amber-900/30 dark:text-amber-300">
-            This transcript has edited or translated segments. Re-transcribing produces a fresh transcript
-            from the model — your edits and translations won't carry over to it.
+            {t("retranscribeRevisionsWarning")}
           </p>
         )}
         <div className="flex items-center gap-4 text-sm">
           <label className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-            Min speakers
+            {t("minSpeakers")}
             <input
               type="number"
               min={1}
               value={min}
               onChange={(e) => setMin(e.target.value)}
-              aria-label="Minimum speakers"
+              aria-label={t("minSpeakersAria")}
               className="w-20 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             />
           </label>
           <label className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
-            Max speakers
+            {t("maxSpeakers")}
             <input
               type="number"
               min={1}
               value={max}
               onChange={(e) => setMax(e.target.value)}
-              aria-label="Maximum speakers"
+              aria-label={t("maxSpeakersAria")}
               className="w-20 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             />
           </label>
@@ -565,7 +560,7 @@ function RetranscribeModal({
             onClick={onCancel}
             className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
           >
-            Cancel
+            {t("common:cancel")}
           </button>
           <button
             type="button"
@@ -573,7 +568,7 @@ function RetranscribeModal({
             disabled={busy}
             className="rounded bg-gray-900 px-3 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
           >
-            {busy ? "Starting…" : "Re-transcribe"}
+            {busy ? t("starting") : t("retranscribeTitle")}
           </button>
         </div>
       </div>
@@ -590,6 +585,7 @@ function SegmentEditModal({
   onClose: () => void;
   onSave: (text: string | null) => Promise<void>;
 }) {
+  const { t } = useTranslation("workspace");
   const [text, setText] = useState(seg.text);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -618,7 +614,7 @@ function SegmentEditModal({
     try {
       await onSave(value);
     } catch (e) {
-      setError(apiErrorMessage(e, "Could not save the segment."));
+      setError(apiErrorMessage(e, t("errSaveSegment")));
       setBusy(false);
     }
   }
@@ -627,11 +623,11 @@ function SegmentEditModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         role="dialog"
-        aria-label="Edit segment"
+        aria-label={t("editSegment")}
         className="w-full max-w-3xl rounded-lg border bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-3 text-base font-semibold dark:text-gray-100">Edit segment</h2>
+        <h2 className="mb-3 text-base font-semibold dark:text-gray-100">{t("editSegment")}</h2>
         <textarea
           ref={taRef}
           autoFocus
@@ -640,12 +636,12 @@ function SegmentEditModal({
             setText(e.target.value);
             autosize();
           }}
-          aria-label="Segment text"
+          aria-label={t("segmentTextAria")}
           className="block max-h-[60vh] min-h-[8rem] w-full resize-none overflow-y-auto rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         />
         {revised && (
           <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            <span className="font-medium">Original:</span> {seg.original}
+            <span className="font-medium">{t("originalLabel")}</span> {seg.original}
           </p>
         )}
         {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
@@ -658,7 +654,7 @@ function SegmentEditModal({
               disabled={busy}
               className="mr-auto rounded border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
             >
-              Reset to original
+              {t("resetToOriginal")}
             </button>
           )}
           <button
@@ -666,7 +662,7 @@ function SegmentEditModal({
             onClick={onClose}
             className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
           >
-            Cancel
+            {t("common:cancel")}
           </button>
           <button
             type="button"
@@ -674,7 +670,7 @@ function SegmentEditModal({
             disabled={busy}
             className="rounded bg-gray-900 px-3 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
           >
-            {busy ? "Saving…" : "Save"}
+            {busy ? t("common:saving") : t("common:save")}
           </button>
         </div>
       </div>
@@ -691,6 +687,7 @@ function RecordingNameForm({
   onSave: (name: string) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation("workspace");
   const [value, setValue] = useState(initial);
   return (
     <form
@@ -705,12 +702,12 @@ function RecordingNameForm({
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => e.key === "Escape" && onCancel()}
-        placeholder="Recording name"
-        aria-label="Recording name"
+        placeholder={t("recordingNamePlaceholder")}
+        aria-label={t("recordingNamePlaceholder")}
         className="w-64 rounded border px-2 py-1 text-base dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
       />
       <button type="submit" className="rounded border px-2 py-1 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
-        Save
+        {t("common:save")}
       </button>
     </form>
   );
@@ -735,6 +732,7 @@ export function SpeakerRow({
   onAssign: (profileId: string | null) => void;
   onNewPerson: () => void;
 }) {
+  const { t } = useTranslation("workspace");
   const [value, setValue] = useState(initial);
   // Keep the field in sync when identification/reassignment changes the name out from under us.
   useEffect(() => setValue(initial), [initial]);
@@ -745,23 +743,23 @@ export function SpeakerRow({
         <span className="text-xs text-gray-400 dark:text-gray-500">{label}</span>
         {info?.identifiedAuto && (
           <span
-            title="Name applied automatically by speaker identification"
+            title={t("autoNameTitle")}
             className="rounded bg-blue-100 px-1 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
           >
-            auto
+            {t("autoBadge")}
           </span>
         )}
       </div>
       <input
         value={value}
-        aria-label={`Name for ${label}`}
+        aria-label={t("nameForAria", { label })}
         onChange={(e) => setValue(e.target.value)}
         onBlur={() => value !== initial && onRename(value)}
         className="w-40 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
       />
       <select
         value={info?.profileId ?? ""}
-        aria-label={`Assign ${label} to a person`}
+        aria-label={t("assignAria", { label })}
         onChange={(e) => {
           const v = e.target.value;
           if (v === NEW_PERSON) onNewPerson();
@@ -769,13 +767,13 @@ export function SpeakerRow({
         }}
         className="w-40 rounded border px-2 py-1 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
       >
-        <option value="">Unassigned</option>
+        <option value="">{t("unassigned")}</option>
         {profiles.map((p) => (
           <option key={p.id} value={p.id}>
             {p.name}
           </option>
         ))}
-        <option value={NEW_PERSON}>+ New person…</option>
+        <option value={NEW_PERSON}>{t("newPerson")}</option>
       </select>
     </div>
   );
@@ -800,6 +798,7 @@ function SegmentRow({
   onEdit: () => void;
   onTranslate?: () => void;
 }) {
+  const { t } = useTranslation("workspace");
   const revised = seg.revised != null;
   const actions = [
     { label: editLabel, onClick: onEdit },
@@ -823,14 +822,14 @@ function SegmentRow({
       {/* Marks a segment whose text has been edited or translated (a revision exists). */}
       {revised && (
         <span
-          title="This segment has been edited or translated"
-          aria-label="Edited"
+          title={t("revisedTitle")}
+          aria-label={t("editedAria")}
           className="mt-0.5 shrink-0 text-teal-500 dark:text-teal-400"
         >
           ✎
         </span>
       )}
-      <KebabMenu actions={actions} label="Segment actions" />
+      <KebabMenu actions={actions} label={t("segmentActions")} />
     </li>
   );
 }

@@ -57,18 +57,5 @@ export const TOUR_STEPS: TourStep[] = [
   },
 ];
 
-/// Copy for the empty detail page, chosen by how many recordings the user has.
-export function emptyStateCopy(recordingCount: number): { title: string; body: string; showTour: boolean } {
-  if (recordingCount === 0) {
-    return {
-      title: "Welcome to Diariz",
-      body: "Press Record or Upload at the top to add your first recording — it’ll be transcribed and appear in the list on the left.",
-      showTour: true,
-    };
-  }
-  return {
-    title: "Select a recording",
-    body: "Choose a recording from the list, or press Record / Upload to add another.",
-    showTour: false,
-  };
-}
+// The empty-detail-page copy now lives in the i18n `workspace` catalog (EmptyDetail picks the welcome
+// vs select-a-recording variant directly), so it isn't duplicated here.

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import CollapsibleSection from "./CollapsibleSection";
 import type { RecordingAction } from "../lib/types";
 
@@ -18,19 +19,18 @@ export default function ActionsPanel({
   onUpdate: (id: string, patch: Patch) => void;
   onDelete: (id: string) => void;
 }) {
+  const { t } = useTranslation("workspace");
   return (
-    <CollapsibleSection title="Actions">
+    <CollapsibleSection title={t("actionsTitle")}>
       {actions.length === 0 ? (
-        <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
-          No actions identified — add one below.
-        </p>
+        <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">{t("noActions")}</p>
       ) : (
         <table className="mb-3 w-full table-fixed text-sm">
           <thead>
             <tr className="text-left text-xs font-medium text-gray-400 dark:text-gray-500">
-              <th className="w-[55%] pb-1 pr-2 font-medium">Action</th>
-              <th className="w-[18%] pb-1 pr-2 font-medium">Actor</th>
-              <th className="w-[22%] pb-1 pr-2 font-medium">Deadline</th>
+              <th className="w-[55%] pb-1 pr-2 font-medium">{t("colAction")}</th>
+              <th className="w-[18%] pb-1 pr-2 font-medium">{t("colActor")}</th>
+              <th className="w-[22%] pb-1 pr-2 font-medium">{t("colDeadline")}</th>
               <th className="w-[5%] pb-1" aria-hidden />
             </tr>
           </thead>
@@ -47,7 +47,7 @@ export default function ActionsPanel({
         onClick={onAdd}
         className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
       >
-        + Add action
+        {t("addAction")}
       </button>
     </CollapsibleSection>
   );
@@ -64,22 +64,23 @@ function ActionRow({
   onUpdate: (id: string, patch: Patch) => void;
   onDelete: (id: string) => void;
 }) {
+  const { t } = useTranslation("workspace");
   return (
     <tr className="align-top">
       <td className="py-1 pr-2">
-        <Cell label={`Action ${row}`} value={action.text} commit={(v) => onUpdate(action.id, { text: v })} />
+        <Cell label={t("actionCellAria", { row })} value={action.text} commit={(v) => onUpdate(action.id, { text: v })} />
       </td>
       <td className="py-1 pr-2">
-        <Cell label={`Actor ${row}`} value={action.actor} commit={(v) => onUpdate(action.id, { actor: v })} />
+        <Cell label={t("actorCellAria", { row })} value={action.actor} commit={(v) => onUpdate(action.id, { actor: v })} />
       </td>
       <td className="py-1 pr-2">
-        <Cell label={`Deadline ${row}`} value={action.deadline} commit={(v) => onUpdate(action.id, { deadline: v })} />
+        <Cell label={t("deadlineCellAria", { row })} value={action.deadline} commit={(v) => onUpdate(action.id, { deadline: v })} />
       </td>
       <td className="py-1 text-right">
         <button
           type="button"
-          aria-label={`Remove action ${row}`}
-          title="Remove"
+          aria-label={t("removeActionAria", { row })}
+          title={t("common:remove")}
           onClick={() => onDelete(action.id)}
           className="rounded px-1 text-gray-400 hover:bg-gray-100 hover:text-red-600 dark:hover:bg-gray-800 dark:hover:text-red-400"
         >

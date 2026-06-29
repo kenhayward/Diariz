@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { hasOnboarded, setOnboarded, emptyStateCopy, TOUR_STEPS, ONBOARDED_KEY } from "./onboarding";
+import { hasOnboarded, setOnboarded, TOUR_STEPS, ONBOARDED_KEY } from "./onboarding";
 
 describe("onboarding state", () => {
   beforeEach(() => localStorage.clear());
@@ -11,20 +11,6 @@ describe("onboarding state", () => {
     expect(hasOnboarded()).toBe(true);
     setOnboarded(false);
     expect(hasOnboarded()).toBe(false);
-  });
-});
-
-describe("emptyStateCopy", () => {
-  it("welcomes a brand-new user and offers the tour", () => {
-    const c = emptyStateCopy(0);
-    expect(c.showTour).toBe(true);
-    expect(c.title).toMatch(/welcome/i);
-  });
-
-  it("prompts a returning user to pick a recording (no tour)", () => {
-    const c = emptyStateCopy(3);
-    expect(c.showTour).toBe(false);
-    expect(c.title).toMatch(/select/i);
   });
 });
 
