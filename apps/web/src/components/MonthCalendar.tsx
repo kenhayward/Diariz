@@ -23,12 +23,13 @@ export default function MonthCalendar({
   onNext: () => void;
 }) {
   const { t, i18n } = useTranslation("workspace");
-  const weeks = buildMonthGrid(year, month);
+  // Drop any trailing week made up entirely of next-month days — keeps the grid compact.
+  const weeks = buildMonthGrid(year, month).filter((w) => w.some((d) => d.inMonth));
   const todayKey = dayKey(new Date());
 
   return (
-    <div className="px-3 py-2">
-      <div className="mb-2 flex items-center justify-between">
+    <div className="px-2 py-1.5">
+      <div className="mb-1 flex items-center justify-between">
         <button
           type="button"
           onClick={onPrev}
@@ -48,31 +49,33 @@ export default function MonthCalendar({
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-center text-[10px] uppercase text-gray-400 dark:text-gray-500">
+      <div className="grid grid-cols-7 gap-0.5 text-center text-[9px] uppercase text-gray-400 dark:text-gray-500">
         {weekdayLabels(i18n.language).map((w, i) => (
-          <div key={i} className="py-0.5">{w}</div>
+          <div key={i}>{w}</div>
         ))}
       </div>
 
-      <div className="mt-1 grid grid-cols-7 gap-1">
-        {weeks.flat().map((day) => {
+      {/* Short rectangular cells (not square) keep the calendar compact so the day list below gets room. */}
+      <div className="mt-0.5 grid grid-cols-7 gap-0.5">
+        {weeks.flat().map((day, i) => {
+          // Don't show adjacent-month days (confusing) — render an empty placeholder to keep alignment.
+          if (!day.inMonth) return <div key={`adj-${i}`} className="h-5" />;
           const has = daysWithRecordings.has(day.key);
           const selected = day.key === selectedKey;
           const isToday = day.key === todayKey;
           return (
             <button
-              key={day.key + (day.inMonth ? "" : "-adj")}
+              key={day.key}
               type="button"
               disabled={!has}
               onClick={() => has && onSelect(day.key)}
               aria-pressed={selected}
               aria-current={isToday ? "date" : undefined}
               className={[
-                "aspect-square rounded text-xs tabular-nums",
+                "flex h-5 items-center justify-center rounded text-[11px] tabular-nums",
                 has
                   ? "cursor-pointer bg-green-100 text-green-900 hover:bg-green-200 dark:bg-green-900/40 dark:text-green-200 dark:hover:bg-green-900/60"
                   : "cursor-default bg-gray-50 text-gray-300 dark:bg-gray-800/60 dark:text-gray-600",
-                !day.inMonth ? "opacity-50" : "",
                 selected ? "ring-2 ring-inset ring-green-500 dark:ring-green-400" : "",
                 isToday && !selected ? "ring-1 ring-inset ring-blue-400" : "",
               ].join(" ")}

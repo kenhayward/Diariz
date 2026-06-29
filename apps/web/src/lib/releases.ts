@@ -57,6 +57,30 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.32.1",
+    date: "2026-06-29",
+    pr: 75,
+    headline: "Recordings-list polish & fixes",
+    summary:
+      "Follow-up fixes for the recordings list: the account-menu **storage figure now refreshes** right " +
+      "after you delete a recording's audio (or merge/delete recordings); **merging shows progress** (a " +
+      "“Merging audio…” indicator and a status pill) and surfaces an error if it fails; the **calendar is " +
+      "more compact** (shorter rectangular day cells, no confusing next-month days, trimmed height) leaving " +
+      "more room for the day's recordings; the section **select checkbox now sits before the drag handle** " +
+      "to match the recording rows; and you can **drop a section onto a top-level section to nest it** as a " +
+      "sub-section.",
+    changed: [
+      "Recording rows are dragged by the whole row now (the separate drag-handle icon is gone) — the row already highlights on hover.",
+    ],
+    fixed: [
+      "Account-menu storage usage refreshes after delete-audio / merge / delete.",
+      "Merge now shows a “Merging audio…” indicator and surfaces failures instead of doing nothing visibly.",
+      "Calendar day cells are shorter/rectangular, next-month days are hidden, and the grid is trimmed.",
+      "Section select-all checkbox is now before the drag handle, matching recording rows.",
+      "Dropping a section onto a top-level section nests it as a sub-section.",
+    ],
+  },
+  {
     version: "0.32.0",
     date: "2026-06-29",
     pr: 74,
