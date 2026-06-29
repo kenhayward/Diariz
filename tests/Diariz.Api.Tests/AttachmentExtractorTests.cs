@@ -1,5 +1,9 @@
 using System.Text;
 using Diariz.Api.Services;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Wordprocessing;
+using MimeKit;
 
 namespace Diariz.Api.Tests;
 
@@ -71,5 +75,67 @@ public class AttachmentExtractorTests
 
         Assert.Equal("hello.pdf", result.Name);
         Assert.Contains("Hello PDF document", result.Text);
+    }
+
+    [Theory]
+    [InlineData("report.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")]
+    [InlineData("invite.ics", "text/calendar")]
+    [InlineData("mail.eml", "message/rfc822")]
+    public void IsSupported_AcceptsOfficeEmailAndCalendar(string name, string contentType) =>
+        Assert.True(Extractor.IsSupported(name, contentType));
+
+    [Fact]
+    public void Extract_Docx_PullsBodyText()
+    {
+        var result = Extractor.Extract("notes.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            Docx("The quarterly numbers look strong."));
+
+        Assert.Contains("quarterly numbers look strong", result.Text);
+    }
+
+    [Fact]
+    public void Extract_Eml_IncludesSubjectAndBody()
+    {
+        var result = Extractor.Extract("mail.eml", "message/rfc822", Eml("Budget review", "Please cut spend by 10%."));
+
+        Assert.Contains("Budget review", result.Text);
+        Assert.Contains("cut spend by 10%", result.Text);
+    }
+
+    [Fact]
+    public void Extract_Ics_SurfacesEventProperties()
+    {
+        var ics = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nSUMMARY:Sprint planning\r\n" +
+                  "DTSTART;TZID=UTC:20260701T090000\r\nLOCATION:Room 4\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        var result = Extractor.Extract("invite.ics", "text/calendar", Encoding.UTF8.GetBytes(ics));
+
+        Assert.Contains("SUMMARY: Sprint planning", result.Text);
+        Assert.Contains("LOCATION: Room 4", result.Text);
+        Assert.Contains("DTSTART: 20260701T090000", result.Text); // TZID param stripped from the key
+    }
+
+    private static byte[] Docx(string text)
+    {
+        using var ms = new MemoryStream();
+        using (var doc = WordprocessingDocument.Create(ms, WordprocessingDocumentType.Document))
+        {
+            var main = doc.AddMainDocumentPart();
+            main.Document = new Document(new Body(new Paragraph(new Run(new Text(text)))));
+            main.Document.Save();
+        }
+        return ms.ToArray();
+    }
+
+    private static byte[] Eml(string subject, string body)
+    {
+        var msg = new MimeMessage();
+        msg.From.Add(new MailboxAddress("Alice", "alice@x.test"));
+        msg.To.Add(new MailboxAddress("Bob", "bob@x.test"));
+        msg.Subject = subject;
+        msg.Body = new TextPart("plain") { Text = body };
+        using var ms = new MemoryStream();
+        msg.WriteTo(ms);
+        return ms.ToArray();
     }
 }

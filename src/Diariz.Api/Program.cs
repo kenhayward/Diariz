@@ -141,6 +141,11 @@ builder.Services.AddSingleton<IExportLocalizer>(_ => new JsonExportLocalizer(exp
 builder.Services.AddHttpClient<IChatStreamClient, ChatStreamClient>();
 builder.Services.AddScoped<IChatContextResolver, ChatContextResolver>();
 builder.Services.AddSingleton<IAttachmentExtractor, AttachmentExtractor>();
+// URL-attachment fetcher: a named client with auto-redirect OFF so each hop is re-checked against the
+// SSRF guard (see UrlFetcher).
+builder.Services.AddHttpClient("url-attachments")
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+builder.Services.AddScoped<IUrlFetcher, UrlFetcher>();
 
 // ---- App services ----
 builder.Services.AddScoped<ITokenService, TokenService>();

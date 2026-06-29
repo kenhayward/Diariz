@@ -16,6 +16,8 @@
   "pickSelected_other": "Transcripciones seleccionadas",
   "pickSelectedHint": "Marcadas con el botón Seleccionar de la lista ({{n}})",
   "pickNoneHint": "Sin contexto de transcripción",
+  "includeAttachments": "Incluir adjuntos",
+  "includeAttachmentsHint": "Añade los archivos y enlaces de las grabaciones seleccionadas al contexto",
   "removeAttachment": "Quitar adjunto",
   "reading": "Leyendo…",
   "attachFile": "+ Adjuntar archivo",

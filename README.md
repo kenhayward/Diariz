@@ -42,7 +42,9 @@ ordering and cross-group moves; select a whole group at once to build chat conte
 **list or a calendar** (days with recordings are highlighted; click one to see that day's recordings).
 - **Attach supporting documents** to a transcript — upload files (PDFs, Office docs, emails, calendar
 invites, images, …) or add URLs, then rename, open, and remove them from an "Attachments (N)" button
-(or drag files onto the page). Files are stored in object storage and count toward your quota.
+(or drag files onto the page). Files are stored in object storage and count toward your quota. Turn on
+**Include attachments** in chat to feed them to the LLM (documents are read into text; URLs are fetched
+behind SSRF guards).
 - **Manage audio & merge**: **delete a recording's audio** to reclaim its storage while keeping the
 transcript, and **merge** several recordings into the earliest one — their transcripts are laid end-to-end
 and their audio is concatenated server-side (ffmpeg).

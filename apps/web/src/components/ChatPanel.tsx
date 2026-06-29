@@ -26,6 +26,7 @@ export default function ChatPanel() {
   const [error, setError] = useState<string | null>(null);
 
   const [contextMode, setContextMode] = useState<ContextMode>("current");
+  const [includeAttachments, setIncludeAttachments] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const [attachment, setAttachment] = useState<{ name: string; text: string; chars: number } | null>(null);
@@ -130,6 +131,7 @@ export default function ChatPanel() {
           attachmentName: attachment?.name ?? null,
           attachmentText: attachment?.text ?? null,
           messages: history,
+          includeAttachments: includeAttachments && recordingIds.length > 0,
         },
         { onToken: appendToken, onMeta: setUsage, signal: controller.signal },
       )
@@ -205,6 +207,7 @@ export default function ChatPanel() {
           ? { name: c.context.attachmentName, text: c.context.attachmentText, chars: c.context.attachmentText.length }
           : null,
       );
+      setIncludeAttachments(c.context.includeAttachments ?? false);
       setOpenedId(id);
       setUsage(null);
       setSaveStatus(null);
@@ -223,6 +226,7 @@ export default function ChatPanel() {
         recordingIds,
         attachmentName: attachment?.name ?? null,
         attachmentText: attachment?.text ?? null,
+        includeAttachments,
       },
     };
     try {
@@ -388,6 +392,20 @@ export default function ChatPanel() {
                     <span className="ml-4 block text-[11px] text-gray-400">{o.hint}</span>
                   </button>
                 ))}
+                {/* Pull the selected transcripts' attachments (files + URLs) into the context too. */}
+                <label className="mt-1 flex cursor-pointer items-start gap-1.5 border-t px-3 py-1.5 text-sm dark:border-gray-700 dark:text-gray-200">
+                  <input
+                    type="checkbox"
+                    checked={includeAttachments}
+                    disabled={contextMode === "none"}
+                    onChange={(e) => setIncludeAttachments(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    {t("includeAttachments")}
+                    <span className="block text-[11px] text-gray-400">{t("includeAttachmentsHint")}</span>
+                  </span>
+                </label>
               </div>
             )}
           </div>

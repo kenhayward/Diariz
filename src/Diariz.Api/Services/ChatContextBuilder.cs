@@ -16,7 +16,7 @@ public static class ChatContextBuilder
 
     public static string BuildSystemPrompt(
         IReadOnlyList<TranscriptContext> transcripts, string? attachmentName, string? attachmentText,
-        int charBudget = DefaultCharBudget)
+        IReadOnlyList<TranscriptContext>? documents = null, int charBudget = DefaultCharBudget)
     {
         var context = new StringBuilder();
         foreach (var t in transcripts)
@@ -27,11 +27,12 @@ public static class ChatContextBuilder
         }
 
         if (!string.IsNullOrWhiteSpace(attachmentText))
-        {
-            context.Append("=== Attached document: ")
-                .Append(string.IsNullOrWhiteSpace(attachmentName) ? "document" : attachmentName).Append(" ===\n");
-            context.Append(attachmentText).Append('\n');
-        }
+            AppendDocument(context, attachmentName, attachmentText);
+
+        // Documents pulled from the selected recordings' attachments (files + fetched URLs).
+        foreach (var d in documents ?? [])
+            if (!string.IsNullOrWhiteSpace(d.Text))
+                AppendDocument(context, d.Title, d.Text);
 
         var body = context.ToString().Trim();
         if (body.Length > charBudget)
@@ -44,6 +45,13 @@ public static class ChatContextBuilder
         sb.Append(body.Length > 0 ? "Context:\n" + body
             : "No transcript context was provided for this conversation.");
         return sb.ToString();
+    }
+
+    private static void AppendDocument(StringBuilder context, string? name, string text)
+    {
+        context.Append("=== Attached document: ")
+            .Append(string.IsNullOrWhiteSpace(name) ? "document" : name).Append(" ===\n");
+        context.Append(text).Append('\n');
     }
 
     /// <summary>The request messages: the system prompt followed by the (non-blank) conversation history.</summary>

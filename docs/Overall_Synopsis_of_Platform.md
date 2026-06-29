@@ -148,8 +148,13 @@ only `hasApiKey`).
 - **Chat (streaming).** `POST /api/chat/stream` builds a system prompt from the selected transcripts
   (current / selected / none) **plus their action items** and an optional uploaded attachment
   (`ChatContextBuilder`), then streams tokens back via **Server-Sent Events** (`ChatStreamClient`).
-  Conversations save to **`ChatSession`** rows (thread + context stored as `jsonb`), so the server stays
-  stateless between turns — each request resends the full history and context.
+  With **`IncludeAttachments`** the selected recordings' **attachments** are folded in too: uploaded files
+  are read into text by **`AttachmentExtractor`** (PDF, text, Office `.docx/.xlsx/.pptx`, email/calendar
+  `.eml/.ics` — via PdfPig / Open XML SDK / MimeKit), and **URL** attachments are fetched by
+  **`UrlFetcher`** behind **SSRF guards** (`UrlFetchGuard` — blocks loopback/private/link-local IPs and
+  non-http(s) schemes), with a size cap, redirect re-validation, and HTML→text reduction. Conversations
+  save to **`ChatSession`** rows (thread + context stored as `jsonb`), so the server stays stateless
+  between turns — each request resends the full history and context.
 
 ## Auth, multi-tenancy, and roles
 
