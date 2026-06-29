@@ -41,6 +41,8 @@ export interface SummaryDto {
   model: string;
   text: string;
   createdAt: string;
+  /// The user hand-wrote/edited this summary; the auto-summariser won't overwrite it without a warning.
+  isUserEdited: boolean;
 }
 
 export interface SegmentDto {

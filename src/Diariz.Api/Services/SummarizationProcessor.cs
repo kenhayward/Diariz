@@ -31,6 +31,17 @@ public static class SummarizationProcessor
                 .FirstOrDefaultAsync(t => t.Id == job.TranscriptionId, ct)
                 ?? throw new InvalidOperationException("Transcription not found.");
 
+            // Protect a hand-edited summary: the automatic summariser leaves it untouched. A user-initiated
+            // re-summarise clears IsUserEdited first (so it isn't blocked here).
+            if (transcription.Summary is { IsUserEdited: true })
+            {
+                rec.Status = RecordingStatus.Summarized;
+                rec.Error = null;
+                await db.SaveChangesAsync(ct);
+                await hub.NotifyStatusAsync(rec.UserId, rec.Id, RecordingStatus.Summarized.ToString());
+                return;
+            }
+
             var names = await db.Speakers
                 .Where(s => s.RecordingId == rec.Id)
                 .ToDictionaryAsync(s => s.Label, s => s.DisplayName, ct);

@@ -10,6 +10,7 @@ import ToolbarButton, { iconProps } from "./ToolbarButton";
 import MoveToSectionModal from "./MoveToSectionModal";
 import DownloadTranscriptModal from "./DownloadTranscriptModal";
 import { recordingMenu } from "./recordingMenu";
+import { copyRichLink, transcriptUrl } from "../lib/clipboard";
 import { useSelection } from "../lib/selection";
 import { formatDuration } from "../lib/format";
 import { computeReorder } from "../lib/reorder";
@@ -853,6 +854,7 @@ function RecordingRow({
 
   const actions = recordingMenu({
     onRename: () => setRenaming(true),
+    onCopyLink: run(() => copyRichLink(transcriptUrl(r.id), r.name ?? r.title)),
     onRetranscribe: run(async () => { await api.retranscribe(r.id); refresh(); }),
     onSummarise: run(async () => { await api.summarize(r.id); refresh(); }),
     onExtractActions: run(async () => {

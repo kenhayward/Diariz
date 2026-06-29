@@ -8,7 +8,7 @@ const t = i18n.getFixedT("en");
 function build(overrides: Partial<Parameters<typeof recordingMenu>[0]> = {}) {
   const noop = vi.fn();
   return recordingMenu({
-    onRename: noop, onRetranscribe: noop, onSummarise: noop, onMove: noop, onPlay: noop,
+    onRename: noop, onCopyLink: noop, onRetranscribe: noop, onSummarise: noop, onMove: noop, onPlay: noop,
     onDownloadTranscript: noop, onDownloadAudio: noop, onDeleteAudio: noop, onDelete: noop,
     hasTranscript: true, hasAudio: true,
     ...overrides,
@@ -20,6 +20,7 @@ describe("recordingMenu", () => {
     const labels = build().map((a) => a.label);
     expect(labels).toEqual([
       "Rename",
+      "Copy link",
       "Re-transcribe",
       "Summarise",
       "Move to section…",
@@ -31,6 +32,13 @@ describe("recordingMenu", () => {
     ]);
     expect(labels).not.toContain("Download both");
     expect(labels).not.toContain("Download transcript (.srt)");
+    expect(labels).not.toContain("Edit summary"); // detail-only (needs onEditSummary)
+  });
+
+  it("includes Edit summary only when an onEditSummary handler is provided (detail menu)", () => {
+    expect(build().map((a) => a.label)).not.toContain("Edit summary");
+    const labels = build({ onEditSummary: () => {} }).map((a) => a.label);
+    expect(labels).toContain("Edit summary");
   });
 
   it("hides audio-dependent actions once the audio is deleted", () => {

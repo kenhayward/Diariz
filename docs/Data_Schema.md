@@ -45,6 +45,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddRecordingAudioDeleted` | `Recording.AudioDeletedAt` (nullable) — audio deleted while keeping the transcript |
 | `AddSectionParentAndPosition` | `Section.ParentId` (self-ref, cascade) + `Section.Position` — two-level sub-grouping |
 | `AddSpeakerMultiSpeaker` | `Speaker.IsMultiSpeaker` (bool) — "Multiple Speakers" slots excluded from voiceprints |
+| `AddSummaryUserEdited` | `Summary.IsUserEdited` (bool) + `Summary.UpdatedAt` (nullable) — manual/protected summary edits |
 
 ### Entity-relationship overview
 
@@ -138,9 +139,11 @@ LLM summary of a specific transcription version (1:1 with `Transcription`).
 |---|---|---|
 | `Id` | uuid PK | |
 | `TranscriptionId` | uuid FK → Transcriptions | unique (1:1), cascade |
-| `Model` | text | LLM model id used |
+| `Model` | text | LLM model id used (or `user` for a hand-written/edited summary) |
 | `Text` | text | |
 | `CreatedAt` | timestamptz | |
+| `IsUserEdited` | bool | user hand-wrote/edited it — the auto-summariser won't overwrite it |
+| `UpdatedAt` | timestamptz null | when the user last edited it |
 
 #### `RecordingActions`
 Extracted/hand-edited action items.
