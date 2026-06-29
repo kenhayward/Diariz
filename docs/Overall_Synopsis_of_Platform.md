@@ -187,6 +187,12 @@ Voiceprints are **per-user** (a user's voiceprints only match their own recordin
 - **Merge gate:** `src/locales.test.ts` asserts every catalog mirrors `en`'s keys exactly (no missing/empty),
   and `scripts/check-single-locale.mjs` (a CI job) limits a *translation-only* PR to one non-`en` language.
   See `apps/web/src/locales/README.md`.
+- **Server-side exports.** The headings in **downloaded** transcripts (`TranscriptFormatter` — txt/md/rtf) and
+  the **emailed** transcript (`TranscriptEmail`) are localized too, from runtime JSON at
+  **`src/Diariz.Api/locales/<lang>/exports.json`** read by a tiny **`JsonExportLocalizer`** (`IExportLocalizer`,
+  not compiled `.resx`; the files are copied next to the app). The endpoints resolve the recording owner's
+  **`UserSettings.UiLanguage`** and pass an `ExportStrings` to the (pure) formatters, which default to English.
+  Transcript *content* already uses `EffectiveText` (translated when the user translated).
 
 ## Audio storage & playback
 

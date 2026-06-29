@@ -1,0 +1,15 @@
+{
+  "transcriptName": "Transcript Name",
+  "summary": "Summary",
+  "actions": "Actions",
+  "transcript": "Transcript",
+  "action": "Action",
+  "actor": "Actor",
+  "deadline": "Deadline",
+  "time": "Time",
+  "speaker": "Speaker",
+  "text": "Text",
+  "none": "(none)",
+  "sentFromDiariz": "Sent from Diariz",
+  "subject": "Transcript for {name}"
+}

@@ -13,20 +13,22 @@ public static class TranscriptFormatter
 
     /// <summary>Plain text: headings, the summary, the actions (if any), then one paragraph per segment.</summary>
     public static string ToText(string name, string? summary, IReadOnlyList<SegmentDto> segments,
-        IReadOnlyList<RecordingActionDto>? actions = null)
+        IReadOnlyList<RecordingActionDto>? actions = null, ExportStrings? strings = null)
     {
+        var s10n = strings ?? ExportStrings.English;
         var sb = new StringBuilder();
-        sb.Append("Transcript Name\n").Append(name).Append("\n\n");
-        sb.Append("Summary\n").Append(string.IsNullOrWhiteSpace(summary) ? EmDash : summary!.Trim()).Append("\n\n");
+        sb.Append(s10n.TranscriptName).Append('\n').Append(name).Append("\n\n");
+        sb.Append(s10n.Summary).Append('\n').Append(string.IsNullOrWhiteSpace(summary) ? EmDash : summary!.Trim()).Append("\n\n");
         if (actions is { Count: > 0 })
         {
-            sb.Append("Actions\n");
+            sb.Append(s10n.Actions).Append('\n');
             foreach (var a in actions)
                 sb.Append('\n').Append(a.Text.Trim()).Append('\n')
-                  .Append("Actor: ").Append(Dash(a.Actor)).Append("   Deadline: ").Append(Dash(a.Deadline)).Append('\n');
+                  .Append(s10n.Actor).Append(": ").Append(Dash(a.Actor))
+                  .Append("   ").Append(s10n.Deadline).Append(": ").Append(Dash(a.Deadline)).Append('\n');
             sb.Append('\n');
         }
-        sb.Append("Transcript\n");
+        sb.Append(s10n.Transcript).Append('\n');
         foreach (var s in segments)
             sb.Append("\n[").Append(Clock(s.StartMs)).Append("] ").Append(s.SpeakerDisplay).Append('\n')
               .Append(s.Text.Trim()).Append('\n');
@@ -36,16 +38,18 @@ public static class TranscriptFormatter
 
     /// <summary>Markdown: headings, the summary, an actions table (if any), then a Time/Speaker/Text table.</summary>
     public static string ToMarkdown(string name, string? summary, IReadOnlyList<SegmentDto> segments,
-        IReadOnlyList<RecordingActionDto>? actions = null)
+        IReadOnlyList<RecordingActionDto>? actions = null, ExportStrings? strings = null)
     {
+        var s10n = strings ?? ExportStrings.English;
         var sb = new StringBuilder();
         sb.Append("# ").Append(name).Append("\n\n");
-        sb.Append("## Summary\n\n").Append(string.IsNullOrWhiteSpace(summary) ? "_(none)_" : summary!.Trim()).Append("\n\n");
+        sb.Append("## ").Append(s10n.Summary).Append("\n\n")
+          .Append(string.IsNullOrWhiteSpace(summary) ? $"_{s10n.None}_" : summary!.Trim()).Append("\n\n");
         if (actions is { Count: > 0 })
         {
-            sb.Append("## Actions\n\n");
+            sb.Append("## ").Append(s10n.Actions).Append("\n\n");
             // 60/18/22% column widths via the separator-row dash counts (Action is the widest column).
-            sb.Append("| Action | Actor | Deadline |\n")
+            sb.Append("| ").Append(s10n.Action).Append(" | ").Append(s10n.Actor).Append(" | ").Append(s10n.Deadline).Append(" |\n")
               .Append("| ").Append(new string('-', 60)).Append(" | ").Append(new string('-', 18))
               .Append(" | ").Append(new string('-', 22)).Append(" |\n");
             foreach (var a in actions)
@@ -53,10 +57,10 @@ public static class TranscriptFormatter
                   .Append(" | ").Append(Md(a.Deadline)).Append(" |\n");
             sb.Append('\n');
         }
-        sb.Append("## Transcript\n\n");
+        sb.Append("## ").Append(s10n.Transcript).Append("\n\n");
         // 13/16/71% column widths are carried by the separator-row dash counts (how pandoc/MultiMarkdown
         // size columns); GFM/kramdown ignore the extra dashes, so no stray attribute line is needed.
-        sb.Append("| Time | Speaker | Text |\n")
+        sb.Append("| ").Append(s10n.Time).Append(" | ").Append(s10n.Speaker).Append(" | ").Append(s10n.Text).Append(" |\n")
           .Append("| ").Append(new string('-', 13)).Append(" | ").Append(new string('-', 16))
           .Append(" | ").Append(new string('-', 71)).Append(" |\n");
         foreach (var s in segments)
@@ -68,28 +72,31 @@ public static class TranscriptFormatter
     /// <summary>Rich Text Format: bold headings, the summary, an actions table (if any), then a table of
     /// time, speaker, and text.</summary>
     public static string ToRtf(string name, string? summary, IReadOnlyList<SegmentDto> segments,
-        IReadOnlyList<RecordingActionDto>? actions = null)
+        IReadOnlyList<RecordingActionDto>? actions = null, ExportStrings? strings = null)
     {
+        var s10n = strings ?? ExportStrings.English;
+        string Bold(string label) => @"{\b " + Rtf(label) + "}"; // bold, RTF-escaped (labels may have accents)
+
         // Column boundaries (twips, of a ~9600-twip table): transcript 13/16/71%, actions 60/18/22%.
         const string transcriptCols = @"\cellx1248\cellx2784\cellx9600";
         const string actionCols = @"\cellx5760\cellx7488\cellx9600";
 
         var sb = new StringBuilder();
         sb.Append(@"{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0 Arial;}}\f0\fs22").Append('\n');
-        sb.Append(@"{\b Transcript Name}\line ").Append(Rtf(name)).Append(@"\par").Append('\n');
+        sb.Append(Bold(s10n.TranscriptName)).Append(@"\line ").Append(Rtf(name)).Append(@"\par").Append('\n');
         // Extra paragraph mark after the summary for breathing room before the table.
-        sb.Append(@"{\b Summary}\line ")
+        sb.Append(Bold(s10n.Summary)).Append(@"\line ")
           .Append(string.IsNullOrWhiteSpace(summary) ? Rtf(EmDash) : Rtf(summary!.Trim())).Append(@"\par\par").Append('\n');
         if (actions is { Count: > 0 })
         {
-            sb.Append(@"{\b Actions}\par").Append('\n');
-            sb.Append(Row(true, actionCols, @"{\b Action}", @"{\b Actor}", @"{\b Deadline}"));
+            sb.Append(Bold(s10n.Actions)).Append(@"\par").Append('\n');
+            sb.Append(Row(true, actionCols, Bold(s10n.Action), Bold(s10n.Actor), Bold(s10n.Deadline)));
             foreach (var a in actions)
                 sb.Append(Row(false, actionCols, Rtf(a.Text), Rtf(a.Actor), Rtf(a.Deadline)));
             sb.Append(@"\par").Append('\n');
         }
-        sb.Append(@"{\b Transcript}\par").Append('\n');
-        sb.Append(Row(true, transcriptCols, @"{\b Time}", @"{\b Speaker}", @"{\b Text}"));
+        sb.Append(Bold(s10n.Transcript)).Append(@"\par").Append('\n');
+        sb.Append(Row(true, transcriptCols, Bold(s10n.Time), Bold(s10n.Speaker), Bold(s10n.Text)));
         foreach (var s in segments)
             sb.Append(Row(false, transcriptCols, Clock(s.StartMs), Rtf(s.SpeakerDisplay), Rtf(s.Text)));
         sb.Append('}');

@@ -104,7 +104,9 @@ base; **Spanish, French, and German** ship today). Users pick their interface la
 **Preferences**, and `?lang=es` forces it. Catalogs are auto-discovered, so **adding or improving a
 language is a data-only PR** — no code changes. See
 [`apps/web/src/locales/README.md`](apps/web/src/locales/README.md) for the contributor guide (CI checks
-that every catalog mirrors English and limits a translation PR to one language).
+that every catalog mirrors English and limits a translation PR to one language). The headings in
+**downloaded and emailed transcripts** are localized too, from server-side catalogs under
+[`src/Diariz.Api/locales/`](src/Diariz.Api/locales/).
 
 ## Roadmap
 
