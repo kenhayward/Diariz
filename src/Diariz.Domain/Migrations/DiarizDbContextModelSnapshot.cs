@@ -206,6 +206,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<DateTimeOffset?>("ActionsExtractedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTimeOffset?>("AudioDeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("BlobKey")
                         .IsRequired()
                         .HasColumnType("text");

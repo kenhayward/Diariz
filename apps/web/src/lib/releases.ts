@@ -56,6 +56,27 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.29.0",
+    date: "2026-06-29",
+    pr: 71,
+    headline: "Delete a recording's audio while keeping its transcript",
+    summary:
+      "You can now **delete the audio** of a recording (from its kebab menu, or in bulk via the " +
+      "recordings-list toolbar in Select mode) while keeping the transcript and everything derived from it. " +
+      "Deleting the audio **frees that recording's storage** against your quota. The recordings list shows a " +
+      "**microphone icon** at the start of each row — green when the audio is available, grey once it's been " +
+      "deleted — and a **Refresh** button picks up changes made on another machine or browser. Audio-only " +
+      "actions (play, download audio, re-transcribe, re-identify) hide once the audio is gone.",
+    added: [
+      "Delete audio (single, via the kebab) and bulk Delete audio (Select mode) — keeps the transcript, frees the quota.",
+      "A green/grey microphone indicator showing audio presence on each recordings-list row.",
+      "A Refresh button on the recordings-list toolbar.",
+    ],
+    changed: [
+      "Playback, audio download, re-transcribe and re-identify are hidden for recordings whose audio has been deleted.",
+    ],
+  },
+  {
     version: "0.28.1",
     date: "2026-06-29",
     pr: 70,

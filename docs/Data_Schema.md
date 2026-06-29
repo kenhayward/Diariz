@@ -42,6 +42,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddRecordingActions` | `RecordingActions`, `Recording.ActionsExtractedAt` |
 | `AddSegmentOriginalRevised` | renames `Segment.Text` → `Original`, adds `Segment.Revised` (nullable) |
 | `AddUserLanguagePreferences` | `UserSettings.NativeLanguage`, `UserSettings.UiLanguage` (both nullable) |
+| `AddRecordingAudioDeleted` | `Recording.AudioDeletedAt` (nullable) — audio deleted while keeping the transcript |
 
 ### Entity-relationship overview
 
@@ -85,7 +86,8 @@ The owned audio recording.
 | `Source` | int | `RecordingSource`: 0 Microphone, 1 System, 2 Upload |
 | `BlobKey` | text | MinIO object key (see §2) |
 | `ContentType` | text | MIME of the stored audio (e.g. `audio/webm`) |
-| `SizeBytes` | bigint | blob size; counts toward the owner's quota |
+| `SizeBytes` | bigint | blob size; counts toward the owner's quota (reset to 0 when the audio is deleted) |
+| `AudioDeletedAt` | timestamptz null | non-null once the audio blob was deleted to reclaim storage (transcript kept); audio endpoints 404 |
 | `DurationMs` | bigint | measured by the worker for uploads (no client duration) |
 | `Status` | int | `RecordingStatus`: 0 Uploaded, 1 Queued, 2 Transcribing, 3 Transcribed, 4 Summarized, 5 Failed, 6 Summarizing |
 | `Error` | text null | last failure message |

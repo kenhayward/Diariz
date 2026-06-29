@@ -12,6 +12,7 @@ export default function DetailToolbar({
   onEmailTranscript,
   onDownloadTranscript,
   hasTranscript,
+  hasAudio,
 }: {
   onRename: () => void;
   onRetranscribe: () => void;
@@ -20,12 +21,14 @@ export default function DetailToolbar({
   onEmailTranscript: () => void;
   onDownloadTranscript: () => void;
   hasTranscript: boolean;
+  /// Re-transcribe needs the audio, so its button is hidden once the audio has been deleted.
+  hasAudio: boolean;
 }) {
   const { t } = useTranslation("recordings");
   return (
     <div className="flex items-center gap-0.5">
       <ToolbarButton label={t("rename")} onClick={onRename} icon={<EditIcon />} />
-      <ToolbarButton label={t("retranscribe")} onClick={onRetranscribe} icon={<RefreshIcon />} />
+      {hasAudio && <ToolbarButton label={t("retranscribe")} onClick={onRetranscribe} icon={<RefreshIcon />} />}
       <ToolbarButton label={t("moveToSectionShort")} onClick={onMove} icon={<FolderIcon />} />
       <ToolbarButton
         label={t("extractActions")}

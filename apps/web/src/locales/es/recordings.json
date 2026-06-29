@@ -11,6 +11,7 @@
   "downloadTranscript": "Descargar transcripción",
   "emailTranscript": "Enviarme la transcripción por correo",
   "downloadAudio": "Descargar audio",
+  "deleteAudio": "Eliminar audio",
   "delete": "Eliminar",
   "edit": "Editar"
 }

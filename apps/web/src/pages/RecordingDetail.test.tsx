@@ -60,6 +60,7 @@ const base: RecordingDetailType = {
   summary: null,
   actions: [],
   actionsExtracted: false,
+  hasAudio: true,
 };
 
 function renderPage(rec: RecordingDetailType) {

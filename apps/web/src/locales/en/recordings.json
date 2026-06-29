@@ -11,6 +11,7 @@
   "downloadTranscript": "Download transcript",
   "emailTranscript": "Email me the transcript",
   "downloadAudio": "Download audio",
+  "deleteAudio": "Delete audio",
   "delete": "Delete",
   "edit": "Edit"
 }

@@ -9,8 +9,8 @@ function build(overrides: Partial<Parameters<typeof recordingMenu>[0]> = {}) {
   const noop = vi.fn();
   return recordingMenu({
     onRename: noop, onRetranscribe: noop, onSummarise: noop, onMove: noop, onPlay: noop,
-    onDownloadTranscript: noop, onDownloadAudio: noop, onDelete: noop,
-    hasTranscript: true,
+    onDownloadTranscript: noop, onDownloadAudio: noop, onDeleteAudio: noop, onDelete: noop,
+    hasTranscript: true, hasAudio: true,
     ...overrides,
   }, t);
 }
@@ -26,10 +26,25 @@ describe("recordingMenu", () => {
       "Play",
       "Download transcript",
       "Download audio",
+      "Delete audio",
       "Delete",
     ]);
     expect(labels).not.toContain("Download both");
     expect(labels).not.toContain("Download transcript (.srt)");
+  });
+
+  it("hides audio-dependent actions once the audio is deleted", () => {
+    const labels = build({ hasAudio: false, onReidentify: () => {} }).map((a) => a.label);
+    // Re-transcribe / Play / Download audio / Delete audio / Re-identify all need the audio.
+    expect(labels).not.toContain("Re-transcribe");
+    expect(labels).not.toContain("Play");
+    expect(labels).not.toContain("Download audio");
+    expect(labels).not.toContain("Delete audio");
+    expect(labels).not.toContain("Re-identify speakers");
+    // Transcript-only actions remain.
+    expect(labels).toContain("Rename");
+    expect(labels).toContain("Download transcript");
+    expect(labels).toContain("Delete");
   });
 
   it("omits Play when no onPlay handler is provided (the list menu)", () => {

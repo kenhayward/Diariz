@@ -19,11 +19,16 @@ export interface RecordingMenuHandlers {
   /// Opens the "Download as…" format chooser (Plain Text / Markdown / RTF).
   onDownloadTranscript: () => void;
   onDownloadAudio: () => void;
+  /// Delete just the audio (keeps the transcript). Shown only while the recording still has audio.
+  onDeleteAudio: () => void;
   /// Optional (detail page only): email the transcript to the signed-in user.
   onEmailTranscript?: () => void;
   onDelete: () => void;
   /// Transcript-dependent actions are disabled until a transcript exists.
   hasTranscript: boolean;
+  /// Whether the audio is still present. Audio-dependent actions (re-transcribe, re-identify, play,
+  /// download/delete audio) are hidden once the audio has been deleted.
+  hasAudio: boolean;
   isSummarizing?: boolean;
 }
 
@@ -33,24 +38,26 @@ export interface RecordingMenuHandlers {
 export function recordingMenu(h: RecordingMenuHandlers, t: TFunction): KebabAction[] {
   return [
     { label: t("recordings:rename"), onClick: h.onRename },
-    { label: t("recordings:retranscribe"), onClick: h.onRetranscribe },
+    // Re-transcribe needs the audio, so it's hidden once the audio is deleted.
+    ...(h.hasAudio ? [{ label: t("recordings:retranscribe"), onClick: h.onRetranscribe }] : []),
     { label: t("recordings:summarise"), onClick: h.onSummarise, disabled: !h.hasTranscript || h.isSummarizing },
     ...(h.onExtractActions
       ? [{ label: t("recordings:extractActions"), onClick: h.onExtractActions, disabled: !h.hasTranscript }]
       : []),
-    ...(h.onReidentify
+    ...(h.onReidentify && h.hasAudio
       ? [{ label: t("recordings:reidentifySpeakers"), onClick: h.onReidentify, disabled: !h.hasTranscript }]
       : []),
     ...(h.onTranslate && h.translateLabel
       ? [{ label: t("recordings:translateTo", { language: h.translateLabel }), onClick: h.onTranslate, disabled: !h.hasTranscript }]
       : []),
     { label: t("recordings:moveToSection"), onClick: h.onMove },
-    ...(h.onPlay ? [{ label: t("recordings:play"), onClick: h.onPlay }] : []),
+    ...(h.onPlay && h.hasAudio ? [{ label: t("recordings:play"), onClick: h.onPlay }] : []),
     { label: t("recordings:downloadTranscript"), onClick: h.onDownloadTranscript, disabled: !h.hasTranscript },
     ...(h.onEmailTranscript
       ? [{ label: t("recordings:emailTranscript"), onClick: h.onEmailTranscript, disabled: !h.hasTranscript }]
       : []),
-    { label: t("recordings:downloadAudio"), onClick: h.onDownloadAudio },
+    ...(h.hasAudio ? [{ label: t("recordings:downloadAudio"), onClick: h.onDownloadAudio }] : []),
+    ...(h.hasAudio ? [{ label: t("recordings:deleteAudio"), danger: true, onClick: h.onDeleteAudio }] : []),
     { label: t("recordings:delete"), danger: true, onClick: h.onDelete },
   ];
 }

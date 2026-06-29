@@ -65,7 +65,7 @@ public class RecordingsController : ControllerBase
             .OrderBy(r => r.Position)
             .ThenByDescending(r => r.CreatedAt)
             .Select(r => new RecordingSummaryDto(r.Id, r.Title, r.Name, r.Source, r.DurationMs, r.Status, r.CreatedAt,
-                r.SectionId, r.Section != null ? r.Section.Name : null, r.Actions.Any()))
+                r.SectionId, r.Section != null ? r.Section.Name : null, r.Actions.Any(), r.AudioDeletedAt == null))
             .ToListAsync();
 
     /// <summary>Drag-and-drop: set the section and 0-based position of each listed recording in one
@@ -132,7 +132,7 @@ public class RecordingsController : ControllerBase
 
         return new RecordingDetailDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.SizeBytes,
             rec.Status, rec.Error, rec.CreatedAt, rec.MinSpeakers, rec.MaxSpeakers, names, speakers, tDto, sDto,
-            actions, rec.ActionsExtractedAt != null);
+            actions, rec.ActionsExtractedAt != null, rec.HasAudio);
     }
 
     /// <summary>Upload an audio file and kick off transcription.</summary>
@@ -188,7 +188,7 @@ public class RecordingsController : ControllerBase
 
         return CreatedAtAction(nameof(Get), new { id = rec.Id },
             new RecordingSummaryDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.Status, rec.CreatedAt,
-                rec.SectionId, null, false));
+                rec.SectionId, null, false, rec.HasAudio));
     }
 
     [HttpPost("{id:guid}/retranscribe")]
@@ -498,6 +498,46 @@ public class RecordingsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Delete just the audio blob, keeping the transcript and metadata. Frees the recording's
+    /// bytes against the owner's quota (SizeBytes -> 0) and flags <see cref="Recording.AudioDeletedAt"/>.
+    /// Idempotent: deleting already-deleted audio is a no-op success.</summary>
+    [HttpDelete("{id:guid}/audio")]
+    public async Task<IActionResult> DeleteAudio(Guid id)
+    {
+        var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+
+        if (rec.HasAudio)
+        {
+            await _storage.DeleteAsync(rec.BlobKey);
+            rec.AudioDeletedAt = DateTimeOffset.UtcNow;
+            rec.SizeBytes = 0; // stop counting toward the quota (UsedBytes = SUM(SizeBytes))
+            await _db.SaveChangesAsync();
+        }
+        return NoContent();
+    }
+
+    /// <summary>Bulk variant of <see cref="DeleteAudio"/> for the recordings-list "Delete audio" action.
+    /// Skips ids that aren't the caller's or already have no audio.</summary>
+    [HttpPost("audio/delete")]
+    public async Task<IActionResult> DeleteAudioBulk(DeleteAudioRequest req)
+    {
+        var ids = (req.Ids ?? []).ToList();
+        if (ids.Count == 0) return NoContent();
+
+        var recs = await _db.Recordings
+            .Where(r => ids.Contains(r.Id) && r.UserId == UserId && r.AudioDeletedAt == null)
+            .ToListAsync();
+        foreach (var rec in recs)
+        {
+            await _storage.DeleteAsync(rec.BlobKey);
+            rec.AudioDeletedAt = DateTimeOffset.UtcNow;
+            rec.SizeBytes = 0;
+        }
+        if (recs.Count > 0) await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     /// <summary>Returns a same-origin URL the browser can stream/download the audio from. The audio is
     /// served by the API itself (see <see cref="GetAudio"/>), so MinIO never has to be reachable from the
     /// client. The &lt;audio&gt; element / download link can't send an Authorization header, so the caller's
@@ -505,7 +545,7 @@ public class RecordingsController : ControllerBase
     [HttpGet("{id:guid}/audio-url")]
     public async Task<ActionResult<object>> AudioUrl(Guid id, [FromQuery] bool download = false)
     {
-        var owned = await _db.Recordings.AnyAsync(r => r.Id == id && r.UserId == UserId);
+        var owned = await _db.Recordings.AnyAsync(r => r.Id == id && r.UserId == UserId && r.AudioDeletedAt == null);
         if (!owned) return NotFound();
 
         var bearer = Request.Headers.Authorization.ToString();
@@ -521,7 +561,7 @@ public class RecordingsController : ControllerBase
     public async Task<IActionResult> GetAudio(Guid id, [FromQuery] bool download = false, CancellationToken ct = default)
     {
         var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId, ct);
-        if (rec is null) return NotFound();
+        if (rec is null || !rec.HasAudio) return NotFound();
 
         var total = rec.SizeBytes > 0 ? rec.SizeBytes : (await _storage.GetSizeAsync(rec.BlobKey, ct) ?? 0);
         Response.Headers.AcceptRanges = "bytes";

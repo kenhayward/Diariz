@@ -24,8 +24,17 @@ public class Recording
     /// <summary>MIME / container of the stored audio, e.g. audio/webm, audio/wav.</summary>
     public string ContentType { get; set; } = "audio/webm";
 
-    /// <summary>Size in bytes of the stored audio blob (counts toward the owner's storage quota).</summary>
+    /// <summary>Size in bytes of the stored audio blob (counts toward the owner's storage quota).
+    /// Reset to 0 when the audio is deleted (see <see cref="AudioDeletedAt"/>) so it stops counting.</summary>
     public long SizeBytes { get; set; }
+
+    /// <summary>When the user deleted this recording's audio blob to reclaim storage (null = audio
+    /// still present). The transcript and metadata are kept; <see cref="HasAudio"/> reflects this.</summary>
+    public DateTimeOffset? AudioDeletedAt { get; set; }
+
+    /// <summary>True when the original audio is still available (not deleted). Audio-dependent actions
+    /// (playback, download, re-transcribe, re-identify) are only valid when this holds.</summary>
+    public bool HasAudio => AudioDeletedAt is null;
 
     public long DurationMs { get; set; }
     public RecordingStatus Status { get; set; } = RecordingStatus.Uploaded;

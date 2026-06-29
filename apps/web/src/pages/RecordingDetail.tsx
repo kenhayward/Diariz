@@ -298,12 +298,19 @@ export default function RecordingDetail() {
     onDownloadTranscript: () => setDownloading(true),
     onEmailTranscript: emailTranscript,
     onDownloadAudio: () => void api.downloadAudio(id),
+    onDeleteAudio: async () => {
+      if (!window.confirm(t("workspace:confirmDeleteAudio", { name: rec.name ?? rec.title }))) return;
+      await api.deleteAudio(id);
+      qc.invalidateQueries({ queryKey: ["recording", id] });
+      qc.invalidateQueries({ queryKey: ["recordings"] });
+    },
     onDelete: async () => {
       if (!window.confirm(t("workspace:confirmDelete", { name: rec.name ?? rec.title }))) return;
       await api.deleteRecording(id);
       navigate("/");
     },
     hasTranscript,
+    hasAudio: rec.hasAudio,
     isSummarizing,
   }, t);
 
@@ -342,6 +349,7 @@ export default function RecordingDetail() {
             onEmailTranscript={emailTranscript}
             onDownloadTranscript={() => setDownloading(true)}
             hasTranscript={hasTranscript}
+            hasAudio={rec.hasAudio}
           />
           <KebabMenu actions={menuActions} />
         </div>
@@ -433,7 +441,9 @@ export default function RecordingDetail() {
                 {toggleLabel(showOriginal)}
               </button>
             )}
-            <audio ref={audioRef} controls onTimeUpdate={onTimeUpdate} className="h-8 min-w-48 flex-1" />
+            {rec.hasAudio && (
+              <audio ref={audioRef} controls onTimeUpdate={onTimeUpdate} className="h-8 min-w-48 flex-1" />
+            )}
           </div>
           <ul className="space-y-2">
             {rec.current.segments.map((s, i) => (
@@ -444,7 +454,7 @@ export default function RecordingDetail() {
                 showOriginal={showOriginal}
                 editLabel={t("recordings:edit")}
                 translateLabel={nativeLang ? t("recordings:translateTo", { language: nativeLang.englishName }) : undefined}
-                onPlay={() => playFrom(s.startMs)}
+                onPlay={rec.hasAudio ? () => playFrom(s.startMs) : undefined}
                 onEdit={() => setEditingSeg(s)}
                 onTranslate={nativeLang ? () => translateSegment(s.id) : undefined}
               />
@@ -794,7 +804,8 @@ function SegmentRow({
   showOriginal: boolean;
   editLabel: string;
   translateLabel?: string;
-  onPlay: () => void;
+  /// Seek+play from this segment. Omitted when the recording has no audio (row isn't clickable then).
+  onPlay?: () => void;
   onEdit: () => void;
   onTranslate?: () => void;
 }) {
@@ -807,7 +818,9 @@ function SegmentRow({
   return (
     <li
       onClick={onPlay}
-      className={`flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-2 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800 ${
+      className={`flex items-start gap-3 rounded-lg border px-4 py-2 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800 ${
+        onPlay ? "cursor-pointer" : ""
+      } ${
         active
           ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/30"
           : "bg-white dark:bg-gray-900"
