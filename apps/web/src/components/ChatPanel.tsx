@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import { renderMarkdown } from "../lib/markdown";
@@ -12,6 +13,7 @@ type ContextMode = "current" | "selected" | "none";
 /// Right-panel chat: ask questions over one or more transcripts, attach a PDF/text file as extra
 /// context, watch the reply stream in, and save / reload / delete conversations.
 export default function ChatPanel() {
+  const { t } = useTranslation("chat");
   const activeId = useActiveRecordingId();
   const selection = useSelection();
   // The model's context-window size for the dial (per-user override, else server default).
@@ -136,7 +138,7 @@ export default function ChatPanel() {
       })
       .catch((e: unknown) => {
         if (controller.signal.aborted) return;
-        setLastAssistant(`[${apiErrorMessage(e, "Chat failed.")}]`);
+        setLastAssistant(`[${apiErrorMessage(e, t("chatFailed"))}]`);
       })
       .finally(() => {
         if (abortRef.current === controller) abortRef.current = null;
@@ -167,7 +169,7 @@ export default function ChatPanel() {
     api
       .uploadChatAttachment(file)
       .then((r) => setAttachment({ name: r.name, text: r.text, chars: r.chars }))
-      .catch((err: unknown) => setError(apiErrorMessage(err, "Could not read the file.")))
+      .catch((err: unknown) => setError(apiErrorMessage(err, t("couldNotReadFile"))))
       .finally(() => setUploading(false));
   }
 
@@ -228,7 +230,7 @@ export default function ChatPanel() {
         ? await api.updateChatConversation(openedId, body)
         : await api.createChatConversation(body);
       setOpenedId(res.id);
-      setSaveStatus("Saved");
+      setSaveStatus(t("saved"));
       // Keep the saved-conversations dropdown current (it may be open, and isn't otherwise refreshed).
       await refreshSavedList();
     } catch (e) {
@@ -251,17 +253,17 @@ export default function ChatPanel() {
 
   const contextLabel =
     contextMode === "current"
-      ? "Current transcript"
+      ? t("ctxCurrent")
       : contextMode === "selected"
-        ? `Selected (${selection.selectedIds.length})`
-        : "None";
+        ? t("ctxSelected", { n: selection.selectedIds.length })
+        : t("ctxNone");
 
   return (
     <div className="flex h-full flex-col">
       {/* Toolbar */}
       <div className="flex h-9 shrink-0 items-center gap-1 border-b px-2 dark:border-gray-700">
         <div ref={savedRef} className="relative flex items-center">
-          <IconButton label="Saved conversations" onClick={toggleSavedList} aria-expanded={listOpen}>
+          <IconButton label={t("savedConversations")} onClick={toggleSavedList} aria-expanded={listOpen}>
             <BookmarkIcon />
           </IconButton>
           {listOpen && (
@@ -270,7 +272,7 @@ export default function ChatPanel() {
               className="absolute left-0 top-full z-30 mt-1 max-h-64 w-56 overflow-y-auto rounded-md border bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800"
             >
               {savedList.length === 0 ? (
-                <div className="px-3 py-2 text-xs text-gray-400">No saved conversations</div>
+                <div className="px-3 py-2 text-xs text-gray-400">{t("noSavedConversations")}</div>
               ) : (
                 savedList.map((c) => (
                   <button
@@ -287,13 +289,13 @@ export default function ChatPanel() {
             </div>
           )}
         </div>
-        <IconButton label="Clear conversation" onClick={clearThread} disabled={!started}>
+        <IconButton label={t("clearConversation")} onClick={clearThread} disabled={!started}>
           <EraserIcon />
         </IconButton>
-        <IconButton label="Save conversation" onClick={saveConversation} disabled={!started || streaming || saving}>
+        <IconButton label={t("saveConversation")} onClick={saveConversation} disabled={!started || streaming || saving}>
           <SaveIcon />
         </IconButton>
-        <IconButton label="Delete conversation" onClick={deleteConversation} disabled={!openedId}>
+        <IconButton label={t("deleteConversation")} onClick={deleteConversation} disabled={!openedId}>
           <TrashIcon />
         </IconButton>
         {saveStatus && <span className="ml-1 text-xs text-green-600 dark:text-green-400">{saveStatus}</span>}
@@ -306,9 +308,7 @@ export default function ChatPanel() {
       {/* Thread */}
       <div ref={threadRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
         {messages.length === 0 ? (
-          <p className="px-1 text-xs text-gray-400 dark:text-gray-500">
-            Ask a question about your recordings. Pick which transcripts the assistant can see below.
-          </p>
+          <p className="px-1 text-xs text-gray-400 dark:text-gray-500">{t("intro")}</p>
         ) : (
           messages.map((m, i) => {
             const thinking = m.role === "assistant" && m.content === "" && streaming && i === messages.length - 1;
@@ -323,7 +323,7 @@ export default function ChatPanel() {
                 >
                   {m.role === "assistant" ? (
                     thinking ? (
-                      <span className="text-gray-400">Thinking…</span>
+                      <span className="text-gray-400">{t("thinking")}</span>
                     ) : (
                       // Assistant markdown is sanitized in renderMarkdown (DOMPurify) before injection.
                       <div
@@ -354,7 +354,7 @@ export default function ChatPanel() {
               className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
             >
               <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-              Context: {contextLabel}
+              {t("contextPrefix")} {contextLabel}
               <span className="text-gray-400">{pickerOpen ? "▲" : "▼"}</span>
             </button>
             {pickerOpen && (
@@ -364,9 +364,9 @@ export default function ChatPanel() {
               >
                 {(
                   [
-                    { mode: "current", label: "Current transcript", hint: "The recording open in the middle panel" },
-                    { mode: "selected", label: `Selected transcript${selection.selectedIds.length === 1 ? "" : "s"}`, hint: `Ticked via the list's Select button (${selection.selectedIds.length})` },
-                    { mode: "none", label: "None", hint: "No transcript context" },
+                    { mode: "current", label: t("ctxCurrent"), hint: t("pickCurrentHint") },
+                    { mode: "selected", label: t("pickSelected", { count: selection.selectedIds.length }), hint: t("pickSelectedHint", { n: selection.selectedIds.length }) },
+                    { mode: "none", label: t("ctxNone"), hint: t("pickNoneHint") },
                   ] as { mode: ContextMode; label: string; hint: string }[]
                 ).map((o) => (
                   <button
@@ -402,7 +402,7 @@ export default function ChatPanel() {
           {attachment ? (
             <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs dark:border-gray-700 dark:text-gray-300">
               📎 <span className="max-w-[120px] truncate">{attachment.name}</span>
-              <button type="button" aria-label="Remove attachment" onClick={() => setAttachment(null)} className="text-gray-400 hover:text-red-500">
+              <button type="button" aria-label={t("removeAttachment")} onClick={() => setAttachment(null)} className="text-gray-400 hover:text-red-500">
                 ✕
               </button>
             </span>
@@ -413,7 +413,7 @@ export default function ChatPanel() {
               disabled={uploading}
               className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
             >
-              {uploading ? "Reading…" : "+ Attach file"}
+              {uploading ? t("reading") : t("attachFile")}
             </button>
           )}
         </div>
@@ -430,8 +430,8 @@ export default function ChatPanel() {
               }
             }}
             rows={2}
-            placeholder="Ask about your transcripts…"
-            aria-label="Chat message"
+            placeholder={t("askPlaceholder")}
+            aria-label={t("messageAria")}
             className="min-h-0 flex-1 resize-none rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           />
           {streaming ? (
@@ -440,7 +440,7 @@ export default function ChatPanel() {
               onClick={stop}
               className="rounded bg-gray-200 px-3 py-1.5 text-sm dark:bg-gray-700 dark:text-gray-100"
             >
-              Stop
+              {t("stop")}
             </button>
           ) : (
             <button
@@ -449,7 +449,7 @@ export default function ChatPanel() {
               disabled={!input.trim()}
               className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white disabled:opacity-50"
             >
-              Send
+              {t("send")}
             </button>
           )}
         </div>

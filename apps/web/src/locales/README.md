@@ -14,6 +14,11 @@ locales/
     auth.json
     account.json
     recordings.json
+    workspace.json
+    chat.json
+    admin.json
+    people.json
+    tour.json
   es/  fr/  de/  …         # one folder per translated language, same files & keys as en/
 ```
 
@@ -45,4 +50,5 @@ folder here (intersected with `languages.json`).
 
 When you add UI text, add the key to the relevant **`en/`** namespace (and ideally the flagship locales).
 Use `useTranslation("<namespace>")` and `t("key")`, or the fully-qualified `t("namespace:key")`. The
-namespaces today are `common`, `auth`, `account`, `recordings`, and `workspace`.
+namespaces today are `common`, `auth`, `account`, `recordings`, `workspace`, `chat`, `admin`, `people`,
+and `tour`.

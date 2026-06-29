@@ -1,0 +1,27 @@
+{
+  "stepOf": "Step {{index}} of {{total}}",
+  "skip": "Skip & turn off",
+  "back": "Back",
+  "next": "Next",
+  "done": "Done",
+  "capture": {
+    "title": "Capture or upload audio",
+    "body": "Record from your microphone (or Windows system audio in the desktop app), or upload existing audio files. Everything is transcribed and diarized automatically."
+  },
+  "recordings": {
+    "title": "Your recordings",
+    "body": "Recordings appear here as they finish. Organise them into sections, drag to reorder, and drop audio files anywhere on this panel to upload."
+  },
+  "detail": {
+    "title": "Transcript & speakers",
+    "body": "Open a recording to read its speaker-labelled, timestamped transcript. Rename speakers, identify known people, edit, summarise, and play back."
+  },
+  "chat": {
+    "title": "Chat across transcripts",
+    "body": "Ask questions across one or more transcripts with an AI assistant. Open this panel from its rail on the right."
+  },
+  "account": {
+    "title": "Settings & more",
+    "body": "Configure your AI endpoint, manage enrolled speakers (People), check your storage, and replay this tour any time from here."
+  }
+}

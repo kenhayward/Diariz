@@ -37,5 +37,14 @@
   "quotasIntro": "New users start with the starter quota; administrators can raise a user up to the maximum.",
   "starterQuota": "Starter quota (GB)",
   "maxQuota": "Maximum quota (GB)",
-  "defaultValue": "Default: {{value}}"
+  "defaultValue": "Default: {{value}}",
+  "releaseNotes": "Release Notes",
+  "resizeReleaseList": "Resize release list",
+  "changeAdded": "Added",
+  "changeChanged": "Changed",
+  "changeFixed": "Fixed",
+  "aboutAria": "About Diariz",
+  "aboutVersion": "Version {{version}}",
+  "releaseNotesLink": "Release notes →",
+  "githubLink": "GitHub →"
 }

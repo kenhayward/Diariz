@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import type { SpeakerProfile } from "../lib/types";
@@ -6,6 +7,7 @@ import type { SpeakerProfile } from "../lib/types";
 /// Manage enrolled people / voiceprints: rename, view & prune training contributions, merge two people,
 /// and erase one or all (GDPR). Voiceprints are biometric data — erasure reverts auto-applied labels.
 export default function PeopleModal({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation("people");
   const qc = useQueryClient();
   const { data: people = [], isLoading } = useQuery({
     queryKey: ["speaker-profiles"],
@@ -33,7 +35,7 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
   }
 
   async function eraseAll() {
-    if (!window.confirm("Erase ALL your voiceprints? Auto-identified labels revert to anonymous; names you typed are kept.")) return;
+    if (!window.confirm(t("confirmEraseAll"))) return;
     await act(() => api.deleteAllSpeakerProfiles());
   }
 
@@ -52,7 +54,7 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
       el.currentTime = startMs / 1000;
       await el.play();
     } catch (e) {
-      setError(apiErrorMessage(e, "Could not play the sample."));
+      setError(apiErrorMessage(e, t("errPlaySample")));
     }
   }
 
@@ -60,22 +62,17 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         role="dialog"
-        aria-label="People"
+        aria-label={t("title")}
         className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-lg border bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-1 text-base font-semibold dark:text-gray-100">People</h2>
-        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
-          Enrolled voiceprints used to identify speakers across recordings. Voiceprints are biometric data —
-          only enrol people with their consent, and erase them when required.
-        </p>
+        <h2 className="mb-1 text-base font-semibold dark:text-gray-100">{t("title")}</h2>
+        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">{t("description")}</p>
 
         {error && <p className="mb-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
-        {isLoading && <p className="text-sm text-gray-500 dark:text-gray-400">Loading…</p>}
+        {isLoading && <p className="text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>}
         {!isLoading && people.length === 0 && (
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            No people yet. Enrol someone from a recording's speaker (“+ New person…”).
-          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t("empty")}</p>
         )}
 
         <ul className="divide-y dark:divide-gray-800">
@@ -101,7 +98,7 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
               onClick={eraseAll}
               className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-600 dark:border-red-800 dark:text-red-400"
             >
-              Erase all voiceprints
+              {t("eraseAll")}
             </button>
           ) : (
             <span />
@@ -110,7 +107,7 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
             onClick={onClose}
             className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
           >
-            Close
+            {t("common:close")}
           </button>
         </div>
       </div>
@@ -133,6 +130,7 @@ function PersonRow({
   act: (fn: () => Promise<unknown>, detailId?: string) => Promise<void>;
   onPlay: (recordingId: string, startMs: number) => void;
 }) {
+  const { t } = useTranslation("people");
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(person.name);
   const { data: detail } = useQuery({
@@ -152,7 +150,7 @@ function PersonRow({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="flex min-w-0 items-center gap-2">
           <button
-            aria-label={expanded ? `Collapse ${person.name}` : `Expand ${person.name}`}
+            aria-label={expanded ? t("collapse", { name: person.name }) : t("expand", { name: person.name })}
             onClick={onToggle}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
           >
@@ -162,7 +160,7 @@ function PersonRow({
             <input
               autoFocus
               value={name}
-              aria-label={`Rename ${person.name}`}
+              aria-label={t("rename", { name: person.name })}
               onChange={(e) => setName(e.target.value)}
               onBlur={saveName}
               onKeyDown={(e) => {
@@ -180,25 +178,25 @@ function PersonRow({
             </button>
           )}
           <span className="shrink-0 text-xs text-gray-500 dark:text-gray-400">
-            {person.sampleCount} sample{person.sampleCount === 1 ? "" : "s"}
+            {t("sampleCount", { count: person.sampleCount })}
           </span>
         </span>
 
         <span className="flex shrink-0 items-center gap-1.5">
           {others.length > 0 && (
             <select
-              aria-label={`Merge a person into ${person.name}`}
+              aria-label={t("mergeAria", { name: person.name })}
               value=""
               onChange={(e) => {
                 const sourceId = e.target.value;
                 if (!sourceId) return;
                 const src = others.find((o) => o.id === sourceId);
-                if (src && window.confirm(`Merge "${src.name}" into "${person.name}"? "${src.name}" is removed.`))
+                if (src && window.confirm(t("confirmMerge", { source: src.name, target: person.name })))
                   act(() => api.mergeSpeakerProfiles(person.id, sourceId), person.id);
               }}
               className="rounded border px-1 py-1 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             >
-              <option value="">Merge in…</option>
+              <option value="">{t("mergeIn")}</option>
               {others.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.name}
@@ -208,12 +206,12 @@ function PersonRow({
           )}
           <button
             onClick={() => {
-              if (window.confirm(`Delete "${person.name}"? Auto-identified labels revert; typed names are kept.`))
+              if (window.confirm(t("confirmDelete", { name: person.name })))
                 act(() => api.deleteSpeakerProfile(person.id));
             }}
             className="rounded border border-red-300 px-2 py-1 text-xs text-red-600 dark:border-red-800 dark:text-red-400"
           >
-            Delete
+            {t("delete")}
           </button>
         </span>
       </div>
@@ -222,8 +220,8 @@ function PersonRow({
         <div className="mt-2 pl-6">
           {detail && (
             <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">
-              Labels {detail.identifiedCount} speaker{detail.identifiedCount === 1 ? "" : "s"} · trained on{" "}
-              {detail.contributions.length} recording{detail.contributions.length === 1 ? "" : "s"}
+              {t("statsLabels", { count: detail.identifiedCount })} ·{" "}
+              {t("statsTrained", { count: detail.contributions.length })}
             </p>
           )}
           <ul className="space-y-1">
@@ -235,18 +233,18 @@ function PersonRow({
                 </span>
                 <span className="flex shrink-0 gap-1.5">
                   <button
-                    aria-label={`Play sample from ${c.recordingName}`}
+                    aria-label={t("playAria", { name: c.recordingName })}
                     onClick={() => onPlay(c.recordingId, c.startMs)}
                     className="rounded border px-2 py-0.5 text-[11px] dark:border-gray-700"
                   >
-                    ▶ Play
+                    {t("play")}
                   </button>
                   <button
-                    aria-label={`Remove training sample from ${c.recordingName}`}
+                    aria-label={t("removeAria", { name: c.recordingName })}
                     onClick={() => act(() => api.removeProfileContribution(person.id, c.id), person.id)}
                     className="rounded border px-2 py-0.5 text-[11px] dark:border-gray-700"
                   >
-                    Remove
+                    {t("common:remove")}
                   </button>
                 </span>
               </li>

@@ -37,5 +37,14 @@
   "quotasIntro": "Les nouveaux utilisateurs démarrent avec le quota initial ; les administrateurs peuvent l'augmenter jusqu'au maximum.",
   "starterQuota": "Quota initial (Go)",
   "maxQuota": "Quota maximum (Go)",
-  "defaultValue": "Par défaut : {{value}}"
+  "defaultValue": "Par défaut : {{value}}",
+  "releaseNotes": "Notes de version",
+  "resizeReleaseList": "Redimensionner la liste des versions",
+  "changeAdded": "Ajouté",
+  "changeChanged": "Modifié",
+  "changeFixed": "Corrigé",
+  "aboutAria": "À propos de Diariz",
+  "aboutVersion": "Version {{version}}",
+  "releaseNotesLink": "Notes de version →",
+  "githubLink": "GitHub →"
 }

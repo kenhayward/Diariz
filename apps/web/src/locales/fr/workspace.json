@@ -1,5 +1,7 @@
 {
   "namePrompt": "Nom de cette personne ?",
+  "errAssignSpeaker": "Impossible de réattribuer l'intervenant.",
+  "errCreatePerson": "Impossible de créer la personne.",
   "retranscribing": "Nouvelle transcription…",
   "errRetranscribe": "Impossible de lancer la nouvelle transcription.",
   "errSummarise": "Impossible de lancer le résumé.",
@@ -102,5 +104,20 @@
   "emptyWelcomeBody": "Appuyez sur Enregistrer ou Importer en haut pour ajouter votre premier enregistrement — il sera transcrit et apparaîtra dans la liste à gauche.",
   "emptySelectTitle": "Sélectionnez un enregistrement",
   "emptySelectBody": "Choisissez un enregistrement dans la liste, ou appuyez sur Enregistrer / Importer pour en ajouter un autre.",
-  "takeTour": "Faire la visite"
+  "takeTour": "Faire la visite",
+  "systemDesktopSuffix": " (bureau uniquement)",
+  "recStop": "Arrêter",
+  "recRecord": "Enregistrer",
+  "recUploading": "Importation…",
+  "recUpload": "Importer",
+  "recUploadTitle": "Importez des fichiers audio à transcrire (ou déposez-les sur le panneau des enregistrements)",
+  "errUpload": "Échec de l'importation.",
+  "recTitlePrefixSystem": "Système",
+  "recTitlePrefixMic": "Micro",
+  "panelRecordings": "Enregistrements",
+  "panelChat": "Chat",
+  "resizeRecordings": "Redimensionner le panneau des enregistrements",
+  "resizeChat": "Redimensionner le panneau de chat",
+  "collapsePanel": "Réduire le panneau {{title}}",
+  "expandPanel": "Développer le panneau {{label}}"
 }

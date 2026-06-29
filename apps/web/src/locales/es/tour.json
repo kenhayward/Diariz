@@ -1,0 +1,27 @@
+{
+  "stepOf": "Paso {{index}} de {{total}}",
+  "skip": "Omitir y desactivar",
+  "back": "Atrás",
+  "next": "Siguiente",
+  "done": "Listo",
+  "capture": {
+    "title": "Captura o sube audio",
+    "body": "Graba desde tu micrófono (o el audio del sistema de Windows en la app de escritorio), o sube archivos de audio existentes. Todo se transcribe y se diariza automáticamente."
+  },
+  "recordings": {
+    "title": "Tus grabaciones",
+    "body": "Las grabaciones aparecen aquí a medida que terminan. Organízalas en secciones, arrástralas para reordenarlas y suelta archivos de audio en cualquier parte de este panel para subirlos."
+  },
+  "detail": {
+    "title": "Transcripción y hablantes",
+    "body": "Abre una grabación para leer su transcripción con hablantes etiquetados y marcas de tiempo. Renombra hablantes, identifica a personas conocidas, edita, resume y reproduce."
+  },
+  "chat": {
+    "title": "Chatea entre transcripciones",
+    "body": "Haz preguntas en una o varias transcripciones con un asistente de IA. Abre este panel desde su carril a la derecha."
+  },
+  "account": {
+    "title": "Configuración y más",
+    "body": "Configura tu endpoint de IA, gestiona los hablantes registrados (Personas), revisa tu almacenamiento y repite este recorrido cuando quieras desde aquí."
+  }
+}

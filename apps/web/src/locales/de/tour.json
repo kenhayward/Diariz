@@ -1,0 +1,27 @@
+{
+  "stepOf": "Schritt {{index}} von {{total}}",
+  "skip": "Überspringen & deaktivieren",
+  "back": "Zurück",
+  "next": "Weiter",
+  "done": "Fertig",
+  "capture": {
+    "title": "Audio aufnehmen oder hochladen",
+    "body": "Nimm über dein Mikrofon auf (oder das Windows-Systemaudio in der Desktop-App) oder lade vorhandene Audiodateien hoch. Alles wird automatisch transkribiert und diarisiert."
+  },
+  "recordings": {
+    "title": "Deine Aufnahmen",
+    "body": "Aufnahmen erscheinen hier, sobald sie fertig sind. Ordne sie in Abschnitte, ziehe sie zum Umordnen und lege Audiodateien irgendwo auf diesem Panel ab, um sie hochzuladen."
+  },
+  "detail": {
+    "title": "Transkription & Sprecher",
+    "body": "Öffne eine Aufnahme, um ihre Transkription mit Sprecherbezeichnungen und Zeitstempeln zu lesen. Benenne Sprecher um, identifiziere bekannte Personen, bearbeite, fasse zusammen und spiele ab."
+  },
+  "chat": {
+    "title": "Über Transkriptionen chatten",
+    "body": "Stelle Fragen über eine oder mehrere Transkriptionen mit einem KI-Assistenten. Öffne dieses Panel über die Leiste rechts."
+  },
+  "account": {
+    "title": "Einstellungen & mehr",
+    "body": "Konfiguriere deinen KI-Endpunkt, verwalte registrierte Sprecher (Personen), prüfe deinen Speicher und wiederhole diese Tour jederzeit von hier aus."
+  }
+}

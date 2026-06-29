@@ -1,5 +1,7 @@
 {
   "namePrompt": "Name for this person?",
+  "errAssignSpeaker": "Could not reassign the speaker.",
+  "errCreatePerson": "Could not create the person.",
   "retranscribing": "Re-transcribing…",
   "errRetranscribe": "Could not start re-transcription.",
   "errSummarise": "Could not start summarisation.",
@@ -102,5 +104,20 @@
   "emptyWelcomeBody": "Press Record or Upload at the top to add your first recording — it'll be transcribed and appear in the list on the left.",
   "emptySelectTitle": "Select a recording",
   "emptySelectBody": "Choose a recording from the list, or press Record / Upload to add another.",
-  "takeTour": "Take the tour"
+  "takeTour": "Take the tour",
+  "systemDesktopSuffix": " (desktop only)",
+  "recStop": "Stop",
+  "recRecord": "Record",
+  "recUploading": "Uploading…",
+  "recUpload": "Upload",
+  "recUploadTitle": "Upload audio files to transcribe (or drag them onto the recordings panel)",
+  "errUpload": "Upload failed.",
+  "recTitlePrefixSystem": "System",
+  "recTitlePrefixMic": "Mic",
+  "panelRecordings": "Recordings",
+  "panelChat": "Chat",
+  "resizeRecordings": "Resize recordings panel",
+  "resizeChat": "Resize chat panel",
+  "collapsePanel": "Collapse {{title}} panel",
+  "expandPanel": "Expand {{label}} panel"
 }

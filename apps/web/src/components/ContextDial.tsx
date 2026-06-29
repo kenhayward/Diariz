@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+
 /// Fraction of the context window consumed (0–1), guarding against a zero/unknown total.
 export function contextFraction(used: number, total: number): number {
   if (!(total > 0)) return 0;
@@ -15,6 +17,7 @@ export default function ContextDial({
   used: number;
   total: number;
 }) {
+  const { t } = useTranslation("chat");
   const frac = contextFraction(used, total);
   const pct = Math.round(frac * 100);
   const r = 9;
@@ -24,7 +27,7 @@ export default function ContextDial({
   return (
     <div
       className="group relative inline-flex items-center gap-1.5"
-      aria-label={`Context ${pct}% used`}
+      aria-label={t("contextUsedAria", { pct })}
     >
       <svg width="22" height="22" viewBox="0 0 26 26" aria-hidden="true" className="shrink-0">
         <circle cx="13" cy="13" r={r} fill="none" strokeWidth="3.5" className="stroke-gray-200 dark:stroke-gray-700" />
@@ -48,9 +51,9 @@ export default function ContextDial({
         role="tooltip"
         className="pointer-events-none absolute bottom-full right-0 z-30 mb-2 hidden whitespace-nowrap rounded-md border bg-white px-2 py-1 text-[11px] leading-tight shadow-lg group-hover:block dark:border-gray-700 dark:bg-gray-800"
       >
-        <div className="font-medium text-gray-700 dark:text-gray-200">{model || "model"}</div>
+        <div className="font-medium text-gray-700 dark:text-gray-200">{model || t("modelFallback")}</div>
         <div className="text-gray-500 dark:text-gray-400">
-          {used.toLocaleString()} / {total.toLocaleString()} tokens ({pct}%)
+          {used.toLocaleString()} / {total.toLocaleString()} {t("tokens")} ({pct}%)
         </div>
       </div>
     </div>

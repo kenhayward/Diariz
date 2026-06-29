@@ -37,5 +37,14 @@
   "quotasIntro": "Neue Benutzer starten mit dem Startkontingent; Administratoren können es bis zum Maximum erhöhen.",
   "starterQuota": "Startkontingent (GB)",
   "maxQuota": "Maximales Kontingent (GB)",
-  "defaultValue": "Standard: {{value}}"
+  "defaultValue": "Standard: {{value}}",
+  "releaseNotes": "Versionshinweise",
+  "resizeReleaseList": "Versionsliste in der Größe ändern",
+  "changeAdded": "Hinzugefügt",
+  "changeChanged": "Geändert",
+  "changeFixed": "Behoben",
+  "aboutAria": "Über Diariz",
+  "aboutVersion": "Version {{version}}",
+  "releaseNotesLink": "Versionshinweise →",
+  "githubLink": "GitHub →"
 }

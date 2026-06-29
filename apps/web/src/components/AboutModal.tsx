@@ -1,10 +1,12 @@
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { renderMarkdown } from "../lib/markdown";
 import { APP_VERSION, BUILD_COMMIT } from "../lib/version";
 import { TAGLINE, GITHUB_URL, COPYRIGHT, LICENSE, CAPABILITIES } from "../lib/releases";
 
 /// About box: app identity, version, what it does, links, third-party disclaimers, and copyright.
 export default function AboutModal({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation("account");
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("keydown", onKey);
@@ -15,7 +17,7 @@ export default function AboutModal({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         role="dialog"
-        aria-label="About Diariz"
+        aria-label={t("aboutAria")}
         className="max-h-[85vh] w-[60vw] min-w-80 max-w-5xl overflow-y-auto rounded-lg border bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900"
         onClick={(e) => e.stopPropagation()}
       >
@@ -29,7 +31,7 @@ export default function AboutModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-          Version {APP_VERSION}
+          {t("aboutVersion", { version: APP_VERSION })}
           {BUILD_COMMIT ? ` · ${BUILD_COMMIT}` : ""}
         </p>
 
@@ -47,7 +49,7 @@ export default function AboutModal({ onClose }: { onClose: () => void }) {
             rel="noopener noreferrer"
             className="text-blue-600 hover:underline dark:text-blue-400"
           >
-            Release notes →
+            {t("releaseNotesLink")}
           </a>
           <a
             href={GITHUB_URL}
@@ -55,7 +57,7 @@ export default function AboutModal({ onClose }: { onClose: () => void }) {
             rel="noopener noreferrer"
             className="text-blue-600 hover:underline dark:text-blue-400"
           >
-            GitHub →
+            {t("githubLink")}
           </a>
         </div>
 
@@ -94,7 +96,7 @@ export default function AboutModal({ onClose }: { onClose: () => void }) {
             onClick={onClose}
             className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
           >
-            Close
+            {t("common:close")}
           </button>
         </div>
       </div>

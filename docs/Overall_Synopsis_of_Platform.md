@@ -176,10 +176,10 @@ Voiceprints are **per-user** (a user's voiceprints only match their own recordin
 ## Localization (web UI)
 
 - The interface is localized with **react-i18next**. Strings live in JSON catalogs at
-  **`apps/web/src/locales/<lang>/<namespace>.json`** (namespaces: `common`, `auth`, `account`, `recordings`),
-  (namespaces: `common`, `auth`, `account`, `recordings`, `workspace`), with **English authoritative** and
-  **Spanish/French/German** shipped. Catalogs are **auto-discovered** (`lib/i18n.ts` via `import.meta.glob`),
-  so adding a language is a **data-only** change.
+  **`apps/web/src/locales/<lang>/<namespace>.json`** (namespaces: `common`, `auth`, `account`, `recordings`,
+  `workspace`, `chat`, `admin`, `people`, `tour`), with **English authoritative** and **Spanish/French/German**
+  shipped. Catalogs are **auto-discovered** (`lib/i18n.ts` via `import.meta.glob`), so adding a language is a
+  **data-only** change.
 - `LanguageProvider` (`language.tsx`) resolves the active locale by **`?lang=` → stored preference →
   `navigator.languages` → `en`** (`resolveLanguage`), sets `<html lang>`/`<html dir>` (RTL), and persists the
   choice (`diariz.language`). The picker lists the languages with a shipped catalog (`uiLanguages`); the

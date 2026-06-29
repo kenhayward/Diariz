@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import { getStream, isElectron, describeAudioError, type AudioSourceKind } from "../lib/audioSource";
 import { connectTrayRecorder, type RecorderState, type TrayBridge } from "../lib/trayRecorder";
@@ -12,6 +13,7 @@ export default function Recorder({
   onUploaded: () => void;
   compact?: boolean;
 }) {
+  const { t } = useTranslation("workspace");
   const [source, setSource] = useState<AudioSourceKind>("mic");
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -73,12 +75,13 @@ export default function Recorder({
       const blob = new Blob(chunksRef.current, { type: "audio/webm" });
       const durationMs = Date.now() - startRef.current;
       const kind = activeSourceRef.current;
-      const title = `${kind === "system" ? "System" : "Mic"} ${new Date().toLocaleString()}`;
+      const prefix = kind === "system" ? t("recTitlePrefixSystem") : t("recTitlePrefixMic");
+      const title = `${prefix} ${new Date().toLocaleString()}`;
       await api.upload(blob, title, durationMs, kind === "system" ? "System" : "Microphone");
       onUploaded();
       reportRef.current({ phase: "idle" });
     } catch (e) {
-      const message = apiErrorMessage(e, "Upload failed.");
+      const message = apiErrorMessage(e, t("errUpload"));
       setError(message);
       reportRef.current({ phase: "error", error: message });
     } finally {
@@ -130,13 +133,16 @@ export default function Recorder({
           disabled={recording}
           className="rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         >
-          <option value="mic">Microphone</option>
-          <option value="system">System audio{isElectron ? "" : " (desktop only)"}</option>
+          <option value="mic">{t("sourceMicrophone")}</option>
+          <option value="system">
+            {t("sourceSystem")}
+            {isElectron ? "" : t("systemDesktopSuffix")}
+          </option>
         </select>
 
         {recording ? (
           <button onClick={stop} className="rounded bg-red-600 px-3 py-1.5 text-sm text-white">
-            Stop
+            {t("recStop")}
           </button>
         ) : (
           <button
@@ -144,7 +150,7 @@ export default function Recorder({
             disabled={busy}
             className="rounded bg-gray-900 px-3 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
           >
-            {busy ? "Uploading…" : "Record"}
+            {busy ? t("recUploading") : t("recRecord")}
           </button>
         )}
 
@@ -152,10 +158,10 @@ export default function Recorder({
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={recording || busy}
-          title="Upload audio files to transcribe (or drag them onto the recordings panel)"
+          title={t("recUploadTitle")}
           className="rounded border px-3 py-1.5 text-sm disabled:opacity-50 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
         >
-          Upload
+          {t("recUpload")}
         </button>
         <input
           ref={fileRef}

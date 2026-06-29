@@ -1,11 +1,13 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { useTour } from "../lib/tour";
 
 /// Full-screen guided-tour overlay: dims the app, spotlights the current region (a `data-tour="…"`
 /// element) via a box-shadow cutout, and shows an explanatory card. Replaces nothing structural — it
 /// just renders on top when the tour is active.
 export default function TourOverlay() {
+  const { t } = useTranslation("tour");
   const { active, index, steps, next, back, end } = useTour();
   const step = active ? steps[index] : null;
   const [rect, setRect] = useState<DOMRect | null>(null);
@@ -42,6 +44,8 @@ export default function TourOverlay() {
 
   if (!step) return null;
 
+  const title = t(`${step.target}.title`);
+  const body = t(`${step.target}.body`);
   const isLast = index === steps.length - 1;
   const pad = 6;
   const spot = rect
@@ -76,14 +80,14 @@ export default function TourOverlay() {
 
       <div
         role="dialog"
-        aria-label={step.title}
+        aria-label={title}
         className={`pointer-events-auto fixed left-1/2 ${cardVertical} w-[min(92vw,26rem)] -translate-x-1/2 rounded-xl border bg-white p-4 shadow-2xl dark:border-gray-700 dark:bg-gray-900`}
       >
         <div className="mb-1 text-xs font-medium text-gray-400 dark:text-gray-500">
-          Step {index + 1} of {steps.length}
+          {t("stepOf", { index: index + 1, total: steps.length })}
         </div>
-        <h3 className="text-base font-semibold dark:text-gray-100">{step.title}</h3>
-        <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{step.body}</p>
+        <h3 className="text-base font-semibold dark:text-gray-100">{title}</h3>
+        <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{body}</p>
 
         <div className="mt-4 flex items-center justify-between">
           <button
@@ -91,7 +95,7 @@ export default function TourOverlay() {
             onClick={end}
             className="text-xs text-gray-400 hover:text-gray-600 hover:underline dark:hover:text-gray-200"
           >
-            Skip &amp; turn off
+            {t("skip")}
           </button>
           <div className="flex items-center gap-2">
             {index > 0 && (
@@ -100,7 +104,7 @@ export default function TourOverlay() {
                 onClick={back}
                 className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
               >
-                Back
+                {t("back")}
               </button>
             )}
             <button
@@ -108,7 +112,7 @@ export default function TourOverlay() {
               onClick={next}
               className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
             >
-              {isLast ? "Done" : "Next"}
+              {isLast ? t("done") : t("next")}
             </button>
           </div>
         </div>
