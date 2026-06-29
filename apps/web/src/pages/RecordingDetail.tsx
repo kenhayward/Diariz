@@ -11,6 +11,8 @@ import CollapsibleSection from "../components/CollapsibleSection";
 import MoveToSectionModal from "../components/MoveToSectionModal";
 import DownloadTranscriptModal from "../components/DownloadTranscriptModal";
 import SummaryEditModal from "../components/SummaryEditModal";
+import AttachmentsModal from "../components/AttachmentsModal";
+import AttachmentsSplitButton from "../components/AttachmentsSplitButton";
 import { recordingMenu } from "../components/recordingMenu";
 import { copyRichLink, transcriptUrl } from "../lib/clipboard";
 import { formatBytes, formatDate, formatDuration } from "../lib/format";
@@ -38,6 +40,11 @@ export default function RecordingDetail() {
     queryKey: ["speaker-profiles"],
     queryFn: api.listSpeakerProfiles,
   });
+  const { data: attachments = [] } = useQuery({
+    queryKey: ["attachments", id],
+    queryFn: () => api.listAttachments(id),
+    enabled: Boolean(id),
+  });
   // The user's native language drives the "Translate to …" action; resolve its display name.
   const { data: profile } = useQuery({ queryKey: ["user-profile"], queryFn: api.getProfile });
   const { data: languages = [] } = useQuery({ queryKey: ["languages"], queryFn: fetchLanguages });
@@ -52,6 +59,8 @@ export default function RecordingDetail() {
   const [moving, setMoving] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [editingSummary, setEditingSummary] = useState(false);
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const [editingSeg, setEditingSeg] = useState<SegmentDto | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionInfo, setActionInfo] = useState<string | null>(null);
@@ -188,6 +197,26 @@ export default function RecordingDetail() {
       await qc.invalidateQueries({ queryKey: ["recording", id] });
     } catch (e) {
       setActionError(apiErrorMessage(e, t("workspace:errEditSummary")));
+    }
+  }
+
+  const refreshAttachments = () => {
+    qc.invalidateQueries({ queryKey: ["attachments", id] });
+    qc.invalidateQueries({ queryKey: ["user-storage"] }); // attachment bytes count toward quota
+  };
+
+  // Files dropped anywhere on the detail page are attached to this recording.
+  async function onDropFiles(e: React.DragEvent) {
+    e.preventDefault();
+    setDragging(false);
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+    setActionError(null);
+    try {
+      for (const f of Array.from(files)) await api.addFileAttachment(id, f);
+      refreshAttachments();
+    } catch (err) {
+      setActionError(apiErrorMessage(err, t("workspace:errAddAttachment")));
     }
   }
 
@@ -373,7 +402,25 @@ export default function RecordingDetail() {
   }, t);
 
   return (
-    <div className="space-y-5">
+    <div
+      className="relative space-y-5"
+      onDragOver={(e) => {
+        // Only react to file drags (ignore in-app text/section drags).
+        if (Array.from(e.dataTransfer.types).includes("Files")) {
+          e.preventDefault();
+          setDragging(true);
+        }
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget === e.target) setDragging(false);
+      }}
+      onDrop={onDropFiles}
+    >
+      {dragging && (
+        <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center rounded-lg border-2 border-dashed border-blue-400 bg-blue-50/80 text-sm font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
+          {t("workspace:dropToAttach")}
+        </div>
+      )}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           {renaming ? (
@@ -434,6 +481,15 @@ export default function RecordingDetail() {
           {t("workspace:extractingActions")}
         </p>
       )}
+
+      <div className="flex items-center gap-2">
+        <AttachmentsSplitButton
+          recordingId={id}
+          attachments={attachments}
+          onManage={() => setAttachmentsOpen(true)}
+        />
+        <span className="text-xs text-gray-400 dark:text-gray-500">{t("workspace:dropHint")}</span>
+      </div>
 
       {rec.status === "Failed" && rec.error && (
         <p className="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{rec.error}</p>
@@ -559,6 +615,15 @@ export default function RecordingDetail() {
           initial={rec.summary?.text ?? ""}
           onClose={() => setEditingSummary(false)}
           onSave={saveSummary}
+        />
+      )}
+
+      {attachmentsOpen && (
+        <AttachmentsModal
+          recordingId={id}
+          attachments={attachments}
+          onClose={() => setAttachmentsOpen(false)}
+          onChange={refreshAttachments}
         />
       )}
 

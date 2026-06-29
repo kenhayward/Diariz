@@ -110,6 +110,15 @@ public record RecordingDetailDto(
 
 public record RenameSpeakerRequest(string Label, string DisplayName);
 
+// ---- Attachments (supporting documents/URLs on a recording) ----
+/// <summary>A recording attachment: an uploaded file (with content type + size) or a URL.</summary>
+public record AttachmentDto(
+    Guid Id, AttachmentKind Kind, string Name, string? ContentType, long SizeBytes, string? Url, int Ordinal);
+/// <summary>Attach a URL (address + optional display name) to a recording.</summary>
+public record AddUrlAttachmentRequest(string Url, string? Name);
+/// <summary>Rename an attachment.</summary>
+public record RenameAttachmentRequest(string Name);
+
 // ---- Action items (extracted from a transcript; user-editable) ----
 public record RecordingActionDto(Guid Id, string Text, string Actor, string Deadline, int Ordinal);
 public record CreateRecordingActionRequest(string? Text, string? Actor, string? Deadline);

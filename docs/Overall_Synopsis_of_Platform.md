@@ -37,7 +37,7 @@ Infrastructure (via Docker Compose, project name **`diariz`**):
 
 - **PostgreSQL + pgvector** (`pgvector/pgvector:pg16`) — relational data **and** voiceprint/embedding vectors.
 - **Redis** (`redis:7`) — job queues (Redis **Streams**), nothing is stored long-term here.
-- **MinIO** (S3-compatible) — original audio blobs.
+- **MinIO** (S3-compatible) — original audio blobs and uploaded attachment files.
 
 ### Ports (Docker / local dev)
 
@@ -268,7 +268,9 @@ CI runs all four suites on a self-hosted Windows runner.
 - **M1 — done:** capture → transcribe (WhisperX + pyannote) → view speaker-labelled segments.
 - **M2 — done:** multi-user auth + RBAC, LLM summaries, action extraction, transcript export/email,
   re-transcribe with model choice, sections (**two-level nesting**: `Section.ParentId`, drag-to-reorder),
-  speaker identification, delete-audio (keep transcript, free quota).
+  speaker identification, delete-audio (keep transcript, free quota), **supporting-document attachments**
+  (files or URLs on a recording — `Attachments` table + `AttachmentsController`, files in MinIO under
+  `{userId}/attachments/…` and counted toward the quota).
 - **M3 — partial:** chat across transcripts (shipped); full embedding-backed RAG over `Segment.Embedding`
   (`vector(768)`, sized for `nomic-embed-text`) is scaffolded but not yet populated.
 - **M4 — planned:** packaging/TLS hardening, macOS desktop build (see the macOS guide).

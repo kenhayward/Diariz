@@ -104,6 +104,48 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.Attachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BlobKey")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ContentType")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("RecordingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Url")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecordingId", "Ordinal");
+
+                    b.ToTable("Attachments");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.ChatSession", b =>
                 {
                     b.Property<Guid>("Id")
@@ -674,6 +716,17 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.Attachment", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.Recording", "Recording")
+                        .WithMany("Attachments")
+                        .HasForeignKey("RecordingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Recording");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.ChatSession", b =>
                 {
                     b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
@@ -887,6 +940,8 @@ namespace Diariz.Domain.Migrations
             modelBuilder.Entity("Diariz.Domain.Entities.Recording", b =>
                 {
                     b.Navigation("Actions");
+
+                    b.Navigation("Attachments");
 
                     b.Navigation("Speakers");
 
