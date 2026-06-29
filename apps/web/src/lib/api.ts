@@ -184,6 +184,11 @@ export const api = {
     await http.put(`/api/recordings/${id}/speakers/${encodeURIComponent(label)}/multi`);
   },
 
+  /// Manually create or edit the transcript's summary (flags it as user-edited; works without an LLM).
+  async updateSummary(id: string, text: string): Promise<void> {
+    await http.put(`/api/recordings/${id}/summary`, { text });
+  },
+
   /// Translate the whole transcript (segments + summary + actions) into `language` (BCP-47), or the
   /// caller's native language when omitted. Translations land in each segment's revision.
   async translateRecording(id: string, language?: string): Promise<void> {

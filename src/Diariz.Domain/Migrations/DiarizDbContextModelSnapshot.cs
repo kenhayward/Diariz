@@ -456,6 +456,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("IsUserEdited")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Model")
                         .IsRequired()
                         .HasColumnType("text");
@@ -466,6 +469,9 @@ namespace Diariz.Domain.Migrations
 
                     b.Property<Guid>("TranscriptionId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 

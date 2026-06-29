@@ -97,6 +97,29 @@ public class SummarizationProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_SkipsOverwrite_WhenSummaryIsUserEdited()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, tr) = await Seed(db, userId, name: "x");
+        db.Summaries.Add(new Summary
+        {
+            Id = Guid.NewGuid(), TranscriptionId = tr.Id, Model = "user", Text = "my edit", IsUserEdited = true,
+        });
+        await db.SaveChangesAsync();
+        var client = new FakeSummarizationClient { Result = new SummaryResult("LLM-generated", "Name") };
+
+        await SummarizationProcessor.ProcessAsync(db, client, new FakeSummarizationSettingsResolver(),
+            new FakeHubContext(), Job(rec, tr), NullLogger.Instance);
+
+        var summary = await db.Summaries.SingleAsync(s => s.TranscriptionId == tr.Id);
+        Assert.Equal("my edit", summary.Text);   // user edit preserved
+        Assert.Equal(0, client.Calls);           // LLM never called
+        var reloaded = await db.Recordings.FindAsync(rec.Id);
+        Assert.Equal(RecordingStatus.Summarized, reloaded!.Status); // settled, not left Summarizing/Failed
+    }
+
+    [Fact]
     public async Task ProcessAsync_NoSegments_SetsFailed()
     {
         using var db = TestDb.Create();

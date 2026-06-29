@@ -128,7 +128,7 @@ public class RecordingsController : ControllerBase
                 names.TryGetValue(s.SpeakerLabel, out var dn) ? dn : s.SpeakerLabel,
                 s.StartMs, s.EndMs, s.Original, s.Revised)).ToList());
         SummaryDto? sDto = current?.Summary is null ? null
-            : new(current.Summary.Model, current.Summary.Text, current.Summary.CreatedAt);
+            : new(current.Summary.Model, current.Summary.Text, current.Summary.CreatedAt, current.Summary.IsUserEdited);
 
         return new RecordingDetailDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.SizeBytes,
             rec.Status, rec.Error, rec.CreatedAt, rec.MinSpeakers, rec.MaxSpeakers, names, speakers, tDto, sDto,
@@ -489,6 +489,7 @@ public class RecordingsController : ControllerBase
     {
         var rec = await _db.Recordings
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                .ThenInclude(t => t.Summary)
             .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
         if (rec is null) return NotFound();
 
@@ -502,11 +503,47 @@ public class RecordingsController : ControllerBase
         // Idempotent: a summary is already in flight, don't enqueue a second job.
         if (rec.Status == RecordingStatus.Summarizing) return Accepted();
 
+        // A user-initiated summarise is an explicit "overwrite" — clear the protected-edit flag so the
+        // queued job replaces a hand-edited summary (the UI warns before getting here).
+        if (current.Summary is { IsUserEdited: true } s) s.IsUserEdited = false;
+
         rec.Status = RecordingStatus.Summarizing;
         await _queue.EnqueueSummarizationAsync(new SummarizationJob(rec.Id, current.Id));
         await _hub.NotifyStatusAsync(rec.UserId, rec.Id, rec.Status.ToString());
         await _db.SaveChangesAsync();
         return Accepted();
+    }
+
+    /// <summary>Manually create or edit the current transcription's summary. Works even when no LLM is
+    /// configured, and marks the summary as user-edited so the automatic summariser won't overwrite it.</summary>
+    [HttpPut("{id:guid}/summary")]
+    public async Task<IActionResult> UpdateSummary(Guid id, UpdateSummaryRequest req)
+    {
+        var rec = await _db.Recordings
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                .ThenInclude(t => t.Summary)
+            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+
+        var current = rec.Transcriptions.FirstOrDefault();
+        if (current is null) return NotFound();
+
+        var summary = current.Summary;
+        if (summary is null)
+        {
+            summary = new Summary { Id = Guid.NewGuid(), TranscriptionId = current.Id };
+            _db.Summaries.Add(summary);
+        }
+        summary.Text = req.Text ?? string.Empty;
+        summary.Model = Summary.UserEditedModel;
+        summary.IsUserEdited = true;
+        summary.UpdatedAt = DateTimeOffset.UtcNow;
+
+        // The recording now has a summary — reflect that in its status (without clobbering an in-flight job).
+        if (rec.Status is RecordingStatus.Transcribed) rec.Status = RecordingStatus.Summarized;
+
+        await _db.SaveChangesAsync();
+        return NoContent();
     }
 
     [HttpPut("{id:guid}/name")]

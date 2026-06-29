@@ -10,7 +10,9 @@ import ActionsPanel from "../components/ActionsPanel";
 import CollapsibleSection from "../components/CollapsibleSection";
 import MoveToSectionModal from "../components/MoveToSectionModal";
 import DownloadTranscriptModal from "../components/DownloadTranscriptModal";
+import SummaryEditModal from "../components/SummaryEditModal";
 import { recordingMenu } from "../components/recordingMenu";
+import { copyRichLink, transcriptUrl } from "../lib/clipboard";
 import { formatBytes, formatDate, formatDuration } from "../lib/format";
 import { hasRevisions, segmentText, toggleLabel } from "../lib/transcriptView";
 import { fetchLanguages } from "../lib/languages";
@@ -49,6 +51,7 @@ export default function RecordingDetail() {
   const [renaming, setRenaming] = useState(false);
   const [moving, setMoving] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [editingSummary, setEditingSummary] = useState(false);
   const [editingSeg, setEditingSeg] = useState<SegmentDto | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionInfo, setActionInfo] = useState<string | null>(null);
@@ -153,6 +156,8 @@ export default function RecordingDetail() {
   }
 
   async function summarize() {
+    // Re-summarising replaces the summary — confirm first when the user has hand-edited it.
+    if (rec?.summary?.isUserEdited && !window.confirm(t("workspace:confirmResummarise"))) return;
     setActionError(null);
     setSummarizing(true);
     try {
@@ -162,6 +167,27 @@ export default function RecordingDetail() {
       setActionError(apiErrorMessage(e, t("workspace:errSummarise")));
     } finally {
       setSummarizing(false);
+    }
+  }
+
+  // Copy a persistent rich-text link to this transcript (the name shows as the link text).
+  async function copyLink() {
+    setActionError(null);
+    setActionInfo(null);
+    const ok = await copyRichLink(transcriptUrl(id), rec?.name ?? rec?.title ?? "");
+    if (ok) setActionInfo(t("workspace:linkCopied"));
+    else setActionError(t("workspace:errCopyLink"));
+  }
+
+  // Save a manually-written/edited summary (flagged user-edited so auto-summary won't clobber it).
+  async function saveSummary(text: string) {
+    setActionError(null);
+    try {
+      await api.updateSummary(id, text);
+      setEditingSummary(false);
+      await qc.invalidateQueries({ queryKey: ["recording", id] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e, t("workspace:errEditSummary")));
     }
   }
 
@@ -316,8 +342,10 @@ export default function RecordingDetail() {
 
   const menuActions = recordingMenu({
     onRename: () => setRenaming(true),
+    onCopyLink: copyLink,
     onRetranscribe: () => setRetranscribeOpen(true),
     onSummarise: summarize,
+    onEditSummary: () => setEditingSummary(true),
     onExtractActions: extractActions,
     onReidentify: reidentify,
     onTranslate: nativeLang ? translateRecording : undefined,
@@ -379,6 +407,7 @@ export default function RecordingDetail() {
           )}
           <DetailToolbar
             onRename={() => setRenaming(true)}
+            onCopyLink={copyLink}
             onRetranscribe={() => setRetranscribeOpen(true)}
             onMove={() => setMoving(true)}
             onExtractActions={extractActions}
@@ -414,6 +443,9 @@ export default function RecordingDetail() {
       )}
       {rec.summary && (
         <CollapsibleSection title={t("workspace:sectionSummary")}>
+          {rec.summary.isUserEdited && (
+            <p className="mb-1 text-xs italic text-gray-400 dark:text-gray-500">{t("workspace:summaryEditedHint")}</p>
+          )}
           <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{rec.summary.text}</p>
         </CollapsibleSection>
       )}
@@ -518,6 +550,14 @@ export default function RecordingDetail() {
             setEditingSeg(null);
             qc.invalidateQueries({ queryKey: ["recording", id] });
           }}
+        />
+      )}
+
+      {editingSummary && (
+        <SummaryEditModal
+          initial={rec.summary?.text ?? ""}
+          onClose={() => setEditingSummary(false)}
+          onSave={saveSummary}
         />
       )}
 

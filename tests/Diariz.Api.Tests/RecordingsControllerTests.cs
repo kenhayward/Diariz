@@ -814,6 +814,79 @@ public class RecordingsControllerTests
         Assert.Equal("Bob", sp.DisplayName);
     }
 
+    // ---- Manual summary editing ----
+
+    [Fact]
+    public async Task UpdateSummary_CreatesSummary_WhenNone_EvenWithoutLlm()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
+        // No LLM configured — manual editing must still work.
+        var controller = Build(db, userId, new FakeJobQueue(), summarizationEnabled: false);
+
+        var result = await controller.UpdateSummary(rec.Id, new UpdateSummaryRequest("My hand-written notes."));
+
+        Assert.IsType<NoContentResult>(result);
+        var summary = await db.Summaries.SingleAsync(s => s.TranscriptionId == tr.Id);
+        Assert.Equal("My hand-written notes.", summary.Text);
+        Assert.True(summary.IsUserEdited);
+        Assert.NotNull(summary.UpdatedAt);
+        Assert.Equal(Summary.UserEditedModel, summary.Model);
+    }
+
+    [Fact]
+    public async Task UpdateSummary_UpdatesExisting_AndFlagsUserEdited()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
+        db.Summaries.Add(new Summary { Id = Guid.NewGuid(), TranscriptionId = tr.Id, Model = "gpt", Text = "auto" });
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.UpdateSummary(rec.Id, new UpdateSummaryRequest("edited"));
+
+        var summary = await db.Summaries.SingleAsync(s => s.TranscriptionId == tr.Id);
+        Assert.Equal("edited", summary.Text);
+        Assert.True(summary.IsUserEdited);
+    }
+
+    [Fact]
+    public async Task UpdateSummary_OnAnotherUsersRecording_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var rec = await SeedTranscribedRecording(db, Guid.NewGuid());
+        var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(await controller.UpdateSummary(rec.Id, new UpdateSummaryRequest("x")));
+    }
+
+    [Fact]
+    public async Task Summarize_ClearsUserEditedFlag_SoTheForcedResummaryOverwrites()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
+        db.Summaries.Add(new Summary
+        {
+            Id = Guid.NewGuid(), TranscriptionId = tr.Id, Model = "user", Text = "my edit", IsUserEdited = true,
+        });
+        await db.SaveChangesAsync();
+        var queue = new FakeJobQueue();
+        var controller = Build(db, userId, queue, summarizationEnabled: true);
+
+        var result = await controller.Summarize(rec.Id);
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Single(queue.SummarizationEnqueued);
+        var summary = await db.Summaries.SingleAsync(s => s.TranscriptionId == tr.Id);
+        Assert.False(summary.IsUserEdited); // cleared so the queued job is allowed to overwrite it
+    }
+
     // ---- Merge segments ----
 
     [Fact]

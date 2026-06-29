@@ -5,6 +5,7 @@ import DetailToolbar from "./DetailToolbar";
 function build(overrides: Partial<Parameters<typeof DetailToolbar>[0]> = {}) {
   const props = {
     onRename: vi.fn(),
+    onCopyLink: vi.fn(),
     onRetranscribe: vi.fn(),
     onMove: vi.fn(),
     onExtractActions: vi.fn(),
@@ -20,6 +21,7 @@ function build(overrides: Partial<Parameters<typeof DetailToolbar>[0]> = {}) {
 
 const NAMES = [
   "Rename",
+  "Copy link",
   "Re-transcribe",
   "Move to section",
   "Extract actions",
@@ -41,12 +43,14 @@ describe("DetailToolbar", () => {
   it("invokes the matching handler when a button is clicked", () => {
     const p = build();
     fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy link" }));
     fireEvent.click(screen.getByRole("button", { name: "Re-transcribe" }));
     fireEvent.click(screen.getByRole("button", { name: "Move to section" }));
     fireEvent.click(screen.getByRole("button", { name: "Extract actions" }));
     fireEvent.click(screen.getByRole("button", { name: "Email me the transcript" }));
     fireEvent.click(screen.getByRole("button", { name: "Download transcript" }));
     expect(p.onRename).toHaveBeenCalledTimes(1);
+    expect(p.onCopyLink).toHaveBeenCalledTimes(1);
     expect(p.onRetranscribe).toHaveBeenCalledTimes(1);
     expect(p.onMove).toHaveBeenCalledTimes(1);
     expect(p.onExtractActions).toHaveBeenCalledTimes(1);

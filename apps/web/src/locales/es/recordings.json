@@ -1,5 +1,7 @@
 {
   "rename": "Cambiar nombre",
+  "copyLink": "Copiar enlace",
+  "editSummary": "Editar resumen",
   "retranscribe": "Volver a transcribir",
   "summarise": "Resumir",
   "extractActions": "Extraer acciones",

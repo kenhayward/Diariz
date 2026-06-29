@@ -5,6 +5,10 @@ export interface RecordingMenuHandlers {
   onRename: () => void;
   onRetranscribe: () => void;
   onSummarise: () => void;
+  /// Copy a persistent rich-text link to this transcript (name as link text). Both surfaces.
+  onCopyLink: () => void;
+  /// Optional (detail page only): manually edit the transcript's summary.
+  onEditSummary?: () => void;
   onMove: () => void;
   /// Optional (detail page only): extract action items from the transcript with the LLM.
   onExtractActions?: () => void;
@@ -38,9 +42,13 @@ export interface RecordingMenuHandlers {
 export function recordingMenu(h: RecordingMenuHandlers, t: TFunction): KebabAction[] {
   return [
     { label: t("recordings:rename"), onClick: h.onRename },
+    { label: t("recordings:copyLink"), onClick: h.onCopyLink },
     // Re-transcribe needs the audio, so it's hidden once the audio is deleted.
     ...(h.hasAudio ? [{ label: t("recordings:retranscribe"), onClick: h.onRetranscribe }] : []),
     { label: t("recordings:summarise"), onClick: h.onSummarise, disabled: !h.hasTranscript || h.isSummarizing },
+    ...(h.onEditSummary
+      ? [{ label: t("recordings:editSummary"), onClick: h.onEditSummary, disabled: !h.hasTranscript }]
+      : []),
     ...(h.onExtractActions
       ? [{ label: t("recordings:extractActions"), onClick: h.onExtractActions, disabled: !h.hasTranscript }]
       : []),

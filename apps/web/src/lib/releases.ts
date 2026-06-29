@@ -57,6 +57,27 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.34.0",
+    date: "2026-06-29",
+    pr: 77,
+    headline: "Copy a transcript link; edit the summary by hand",
+    summary:
+      "Two ways to work with a transcript more directly. **Copy link** (a toolbar button and a ⋮-menu " +
+      "item on both the detail page and the recordings list) puts a **persistent link** to the transcript " +
+      "on your clipboard as **rich text** — pasting into an email or meeting notes shows the recording’s " +
+      "**name** as the clickable link. (It’s a personal deep-link: opening it still requires signing in as " +
+      "you.) And you can now **edit the summary by hand** (⋮ → Edit summary) — write one even when no AI " +
+      "endpoint is configured. A hand-edited summary is **protected**: the automatic summariser won’t " +
+      "overwrite it, and re-summarising warns you first.",
+    added: [
+      "Copy a persistent rich-text link to a transcript (toolbar + ⋮ menu on the detail page and the list).",
+      "Manually create or edit a recording’s summary; works without an LLM configured.",
+    ],
+    changed: [
+      "The automatic summariser no longer overwrites a summary you’ve edited by hand (re-summarising warns first).",
+    ],
+  },
+  {
     version: "0.33.0",
     date: "2026-06-29",
     pr: 76,

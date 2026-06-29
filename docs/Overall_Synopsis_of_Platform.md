@@ -130,7 +130,10 @@ only `hasApiKey`).
   **second Redis stream `summarization-jobs`** (group `summarizers`). The API's **only stream consumer**,
   `SummarizationWorker` (a singleton `BackgroundService`), reads it, calls `/chat/completions`
   (`SummarizationClient`), writes a **`Summary`** (and an auto-generated `Recording.Name` when unset), and
-  notifies over SignalR. It XACKs even on failure to avoid poison-message loops.
+  notifies over SignalR. It XACKs even on failure to avoid poison-message loops. A summary can also be
+  **written/edited by hand** — `PUT /api/recordings/{id}/summary` (works with no LLM configured) sets
+  `Summary.IsUserEdited`; the automatic summariser then **skips** that summary, and a user-initiated
+  re-summarise clears the flag first (the UI warns before overwriting).
 - **Extract actions (sync).** `POST /api/recordings/{id}/actions/extract` calls the LLM inline
   (`ActionsClient` → `ActionsPrompt`), **replaces** the recording's **`RecordingAction`** rows, and sets
   `Recording.ActionsExtractedAt`. Shown "by exception" — the Actions panel appears only once extraction has

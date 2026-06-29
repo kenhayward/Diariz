@@ -73,7 +73,10 @@ public record SegmentDto(
     public string Text => Revised ?? Original;
 }
 
-public record SummaryDto(string Model, string Text, DateTimeOffset CreatedAt);
+public record SummaryDto(string Model, string Text, DateTimeOffset CreatedAt, bool IsUserEdited = false);
+
+/// <summary>Manually create or edit a transcript's summary (the current transcription version).</summary>
+public record UpdateSummaryRequest(string Text);
 
 public record TranscriptionDto(
     Guid Id,
