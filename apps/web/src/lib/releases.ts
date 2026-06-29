@@ -56,6 +56,18 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.28.1",
+    date: "2026-06-29",
+    pr: 70,
+    headline: "Clearer translation docs in the README",
+    summary:
+      "Documentation-only: the README's **Translations** section is reorganised into clear **Web User " +
+      "Interface** and **Server Side** subsections, spelling out that both sets of strings need translating " +
+      "and that catalogs are auto-discovered (so adding a language stays a data-only PR). No application " +
+      "behaviour changes.",
+    changed: ["Reorganised and clarified the README Translations section (web vs server-side catalogs)."],
+  },
+  {
     version: "0.28.0",
     date: "2026-06-29",
     pr: 69,
