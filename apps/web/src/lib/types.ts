@@ -183,6 +183,28 @@ export interface UserSettings {
   defaultContextWindow: number;
 }
 
+/// A supported language for content translation (and, when a UI catalog exists, the app UI).
+export interface Language {
+  code: string;
+  englishName: string;
+  nativeName: string;
+  rtl: boolean;
+}
+
+/// The signed-in user's editable profile (display name + language preferences). Email is read-only.
+export interface UserProfile {
+  email: string;
+  fullName: string | null;
+  nativeLanguage: string | null;
+  uiLanguage: string | null;
+}
+
+export interface UpdateUserProfile {
+  fullName: string | null;
+  nativeLanguage: string | null;
+  uiLanguage: string | null;
+}
+
 export interface UpdateUserSettings {
   apiBase: string | null;
   model: string | null;

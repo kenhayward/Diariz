@@ -51,6 +51,27 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.23.0",
+    date: "2026-06-29",
+    pr: 64,
+    headline: "Set your own name and language in Preferences",
+    summary:
+      "A new **Preferences** item in the account menu (for every user) lets you change your **display name** " +
+      "and choose your **native language** and **app language** — and you can pick a language right on the " +
+      "signup screen. This is the groundwork for the localization & translation feature: the languages come " +
+      "from a shared supported-language list (`GET /api/languages`, ~50 languages with right-to-left flags) " +
+      "and your native language will be the default target when translating transcripts. The app interface " +
+      "itself isn't translated yet — that lands in a later release.",
+    added: [
+      "A Preferences modal (account menu) to edit your display name and native/app language — available to all users.",
+      "A language selector on the account-setup screen.",
+      "GET /api/languages — the supported-language reference list, used by the pickers.",
+    ],
+    changed: [
+      "You can now rename yourself; the new name shows immediately (the app re-issues your session token).",
+    ],
+  },
+  {
     version: "0.22.0",
     date: "2026-06-29",
     pr: 63,

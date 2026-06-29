@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth";
 import { api, apiErrorMessage } from "../lib/api";
+import { fetchLanguages } from "../lib/languages";
+import { setStoredLanguage } from "../lib/language";
+import type { Language } from "../lib/types";
 import AuthShell from "../components/AuthShell";
 
 /// Public page reached from the one-time setup link. Validates the link, then collects a full name
@@ -18,6 +21,8 @@ export default function Setup() {
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [language, setLanguage] = useState(""); // chosen UI language (blank = follow browser)
+  const [languages, setLanguages] = useState<Language[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,6 +37,9 @@ export default function Setup() {
       })
       .catch(() => active && setValid(false))
       .finally(() => active && setChecking(false));
+    fetchLanguages()
+      .then((l) => active && setLanguages(l))
+      .catch(() => {}); // a missing list just hides the selector — never blocks setup
     return () => {
       active = false;
     };
@@ -48,6 +56,20 @@ export default function Setup() {
     try {
       const res = await api.setup({ email, token, fullName: fullName.trim(), password });
       setSession(res.accessToken);
+      setStoredLanguage(language || null); // cache the choice locally for an immediate UI effect
+      if (language) {
+        // Persist the language to the new account (best-effort — never block sign-in if it fails).
+        try {
+          const updated = await api.updateProfile({
+            fullName: fullName.trim() || null,
+            nativeLanguage: language,
+            uiLanguage: language,
+          });
+          setSession(updated.accessToken);
+        } catch {
+          /* ignore */
+        }
+      }
       navigate("/");
     } catch (err) {
       setError(apiErrorMessage(err, "Could not complete setup."));
@@ -107,6 +129,24 @@ export default function Setup() {
             <p className="text-xs text-gray-400 dark:text-gray-500">
               At least 8 characters with an uppercase letter, a lowercase letter, a number, and a symbol.
             </p>
+            {languages.length > 0 && (
+              <label className="block text-sm">
+                <span className="mb-1 block text-gray-600 dark:text-gray-300">Language</span>
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  aria-label="Language"
+                  className="w-full rounded border px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                >
+                  <option value="">Follow my browser</option>
+                  {languages.map((l) => (
+                    <option key={l.code} value={l.code}>
+                      {l.englishName} ({l.nativeName})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
             <button
               type="submit"
