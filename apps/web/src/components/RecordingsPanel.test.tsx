@@ -18,6 +18,8 @@ vi.mock("../lib/api", () => ({
     retranscribe: vi.fn(),
     summarize: vi.fn(),
     deleteRecording: vi.fn(),
+    deleteAudio: vi.fn(),
+    deleteAudioBulk: vi.fn(),
     renameRecording: vi.fn(),
     moveRecording: vi.fn(),
     renameSection: vi.fn(),
@@ -46,6 +48,7 @@ const rec: RecordingSummary = {
   sectionId: null,
   sectionName: null,
   hasActions: false,
+  hasAudio: true,
 };
 
 function renderList() {
@@ -105,8 +108,40 @@ describe("RecordingsPanel", () => {
     renderList();
     await screen.findByText("Weekly Standup");
     fireEvent.click(screen.getByRole("button", { name: /actions/i }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /delete/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" })); // exact: not "Delete audio"
     await waitFor(() => expect(api.deleteRecording).toHaveBeenCalledWith("rec-1"));
+  });
+
+  it("shows a green mic when audio is present and grey once deleted", async () => {
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...rec, id: "a", name: "Has audio", hasAudio: true },
+      { ...rec, id: "b", name: "No audio", hasAudio: false },
+    ]);
+    renderList();
+    await screen.findByText("Has audio");
+    expect(screen.getByLabelText("Audio available")).toBeTruthy();
+    expect(screen.getByLabelText("Audio deleted")).toBeTruthy();
+  });
+
+  it("Delete audio (kebab) confirms then calls the API", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    (api.deleteAudio as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    renderList();
+    await screen.findByText("Weekly Standup");
+    fireEvent.click(screen.getByRole("button", { name: /actions/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete audio" }));
+    await waitFor(() => expect(api.deleteAudio).toHaveBeenCalledWith("rec-1"));
+  });
+
+  it("bulk Delete audio in select mode calls the API with the selected ids", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    (api.deleteAudioBulk as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    renderList();
+    await screen.findByText("Weekly Standup");
+    fireEvent.click(screen.getByRole("button", { name: /select recordings/i })); // enter select mode
+    fireEvent.click(screen.getByRole("checkbox", { name: /weekly standup/i }));   // select the row
+    fireEvent.click(screen.getByRole("button", { name: "Delete audio" }));        // toolbar bulk action
+    await waitFor(() => expect(api.deleteAudioBulk).toHaveBeenCalledWith(["rec-1"]));
   });
 
   it("groups recordings under section headings with Ungrouped last", async () => {

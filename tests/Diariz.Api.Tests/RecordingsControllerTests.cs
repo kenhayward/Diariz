@@ -1225,4 +1225,114 @@ public class RecordingsControllerTests
 
         Assert.IsType<NotFoundResult>(await controller.GetAudio(rec.Id));
     }
+
+    // ---- Delete audio (keep the transcript) ----
+
+    [Fact]
+    public async Task DeleteAudio_RemovesBlob_FlagsDeleted_AndFreesQuota()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        rec.SizeBytes = 1234;
+        storage.Objects[rec.BlobKey] = Encoding.UTF8.GetBytes("audio");
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue(), storage);
+
+        var result = await controller.DeleteAudio(rec.Id);
+
+        Assert.IsType<NoContentResult>(result);
+        var reloaded = (await db.Recordings.FindAsync(rec.Id))!;
+        Assert.NotNull(reloaded.AudioDeletedAt);   // flagged
+        Assert.False(reloaded.HasAudio);
+        Assert.Equal(0, reloaded.SizeBytes);       // stops counting toward quota
+        Assert.False(storage.Objects.ContainsKey(rec.BlobKey)); // blob gone
+        Assert.NotNull(await db.Transcriptions.SingleOrDefaultAsync(t => t.RecordingId == rec.Id)); // transcript kept
+    }
+
+    [Fact]
+    public async Task DeleteAudio_WhenAlreadyDeleted_IsNoOpSuccess()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        rec.AudioDeletedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
+        rec.SizeBytes = 0;
+        await db.SaveChangesAsync();
+        var stamp = rec.AudioDeletedAt;
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<NoContentResult>(await controller.DeleteAudio(rec.Id));
+        Assert.Equal(stamp, (await db.Recordings.FindAsync(rec.Id))!.AudioDeletedAt); // unchanged
+    }
+
+    [Fact]
+    public async Task DeleteAudio_OnAnotherUsersRecording_ReturnsNotFound_AndKeepsBlob()
+    {
+        using var db = TestDb.Create();
+        var storage = new FakeAudioStorage();
+        var rec = await SeedRecording(db, Guid.NewGuid(), versions: 1);
+        storage.Objects[rec.BlobKey] = Encoding.UTF8.GetBytes("audio");
+        var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue(), storage);
+
+        Assert.IsType<NotFoundResult>(await controller.DeleteAudio(rec.Id));
+        Assert.True(storage.Objects.ContainsKey(rec.BlobKey));
+        Assert.True((await db.Recordings.FindAsync(rec.Id))!.HasAudio);
+    }
+
+    [Fact]
+    public async Task DeleteAudioBulk_DeletesOwnedWithAudio_SkipsRest()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var withAudio = await SeedRecording(db, userId, versions: 1);
+        withAudio.SizeBytes = 500;
+        var alreadyGone = await SeedRecording(db, userId, versions: 1);
+        alreadyGone.AudioDeletedAt = DateTimeOffset.UtcNow;
+        var othersRec = await SeedRecording(db, Guid.NewGuid(), versions: 1);
+        storage.Objects[withAudio.BlobKey] = Encoding.UTF8.GetBytes("a");
+        storage.Objects[othersRec.BlobKey] = Encoding.UTF8.GetBytes("b");
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue(), storage);
+
+        var result = await controller.DeleteAudioBulk(
+            new DeleteAudioRequest([withAudio.Id, alreadyGone.Id, othersRec.Id]));
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.False((await db.Recordings.FindAsync(withAudio.Id))!.HasAudio);
+        Assert.Equal(0, (await db.Recordings.FindAsync(withAudio.Id))!.SizeBytes);
+        Assert.False(storage.Objects.ContainsKey(withAudio.BlobKey));
+        Assert.True(storage.Objects.ContainsKey(othersRec.BlobKey)); // other user's blob untouched
+        Assert.True((await db.Recordings.FindAsync(othersRec.Id))!.HasAudio);
+    }
+
+    [Fact]
+    public async Task GetAudio_AfterDelete_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        rec.AudioDeletedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(await controller.GetAudio(rec.Id));
+        Assert.IsType<NotFoundResult>((await controller.AudioUrl(rec.Id)).Result);
+    }
+
+    [Fact]
+    public async Task Get_ReflectsHasAudio_FalseAfterDelete()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        rec.AudioDeletedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var dto = Assert.IsType<RecordingDetailDto>((await controller.Get(rec.Id)).Value);
+        Assert.False(dto.HasAudio);
+    }
 }

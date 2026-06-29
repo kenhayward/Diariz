@@ -139,7 +139,7 @@ export default function RecordingsPanel() {
       onDrop={onFileDrop}
       className={`flex h-full flex-col ${dragging ? "rounded-md ring-2 ring-inset ring-blue-400 dark:ring-blue-500" : ""}`}
     >
-      <ListToolbar />
+      <ListToolbar recordings={recordings} />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <UploadStatusList items={upload.items} onClear={upload.clearFinished} />
         {dragging && (
@@ -220,11 +220,12 @@ export default function RecordingsPanel() {
   );
 }
 
-/// Top-of-list toolbar: create a section (group) and toggle multi-select for picking chat context.
-function ListToolbar() {
+/// Top-of-list toolbar: create a section (group), toggle multi-select, bulk-delete audio for the
+/// selection, and refresh the list (picks up changes made on another machine/browser).
+function ListToolbar({ recordings }: { recordings: RecordingSummary[] }) {
   const { t } = useTranslation("workspace");
   const qc = useQueryClient();
-  const { selectMode, setSelectMode, selectedIds } = useSelection();
+  const { selectMode, setSelectMode, selectedIds, clear } = useSelection();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -243,6 +244,18 @@ function ListToolbar() {
     } finally {
       setBusy(false);
     }
+  }
+
+  // Of the selected recordings, those that still have audio to delete.
+  const selectedWithAudio = recordings.filter((r) => selectedIds.includes(r.id) && r.hasAudio);
+
+  async function deleteSelectedAudio() {
+    const ids = selectedWithAudio.map((r) => r.id);
+    if (ids.length === 0) return;
+    if (!window.confirm(t("confirmDeleteAudioBulk", { count: ids.length }))) return;
+    await api.deleteAudioBulk(ids);
+    clear();
+    qc.invalidateQueries({ queryKey: ["recordings"] });
   }
 
   return (
@@ -275,6 +288,22 @@ function ListToolbar() {
             active={selectMode}
             icon={<SelectIcon />}
           />
+          {selectMode && (
+            <ToolbarButton
+              label={t("recordings:deleteAudio")}
+              onClick={deleteSelectedAudio}
+              disabled={selectedWithAudio.length === 0}
+              icon={<TrashIcon />}
+            />
+          )}
+          <ToolbarButton
+            label={t("refresh")}
+            onClick={() => {
+              qc.invalidateQueries({ queryKey: ["recordings"] });
+              qc.invalidateQueries({ queryKey: ["sections"] });
+            }}
+            icon={<RefreshIcon />}
+          />
           {selectMode && selectedIds.length > 0 && (
             <span className="text-xs text-blue-700 dark:text-blue-300">{selectedIds.length}</span>
           )}
@@ -297,6 +326,45 @@ const SelectIcon = () => (
     <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
   </svg>
 );
+const RefreshIcon = () => (
+  <svg {...iconProps}>
+    <path d="M23 4v6h-6" />
+    <path d="M1 20v-6h6" />
+    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+  </svg>
+);
+const TrashIcon = () => (
+  <svg {...iconProps}>
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  </svg>
+);
+
+/// A small microphone glyph marking whether a recording still has its audio: green when present,
+/// grey once the audio has been deleted. Sits at the start of the row, after the drag handle.
+function MicIcon({ on, title }: { on: boolean; title: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      width={14}
+      height={14}
+      role="img"
+      aria-label={title}
+      className={`shrink-0 ${on ? "text-green-600 dark:text-green-400" : "text-gray-300 dark:text-gray-600"}`}
+    >
+      <title>{title}</title>
+      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+      <line x1="12" y1="19" x2="12" y2="23" />
+      <line x1="8" y1="23" x2="16" y2="23" />
+    </svg>
+  );
+}
 
 /// Per-file status for the current upload batch (queued/uploading/done/failed). Tolerant of partial
 /// failures — a rejected file shows its reason and the rest still upload.
@@ -579,12 +647,18 @@ function RecordingRow({
     onDownloadTranscript: () => setDownloading(true),
     onEmailTranscript: run(() => api.emailTranscript(r.id)),
     onDownloadAudio: run(() => api.downloadAudio(r.id)),
+    onDeleteAudio: run(async () => {
+      if (!window.confirm(t("workspace:confirmDeleteAudio", { name: r.name ?? r.title }))) return;
+      await api.deleteAudio(r.id);
+      refresh();
+    }),
     onDelete: run(async () => {
       if (!window.confirm(t("workspace:confirmDelete", { name: r.name ?? r.title }))) return;
       await api.deleteRecording(r.id);
       refresh();
     }),
     hasTranscript: hasTranscript(r.status),
+    hasAudio: r.hasAudio,
     isSummarizing: r.status === "Summarizing",
   }, t);
 
@@ -621,6 +695,11 @@ function RecordingRow({
         >
           ⠿
         </span>
+        {/* Audio presence: green when the audio is available, grey once it's been deleted. */}
+        <MicIcon
+          on={r.hasAudio}
+          title={r.hasAudio ? t("workspace:hasAudioTitle") : t("workspace:audioDeletedTitle")}
+        />
         {renaming ? (
           <RenameForm initial={r.name ?? ""} onSave={saveName} onCancel={() => setRenaming(false)} />
         ) : (

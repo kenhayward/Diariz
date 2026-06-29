@@ -307,6 +307,16 @@ export const api = {
     await http.delete(`/api/recordings/${id}`);
   },
 
+  /// Delete just the audio blob (keeps the transcript + metadata, frees the quota).
+  async deleteAudio(id: string): Promise<void> {
+    await http.delete(`/api/recordings/${id}/audio`);
+  },
+
+  /// Bulk delete audio for the given recordings (recordings-list "Delete audio" action).
+  async deleteAudioBulk(ids: string[]): Promise<void> {
+    await http.post("/api/recordings/audio/delete", { ids });
+  },
+
   async summarize(id: string): Promise<void> {
     await http.post(`/api/recordings/${id}/summarize`);
   },

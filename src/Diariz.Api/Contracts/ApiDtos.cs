@@ -50,7 +50,11 @@ public record RecordingSummaryDto(
     DateTimeOffset CreatedAt,
     Guid? SectionId,
     string? SectionName,
-    bool HasActions);
+    bool HasActions,
+    bool HasAudio);
+
+/// <summary>Bulk delete the audio blobs of the listed recordings (keeps their transcripts/metadata).</summary>
+public record DeleteAudioRequest(IReadOnlyList<Guid> Ids);
 
 public record SegmentDto(
     Guid Id, string Speaker, string SpeakerDisplay, long StartMs, long EndMs,
@@ -88,7 +92,8 @@ public record RecordingDetailDto(
     TranscriptionDto? Current,
     SummaryDto? Summary,
     IReadOnlyList<RecordingActionDto> Actions,
-    bool ActionsExtracted);
+    bool ActionsExtracted,
+    bool HasAudio);
 
 public record RenameSpeakerRequest(string Label, string DisplayName);
 

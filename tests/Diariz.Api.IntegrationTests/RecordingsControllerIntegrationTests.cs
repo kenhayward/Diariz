@@ -85,6 +85,34 @@ public class RecordingsControllerIntegrationTests(ContainersFixture fx)
     }
 
     [Fact]
+    public async Task DeleteAudio_FreesQuota_FlagsDeleted_AndAudioBecomes404()
+    {
+        Guid userId, recId;
+        await using (var db = fx.CreateDbContext())
+        {
+            var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = "u@x.test" };
+            var rec = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = "k", SizeBytes = 1000 };
+            db.AddRange(user, rec);
+            await db.SaveChangesAsync();
+            (userId, recId) = (user.Id, rec.Id);
+        }
+
+        await using (var db = fx.CreateDbContext())
+        {
+            Assert.Equal(1000, await new StorageUsage(db).UsedBytesAsync(userId)); // counted before delete
+            Assert.IsType<NoContentResult>(await Build(db, userId).DeleteAudio(recId));
+        }
+
+        await using var verify = fx.CreateDbContext();
+        var rec2 = (await verify.Recordings.FindAsync(recId))!;
+        Assert.NotNull(rec2.AudioDeletedAt);
+        Assert.False(rec2.HasAudio);
+        Assert.Equal(0, rec2.SizeBytes);
+        Assert.Equal(0, await new StorageUsage(verify).UsedBytesAsync(userId)); // quota freed
+        Assert.IsType<NotFoundResult>(await Build(verify, userId).GetAudio(recId)); // audio gone
+    }
+
+    [Fact]
     public async Task Get_ReturnsHighestVersionTranscription_WithSummary()
     {
         Guid userId, recId;

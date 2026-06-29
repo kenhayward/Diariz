@@ -18,7 +18,7 @@ public class JsonConfigTests
 
         var dto = new RecordingSummaryDto(
             Guid.NewGuid(), "title", null, RecordingSource.Microphone, 0, RecordingStatus.Transcribed, DateTimeOffset.UnixEpoch,
-            null, null, false);
+            null, null, false, true);
         var json = JsonSerializer.Serialize(dto, options);
 
         Assert.Contains("\"Transcribed\"", json);

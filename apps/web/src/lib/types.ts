@@ -23,6 +23,8 @@ export interface RecordingSummary {
   sectionName: string | null;
   /// Whether the recording already has extracted action items (drives the list's re-extract confirm).
   hasActions: boolean;
+  /// Whether the original audio is still present (false once the audio has been deleted).
+  hasAudio: boolean;
 }
 
 export interface SectionDto {
@@ -126,6 +128,8 @@ export interface RecordingDetail {
   actions: RecordingAction[];
   /// Whether action extraction has been run — drives the "show the Actions panel by exception" rule.
   actionsExtracted: boolean;
+  /// Whether the original audio is still present (false once the audio has been deleted).
+  hasAudio: boolean;
 }
 
 export interface AuthResponse {

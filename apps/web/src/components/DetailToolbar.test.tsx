@@ -11,6 +11,7 @@ function build(overrides: Partial<Parameters<typeof DetailToolbar>[0]> = {}) {
     onEmailTranscript: vi.fn(),
     onDownloadTranscript: vi.fn(),
     hasTranscript: true,
+    hasAudio: true,
     ...overrides,
   };
   render(<DetailToolbar {...props} />);

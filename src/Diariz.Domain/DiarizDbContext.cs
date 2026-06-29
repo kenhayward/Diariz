@@ -38,6 +38,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         builder.Entity<Recording>(e =>
         {
             e.HasIndex(r => new { r.UserId, r.CreatedAt });
+            e.Ignore(r => r.HasAudio); // computed from AudioDeletedAt, not stored
             e.Property(r => r.Title).HasMaxLength(512);
             e.Property(r => r.Name).HasMaxLength(512);
             e.HasMany(r => r.Transcriptions)
