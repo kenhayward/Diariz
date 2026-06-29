@@ -174,6 +174,16 @@ export const api = {
     await http.put(`/api/recordings/${id}/segments/${segmentId}`, { text });
   },
 
+  /// Translate the whole transcript (segments + summary + actions) into `language` (BCP-47), or the
+  /// caller's native language when omitted. Translations land in each segment's revision.
+  async translateRecording(id: string, language?: string): Promise<void> {
+    await http.post(`/api/recordings/${id}/translate`, { language: language ?? null });
+  },
+
+  async translateSegment(id: string, segmentId: string, language?: string): Promise<void> {
+    await http.post(`/api/recordings/${id}/segments/${segmentId}/translate`, { language: language ?? null });
+  },
+
   /// Collapse consecutive same-speaker segments in the current transcription (permanent for this version).
   async mergeSegments(id: string): Promise<void> {
     await http.post(`/api/recordings/${id}/merge-segments`);

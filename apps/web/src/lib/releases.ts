@@ -26,8 +26,9 @@ manual reassignment. A **People** screen manages enrolled voiceprints — rename
 merge duplicates, and erase one or all (GDPR) of the stored biometric voiceprints.
 
 It can **summarise** recordings, **extract action items** (with actor and deadline) into an editable
-table, and let you **chat across one or more transcripts** — with file attachments, a context-usage dial,
-and saved conversations — using an OpenAI-compatible LLM endpoint you configure. Recordings organise into
+table, **translate** a transcript (segments, summary, and actions) into your chosen language, and let you
+**chat across one or more transcripts** — with file attachments, a context-usage dial, and saved
+conversations — using an OpenAI-compatible LLM endpoint you configure. Recordings organise into
 **sections** with drag-and-drop ordering.
 
 Diariz is **multi-user** with role-based access: people request access (or an administrator adds them),
@@ -50,6 +51,26 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.24.0",
+    date: "2026-06-29",
+    pr: 65,
+    headline: "Translate transcripts into your language",
+    summary:
+      "**Translate to {your language}** now appears on a recording's menu (and on each segment's menu) once " +
+      "you've set a native language in Preferences. It uses your configured OpenAI-compatible LLM to translate " +
+      "the whole transcript — every segment, plus the summary and action items — into your language, keeping " +
+      "speakers' names intact. Translations land in the **revised** layer, so the model's original words are " +
+      "preserved: the ✎ marks translated rows and the **Show original / Show revised** toggle flips back to " +
+      "the source at any time. You can also translate a single segment from its menu.",
+    added: [
+      "“Translate to {language}” on the recording menu/toolbar and on each segment — translates into your native language via the LLM.",
+      "Whole-transcript translation covers the segments, the summary, and the action items in one go.",
+    ],
+    changed: [
+      "Translations are stored as revisions (the model's original is kept) and are shown/exported like manual edits.",
+    ],
+  },
   {
     version: "0.23.0",
     date: "2026-06-29",

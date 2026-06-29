@@ -12,6 +12,7 @@ import DownloadTranscriptModal from "../components/DownloadTranscriptModal";
 import { recordingMenu } from "../components/recordingMenu";
 import { formatBytes, formatDuration } from "../lib/format";
 import { hasRevisions, segmentText, toggleLabel } from "../lib/transcriptView";
+import { fetchLanguages } from "../lib/languages";
 import { allSpeakersAssigned } from "../lib/speakers";
 import type { SegmentDto, SpeakerInfo, SpeakerProfile } from "../lib/types";
 
@@ -33,6 +34,10 @@ export default function RecordingDetail() {
     queryKey: ["speaker-profiles"],
     queryFn: api.listSpeakerProfiles,
   });
+  // The user's native language drives the "Translate to …" action; resolve its display name.
+  const { data: profile } = useQuery({ queryKey: ["user-profile"], queryFn: api.getProfile });
+  const { data: languages = [] } = useQuery({ queryKey: ["languages"], queryFn: fetchLanguages });
+  const nativeLang = languages.find((l) => l.code === profile?.nativeLanguage) ?? null;
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
@@ -49,6 +54,7 @@ export default function RecordingDetail() {
   // When the transcript has edited/translated segments, the user can flip the whole list back to the
   // model's original words.
   const [showOriginal, setShowOriginal] = useState(false);
+  const [translating, setTranslating] = useState(false);
 
   useEffect(() => {
     const hub = createHub((e) => {
@@ -145,6 +151,42 @@ export default function RecordingDetail() {
       setActionError(apiErrorMessage(e, "Could not extract actions."));
     } finally {
       setExtracting(false);
+    }
+  }
+
+  // Translate the whole transcript (+ summary + actions) into the user's native language. Overwrites any
+  // existing revision/translation, so confirm first when there's edited text to lose.
+  async function translateRecording() {
+    if (!nativeLang) return;
+    if (rec?.current && hasRevisions(rec.current.segments) &&
+        !window.confirm(`Translate to ${nativeLang.englishName}? This replaces any edited or previously translated text.`))
+      return;
+    setActionError(null);
+    setActionInfo(null);
+    setTranslating(true);
+    try {
+      await api.translateRecording(id, nativeLang.code);
+      await qc.invalidateQueries({ queryKey: ["recording", id] });
+      setActionInfo(`Translated to ${nativeLang.englishName}.`);
+    } catch (e) {
+      setActionError(apiErrorMessage(e, "Could not translate the transcript."));
+    } finally {
+      setTranslating(false);
+    }
+  }
+
+  async function translateSegment(segmentId: string) {
+    if (!nativeLang) return;
+    setActionError(null);
+    setActionInfo(null);
+    setTranslating(true);
+    try {
+      await api.translateSegment(id, segmentId, nativeLang.code);
+      await qc.invalidateQueries({ queryKey: ["recording", id] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e, "Could not translate the segment."));
+    } finally {
+      setTranslating(false);
     }
   }
 
@@ -247,6 +289,8 @@ export default function RecordingDetail() {
     onSummarise: summarize,
     onExtractActions: extractActions,
     onReidentify: reidentify,
+    onTranslate: nativeLang ? translateRecording : undefined,
+    translateLabel: nativeLang?.englishName,
     onMove: () => setMoving(true),
     onPlay: () => void playFrom(0),
     onDownloadTranscript: () => setDownloading(true),
@@ -283,9 +327,9 @@ export default function RecordingDetail() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {(isSummarizing || requeuing) && (
+          {(isSummarizing || requeuing || translating) && (
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              {isSummarizing ? "Summarising…" : "Queuing…"}
+              {translating ? "Translating…" : isSummarizing ? "Summarising…" : "Queuing…"}
             </span>
           )}
           <DetailToolbar
@@ -396,8 +440,10 @@ export default function RecordingDetail() {
                 seg={s}
                 active={i === activeIdx}
                 showOriginal={showOriginal}
+                translateLabel={nativeLang?.englishName}
                 onPlay={() => playFrom(s.startMs)}
                 onEdit={() => setEditingSeg(s)}
+                onTranslate={nativeLang ? () => translateSegment(s.id) : undefined}
               />
             ))}
           </ul>
@@ -736,16 +782,24 @@ function SegmentRow({
   seg,
   active,
   showOriginal,
+  translateLabel,
   onPlay,
   onEdit,
+  onTranslate,
 }: {
   seg: SegmentDto;
   active: boolean;
   showOriginal: boolean;
+  translateLabel?: string;
   onPlay: () => void;
   onEdit: () => void;
+  onTranslate?: () => void;
 }) {
   const revised = seg.revised != null;
+  const actions = [
+    { label: "Edit", onClick: onEdit },
+    ...(onTranslate && translateLabel ? [{ label: `Translate to ${translateLabel}`, onClick: onTranslate }] : []),
+  ];
   return (
     <li
       onClick={onPlay}
@@ -771,7 +825,7 @@ function SegmentRow({
           ✎
         </span>
       )}
-      <KebabMenu actions={[{ label: "Edit", onClick: onEdit }]} label="Segment actions" />
+      <KebabMenu actions={actions} label="Segment actions" />
     </li>
   );
 }

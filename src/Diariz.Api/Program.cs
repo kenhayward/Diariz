@@ -122,6 +122,7 @@ builder.Services.AddScoped<ISpeakerIdentifier, SpeakerIdentifier>();
 // ---- Summarisation (OpenAI-compatible endpoint + background consumer) ----
 builder.Services.AddHttpClient<ISummarizationClient, SummarizationClient>();
 builder.Services.AddHttpClient<IActionsClient, ActionsClient>();
+builder.Services.AddHttpClient<ITranslationClient, TranslationClient>();
 builder.Services.AddScoped<ISummarizationSettingsResolver, SummarizationSettingsResolver>();
 builder.Services.AddHostedService<SummarizationWorker>();
 

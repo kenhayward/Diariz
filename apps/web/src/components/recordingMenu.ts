@@ -7,6 +7,10 @@ export interface RecordingMenuHandlers {
   onMove: () => void;
   /// Optional (detail page only): extract action items from the transcript with the LLM.
   onExtractActions?: () => void;
+  /// Optional (detail page only): translate the transcript into the user's native language.
+  onTranslate?: () => void;
+  /// The native-language label shown on the Translate item, e.g. "Spanish". Required for the item to appear.
+  translateLabel?: string;
   /// Optional (detail page only): re-run speaker identification against current voiceprints.
   onReidentify?: () => void;
   /// Optional: the list omits Play (playback lives in the detail panel); the detail menu provides it.
@@ -34,6 +38,9 @@ export function recordingMenu(h: RecordingMenuHandlers): KebabAction[] {
       : []),
     ...(h.onReidentify
       ? [{ label: "Re-identify speakers", onClick: h.onReidentify, disabled: !h.hasTranscript }]
+      : []),
+    ...(h.onTranslate && h.translateLabel
+      ? [{ label: `Translate to ${h.translateLabel}`, onClick: h.onTranslate, disabled: !h.hasTranscript }]
       : []),
     { label: "Move to section…", onClick: h.onMove },
     ...(h.onPlay ? [{ label: "Play", onClick: h.onPlay }] : []),

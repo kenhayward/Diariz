@@ -137,6 +137,10 @@ public record UserProfileDto(string Email, string? FullName, string? NativeLangu
 /// in the supported set (else 400).</summary>
 public record UpdateUserProfileRequest(string? FullName, string? NativeLanguage, string? UiLanguage);
 
+/// <summary>Translate a transcript (or one segment) into <see cref="Language"/> (BCP-47). When null, the
+/// caller's saved native language is used; 400 if neither is set.</summary>
+public record TranslateRequest(string? Language = null);
+
 // ---- User settings (per-user summarisation config) ----
 /// <summary>Settings returned to the client. The API key is never exposed — only whether one is set.
 /// The Default* fields are the server-wide values, shown as placeholders so the user can see what
