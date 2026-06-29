@@ -117,7 +117,7 @@ public class RecordingsController : ControllerBase
             .ToList();
         var speakers = rec.Speakers
             .OrderBy(s => s.Label)
-            .Select(s => new SpeakerInfoDto(s.Label, s.DisplayName, s.ProfileId, s.IdentifiedAuto))
+            .Select(s => new SpeakerInfoDto(s.Label, s.DisplayName, s.ProfileId, s.IdentifiedAuto, s.IsMultiSpeaker))
             .ToList();
         var current = rec.Transcriptions.FirstOrDefault();
         TranscriptionDto? tDto = current is null ? null : new(
@@ -229,8 +229,35 @@ public class RecordingsController : ControllerBase
             speaker = new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = req.Label };
             _db.Speakers.Add(speaker);
         }
-        // A free-text rename detaches the speaker from any voiceprint (it's now hand-typed text).
+        // A free-text rename detaches the speaker from any voiceprint (it's now hand-typed text)
+        // and exits "Multiple Speakers" mode (the user has named a single person).
         speaker.DisplayName = req.DisplayName;
+        speaker.ProfileId = null;
+        speaker.IdentifiedAuto = false;
+        speaker.IsMultiSpeaker = false;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>Mark a recording's speaker as "Multiple Speakers" (overlapping/simultaneous speech). Such a
+    /// speaker is detached from any voiceprint and excluded from auto-identification and enrolment, since
+    /// its audio mixes people. Clearing happens implicitly when the user renames/assigns the speaker.</summary>
+    [HttpPut("{id:guid}/speakers/{label}/multi")]
+    public async Task<IActionResult> MarkMultiSpeaker(Guid id, string label)
+    {
+        var rec = await _db.Recordings.Include(r => r.Speakers)
+            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+
+        var speaker = rec.Speakers.FirstOrDefault(s => s.Label == label);
+        if (speaker is null)
+        {
+            // Add to the DbSet (not the loaded nav collection) so EF tracks it as Added/INSERT.
+            speaker = new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = label };
+            _db.Speakers.Add(speaker);
+        }
+        speaker.IsMultiSpeaker = true;
+        speaker.DisplayName = Speaker.MultiSpeakerName;
         speaker.ProfileId = null;
         speaker.IdentifiedAuto = false;
         await _db.SaveChangesAsync();
@@ -251,10 +278,11 @@ public class RecordingsController : ControllerBase
 
         if (req.ProfileId is null)
         {
-            // Unassign → revert to the anonymous label.
+            // Unassign → revert to the anonymous label (and exit "Multiple Speakers" mode).
             speaker.ProfileId = null;
             speaker.DisplayName = speaker.Label;
             speaker.IdentifiedAuto = false;
+            speaker.IsMultiSpeaker = false;
             await _db.SaveChangesAsync();
             return NoContent();
         }
@@ -266,6 +294,7 @@ public class RecordingsController : ControllerBase
         speaker.ProfileId = profile.Id;
         speaker.DisplayName = profile.Name;
         speaker.IdentifiedAuto = false; // an explicit manual assignment
+        speaker.IsMultiSpeaker = false; // naming a single person exits "Multiple Speakers" mode
 
         // Train "by whole speakers": record this speaker as a contribution (once) and recompute the
         // centroid from all of the profile's contribution snapshots. Requires the speaker embedding,
@@ -422,6 +451,35 @@ public class RecordingsController : ControllerBase
         // Edits land on Revised, preserving the model's Original. A null Text resets to the original
         // (clears the revision); a value (incl. "") sets the revision.
         seg.Revised = req.Text;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>Delete a single segment from the current transcription (e.g. a meaningless filler row).
+    /// Permanent for this version — re-transcribe to regenerate the full set. Remaining segments are
+    /// renumbered so their ordinals stay contiguous.</summary>
+    [HttpDelete("{id:guid}/segments/{segmentId:guid}")]
+    public async Task<IActionResult> DeleteSegment(Guid id, Guid segmentId)
+    {
+        var seg = await _db.Segments.Include(s => s.Transcription)
+            .FirstOrDefaultAsync(s => s.Id == segmentId);
+        if (seg?.Transcription is null || seg.Transcription.RecordingId != id) return NotFound();
+
+        // Ownership: the segment's recording must belong to the caller.
+        var owned = await _db.Recordings.AnyAsync(r => r.Id == id && r.UserId == UserId);
+        if (!owned) return NotFound();
+
+        var transcriptionId = seg.Transcription.Id;
+        _db.Segments.Remove(seg);
+
+        // Renumber the survivors contiguously from 0 (preserving order).
+        var survivors = await _db.Segments
+            .Where(s => s.TranscriptionId == transcriptionId && s.Id != segmentId)
+            .OrderBy(s => s.Ordinal)
+            .ToListAsync();
+        var ordinal = 0;
+        foreach (var s in survivors) s.Ordinal = ordinal++;
+
         await _db.SaveChangesAsync();
         return NoContent();
     }

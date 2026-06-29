@@ -29,4 +29,14 @@ public class Speaker
     /// identification (vs. a manual rename/assignment). Lets re-identification and GDPR erasure revert
     /// auto labels without touching names the user set by hand.</summary>
     public bool IdentifiedAuto { get; set; }
+
+    /// <summary>The user has marked this diarization slot as overlapping/simultaneous speech ("Multiple
+    /// Speakers"). Such a speaker is never auto-identified nor enrolled into a voiceprint, since its audio
+    /// is a mix of people. Setting any explicit name/profile (or unassigning) clears the flag.</summary>
+    public bool IsMultiSpeaker { get; set; }
+
+    /// <summary>The display name applied when a speaker is flagged <see cref="IsMultiSpeaker"/>. Stored
+    /// verbatim so server-side transcript surfaces (exports, email, chat) read it like any other name;
+    /// the web localises the in-app affordance.</summary>
+    public const string MultiSpeakerName = "Multiple Speakers";
 }

@@ -1,6 +1,7 @@
 {
   "namePrompt": "Name for this person?",
   "errAssignSpeaker": "Could not reassign the speaker.",
+  "errDeleteSegment": "Could not delete the segment.",
   "errCreatePerson": "Could not create the person.",
   "retranscribing": "Re-transcribing…",
   "errRetranscribe": "Could not start re-transcription.",
@@ -76,6 +77,8 @@
   "assignAria": "Assign {{label}} to a person",
   "unassigned": "Unassigned",
   "newPerson": "+ New person…",
+  "multipleSpeakers": "Multiple Speakers",
+  "confirmDeleteSegment": "Delete this segment? Re-transcribe to restore it.",
   "revisedTitle": "This segment has been edited or translated",
   "editedAria": "Edited",
   "dropToUpload": "Drop audio files to upload",

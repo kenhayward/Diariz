@@ -14,6 +14,8 @@ public static class SpeakerLabeling
         foreach (var sp in speakers)
         {
             if (sp.Embedding is null) continue;
+            // "Multiple Speakers" is overlapping audio — never match it against a single-person voiceprint.
+            if (sp.IsMultiSpeaker) continue;
             // Only (re)label anonymous or previously-auto speakers — never override a manual name.
             if (!(sp.IdentifiedAuto || sp.DisplayName == sp.Label)) continue;
 

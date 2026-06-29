@@ -73,6 +73,9 @@ export interface SpeakerInfo {
   displayName: string;
   profileId: string | null;
   identifiedAuto: boolean;
+  /// The user has marked this slot as overlapping/simultaneous speech ("Multiple Speakers").
+  /// Such a speaker is never auto-identified or enrolled into a voiceprint.
+  isMultiSpeaker: boolean;
 }
 
 /// An enrolled person/voiceprint (per user).

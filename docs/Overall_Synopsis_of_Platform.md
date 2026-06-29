@@ -108,7 +108,9 @@ services address each other by Compose service name (`minio:9000`, `redis:6379`,
    duration, and runs **auto-identification**: for any speaker not manually named, it matches the embedding
    against the owner's enrolled **`SpeakerProfile`** voiceprints by **pgvector cosine distance** (≤
    `Identification:Threshold`) and, on a hit, sets `ProfileId` + `DisplayName` + `IdentifiedAuto = true` —
-   never overriding a manual name.
+   never overriding a manual name, and **skipping any speaker the user flagged `IsMultiSpeaker`**
+   ("Multiple Speakers" — overlapping/simultaneous speech, which is also never enrolled into a voiceprint).
+   Individual segments can be deleted from a transcript (the survivors renumber); re-transcribe regenerates them.
 6. **Notify.** The API pushes **`RecordingStatusChanged`** over **SignalR** (`/hubs/transcription`) to the
    owner's per-user group; the browser refetches and the detail page shows the transcript.
 

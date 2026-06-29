@@ -1,6 +1,7 @@
 {
   "namePrompt": "Name dieser Person?",
   "errAssignSpeaker": "Der Sprecher konnte nicht neu zugewiesen werden.",
+  "errDeleteSegment": "Das Segment konnte nicht gelöscht werden.",
   "errCreatePerson": "Die Person konnte nicht erstellt werden.",
   "retranscribing": "Wird neu transkribiert…",
   "errRetranscribe": "Die neue Transkription konnte nicht gestartet werden.",
@@ -76,6 +77,8 @@
   "assignAria": "{{label}} einer Person zuweisen",
   "unassigned": "Nicht zugewiesen",
   "newPerson": "+ Neue Person…",
+  "multipleSpeakers": "Mehrere Sprecher",
+  "confirmDeleteSegment": "Dieses Segment löschen? Erneut transkribieren, um es wiederherzustellen.",
   "revisedTitle": "Dieses Segment wurde bearbeitet oder übersetzt",
   "editedAria": "Bearbeitet",
   "dropToUpload": "Audiodateien zum Hochladen ablegen",

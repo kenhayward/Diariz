@@ -44,6 +44,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddUserLanguagePreferences` | `UserSettings.NativeLanguage`, `UserSettings.UiLanguage` (both nullable) |
 | `AddRecordingAudioDeleted` | `Recording.AudioDeletedAt` (nullable) — audio deleted while keeping the transcript |
 | `AddSectionParentAndPosition` | `Section.ParentId` (self-ref, cascade) + `Section.Position` — two-level sub-grouping |
+| `AddSpeakerMultiSpeaker` | `Speaker.IsMultiSpeaker` (bool) — "Multiple Speakers" slots excluded from voiceprints |
 
 ### Entity-relationship overview
 
@@ -168,6 +169,7 @@ Per-recording diarization label → display name, plus its voiceprint and any id
 | `Embedding` | **vector(192)** null | ECAPA per-speaker voiceprint from the worker; Postgres-only |
 | `ProfileId` | uuid FK → SpeakerProfiles null | the identified person; **SetNull** on profile delete |
 | `IdentifiedAuto` | bool | true when name/profile were set by auto-ID (vs a manual rename) |
+| `IsMultiSpeaker` | bool | user marked this slot as overlapping speech ("Multiple Speakers"); never auto-identified or enrolled into a voiceprint |
 
 Unique index: `(RecordingId, Label)`.
 

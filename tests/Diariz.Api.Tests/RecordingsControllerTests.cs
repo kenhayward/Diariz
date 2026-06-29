@@ -669,6 +669,151 @@ public class RecordingsControllerTests
         Assert.IsType<NotFoundResult>(result);
     }
 
+    // ---- Delete segment ----
+
+    [Fact]
+    public async Task DeleteSegment_RemovesSegment_AndRenumbersOrdinals()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId); // two segments: "Hello"(0), "World"(1)
+        var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
+        var first = await db.Segments.Where(s => s.TranscriptionId == tr.Id).OrderBy(s => s.Ordinal).FirstAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.DeleteSegment(rec.Id, first.Id);
+
+        Assert.IsType<NoContentResult>(result);
+        var remaining = await db.Segments.Where(s => s.TranscriptionId == tr.Id)
+            .OrderBy(s => s.Ordinal).ToListAsync();
+        var seg = Assert.Single(remaining);
+        Assert.Equal("World", seg.Original);
+        Assert.Equal(0, seg.Ordinal); // renumbered contiguously from 0
+    }
+
+    [Fact]
+    public async Task DeleteSegment_OnAnotherUsersRecording_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var rec = await SeedTranscribedRecording(db, Guid.NewGuid());
+        var seg = await db.Segments.FirstAsync();
+        var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue());
+
+        var result = await controller.DeleteSegment(rec.Id, seg.Id);
+
+        Assert.IsType<NotFoundResult>(result);
+        Assert.NotNull(await db.Segments.FindAsync(seg.Id)); // untouched
+    }
+
+    [Fact]
+    public async Task DeleteSegment_WrongRecordingId_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedTranscribedRecording(db, userId);
+        var seg = await db.Segments.FirstAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.DeleteSegment(Guid.NewGuid(), seg.Id);
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    // ---- Multiple Speakers ----
+
+    [Fact]
+    public async Task MarkMultiSpeaker_SetsFlag_AndDetachesFromVoiceprint()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var profileId = Guid.NewGuid();
+        db.Speakers.Add(new Speaker
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00",
+            DisplayName = "Alice", ProfileId = profileId, IdentifiedAuto = true,
+        });
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.MarkMultiSpeaker(rec.Id, "SPEAKER_00");
+
+        Assert.IsType<NoContentResult>(result);
+        var sp = await db.Speakers.SingleAsync(s => s.RecordingId == rec.Id && s.Label == "SPEAKER_00");
+        Assert.True(sp.IsMultiSpeaker);
+        Assert.Null(sp.ProfileId);
+        Assert.False(sp.IdentifiedAuto);
+        Assert.Equal(Speaker.MultiSpeakerName, sp.DisplayName);
+    }
+
+    [Fact]
+    public async Task MarkMultiSpeaker_CreatesSpeaker_WhenLabelNotYetPresent()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.MarkMultiSpeaker(rec.Id, "SPEAKER_07");
+
+        Assert.IsType<NoContentResult>(result);
+        var sp = await db.Speakers.SingleAsync(s => s.RecordingId == rec.Id && s.Label == "SPEAKER_07");
+        Assert.True(sp.IsMultiSpeaker);
+    }
+
+    [Fact]
+    public async Task MarkMultiSpeaker_OnAnotherUsersRecording_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var rec = await SeedRecording(db, Guid.NewGuid(), versions: 1);
+        var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(await controller.MarkMultiSpeaker(rec.Id, "SPEAKER_00"));
+    }
+
+    [Fact]
+    public async Task AssignSpeaker_Unassign_ClearsMultiFlag()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        db.Speakers.Add(new Speaker
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00",
+            DisplayName = Speaker.MultiSpeakerName, IsMultiSpeaker = true,
+        });
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.AssignSpeaker(rec.Id, "SPEAKER_00", new AssignSpeakerRequest(null));
+
+        Assert.IsType<NoContentResult>(result);
+        var sp = await db.Speakers.SingleAsync(s => s.RecordingId == rec.Id && s.Label == "SPEAKER_00");
+        Assert.False(sp.IsMultiSpeaker);
+        Assert.Equal("SPEAKER_00", sp.DisplayName); // reverted to the raw label
+    }
+
+    [Fact]
+    public async Task RenameSpeaker_ClearsMultiFlag()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        db.Speakers.Add(new Speaker
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00",
+            DisplayName = Speaker.MultiSpeakerName, IsMultiSpeaker = true,
+        });
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.RenameSpeaker(rec.Id, new RenameSpeakerRequest("SPEAKER_00", "Bob"));
+
+        var sp = await db.Speakers.SingleAsync(s => s.RecordingId == rec.Id && s.Label == "SPEAKER_00");
+        Assert.False(sp.IsMultiSpeaker);
+        Assert.Equal("Bob", sp.DisplayName);
+    }
+
     // ---- Merge segments ----
 
     [Fact]

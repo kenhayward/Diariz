@@ -57,6 +57,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.33.0",
+    date: "2026-06-29",
+    pr: 76,
+    headline: "Tidy transcripts: delete segments, mark overlapping speech",
+    summary:
+      "Two transcript-editing tools. You can now **delete a single segment** from the transcript " +
+      "(via the row’s ⋮ menu) — handy for dropping a meaningless or misfired row; the remaining rows " +
+      "renumber automatically, and re-transcribing always regenerates the full set. And a speaker can be " +
+      "marked **“Multiple Speakers”** from the speaker dropdown, for stretches of overlapping or " +
+      "simultaneous speech. Because that audio is a mix of voices, a “Multiple Speakers” slot is **never " +
+      "used to recognise or train a voiceprint**.",
+    added: [
+      "Delete an individual transcript segment from its ⋮ menu (permanent for that version; re-transcribe to restore).",
+      "Mark a speaker as “Multiple Speakers” for overlapping speech — excluded from automatic identification and voiceprint enrolment.",
+    ],
+  },
+  {
     version: "0.32.1",
     date: "2026-06-29",
     pr: 75,

@@ -174,6 +174,16 @@ export const api = {
     await http.put(`/api/recordings/${id}/segments/${segmentId}`, { text });
   },
 
+  /// Delete a single segment from the current transcription (permanent for this version).
+  async deleteSegment(id: string, segmentId: string): Promise<void> {
+    await http.delete(`/api/recordings/${id}/segments/${segmentId}`);
+  },
+
+  /// Mark a speaker as "Multiple Speakers" (overlapping speech) — excluded from voiceprints.
+  async markMultiSpeaker(id: string, label: string): Promise<void> {
+    await http.put(`/api/recordings/${id}/speakers/${encodeURIComponent(label)}/multi`);
+  },
+
   /// Translate the whole transcript (segments + summary + actions) into `language` (BCP-47), or the
   /// caller's native language when omitted. Translations land in each segment's revision.
   async translateRecording(id: string, language?: string): Promise<void> {

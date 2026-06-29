@@ -123,9 +123,10 @@ public record ProfileContributionDto(
 /// <summary>A voiceprint with its training provenance and how many recording-speakers it currently labels.</summary>
 public record SpeakerProfileDetailDto(
     Guid Id, string Name, int SampleCount, int IdentifiedCount, IReadOnlyList<ProfileContributionDto> Contributions);
-/// <summary>Per-recording speaker: its label, shown name, the matched voiceprint (if any), and whether
-/// the name was set automatically.</summary>
-public record SpeakerInfoDto(string Label, string DisplayName, Guid? ProfileId, bool IdentifiedAuto);
+/// <summary>Per-recording speaker: its label, shown name, the matched voiceprint (if any), whether
+/// the name was set automatically, and whether it's flagged "Multiple Speakers" (overlapping speech).</summary>
+public record SpeakerInfoDto(
+    string Label, string DisplayName, Guid? ProfileId, bool IdentifiedAuto, bool IsMultiSpeaker = false);
 public record RenameRecordingRequest(string? Name);
 /// <summary>Diarization speaker-count hints. Either bound may be null (= no bound / auto).</summary>
 public record SpeakerHints(int? Min, int? Max);

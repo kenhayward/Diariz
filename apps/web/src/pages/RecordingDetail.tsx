@@ -72,6 +72,12 @@ export default function RecordingDetail() {
     return [...set];
   }, [rec]);
 
+  // Labels flagged "Multiple Speakers" — their segment/speaker display is localised in-app.
+  const multiSpeakerLabels = useMemo(
+    () => new Set((rec?.speakers ?? []).filter((s) => s.isMultiSpeaker).map((s) => s.label)),
+    [rec],
+  );
+
   async function rename(label: string, name: string) {
     await api.renameSpeaker(id, label, name);
     qc.invalidateQueries({ queryKey: ["recording", id] });
@@ -97,6 +103,29 @@ export default function RecordingDetail() {
       qc.invalidateQueries({ queryKey: ["speaker-profiles"] });
     } catch (e) {
       setActionError(apiErrorMessage(e, t("workspace:errCreatePerson")));
+    }
+  }
+
+  // Mark a speaker as "Multiple Speakers" (overlapping speech) — detaches it from any voiceprint.
+  async function markMulti(label: string) {
+    setActionError(null);
+    try {
+      await api.markMultiSpeaker(id, label);
+      qc.invalidateQueries({ queryKey: ["recording", id] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e, t("workspace:errAssignSpeaker")));
+    }
+  }
+
+  // Delete a single (e.g. meaningless) segment from the current transcription.
+  async function deleteSegment(segmentId: string) {
+    if (!window.confirm(t("workspace:confirmDeleteSegment"))) return;
+    setActionError(null);
+    try {
+      await api.deleteSegment(id, segmentId);
+      qc.invalidateQueries({ queryKey: ["recording", id] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e, t("workspace:errDeleteSegment")));
     }
   }
 
@@ -410,11 +439,16 @@ export default function RecordingDetail() {
                   key={label}
                   label={label}
                   info={info}
-                  initial={rec.speakerNames[label] ?? info?.displayName ?? label}
+                  initial={
+                    info?.isMultiSpeaker
+                      ? t("workspace:multipleSpeakers")
+                      : rec.speakerNames[label] ?? info?.displayName ?? label
+                  }
                   profiles={profiles}
                   onRename={(name) => rename(label, name)}
                   onAssign={(profileId) => assignSpeaker(label, profileId)}
                   onNewPerson={() => newPerson(label)}
+                  onMulti={() => markMulti(label)}
                 />
               );
             })}
@@ -457,12 +491,15 @@ export default function RecordingDetail() {
               <SegmentRow
                 key={s.id}
                 seg={s}
+                speakerName={multiSpeakerLabels.has(s.speaker) ? t("workspace:multipleSpeakers") : s.speakerDisplay}
                 active={i === activeIdx}
                 showOriginal={showOriginal}
                 editLabel={t("recordings:edit")}
+                deleteLabel={t("recordings:delete")}
                 translateLabel={nativeLang ? t("recordings:translateTo", { language: nativeLang.englishName }) : undefined}
                 onPlay={rec.hasAudio ? () => playFrom(s.startMs) : undefined}
                 onEdit={() => setEditingSeg(s)}
+                onDelete={() => deleteSegment(s.id)}
                 onTranslate={nativeLang ? () => translateSegment(s.id) : undefined}
               />
             ))}
@@ -731,6 +768,7 @@ function RecordingNameForm({
 }
 
 const NEW_PERSON = "__new__";
+const MULTI_SPEAKER = "__multi__";
 
 export function SpeakerRow({
   label,
@@ -740,6 +778,7 @@ export function SpeakerRow({
   onRename,
   onAssign,
   onNewPerson,
+  onMulti,
 }: {
   label: string;
   info: SpeakerInfo | undefined;
@@ -748,6 +787,7 @@ export function SpeakerRow({
   onRename: (name: string) => void;
   onAssign: (profileId: string | null) => void;
   onNewPerson: () => void;
+  onMulti: () => void;
 }) {
   const { t } = useTranslation("workspace");
   const [value, setValue] = useState(initial);
@@ -775,11 +815,12 @@ export function SpeakerRow({
         className="w-40 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
       />
       <select
-        value={info?.profileId ?? ""}
+        value={info?.isMultiSpeaker ? MULTI_SPEAKER : info?.profileId ?? ""}
         aria-label={t("assignAria", { label })}
         onChange={(e) => {
           const v = e.target.value;
           if (v === NEW_PERSON) onNewPerson();
+          else if (v === MULTI_SPEAKER) onMulti();
           else onAssign(v || null);
         }}
         className="w-40 rounded border px-2 py-1 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
@@ -790,6 +831,7 @@ export function SpeakerRow({
             {p.name}
           </option>
         ))}
+        <option value={MULTI_SPEAKER}>{t("multipleSpeakers")}</option>
         <option value={NEW_PERSON}>{t("newPerson")}</option>
       </select>
     </div>
@@ -798,22 +840,29 @@ export function SpeakerRow({
 
 function SegmentRow({
   seg,
+  speakerName,
   active,
   showOriginal,
   editLabel,
+  deleteLabel,
   translateLabel,
   onPlay,
   onEdit,
+  onDelete,
   onTranslate,
 }: {
   seg: SegmentDto;
+  /// The speaker name to show (localised "Multiple Speakers" overrides the server display).
+  speakerName: string;
   active: boolean;
   showOriginal: boolean;
   editLabel: string;
+  deleteLabel: string;
   translateLabel?: string;
   /// Seek+play from this segment. Omitted when the recording has no audio (row isn't clickable then).
   onPlay?: () => void;
   onEdit: () => void;
+  onDelete: () => void;
   onTranslate?: () => void;
 }) {
   const { t } = useTranslation("workspace");
@@ -821,6 +870,7 @@ function SegmentRow({
   const actions = [
     { label: editLabel, onClick: onEdit },
     ...(onTranslate && translateLabel ? [{ label: translateLabel, onClick: onTranslate }] : []),
+    { label: deleteLabel, onClick: onDelete, danger: true },
   ];
   return (
     <li
@@ -834,7 +884,7 @@ function SegmentRow({
       }`}
     >
       <span className="w-12 shrink-0 font-mono text-xs text-gray-400 dark:text-gray-500">{fmt(seg.startMs)}</span>
-      <span className="w-28 shrink-0 text-sm font-medium text-gray-700 dark:text-gray-200">{seg.speakerDisplay}</span>
+      <span className="w-28 shrink-0 text-sm font-medium text-gray-700 dark:text-gray-200">{speakerName}</span>
       {/* Auto-expands vertically to show the full (possibly merged) block of text. */}
       <span className="flex-1 whitespace-pre-wrap break-words text-sm dark:text-gray-200">
         {segmentText(seg, showOriginal)}
