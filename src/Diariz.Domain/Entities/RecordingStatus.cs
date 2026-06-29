@@ -10,5 +10,7 @@ public enum RecordingStatus
     Summarized = 4,
     Failed = 5,
     // Appended (never renumber — values are persisted as ints).
-    Summarizing = 6
+    Summarizing = 6,
+    /// <summary>Audio is being concatenated for a transcript merge (worker job in flight).</summary>
+    Merging = 7
 }

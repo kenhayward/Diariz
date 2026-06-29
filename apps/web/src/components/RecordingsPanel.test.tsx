@@ -20,6 +20,7 @@ vi.mock("../lib/api", () => ({
     deleteRecording: vi.fn(),
     deleteAudio: vi.fn(),
     deleteAudioBulk: vi.fn(),
+    mergeRecordings: vi.fn(),
     renameRecording: vi.fn(),
     moveRecording: vi.fn(),
     renameSection: vi.fn(),
@@ -326,6 +327,30 @@ describe("RecordingsPanel", () => {
     const menus = screen.getAllByRole("button", { name: /section actions/i });
     fireEvent.click(menus[0]); // Customers (first heading)
     expect(screen.getByRole("menuitem", { name: /new sub-section/i })).toBeTruthy();
+  });
+
+  it("Merge transcripts is enabled only for 2+ and calls the API with the selection", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    (api.mergeRecordings as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...rec, id: "a", name: "First" },
+      { ...rec, id: "b", name: "Second" },
+    ]);
+    renderList();
+    await screen.findByText("First");
+    fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
+
+    const mergeBtn = () => screen.getByRole("button", { name: /merge transcripts/i }) as HTMLButtonElement;
+    expect(mergeBtn().disabled).toBe(true); // nothing selected
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /select first/i }));
+    expect(mergeBtn().disabled).toBe(true); // only one
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /select second/i }));
+    expect(mergeBtn().disabled).toBe(false); // two
+
+    fireEvent.click(mergeBtn());
+    await waitFor(() => expect(api.mergeRecordings).toHaveBeenCalledWith(["a", "b"]));
   });
 
   it("reorders within a group via drag and drop", async () => {

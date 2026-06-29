@@ -10,6 +10,7 @@ public interface IJobQueue
 {
     Task EnqueueAsync(TranscriptionJob job, CancellationToken ct = default);
     Task EnqueueSummarizationAsync(SummarizationJob job, CancellationToken ct = default);
+    Task EnqueueAudioMergeAsync(AudioMergeJob job, CancellationToken ct = default);
 }
 
 /// <summary>Producer side of the transcription + summarisation queues, backed by Redis Streams.</summary>
@@ -39,5 +40,12 @@ public class RedisJobQueue : IJobQueue
         var db = _redis.GetDatabase();
         var payload = JsonSerializer.Serialize(job);
         await db.StreamAddAsync(_summaryOpts.StreamKey, "job", payload);
+    }
+
+    public async Task EnqueueAudioMergeAsync(AudioMergeJob job, CancellationToken ct = default)
+    {
+        var db = _redis.GetDatabase();
+        var payload = JsonSerializer.Serialize(job);
+        await db.StreamAddAsync(_opts.MergeStreamKey, "job", payload);
     }
 }

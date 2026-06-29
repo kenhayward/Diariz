@@ -323,6 +323,11 @@ export const api = {
     await http.post("/api/recordings/audio/delete", { ids });
   },
 
+  /// Merge 2+ recordings into the earliest-created one (transcripts + audio). Async on the worker.
+  async mergeRecordings(ids: string[]): Promise<void> {
+    await http.post("/api/recordings/merge", { ids });
+  },
+
   async summarize(id: string): Promise<void> {
     await http.post(`/api/recordings/${id}/summarize`);
   },

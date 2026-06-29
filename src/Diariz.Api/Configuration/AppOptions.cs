@@ -25,6 +25,8 @@ public class JobQueueOptions
     public string RedisConnection { get; set; } = "redis:6379";
     public string StreamKey { get; set; } = "transcription-jobs";
     public string ConsumerGroup { get; set; } = "workers";
+    /// <summary>Stream the GPU worker consumes audio-concatenation merge jobs from.</summary>
+    public string MergeStreamKey { get; set; } = "audio-merge-jobs";
 }
 
 public class WorkerOptions

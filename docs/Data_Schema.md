@@ -90,7 +90,7 @@ The owned audio recording.
 | `SizeBytes` | bigint | blob size; counts toward the owner's quota (reset to 0 when the audio is deleted) |
 | `AudioDeletedAt` | timestamptz null | non-null once the audio blob was deleted to reclaim storage (transcript kept); audio endpoints 404 |
 | `DurationMs` | bigint | measured by the worker for uploads (no client duration) |
-| `Status` | int | `RecordingStatus`: 0 Uploaded, 1 Queued, 2 Transcribing, 3 Transcribed, 4 Summarized, 5 Failed, 6 Summarizing |
+| `Status` | int | `RecordingStatus`: 0 Uploaded, 1 Queued, 2 Transcribing, 3 Transcribed, 4 Summarized, 5 Failed, 6 Summarizing, 7 Merging |
 | `Error` | text null | last failure message |
 | `MinSpeakers` / `MaxSpeakers` | int null | diarization hints (null = automatic) |
 | `SectionId` | uuid FK → Sections null | null = "Ungrouped"; **SetNull** on section delete |

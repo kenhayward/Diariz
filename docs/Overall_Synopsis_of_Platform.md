@@ -204,12 +204,19 @@ Voiceprints are **per-user** (a user's voiceprints only match their own recordin
 
 ## Cross-boundary contracts (the non-obvious glue)
 
-- **Redis Streams, two of them.** `transcription-jobs`/`workers` (API → Python worker) and
+- **Redis Streams, three of them.** `transcription-jobs`/`workers` and `audio-merge-jobs` (both API → Python
+  worker, sharing the `workers` group — the worker `XREADGROUP`s both streams and dispatches by stream key) and
   `summarization-jobs`/`summarizers` (API → its own in-process consumer). Job payloads are **PascalCase JSON**
   so .NET produces and Python/.NET consume without renaming. Keep `TranscriptionJob` / `TranscriptionResult` /
-  `Segment` shapes in sync across both languages.
-- **Worker → API callback** uses route `internal/transcriptions/*` and the **`X-Worker-Secret`** shared header
-  (not JWT). Not user-facing.
+  `AudioMergeJob` / `Segment` shapes in sync across both languages.
+- **Merge recordings.** `POST /api/recordings/merge` folds 2+ recordings into the earliest one: it builds a new
+  transcription version on the survivor (`TranscriptMerger` lays the source transcripts end-to-end, offsetting
+  timestamps and namespacing speakers), sets it `Merging`, and enqueues an `AudioMergeJob`. The worker
+  concatenates the source audio with **ffmpeg** (libopus/WebM), uploads the combined blob, and calls back to
+  `internal/recordings/merge-result`, which swaps the audio onto the survivor and deletes the now-merged source
+  recordings (rows + blobs); `merge-failure` flags the survivor and keeps the sources.
+- **Worker → API callback** uses routes `internal/transcriptions/*` and `internal/recordings/merge-*`, both with
+  the **`X-Worker-Secret`** shared header (not JWT). Not user-facing.
 - **SignalR** hub `/hubs/transcription` requires JWT; clients auto-join a per-user group (group name = user
   GUID) so `RecordingStatusChanged` events are scoped per user.
 - **pgvector is Postgres-only.** All vector matching sits behind `ISpeakerIdentifier`; unit tests fake it,
