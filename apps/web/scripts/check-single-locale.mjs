@@ -11,11 +11,17 @@ const base = process.argv[2] || "origin/main";
 let changed = [];
 try {
   // execFile (no shell) so the base ref can't inject shell metacharacters.
-  const out = execFileSync("git", ["diff", "--name-only", `${base}...HEAD`], { encoding: "utf8" });
+  const out = execFileSync("git", ["diff", "--name-only", `${base}...HEAD`], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
   changed = out.split("\n").filter(Boolean);
 } catch (e) {
-  console.error(`Could not diff against ${base}: ${e.message}`);
-  process.exit(1);
+  // The gate is a convenience check; if we can't compute the diff (detached checkout, base not
+  // fetched, no worktree), skip rather than block a legitimate PR. The completeness test is the
+  // hard guarantee.
+  console.warn(`Skipping single-locale gate — could not diff against ${base}: ${e.message}`);
+  process.exit(0);
 }
 
 // Match apps/web/src/locales/<lang>/<file>.json (the per-language catalog folders).
