@@ -18,7 +18,7 @@ public class RecordingsControllerTests
 {
     private static RecordingsController Build(DiarizDbContext db, Guid userId, FakeJobQueue queue,
         FakeAudioStorage? storage = null, bool summarizationEnabled = true, FakeEmailSender? email = null,
-        FakeSpeakerIdentifier? identifier = null, UploadOptions? uploads = null)
+        FakeSpeakerIdentifier? identifier = null, UploadOptions? uploads = null, IExportLocalizer? exportLocalizer = null)
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" })
@@ -29,7 +29,7 @@ public class RecordingsControllerTests
             new FakeApiKeyProtector());
         return new RecordingsController(db, storage ?? new FakeAudioStorage(), queue, new FakeHubContext(), config,
             resolver, email ?? new FakeEmailSender(), identifier ?? new FakeSpeakerIdentifier(),
-            Options.Create(uploads ?? new UploadOptions()))
+            Options.Create(uploads ?? new UploadOptions()), exportLocalizer)
         {
             ControllerContext = Http.Context(userId)
         };
@@ -727,6 +727,36 @@ public class RecordingsControllerTests
         Assert.Equal("SPEAKER_00", seg.SpeakerLabel); // keeps the first run's label
         Assert.Equal(0, seg.StartMs);
         Assert.Equal(2000, seg.EndMs);
+    }
+
+    // ---- Localized exports ----
+
+    [Fact]
+    public async Task TranscriptTxt_LocalizesHeadings_ToOwnersUiLanguage()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId, name: "Team Sync");
+        db.UserSettings.Add(new Domain.Entities.UserSettings { UserId = userId, UiLanguage = "es" });
+        await db.SaveChangesAsync();
+
+        var root = Path.Combine(Path.GetTempPath(), "diariz-exp-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "es"));
+        await File.WriteAllTextAsync(Path.Combine(root, "es", "exports.json"),
+            "{\"summary\":\"Resumen\",\"transcript\":\"Transcripción\"}");
+        try
+        {
+            var controller = Build(db, userId, new FakeJobQueue(),
+                exportLocalizer: new JsonExportLocalizer(root));
+
+            var result = await controller.TranscriptTxt(rec.Id);
+
+            var body = Encoding.UTF8.GetString(Assert.IsType<FileContentResult>(result).FileContents);
+            Assert.Contains("Resumen", body);        // localized heading
+            Assert.Contains("Transcripción", body);
+            Assert.DoesNotContain("\nSummary\n", body); // the English heading is gone
+        }
+        finally { Directory.Delete(root, true); }
     }
 
     // ---- Re-identify ----

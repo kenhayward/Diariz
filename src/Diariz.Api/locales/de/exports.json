@@ -1,0 +1,15 @@
+{
+  "transcriptName": "Name der Transkription",
+  "summary": "Zusammenfassung",
+  "actions": "Aktionen",
+  "transcript": "Transkription",
+  "action": "Aktion",
+  "actor": "Verantwortlich",
+  "deadline": "Frist",
+  "time": "Zeit",
+  "speaker": "Sprecher",
+  "text": "Text",
+  "none": "(keine)",
+  "sentFromDiariz": "Gesendet von Diariz",
+  "subject": "Transkription für {name}"
+}

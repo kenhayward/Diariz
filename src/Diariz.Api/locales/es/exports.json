@@ -1,0 +1,15 @@
+{
+  "transcriptName": "Nombre de la transcripción",
+  "summary": "Resumen",
+  "actions": "Acciones",
+  "transcript": "Transcripción",
+  "action": "Acción",
+  "actor": "Responsable",
+  "deadline": "Fecha límite",
+  "time": "Tiempo",
+  "speaker": "Hablante",
+  "text": "Texto",
+  "none": "(ninguno)",
+  "sentFromDiariz": "Enviado desde Diariz",
+  "subject": "Transcripción de {name}"
+}

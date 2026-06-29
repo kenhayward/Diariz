@@ -27,13 +27,14 @@ public class RecordingsController : ControllerBase
     private readonly IEmailSender _email;
     private readonly ISpeakerIdentifier _identifier;
     private readonly UploadOptions _uploads;
+    private readonly IExportLocalizer? _exportLocalizer;
     private readonly string _defaultModel;
 
     public RecordingsController(
         DiarizDbContext db, IAudioStorage storage, IJobQueue queue,
         IHubContext<TranscriptionHub> hub, IConfiguration config,
         ISummarizationSettingsResolver summarization, IEmailSender email, ISpeakerIdentifier identifier,
-        IOptions<UploadOptions> uploads)
+        IOptions<UploadOptions> uploads, IExportLocalizer? exportLocalizer = null)
     {
         _db = db;
         _storage = storage;
@@ -43,10 +44,19 @@ public class RecordingsController : ControllerBase
         _email = email;
         _identifier = identifier;
         _uploads = uploads.Value;
+        _exportLocalizer = exportLocalizer;
         _defaultModel = config["Transcription:DefaultModel"] ?? "whisperx-large-v3";
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    /// <summary>The export/email labels in the caller's UI language (falls back to English).</summary>
+    private async Task<ExportStrings> ExportLabelsAsync()
+    {
+        if (_exportLocalizer is null) return ExportStrings.English;
+        var uiLang = (await _db.UserSettings.FindAsync(UserId))?.UiLanguage;
+        return _exportLocalizer.For(uiLang);
+    }
 
     [HttpGet]
     public async Task<IReadOnlyList<RecordingSummaryDto>> List() =>
@@ -391,8 +401,9 @@ public class RecordingsController : ControllerBase
             .ToList();
 
         var name = rec.Name ?? rec.Title;
-        var html = TranscriptEmail.BuildHtml(name, current.Summary?.Text, segs, actions);
-        var sent = await _email.SendAsync(address!, TranscriptEmail.Subject(name), html);
+        var labels = await ExportLabelsAsync();
+        var html = TranscriptEmail.BuildHtml(name, current.Summary?.Text, segs, actions, labels);
+        var sent = await _email.SendAsync(address!, TranscriptEmail.Subject(name, labels), html);
         if (!sent) return BadRequest("Email isn't configured on the server. Contact an administrator.");
         return Ok();
     }
@@ -599,12 +610,13 @@ public class RecordingsController : ControllerBase
             .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal))
             .ToList();
 
+        var labels = await ExportLabelsAsync();
         var (body, mime, ext) = format switch
         {
-            "md" => (TranscriptFormatter.ToMarkdown(name, summary, segs, actions), "text/markdown", "md"),
-            "rtf" => (TranscriptFormatter.ToRtf(name, summary, segs, actions), "application/rtf", "rtf"),
+            "md" => (TranscriptFormatter.ToMarkdown(name, summary, segs, actions, labels), "text/markdown", "md"),
+            "rtf" => (TranscriptFormatter.ToRtf(name, summary, segs, actions, labels), "application/rtf", "rtf"),
             "srt" => (TranscriptFormatter.ToSrt(segs), "application/x-subrip", "srt"),
-            _ => (TranscriptFormatter.ToText(name, summary, segs, actions), "text/plain", "txt"),
+            _ => (TranscriptFormatter.ToText(name, summary, segs, actions, labels), "text/plain", "txt"),
         };
         return File(Encoding.UTF8.GetBytes(body), mime, $"{Slug(name)}.{ext}");
     }

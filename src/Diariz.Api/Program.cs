@@ -126,6 +126,14 @@ builder.Services.AddHttpClient<ITranslationClient, TranslationClient>();
 builder.Services.AddScoped<ISummarizationSettingsResolver, SummarizationSettingsResolver>();
 builder.Services.AddHostedService<SummarizationWorker>();
 
+// ---- Localized export/email labels (runtime JSON, not compiled .resx) ----
+// Prefer the content root's locales/ (present in dev and copied to the published output), falling back to
+// the app base directory.
+var exportLocalesRoot = Directory.Exists(Path.Combine(builder.Environment.ContentRootPath, "locales"))
+    ? Path.Combine(builder.Environment.ContentRootPath, "locales")
+    : Path.Combine(AppContext.BaseDirectory, "locales");
+builder.Services.AddSingleton<IExportLocalizer>(_ => new JsonExportLocalizer(exportLocalesRoot));
+
 // ---- Chat (streaming, reuses the per-user summarisation LLM config) ----
 builder.Services.AddHttpClient<IChatStreamClient, ChatStreamClient>();
 builder.Services.AddScoped<IChatContextResolver, ChatContextResolver>();

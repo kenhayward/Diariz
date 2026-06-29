@@ -38,7 +38,8 @@ Administrator sets the starter and maximum, any administrator can raise an indiv
 usage shows in the account menu.
 
 The interface is **localized** — pick your language (English, Spanish, French, German today) at signup or
-in Preferences. Translations are community-extensible via simple JSON files.
+in Preferences, and downloaded/emailed transcripts use it too. Translations are community-extensible via
+simple JSON files.
 `.trim();
 
 export interface Release {
@@ -54,6 +55,23 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.26.0",
+    date: "2026-06-29",
+    pr: 67,
+    headline: "Downloaded and emailed transcripts speak your language",
+    summary:
+      "The headings in **downloaded transcripts** (.txt / .md / .rtf) and the **emailed transcript** — " +
+      "things like *Summary*, *Transcript*, *Actions*, the table columns, the email subject and footer — now " +
+      "appear in your **app language** (English, Spanish, French, or German). Like the rest of the " +
+      "localization, these labels live in simple JSON files on the server, so they're community-extensible " +
+      "with a data-only PR. (The transcript content itself was already in whatever language you translated " +
+      "it to.) This completes the localization & translation feature.",
+    added: [
+      "Localized headings in transcript downloads and the emailed transcript, in the recording owner's app language.",
+      "Server-side export string catalogs (src/Diariz.Api/locales) that contributors can translate without code changes.",
+    ],
+  },
   {
     version: "0.25.0",
     date: "2026-06-29",
