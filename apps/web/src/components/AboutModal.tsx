@@ -62,9 +62,9 @@ export default function AboutModal({ onClose }: { onClose: () => void }) {
         {/* Disclaimers */}
         <div className="mt-4 border-t pt-3 text-xs leading-relaxed text-gray-500 dark:border-gray-700 dark:text-gray-400">
           <p>
-            Diariz is built on open-source software — including ASP.NET Core, React, WhisperX,
-            pyannote.audio, SpeechBrain, PostgreSQL/pgvector, Redis, MinIO/S3, MailKit, PdfPig, marked,
-            and DOMPurify — each under its own licence.
+            Diariz is built on open-source software — including ASP.NET Core, React, react-i18next,
+            WhisperX, pyannote.audio, SpeechBrain, PostgreSQL/pgvector, Redis, MinIO/S3, MailKit, PdfPig,
+            marked, and DOMPurify — each under its own licence.
           </p>
           <p className="mt-2">
             Speaker diarization uses the <strong>gated</strong> pyannote models

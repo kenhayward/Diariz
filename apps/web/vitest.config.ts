@@ -18,6 +18,7 @@ export default defineConfig({
   test: {
     environment: "jsdom", // provides window / localStorage for the api + token helpers
     globals: true, // enables @testing-library/react's automatic cleanup between tests
+    setupFiles: ["./src/test-setup.ts"], // initialise i18next once for component tests
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
   },
 });

@@ -1,0 +1,16 @@
+{
+  "rename": "Umbenennen",
+  "retranscribe": "Neu transkribieren",
+  "summarise": "Zusammenfassen",
+  "extractActions": "Aktionen extrahieren",
+  "reidentifySpeakers": "Sprecher neu identifizieren",
+  "translateTo": "Übersetzen nach {{language}}",
+  "moveToSection": "In Abschnitt verschieben…",
+  "moveToSectionShort": "In Abschnitt verschieben",
+  "play": "Abspielen",
+  "downloadTranscript": "Transkription herunterladen",
+  "emailTranscript": "Transkription per E-Mail senden",
+  "downloadAudio": "Audio herunterladen",
+  "delete": "Löschen",
+  "edit": "Bearbeiten"
+}

@@ -1,11 +1,13 @@
 import { useState } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth";
 import { apiErrorMessage } from "../lib/api";
 import AuthShell from "../components/AuthShell";
 
 export default function Login() {
+  const { t } = useTranslation("auth");
   const { login } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -25,8 +27,8 @@ export default function Login() {
       // anything else (500, network) shows the real reason.
       setError(
         axios.isAxiosError(err) && err.response?.status === 401
-          ? "Invalid email or password."
-          : apiErrorMessage(err, "Invalid email or password."),
+          ? t("invalidCredentials")
+          : apiErrorMessage(err, t("invalidCredentials")),
       );
     } finally {
       setBusy(false);
@@ -41,11 +43,11 @@ export default function Login() {
       >
         <div className="flex items-center gap-2">
           <img src="/logo.png" alt="" className="h-8 w-auto" />
-          <h1 className="text-lg font-semibold dark:text-gray-100">Sign in to Diariz</h1>
+          <h1 className="text-lg font-semibold dark:text-gray-100">{t("signInTitle")}</h1>
         </div>
         <input
           type="email"
-          placeholder="Email"
+          placeholder={t("email")}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className="w-full rounded border px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
@@ -53,7 +55,7 @@ export default function Login() {
         />
         <input
           type="password"
-          placeholder="Password"
+          placeholder={t("password")}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="w-full rounded border px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
@@ -65,12 +67,12 @@ export default function Login() {
           disabled={busy}
           className="w-full rounded bg-gray-900 py-2 text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
         >
-          {busy ? "Signing in…" : "Sign in"}
+          {busy ? t("signingIn") : t("signIn")}
         </button>
         <p className="text-center text-sm text-gray-500 dark:text-gray-400">
-          Need an account?{" "}
+          {t("needAccount")}{" "}
           <Link to="/request-access" className="text-blue-600 hover:underline dark:text-blue-400">
-            Request access
+            {t("requestAccess")}
           </Link>
         </p>
       </form>

@@ -1,7 +1,7 @@
 {
   "name": "diariz-web",
   "private": true,
-  "version": "0.24.0",
+  "version": "0.25.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,9 +15,11 @@
     "@tanstack/react-query": "^5.62.0",
     "axios": "^1.7.9",
     "dompurify": "^3.4.11",
+    "i18next": "^23.16.8",
     "marked": "^18.0.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-i18next": "^15.7.4",
     "react-router-dom": "^7.1.1"
   },
   "devDependencies": {

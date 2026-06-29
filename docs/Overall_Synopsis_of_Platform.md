@@ -173,6 +173,21 @@ one or all (GDPR): erasing reverts auto-applied labels to the anonymous label bu
 Voiceprints are **per-user** (a user's voiceprints only match their own recordings). See
 [`Speaker_Identification_and_Verification.md`](Speaker_Identification_and_Verification.md).
 
+## Localization (web UI)
+
+- The interface is localized with **react-i18next**. Strings live in JSON catalogs at
+  **`apps/web/src/locales/<lang>/<namespace>.json`** (namespaces: `common`, `auth`, `account`, `recordings`),
+  with **English authoritative** and **Spanish/French/German** shipped. Catalogs are **auto-discovered**
+  (`lib/i18n.ts` via `import.meta.glob`), so adding a language is a **data-only** change.
+- `LanguageProvider` (`language.tsx`) resolves the active locale by **`?lang=` → stored preference →
+  `navigator.languages` → `en`** (`resolveLanguage`), sets `<html lang>`/`<html dir>` (RTL), and persists the
+  choice (`diariz.language`). The picker lists the languages with a shipped catalog (`uiLanguages`); the
+  full ~50 (`languages.json`, mirroring the API's `GET /api/languages`) remain available as *content*
+  translation targets. Missing keys fall back to English.
+- **Merge gate:** `src/locales.test.ts` asserts every catalog mirrors `en`'s keys exactly (no missing/empty),
+  and `scripts/check-single-locale.mjs` (a CI job) limits a *translation-only* PR to one non-`en` language.
+  See `apps/web/src/locales/README.md`.
+
 ## Audio storage & playback
 
 - Original blobs live in **MinIO**; the **API streams them back itself** (same-origin) rather than handing

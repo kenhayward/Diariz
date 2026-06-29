@@ -36,6 +36,9 @@ an administrator approves, and each user sets up their own account and keeps the
 recordings, transcripts, and chats. Each user has a **storage quota** (audio): the Platform
 Administrator sets the starter and maximum, any administrator can raise an individual user, and your
 usage shows in the account menu.
+
+The interface is **localized** — pick your language (English, Spanish, French, German today) at signup or
+in Preferences. Translations are community-extensible via simple JSON files.
 `.trim();
 
 export interface Release {
@@ -51,6 +54,28 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.25.0",
+    date: "2026-06-29",
+    pr: 66,
+    headline: "The app speaks your language",
+    summary:
+      "Diariz's interface is now **localized** — choose your language at signup or in **Preferences**, or " +
+      "force it with `?lang=es` in the URL. **English, Spanish, French, and German** ship today; the account " +
+      "menu, the recording menus and toolbar, the sign-in / request-access / setup screens, and the Settings " +
+      "and Preferences dialogs all translate, with dates shown in your locale and right-to-left support built " +
+      "in. Translations live in simple JSON files, so **anyone can add or improve a language with a data-only " +
+      "PR** — no code changes. (This localizes the interface chrome; some deeper screens still follow in later " +
+      "releases.)",
+    added: [
+      "A localized UI via react-i18next — English, Spanish, French and German, picked at signup or in Preferences (or via ?lang=).",
+      "Contributor-friendly translation catalogs (apps/web/src/locales) with a guide and CI checks that keep every language complete.",
+      "Right-to-left layout support and locale-aware date formatting.",
+    ],
+    changed: [
+      "The app-language picker now lists the languages that have a shipped translation; your native language (for translating transcripts) still offers the full list.",
+    ],
+  },
   {
     version: "0.24.0",
     date: "2026-06-29",

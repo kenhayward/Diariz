@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth";
 import { bytesToGb, gbToBytes } from "../lib/format";
@@ -9,6 +10,7 @@ type Tab = "ai" | "quotas";
 /// Settings modal with two tabs — AI (per-user summarisation/chat config) and, for the Platform
 /// Administrator, Storage Quotas — saved together by a single OK/Cancel footer.
 export default function SettingsModal({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation("account");
   const qc = useQueryClient();
   const { isPlatformAdmin } = useAuth();
   const { data } = useQuery({ queryKey: ["user-settings"], queryFn: api.getUserSettings });
@@ -90,14 +92,14 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b px-5 pt-4 dark:border-gray-700">
-          <h2 className="mb-3 text-base font-semibold dark:text-gray-100">Settings</h2>
+          <h2 className="mb-3 text-base font-semibold dark:text-gray-100">{t("settingsTitle")}</h2>
           {isPlatformAdmin && (
-            <div className="flex gap-1" role="tablist" aria-label="Settings sections">
+            <div className="flex gap-1" role="tablist" aria-label={t("settingsTitle")}>
               <TabButton active={tab === "ai"} onClick={() => setTab("ai")}>
-                AI Settings
+                {t("aiSettings")}
               </TabButton>
               <TabButton active={tab === "quotas"} onClick={() => setTab("quotas")}>
-                Storage Quotas
+                {t("storageQuotas")}
               </TabButton>
             </div>
           )}
@@ -107,37 +109,34 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
           {tab === "ai" ? (
             <div className="space-y-3">
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Your own OpenAI-compatible endpoint, used for both summaries and chat. Leave fields blank to
-                use the server default.
-              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("aiIntro")}</p>
               <label className="block text-sm">
-                <span className="mb-1 block text-gray-600 dark:text-gray-300">Summarisation endpoint (base URL)</span>
+                <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("summaryEndpoint")}</span>
                 <input
                   name="diariz-summary-endpoint"
                   autoComplete="off"
                   value={apiBase}
                   onChange={(e) => setApiBase(e.target.value)}
-                  placeholder={data?.defaultApiBase ? `Default: ${data.defaultApiBase}` : "https://api.openai.com/v1"}
+                  placeholder={data?.defaultApiBase ? t("defaultValue", { value: data.defaultApiBase }) : "https://api.openai.com/v1"}
                   className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                 />
               </label>
               <label className="block text-sm">
-                <span className="mb-1 block text-gray-600 dark:text-gray-300">Summarisation model</span>
+                <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("summaryModel")}</span>
                 <input
                   name="diariz-summary-model"
                   autoComplete="off"
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
-                  placeholder={data?.defaultModel ? `Default: ${data.defaultModel}` : "gpt-4o-mini"}
+                  placeholder={data?.defaultModel ? t("defaultValue", { value: data.defaultModel }) : "gpt-4o-mini"}
                   className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                 />
               </label>
               <label className="block text-sm">
                 <span className="mb-1 block text-gray-600 dark:text-gray-300">
-                  Summarisation API key
+                  {t("summaryApiKey")}
                   {data?.hasApiKey && apiKey === null && (
-                    <span className="ml-1 text-green-600 dark:text-green-400">· set</span>
+                    <span className="ml-1 text-green-600 dark:text-green-400">{t("keySet")}</span>
                   )}
                 </span>
                 <input
@@ -148,9 +147,9 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder={
                     data?.hasApiKey
-                      ? "•••••• (leave blank to keep)"
+                      ? t("keyKeepBlank")
                       : data?.serverHasApiKey
-                        ? "Using server default (leave blank)"
+                        ? t("keyServerDefault")
                         : "sk-…"
                   }
                   className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
@@ -161,15 +160,15 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                     onClick={() => setApiKey("")}
                     className="mt-1 text-xs text-red-600 hover:underline dark:text-red-400"
                   >
-                    Clear stored key
+                    {t("clearStoredKey")}
                   </button>
                 )}
               </label>
               {apiKey === "" && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">The stored key will be cleared on save.</p>
+                <p className="text-xs text-amber-600 dark:text-amber-400">{t("keyWillClear")}</p>
               )}
               <label className="block text-sm">
-                <span className="mb-1 block text-gray-600 dark:text-gray-300">Chat context window (tokens)</span>
+                <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("chatContextWindow")}</span>
                 <input
                   type="number"
                   min={1}
@@ -177,40 +176,36 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                   autoComplete="off"
                   value={contextWindow}
                   onChange={(e) => setContextWindow(e.target.value)}
-                  placeholder={data ? `Default: ${data.defaultContextWindow.toLocaleString()}` : "131072"}
+                  placeholder={data ? t("defaultValue", { value: data.defaultContextWindow.toLocaleString() }) : "131072"}
                   className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                 />
-                <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">
-                  Drives the chat context dial. Leave blank to use the server default.
-                </span>
+                <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("chatContextHint")}</span>
               </label>
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                New users start with the starter quota; administrators can raise a user up to the maximum.
-              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("quotasIntro")}</p>
               <label className="block text-sm">
-                <span className="mb-1 block text-gray-600 dark:text-gray-300">Starter quota (GB)</span>
+                <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("starterQuota")}</span>
                 <input
                   type="number"
                   min={1}
                   step={0.5}
                   value={starterGb}
                   onChange={(e) => setStarterGb(e.target.value)}
-                  aria-label="Starter quota (GB)"
+                  aria-label={t("starterQuota")}
                   className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                 />
               </label>
               <label className="block text-sm">
-                <span className="mb-1 block text-gray-600 dark:text-gray-300">Maximum quota (GB)</span>
+                <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("maxQuota")}</span>
                 <input
                   type="number"
                   min={1}
                   step={0.5}
                   value={maxGb}
                   onChange={(e) => setMaxGb(e.target.value)}
-                  aria-label="Maximum quota (GB)"
+                  aria-label={t("maxQuota")}
                   className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                 />
               </label>
@@ -225,7 +220,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
             onClick={onClose}
             className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
           >
-            Cancel
+            {t("common:cancel")}
           </button>
           <button
             type="button"
@@ -233,7 +228,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
             disabled={busy}
             className="rounded bg-gray-900 px-3 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
           >
-            {busy ? "Saving…" : "OK"}
+            {busy ? t("common:saving") : t("common:ok")}
           </button>
         </div>
       </div>

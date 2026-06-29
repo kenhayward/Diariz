@@ -1,0 +1,16 @@
+{
+  "rename": "Cambiar nombre",
+  "retranscribe": "Volver a transcribir",
+  "summarise": "Resumir",
+  "extractActions": "Extraer acciones",
+  "reidentifySpeakers": "Reidentificar hablantes",
+  "translateTo": "Traducir a {{language}}",
+  "moveToSection": "Mover a sección…",
+  "moveToSectionShort": "Mover a sección",
+  "play": "Reproducir",
+  "downloadTranscript": "Descargar transcripción",
+  "emailTranscript": "Enviarme la transcripción por correo",
+  "downloadAudio": "Descargar audio",
+  "delete": "Eliminar",
+  "edit": "Editar"
+}
