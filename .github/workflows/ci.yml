@@ -54,6 +54,22 @@ jobs:
         working-directory: apps/web
         run: npm test
 
+  locale-gate:
+    name: Locale single-language gate
+    runs-on: [self-hosted]
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need history to diff the branch against its base
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # A translation-only PR may touch at most one non-English locale folder (core PRs are exempt).
+      - name: Check one non-en locale per translation PR
+        working-directory: apps/web
+        run: node scripts/check-single-locale.mjs ${{ github.event.pull_request.base.sha }}
+
   worker:
     name: Worker (pytest)
     runs-on: [self-hosted]

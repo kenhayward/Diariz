@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import { createHub } from "../lib/signalr";
@@ -536,6 +537,7 @@ function RecordingRow({
   onToggleSelect: () => void;
   onDropBefore: (draggedId: string) => void;
 }) {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const [renaming, setRenaming] = useState(false);
   const [moving, setMoving] = useState(false);
@@ -579,7 +581,7 @@ function RecordingRow({
     }),
     hasTranscript: hasTranscript(r.status),
     isSummarizing: r.status === "Summarizing",
-  });
+  }, t);
 
   return (
     <li

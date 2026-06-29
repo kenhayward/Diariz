@@ -96,6 +96,16 @@ npm install && npm run dev
 Sign in with the seeded user (`SEED_EMAIL` / `SEED_PASSWORD`), record a clip, and the
 transcript appears automatically when the worker finishes.
 
+## Translations
+
+The web UI is localized with **react-i18next**. Strings live in JSON catalogs under
+[`apps/web/src/locales/`](apps/web/src/locales/), one folder per language (English is the authoritative
+base; **Spanish, French, and German** ship today). Users pick their interface language at signup or in
+**Preferences**, and `?lang=es` forces it. Catalogs are auto-discovered, so **adding or improving a
+language is a data-only PR** — no code changes. See
+[`apps/web/src/locales/README.md`](apps/web/src/locales/README.md) for the contributor guide (CI checks
+that every catalog mirrors English and limits a translation PR to one language).
+
 ## Roadmap
 
 - **M1 — done:** capture → transcribe (timestamps + diarization) → view.

@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
+import i18n from "../lib/i18n";
 import { recordingMenu } from "./recordingMenu";
+
+// Resolve labels through the real English catalog so the assertions below read naturally.
+const t = i18n.getFixedT("en");
 
 function build(overrides: Partial<Parameters<typeof recordingMenu>[0]> = {}) {
   const noop = vi.fn();
@@ -8,7 +12,7 @@ function build(overrides: Partial<Parameters<typeof recordingMenu>[0]> = {}) {
     onDownloadTranscript: noop, onDownloadAudio: noop, onDelete: noop,
     hasTranscript: true,
     ...overrides,
-  });
+  }, t);
 }
 
 describe("recordingMenu", () => {

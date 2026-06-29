@@ -20,6 +20,12 @@ export function formatDuration(ms: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
 }
 
+/// A date (ISO string) formatted for the given locale via `Intl` (falls back to the browser locale when
+/// none is passed). Routes user-facing dates through the active UI language.
+export function formatDate(iso: string, locale?: string): string {
+  return new Date(iso).toLocaleDateString(locale || undefined);
+}
+
 /// Percentage of quota used (0 when there's no quota), rounded to a whole number.
 export function storagePercent(usedBytes: number, quotaBytes: number): number {
   if (quotaBytes <= 0) return 0;

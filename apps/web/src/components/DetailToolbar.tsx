@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import ToolbarButton, { iconProps } from "./ToolbarButton";
 
 /// A row of graphical shortcut buttons for the most common recording actions, shown on the detail
@@ -20,25 +21,26 @@ export default function DetailToolbar({
   onDownloadTranscript: () => void;
   hasTranscript: boolean;
 }) {
+  const { t } = useTranslation("recordings");
   return (
     <div className="flex items-center gap-0.5">
-      <ToolbarButton label="Rename" onClick={onRename} icon={<EditIcon />} />
-      <ToolbarButton label="Re-transcribe" onClick={onRetranscribe} icon={<RefreshIcon />} />
-      <ToolbarButton label="Move to section" onClick={onMove} icon={<FolderIcon />} />
+      <ToolbarButton label={t("rename")} onClick={onRename} icon={<EditIcon />} />
+      <ToolbarButton label={t("retranscribe")} onClick={onRetranscribe} icon={<RefreshIcon />} />
+      <ToolbarButton label={t("moveToSectionShort")} onClick={onMove} icon={<FolderIcon />} />
       <ToolbarButton
-        label="Extract actions"
+        label={t("extractActions")}
         onClick={onExtractActions}
         icon={<ChecklistIcon />}
         disabled={!hasTranscript}
       />
       <ToolbarButton
-        label="Email me the transcript"
+        label={t("emailTranscript")}
         onClick={onEmailTranscript}
         icon={<MailIcon />}
         disabled={!hasTranscript}
       />
       <ToolbarButton
-        label="Download transcript"
+        label={t("downloadTranscript")}
         onClick={onDownloadTranscript}
         icon={<DownloadIcon />}
         disabled={!hasTranscript}

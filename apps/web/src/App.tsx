@@ -1,5 +1,7 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { useEffect } from "react";
+import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import { useAuth } from "./auth";
+import { useLanguage } from "./language";
 import Login from "./pages/Login";
 import RequestAccess from "./pages/RequestAccess";
 import Setup from "./pages/Setup";
@@ -14,6 +16,15 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  // An explicit `?lang=xx` overrides the active UI language (and is remembered) — highest priority in the
+  // negotiation order. Ignored when there's no catalog for that language.
+  const [params] = useSearchParams();
+  const { setLanguage } = useLanguage();
+  const langParam = params.get("lang");
+  useEffect(() => {
+    if (langParam) setLanguage(langParam);
+  }, [langParam, setLanguage]);
+
   return (
     <Routes>
       <Route path="/login" element={<Login />} />

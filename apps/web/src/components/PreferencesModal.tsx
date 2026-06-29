@@ -1,16 +1,19 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth";
+import { useLanguage } from "../language";
 import { fetchLanguages } from "../lib/languages";
-import { setStoredLanguage } from "../lib/language";
 
 /// Personal preferences for any user: display name, native language (the default translation target),
 /// and the language the app UI is shown in. Saving re-issues the access token so the new name shows
 /// immediately, and caches the UI language locally.
 export default function PreferencesModal({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation("account");
   const qc = useQueryClient();
   const { setSession } = useAuth();
+  const { available: uiLanguages, setLanguage } = useLanguage();
   const { data: profile } = useQuery({ queryKey: ["user-profile"], queryFn: api.getProfile });
   const { data: languages } = useQuery({ queryKey: ["languages"], queryFn: fetchLanguages });
 
@@ -44,11 +47,11 @@ export default function PreferencesModal({ onClose }: { onClose: () => void }) {
         uiLanguage: uiLanguage || null,
       });
       setSession(res.accessToken); // adopt the fresh token so the new display name takes effect now
-      setStoredLanguage(uiLanguage || null); // cache the UI language locally (used pre-login / by i18n)
+      if (uiLanguage) setLanguage(uiLanguage); // apply the UI language live (and persist it)
       qc.invalidateQueries({ queryKey: ["user-profile"] });
       onClose();
     } catch (e) {
-      setError(apiErrorMessage(e, "Could not save your preferences."));
+      setError(apiErrorMessage(e, t("preferencesSaveError")));
       setBusy(false);
     }
   }
@@ -62,60 +65,57 @@ export default function PreferencesModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b px-5 pt-4 pb-3 dark:border-gray-700">
-          <h2 className="text-base font-semibold dark:text-gray-100">Preferences</h2>
+          <h2 className="text-base font-semibold dark:text-gray-100">{t("preferencesTitle")}</h2>
         </div>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
           <label className="block text-sm">
-            <span className="mb-1 block text-gray-600 dark:text-gray-300">Display name</span>
+            <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("displayName")}</span>
             <input
               name="diariz-display-name"
               autoComplete="off"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder={profile?.email ?? "Your name"}
+              placeholder={profile?.email ?? ""}
               className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             />
           </label>
 
           <label className="block text-sm">
-            <span className="mb-1 block text-gray-600 dark:text-gray-300">Native language</span>
+            <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("nativeLanguage")}</span>
             <select
               value={nativeLanguage}
               onChange={(e) => setNativeLanguage(e.target.value)}
-              aria-label="Native language"
+              aria-label={t("nativeLanguage")}
               className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             >
-              <option value="">— Not set —</option>
+              <option value="">{t("notSet")}</option>
               {languages?.map((l) => (
                 <option key={l.code} value={l.code}>
                   {l.englishName} ({l.nativeName})
                 </option>
               ))}
             </select>
-            <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">
-              Used as the default language when translating a transcript.
-            </span>
+            <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("nativeLanguageHint")}</span>
           </label>
 
           <label className="block text-sm">
-            <span className="mb-1 block text-gray-600 dark:text-gray-300">App language</span>
+            <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("appLanguage")}</span>
             <select
               value={uiLanguage}
               onChange={(e) => setUiLanguage(e.target.value)}
-              aria-label="App language"
+              aria-label={t("appLanguage")}
               className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             >
-              <option value="">— Follow my browser —</option>
-              {languages?.map((l) => (
+              <option value="">{t("followBrowser")}</option>
+              {/* Only languages with a shipped UI catalog can be the interface language. */}
+              {uiLanguages.map((l) => (
                 <option key={l.code} value={l.code}>
                   {l.englishName} ({l.nativeName})
                 </option>
               ))}
             </select>
-            <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">
-              The language the interface is shown in (where a translation is available).
-            </span>
+            <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("appLanguageHint")}</span>
           </label>
         </div>
 
@@ -126,7 +126,7 @@ export default function PreferencesModal({ onClose }: { onClose: () => void }) {
             onClick={onClose}
             className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
           >
-            Cancel
+            {t("common:cancel")}
           </button>
           <button
             type="button"
@@ -134,7 +134,7 @@ export default function PreferencesModal({ onClose }: { onClose: () => void }) {
             disabled={busy}
             className="rounded bg-gray-900 px-3 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
           >
-            {busy ? "Saving…" : "OK"}
+            {busy ? t("common:saving") : t("common:ok")}
           </button>
         </div>
       </div>

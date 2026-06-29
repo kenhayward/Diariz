@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth";
 import { useTheme } from "../theme";
 import { api } from "../lib/api";
@@ -13,13 +14,14 @@ import ManageUsersModal from "./ManageUsersModal";
 import PeopleModal from "./PeopleModal";
 import AboutModal from "./AboutModal";
 
-const THEMES: { value: ThemeChoice; label: string }[] = [
-  { value: "auto", label: "Auto" },
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
+const THEMES: { value: ThemeChoice; key: string }[] = [
+  { value: "auto", key: "themeAuto" },
+  { value: "light", key: "themeLight" },
+  { value: "dark", key: "themeDark" },
 ];
 
 export default function UserMenu() {
+  const { t } = useTranslation("account");
   const { initials, email, fullName, isAdmin, logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const tour = useTour();
@@ -71,8 +73,11 @@ export default function UserMenu() {
               <div className="truncate text-sm font-medium dark:text-gray-100">{fullName ?? email}</div>
               {storage && (
                 <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                  Storage {formatBytes(storage.usedBytes)} / {formatBytes(storage.quotaBytes)} (
-                  {storagePercent(storage.usedBytes, storage.quotaBytes)}%)
+                  {t("storageUsage", {
+                    used: formatBytes(storage.usedBytes),
+                    total: formatBytes(storage.quotaBytes),
+                    percent: storagePercent(storage.usedBytes, storage.quotaBytes),
+                  })}
                 </div>
               )}
             </div>
@@ -86,7 +91,7 @@ export default function UserMenu() {
             }}
             className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
           >
-            Preferences
+            {t("preferences")}
           </button>
           <button
             type="button"
@@ -97,7 +102,7 @@ export default function UserMenu() {
             }}
             className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
           >
-            Settings
+            {t("settings")}
           </button>
           {isAdmin && (
             <button
@@ -109,7 +114,7 @@ export default function UserMenu() {
               }}
               className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
             >
-              Manage Users
+              {t("manageUsers")}
             </button>
           )}
 
@@ -122,7 +127,7 @@ export default function UserMenu() {
             }}
             className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
           >
-            People
+            {t("people")}
           </button>
 
           <button
@@ -134,7 +139,7 @@ export default function UserMenu() {
             }}
             className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
           >
-            Show guided tour
+            {t("showTour")}
           </button>
 
           <button
@@ -146,22 +151,22 @@ export default function UserMenu() {
             }}
             className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
           >
-            About
+            {t("about")}
           </button>
 
           <div className="border-t py-1 dark:border-gray-700">
-            <div className="px-3 py-1 text-xs font-medium text-gray-400 dark:text-gray-500">Theme</div>
-            {THEMES.map((t) => (
+            <div className="px-3 py-1 text-xs font-medium text-gray-400 dark:text-gray-500">{t("theme")}</div>
+            {THEMES.map((opt) => (
               <button
-                key={t.value}
+                key={opt.value}
                 type="button"
                 role="menuitemradio"
-                aria-checked={theme === t.value}
-                onClick={() => setTheme(t.value)}
+                aria-checked={theme === opt.value}
+                onClick={() => setTheme(opt.value)}
                 className="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
               >
-                {t.label}
-                {theme === t.value && <span aria-hidden>✓</span>}
+                {t(opt.key)}
+                {theme === opt.value && <span aria-hidden>✓</span>}
               </button>
             ))}
           </div>
@@ -175,7 +180,7 @@ export default function UserMenu() {
             }}
             className="block w-full border-t px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
           >
-            Sign Out
+            {t("signOut")}
           </button>
         </div>
       )}

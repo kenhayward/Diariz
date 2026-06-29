@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import { createHub } from "../lib/signalr";
@@ -10,7 +11,7 @@ import CollapsibleSection from "../components/CollapsibleSection";
 import MoveToSectionModal from "../components/MoveToSectionModal";
 import DownloadTranscriptModal from "../components/DownloadTranscriptModal";
 import { recordingMenu } from "../components/recordingMenu";
-import { formatBytes, formatDuration } from "../lib/format";
+import { formatBytes, formatDate, formatDuration } from "../lib/format";
 import { hasRevisions, segmentText, toggleLabel } from "../lib/transcriptView";
 import { fetchLanguages } from "../lib/languages";
 import { allSpeakersAssigned } from "../lib/speakers";
@@ -22,6 +23,7 @@ function fmt(ms: number): string {
 }
 
 export default function RecordingDetail() {
+  const { t, i18n } = useTranslation();
   const { id = "" } = useParams();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -303,7 +305,7 @@ export default function RecordingDetail() {
     },
     hasTranscript,
     isSummarizing,
-  });
+  }, t);
 
   return (
     <div className="space-y-5">
@@ -320,7 +322,7 @@ export default function RecordingDetail() {
           )}
           <p className="text-xs text-gray-500 dark:text-gray-400">
             {rec.source === "System" ? "System audio" : rec.source === "Upload" ? "Uploaded" : "Microphone"} ·{" "}
-            {new Date(rec.createdAt).toLocaleDateString()}
+            {formatDate(rec.createdAt, i18n.language)}
             {rec.durationMs > 0 ? ` · ${formatDuration(rec.durationMs)}` : ""} · {rec.status}
             {rec.sizeBytes > 0 ? ` · ${formatBytes(rec.sizeBytes)}` : ""}
             {rec.current?.language ? ` · ${rec.current.language}` : ""}
@@ -440,7 +442,8 @@ export default function RecordingDetail() {
                 seg={s}
                 active={i === activeIdx}
                 showOriginal={showOriginal}
-                translateLabel={nativeLang?.englishName}
+                editLabel={t("recordings:edit")}
+                translateLabel={nativeLang ? t("recordings:translateTo", { language: nativeLang.englishName }) : undefined}
                 onPlay={() => playFrom(s.startMs)}
                 onEdit={() => setEditingSeg(s)}
                 onTranslate={nativeLang ? () => translateSegment(s.id) : undefined}
@@ -782,6 +785,7 @@ function SegmentRow({
   seg,
   active,
   showOriginal,
+  editLabel,
   translateLabel,
   onPlay,
   onEdit,
@@ -790,6 +794,7 @@ function SegmentRow({
   seg: SegmentDto;
   active: boolean;
   showOriginal: boolean;
+  editLabel: string;
   translateLabel?: string;
   onPlay: () => void;
   onEdit: () => void;
@@ -797,8 +802,8 @@ function SegmentRow({
 }) {
   const revised = seg.revised != null;
   const actions = [
-    { label: "Edit", onClick: onEdit },
-    ...(onTranslate && translateLabel ? [{ label: `Translate to ${translateLabel}`, onClick: onTranslate }] : []),
+    { label: editLabel, onClick: onEdit },
+    ...(onTranslate && translateLabel ? [{ label: translateLabel, onClick: onTranslate }] : []),
   ];
   return (
     <li

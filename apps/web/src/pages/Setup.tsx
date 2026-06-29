@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth";
 import { api, apiErrorMessage } from "../lib/api";
 import { fetchLanguages } from "../lib/languages";
@@ -10,6 +11,7 @@ import AuthShell from "../components/AuthShell";
 /// Public page reached from the one-time setup link. Validates the link, then collects a full name
 /// and password to activate the account and sign the user in.
 export default function Setup() {
+  const { t } = useTranslation("auth");
   const [params] = useSearchParams();
   const email = params.get("email") ?? "";
   const token = params.get("token") ?? "";
@@ -48,7 +50,7 @@ export default function Setup() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (password !== confirm) {
-      setError("Passwords don't match.");
+      setError(t("passwordsDontMatch"));
       return;
     }
     setBusy(true);
@@ -72,7 +74,7 @@ export default function Setup() {
       }
       navigate("/");
     } catch (err) {
-      setError(apiErrorMessage(err, "Could not complete setup."));
+      setError(apiErrorMessage(err, t("setupFailed")));
     } finally {
       setBusy(false);
     }
@@ -83,26 +85,24 @@ export default function Setup() {
       <div className="w-full max-w-sm space-y-4 rounded-lg border bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-900">
         <div className="flex items-center gap-2">
           <img src="/logo.png" alt="" className="h-8 w-auto" />
-          <h1 className="text-lg font-semibold dark:text-gray-100">Set up your account</h1>
+          <h1 className="text-lg font-semibold dark:text-gray-100">{t("setupTitle")}</h1>
         </div>
 
         {checking ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400">Checking your link…</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t("checkingLink")}</p>
         ) : !valid ? (
           <div className="space-y-3">
-            <p className="text-sm text-red-600 dark:text-red-400">
-              This setup link is invalid or has expired. Please request access again.
-            </p>
+            <p className="text-sm text-red-600 dark:text-red-400">{t("invalidLink")}</p>
             <Link to="/request-access" className="text-sm text-blue-600 hover:underline dark:text-blue-400">
-              Request access
+              {t("requestAccess")}
             </Link>
           </div>
         ) : (
           <form onSubmit={onSubmit} className="space-y-3" autoComplete="off">
-            <p className="text-xs text-gray-500 dark:text-gray-400">Setting up {email}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{t("settingUpEmail", { email })}</p>
             <input
               type="text"
-              placeholder="Full name"
+              placeholder={t("fullName")}
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               className="w-full rounded border px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
@@ -110,7 +110,7 @@ export default function Setup() {
             />
             <input
               type="password"
-              placeholder="Password"
+              placeholder={t("password")}
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -119,26 +119,24 @@ export default function Setup() {
             />
             <input
               type="password"
-              placeholder="Confirm password"
+              placeholder={t("confirmPassword")}
               autoComplete="new-password"
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               className="w-full rounded border px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               required
             />
-            <p className="text-xs text-gray-400 dark:text-gray-500">
-              At least 8 characters with an uppercase letter, a lowercase letter, a number, and a symbol.
-            </p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">{t("passwordRequirements")}</p>
             {languages.length > 0 && (
               <label className="block text-sm">
-                <span className="mb-1 block text-gray-600 dark:text-gray-300">Language</span>
+                <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("language")}</span>
                 <select
                   value={language}
                   onChange={(e) => setLanguage(e.target.value)}
-                  aria-label="Language"
+                  aria-label={t("language")}
                   className="w-full rounded border px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                 >
-                  <option value="">Follow my browser</option>
+                  <option value="">{t("followBrowser")}</option>
                   {languages.map((l) => (
                     <option key={l.code} value={l.code}>
                       {l.englishName} ({l.nativeName})
@@ -153,7 +151,7 @@ export default function Setup() {
               disabled={busy}
               className="w-full rounded bg-gray-900 py-2 text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
             >
-              {busy ? "Setting up…" : "Create account"}
+              {busy ? t("settingUp") : t("createAccount")}
             </button>
           </form>
         )}
