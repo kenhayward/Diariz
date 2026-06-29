@@ -19,4 +19,11 @@ public class UserSettings
     /// <summary>Chat model's context-window size in tokens, used by the context dial. Null falls back
     /// to the server default (<c>Chat:ContextLength</c>).</summary>
     public int? ChatContextWindow { get; set; }
+
+    /// <summary>The user's native language (BCP-47), used as the default target when translating
+    /// transcripts. Null = not set.</summary>
+    public string? NativeLanguage { get; set; }
+
+    /// <summary>The language the app UI is shown in (BCP-47). Null = follow the browser / default.</summary>
+    public string? UiLanguage { get; set; }
 }

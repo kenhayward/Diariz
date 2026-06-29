@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const setSession = vi.fn();
 vi.mock("../auth", () => ({ useAuth: () => ({ setSession }) }));
 vi.mock("../lib/api", () => ({
-  api: { validateSetup: vi.fn(), setup: vi.fn() },
+  api: { validateSetup: vi.fn(), setup: vi.fn(), getLanguages: vi.fn().mockResolvedValue([]), updateProfile: vi.fn() },
   apiErrorMessage: (e: unknown) => String(e),
 }));
 

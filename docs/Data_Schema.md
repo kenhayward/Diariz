@@ -41,6 +41,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddSpeakerCountHints` | `Recording.MinSpeakers/MaxSpeakers` |
 | `AddRecordingActions` | `RecordingActions`, `Recording.ActionsExtractedAt` |
 | `AddSegmentOriginalRevised` | renames `Segment.Text` → `Original`, adds `Segment.Revised` (nullable) |
+| `AddUserLanguagePreferences` | `UserSettings.NativeLanguage`, `UserSettings.UiLanguage` (both nullable) |
 
 ### Entity-relationship overview
 
@@ -232,8 +233,11 @@ Per-user preferences (1:1 with the user via a **shared primary key** = `UserId`)
 | `SummaryApiKeyEncrypted` | text null | API key **encrypted at rest** (ASP.NET Data Protection); never returned to clients |
 | `SummaryModel` | varchar(256) null | |
 | `ChatContextWindow` | int null | per-user context-window override (tokens); null → server `Chat:ContextLength` |
+| `NativeLanguage` | text null | the user's native language (BCP-47); default target when translating transcripts |
+| `UiLanguage` | text null | the language the app UI is shown in (BCP-47); null → follow the browser |
 
-Each field falls back to the server `Summarization`/`Chat` defaults when null.
+Each field falls back to the server `Summarization`/`Chat` defaults when null. The display name lives on
+`AspNetUsers.FullName` (editable via `PUT /api/user/profile`), not here.
 
 #### `PlatformSettings`
 Single seeded row (`Id = 1`), edited by the Platform Administrator.

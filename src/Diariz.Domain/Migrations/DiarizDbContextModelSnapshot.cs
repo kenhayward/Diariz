@@ -499,6 +499,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<int?>("ChatContextWindow")
                         .HasColumnType("integer");
 
+                    b.Property<string>("NativeLanguage")
+                        .HasColumnType("text");
+
                     b.Property<string>("SummaryApiBase")
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
@@ -509,6 +512,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<string>("SummaryModel")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
+
+                    b.Property<string>("UiLanguage")
+                        .HasColumnType("text");
 
                     b.HasKey("UserId");
 

@@ -8,6 +8,7 @@ import { formatBytes, storagePercent } from "../lib/format";
 import type { ThemeChoice } from "../lib/theme";
 import Avatar from "./Avatar";
 import SettingsModal from "./SettingsModal";
+import PreferencesModal from "./PreferencesModal";
 import ManageUsersModal from "./ManageUsersModal";
 import PeopleModal from "./PeopleModal";
 import AboutModal from "./AboutModal";
@@ -25,6 +26,7 @@ export default function UserMenu() {
   const { data: storage } = useQuery({ queryKey: ["user-storage"], queryFn: api.getUserStorage });
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [usersOpen, setUsersOpen] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -75,6 +77,17 @@ export default function UserMenu() {
               )}
             </div>
           )}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              setPreferencesOpen(true);
+            }}
+            className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
+          >
+            Preferences
+          </button>
           <button
             type="button"
             role="menuitem"
@@ -167,6 +180,7 @@ export default function UserMenu() {
         </div>
       )}
 
+      {preferencesOpen && <PreferencesModal onClose={() => setPreferencesOpen(false)} />}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       {usersOpen && <ManageUsersModal onClose={() => setUsersOpen(false)} />}
       {peopleOpen && <PeopleModal onClose={() => setPeopleOpen(false)} />}

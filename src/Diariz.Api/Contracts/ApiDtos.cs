@@ -124,6 +124,19 @@ public record RetranscribeRequest(string? Model, SpeakerHints? Speakers = null);
 /// revision.</summary>
 public record UpdateSegmentRequest(string? Text);
 
+// ---- Languages & profile (localization) ----
+/// <summary>A supported language: BCP-47 <paramref name="Code"/>, its name in English and in its own
+/// script, and whether it is written right-to-left.</summary>
+public record LanguageDto(string Code, string EnglishName, string NativeName, bool Rtl);
+
+/// <summary>The signed-in user's editable profile: display name + language preferences (BCP-47, or null
+/// = not set / follow the browser). Email is read-only.</summary>
+public record UserProfileDto(string Email, string? FullName, string? NativeLanguage, string? UiLanguage);
+
+/// <summary>Self-service profile update. Each field is trimmed; blank clears it. Language codes must be
+/// in the supported set (else 400).</summary>
+public record UpdateUserProfileRequest(string? FullName, string? NativeLanguage, string? UiLanguage);
+
 // ---- User settings (per-user summarisation config) ----
 /// <summary>Settings returned to the client. The API key is never exposed — only whether one is set.
 /// The Default* fields are the server-wide values, shown as placeholders so the user can see what

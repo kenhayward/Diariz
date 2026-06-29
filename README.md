@@ -39,6 +39,9 @@ the in-app **Release Notes** page (`/release-notes`), reachable from **About** i
 - **Multi-user RBAC**: Standard / Administrator / Platform Administrator roles, an access-request →
   admin-grant → account-setup lifecycle (one-time email link, with an in-app fallback when SMTP is
   unconfigured), and admin user management. Each user's data is isolated to them. Light/Dark/Auto theming.
+- **Preferences**: every user can change their own **display name** and pick their **native** and **app**
+  language (chosen at signup or later from the account menu) — groundwork for upcoming UI localization and
+  transcript translation.
 - **Storage quotas**: each user gets an audio-storage quota (starter + maximum set by the Platform
   Administrator; any admin can raise a user up to the maximum). Usage shows in the account menu and
   per-recording; over-quota uploads are rejected.

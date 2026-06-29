@@ -151,6 +151,11 @@ only `hasApiKey`).
 - **Isolation:** every recording/section/chat/voiceprint query filters by `UserId` from the JWT
   `NameIdentifier` claim. **Storage quotas** (audio bytes) are per-user: the Platform Administrator sets the
   starter + maximum (`PlatformSettings`), any admin can raise an individual user up to the max.
+- **Self-service profile:** every user has a **Preferences** screen to change their **display name**
+  (`PUT /api/user/profile` → updates `ApplicationUser.FullName` and re-issues the token so the name claim
+  updates without a re-login) and their **native / UI language** (stored on `UserSettings`). The supported
+  languages come from a shared list at **`GET /api/languages`** (anonymous, so the signup page offers a
+  language selector too). This underpins the localization & translation feature.
 
 ## Speaker identification (voiceprints)
 

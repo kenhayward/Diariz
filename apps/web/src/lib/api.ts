@@ -8,6 +8,7 @@ import type {
   ChatTurn,
   ChatUsage,
   GrantResult,
+  Language,
   PlatformSettings,
   RecordingAction,
   RecordingDetail,
@@ -18,7 +19,9 @@ import type {
   SetupValidation,
   SpeakerProfile,
   SpeakerProfileDetail,
+  UpdateUserProfile,
   UpdateUserSettings,
+  UserProfile,
   UserSettings,
   UserStorage,
 } from "./types";
@@ -296,6 +299,25 @@ export const api = {
 
   async summarize(id: string): Promise<void> {
     await http.post(`/api/recordings/${id}/summarize`);
+  },
+
+  // ---- Languages & profile (localization) ----
+
+  async getLanguages(): Promise<Language[]> {
+    const { data } = await http.get<Language[]>("/api/languages");
+    return data;
+  },
+
+  async getProfile(): Promise<UserProfile> {
+    const { data } = await http.get<UserProfile>("/api/user/profile");
+    return data;
+  },
+
+  /// Update the signed-in user's profile. Returns a fresh access token (the new display name lives in
+  /// the JWT) — the caller should adopt it via the auth context.
+  async updateProfile(body: UpdateUserProfile): Promise<AuthResponse> {
+    const { data } = await http.put<AuthResponse>("/api/user/profile", body);
+    return data;
   },
 
   async getUserSettings(): Promise<UserSettings> {
