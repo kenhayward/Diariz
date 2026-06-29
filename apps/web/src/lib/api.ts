@@ -165,7 +165,9 @@ export const api = {
     await http.put(`/api/recordings/${id}/speakers`, { label, displayName });
   },
 
-  async updateSegment(id: string, segmentId: string, text: string): Promise<void> {
+  /// Edit a segment. `text` is tri-state: a string sets the revision (preserving the original);
+  /// `null` resets to the model's original (clears the revision).
+  async updateSegment(id: string, segmentId: string, text: string | null): Promise<void> {
     await http.put(`/api/recordings/${id}/segments/${segmentId}`, { text });
   },
 

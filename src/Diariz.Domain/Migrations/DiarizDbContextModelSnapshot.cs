@@ -338,16 +338,19 @@ namespace Diariz.Domain.Migrations
                     b.Property<int>("Ordinal")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Original")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Revised")
+                        .HasColumnType("text");
+
                     b.Property<string>("SpeakerLabel")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<long>("StartMs")
                         .HasColumnType("bigint");
-
-                    b.Property<string>("Text")
-                        .IsRequired()
-                        .HasColumnType("text");
 
                     b.Property<Guid>("TranscriptionId")
                         .HasColumnType("uuid");

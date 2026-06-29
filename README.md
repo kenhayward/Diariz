@@ -20,6 +20,8 @@ the in-app **Release Notes** page (`/release-notes`), reachable from **About** i
   via the Upload button or by **dragging several onto the recordings list**, with per-file status.
 - **Transcribe + diarize** server-side with WhisperX (large-v3, word-level timestamps) and pyannote 3.1,
   producing speaker-labelled, timestamped segments you can rename, edit, and play back (per segment or whole).
+  Edits are kept **separately from the model's original words** — a ✎ marks revised rows and a **Show original /
+  Show revised** toggle flips the whole transcript, so you can always get back to what the model said.
   Re-transcribe with a chosen model at any time (with optional **min/max speaker hints** for pyannote when
   voices are merged), **merge** consecutive same-speaker rows, and **email yourself** the formatted transcript.
 - **Identify speakers** across recordings: enrol a person from a recording's speaker and Diariz recognises

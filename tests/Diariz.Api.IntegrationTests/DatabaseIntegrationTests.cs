@@ -40,7 +40,7 @@ public class DatabaseIntegrationTests(ContainersFixture fx)
                 Id = segId,
                 TranscriptionId = tr.Id,
                 SpeakerLabel = "SPEAKER_00",
-                Text = "hello",
+                Original = "hello",
                 Ordinal = 0,
                 Embedding = new Vector(Enumerable.Range(0, 768).Select(i => (float)i).ToArray())
             };

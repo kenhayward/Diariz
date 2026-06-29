@@ -15,8 +15,10 @@ Diariz records audio — from your microphone, or Windows system/loopback audio 
 an existing audio file** (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A), and it transcribes it server-side with
 **WhisperX** (word-level timestamps) and **pyannote** speaker
 diarization. You get speaker-labelled, timestamped segments you can rename, edit, and play back
-(per segment or the whole recording), and can re-transcribe at any time. You can **merge** consecutive
-same-speaker rows into single blocks and **email yourself the transcript**.
+(per segment or the whole recording), and can re-transcribe at any time. Edits are kept **separately from
+the model's original words**, so a **Show original / Show revised** toggle always gets you back to what the
+model said. You can **merge** consecutive same-speaker rows into single blocks and **email yourself the
+transcript**.
 
 It can **identify speakers** across recordings: enrol a person from a recording's speaker and Diariz
 recognises that voice in later recordings automatically (using **SpeechBrain ECAPA** voiceprints), with
@@ -48,6 +50,29 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.22.0",
+    date: "2026-06-29",
+    pr: 63,
+    headline: "Edit transcripts without losing the model's original words",
+    summary:
+      "Each transcript segment now keeps two layers: the model's **original** words (never overwritten) and " +
+      "your **revised** version (an edit — and, in a coming release, a translation). Editing a segment saves " +
+      "to the revision and leaves the original intact, a small ✎ marks revised rows, and a **Show original / " +
+      "Show revised** toggle flips the whole transcript between the two. You can **reset** any segment back to " +
+      "the model's original from the edit box. This is the data foundation for the upcoming localization & " +
+      "translation feature. (Re-transcribing still produces a fresh transcript from the model — a heads-up now " +
+      "warns when that would set aside your edits.)",
+    added: [
+      "Each segment stores the model's original text and your revision separately; exports, email, chat and summaries use your revised text when present.",
+      "A ✎ indicator on segments you've edited, and a Show original / Show revised toggle for the whole transcript.",
+      "“Reset to original” in the segment editor clears a revision and restores the model's words.",
+    ],
+    changed: [
+      "Editing a segment now updates a separate revision rather than overwriting the original.",
+      "Re-transcribing a transcript that has edited segments now shows a heads-up first (the fresh transcript comes straight from the model).",
+    ],
+  },
   {
     version: "0.21.2",
     date: "2026-06-28",

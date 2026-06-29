@@ -605,18 +605,40 @@ public class RecordingsControllerTests
     // ---- Update segment ----
 
     [Fact]
-    public async Task UpdateSegment_UpdatesText_OnOwnedRecording()
+    public async Task UpdateSegment_SetsRevised_PreservingOriginal()
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var rec = await SeedTranscribedRecording(db, userId);
-        var seg = await db.Segments.FirstAsync();
+        var seg = await db.Segments.OrderBy(s => s.Ordinal).FirstAsync();
+        var original = seg.Original;
         var controller = Build(db, userId, new FakeJobQueue());
 
         var result = await controller.UpdateSegment(rec.Id, seg.Id, new UpdateSegmentRequest("Corrected text"));
 
         Assert.IsType<NoContentResult>(result);
-        Assert.Equal("Corrected text", (await db.Segments.FindAsync(seg.Id))!.Text);
+        var updated = (await db.Segments.FindAsync(seg.Id))!;
+        Assert.Equal("Corrected text", updated.Revised);     // the edit lands on Revised
+        Assert.Equal(original, updated.Original);            // the model's original is preserved
+        Assert.Equal("Corrected text", updated.EffectiveText);
+    }
+
+    [Fact]
+    public async Task UpdateSegment_NullText_ResetsRevisedToOriginal()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId);
+        var seg = await db.Segments.OrderBy(s => s.Ordinal).FirstAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+        await controller.UpdateSegment(rec.Id, seg.Id, new UpdateSegmentRequest("an edit"));
+
+        var result = await controller.UpdateSegment(rec.Id, seg.Id, new UpdateSegmentRequest(null));
+
+        Assert.IsType<NoContentResult>(result);
+        var updated = (await db.Segments.FindAsync(seg.Id))!;
+        Assert.Null(updated.Revised);                        // revision cleared
+        Assert.Equal(updated.Original, updated.EffectiveText); // shows the original again
     }
 
     [Fact]
@@ -630,7 +652,7 @@ public class RecordingsControllerTests
         var result = await controller.UpdateSegment(rec.Id, seg.Id, new UpdateSegmentRequest("hijack"));
 
         Assert.IsType<NotFoundResult>(result);
-        Assert.NotEqual("hijack", (await db.Segments.FindAsync(seg.Id))!.Text);
+        Assert.Null((await db.Segments.FindAsync(seg.Id))!.Revised); // unchanged
     }
 
     [Fact]
@@ -662,7 +684,7 @@ public class RecordingsControllerTests
         Assert.IsType<NoContentResult>(result);
         var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
         var seg = Assert.Single(await db.Segments.Where(s => s.TranscriptionId == tr.Id).ToListAsync());
-        Assert.Equal("Hello\n\nWorld", seg.Text); // paragraph break between merged sections
+        Assert.Equal("Hello\n\nWorld", seg.EffectiveText); // paragraph break between merged sections
         Assert.Equal(0, seg.StartMs);
         Assert.Equal(2000, seg.EndMs);
         Assert.Equal(0, seg.Ordinal);
@@ -687,8 +709,8 @@ public class RecordingsControllerTests
         var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
         // Two consecutive segments diarized as different speakers...
         db.Segments.AddRange(
-            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 1000, Text = "Hello", Ordinal = 0 },
-            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_01", StartMs = 1000, EndMs = 2000, Text = "World", Ordinal = 1 });
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 1000, Original = "Hello", Ordinal = 0 },
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_01", StartMs = 1000, EndMs = 2000, Original = "World", Ordinal = 1 });
         // ...but both reassigned to the same person.
         var profileId = Guid.NewGuid();
         db.Speakers.AddRange(
@@ -701,7 +723,7 @@ public class RecordingsControllerTests
 
         Assert.IsType<NoContentResult>(result);
         var seg = Assert.Single(await db.Segments.Where(s => s.TranscriptionId == tr.Id).ToListAsync());
-        Assert.Equal("Hello\n\nWorld", seg.Text);
+        Assert.Equal("Hello\n\nWorld", seg.EffectiveText);
         Assert.Equal("SPEAKER_00", seg.SpeakerLabel); // keeps the first run's label
         Assert.Equal(0, seg.StartMs);
         Assert.Equal(2000, seg.EndMs);
@@ -958,8 +980,8 @@ public class RecordingsControllerTests
         rec.Name = name;
         var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
         db.Segments.AddRange(
-            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 1000, Text = "Hello", Ordinal = 0 },
-            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 1000, EndMs = 2000, Text = "World", Ordinal = 1 });
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 1000, Original = "Hello", Ordinal = 0 },
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 1000, EndMs = 2000, Original = "World", Ordinal = 1 });
         db.Speakers.Add(new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Alice" });
         await db.SaveChangesAsync();
         return rec;

@@ -126,7 +126,7 @@ public class RbacIntegrationTests(ContainersFixture fx)
             db.Users.Add(new ApplicationUser { Id = userId, UserName = $"{userId}@x.test", Email = $"{userId}@x.test" });
             var rec = new Recording { Id = recId, UserId = userId, BlobKey = "k", Title = "R" };
             var tr = new Transcription { Id = trId, RecordingId = recId, Model = "m", Version = 1 };
-            var seg = new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "S0", Text = "hi", Ordinal = 0 };
+            var seg = new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "S0", Original = "hi", Ordinal = 0 };
             db.AddRange(rec, tr, seg,
                 new Section { Id = sectionId, UserId = userId, Name = "Sec" },
                 new ChatSession { Id = chatId, UserId = userId, Title = "C" });

@@ -11,6 +11,7 @@ import MoveToSectionModal from "../components/MoveToSectionModal";
 import DownloadTranscriptModal from "../components/DownloadTranscriptModal";
 import { recordingMenu } from "../components/recordingMenu";
 import { formatBytes, formatDuration } from "../lib/format";
+import { hasRevisions, segmentText, toggleLabel } from "../lib/transcriptView";
 import { allSpeakersAssigned } from "../lib/speakers";
 import type { SegmentDto, SpeakerInfo, SpeakerProfile } from "../lib/types";
 
@@ -45,6 +46,9 @@ export default function RecordingDetail() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionInfo, setActionInfo] = useState<string | null>(null);
   const [retranscribeOpen, setRetranscribeOpen] = useState(false);
+  // When the transcript has edited/translated segments, the user can flip the whole list back to the
+  // model's original words.
+  const [showOriginal, setShowOriginal] = useState(false);
 
   useEffect(() => {
     const hub = createHub((e) => {
@@ -374,6 +378,15 @@ export default function RecordingDetail() {
             >
               Merge same-speaker rows
             </button>
+            {hasRevisions(rec.current.segments) && (
+              <button
+                onClick={() => setShowOriginal((v) => !v)}
+                title="Switch between the model's original words and your edited/translated version"
+                className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+              >
+                {toggleLabel(showOriginal)}
+              </button>
+            )}
             <audio ref={audioRef} controls onTimeUpdate={onTimeUpdate} className="h-8 min-w-48 flex-1" />
           </div>
           <ul className="space-y-2">
@@ -382,6 +395,7 @@ export default function RecordingDetail() {
                 key={s.id}
                 seg={s}
                 active={i === activeIdx}
+                showOriginal={showOriginal}
                 onPlay={() => playFrom(s.startMs)}
                 onEdit={() => setEditingSeg(s)}
               />
@@ -413,6 +427,7 @@ export default function RecordingDetail() {
         <RetranscribeModal
           initialMin={rec.minSpeakers}
           initialMax={rec.maxSpeakers}
+          hasRevisions={!!rec.current && hasRevisions(rec.current.segments)}
           busy={requeuing}
           onCancel={() => setRetranscribeOpen(false)}
           onConfirm={retranscribe}
@@ -427,12 +442,14 @@ export default function RecordingDetail() {
 function RetranscribeModal({
   initialMin,
   initialMax,
+  hasRevisions,
   busy,
   onCancel,
   onConfirm,
 }: {
   initialMin: number | null;
   initialMax: number | null;
+  hasRevisions: boolean;
   busy: boolean;
   onCancel: () => void;
   onConfirm: (min: number | null, max: number | null) => void;
@@ -463,6 +480,12 @@ function RetranscribeModal({
           Optionally tell the diarizer how many speakers to expect. If two people were merged into one
           speaker, set the minimum to 2. Leave blank for automatic detection.
         </p>
+        {hasRevisions && (
+          <p className="mb-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700/60 dark:bg-amber-900/30 dark:text-amber-300">
+            This transcript has edited or translated segments. Re-transcribing produces a fresh transcript
+            from the model — your edits and translations won't carry over to it.
+          </p>
+        )}
         <div className="flex items-center gap-4 text-sm">
           <label className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
             Min speakers
@@ -516,12 +539,13 @@ function SegmentEditModal({
 }: {
   seg: SegmentDto;
   onClose: () => void;
-  onSave: (text: string) => Promise<void>;
+  onSave: (text: string | null) => Promise<void>;
 }) {
   const [text, setText] = useState(seg.text);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const revised = seg.revised != null;
 
   // Grow the textarea to fit its content; CSS max-height keeps the modal on-screen (it scrolls past that).
   function autosize() {
@@ -539,11 +563,11 @@ function SegmentEditModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  async function save() {
+  async function save(value: string | null) {
     setBusy(true);
     setError(null);
     try {
-      await onSave(text);
+      await onSave(value);
     } catch (e) {
       setError(apiErrorMessage(e, "Could not save the segment."));
       setBusy(false);
@@ -570,8 +594,24 @@ function SegmentEditModal({
           aria-label="Segment text"
           className="block max-h-[60vh] min-h-[8rem] w-full resize-none overflow-y-auto rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         />
+        {revised && (
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            <span className="font-medium">Original:</span> {seg.original}
+          </p>
+        )}
         {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
-        <div className="mt-3 flex justify-end gap-2">
+        <div className="mt-3 flex items-center justify-end gap-2">
+          {/* Clearing a revision restores the model's original words (sends null to the server). */}
+          {revised && (
+            <button
+              type="button"
+              onClick={() => save(null)}
+              disabled={busy}
+              className="mr-auto rounded border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+            >
+              Reset to original
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -581,7 +621,7 @@ function SegmentEditModal({
           </button>
           <button
             type="button"
-            onClick={save}
+            onClick={() => save(text)}
             disabled={busy}
             className="rounded bg-gray-900 px-3 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
           >
@@ -695,14 +735,17 @@ export function SpeakerRow({
 function SegmentRow({
   seg,
   active,
+  showOriginal,
   onPlay,
   onEdit,
 }: {
   seg: SegmentDto;
   active: boolean;
+  showOriginal: boolean;
   onPlay: () => void;
   onEdit: () => void;
 }) {
+  const revised = seg.revised != null;
   return (
     <li
       onClick={onPlay}
@@ -715,7 +758,19 @@ function SegmentRow({
       <span className="w-12 shrink-0 font-mono text-xs text-gray-400 dark:text-gray-500">{fmt(seg.startMs)}</span>
       <span className="w-28 shrink-0 text-sm font-medium text-gray-700 dark:text-gray-200">{seg.speakerDisplay}</span>
       {/* Auto-expands vertically to show the full (possibly merged) block of text. */}
-      <span className="flex-1 whitespace-pre-wrap break-words text-sm dark:text-gray-200">{seg.text}</span>
+      <span className="flex-1 whitespace-pre-wrap break-words text-sm dark:text-gray-200">
+        {segmentText(seg, showOriginal)}
+      </span>
+      {/* Marks a segment whose text has been edited or translated (a revision exists). */}
+      {revised && (
+        <span
+          title="This segment has been edited or translated"
+          aria-label="Edited"
+          className="mt-0.5 shrink-0 text-teal-500 dark:text-teal-400"
+        >
+          ✎
+        </span>
+      )}
       <KebabMenu actions={[{ label: "Edit", onClick: onEdit }]} label="Segment actions" />
     </li>
   );

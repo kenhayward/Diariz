@@ -107,7 +107,7 @@ public class ChatIntegrationTests(ContainersFixture fx)
             seed.Segments.Add(new Segment
             {
                 Id = Guid.NewGuid(), TranscriptionId = v2.Id, SpeakerLabel = "SPEAKER_00",
-                StartMs = 0, EndMs = 1000, Text = "Hello team", Ordinal = 0,
+                StartMs = 0, EndMs = 1000, Original = "Hello team", Ordinal = 0,
             });
             seed.Speakers.Add(new Speaker { Id = Guid.NewGuid(), RecordingId = recId, Label = "SPEAKER_00", DisplayName = "Alice" });
             await seed.SaveChangesAsync();

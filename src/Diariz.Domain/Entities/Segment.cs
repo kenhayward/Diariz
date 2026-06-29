@@ -17,7 +17,16 @@ public class Segment
 
     public long StartMs { get; set; }
     public long EndMs { get; set; }
-    public string Text { get; set; } = string.Empty;
+
+    /// <summary>The model's verbatim output for this span — immutable once written by the worker.</summary>
+    public string Original { get; set; } = string.Empty;
+
+    /// <summary>A user edit or a translation of <see cref="Original"/>. Null = unchanged (show the original).
+    /// A non-null value (including empty) takes precedence — see <see cref="EffectiveText"/>.</summary>
+    public string? Revised { get; set; }
+
+    /// <summary>The text actually shown/exported: the revision when present, else the model's original.</summary>
+    public string EffectiveText => Revised ?? Original;
 
     /// <summary>Ordering index within the transcription.</summary>
     public int Ordinal { get; set; }

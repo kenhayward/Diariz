@@ -116,7 +116,7 @@ public class RecordingsController : ControllerBase
                 s.Id,
                 s.SpeakerLabel,
                 names.TryGetValue(s.SpeakerLabel, out var dn) ? dn : s.SpeakerLabel,
-                s.StartMs, s.EndMs, s.Text)).ToList());
+                s.StartMs, s.EndMs, s.Original, s.Revised)).ToList());
         SummaryDto? sDto = current?.Summary is null ? null
             : new(current.Summary.Model, current.Summary.Text, current.Summary.CreatedAt);
 
@@ -320,7 +320,7 @@ public class RecordingsController : ControllerBase
         }
 
         var merged = SegmentMerger.Merge(segments
-            .Select(s => new SegmentMerger.Part(KeyFor(s.SpeakerLabel), s.SpeakerLabel, s.StartMs, s.EndMs, s.Text)).ToList());
+            .Select(s => new SegmentMerger.Part(KeyFor(s.SpeakerLabel), s.SpeakerLabel, s.StartMs, s.EndMs, s.EffectiveText)).ToList());
         if (merged.Count == segments.Count) return NoContent(); // nothing adjacent to merge
 
         _db.Segments.RemoveRange(segments);
@@ -333,7 +333,9 @@ public class RecordingsController : ControllerBase
                 SpeakerLabel = p.SpeakerLabel,
                 StartMs = p.StartMs,
                 EndMs = p.EndMs,
-                Text = p.Text,
+                // Merge consolidates the displayed (effective) text; the per-segment original/revised split
+                // is intentionally collapsed into a fresh Original on the merged row.
+                Original = p.Text,
                 Ordinal = ordinal++
             });
         await _db.SaveChangesAsync();
@@ -381,7 +383,7 @@ public class RecordingsController : ControllerBase
             .Select(s => new SegmentDto(
                 s.Id, s.SpeakerLabel,
                 names.TryGetValue(s.SpeakerLabel, out var dn) ? dn : s.SpeakerLabel,
-                s.StartMs, s.EndMs, s.Text))
+                s.StartMs, s.EndMs, s.Original, s.Revised))
             .ToList();
         var actions = rec.Actions
             .OrderBy(a => a.Ordinal)
@@ -406,7 +408,9 @@ public class RecordingsController : ControllerBase
         var owned = await _db.Recordings.AnyAsync(r => r.Id == id && r.UserId == UserId);
         if (!owned) return NotFound();
 
-        seg.Text = req.Text ?? "";
+        // Edits land on Revised, preserving the model's Original. A null Text resets to the original
+        // (clears the revision); a value (incl. "") sets the revision.
+        seg.Revised = req.Text;
         await _db.SaveChangesAsync();
         return NoContent();
     }
@@ -585,7 +589,7 @@ public class RecordingsController : ControllerBase
             .Select(s => new SegmentDto(
                 s.Id, s.SpeakerLabel,
                 names.TryGetValue(s.SpeakerLabel, out var dn) ? dn : s.SpeakerLabel,
-                s.StartMs, s.EndMs, s.Text))
+                s.StartMs, s.EndMs, s.Original, s.Revised))
             .ToList();
 
         var name = rec.Name ?? rec.Title;

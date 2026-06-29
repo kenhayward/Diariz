@@ -52,7 +52,14 @@ public record RecordingSummaryDto(
     string? SectionName,
     bool HasActions);
 
-public record SegmentDto(Guid Id, string Speaker, string SpeakerDisplay, long StartMs, long EndMs, string Text);
+public record SegmentDto(
+    Guid Id, string Speaker, string SpeakerDisplay, long StartMs, long EndMs,
+    string Original, string? Revised = null)
+{
+    /// <summary>The text shown/exported: the user's revision (or translation) when present, else the
+    /// model's original. Server-side consumers (formatters, email, chat, summarisation) read this.</summary>
+    public string Text => Revised ?? Original;
+}
 
 public record SummaryDto(string Model, string Text, DateTimeOffset CreatedAt);
 
@@ -112,7 +119,10 @@ public record SpeakerHints(int? Min, int? Max);
 /// <summary>Re-transcribe options. <see cref="Speakers"/> is tri-state: omit/null = keep the recording's
 /// existing hints; present = set them (an object with null Min/Max means "back to automatic").</summary>
 public record RetranscribeRequest(string? Model, SpeakerHints? Speakers = null);
-public record UpdateSegmentRequest(string Text);
+/// <summary>Edit a segment's text. <see cref="Text"/> is tri-state: a value sets the revision (the original
+/// is preserved); null = reset to the model's original (clears the revision); "" = a deliberately blank
+/// revision.</summary>
+public record UpdateSegmentRequest(string? Text);
 
 // ---- User settings (per-user summarisation config) ----
 /// <summary>Settings returned to the client. The API key is never exposed — only whether one is set.

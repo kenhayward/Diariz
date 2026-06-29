@@ -23,7 +23,7 @@ public class RecordingActionsControllerTests
         var tr = new Transcription { Id = Guid.NewGuid(), RecordingId = rec.Id, Model = "m", Version = 1 };
         db.Transcriptions.Add(tr);
         db.Segments.AddRange(
-            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 1000, Text = "Bob, send the report.", Ordinal = 0 });
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 1000, Original = "Bob, send the report.", Ordinal = 0 });
         db.Speakers.Add(new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Alice" });
         await db.SaveChangesAsync();
         return rec;

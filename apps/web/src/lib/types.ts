@@ -42,6 +42,11 @@ export interface SegmentDto {
   speakerDisplay: string;
   startMs: number;
   endMs: number;
+  /** The model's verbatim output for this span. */
+  original: string;
+  /** A user edit or translation; null/undefined = unchanged (show the original). */
+  revised: string | null;
+  /** The text shown/exported: the revision when present, else the original. */
   text: string;
 }
 
