@@ -19,6 +19,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<SpeakerProfile> SpeakerProfiles => Set<SpeakerProfile>();
     public DbSet<ProfileContribution> ProfileContributions => Set<ProfileContribution>();
     public DbSet<RecordingAction> RecordingActions => Set<RecordingAction>();
+    public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -53,6 +54,10 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 .WithOne(a => a.Recording!)
                 .HasForeignKey(a => a.RecordingId)
                 .OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(r => r.Attachments)
+                .WithOne(a => a.Recording!)
+                .HasForeignKey(a => a.RecordingId)
+                .OnDelete(DeleteBehavior.Cascade);
             // Deleting a section ungroups its recordings rather than deleting them.
             e.HasOne(r => r.Section)
                 .WithMany(s => s.Recordings)
@@ -80,6 +85,12 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         builder.Entity<RecordingAction>(e =>
         {
             e.HasIndex(a => new { a.RecordingId, a.Ordinal });
+        });
+
+        builder.Entity<Attachment>(e =>
+        {
+            e.HasIndex(a => new { a.RecordingId, a.Ordinal });
+            e.Property(a => a.Name).HasMaxLength(512);
         });
 
         builder.Entity<ApplicationUser>(e =>

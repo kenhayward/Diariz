@@ -37,6 +37,18 @@ export interface SectionDto {
   position: number;
 }
 
+/// A supporting document attached to a recording — an uploaded file or a URL.
+export type AttachmentKind = "File" | "Url";
+export interface Attachment {
+  id: string;
+  kind: AttachmentKind;
+  name: string;
+  contentType: string | null;
+  sizeBytes: number;
+  url: string | null;
+  ordinal: number;
+}
+
 export interface SummaryDto {
   model: string;
   text: string;

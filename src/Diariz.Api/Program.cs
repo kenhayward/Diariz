@@ -26,6 +26,7 @@ builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailO
 builder.Services.Configure<AppPublicOptions>(builder.Configuration.GetSection(AppPublicOptions.Section));
 builder.Services.Configure<IdentificationOptions>(builder.Configuration.GetSection(IdentificationOptions.Section));
 builder.Services.Configure<UploadOptions>(builder.Configuration.GetSection(UploadOptions.Section));
+builder.Services.Configure<AttachmentOptions>(builder.Configuration.GetSection(AttachmentOptions.Section));
 
 var jwt = builder.Configuration.GetSection(JwtOptions.Section).Get<JwtOptions>() ?? new JwtOptions();
 var storage = builder.Configuration.GetSection(StorageOptions.Section).Get<StorageOptions>() ?? new StorageOptions();
@@ -71,12 +72,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             OnMessageReceived = ctx =>
             {
                 // Allow query-string auth for connections that can't set an Authorization header:
-                // the SignalR WS handshake, and the <audio> element streaming a recording.
+                // the SignalR WS handshake, the <audio> element streaming a recording, and opening an
+                // attachment in a new browser tab.
                 var token = ctx.Request.Query["access_token"];
                 var path = ctx.HttpContext.Request.Path;
-                var isAudio = path.StartsWithSegments("/api/recordings")
-                    && path.Value!.EndsWith("/audio", StringComparison.OrdinalIgnoreCase);
-                if (!string.IsNullOrEmpty(token) && (path.StartsWithSegments("/hubs") || isAudio))
+                var isRecordingAsset = path.StartsWithSegments("/api/recordings")
+                    && (path.Value!.EndsWith("/audio", StringComparison.OrdinalIgnoreCase)
+                        || path.Value!.EndsWith("/content", StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrEmpty(token) && (path.StartsWithSegments("/hubs") || isRecordingAsset))
                     ctx.Token = token;
                 return Task.CompletedTask;
             }

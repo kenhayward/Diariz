@@ -40,6 +40,9 @@ original words (so you can always flip back), and exports/email/chat use them.
 - **Organise** recordings into **sections and sub-sections** (one level of nesting) with drag-and-drop
 ordering and cross-group moves; select a whole group at once to build chat context. Browse them as a
 **list or a calendar** (days with recordings are highlighted; click one to see that day's recordings).
+- **Attach supporting documents** to a transcript — upload files (PDFs, Office docs, emails, calendar
+invites, images, …) or add URLs, then rename, open, and remove them from an "Attachments (N)" button
+(or drag files onto the page). Files are stored in object storage and count toward your quota.
 - **Manage audio & merge**: **delete a recording's audio** to reclaim its storage while keeping the
 transcript, and **merge** several recordings into the earliest one — their transcripts are laid end-to-end
 and their audio is concatenated server-side (ffmpeg).

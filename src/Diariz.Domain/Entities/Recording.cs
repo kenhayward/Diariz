@@ -63,4 +63,5 @@ public class Recording
     public ICollection<Transcription> Transcriptions { get; set; } = new List<Transcription>();
     public ICollection<Speaker> Speakers { get; set; } = new List<Speaker>();
     public ICollection<RecordingAction> Actions { get; set; } = new List<RecordingAction>();
+    public ICollection<Attachment> Attachments { get; set; } = new List<Attachment>();
 }

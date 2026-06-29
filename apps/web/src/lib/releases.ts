@@ -28,8 +28,9 @@ merge duplicates, and erase one or all (GDPR) of the stored biometric voiceprint
 It can **summarise** recordings, **extract action items** (with actor and deadline) into an editable
 table, **translate** a transcript (segments, summary, and actions) into your chosen language, and let you
 **chat across one or more transcripts** — with file attachments, a context-usage dial, and saved
-conversations — using an OpenAI-compatible LLM endpoint you configure. Recordings organise into
-**sections** (with sub-sections) and drag-and-drop ordering, can be **merged** into one, and can be
+conversations — using an OpenAI-compatible LLM endpoint you configure. You can **attach supporting
+documents** (files or URLs) to a recording and open them from the transcript page. Recordings organise
+into **sections** (with sub-sections) and drag-and-drop ordering, can be **merged** into one, and can be
 browsed as a **list or a calendar**.
 
 Diariz is **multi-user** with role-based access: people request access (or an administrator adds them),
@@ -56,6 +57,26 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.36.0",
+    date: "2026-06-29",
+    pr: 79,
+    headline: "Attach supporting documents to a transcript",
+    summary:
+      "Keep the **supporting material** for a meeting alongside its transcript. On the detail page, an " +
+      "**Attachments (N)** split button opens a manager where you can **add files** (PDFs, Office docs, " +
+      "emails, calendar invites, images — anything), **add a URL**, **rename**, **open**, and **remove** " +
+      "them; the dropdown opens any attachment directly with your browser. You can also **drag files onto " +
+      "the page** to attach them. Files are stored in object storage and count toward your storage quota; " +
+      "URLs don't. (Using attachments as chat context comes next.)",
+    added: [
+      "Attachments on a recording: add files or URLs, rename, open, and remove from an “Attachments (N)” split button.",
+      "Drag-and-drop files onto the transcript page to attach them.",
+    ],
+    changed: [
+      "Your storage usage now includes attachment files (URLs don't count).",
+    ],
+  },
   {
     version: "0.35.0",
     date: "2026-06-29",

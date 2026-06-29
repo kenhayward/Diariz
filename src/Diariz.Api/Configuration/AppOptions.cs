@@ -97,6 +97,14 @@ public class UploadOptions
     public bool AllowAac { get; set; } = true;
 }
 
+/// <summary>Limits for supporting-document attachments on a recording.</summary>
+public class AttachmentOptions
+{
+    public const string Section = "Attachments";
+    /// <summary>Max size of a single uploaded attachment file, in bytes (also counts toward the user's quota).</summary>
+    public long MaxBytes { get; set; } = 50L * 1024 * 1024; // 50 MB
+}
+
 /// <summary>Automatic speaker identification (matching new recordings' speakers to enrolled voiceprints).</summary>
 public class IdentificationOptions
 {

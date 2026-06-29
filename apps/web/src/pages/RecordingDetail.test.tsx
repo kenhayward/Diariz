@@ -28,6 +28,7 @@ vi.mock("../lib/api", () => ({
     updateAction: vi.fn(),
     deleteAction: vi.fn(),
     listSpeakerProfiles: vi.fn(),
+    listAttachments: vi.fn().mockResolvedValue([]),
     assignSpeaker: vi.fn(),
     createSpeakerProfile: vi.fn(),
   },

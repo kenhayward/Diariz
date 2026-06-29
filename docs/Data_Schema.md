@@ -47,6 +47,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddSpeakerMultiSpeaker` | `Speaker.IsMultiSpeaker` (bool) — "Multiple Speakers" slots excluded from voiceprints |
 | `AddSummaryUserEdited` | `Summary.IsUserEdited` (bool) + `Summary.UpdatedAt` (nullable) — manual/protected summary edits |
 | `AddTranscriptionProcessingMs` | `Transcription.ProcessingMs` (nullable) — full-pipeline wall-clock time the worker spent |
+| `AddAttachments` | `Attachments` (file/URL supporting documents on a recording, cascade) |
 
 ### Entity-relationship overview
 
@@ -161,6 +162,24 @@ Extracted/hand-edited action items.
 | `CreatedAt` | timestamptz | |
 
 Index: `(RecordingId, Ordinal)`.
+
+#### `Attachments`
+Supporting documents on a recording — an uploaded file (blob) or a URL.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `RecordingId` | uuid FK → Recordings | cascade |
+| `Kind` | int | `File`=0, `Url`=1 (append-only) |
+| `Name` | varchar(512) | display name / link text |
+| `BlobKey` | text null | object-storage key (File kind) |
+| `ContentType` | text null | MIME of the uploaded file |
+| `SizeBytes` | bigint | file size — counts toward the quota (0 for a URL) |
+| `Url` | text null | the linked address (Url kind) |
+| `Ordinal` | int | 0-based order within the recording |
+| `CreatedAt` | timestamptz | |
+
+Index: `(RecordingId, Ordinal)`. Attachment blobs live under MinIO key `{userId}/attachments/{attachmentId}{ext}`.
 
 #### `Speakers`
 Per-recording diarization label → display name, plus its voiceprint and any identification.
@@ -293,9 +312,9 @@ Changing an embedding model means a migration to resize the column **and** re-en
 
 ### What's stored
 
-**Only the original audio blobs.** Nothing else (no transcripts, no derived files) lives in MinIO — those are
-in Postgres. Transcript downloads (TXT/MD/RTF/SRT) and the emailed HTML are rendered on demand by the API from
-the database.
+**The original audio blobs and uploaded attachment files.** Nothing else (no transcripts, no derived files)
+lives in MinIO — those are in Postgres. Transcript downloads (TXT/MD/RTF/SRT) and the emailed HTML are
+rendered on demand by the API from the database.
 
 ### Bucket & key layout
 
@@ -305,6 +324,8 @@ the database.
   uploaded file name (recordings default to `.webm`). The `userId` prefix gives a natural per-user "folder"
   and keeps keys unguessable (random Guids).
 - The key is stored on `Recording.BlobKey`; `Recording.ContentType` holds the MIME type.
+- **Attachment files** use key `{userId}/attachments/{attachmentId}{ext}` (stored on `Attachment.BlobKey`);
+  the API streams them back same-origin (inline) and counts their bytes toward the user's quota.
 
 ### Access pattern (who reads/writes)
 

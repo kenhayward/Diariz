@@ -1,6 +1,7 @@
 import axios from "axios";
 import type {
   AdminUser,
+  Attachment,
   AuthResponse,
   ChatAttachment,
   ChatConversation,
@@ -187,6 +188,34 @@ export const api = {
   /// Manually create or edit the transcript's summary (flags it as user-edited; works without an LLM).
   async updateSummary(id: string, text: string): Promise<void> {
     await http.put(`/api/recordings/${id}/summary`, { text });
+  },
+
+  // ---- Attachments (supporting documents) ----
+  async listAttachments(id: string): Promise<Attachment[]> {
+    const { data } = await http.get<Attachment[]>(`/api/recordings/${id}/attachments`);
+    return data;
+  },
+  async addFileAttachment(id: string, file: File): Promise<Attachment> {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    const { data } = await http.post<Attachment>(`/api/recordings/${id}/attachments/file`, form);
+    return data;
+  },
+  async addUrlAttachment(id: string, url: string, name?: string): Promise<Attachment> {
+    const { data } = await http.post<Attachment>(`/api/recordings/${id}/attachments/url`, { url, name });
+    return data;
+  },
+  async renameAttachment(id: string, attachmentId: string, name: string): Promise<void> {
+    await http.put(`/api/recordings/${id}/attachments/${attachmentId}`, { name });
+  },
+  async deleteAttachment(id: string, attachmentId: string): Promise<void> {
+    await http.delete(`/api/recordings/${id}/attachments/${attachmentId}`);
+  },
+  /// A same-origin, self-authenticating URL the browser can open directly (file attachments only).
+  /// Carries the bearer as `access_token` since a new tab can't set an Authorization header.
+  attachmentContentUrl(id: string, attachmentId: string): string {
+    const token = encodeURIComponent(getToken() ?? "");
+    return `${baseURL}/api/recordings/${id}/attachments/${attachmentId}/content?access_token=${token}`;
   },
 
   /// Translate the whole transcript (segments + summary + actions) into `language` (BCP-47), or the

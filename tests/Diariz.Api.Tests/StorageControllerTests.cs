@@ -52,6 +52,23 @@ public class StorageControllerTests
     }
 
     [Fact]
+    public async Task Get_IncludesAttachmentFileBytes()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.Users.Add(new ApplicationUser { Id = userId, UserName = "u@x.test", Email = "u@x.test", QuotaBytes = 5000 });
+        var rec = new Recording { Id = Guid.NewGuid(), UserId = userId, BlobKey = "a", SizeBytes = 1000 };
+        db.Recordings.Add(rec);
+        db.Attachments.Add(new Attachment { Id = Guid.NewGuid(), RecordingId = rec.Id, Kind = AttachmentKind.File, Name = "f.pdf", BlobKey = "k", SizeBytes = 300 });
+        db.Attachments.Add(new Attachment { Id = Guid.NewGuid(), RecordingId = rec.Id, Kind = AttachmentKind.Url, Name = "link", Url = "https://x.test", SizeBytes = 0 });
+        await db.SaveChangesAsync();
+
+        var dto = await Build(db, userId).Get();
+
+        Assert.Equal(1300, dto.UsedBytes); // audio 1000 + attachment file 300 (URL counts 0)
+    }
+
+    [Fact]
     public async Task Get_NoRecordings_ReturnsZeroUsed()
     {
         using var db = TestDb.Create();
