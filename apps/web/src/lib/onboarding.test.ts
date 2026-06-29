@@ -20,8 +20,7 @@ describe("TOUR_STEPS", () => {
     const targets = TOUR_STEPS.map((s) => s.target);
     expect(new Set(targets).size).toBe(targets.length);
     for (const s of TOUR_STEPS) {
-      expect(s.title).toBeTruthy();
-      expect(s.body).toBeTruthy();
+      expect(s.target).toBeTruthy();
     }
   });
 });

@@ -37,5 +37,14 @@
   "quotasIntro": "Los nuevos usuarios empiezan con la cuota inicial; los administradores pueden aumentarla hasta el máximo.",
   "starterQuota": "Cuota inicial (GB)",
   "maxQuota": "Cuota máxima (GB)",
-  "defaultValue": "Predeterminado: {{value}}"
+  "defaultValue": "Predeterminado: {{value}}",
+  "releaseNotes": "Notas de la versión",
+  "resizeReleaseList": "Cambiar el tamaño de la lista de versiones",
+  "changeAdded": "Añadido",
+  "changeChanged": "Cambiado",
+  "changeFixed": "Corregido",
+  "aboutAria": "Acerca de Diariz",
+  "aboutVersion": "Versión {{version}}",
+  "releaseNotesLink": "Notas de la versión →",
+  "githubLink": "GitHub →"
 }

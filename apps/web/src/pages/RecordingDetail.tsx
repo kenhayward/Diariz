@@ -83,7 +83,7 @@ export default function RecordingDetail() {
       await api.assignSpeaker(id, label, profileId);
       qc.invalidateQueries({ queryKey: ["recording", id] });
     } catch (e) {
-      setActionError(apiErrorMessage(e, "Could not reassign the speaker."));
+      setActionError(apiErrorMessage(e, t("workspace:errAssignSpeaker")));
     }
   }
 
@@ -96,7 +96,7 @@ export default function RecordingDetail() {
       qc.invalidateQueries({ queryKey: ["recording", id] });
       qc.invalidateQueries({ queryKey: ["speaker-profiles"] });
     } catch (e) {
-      setActionError(apiErrorMessage(e, "Could not create the person."));
+      setActionError(apiErrorMessage(e, t("workspace:errCreatePerson")));
     }
   }
 

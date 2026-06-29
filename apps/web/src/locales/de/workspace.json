@@ -1,5 +1,7 @@
 {
   "namePrompt": "Name dieser Person?",
+  "errAssignSpeaker": "Der Sprecher konnte nicht neu zugewiesen werden.",
+  "errCreatePerson": "Die Person konnte nicht erstellt werden.",
   "retranscribing": "Wird neu transkribiert…",
   "errRetranscribe": "Die neue Transkription konnte nicht gestartet werden.",
   "errSummarise": "Die Zusammenfassung konnte nicht gestartet werden.",
@@ -102,5 +104,20 @@
   "emptyWelcomeBody": "Drücke oben auf Aufnehmen oder Hochladen, um deine erste Aufnahme hinzuzufügen – sie wird transkribiert und erscheint in der Liste links.",
   "emptySelectTitle": "Wähle eine Aufnahme",
   "emptySelectBody": "Wähle eine Aufnahme aus der Liste, oder drücke auf Aufnehmen / Hochladen, um eine weitere hinzuzufügen.",
-  "takeTour": "Tour starten"
+  "takeTour": "Tour starten",
+  "systemDesktopSuffix": " (nur Desktop)",
+  "recStop": "Stopp",
+  "recRecord": "Aufnehmen",
+  "recUploading": "Wird hochgeladen…",
+  "recUpload": "Hochladen",
+  "recUploadTitle": "Audiodateien zum Transkribieren hochladen (oder auf das Aufnahmen-Panel ziehen)",
+  "errUpload": "Hochladen fehlgeschlagen.",
+  "recTitlePrefixSystem": "System",
+  "recTitlePrefixMic": "Mikro",
+  "panelRecordings": "Aufnahmen",
+  "panelChat": "Chat",
+  "resizeRecordings": "Größe des Aufnahmen-Panels ändern",
+  "resizeChat": "Größe des Chat-Panels ändern",
+  "collapsePanel": "Panel {{title}} einklappen",
+  "expandPanel": "Panel {{label}} ausklappen"
 }

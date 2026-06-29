@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Outlet } from "react-router-dom";
 import RecordingsPanel from "./RecordingsPanel";
 import ChatPanel from "./ChatPanel";
@@ -26,6 +27,7 @@ const RIGHT_MAX = 640;
 /// The three-panel workspace: recordings list · selected recording (Outlet) · chat.
 /// Left and right panels collapse to a thin rail; the right panel is also drag-resizable.
 export default function Workspace() {
+  const { t } = useTranslation("workspace");
   const [leftOpen, setLeftOpen] = usePersistedBool("diariz.panels.left", true);
   const [rightOpen, setRightOpen] = usePersistedBool("diariz.panels.right", false);
   const { width: leftWidth, startResize: startLeftResize } = useResizableWidth("diariz.panels.leftWidth", {
@@ -66,7 +68,7 @@ export default function Workspace() {
             style={{ width: leftWidth }}
             className="flex shrink-0 flex-col border-r bg-white dark:border-gray-700 dark:bg-gray-900"
           >
-            <PanelHeader title="Recordings" onCollapse={() => setLeftOpen(false)} chevron="◀" />
+            <PanelHeader title={t("panelRecordings")} onCollapse={() => setLeftOpen(false)} chevron="◀" />
             <div className="min-h-0 flex-1 overflow-y-auto">
               <RecordingsPanel />
             </div>
@@ -74,13 +76,13 @@ export default function Workspace() {
           <div
             role="separator"
             aria-orientation="vertical"
-            aria-label="Resize recordings panel"
+            aria-label={t("resizeRecordings")}
             onMouseDown={(e) => startLeftResize(e, "left")}
             className="w-1 shrink-0 cursor-col-resize bg-transparent transition-colors hover:bg-blue-400 dark:hover:bg-blue-600"
           />
         </>
       ) : (
-        <CollapsedRail label="Recordings" onExpand={() => setLeftOpen(true)} chevron="▶" tour="recordings" />
+        <CollapsedRail label={t("panelRecordings")} onExpand={() => setLeftOpen(true)} chevron="▶" tour="recordings" />
       )}
 
       <main data-tour="detail" className="min-w-0 flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950">
@@ -95,7 +97,7 @@ export default function Workspace() {
         <div
           role="separator"
           aria-orientation="vertical"
-          aria-label="Resize chat panel"
+          aria-label={t("resizeChat")}
           onMouseDown={startResize}
           className="w-1 cursor-col-resize bg-transparent transition-colors hover:bg-blue-400 dark:hover:bg-blue-600"
         />
@@ -103,13 +105,13 @@ export default function Workspace() {
           style={{ width: rightWidth }}
           className="flex shrink-0 flex-col border-l bg-white dark:border-gray-700 dark:bg-gray-900"
         >
-          <PanelHeader title="Chat" onCollapse={() => setRightOpen(false)} chevron="▶" />
+          <PanelHeader title={t("panelChat")} onCollapse={() => setRightOpen(false)} chevron="▶" />
           <div className="min-h-0 flex-1 overflow-y-auto">
             <ChatPanel />
           </div>
         </aside>
       </div>
-      {!rightOpen && <CollapsedRail label="Chat" onExpand={() => setRightOpen(true)} chevron="◀" tour="chat" />}
+      {!rightOpen && <CollapsedRail label={t("panelChat")} onExpand={() => setRightOpen(true)} chevron="◀" tour="chat" />}
     </div>
     </SelectionProvider>
   );
@@ -124,6 +126,7 @@ function PanelHeader({
   onCollapse: () => void;
   chevron: string;
 }) {
+  const { t } = useTranslation("workspace");
   return (
     <div className="flex h-9 shrink-0 items-center justify-between border-b px-3 dark:border-gray-700">
       <span className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
@@ -131,7 +134,7 @@ function PanelHeader({
       </span>
       <button
         type="button"
-        aria-label={`Collapse ${title} panel`}
+        aria-label={t("collapsePanel", { title })}
         onClick={onCollapse}
         className="rounded px-1 text-xs text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
       >
@@ -152,6 +155,7 @@ function CollapsedRail({
   chevron: string;
   tour?: string;
 }) {
+  const { t } = useTranslation("workspace");
   return (
     <div
       data-tour={tour}
@@ -159,7 +163,7 @@ function CollapsedRail({
     >
       <button
         type="button"
-        aria-label={`Expand ${label} panel`}
+        aria-label={t("expandPanel", { label })}
         onClick={onExpand}
         className="rounded px-1 py-1 text-xs text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
       >

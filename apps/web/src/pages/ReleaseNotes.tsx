@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { renderMarkdown } from "../lib/markdown";
 import { useResizableWidth } from "../lib/useResizableWidth";
 import { RELEASES, TAGLINE, GITHUB_URL, type Release } from "../lib/releases";
@@ -7,6 +8,7 @@ import { RELEASES, TAGLINE, GITHUB_URL, type Release } from "../lib/releases";
 /// release's notes on the right. The two panels scroll independently; the header stays put.
 /// The list is drag-resizable.
 export default function ReleaseNotes() {
+  const { t } = useTranslation("account");
   const [selected, setSelected] = useState(RELEASES[0]?.version ?? "");
   const release = RELEASES.find((r) => r.version === selected) ?? RELEASES[0];
   const { width, startResize } = useResizableWidth("diariz.releaseNotes.listWidth", {
@@ -26,7 +28,7 @@ export default function ReleaseNotes() {
             <span className="truncate text-sm text-gray-500 dark:text-gray-400">{TAGLINE}</span>
           </div>
         </div>
-        <h1 className="ml-auto text-base font-semibold text-gray-700 dark:text-gray-200">Release Notes</h1>
+        <h1 className="ml-auto text-base font-semibold text-gray-700 dark:text-gray-200">{t("releaseNotes")}</h1>
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -61,7 +63,7 @@ export default function ReleaseNotes() {
         <div
           role="separator"
           aria-orientation="vertical"
-          aria-label="Resize release list"
+          aria-label={t("resizeReleaseList")}
           onMouseDown={(e) => startResize(e, "left")}
           className="w-1 shrink-0 cursor-col-resize bg-transparent transition-colors hover:bg-blue-400 dark:hover:bg-blue-600"
         />
@@ -76,6 +78,7 @@ export default function ReleaseNotes() {
 }
 
 function ReleaseDetail({ release }: { release: Release }) {
+  const { t } = useTranslation("account");
   return (
     <article className="mx-auto max-w-3xl">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -99,9 +102,9 @@ function ReleaseDetail({ release }: { release: Release }) {
         dangerouslySetInnerHTML={{ __html: renderMarkdown(release.summary) }}
       />
 
-      <ChangeList title="Added" items={release.added} />
-      <ChangeList title="Changed" items={release.changed} />
-      <ChangeList title="Fixed" items={release.fixed} />
+      <ChangeList title={t("changeAdded")} items={release.added} />
+      <ChangeList title={t("changeChanged")} items={release.changed} />
+      <ChangeList title={t("changeFixed")} items={release.fixed} />
     </article>
   );
 }

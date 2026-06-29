@@ -32,6 +32,17 @@ function keysOf(obj: Record<string, unknown>, prefix = ""): string[] {
   return out.sort();
 }
 
+/** Flattened (key → leaf value) pairs for a (possibly nested) catalog object. */
+function leavesOf(obj: Record<string, unknown>, prefix = ""): [string, unknown][] {
+  const out: [string, unknown][] = [];
+  for (const [k, v] of Object.entries(obj)) {
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (v && typeof v === "object" && !Array.isArray(v)) out.push(...leavesOf(v as Record<string, unknown>, key));
+    else out.push([key, v]);
+  }
+  return out;
+}
+
 const metaCodes = new Set((metadata as { code: string }[]).map((l) => l.code));
 
 describe("locale catalogs (merge gate)", () => {
@@ -58,7 +69,7 @@ describe("locale catalogs (merge gate)", () => {
 
         it(`${ns}.json has no empty values`, () => {
           const data = get(lng, ns)!;
-          for (const [k, v] of Object.entries(data)) {
+          for (const [k, v] of leavesOf(data)) {
             expect(typeof v === "string" && v.trim().length > 0, `${lng}/${ns}.json → "${k}" is empty`).toBe(true);
           }
         });

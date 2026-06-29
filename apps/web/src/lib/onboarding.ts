@@ -22,39 +22,19 @@ export function setOnboarded(done: boolean): void {
   }
 }
 
-/// One step of the tour. `target` matches a `data-tour="…"` attribute on the region to spotlight.
+/// One step of the tour. `target` matches a `data-tour="…"` attribute on the region to spotlight; the
+/// step's title/body copy lives in the i18n `tour` catalog keyed by `target` (`<target>.title` /
+/// `<target>.body`), so adding/translating tour copy is a JSON-only change.
 export interface TourStep {
   target: string;
-  title: string;
-  body: string;
 }
 
 export const TOUR_STEPS: TourStep[] = [
-  {
-    target: "capture",
-    title: "Capture or upload audio",
-    body: "Record from your microphone (or Windows system audio in the desktop app), or upload existing audio files. Everything is transcribed and diarized automatically.",
-  },
-  {
-    target: "recordings",
-    title: "Your recordings",
-    body: "Recordings appear here as they finish. Organise them into sections, drag to reorder, and drop audio files anywhere on this panel to upload.",
-  },
-  {
-    target: "detail",
-    title: "Transcript & speakers",
-    body: "Open a recording to read its speaker-labelled, timestamped transcript. Rename speakers, identify known people, edit, summarise, and play back.",
-  },
-  {
-    target: "chat",
-    title: "Chat across transcripts",
-    body: "Ask questions across one or more transcripts with an AI assistant. Open this panel from its rail on the right.",
-  },
-  {
-    target: "account",
-    title: "Settings & more",
-    body: "Configure your AI endpoint, manage enrolled speakers (People), check your storage, and replay this tour any time from here.",
-  },
+  { target: "capture" },
+  { target: "recordings" },
+  { target: "detail" },
+  { target: "chat" },
+  { target: "account" },
 ];
 
 // The empty-detail-page copy now lives in the i18n `workspace` catalog (EmptyDetail picks the welcome

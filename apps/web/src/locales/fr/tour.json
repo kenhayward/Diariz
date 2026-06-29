@@ -1,0 +1,27 @@
+{
+  "stepOf": "Étape {{index}} sur {{total}}",
+  "skip": "Ignorer et désactiver",
+  "back": "Précédent",
+  "next": "Suivant",
+  "done": "Terminé",
+  "capture": {
+    "title": "Capturez ou importez de l'audio",
+    "body": "Enregistrez depuis votre microphone (ou l'audio système de Windows dans l'application de bureau), ou importez des fichiers audio existants. Tout est transcrit et diarisé automatiquement."
+  },
+  "recordings": {
+    "title": "Vos enregistrements",
+    "body": "Les enregistrements apparaissent ici une fois terminés. Organisez-les en sections, glissez-les pour les réordonner, et déposez des fichiers audio n'importe où sur ce panneau pour les importer."
+  },
+  "detail": {
+    "title": "Transcription et intervenants",
+    "body": "Ouvrez un enregistrement pour lire sa transcription horodatée avec intervenants étiquetés. Renommez les intervenants, identifiez les personnes connues, modifiez, résumez et écoutez."
+  },
+  "chat": {
+    "title": "Discutez entre transcriptions",
+    "body": "Posez des questions sur une ou plusieurs transcriptions avec un assistant IA. Ouvrez ce panneau depuis son rail à droite."
+  },
+  "account": {
+    "title": "Paramètres et plus",
+    "body": "Configurez votre endpoint d'IA, gérez les intervenants enregistrés (Personnes), vérifiez votre stockage et rejouez cette visite à tout moment depuis ici."
+  }
+}

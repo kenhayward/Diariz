@@ -56,6 +56,27 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.28.0",
+    date: "2026-06-29",
+    pr: 69,
+    headline: "The whole interface is now localized",
+    summary:
+      "Localization now covers the last English-only corners of the app: the **chat panel** (context " +
+      "picker, attachments, the context-usage dial, saved conversations), the admin **Manage Users** screen, " +
+      "the **People** voiceprint manager, the **guided tour**, the audio **recorder** controls, the " +
+      "collapsible workspace **panel headers**, the **About** box chrome, and the **Release Notes** page — all " +
+      "appear in your chosen language (English, Spanish, French, or German). The new strings live in four new " +
+      "JSON catalogs (`chat`, `admin`, `people`, `tour`) plus additions to the existing ones, so contributors " +
+      "can translate them without touching code.",
+    added: [
+      "Translation of the chat panel, Manage Users, People, the onboarding tour, the recorder, the workspace panel headers, and the About / Release Notes chrome.",
+      "Four new translation namespaces — `chat`, `admin`, `people`, `tour` (en + es/fr/de).",
+    ],
+    changed: [
+      "The locale completeness gate now validates nested catalog values (e.g. the per-step tour copy), not just top-level keys.",
+    ],
+  },
+  {
     version: "0.27.0",
     date: "2026-06-29",
     pr: 68,

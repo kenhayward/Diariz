@@ -1,5 +1,7 @@
 {
   "namePrompt": "¿Nombre de esta persona?",
+  "errAssignSpeaker": "No se pudo reasignar el hablante.",
+  "errCreatePerson": "No se pudo crear la persona.",
   "retranscribing": "Volviendo a transcribir…",
   "errRetranscribe": "No se pudo iniciar la nueva transcripción.",
   "errSummarise": "No se pudo iniciar el resumen.",
@@ -102,5 +104,20 @@
   "emptyWelcomeBody": "Pulsa Grabar o Subir arriba para añadir tu primera grabación: se transcribirá y aparecerá en la lista de la izquierda.",
   "emptySelectTitle": "Selecciona una grabación",
   "emptySelectBody": "Elige una grabación de la lista, o pulsa Grabar / Subir para añadir otra.",
-  "takeTour": "Hacer el recorrido"
+  "takeTour": "Hacer el recorrido",
+  "systemDesktopSuffix": " (solo escritorio)",
+  "recStop": "Detener",
+  "recRecord": "Grabar",
+  "recUploading": "Subiendo…",
+  "recUpload": "Subir",
+  "recUploadTitle": "Sube archivos de audio para transcribir (o suéltalos en el panel de grabaciones)",
+  "errUpload": "Error al subir.",
+  "recTitlePrefixSystem": "Sistema",
+  "recTitlePrefixMic": "Micrófono",
+  "panelRecordings": "Grabaciones",
+  "panelChat": "Chat",
+  "resizeRecordings": "Cambiar el tamaño del panel de grabaciones",
+  "resizeChat": "Cambiar el tamaño del panel de chat",
+  "collapsePanel": "Contraer el panel {{title}}",
+  "expandPanel": "Expandir el panel {{label}}"
 }
