@@ -61,6 +61,9 @@ public record RecordingSummaryDto(
 /// <summary>Bulk delete the audio blobs of the listed recordings (keeps their transcripts/metadata).</summary>
 public record DeleteAudioRequest(IReadOnlyList<Guid> Ids);
 
+/// <summary>Merge the listed recordings' transcripts (and audio) into the earliest-created one.</summary>
+public record MergeRecordingsRequest(IReadOnlyList<Guid> Ids);
+
 public record SegmentDto(
     Guid Id, string Speaker, string SpeakerDisplay, long StartMs, long EndMs,
     string Original, string? Revised = null)

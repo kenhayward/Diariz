@@ -27,6 +27,7 @@ const statusColor: Record<RecordingStatus, string> = {
   Transcribed: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
   Summarizing: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
   Summarized: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
+  Merging: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
   Failed: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
 };
 
@@ -325,6 +326,14 @@ function ListToolbar({ recordings }: { recordings: RecordingSummary[] }) {
     qc.invalidateQueries({ queryKey: ["recordings"] });
   }
 
+  async function mergeSelected() {
+    if (selectedIds.length < 2) return;
+    if (!window.confirm(t("confirmMergeRecordings", { count: selectedIds.length }))) return;
+    await api.mergeRecordings(selectedIds);
+    clear();
+    qc.invalidateQueries({ queryKey: ["recordings"] });
+  }
+
   return (
     <div className="flex h-9 items-center justify-between gap-2 border-b px-3 dark:border-gray-700">
       {open ? (
@@ -355,6 +364,14 @@ function ListToolbar({ recordings }: { recordings: RecordingSummary[] }) {
             active={selectMode}
             icon={<SelectIcon />}
           />
+          {selectMode && (
+            <ToolbarButton
+              label={t("mergeTranscripts")}
+              onClick={mergeSelected}
+              disabled={selectedIds.length < 2}
+              icon={<MergeIcon />}
+            />
+          )}
           {selectMode && (
             <ToolbarButton
               label={t("recordings:deleteAudio")}
@@ -404,6 +421,12 @@ const TrashIcon = () => (
   <svg {...iconProps}>
     <polyline points="3 6 5 6 21 6" />
     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  </svg>
+);
+const MergeIcon = () => (
+  <svg {...iconProps}>
+    <path d="M6 3v6a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3" />
+    <line x1="12" y1="15" x2="12" y2="21" />
   </svg>
 );
 

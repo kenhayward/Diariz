@@ -24,3 +24,9 @@ def download(blob_key: str) -> str:
     os.close(fd)
     _s3.download_file(config.S3_BUCKET, blob_key, path)
     return path
+
+
+def upload(blob_key: str, local_path: str, content_type: str) -> None:
+    """Upload a local file to the given object key (used for merged/concatenated audio)."""
+    extra = {"ContentType": content_type} if content_type else {}
+    _s3.upload_file(config.S3_BUCKET, blob_key, local_path, ExtraArgs=extra)

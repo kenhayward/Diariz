@@ -6,6 +6,8 @@ class Config:
     # Redis
     REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
     STREAM_KEY = os.getenv("STREAM_KEY", "transcription-jobs")
+    # Second stream this worker also consumes: audio-concatenation merge jobs (shares the same group).
+    MERGE_STREAM_KEY = os.getenv("MERGE_STREAM_KEY", "audio-merge-jobs")
     CONSUMER_GROUP = os.getenv("CONSUMER_GROUP", "workers")
     CONSUMER_NAME = os.getenv("CONSUMER_NAME", "worker-1")
 

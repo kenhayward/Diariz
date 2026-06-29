@@ -39,3 +39,27 @@ public record TranscriptionResult(
 public record TranscriptionFailure(
     Guid TranscriptionId,
     string Error);
+
+/// <summary>Job payload for an audio-concatenation merge, consumed by the Python worker. The worker
+/// downloads <paramref name="BlobKeys"/> in order, concatenates them with ffmpeg, uploads the result to
+/// <paramref name="OutputKey"/>, and reports back. <paramref name="DeleteRecordingIds"/> are echoed back so
+/// the callback can remove the now-merged source recordings.</summary>
+public record AudioMergeJob(
+    Guid RecordingId,
+    IReadOnlyList<string> BlobKeys,
+    string OutputKey,
+    IReadOnlyList<Guid> DeleteRecordingIds);
+
+/// <summary>Callback body the worker POSTs when the concatenated audio is ready.</summary>
+public record AudioMergeResult(
+    Guid RecordingId,
+    string BlobKey,
+    string ContentType,
+    long SizeBytes,
+    long DurationMs,
+    IReadOnlyList<Guid> DeleteRecordingIds);
+
+/// <summary>Callback body the worker POSTs when the merge fails (originals are kept).</summary>
+public record AudioMergeFailure(
+    Guid RecordingId,
+    string Error);

@@ -56,6 +56,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.31.0",
+    date: "2026-06-29",
+    pr: 73,
+    headline: "Merge several recordings into one",
+    summary:
+      "Select two or more recordings and **Merge transcripts** to combine them into the **earliest-created** " +
+      "one. Their transcripts are laid end-to-end (timestamps offset so they run in sequence) into a new " +
+      "transcript on the survivor, and their **audio is concatenated** into a single file by the worker " +
+      "(ffmpeg) so nothing is lost. The other recordings are then removed. Useful when a meeting was captured " +
+      "in several parts. Speakers are kept distinct per source — re-identify or rename them afterward.",
+    added: [
+      "Merge transcripts: a Select-mode toolbar action (2+ recordings) that combines transcripts + audio into the earliest recording and deletes the rest, with a confirmation.",
+    ],
+    changed: [
+      "New worker job + Redis stream (audio-merge-jobs) for server-side ffmpeg audio concatenation; a Merging status while it runs.",
+    ],
+  },
+  {
     version: "0.30.0",
     date: "2026-06-29",
     pr: 72,

@@ -1335,4 +1335,93 @@ public class RecordingsControllerTests
         var dto = Assert.IsType<RecordingDetailDto>((await controller.Get(rec.Id)).Value);
         Assert.False(dto.HasAudio);
     }
+
+    // ---- Merge transcripts (+ audio concatenation) ----
+
+    private static async Task<Recording> SeedMergeable(
+        DiarizDbContext db, Guid userId, DateTimeOffset createdAt, long durationMs, string text)
+    {
+        var rec = new Recording
+        {
+            Id = Guid.NewGuid(), UserId = userId, BlobKey = $"{userId}/{Guid.NewGuid():N}.webm",
+            Status = RecordingStatus.Transcribed, CreatedAt = createdAt, DurationMs = durationMs,
+        };
+        var tr = new Transcription { Id = Guid.NewGuid(), RecordingId = rec.Id, Model = "m", Version = 1 };
+        db.Recordings.Add(rec);
+        db.Transcriptions.Add(tr);
+        db.Segments.Add(new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = durationMs, Original = text, Ordinal = 0 });
+        db.Speakers.Add(new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "SPEAKER_00" });
+        await db.SaveChangesAsync();
+        return rec;
+    }
+
+    [Fact]
+    public async Task Merge_FewerThanTwo_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedMergeable(db, userId, DateTimeOffset.UtcNow, 1000, "a");
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<BadRequestObjectResult>(await controller.Merge(new MergeRecordingsRequest([rec.Id])));
+    }
+
+    [Fact]
+    public async Task Merge_NotAllOwned_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var mine = await SeedMergeable(db, userId, DateTimeOffset.UtcNow, 1000, "a");
+        var theirs = await SeedMergeable(db, Guid.NewGuid(), DateTimeOffset.UtcNow, 1000, "b");
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(await controller.Merge(new MergeRecordingsRequest([mine.Id, theirs.Id])));
+    }
+
+    [Fact]
+    public async Task Merge_WhenAnyAudioDeleted_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var a = await SeedMergeable(db, userId, DateTimeOffset.UtcNow.AddMinutes(-1), 1000, "a");
+        var b = await SeedMergeable(db, userId, DateTimeOffset.UtcNow, 1000, "b");
+        b.AudioDeletedAt = DateTimeOffset.UtcNow; // its audio is gone, can't concatenate
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<BadRequestObjectResult>(await controller.Merge(new MergeRecordingsRequest([a.Id, b.Id])));
+    }
+
+    [Fact]
+    public async Task Merge_IntoEarliest_BuildsMergedTranscript_SetsMerging_AndEnqueuesJob()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        // 'later' is selected first but 'early' (older) must become the survivor.
+        var later = await SeedMergeable(db, userId, DateTimeOffset.UtcNow, 2000, "World");
+        var early = await SeedMergeable(db, userId, DateTimeOffset.UtcNow.AddMinutes(-5), 1000, "Hello");
+        var controller = Build(db, userId, queue);
+
+        var result = await controller.Merge(new MergeRecordingsRequest([later.Id, early.Id]));
+
+        Assert.IsType<AcceptedResult>(result);
+
+        // Survivor = earliest; gets a new (v2) transcription whose segments are laid end-to-end.
+        var survivor = (await db.Recordings.FindAsync(early.Id))!;
+        Assert.Equal(RecordingStatus.Merging, survivor.Status);
+        var merged = await db.Transcriptions.Where(t => t.RecordingId == early.Id).OrderByDescending(t => t.Version).FirstAsync();
+        Assert.Equal(2, merged.Version);
+        var segs = await db.Segments.Where(s => s.TranscriptionId == merged.Id).OrderBy(s => s.Ordinal).ToListAsync();
+        Assert.Equal(["Hello", "World"], segs.Select(s => s.Original));
+        Assert.Equal(0, segs[0].StartMs);
+        Assert.Equal(1000, segs[1].StartMs); // shifted by the survivor's 1000 ms duration
+        Assert.Equal(["S1-SPEAKER_00", "S2-SPEAKER_00"], segs.Select(s => s.SpeakerLabel));
+
+        var job = Assert.Single(queue.AudioMergeEnqueued);
+        Assert.Equal(early.Id, job.RecordingId);
+        Assert.Equal([early.BlobKey, later.BlobKey], job.BlobKeys); // chronological
+        Assert.Equal([later.Id], job.DeleteRecordingIds);           // only the non-survivors
+        Assert.StartsWith($"{userId}/{early.Id}-merged-", job.OutputKey);
+    }
 }

@@ -7,6 +7,7 @@ export type RecordingStatus =
   | "Transcribed"
   | "Summarizing"
   | "Summarized"
+  | "Merging"
   | "Failed";
 
 export type RecordingSource = "Microphone" | "System" | "Upload";

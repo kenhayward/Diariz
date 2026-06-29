@@ -538,6 +538,90 @@ public class RecordingsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Merge 2+ recordings into the earliest-created one: concatenate their transcripts (with
+    /// timestamps laid end-to-end) into a new transcription version on the survivor, then enqueue an
+    /// audio-concatenation job. The worker stitches the audio and calls back to swap in the combined blob
+    /// and delete the other recordings. All sources must still have their audio.</summary>
+    [HttpPost("merge")]
+    public async Task<IActionResult> Merge(MergeRecordingsRequest req)
+    {
+        var ids = (req.Ids ?? []).Distinct().ToList();
+        if (ids.Count < 2) return BadRequest("Select at least two recordings to merge.");
+
+        var recs = await _db.Recordings
+            .Include(r => r.Speakers)
+            .Include(r => r.Transcriptions).ThenInclude(t => t.Segments)
+            .Where(r => ids.Contains(r.Id) && r.UserId == UserId)
+            .ToListAsync();
+        if (recs.Count != ids.Count) return NotFound();                 // some aren't the caller's
+        if (recs.Any(r => !r.HasAudio)) return BadRequest("Every recording being merged must still have its audio.");
+
+        // Earliest-created recording survives; the rest are folded into it (chronological order).
+        var ordered = recs.OrderBy(r => r.CreatedAt).ToList();
+        var survivor = ordered[0];
+
+        var sources = ordered.Select((rec, idx) =>
+        {
+            var current = rec.Transcriptions.OrderByDescending(t => t.Version).FirstOrDefault();
+            var display = rec.Speakers.ToDictionary(s => s.Label, s => s.DisplayName);
+            var segs = (current?.Segments ?? new List<Segment>())
+                .OrderBy(s => s.Ordinal)
+                .Select(s => new MergeSegmentInput(
+                    s.SpeakerLabel,
+                    display.TryGetValue(s.SpeakerLabel, out var d) ? d : s.SpeakerLabel,
+                    s.StartMs, s.EndMs, s.EffectiveText))
+                .ToList();
+            return new MergeSourceInput(idx, rec.DurationMs, segs);
+        }).ToList();
+
+        var merged = TranscriptMerger.Merge(sources);
+
+        // A new (highest) transcription version on the survivor holds the concatenated transcript.
+        var nextVersion = (survivor.Transcriptions.Max(t => (int?)t.Version) ?? 0) + 1;
+        var tr = new Transcription
+        {
+            Id = Guid.NewGuid(),
+            RecordingId = survivor.Id,
+            Model = "merged",
+            Version = nextVersion,
+            Language = survivor.Transcriptions.OrderByDescending(t => t.Version).FirstOrDefault()?.Language,
+        };
+        _db.Transcriptions.Add(tr);
+        foreach (var s in merged.Segments)
+            _db.Segments.Add(new Segment
+            {
+                Id = Guid.NewGuid(),
+                TranscriptionId = tr.Id,
+                SpeakerLabel = s.SpeakerLabel,
+                StartMs = s.StartMs,
+                EndMs = s.EndMs,
+                Original = s.Text,
+                Ordinal = s.Ordinal,
+            });
+
+        // Seed Speaker rows on the survivor for the namespaced labels (so the detail view can name them).
+        var existing = survivor.Speakers.Select(sp => sp.Label).ToHashSet();
+        foreach (var sp in merged.Speakers.Where(sp => !existing.Contains(sp.Label)))
+            _db.Speakers.Add(new Speaker
+            {
+                Id = Guid.NewGuid(), RecordingId = survivor.Id, Label = sp.Label, DisplayName = sp.DisplayName,
+            });
+
+        survivor.Status = RecordingStatus.Merging;
+        survivor.Error = null;
+
+        // The worker writes the combined audio to a fresh key (the survivor's old blob is one of the inputs).
+        var ext = Path.GetExtension(survivor.BlobKey);
+        var outputKey = $"{UserId}/{survivor.Id}-merged-{Guid.NewGuid():N}{(string.IsNullOrEmpty(ext) ? ".webm" : ext)}";
+        var blobKeys = ordered.Select(r => r.BlobKey).ToList();
+        var deleteIds = ordered.Skip(1).Select(r => r.Id).ToList();
+
+        await _db.SaveChangesAsync();
+        await _queue.EnqueueAudioMergeAsync(new AudioMergeJob(survivor.Id, blobKeys, outputKey, deleteIds));
+        await _hub.NotifyStatusAsync(UserId, survivor.Id, survivor.Status.ToString());
+        return Accepted();
+    }
+
     /// <summary>Returns a same-origin URL the browser can stream/download the audio from. The audio is
     /// served by the API itself (see <see cref="GetAudio"/>), so MinIO never has to be reachable from the
     /// client. The &lt;audio&gt; element / download link can't send an Authorization header, so the caller's
