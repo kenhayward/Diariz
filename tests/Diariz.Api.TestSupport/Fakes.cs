@@ -97,6 +97,32 @@ public sealed class FakeActionsClient : IActionsClient
     }
 }
 
+/// <summary>Stub <see cref="ITranslationClient"/> — by default echoes each input prefixed with the target
+/// language (so tests can assert what was translated), or throws.</summary>
+public sealed class FakeTranslationClient : ITranslationClient
+{
+    /// <summary>Optional override: maps an exact input string to a fixed translation.</summary>
+    public Dictionary<string, string> Map { get; } = new();
+    public Exception? ThrowOnCall { get; set; }
+    public int Calls { get; private set; }
+    public string? LastLanguage { get; private set; }
+    public SummarizationRequestConfig? LastConfig { get; private set; }
+
+    public Task<IReadOnlyList<string>> TranslateAsync(
+        SummarizationRequestConfig config, string targetLanguage, IReadOnlyList<string> texts,
+        CancellationToken ct = default)
+    {
+        Calls++;
+        LastLanguage = targetLanguage;
+        LastConfig = config;
+        if (ThrowOnCall is not null) throw ThrowOnCall;
+        var result = texts
+            .Select(t => string.IsNullOrWhiteSpace(t) ? t : Map.TryGetValue(t, out var m) ? m : $"[{targetLanguage}] {t}")
+            .ToList();
+        return Task.FromResult<IReadOnlyList<string>>(result);
+    }
+}
+
 /// <summary>Records emails it was asked to send; <see cref="Sent"/> toggles the return value to
 /// simulate "SMTP configured" (true) vs the unconfigured fallback (false).</summary>
 public sealed class FakeEmailSender : IEmailSender

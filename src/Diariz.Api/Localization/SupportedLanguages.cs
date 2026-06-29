@@ -65,4 +65,8 @@ public static class SupportedLanguages
 
     /// <summary>True when <paramref name="code"/> is one of the supported language codes (case-insensitive).</summary>
     public static bool IsSupported(string? code) => code is not null && Codes.Contains(code);
+
+    /// <summary>The matching language (case-insensitive), or null when unsupported.</summary>
+    public static LanguageDto? Find(string? code) =>
+        code is null ? null : All.FirstOrDefault(l => string.Equals(l.Code, code, StringComparison.OrdinalIgnoreCase));
 }

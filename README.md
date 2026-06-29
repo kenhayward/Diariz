@@ -34,6 +34,9 @@ the in-app **Release Notes** page (`/release-notes`), reachable from **About** i
 - **Extract action items** from a transcript (Action / Actor / Deadline) with that same LLM, into an
   editable table shown by exception (only after you run it); the actions also travel with the transcript —
   included in the downloads (Text/Markdown/RTF), the emailed transcript, and the chat context.
+- **Translate** a transcript into your chosen language with that same LLM — the whole recording (segments,
+  summary, and actions) or a single segment. Translations are stored as **revisions** over the model's
+  original words (so you can always flip back), and exports/email/chat use them.
 - **Organise** recordings into sections with drag-and-drop ordering and cross-group moves; select a whole
   group at once to build chat context.
 - **Multi-user RBAC**: Standard / Administrator / Platform Administrator roles, an access-request →

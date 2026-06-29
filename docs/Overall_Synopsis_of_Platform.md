@@ -120,7 +120,7 @@ clobbering manual names.
 ## LLM-powered features (all via an OpenAI-compatible endpoint)
 
 The same per-user-or-server LLM config (`UserSettings` ?? server `Summarization` defaults, resolved by
-`SummarizationSettingsResolver`) powers three features. The API key is **encrypted at rest** (ASP.NET Data
+`SummarizationSettingsResolver`) powers four features. The API key is **encrypted at rest** (ASP.NET Data
 Protection, keyring on the `DataProtection:KeysPath` volume) and is **write-only** over the API (`GET` returns
 only `hasApiKey`).
 
@@ -133,6 +133,12 @@ only `hasApiKey`).
   (`ActionsClient` → `ActionsPrompt`), **replaces** the recording's **`RecordingAction`** rows, and sets
   `Recording.ActionsExtractedAt`. Shown "by exception" — the Actions panel appears only once extraction has
   run. Actions also travel into transcript downloads, the emailed transcript, and the chat context.
+- **Translate (sync).** `POST /api/recordings/{id}/translate { language? }` translates the current
+  transcript into a target language (the request's, else the caller's `NativeLanguage`; 400 if neither, or no
+  endpoint) via `TranslationClient` → `TranslationPrompt`. It batches segment **Originals** by a char budget,
+  writes each translation to the segment's **`Revised`** column (Original preserved), and translates the
+  **Summary** + **Actions** text in place; speaker/actor names are kept. `POST .../segments/{segId}/translate`
+  does one segment. The English language name is resolved from `SupportedLanguages`.
 - **Chat (streaming).** `POST /api/chat/stream` builds a system prompt from the selected transcripts
   (current / selected / none) **plus their action items** and an optional uploaded attachment
   (`ChatContextBuilder`), then streams tokens back via **Server-Sent Events** (`ChatStreamClient`).
