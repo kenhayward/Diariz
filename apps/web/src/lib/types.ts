@@ -30,6 +30,10 @@ export interface RecordingSummary {
 export interface SectionDto {
   id: string;
   name: string;
+  /// Null for a top-level section; the parent section's id for a sub-section (one level of nesting).
+  parentId: string | null;
+  /// Manual sort order among siblings.
+  position: number;
 }
 
 export interface SummaryDto {

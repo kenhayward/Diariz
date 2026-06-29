@@ -298,6 +298,36 @@ describe("RecordingsPanel", () => {
     expect((screen.getByRole("checkbox", { name: /select bravo/i }) as HTMLInputElement).checked).toBe(true);
   });
 
+  it("nests a sub-section under its parent section", async () => {
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "cust", name: "Customers", parentId: null, position: 0 },
+      { id: "acme", name: "Acme", parentId: "cust", position: 0 },
+    ]);
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...rec, id: "r1", name: "Acme call", sectionId: "acme", sectionName: "Acme" },
+    ]);
+    renderList();
+
+    expect(await screen.findByRole("heading", { name: "Customers" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Acme" })).toBeTruthy(); // sub-section header
+    expect(screen.getByText("Acme call")).toBeTruthy(); // recording under the sub-section
+  });
+
+  it("offers a New sub-section action on a top-level section only", async () => {
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "cust", name: "Customers", parentId: null, position: 0 },
+      { id: "acme", name: "Acme", parentId: "cust", position: 0 },
+    ]);
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    renderList();
+    await screen.findByRole("heading", { name: "Customers" });
+
+    // The top-level section's menu offers New sub-section…
+    const menus = screen.getAllByRole("button", { name: /section actions/i });
+    fireEvent.click(menus[0]); // Customers (first heading)
+    expect(screen.getByRole("menuitem", { name: /new sub-section/i })).toBeTruthy();
+  });
+
   it("reorders within a group via drag and drop", async () => {
     (api.reorderRecordings as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([

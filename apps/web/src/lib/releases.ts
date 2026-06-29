@@ -56,6 +56,27 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.30.0",
+    date: "2026-06-29",
+    pr: 72,
+    headline: "Organise recordings into sub-sections",
+    summary:
+      "Sections can now be **nested one level deep** — e.g. a *Customers* section with an *Acme Corp* " +
+      "sub-section inside it. Create a sub-section from a section's menu, drag a recording into any section " +
+      "or sub-section, and **drag section headers** to reorder them or move a sub-section to a different " +
+      "parent (or back out to the top level). Recordings can live at either level, and recording rows still " +
+      "use the full panel width. Deleting a parent section removes its sub-sections and returns their " +
+      "recordings to Ungrouped.",
+    added: [
+      "Two-level section nesting (e.g. Customers › Acme Corp); a New sub-section action on each top-level section.",
+      "Drag-and-drop for section headers: reorder among siblings, reparent, or promote a sub-section to the top level.",
+    ],
+    changed: [
+      "Sections are now manually ordered (drag to reorder) instead of always alphabetical.",
+      "The Move to section picker lists sub-sections as “Parent › Child”.",
+    ],
+  },
+  {
     version: "0.29.0",
     date: "2026-06-29",
     pr: 71,
