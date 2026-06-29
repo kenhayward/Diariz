@@ -125,7 +125,6 @@
   "confirmDeleteSection": "¿Eliminar la sección \"{{name}}\"? Sus grabaciones pasarán a Sin agrupar.",
   "sectionActions": "Acciones de la sección",
   "sectionNameAria": "Nombre de la sección",
-  "dragSection": "Arrastra {{name}} para reordenar o mover",
   "newSubSection": "Nueva subsección",
   "newSubSectionPlaceholder": "Nueva subsección en {{parent}}",
   "selectRecordingAria": "Seleccionar {{name}}",

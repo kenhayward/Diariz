@@ -59,6 +59,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.37.1",
+    date: "2026-06-29",
+    pr: 81,
+    headline: "Drag section headers by the whole row",
+    summary:
+      "The recordings list's **section and sub-section headers** now drag the same way as recording rows: " +
+      "the **drag handle is gone** and you grab the **whole row**, which **highlights on hover**. Dragging " +
+      "still nests a section onto a top-level header and reorders sub-sections.",
+    changed: [
+      "Section/sub-section headers are dragged by the whole row (no handle) and highlight on hover, matching the recording rows.",
+    ],
+  },
+  {
     version: "0.37.0",
     date: "2026-06-29",
     pr: 80,
