@@ -20,6 +20,10 @@ public class Transcription
     /// <summary>Detected language code (ISO-639-1) if available.</summary>
     public string? Language { get; set; }
 
+    /// <summary>Full-pipeline wall-clock time the worker spent producing this transcription, in
+    /// milliseconds (null for transcriptions created before this was tracked).</summary>
+    public long? ProcessingMs { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public ICollection<Segment> Segments { get; set; } = new List<Segment>();

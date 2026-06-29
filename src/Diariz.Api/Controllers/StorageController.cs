@@ -30,6 +30,11 @@ public class StorageController : ControllerBase
     {
         var quota = await _db.Users.Where(u => u.Id == UserId).Select(u => u.QuotaBytes).FirstOrDefaultAsync();
         var used = await _usage.UsedBytesAsync(UserId);
-        return new StorageUsageDto(used, quota);
+        // Total wall-clock transcription time across all of the user's transcription versions.
+        var transcriptionMs = await _db.Recordings
+            .Where(r => r.UserId == UserId)
+            .SelectMany(r => r.Transcriptions)
+            .SumAsync(t => t.ProcessingMs ?? 0);
+        return new StorageUsageDto(used, quota, transcriptionMs);
     }
 }

@@ -58,6 +58,9 @@ public class WorkerCallbackController : ControllerBase
         // source for uploaded files (whose client-side duration is unknown).
         if (body.DurationMs is > 0) transcription.Recording.DurationMs = body.DurationMs.Value;
 
+        // Full-pipeline wall-clock time the worker spent on this job.
+        if (body.ProcessingMs is > 0) transcription.ProcessingMs = body.ProcessingMs.Value;
+
         var ordinal = 0;
         foreach (var s in body.Segments)
         {

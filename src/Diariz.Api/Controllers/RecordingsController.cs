@@ -126,7 +126,8 @@ public class RecordingsController : ControllerBase
                 s.Id,
                 s.SpeakerLabel,
                 names.TryGetValue(s.SpeakerLabel, out var dn) ? dn : s.SpeakerLabel,
-                s.StartMs, s.EndMs, s.Original, s.Revised)).ToList());
+                s.StartMs, s.EndMs, s.Original, s.Revised)).ToList(),
+            current.ProcessingMs);
         SummaryDto? sDto = current?.Summary is null ? null
             : new(current.Summary.Model, current.Summary.Text, current.Summary.CreatedAt, current.Summary.IsUserEdited);
 

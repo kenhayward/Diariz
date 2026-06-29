@@ -40,11 +40,14 @@ def handle(job: dict) -> None:
              transcription_id, blob_key, job.get("Model"))
 
     audio_path = None
+    started = time.monotonic()
     try:
         audio_path = storage.download(blob_key)
         result = pipeline.transcribe(audio_path, job.get("MinSpeakers"), job.get("MaxSpeakers"))
+        # Full-pipeline wall-clock time (download + transcribe + diarize + embed), reported to the API.
+        processing_ms = int((time.monotonic() - started) * 1000)
         callback.post_result(transcription_id, result["language"], result["segments"],
-                             result.get("speakers"), result.get("duration_ms"))
+                             result.get("speakers"), result.get("duration_ms"), processing_ms)
     except Exception as e:  # noqa: BLE001 - report and continue
         log.exception("Job failed for transcription %s", transcription_id)
         callback.post_failure(transcription_id, str(e))

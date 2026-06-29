@@ -28,8 +28,9 @@ public record GrantResultDto(bool Emailed, string? SetupUrl);
 /// <summary>Platform-wide storage-quota defaults (bytes), edited by the Platform Administrator.</summary>
 public record PlatformSettingsDto(long StarterQuotaBytes, long MaxQuotaBytes);
 public record UpdatePlatformSettingsRequest(long StarterQuotaBytes, long MaxQuotaBytes);
-/// <summary>The signed-in user's storage usage vs their quota (bytes).</summary>
-public record StorageUsageDto(long UsedBytes, long QuotaBytes);
+/// <summary>The signed-in user's storage usage vs their quota (bytes), plus the total wall-clock time
+/// spent transcribing all their recordings (ms, summed across every transcription version).</summary>
+public record StorageUsageDto(long UsedBytes, long QuotaBytes, long TotalTranscriptionMs = 0);
 
 // ---- Sections ----
 /// <summary>A user section. <c>ParentId</c> is null for a top-level section, or the id of the parent
@@ -84,7 +85,8 @@ public record TranscriptionDto(
     int Version,
     string? Language,
     DateTimeOffset CreatedAt,
-    IReadOnlyList<SegmentDto> Segments);
+    IReadOnlyList<SegmentDto> Segments,
+    long? ProcessingMs = null);
 
 public record RecordingDetailDto(
     Guid Id,

@@ -6,6 +6,7 @@ import { useTheme } from "../theme";
 import { api } from "../lib/api";
 import { useTour } from "../lib/tour";
 import { formatBytes, storagePercent } from "../lib/format";
+import { transcriptionTimeParts } from "../lib/transcriptionTime";
 import type { ThemeChoice } from "../lib/theme";
 import Avatar from "./Avatar";
 import SettingsModal from "./SettingsModal";
@@ -78,6 +79,16 @@ export default function UserMenu() {
                     total: formatBytes(storage.quotaBytes),
                     percent: storagePercent(storage.usedBytes, storage.quotaBytes),
                   })}
+                </div>
+              )}
+              {storage && storage.totalTranscriptionMs > 0 && (
+                <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {(() => {
+                    const { days, clock } = transcriptionTimeParts(storage.totalTranscriptionMs);
+                    return days > 0
+                      ? t("transcriptionTotalDays", { days, clock })
+                      : t("transcriptionTotal", { clock });
+                  })()}
                 </div>
               )}
             </div>

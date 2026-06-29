@@ -85,6 +85,7 @@
   "unassigned": "Sin asignar",
   "newPerson": "+ Nueva persona…",
   "multipleSpeakers": "Varios interlocutores",
+  "processedIn": "transcrito en {{time}}",
   "confirmDeleteSegment": "¿Eliminar este segmento? Vuelve a transcribir para restaurarlo.",
   "revisedTitle": "Este segmento ha sido editado o traducido",
   "editedAria": "Editado",

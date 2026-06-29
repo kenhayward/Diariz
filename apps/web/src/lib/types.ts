@@ -66,6 +66,8 @@ export interface TranscriptionDto {
   language: string | null;
   createdAt: string;
   segments: SegmentDto[];
+  /// Full-pipeline wall-clock time the worker spent producing this transcription (ms); null if untracked.
+  processingMs: number | null;
 }
 
 /// A diarized speaker in a recording: its label, shown name, the enrolled voiceprint it's
@@ -161,10 +163,11 @@ export interface AdminUser {
   usedBytes: number;
 }
 
-/// The signed-in user's storage usage vs quota (bytes).
+/// The signed-in user's storage usage vs quota (bytes), plus total transcription wall-clock time (ms).
 export interface UserStorage {
   usedBytes: number;
   quotaBytes: number;
+  totalTranscriptionMs: number;
 }
 
 /// Platform-wide storage-quota defaults (bytes), edited by the Platform Administrator.

@@ -391,6 +391,7 @@ export default function RecordingDetail() {
             {rec.durationMs > 0 ? ` · ${formatDuration(rec.durationMs)}` : ""} · {rec.status}
             {rec.sizeBytes > 0 ? ` · ${formatBytes(rec.sizeBytes)}` : ""}
             {rec.current?.language ? ` · ${rec.current.language}` : ""}
+            {rec.current?.processingMs ? ` · ${t("workspace:processedIn", { time: formatDuration(rec.current.processingMs) })}` : ""}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">

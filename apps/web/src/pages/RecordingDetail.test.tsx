@@ -55,6 +55,7 @@ const base: RecordingDetailType = {
     model: "whisperx-large-v3",
     version: 1,
     language: "en",
+    processingMs: 65_000,
     segments: [{ id: "seg-1", speaker: "SPEAKER_00", speakerDisplay: "Alice", startMs: 0, endMs: 1000, text: "Hi" }],
   },
   summary: null,
@@ -112,6 +113,12 @@ describe("RecordingDetail", () => {
 
     await waitFor(() => expect(api.summarize).toHaveBeenCalledWith("rec-123"));
     await waitFor(() => expect(api.getRecording).toHaveBeenCalledTimes(2));
+  });
+
+  it("shows the transcription processing time in the subtitle", async () => {
+    renderPage(base);
+    // 65,000 ms → 1:05.
+    expect(await screen.findByText(/transcribed in 1:05/)).toBeTruthy();
   });
 
   it("renders the summary text when present", async () => {

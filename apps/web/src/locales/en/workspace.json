@@ -85,6 +85,7 @@
   "unassigned": "Unassigned",
   "newPerson": "+ New person…",
   "multipleSpeakers": "Multiple Speakers",
+  "processedIn": "transcribed in {{time}}",
   "confirmDeleteSegment": "Delete this segment? Re-transcribe to restore it.",
   "revisedTitle": "This segment has been edited or translated",
   "editedAria": "Edited",

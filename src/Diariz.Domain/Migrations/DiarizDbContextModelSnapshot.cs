@@ -497,6 +497,9 @@ namespace Diariz.Domain.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<long?>("ProcessingMs")
+                        .HasColumnType("bigint");
+
                     b.Property<Guid>("RecordingId")
                         .HasColumnType("uuid");
 

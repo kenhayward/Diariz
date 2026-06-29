@@ -38,8 +38,9 @@ def test_handle_success_posts_result_and_removes_temp_file(monkeypatch, tmp_path
 
     posted = {}
     monkeypatch.setattr(worker.callback, "post_result",
-                        lambda tid, lang, segs, speakers=None, duration_ms=None: posted.update(
-                            tid=tid, lang=lang, segs=segs, speakers=speakers, duration_ms=duration_ms))
+                        lambda tid, lang, segs, speakers=None, duration_ms=None, processing_ms=None: posted.update(
+                            tid=tid, lang=lang, segs=segs, speakers=speakers,
+                            duration_ms=duration_ms, processing_ms=processing_ms))
     monkeypatch.setattr(worker.callback, "post_failure",
                         lambda *a, **k: posted.update(failed=True))
 
@@ -48,6 +49,7 @@ def test_handle_success_posts_result_and_removes_temp_file(monkeypatch, tmp_path
     assert posted["tid"] == "tid-1"
     assert posted["lang"] == "en"
     assert posted["speakers"] == [{"Speaker": "SPEAKER_00", "Embedding": [0.1]}]
+    assert isinstance(posted["processing_ms"], int) and posted["processing_ms"] >= 0  # wall-clock measured
     assert "failed" not in posted
     assert not os.path.exists(str(audio))  # temp file cleaned up
 
