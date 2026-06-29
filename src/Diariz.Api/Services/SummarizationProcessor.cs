@@ -41,7 +41,7 @@ public static class SummarizationProcessor
                     s.Id,
                     s.SpeakerLabel,
                     names.TryGetValue(s.SpeakerLabel, out var dn) ? dn : s.SpeakerLabel,
-                    s.StartMs, s.EndMs, s.Text))
+                    s.StartMs, s.EndMs, s.Original, s.Revised))
                 .ToList();
             if (segs.Count == 0) throw new InvalidOperationException("Transcription has no segments to summarise.");
 

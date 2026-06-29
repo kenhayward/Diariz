@@ -101,7 +101,9 @@ services address each other by Compose service name (`minio:9000`, `redis:6379`,
    header **`X-Worker-Secret`** (= `CALLBACK_SECRET`), not JWT. Body (PascalCase) carries
    `{ TranscriptionId, Language, DurationMs, Segments[], Speakers[] }`, where each `Speaker` may include a
    192-d `Embedding`.
-5. **Persist + identify.** The API writes the **`Segment`** rows, seeds a **`Speaker`** row per new
+5. **Persist + identify.** The API writes the **`Segment`** rows (the worker's text lands in `Segment.Original`;
+   a later user edit or translation goes in `Segment.Revised`, and the effective text shown/exported is
+   `Revised ?? Original`), seeds a **`Speaker`** row per new
    diarization label (`DisplayName = label`), stores each speaker's embedding, backfills the recording's
    duration, and runs **auto-identification**: for any speaker not manually named, it matches the embedding
    against the owner's enrolled **`SpeakerProfile`** voiceprints by **pgvector cosine distance** (≤

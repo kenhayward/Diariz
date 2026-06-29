@@ -43,7 +43,7 @@ public class ChatControllerTests
         db.Segments.Add(new Segment
         {
             Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00",
-            StartMs = 0, EndMs = 1000, Text = "Hello team", Ordinal = 0,
+            StartMs = 0, EndMs = 1000, Original = "Hello team", Ordinal = 0,
         });
         db.Speakers.Add(new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Alice" });
         await db.SaveChangesAsync();

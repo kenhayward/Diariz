@@ -68,7 +68,7 @@ public class WorkerCallbackController : ControllerBase
                 SpeakerLabel = string.IsNullOrWhiteSpace(s.Speaker) ? "UNKNOWN" : s.Speaker,
                 StartMs = s.StartMs,
                 EndMs = s.EndMs,
-                Text = s.Text,
+                Original = s.Text,
                 Ordinal = ordinal++
             });
         }

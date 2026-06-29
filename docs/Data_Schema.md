@@ -40,6 +40,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddStorageQuotas` | `PlatformSettings` (seeded singleton), `ApplicationUser.QuotaBytes` |
 | `AddSpeakerCountHints` | `Recording.MinSpeakers/MaxSpeakers` |
 | `AddRecordingActions` | `RecordingActions`, `Recording.ActionsExtractedAt` |
+| `AddSegmentOriginalRevised` | renames `Segment.Text` → `Original`, adds `Segment.Revised` (nullable) |
 
 ### Entity-relationship overview
 
@@ -118,7 +119,8 @@ A contiguous, single-speaker span of transcribed speech.
 | `TranscriptionId` | uuid FK → Transcriptions | cascade |
 | `SpeakerLabel` | text | diarization label, e.g. `SPEAKER_00` / `UNKNOWN` |
 | `StartMs` / `EndMs` | bigint | ms relative to recording start |
-| `Text` | text | |
+| `Original` | text | the model's verbatim output for this span — never overwritten after the worker writes it |
+| `Revised` | text null | a user edit (later: a translation) of `Original`; null = unchanged. The effective text = `Revised ?? Original` |
 | `Ordinal` | int | order within the transcription |
 | `Embedding` | **vector(768)** null | for RAG retrieval (M3, sized for `nomic-embed-text`); unused/null today; Postgres-only |
 

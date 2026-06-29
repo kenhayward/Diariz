@@ -66,7 +66,7 @@ public class RecordingsControllerIntegrationTests(ContainersFixture fx)
             var tr = new Transcription { Id = Guid.NewGuid(), RecordingId = rec.Id, Model = "m", Version = 1 };
             db.AddRange(
                 user, rec, tr,
-                new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 1, Text = "x", Ordinal = 0 },
+                new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 1, Original = "x", Ordinal = 0 },
                 new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "A" },
                 new Summary { Id = Guid.NewGuid(), TranscriptionId = tr.Id, Model = "gpt", Text = "s" });
             await db.SaveChangesAsync();
@@ -110,5 +110,46 @@ public class RecordingsControllerIntegrationTests(ContainersFixture fx)
         Assert.Equal(3, dto.Current!.Version);
         Assert.Equal("Demo", dto.Name);
         Assert.Equal("The summary", dto.Summary!.Text);
+    }
+
+    [Fact]
+    public async Task UpdateSegment_PersistsRevised_AndGetReturnsBoth()
+    {
+        Guid userId, recId, segId;
+        await using (var db = fx.CreateDbContext())
+        {
+            var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = "u@x.test" };
+            var rec = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = "k", Name = "Demo" };
+            var tr = new Transcription { Id = Guid.NewGuid(), RecordingId = rec.Id, Model = "m", Version = 1 };
+            var seg = new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 1000, Original = "the original", Ordinal = 0 };
+            db.AddRange(user, rec, tr, seg,
+                new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Alice" });
+            await db.SaveChangesAsync();
+            (userId, recId, segId) = (user.Id, rec.Id, seg.Id);
+        }
+
+        await using (var db = fx.CreateDbContext())
+            Assert.IsType<NoContentResult>(
+                await Build(db, userId).UpdateSegment(recId, segId, new UpdateSegmentRequest("a revision")));
+
+        // The revision persists through real Postgres; the original column is untouched.
+        await using var verify = fx.CreateDbContext();
+        var stored = await verify.Segments.FindAsync(segId);
+        Assert.Equal("the original", stored!.Original);
+        Assert.Equal("a revision", stored.Revised);
+
+        // The detail projection surfaces both, and effective text = revision.
+        var dto = Assert.IsType<RecordingDetailDto>((await Build(verify, userId).Get(recId)).Value);
+        var segDto = Assert.Single(dto.Current!.Segments);
+        Assert.Equal("the original", segDto.Original);
+        Assert.Equal("a revision", segDto.Revised);
+        Assert.Equal("a revision", segDto.Text);
+
+        // A null reset clears the revision back to the original.
+        await using (var db = fx.CreateDbContext())
+            Assert.IsType<NoContentResult>(
+                await Build(db, userId).UpdateSegment(recId, segId, new UpdateSegmentRequest(null)));
+        await using var verify2 = fx.CreateDbContext();
+        Assert.Null((await verify2.Segments.FindAsync(segId))!.Revised);
     }
 }

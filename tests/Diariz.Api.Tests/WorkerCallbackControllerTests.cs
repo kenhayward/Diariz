@@ -84,7 +84,7 @@ public class WorkerCallbackControllerTests
             .OrderBy(s => s.Ordinal).ToListAsync();
         Assert.Equal(3, segments.Count);
         Assert.Equal([0, 1, 2], segments.Select(s => s.Ordinal));
-        Assert.Equal("Hello", segments[0].Text);
+        Assert.Equal("Hello", segments[0].Original);
 
         // One Speaker row per distinct label, default display name = label.
         var speakers = await db.Speakers.Where(s => s.RecordingId == recordingId).ToListAsync();

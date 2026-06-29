@@ -25,7 +25,7 @@ public class SummarizationProcessorTests
             db.Segments.Add(new Segment
             {
                 Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00",
-                StartMs = 0, EndMs = 1000, Text = "Hi", Ordinal = 0
+                StartMs = 0, EndMs = 1000, Original = "Hi", Ordinal = 0
             });
         await db.SaveChangesAsync();
         return (rec, tr);

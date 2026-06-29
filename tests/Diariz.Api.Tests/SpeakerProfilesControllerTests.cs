@@ -263,8 +263,8 @@ public class SpeakerProfilesControllerTests
         var tr = new Transcription { Id = Guid.NewGuid(), RecordingId = rec.Id, Model = "m", Version = 1 };
         db.Transcriptions.Add(tr);
         db.Segments.AddRange(
-            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 5000, EndMs = 6000, Text = "later", Ordinal = 1 },
-            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 3000, EndMs = 4000, Text = "first", Ordinal = 0 });
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 5000, EndMs = 6000, Original = "later", Ordinal = 1 },
+            new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 3000, EndMs = 4000, Original = "first", Ordinal = 0 });
         await db.SaveChangesAsync();
         var controller = Build(db, userId);
 

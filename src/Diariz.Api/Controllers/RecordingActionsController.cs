@@ -75,7 +75,7 @@ public class RecordingActionsController : ControllerBase
             .Select(s => new SegmentDto(
                 s.Id, s.SpeakerLabel,
                 names.TryGetValue(s.SpeakerLabel, out var dn) ? dn : s.SpeakerLabel,
-                s.StartMs, s.EndMs, s.Text))
+                s.StartMs, s.EndMs, s.Original, s.Revised))
             .ToList();
 
         var extracted = await _client.ExtractAsync(cfg, segs);
