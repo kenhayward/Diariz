@@ -37,8 +37,12 @@ included in the downloads (Text/Markdown/RTF), the emailed transcript, and the c
 - **Translate** a transcript into your chosen language with that same LLM — the whole recording (segments,
 summary, and actions) or a single segment. Translations are stored as **revisions** over the model's
 original words (so you can always flip back), and exports/email/chat use them.
-- **Organise** recordings into sections with drag-and-drop ordering and cross-group moves; select a whole
-group at once to build chat context.
+- **Organise** recordings into **sections and sub-sections** (one level of nesting) with drag-and-drop
+ordering and cross-group moves; select a whole group at once to build chat context. Browse them as a
+**list or a calendar** (days with recordings are highlighted; click one to see that day's recordings).
+- **Manage audio & merge**: **delete a recording's audio** to reclaim its storage while keeping the
+transcript, and **merge** several recordings into the earliest one — their transcripts are laid end-to-end
+and their audio is concatenated server-side (ffmpeg).
 - **Multi-user RBAC**: Standard / Administrator / Platform Administrator roles, an access-request →
 admin-grant → account-setup lifecycle (one-time email link, with an in-app fallback when SMTP is
 unconfigured), and admin user management. Each user's data is isolated to them. Light/Dark/Auto theming.

@@ -29,7 +29,8 @@ It can **summarise** recordings, **extract action items** (with actor and deadli
 table, **translate** a transcript (segments, summary, and actions) into your chosen language, and let you
 **chat across one or more transcripts** — with file attachments, a context-usage dial, and saved
 conversations — using an OpenAI-compatible LLM endpoint you configure. Recordings organise into
-**sections** with drag-and-drop ordering.
+**sections** (with sub-sections) and drag-and-drop ordering, can be **merged** into one, and can be
+browsed as a **list or a calendar**.
 
 Diariz is **multi-user** with role-based access: people request access (or an administrator adds them),
 an administrator approves, and each user sets up their own account and keeps their own private
@@ -55,6 +56,21 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.32.0",
+    date: "2026-06-29",
+    pr: 74,
+    headline: "Browse recordings in a calendar",
+    summary:
+      "The recordings panel now has **List** and **Calendar** tabs (down the left side). The calendar shows " +
+      "the month focused on today; days that have recordings are **green** (and the only selectable ones), " +
+      "days without are grey. Click a day to see that day's recordings below — in the same format as the " +
+      "list — with the calendar pinned and only the day's list scrolling. Navigate months with the arrows.",
+    added: [
+      "A Calendar view of recordings: month grid with green days-with-recordings, click a day to list that day's recordings.",
+      "List / Calendar tabs on the recordings panel (your choice is remembered).",
+    ],
+  },
   {
     version: "0.31.0",
     date: "2026-06-29",
