@@ -125,6 +125,20 @@ is **Major.Minor.Build** (currently `0.x`).
   **Roadmap** sections in the same PR (it mirrors the `CAPABILITIES`/release-notes edits above). The README
   deliberately does **not** carry a version number (it would drift) — the version lives only in `version.json`
   / `releases.ts`.
+- **Keep the architecture & schema docs current.** Two reference docs must not be allowed to drift:
+  `docs/Overall_Synopsis_of_Platform.md` (components, data flow, cross-boundary contracts, deployment) and
+  `docs/Data_Schema.md` (every Postgres table + column/key/index/cascade, the pgvector columns/dimensions, the
+  enums, and the MinIO bucket/key layout). When a PR makes a **relevant change, update the matching doc in the
+  same PR**:
+  - **Schema / storage** (any new or changed entity, column, index, FK/cascade, migration, vector dimension,
+    JSON blob, MinIO bucket/key/lifecycle) → update **`Data_Schema.md`** (and its migration-history table).
+  - **Architecture / major feature** (a new component or deployable, a new queue/stream or cross-boundary
+    contract, a new external dependency or LLM/worker flow, an auth/RBAC change, a shipped milestone, a port
+    change) → update **`Overall_Synopsis_of_Platform.md`**.
+
+  A change can touch both (e.g. a feature that adds a table). Pure cosmetic/UI tweaks and bug fixes don't
+  require a doc edit. These are internal docs (no version number) — like the README, they don't gate the
+  version bump, but they must be accurate.
 - **State the deployment surface in every PR.** When opening a PR, say whether shipping it needs a
   **desktop release** (a new installer, cut by pushing a `v*` tag) or just a **server redeploy**. The
   desktop app is a thin shell that loads the web app from the server origin, so it only needs a new release
