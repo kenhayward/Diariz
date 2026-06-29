@@ -99,7 +99,6 @@
   "newSubSection": "Neuer Unterabschnitt",
   "newSubSectionPlaceholder": "Neuer Unterabschnitt in {{parent}}",
   "selectRecordingAria": "{{name}} auswählen",
-  "dragToReorder": "Zum Umordnen ziehen",
   "actionsTitle": "Aktionen",
   "noActions": "Keine Aktionen erkannt – füge unten eine hinzu.",
   "colAction": "Aktion",

@@ -69,6 +69,9 @@ export const RELEASES: Release[] = [
       "more room for the day's recordings; the section **select checkbox now sits before the drag handle** " +
       "to match the recording rows; and you can **drop a section onto a top-level section to nest it** as a " +
       "sub-section.",
+    changed: [
+      "Recording rows are dragged by the whole row now (the separate drag-handle icon is gone) — the row already highlights on hover.",
+    ],
     fixed: [
       "Account-menu storage usage refreshes after delete-audio / merge / delete.",
       "Merge now shows a “Merging audio…” indicator and surfaces failures instead of doing nothing visibly.",

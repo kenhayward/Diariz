@@ -883,8 +883,16 @@ function RecordingRow({
   }, t);
 
   return (
+    // The whole row is the drag source (no separate handle) — it already highlights on hover. Dragging is
+    // disabled while renaming so text can be selected in the input. The inner NavLink keeps draggable=false
+    // so grabbing the name still drags the row, not the link.
     <li
       className="px-3 py-2"
+      draggable={!renaming}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/plain", r.id);
+        e.dataTransfer.effectAllowed = "move";
+      }}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         if (e.dataTransfer.files?.length) return; // a file upload — let it bubble to the panel drop zone
@@ -903,18 +911,6 @@ function RecordingRow({
             className="shrink-0"
           />
         )}
-        {/* Drag handle — grab here to reorder or move between groups. */}
-        <span
-          draggable
-          onDragStart={(e) => {
-            e.dataTransfer.setData("text/plain", r.id);
-            e.dataTransfer.effectAllowed = "move";
-          }}
-          aria-label={t("workspace:dragToReorder")}
-          className="shrink-0 cursor-grab select-none px-0.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400"
-        >
-          ⠿
-        </span>
         {/* Audio presence: green when the audio is available, grey once it's been deleted. */}
         <MicIcon
           on={r.hasAudio}

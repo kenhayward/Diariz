@@ -99,7 +99,6 @@
   "newSubSection": "Nueva subsección",
   "newSubSectionPlaceholder": "Nueva subsección en {{parent}}",
   "selectRecordingAria": "Seleccionar {{name}}",
-  "dragToReorder": "Arrastra para reordenar",
   "actionsTitle": "Acciones",
   "noActions": "No se identificaron acciones: añade una abajo.",
   "colAction": "Acción",
