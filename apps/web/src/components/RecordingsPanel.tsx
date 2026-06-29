@@ -744,10 +744,17 @@ function SectionHeading({
   ];
 
   return (
+    // The whole header row is the drag source (no separate handle) — it highlights on hover, mirroring the
+    // recording rows. Dragging is disabled while renaming so text can be selected in the input.
     <div
-      className={`flex items-center justify-between bg-indigo-50 py-1 pr-3 dark:bg-indigo-950/40 ${
+      className={`flex items-center justify-between bg-indigo-50 py-1 pr-3 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 ${
         nested ? "pl-7" : "pl-3"
       }`}
+      draggable={!renaming}
+      onDragStart={(e) => {
+        e.dataTransfer.setData(SECTION_MIME, id);
+        e.dataTransfer.effectAllowed = "move";
+      }}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         const draggedSection = e.dataTransfer.getData(SECTION_MIME);
@@ -759,19 +766,8 @@ function SectionHeading({
         }
       }}
     >
-      {/* Select-all checkbox first (matching the recording rows), then the drag handle. */}
+      {/* Select-all checkbox first (matching the recording rows). */}
       {leading}
-      <span
-        draggable
-        onDragStart={(e) => {
-          e.dataTransfer.setData(SECTION_MIME, id);
-          e.dataTransfer.effectAllowed = "move";
-        }}
-        aria-label={t("dragSection", { name })}
-        className="shrink-0 cursor-grab select-none px-0.5 text-indigo-300 hover:text-indigo-500 dark:text-indigo-700 dark:hover:text-indigo-400"
-      >
-        ⠿
-      </span>
       {renaming ? (
         <SectionRenameForm initial={name} onSave={save} onCancel={() => setRenaming(false)} />
       ) : (

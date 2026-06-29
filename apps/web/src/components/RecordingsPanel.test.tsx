@@ -391,7 +391,8 @@ describe("RecordingsPanel", () => {
     await screen.findByRole("heading", { name: "Customers" });
 
     // Drop the "Loose" section onto the "Customers" header → Loose becomes a sub-section of Customers.
-    const header = screen.getByLabelText(/drag customers/i).closest("div")!;
+    // The whole row is the drop target now (no drag handle); the drop bubbles up from the heading.
+    const header = screen.getByRole("heading", { name: "Customers" });
     fireEvent.drop(header, {
       dataTransfer: { getData: (type: string) => (type === "application/x-diariz-section" ? "loose" : "") },
     });
