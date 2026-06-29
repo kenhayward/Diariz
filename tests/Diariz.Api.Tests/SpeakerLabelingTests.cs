@@ -65,4 +65,19 @@ public class SpeakerLabelingTests
         Assert.Equal("SPEAKER_00", sp.DisplayName);
         Assert.Equal(0, id.Calls); // not even queried
     }
+
+    [Fact]
+    public async Task Skips_MultiSpeaker_EvenWithEmbedding()
+    {
+        // "Multiple Speakers" is overlapping audio — never match it against a single-person voiceprint.
+        var sp = Spk("SPEAKER_00", Speaker.MultiSpeakerName, auto: false, new Vector(new[] { 0.1f }));
+        sp.IsMultiSpeaker = true;
+        var id = new FakeSpeakerIdentifier { Match = new SpeakerMatch(Guid.NewGuid(), "Alice", 0.1) };
+
+        await SpeakerLabeling.ApplyAsync([sp], Guid.NewGuid(), id);
+
+        Assert.Equal(Speaker.MultiSpeakerName, sp.DisplayName);
+        Assert.Null(sp.ProfileId);
+        Assert.Equal(0, id.Calls); // not even queried
+    }
 }

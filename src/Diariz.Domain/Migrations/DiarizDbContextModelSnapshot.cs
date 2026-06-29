@@ -390,6 +390,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<bool>("IdentifiedAuto")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsMultiSpeaker")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Label")
                         .IsRequired()
                         .HasColumnType("text");

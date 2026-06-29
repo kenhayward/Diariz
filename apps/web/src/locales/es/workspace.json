@@ -1,6 +1,7 @@
 {
   "namePrompt": "¿Nombre de esta persona?",
   "errAssignSpeaker": "No se pudo reasignar el hablante.",
+  "errDeleteSegment": "No se pudo eliminar el segmento.",
   "errCreatePerson": "No se pudo crear la persona.",
   "retranscribing": "Volviendo a transcribir…",
   "errRetranscribe": "No se pudo iniciar la nueva transcripción.",
@@ -76,6 +77,8 @@
   "assignAria": "Asignar {{label}} a una persona",
   "unassigned": "Sin asignar",
   "newPerson": "+ Nueva persona…",
+  "multipleSpeakers": "Varios interlocutores",
+  "confirmDeleteSegment": "¿Eliminar este segmento? Vuelve a transcribir para restaurarlo.",
   "revisedTitle": "Este segmento ha sido editado o traducido",
   "editedAria": "Editado",
   "dropToUpload": "Suelta archivos de audio para subir",
