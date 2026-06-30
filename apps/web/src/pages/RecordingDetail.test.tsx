@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { MemoryRouter, Routes, Route, useNavigate } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { RecordingDetail as RecordingDetailType } from "../lib/types";
 
@@ -37,6 +37,11 @@ vi.mock("../lib/api", () => ({
 
 import { api } from "../lib/api";
 import RecordingDetail from "./RecordingDetail";
+
+function NavTo({ to }: { to: string }) {
+  const navigate = useNavigate();
+  return <button onClick={() => navigate(to)}>go</button>;
+}
 
 const base: RecordingDetailType = {
   id: "rec-123",
@@ -238,6 +243,49 @@ describe("RecordingDetail", () => {
 
     resolve([]); // finish the extraction → banner clears
     await waitFor(() => expect(screen.queryByText(/extracting actions from the transcript/i)).toBeNull());
+  });
+
+  it("clears the action banner when navigating to a different recording", async () => {
+    (api.extractActions as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "a1", text: "Send report", actor: "Bob", deadline: "Fri", ordinal: 0 },
+    ]);
+    (api.getRecording as ReturnType<typeof vi.fn>).mockImplementation((rid: string) =>
+      Promise.resolve(
+        rid === "rec-123"
+          ? base
+          : {
+              ...base,
+              id: "rec-999",
+              current: {
+                ...base.current!,
+                segments: [
+                  { id: "seg-2", speaker: "SPEAKER_00", speakerDisplay: "Alice", startMs: 0, endMs: 1000, text: "Different transcript" },
+                ],
+              },
+            },
+      ),
+    );
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={["/recordings/rec-123"]}>
+          <Routes>
+            <Route path="/recordings/:id" element={<RecordingDetail />} />
+          </Routes>
+          <NavTo to="/recordings/rec-999" />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await screen.findByText("Hi");
+    fireEvent.click(screen.getByRole("button", { name: "Extract actions" }));
+    expect(await screen.findByText(/extracted 1 action/i)).toBeTruthy();
+
+    // Navigate to a different recording — the transient banner must not carry over.
+    fireEvent.click(screen.getByRole("button", { name: "go" }));
+    await screen.findByText("Different transcript");
+    expect(screen.queryByText(/extracted 1 action/i)).toBeNull();
   });
 
   it("does not show the actions panel until extraction has run", async () => {

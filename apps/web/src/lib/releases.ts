@@ -63,6 +63,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.41.1",
+    date: "2026-06-30",
+    pr: 86,
+    headline: "Fix: action banner no longer carries over to another transcript",
+    summary:
+      "Fixed a bug where a transient status banner (e.g. \"Extracted 3 actions.\") stayed on screen when you " +
+      "opened a different recording, making it look like the message belonged to the unrelated transcript. " +
+      "These banners now clear when you switch recordings.",
+    fixed: [
+      "Action/status banners on the transcript page now reset when navigating to a different recording.",
+    ],
+  },
+  {
     version: "0.41.0",
     date: "2026-06-30",
     pr: 85,
