@@ -24,8 +24,15 @@ export default function CollapsibleSection({
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
   return (
-    <div className="overflow-hidden rounded-lg border bg-white dark:border-gray-700 dark:bg-gray-900">
-      <div className="flex items-center bg-gray-50 pr-2 hover:bg-gray-100 dark:bg-gray-800/40 dark:hover:bg-gray-800/70">
+    // No `overflow-hidden` here: it would clip popovers that escape the panel (e.g. the SpeakerAssign
+    // typeahead on the bottom row) and, by making the panel a scroll container, let a focused near-bottom
+    // input scroll the header out of view. The header's grey strip is rounded directly instead.
+    <div className="rounded-lg border bg-white dark:border-gray-700 dark:bg-gray-900">
+      <div
+        className={`flex items-center rounded-t-lg bg-gray-50 pr-2 hover:bg-gray-100 dark:bg-gray-800/40 dark:hover:bg-gray-800/70 ${
+          collapsed ? "rounded-b-lg" : ""
+        }`}
+      >
         <button
           type="button"
           aria-label={`${collapsed ? "Expand" : "Collapse"} ${title} section`}

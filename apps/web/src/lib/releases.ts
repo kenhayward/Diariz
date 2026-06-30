@@ -67,6 +67,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.46.1",
+    date: "2026-06-30",
+    pr: 99,
+    headline: "Fix: speaker assignment dropdown was clipped / scrolled the panel",
+    summary:
+      "On the Speakers panel, opening the assignment dropdown on a bottom-row speaker cut its options off at " +
+      "the panel's edge (you couldn't pick one), and opening it scrolled the panel so the “Speakers” header " +
+      "slid out of view. The panel was clipping its own pop-ups; it no longer does, so the dropdown shows in " +
+      "full and the header stays put.",
+    fixed: [
+      "Speaker assignment dropdown is no longer clipped at the bottom of the Speakers panel, and opening it no longer scrolls the panel header away.",
+    ],
+  },
+  {
     version: "0.46.0",
     date: "2026-06-30",
     pr: 98,
