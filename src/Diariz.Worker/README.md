@@ -108,7 +108,7 @@ Run it:
 
 ```bash
 cd deploy
-cp .env.example .env   # set HF_TOKEN etc.; WORKER_ASR_BACKEND defaults to "whisper" in the ROCm file
+cp .env.example .env   # set HF_TOKEN etc.; the ROCm compose hardcodes ASR_BACKEND=whisper (not from .env)
 docker compose -f docker-compose.rocm.yml up --build
 ```
 

@@ -123,10 +123,12 @@ services:
       API_BASE_URL: "http://api:8080"
       CALLBACK_SECRET: ${CALLBACK_SECRET}
       HF_TOKEN: ${HF_TOKEN}
-      # PyTorch-ROCm exposes the AMD GPU as device "cuda". ASR runs on openai-whisper (CTranslate2 has no
-      # AMD GPU support); COMPUTE_TYPE is unused by that backend but kept for parity with the CUDA stack.
+      # PyTorch-ROCm exposes the AMD GPU as device "cuda". ASR is hardcoded to openai-whisper here — it's
+      # intrinsic to this image, not a user choice (CTranslate2 has no AMD GPU support), so it must NOT be
+      # env-overridable: a shared .env carried over from the NVIDIA stack would otherwise force "whisperx"
+      # and break the AMD worker. COMPUTE_TYPE is unused by this backend but kept for parity.
       DEVICE: ${WORKER_DEVICE:-cuda}
-      ASR_BACKEND: ${WORKER_ASR_BACKEND:-whisper}
+      ASR_BACKEND: whisper
       COMPUTE_TYPE: ${WORKER_COMPUTE_TYPE:-float16}
       WHISPER_MODEL: ${WHISPER_MODEL:-large-v3}
       MAX_AUDIO_SECONDS: ${MAX_AUDIO_SECONDS:-14400}
