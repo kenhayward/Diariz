@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { speakerRanges, rangeAt, nextRangeStart } from "./segmentPlayback";
+import { speakerRanges, rangeAt, nextRangeStart, selectedRanges } from "./segmentPlayback";
 
 type Seg = { speaker: string; startMs: number; endMs: number };
 
@@ -39,6 +39,34 @@ describe("speakerRanges", () => {
 
   it("returns [] when the speaker has no segments", () => {
     expect(speakerRanges(segs, "SPEAKER_99")).toEqual([]);
+  });
+});
+
+describe("selectedRanges", () => {
+  const idSegs = [
+    { id: "a", startMs: 0, endMs: 1000 },
+    { id: "b", startMs: 1000, endMs: 2000 },
+    { id: "c", startMs: 2000, endMs: 2500 },
+    { id: "d", startMs: 2500, endMs: 3000 },
+  ];
+
+  it("keeps only the selected ids, sorted, and merges touching ranges", () => {
+    expect(selectedRanges(idSegs, ["a", "c", "d"])).toEqual([
+      { start: 0, end: 1000 },
+      { start: 2000, end: 3000 }, // c + d touch → merged
+    ]);
+  });
+
+  it("leaves a gap between non-adjacent selections", () => {
+    expect(selectedRanges(idSegs, ["a", "d"])).toEqual([
+      { start: 0, end: 1000 },
+      { start: 2500, end: 3000 },
+    ]);
+  });
+
+  it("accepts a Set and returns [] for an empty selection", () => {
+    expect(selectedRanges(idSegs, new Set(["b"]))).toEqual([{ start: 1000, end: 2000 }]);
+    expect(selectedRanges(idSegs, [])).toEqual([]);
   });
 });
 

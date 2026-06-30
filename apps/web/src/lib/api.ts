@@ -197,6 +197,11 @@ export const api = {
     await http.delete(`/api/recordings/${id}/segments/${segmentId}`);
   },
 
+  /// Delete several selected segments at once (survivors renumbered server-side).
+  async deleteSegments(id: string, segmentIds: string[]): Promise<void> {
+    await http.post(`/api/recordings/${id}/segments/delete`, { ids: segmentIds });
+  },
+
   /// Mark a speaker as "Multiple Speakers" (overlapping speech) — excluded from voiceprints.
   async markMultiSpeaker(id: string, label: string): Promise<void> {
     await http.put(`/api/recordings/${id}/speakers/${encodeURIComponent(label)}/multi`);
@@ -261,6 +266,11 @@ export const api = {
 
   async translateSegment(id: string, segmentId: string, language?: string): Promise<void> {
     await http.post(`/api/recordings/${id}/segments/${segmentId}/translate`, { language: language ?? null });
+  },
+
+  /// Translate a set of selected segments into `language` (BCP-47; native when omitted) in one batched call.
+  async translateSegments(id: string, segmentIds: string[], language?: string): Promise<void> {
+    await http.post(`/api/recordings/${id}/segments/translate`, { ids: segmentIds, language: language ?? null });
   },
 
   /// Collapse consecutive same-speaker segments in the current transcription (permanent for this version).

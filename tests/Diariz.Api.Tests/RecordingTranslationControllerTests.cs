@@ -153,4 +153,49 @@ public class RecordingTranslationControllerTests
 
         Assert.IsType<NotFoundResult>(result);
     }
+
+    [Fact]
+    public async Task TranslateSegments_TranslatesOnlySelected_PreservingTheRest_InOneCall()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, segId) = await SeedTranscribed(db, userId, withSummary: false, withAction: false);
+        var client = new FakeTranslationClient();
+
+        // Translate only the first ("Hello") segment; the second ("World") must stay untranslated.
+        var result = await Build(db, userId, client).TranslateSegments(rec.Id, new TranslateSegmentsRequest(new[] { segId }, "es"));
+
+        Assert.IsType<NoContentResult>(result);
+        var hello = await db.Segments.FindAsync(segId);
+        Assert.Equal("Hello", hello!.Original);
+        Assert.Equal("[Spanish] Hello", hello.Revised);
+        var world = await db.Segments.SingleAsync(s => s.Original == "World");
+        Assert.Null(world.Revised); // not selected → untouched
+        Assert.Equal(1, client.Calls); // a single batched call
+    }
+
+    [Fact]
+    public async Task TranslateSegments_NoLlmEndpoint_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, segId) = await SeedTranscribed(db, userId, withSummary: false, withAction: false);
+
+        var result = await Build(db, userId, new FakeTranslationClient(), Disabled())
+            .TranslateSegments(rec.Id, new TranslateSegmentsRequest(new[] { segId }, "es"));
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task TranslateSegments_OnAnotherUsersRecording_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var (rec, segId) = await SeedTranscribed(db, Guid.NewGuid(), withSummary: false, withAction: false);
+
+        var result = await Build(db, Guid.NewGuid(), new FakeTranslationClient())
+            .TranslateSegments(rec.Id, new TranslateSegmentsRequest(new[] { segId }, "es"));
+
+        Assert.IsType<NotFoundResult>(result);
+    }
 }

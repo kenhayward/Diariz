@@ -19,9 +19,9 @@ import ToolbarButton, { iconProps } from "../components/ToolbarButton";
 import { recordingMenu } from "../components/recordingMenu";
 import { copyRichLink, transcriptUrl } from "../lib/clipboard";
 import { segmentIndexAtMs, parseMatchTimes } from "../lib/transcriptNav";
-import { speakerRanges, rangeAt, nextRangeStart, type PlayRange } from "../lib/segmentPlayback";
+import { speakerRanges, selectedRanges, rangeAt, nextRangeStart, type PlayRange } from "../lib/segmentPlayback";
 import { formatBytes, formatDate, formatDuration } from "../lib/format";
-import { hasRevisions, segmentText, toggleLabel } from "../lib/transcriptView";
+import { hasRevisions, segmentText } from "../lib/transcriptView";
 import { fetchLanguages } from "../lib/languages";
 import { allSpeakersAssigned } from "../lib/speakers";
 import type { SegmentDto, SpeakerInfo, SpeakerProfile } from "../lib/types";
@@ -41,6 +41,13 @@ const UsersIcon = (
 );
 const PlayIcon = <svg {...iconProps}><polygon points="5 3 19 12 5 21 5 3" /></svg>;
 const PauseIcon = <svg {...iconProps}><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>;
+// Play-all = a "from the start" glyph (skip-to-start bar + triangle).
+const PlayAllIcon = <svg {...iconProps}><polygon points="7 4 18 12 7 20 7 4" /><line x1="4" y1="4" x2="4" y2="20" /></svg>;
+const SelectIcon = <svg {...iconProps}><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>;
+const MergeIcon = <svg {...iconProps}><path d="M6 3v6a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3" /><line x1="12" y1="15" x2="12" y2="21" /></svg>;
+const TrashIcon = <svg {...iconProps}><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>;
+const GlobeIcon = <svg {...iconProps}><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>;
+const EyeIcon = <svg {...iconProps}><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" /><circle cx="12" cy="12" r="3" /></svg>;
 
 function fmt(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -76,8 +83,21 @@ export default function RecordingDetail() {
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
   // Per-speaker audition: the label currently playing and that speaker's (merged) play ranges.
   const [playingSpeaker, setPlayingSpeaker] = useState<string | null>(null);
+  // The active gapless play ranges ([] = continuous). Drives per-speaker AND "play selected"; onTimeUpdate
+  // skips the gaps between ranges.
   const speakerRangesRef = useRef<PlayRange[]>([]);
   const [peopleOpen, setPeopleOpen] = useState(false);
+  // Segment Select mode (local to this recording — distinct from the recordings/actions shared selection).
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedSegIds, setSelectedSegIds] = useState<Set<string>>(new Set());
+  // Mini player (the small header progress bar): current time + play/pause state of the shared <audio>.
+  const [audioCur, setAudioCur] = useState(0);
+  const [audioPaused, setAudioPaused] = useState(true);
+  // Reset segment selection when navigating to a different recording.
+  useEffect(() => {
+    setSelectMode(false);
+    setSelectedSegIds(new Set());
+  }, [id]);
 
   // When opened from a chat transcript link (/recordings/:id?t=ms), highlight and scroll to that segment.
   const tParam = searchParams.get("t");
@@ -196,17 +216,6 @@ export default function RecordingDetail() {
     }
   }
 
-  // Delete a single (e.g. meaningless) segment from the current transcription.
-  async function deleteSegment(segmentId: string) {
-    if (!window.confirm(t("workspace:confirmDeleteSegment"))) return;
-    setActionError(null);
-    try {
-      await api.deleteSegment(id, segmentId);
-      qc.invalidateQueries({ queryKey: ["recording", id] });
-    } catch (e) {
-      setActionError(apiErrorMessage(e, t("workspace:errDeleteSegment")));
-    }
-  }
 
   async function saveRecordingName(name: string) {
     await api.renameRecording(id, name.trim() || null);
@@ -330,20 +339,6 @@ export default function RecordingDetail() {
     }
   }
 
-  async function translateSegment(segmentId: string) {
-    if (!nativeLang) return;
-    setActionError(null);
-    setActionInfo(null);
-    setTranslating(true);
-    try {
-      await api.translateSegment(id, segmentId, nativeLang.code);
-      await qc.invalidateQueries({ queryKey: ["recording", id] });
-    } catch (e) {
-      setActionError(apiErrorMessage(e, t("workspace:errTranslateSegment")));
-    } finally {
-      setTranslating(false);
-    }
-  }
 
   async function addAction() {
     setActionError(null);
@@ -469,14 +464,48 @@ export default function RecordingDetail() {
     }
   }
 
+  // Play only the selected segments, gaplessly (skipping the gaps between non-adjacent picks).
+  async function playSelected() {
+    const el = audioRef.current;
+    if (!el) return;
+    const ranges = selectedRanges(rec?.current?.segments ?? [], selectedSegIds);
+    if (ranges.length === 0) return;
+    setActionError(null);
+    try {
+      if (!el.src) el.src = await api.audioUrl(id);
+      setPlayingSpeaker(null);
+      speakerRangesRef.current = ranges;
+      el.currentTime = ranges[0].start / 1000;
+      await el.play();
+    } catch (e) {
+      exitSpeakerMode();
+      setActionError(apiErrorMessage(e, t("workspace:errPlayAudio")));
+    }
+  }
+
+  // Mini-player play/pause toggle (loads the audio lazily on first use).
+  async function togglePlayPause() {
+    const el = audioRef.current;
+    if (!el) return;
+    try {
+      if (!el.src) el.src = await api.audioUrl(id);
+      if (el.paused) await el.play();
+      else el.pause();
+    } catch (e) {
+      setActionError(apiErrorMessage(e, t("workspace:errPlayAudio")));
+    }
+  }
+
   function onTimeUpdate() {
     const el = audioRef.current;
     const segs = rec?.current?.segments;
-    if (!el || !segs) return;
+    if (!el) return;
+    setAudioCur(el.currentTime);
+    if (!segs) return;
     const ms = el.currentTime * 1000;
-    // Single-speaker audition: when playback leaves the current range, jump to the speaker's next range
-    // (skipping other speakers) or stop at the end.
-    if (playingSpeaker && speakerRangesRef.current.length && !rangeAt(speakerRangesRef.current, ms)) {
+    // Range playback (per-speaker audition OR "play selected"): when playback leaves the current range, jump
+    // to the next range (skipping the gap) or stop at the end.
+    if (speakerRangesRef.current.length && !rangeAt(speakerRangesRef.current, ms)) {
       const next = nextRangeStart(speakerRangesRef.current, ms);
       if (next == null) {
         el.pause();
@@ -487,6 +516,55 @@ export default function RecordingDetail() {
     }
     const idx = segs.findIndex((s) => ms >= s.startMs && ms < s.endMs);
     setActiveIdx(idx >= 0 ? idx : null);
+  }
+
+  // ---- Segment selection + bulk actions (the transcript Select-mode toolbar) ----
+  /// Click a segment row: in Select mode, toggle it; otherwise pick just this one (replacing the selection).
+  function clickSegment(segId: string) {
+    setSelectedSegIds((prev) => {
+      if (!selectMode) return new Set([segId]);
+      const next = new Set(prev);
+      if (next.has(segId)) next.delete(segId);
+      else next.add(segId);
+      return next;
+    });
+  }
+
+  function editSelected() {
+    if (selectedSegIds.size !== 1) return;
+    const segId = [...selectedSegIds][0];
+    const seg = rec?.current?.segments.find((s) => s.id === segId);
+    if (seg) setEditingSeg(seg);
+  }
+
+  async function deleteSelected() {
+    const ids = [...selectedSegIds];
+    if (ids.length === 0) return;
+    if (!window.confirm(t("workspace:confirmDeleteSelected", { count: ids.length }))) return;
+    setActionError(null);
+    try {
+      await api.deleteSegments(id, ids);
+      setSelectedSegIds(new Set());
+      qc.invalidateQueries({ queryKey: ["recording", id] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e, t("workspace:errDeleteSegment")));
+    }
+  }
+
+  async function translateSelected() {
+    const ids = [...selectedSegIds];
+    if (ids.length === 0 || !nativeLang) return;
+    setActionError(null);
+    setActionInfo(null);
+    setTranslating(true);
+    try {
+      await api.translateSegments(id, ids, nativeLang.code);
+      await qc.invalidateQueries({ queryKey: ["recording", id] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e, t("workspace:errTranslateSegment")));
+    } finally {
+      setTranslating(false);
+    }
   }
 
   if (!rec) return <p className="text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>;
@@ -712,34 +790,82 @@ export default function RecordingDetail() {
 
       {rec.current ? (
         // The body is flush (no horizontal padding) so the segment rows keep the panel's full width.
-        <CollapsibleSection title={t("workspace:sectionTranscript")} bodyClassName="space-y-3 pb-2">
-          <div className="flex flex-wrap items-center gap-3 px-4">
-            <button
-              onClick={() => playFrom(0)}
-              className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-            >
-              ▶ {t("workspace:playAll")}
-            </button>
-            <button
-              onClick={mergeSegments}
-              title={t("workspace:mergeRowsTitle")}
-              className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-            >
-              {t("workspace:mergeRows")}
-            </button>
-            {hasRevisions(rec.current.segments) && (
-              <button
-                onClick={() => setShowOriginal((v) => !v)}
-                title={t("workspace:toggleViewTitle")}
-                className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-              >
-                {toggleLabel(showOriginal)}
-              </button>
-            )}
-            {rec.hasAudio && (
-              <audio ref={audioRef} controls onTimeUpdate={onTimeUpdate} className="h-8 min-w-48 flex-1" />
-            )}
-          </div>
+        <CollapsibleSection
+          title={t("workspace:sectionTranscript")}
+          bodyClassName="space-y-3 pb-2"
+          stickyFill
+          headerActions={
+            <>
+              {/* Small play progress bar, left of the icon buttons (hidden on very narrow widths). */}
+              {rec.hasAudio && (
+                <div className="mr-1 hidden items-center gap-1 sm:flex">
+                  <button
+                    type="button"
+                    onClick={togglePlayPause}
+                    aria-label={audioPaused ? t("workspace:playAll") : t("workspace:pauseAudio")}
+                    className="rounded p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                  >
+                    {audioPaused ? PlayIcon : PauseIcon}
+                  </button>
+                  <input
+                    type="range"
+                    min={0}
+                    max={Math.max(1, rec.durationMs / 1000)}
+                    step={0.1}
+                    value={audioCur}
+                    onChange={(e) => {
+                      const el = audioRef.current;
+                      if (el) el.currentTime = Number(e.target.value);
+                    }}
+                    aria-label={t("workspace:seek")}
+                    className="h-1 w-24 cursor-pointer"
+                  />
+                  <span className="font-mono text-[10px] tabular-nums text-gray-400 dark:text-gray-500">{fmt(audioCur * 1000)}</span>
+                </div>
+              )}
+              <ToolbarButton label={t("workspace:playAll")} icon={PlayAllIcon} onClick={() => playFrom(0)} disabled={!rec.hasAudio} />
+              <ToolbarButton
+                label={t("workspace:playSelected")}
+                icon={PlayIcon}
+                onClick={playSelected}
+                disabled={!rec.hasAudio || selectedSegIds.size === 0}
+              />
+              <ToolbarButton label={t("workspace:mergeRows")} icon={MergeIcon} onClick={mergeSegments} />
+              <ToolbarButton
+                label={selectMode ? t("workspace:doneSelecting") : t("workspace:selectSegments")}
+                icon={SelectIcon}
+                active={selectMode}
+                onClick={() => setSelectMode((v) => !v)}
+              />
+              <ToolbarButton label={t("workspace:editSegment")} icon={PencilIcon} onClick={editSelected} disabled={selectedSegIds.size !== 1} />
+              {nativeLang && (
+                <ToolbarButton
+                  label={t("recordings:translateTo", { language: nativeLang.englishName })}
+                  icon={GlobeIcon}
+                  onClick={translateSelected}
+                  disabled={selectedSegIds.size === 0 || translating}
+                />
+              )}
+              <ToolbarButton label={t("workspace:deleteSelected")} icon={TrashIcon} onClick={deleteSelected} disabled={selectedSegIds.size === 0} />
+              {hasRevisions(rec.current.segments) && (
+                <ToolbarButton label={t("workspace:toggleViewTitle")} icon={EyeIcon} active={showOriginal} onClick={() => setShowOriginal((v) => !v)} />
+              )}
+              {selectedSegIds.size > 0 && (
+                <span className="ml-0.5 text-xs text-blue-700 dark:text-blue-300">{selectedSegIds.size}</span>
+              )}
+            </>
+          }
+        >
+          {/* Hidden audio element — the small header bar + the Play buttons drive it (no native controls). */}
+          {rec.hasAudio && (
+            <audio
+              ref={audioRef}
+              onTimeUpdate={onTimeUpdate}
+              onPlay={() => setAudioPaused(false)}
+              onPause={() => setAudioPaused(true)}
+              className="hidden"
+            />
+          )}
           {matchTimes.length > 1 && (
             <div className="sticky top-0 z-10 mb-2 flex items-center gap-2 rounded-md border bg-blue-50 px-3 py-1.5 text-xs text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
               <span className="font-medium">
@@ -772,14 +898,10 @@ export default function RecordingDetail() {
                 seg={s}
                 speakerName={multiSpeakerLabels.has(s.speaker) ? t("workspace:multipleSpeakers") : s.speakerDisplay}
                 active={i === activeIdx}
+                selected={selectedSegIds.has(s.id)}
+                selectMode={selectMode}
                 showOriginal={showOriginal}
-                editLabel={t("recordings:edit")}
-                deleteLabel={t("recordings:delete")}
-                translateLabel={nativeLang ? t("recordings:translateTo", { language: nativeLang.englishName }) : undefined}
-                onPlay={rec.hasAudio ? () => playFrom(s.startMs) : undefined}
-                onEdit={() => setEditingSeg(s)}
-                onDelete={() => deleteSegment(s.id)}
-                onTranslate={nativeLang ? () => translateSegment(s.id) : undefined}
+                onClick={() => clickSegment(s.id)}
               />
             ))}
           </ul>
@@ -1141,54 +1263,49 @@ function SegmentRow({
   seg,
   speakerName,
   active,
+  selected,
+  selectMode,
   showOriginal,
-  editLabel,
-  deleteLabel,
-  translateLabel,
-  onPlay,
-  onEdit,
-  onDelete,
-  onTranslate,
+  onClick,
 }: {
   seg: SegmentDto;
   /// The speaker name to show (localised "Multiple Speakers" overrides the server display).
   speakerName: string;
+  /// Currently playing (highlighted by the audio position).
   active: boolean;
+  /// Picked in the transcript selection (drives the toolbar's bulk actions).
+  selected: boolean;
+  selectMode: boolean;
   showOriginal: boolean;
-  editLabel: string;
-  deleteLabel: string;
-  translateLabel?: string;
-  /// Seek+play from this segment. Omitted when the recording has no audio (row isn't clickable then).
-  onPlay?: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  onTranslate?: () => void;
+  /// Click anywhere on the row: select it (single, or toggle in Select mode). No longer auto-plays.
+  onClick: () => void;
 }) {
   const { t } = useTranslation("workspace");
   const revised = seg.revised != null;
-  const actions = [
-    { label: editLabel, onClick: onEdit },
-    ...(onTranslate && translateLabel ? [{ label: translateLabel, onClick: onTranslate }] : []),
-    { label: deleteLabel, onClick: onDelete, danger: true },
-  ];
   return (
     <li
       id={`seg-${seg.id}`}
-      onClick={onPlay}
-      className={`flex items-start gap-3 rounded-lg border px-4 py-2 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800 ${
-        onPlay ? "cursor-pointer" : ""
-      } ${
-        active
-          ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/30"
-          : "bg-white dark:bg-gray-900"
+      onClick={onClick}
+      className={`flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 ${
+        selected
+          ? "border-blue-400 bg-blue-50 ring-1 ring-blue-300 dark:border-blue-600 dark:bg-blue-900/30 dark:ring-blue-700"
+          : active
+            ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/30"
+            : "border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900"
       }`}
     >
+      {selectMode && (
+        // Visual only — the whole row is the click target, which toggles selection.
+        <input type="checkbox" checked={selected} readOnly tabIndex={-1} aria-hidden className="mt-1 shrink-0 pointer-events-none" />
+      )}
       <span className="w-12 shrink-0 font-mono text-xs text-gray-400 dark:text-gray-500">{fmt(seg.startMs)}</span>
       <span className="w-28 shrink-0 text-sm font-medium text-gray-700 dark:text-gray-200">{speakerName}</span>
       {/* Auto-expands vertically to show the full (possibly merged) block of text. */}
       <span className="flex-1 whitespace-pre-wrap break-words text-sm dark:text-gray-200">
         {segmentText(seg, showOriginal)}
       </span>
+      {/* The currently-playing row gets a small ▶ marker (distinct from the selection highlight). */}
+      {active && <span aria-hidden className="mt-0.5 shrink-0 text-blue-500 dark:text-blue-400">▶</span>}
       {/* Marks a segment whose text has been edited or translated (a revision exists). */}
       {revised && (
         <span
@@ -1199,7 +1316,6 @@ function SegmentRow({
           ✎
         </span>
       )}
-      <KebabMenu actions={actions} label={t("segmentActions")} />
     </li>
   );
 }

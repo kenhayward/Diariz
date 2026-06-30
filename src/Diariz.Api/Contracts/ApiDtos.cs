@@ -163,6 +163,12 @@ public record RetranscribeRequest(string? Model, SpeakerHints? Speakers = null);
 /// is preserved); null = reset to the model's original (clears the revision); "" = a deliberately blank
 /// revision.</summary>
 public record UpdateSegmentRequest(string? Text);
+/// <summary>Delete a set of segments from the current transcription in one call (survivors are renumbered
+/// once). Ids not on the caller's recording are ignored.</summary>
+public record DeleteSegmentsRequest(IReadOnlyList<Guid> Ids);
+/// <summary>Translate a set of segments into <see cref="Language"/> (BCP-47; null = the caller's native
+/// language) in one batched LLM call. Ids not on the caller's recording are ignored.</summary>
+public record TranslateSegmentsRequest(IReadOnlyList<Guid> Ids, string? Language = null);
 
 // ---- Languages & profile (localization) ----
 /// <summary>A supported language: BCP-47 <paramref name="Code"/>, its name in English and in its own

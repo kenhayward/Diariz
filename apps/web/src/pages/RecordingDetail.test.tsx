@@ -20,6 +20,8 @@ vi.mock("../lib/api", () => ({
     downloadTranscript: vi.fn(),
     downloadAudio: vi.fn(),
     updateSegment: vi.fn(),
+    deleteSegments: vi.fn(),
+    translateSegments: vi.fn(),
     mergeSegments: vi.fn(),
     emailTranscript: vi.fn(),
     reidentify: vi.fn(),
@@ -132,7 +134,7 @@ describe("RecordingDetail", () => {
     expect(await screen.findByText("The key decisions.")).toBeTruthy();
   });
 
-  it("clicking a segment resolves the audio URL and plays from its start", async () => {
+  it("clicking a segment selects it (no auto-play); Play selected then plays it", async () => {
     const play = vi
       .spyOn(window.HTMLMediaElement.prototype, "play")
       .mockResolvedValue(undefined);
@@ -144,8 +146,12 @@ describe("RecordingDetail", () => {
       },
     });
 
+    // Clicking a segment now selects it — it must NOT auto-play.
     fireEvent.click(await screen.findByText("Hello there"));
+    expect(api.audioUrl).not.toHaveBeenCalled();
 
+    // Play selected (enabled once a segment is picked) resolves the URL and plays.
+    fireEvent.click(screen.getByRole("button", { name: /play selected/i }));
     await waitFor(() => expect(api.audioUrl).toHaveBeenCalledWith("rec-123"));
     await waitFor(() => expect(play).toHaveBeenCalled());
   });
@@ -294,18 +300,32 @@ describe("RecordingDetail", () => {
     expect(screen.queryByRole("heading", { name: /^actions$/i })).toBeNull();
   });
 
-  it("edits a segment via its kebab and saves the new text", async () => {
+  it("selects a segment and edits it from the toolbar, saving the new text", async () => {
     (api.updateSegment as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     renderPage(base);
     await screen.findByText("Hi");
 
-    // Open the segment's kebab → Edit, change the text, save.
-    fireEvent.click(screen.getByRole("button", { name: /segment actions/i }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /edit/i }));
+    // Pick the segment, then Edit (enabled only when exactly one is selected) → modal → save.
+    fireEvent.click(screen.getByText("Hi"));
+    fireEvent.click(screen.getByRole("button", { name: /edit segment/i }));
     const textarea = screen.getByRole("textbox", { name: /segment text/i });
     fireEvent.change(textarea, { target: { value: "Hi, corrected" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(() => expect(api.updateSegment).toHaveBeenCalledWith("rec-123", "seg-1", "Hi, corrected"));
+  });
+
+  it("bulk-deletes selected segments from the toolbar after confirming the count", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    (api.deleteSegments as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    renderPage(base);
+    await screen.findByText("Hi");
+
+    // Enter Select mode, tick the segment (click the row), then Delete selected.
+    fireEvent.click(screen.getByRole("button", { name: /select segments/i }));
+    fireEvent.click(screen.getByText("Hi"));
+    fireEvent.click(screen.getByRole("button", { name: /delete selected/i }));
+
+    await waitFor(() => expect(api.deleteSegments).toHaveBeenCalledWith("rec-123", ["seg-1"]));
   });
 });

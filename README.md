@@ -24,6 +24,9 @@ Edits are kept **separately from the model's original words** — a ✎ marks re
 Show revised** toggle flips the whole transcript, so you can always get back to what the model said.
 Re-transcribe with a chosen model at any time (with optional **min/max speaker hints** for pyannote when
 voices are merged), **merge** consecutive same-speaker rows, and **email yourself** the formatted transcript.
+The transcript panel **pins to the top** as you scroll (its segments then scroll internally) and has a header
+**icon toolbar** with a small play bar and a **Select mode** — tick segments (or click one) to **play, edit,
+translate, or delete** just the selection, while **Play all** and **Merge** always act on the whole transcript.
 - **Identify speakers** across recordings: enrol a person from a recording's speaker and Diariz recognises
 that voice automatically in later recordings (SpeechBrain ECAPA voiceprints in pgvector, cosine matching),
 with manual reassignment. A **People** screen renames, prunes training samples, merges duplicates, and

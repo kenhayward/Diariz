@@ -111,4 +111,34 @@ public class RecordingTranslationController : ControllerBase
         await _db.SaveChangesAsync();
         return NoContent();
     }
+
+    /// <summary>Translate a set of selected segments (the Select-mode bulk translate) into the target language
+    /// in one batched call — each segment's <c>Original</c> → <c>Revised</c>. Ids not on the caller's recording
+    /// are ignored; summary/actions are untouched.</summary>
+    [HttpPost("segments/translate")]
+    public async Task<IActionResult> TranslateSegments(Guid recordingId, TranslateSegmentsRequest req)
+    {
+        var current = await _db.Transcriptions.Where(t => t.RecordingId == recordingId)
+            .OrderByDescending(t => t.Version).FirstOrDefaultAsync();
+        if (current is null) return NotFound();
+        if (!await _db.Recordings.AnyAsync(r => r.Id == recordingId && r.UserId == UserId)) return NotFound();
+
+        var cfg = await _settings.ResolveAsync(UserId);
+        if (!cfg.Enabled) return BadRequest("Translation needs an LLM endpoint. Set one in Settings.");
+
+        var (name, error) = await ResolveTargetAsync(req.Language);
+        if (error is not null) return error;
+
+        var ids = (req.Ids ?? Array.Empty<Guid>()).ToHashSet();
+        var segments = await _db.Segments
+            .Where(s => s.TranscriptionId == current.Id && ids.Contains(s.Id))
+            .OrderBy(s => s.Ordinal)
+            .ToListAsync();
+        if (segments.Count == 0) return NoContent();
+
+        var translated = await _client.TranslateAsync(cfg, name!, segments.Select(s => s.Original).ToList());
+        for (var i = 0; i < segments.Count; i++) segments[i].Revised = translated[i];
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
 }
