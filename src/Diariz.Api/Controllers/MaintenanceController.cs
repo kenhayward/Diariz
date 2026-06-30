@@ -46,33 +46,47 @@ public class MaintenanceController : ControllerBase
             CreatedAt: DateTimeOffset.UtcNow,
             IncludesKeyring: false);
 
-        Response.ContentType = "application/zip";
-        Response.Headers.ContentDisposition =
-            $"attachment; filename=\"diariz-backup-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}.zip\"";
-
-        // Stream the zip straight to the response (backups can be many GB — nothing is buffered).
-        using (var zip = new ZipArchive(Response.Body, ZipArchiveMode.Create, leaveOpen: true))
+        // Build to a temp file first, then stream it back. ZipArchive writes its headers/central-directory
+        // SYNCHRONOUSLY, which Kestrel's response body forbids (AllowSynchronousIO is off) — so we can't write
+        // the archive directly to Response.Body. Writing to a FileStream (sync IO is fine on a real file) and
+        // returning File(...) (async copy) sidesteps that, and means a pg_dump failure surfaces as a clean 500
+        // instead of a truncated download. The file is deleted when the response finishes (DeleteOnClose).
+        var tempPath = Path.Combine(Path.GetTempPath(), $"diariz-backup-{Guid.NewGuid():N}.zip");
+        try
         {
-            var manifestEntry = zip.CreateEntry(ManifestEntry, CompressionLevel.Optimal);
-            await using (var ms = manifestEntry.Open())
-                await JsonSerializer.SerializeAsync(ms, manifest, JsonOpts, ct);
-
-            var dumpEntry = zip.CreateEntry(DumpEntry, CompressionLevel.Optimal);
-            await using (var ds = dumpEntry.Open())
-                await _backup.DumpToAsync(ds, ct);
-
-            await foreach (var key in _storage.ListKeysAsync(ct))
+            await using (var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            using (var zip = new ZipArchive(fs, ZipArchiveMode.Create))
             {
-                var blob = await _storage.OpenAsync(key, ct: ct);
-                if (blob is null) continue;
-                // Audio/attachments are already compressed — store, don't deflate again.
-                var entry = zip.CreateEntry(ObjectPrefix + key, CompressionLevel.NoCompression);
-                await using var src = blob.Content;
-                await using var dest = entry.Open();
-                await src.CopyToAsync(dest, ct);
+                var manifestEntry = zip.CreateEntry(ManifestEntry, CompressionLevel.Optimal);
+                await using (var ms = manifestEntry.Open())
+                    await JsonSerializer.SerializeAsync(ms, manifest, JsonOpts, ct);
+
+                var dumpEntry = zip.CreateEntry(DumpEntry, CompressionLevel.Optimal);
+                await using (var ds = dumpEntry.Open())
+                    await _backup.DumpToAsync(ds, ct);
+
+                await foreach (var key in _storage.ListKeysAsync(ct))
+                {
+                    var blob = await _storage.OpenAsync(key, ct: ct);
+                    if (blob is null) continue;
+                    // Audio/attachments are already compressed — store, don't deflate again.
+                    var entry = zip.CreateEntry(ObjectPrefix + key, CompressionLevel.NoCompression);
+                    await using var src = blob.Content;
+                    await using var dest = entry.Open();
+                    await src.CopyToAsync(dest, ct);
+                }
             }
         }
-        return new EmptyResult();
+        catch
+        {
+            if (System.IO.File.Exists(tempPath)) System.IO.File.Delete(tempPath);
+            throw;
+        }
+
+        var name = $"diariz-backup-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}.zip";
+        var stream = new FileStream(tempPath, FileMode.Open, FileAccess.Read, FileShare.None, 1 << 16,
+            FileOptions.Asynchronous | FileOptions.DeleteOnClose);
+        return File(stream, "application/zip", name);
     }
 
     /// <summary>Replace the platform with the uploaded backup (raw <c>application/zip</c> body). Destructive:
