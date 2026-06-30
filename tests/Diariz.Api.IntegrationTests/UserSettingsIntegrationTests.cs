@@ -18,9 +18,14 @@ public class UserSettingsIntegrationTests(ContainersFixture fx)
     // Real Data Protection (in-process keyring) — exercises actual encryption, not the fake prefix.
     private static readonly IApiKeyProtector Protector = new ApiKeyProtector(new EphemeralDataProtectionProvider());
 
-    private static UserSettingsController Settings(Diariz.Domain.DiarizDbContext db, Guid userId) =>
-        new(db, Protector, Options.Create(new SummarizationOptions()), Options.Create(new ChatOptions()))
+    private static UserSettingsController Settings(Diariz.Domain.DiarizDbContext db, Guid userId)
+    {
+        var chat = new ChatOptions();
+        var resolver = new ChatToolSettingsResolver(
+            db, new Diariz.Api.Tools.ChatToolRegistry([]), Options.Create(chat));
+        return new(db, Protector, Options.Create(new SummarizationOptions()), Options.Create(chat), resolver)
         { ControllerContext = Http.Context(userId) };
+    }
 
     private async Task<Guid> SeedUser()
     {

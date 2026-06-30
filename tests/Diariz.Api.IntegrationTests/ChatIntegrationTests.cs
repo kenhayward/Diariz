@@ -16,7 +16,8 @@ namespace Diariz.Api.IntegrationTests;
 public class ChatIntegrationTests(ContainersFixture fx)
 {
     private static ChatController BuildController(
-        DiarizDbContext db, Guid userId, IChatStreamClient? chat = null, bool llmEnabled = true)
+        DiarizDbContext db, Guid userId, IChatStreamClient? chat = null, bool llmEnabled = true,
+        IReadOnlyList<Diariz.Api.Tools.IChatTool>? activeTools = null)
     {
         var settings = new FakeSummarizationSettingsResolver
         {
@@ -24,10 +25,17 @@ public class ChatIntegrationTests(ContainersFixture fx)
                 ? new SummarizationRequestConfig("https://llm.test/v1", "sk", "test-model", 60)
                 : new SummarizationRequestConfig("", "", "test-model", 60),
         };
+        var streamClient = chat ?? new FakeChatStreamClient();
+        var toolSettings = new FakeChatToolSettingsResolver
+        {
+            ActiveTools = activeTools?.ToList() ?? new(),
+            MasterEnabled = activeTools is { Count: > 0 },
+        };
         return new ChatController(
-            db, chat ?? new FakeChatStreamClient(), settings,
+            db, streamClient, settings,
             new ChatContextResolver(db, Options.Create(new ChatOptions { ContextLength = 50000 })),
-            new AttachmentExtractor(), new FakeAudioStorage(), new FakeUrlFetcher())
+            new AttachmentExtractor(), new FakeAudioStorage(), new FakeUrlFetcher(),
+            toolSettings, new ChatToolOrchestrator(streamClient))
         {
             ControllerContext = Http.Context(userId),
         };
@@ -134,5 +142,52 @@ public class ChatIntegrationTests(ContainersFixture fx)
         Assert.Contains("\"type\":\"token\",\"value\":\"Alice\"", sse);
         Assert.Contains("\"type\":\"done\"", sse);
         Assert.Contains("\"contextTotal\":50000", sse);
+    }
+
+    [Fact]
+    public async Task Stream_WithTool_ExecutesRealSearch_AndEmitsToolEvents()
+    {
+        var user = await SeedUser();
+        var recId = Guid.NewGuid();
+        await using (var seed = fx.CreateDbContext())
+        {
+            seed.Recordings.Add(new Recording { Id = recId, UserId = user.Id, Title = "Budget Review" });
+            var tr = new Transcription { Id = Guid.NewGuid(), RecordingId = recId, Model = "m", Version = 1 };
+            seed.Transcriptions.Add(tr);
+            seed.Segments.Add(new Segment
+            {
+                Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00",
+                StartMs = 0, EndMs = 1000, Original = "We should cut the marketing budget.", Ordinal = 0,
+            });
+            seed.Speakers.Add(new Speaker { Id = Guid.NewGuid(), RecordingId = recId, Label = "SPEAKER_00", DisplayName = "Alice" });
+            await seed.SaveChangesAsync();
+        }
+
+        await using var db = fx.CreateDbContext();
+        // The model calls who_said_that, then answers in a second round.
+        var chat = new FakeChatStreamClient
+        {
+            ChunkRounds =
+            [
+                [new ChatStreamDelta(null, [new ToolCallFragment(0, "c1", "who_said_that", "{\"phrase\":\"budget\"}")], "tool_calls")],
+                [new ChatStreamDelta("Alice mentioned the budget.", null, null)],
+            ],
+        };
+        var tool = new Diariz.Api.Tools.WhoSaidThatTool(new TranscriptSearch(db));
+        var controller = BuildController(db, user.Id, chat, activeTools: [tool]);
+        var body = new MemoryStream();
+        controller.ControllerContext.HttpContext.Response.Body = body;
+
+        await controller.Stream(
+            new ChatStreamRequest([recId], null, null, [new ChatTurnDto("user", "Who mentioned the budget?")]), default);
+
+        body.Position = 0;
+        var sse = await new StreamReader(body).ReadToEndAsync();
+        Assert.Contains("\"type\":\"tool_start\",\"name\":\"who_said_that\"", sse);
+        Assert.Contains("\"type\":\"tool_end\",\"name\":\"who_said_that\"", sse);
+        Assert.Contains("\"type\":\"token\",\"value\":\"Alice mentioned the budget.\"", sse);
+        // The tool's real result (When/Who/What with Alice) was fed back to the model on the 2nd call.
+        Assert.Contains(chat.ChunkCallMessages[1],
+            m => System.Text.Json.JsonSerializer.Serialize(m).Contains("Alice"));
     }
 }

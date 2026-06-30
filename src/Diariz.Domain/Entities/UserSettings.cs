@@ -20,6 +20,15 @@ public class UserSettings
     /// to the server default (<c>Chat:ContextLength</c>).</summary>
     public int? ChatContextWindow { get; set; }
 
+    /// <summary>Master switch for chat tool calling. Null falls back to the server default
+    /// (<c>Chat:ToolsEnabled</c>).</summary>
+    public bool? ChatToolsEnabled { get; set; }
+
+    /// <summary>Explicit per-tool on/off overrides, a JSON object of <c>{ "tool_name": bool }</c>. A tool
+    /// absent from the map follows the server default, so tools added later default correctly. Null = no
+    /// overrides.</summary>
+    public string? ChatToolOverridesJson { get; set; }
+
     /// <summary>The user's native language (BCP-47), used as the default target when translating
     /// transcripts. Null = not set.</summary>
     public string? NativeLanguage { get; set; }

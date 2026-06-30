@@ -5,6 +5,13 @@ import { api, apiErrorMessage } from "../lib/api";
 import { renderMarkdown } from "../lib/markdown";
 import { useActiveRecordingId } from "../lib/useActiveRecordingId";
 import { useSelection } from "../lib/selection";
+import {
+  emptyToolCallLine,
+  toolStarted,
+  toolEnded,
+  toolCallLineText,
+  type ToolCallLineState,
+} from "../lib/toolCallLine";
 import type { ChatConversationSummary, ChatTurn, ChatUsage } from "../lib/types";
 import ContextDial from "./ContextDial";
 
@@ -24,6 +31,8 @@ export default function ChatPanel() {
   const [streaming, setStreaming] = useState(false);
   const [usage, setUsage] = useState<ChatUsage | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Ephemeral "Tool call: …" indicator while built-in tools run (cleared when the assistant resumes text).
+  const [toolLine, setToolLine] = useState<ToolCallLineState>(emptyToolCallLine);
 
   const [contextMode, setContextMode] = useState<ContextMode>("current");
   const [includeAttachments, setIncludeAttachments] = useState(false);
@@ -133,7 +142,16 @@ export default function ChatPanel() {
           messages: history,
           includeAttachments: includeAttachments && recordingIds.length > 0,
         },
-        { onToken: appendToken, onMeta: setUsage, signal: controller.signal },
+        {
+          onToken: (tok) => {
+            setToolLine(emptyToolCallLine); // assistant produced text → drop the tool-call line
+            appendToken(tok);
+          },
+          onMeta: setUsage,
+          onToolStart: (name) => setToolLine((s) => toolStarted(s, name)),
+          onToolEnd: (name) => setToolLine((s) => toolEnded(s, name)),
+          signal: controller.signal,
+        },
       )
       .then((u) => {
         if (!controller.signal.aborted) setUsage(u);
@@ -144,6 +162,7 @@ export default function ChatPanel() {
       })
       .finally(() => {
         if (abortRef.current === controller) abortRef.current = null;
+        setToolLine(emptyToolCallLine);
         setStreaming(false);
       });
   }
@@ -342,6 +361,11 @@ export default function ChatPanel() {
               </div>
             );
           })
+        )}
+        {toolCallLineText(toolLine) && (
+          <div className="flex justify-start">
+            <span className="px-1 text-xs italic text-gray-400">{toolCallLineText(toolLine)}</span>
+          </div>
         )}
       </div>
 

@@ -19,15 +19,17 @@ public class UserSettingsController : ControllerBase
     private readonly IApiKeyProtector _protector;
     private readonly SummarizationOptions _serverDefaults;
     private readonly ChatOptions _chatDefaults;
+    private readonly IChatToolSettingsResolver _toolSettings;
 
     public UserSettingsController(
         DiarizDbContext db, IApiKeyProtector protector, IOptions<SummarizationOptions> serverDefaults,
-        IOptions<ChatOptions> chatDefaults)
+        IOptions<ChatOptions> chatDefaults, IChatToolSettingsResolver toolSettings)
     {
         _db = db;
         _protector = protector;
         _serverDefaults = serverDefaults.Value;
         _chatDefaults = chatDefaults.Value;
+        _toolSettings = toolSettings;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -36,13 +38,19 @@ public class UserSettingsController : ControllerBase
     public async Task<UserSettingsDto> Get()
     {
         var s = await _db.UserSettings.FindAsync(UserId);
+        var tools = await _toolSettings.ResolveAsync(UserId);
         return new UserSettingsDto(
             s?.SummaryApiBase, s?.SummaryModel, !string.IsNullOrEmpty(s?.SummaryApiKeyEncrypted),
             DefaultApiBase: NullIfBlank(_serverDefaults.ApiBase),
             DefaultModel: NullIfBlank(_serverDefaults.Model),
             ServerHasApiKey: !string.IsNullOrEmpty(_serverDefaults.ApiKey),
             ContextWindow: s?.ChatContextWindow,
-            DefaultContextWindow: _chatDefaults.ContextLength);
+            DefaultContextWindow: _chatDefaults.ContextLength,
+            ToolsEnabled: tools.MasterEnabled,
+            DefaultToolsEnabled: _chatDefaults.ToolsEnabled,
+            Tools: tools.Catalog
+                .Select(c => new ChatToolDto(c.Name, c.Title, c.Description, c.Enabled, c.DefaultEnabled))
+                .ToList());
     }
 
     private static string? NullIfBlank(string? v) => string.IsNullOrWhiteSpace(v) ? null : v;
@@ -66,6 +74,15 @@ public class UserSettingsController : ControllerBase
 
         // Context window: a positive value sets the override; null/<=0 clears it (server default applies).
         s.ChatContextWindow = req.ContextWindow is > 0 ? req.ContextWindow : null;
+
+        // Tool calling: a value sets the master override; null leaves it unchanged.
+        if (req.ToolsEnabled is not null) s.ChatToolsEnabled = req.ToolsEnabled;
+
+        // Per-tool overrides: a map (possibly empty) replaces them; null leaves them unchanged.
+        if (req.ToolOverrides is not null)
+            s.ChatToolOverridesJson = req.ToolOverrides.Count > 0
+                ? System.Text.Json.JsonSerializer.Serialize(req.ToolOverrides)
+                : null;
 
         await _db.SaveChangesAsync();
         return NoContent();

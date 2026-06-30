@@ -36,6 +36,8 @@
   "keyWillClear": "Der gespeicherte Schlüssel wird beim Speichern gelöscht.",
   "chatContextWindow": "Chat-Kontextfenster (Tokens)",
   "chatContextHint": "Steuert die Chat-Kontextanzeige. Leer lassen, um den Serverwert zu verwenden.",
+  "chatToolsEnabled": "Chat-Tools aktivieren",
+  "chatToolsHint": "Lässt das Chat-Modell integrierte Tools aufrufen, die deine Transkripte durchsuchen. Erfordert ein Modell, das Tool-Aufrufe unterstützt.",
   "quotasIntro": "Neue Benutzer starten mit dem Startkontingent; Administratoren können es bis zum Maximum erhöhen.",
   "starterQuota": "Startkontingent (GB)",
   "maxQuota": "Maximales Kontingent (GB)",

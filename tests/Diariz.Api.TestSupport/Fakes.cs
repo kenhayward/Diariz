@@ -151,7 +151,9 @@ public sealed class FakeSpeakerIdentifier : ISpeakerIdentifier
     }
 }
 
-/// <summary>Stub <see cref="IChatStreamClient"/> — yields a canned token sequence or throws.</summary>
+/// <summary>Stub <see cref="IChatStreamClient"/> — yields a canned token sequence or throws. For the
+/// tool-calling path, <see cref="ChunkRounds"/> scripts one delta list per model call (sequentially); when
+/// empty, <see cref="StreamChunksAsync"/> falls back to streaming <see cref="Tokens"/> as content deltas.</summary>
 public sealed class FakeChatStreamClient : IChatStreamClient
 {
     public List<string> Tokens { get; set; } = ["Project", " Kickoff", " Recap"];
@@ -159,6 +161,14 @@ public sealed class FakeChatStreamClient : IChatStreamClient
     public int Calls { get; private set; }
     public SummarizationRequestConfig? LastConfig { get; private set; }
     public List<ChatMessage>? LastMessages { get; private set; }
+
+    /// <summary>Scripted output per <see cref="StreamChunksAsync"/> call (the last entry repeats).</summary>
+    public List<List<ChatStreamDelta>> ChunkRounds { get; set; } = new();
+    /// <summary>The messages passed to each <see cref="StreamChunksAsync"/> call.</summary>
+    public List<IReadOnlyList<object>> ChunkCallMessages { get; } = new();
+    /// <summary>The tool specs passed to each <see cref="StreamChunksAsync"/> call (null = none offered).</summary>
+    public List<IReadOnlyList<object>?> ChunkCallTools { get; } = new();
+    private int _chunkCall;
 
     public async IAsyncEnumerable<string> StreamAsync(
         SummarizationRequestConfig config, IReadOnlyList<ChatMessage> messages,
@@ -174,6 +184,80 @@ public sealed class FakeChatStreamClient : IChatStreamClient
             yield return t;
             await Task.Yield();
         }
+    }
+
+    public async IAsyncEnumerable<ChatStreamDelta> StreamChunksAsync(
+        SummarizationRequestConfig config, IReadOnlyList<object> messages,
+        IReadOnlyList<object>? tools,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        Calls++;
+        LastConfig = config;
+        ChunkCallMessages.Add(messages.ToList());
+        ChunkCallTools.Add(tools);
+        // Mirror the pre-shaped {role, content} objects into LastMessages so tests can inspect the prompt
+        // the same way they do for StreamAsync.
+        LastMessages = messages.Select(ToChatMessage).ToList();
+        if (ThrowOnCall is not null) throw ThrowOnCall;
+
+        var deltas = ChunkRounds.Count > 0
+            ? ChunkRounds[Math.Min(_chunkCall, ChunkRounds.Count - 1)]
+            : Tokens.Select(t => new ChatStreamDelta(t, null, null)).ToList();
+        _chunkCall++;
+
+        foreach (var d in deltas)
+        {
+            ct.ThrowIfCancellationRequested();
+            yield return d;
+            await Task.Yield();
+        }
+    }
+
+    /// <summary>Reads role/content off a pre-shaped message object (anonymous { role, content }).</summary>
+    private static ChatMessage ToChatMessage(object m)
+    {
+        var t = m.GetType();
+        var role = t.GetProperty("role")?.GetValue(m) as string ?? "";
+        var content = t.GetProperty("content")?.GetValue(m) as string ?? "";
+        return new ChatMessage(role, content);
+    }
+}
+
+/// <summary>Stub <see cref="IChatToolSettingsResolver"/> — returns a fixed set of active tools (none by
+/// default), so the chat controller behaves as the no-tools path unless a test opts in.</summary>
+public sealed class FakeChatToolSettingsResolver : IChatToolSettingsResolver
+{
+    public List<Diariz.Api.Tools.IChatTool> ActiveTools { get; set; } = new();
+    public bool MasterEnabled { get; set; }
+
+    public Task<ChatToolSettings> ResolveAsync(Guid userId, CancellationToken ct = default) =>
+        Task.FromResult(new ChatToolSettings(MasterEnabled, ActiveTools, []));
+}
+
+/// <summary>Stub <see cref="ITranscriptSearch"/> — returns canned results and records the arguments each
+/// tool passed, so the tools can be unit-tested without a database.</summary>
+public sealed class FakeTranscriptSearch : ITranscriptSearch
+{
+    public List<TranscriptHit> Hits { get; set; } = new();
+    public List<RecordingHit> Recordings { get; set; } = new();
+
+    public (Guid UserId, string Phrase, string? Speaker, IReadOnlyList<Guid>? Scope, int Limit)? LastSearch { get; private set; }
+    public (Guid UserId, DateTimeOffset? From, DateTimeOffset? To, string? Name, string? Speaker, string? Contains, int Limit)? LastList { get; private set; }
+
+    public Task<IReadOnlyList<TranscriptHit>> SearchAsync(
+        Guid userId, string phrase, string? speakerName,
+        IReadOnlyList<Guid>? recordingScope, int limit, CancellationToken ct = default)
+    {
+        LastSearch = (userId, phrase, speakerName, recordingScope, limit);
+        return Task.FromResult<IReadOnlyList<TranscriptHit>>(Hits);
+    }
+
+    public Task<IReadOnlyList<RecordingHit>> ListRecordingsAsync(
+        Guid userId, DateTimeOffset? from, DateTimeOffset? to, string? name, string? speaker,
+        string? contains, int limit, CancellationToken ct = default)
+    {
+        LastList = (userId, from, to, name, speaker, contains, limit);
+        return Task.FromResult<IReadOnlyList<RecordingHit>>(Recordings);
     }
 }
 

@@ -36,6 +36,8 @@
   "keyWillClear": "The stored key will be cleared on save.",
   "chatContextWindow": "Chat context window (tokens)",
   "chatContextHint": "Drives the chat context dial. Leave blank to use the server default.",
+  "chatToolsEnabled": "Enable chat tools",
+  "chatToolsHint": "Let the chat model call built-in tools that search your transcripts. Requires a model that supports tool calling.",
   "quotasIntro": "New users start with the starter quota; administrators can raise a user up to the maximum.",
   "starterQuota": "Starter quota (GB)",
   "maxQuota": "Maximum quota (GB)",
