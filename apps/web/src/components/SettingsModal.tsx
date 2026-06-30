@@ -4,8 +4,9 @@ import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth";
 import { bytesToGb, gbToBytes } from "../lib/format";
+import MaintenancePanel from "./MaintenancePanel";
 
-type Tab = "ai" | "quotas";
+type Tab = "ai" | "quotas" | "maintenance";
 
 /// Settings modal with two tabs — AI (per-user summarisation/chat config) and, for the Platform
 /// Administrator, Storage Quotas — saved together by a single OK/Cancel footer.
@@ -107,6 +108,9 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
               </TabButton>
               <TabButton active={tab === "quotas"} onClick={() => setTab("quotas")}>
                 {t("storageQuotas")}
+              </TabButton>
+              <TabButton active={tab === "maintenance"} onClick={() => setTab("maintenance")}>
+                {t("maintenanceTab")}
               </TabButton>
             </div>
           )}
@@ -227,7 +231,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 )}
               </div>
             </div>
-          ) : (
+          ) : tab === "quotas" ? (
             <div className="space-y-3">
               <p className="text-xs text-gray-500 dark:text-gray-400">{t("quotasIntro")}</p>
               <label className="block text-sm">
@@ -255,6 +259,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 />
               </label>
             </div>
+          ) : (
+            <MaintenancePanel />
           )}
         </div>
 

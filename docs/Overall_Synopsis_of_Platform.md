@@ -281,6 +281,21 @@ voiceprints are PyTorch and run on ROCm unchanged (PyTorch-ROCm keeps the `"cuda
 target: Strix Halo (gfx1151). The API/web are vendor-agnostic — only the worker image differs. The
 openai-whisper backend is slower than faster-whisper but accuracy is unchanged (the aligner re-times words).
 
+## Platform backup & restore
+
+`MaintenanceController` (Platform-Administrator only) exports/imports the **whole platform** as one `.zip`:
+a `manifest.json` (app version, the last-applied EF migration id, createdAt), a `database.dump`
+(`pg_dump --format=custom`), and one `objects/<key>` entry per object-store blob (audio + attachments). The
+API image therefore ships the **PostgreSQL client tools** (`pg_dump`/`pg_restore`). `GET /api/maintenance/backup`
+streams the zip straight to the response (token via `access_token`, like the audio endpoint); `POST
+/api/maintenance/restore` takes the raw zip body, **refuses a manifest whose migration id ≠ the running
+schema** (a `pg_restore --clean` brings the dump's schema, which must match the code), runs the restore, then
+wipes and re-uploads the bucket. Restore is **destructive** (replaces all data; the admin is signed out).
+The Data-Protection **keyring is not included** — after restoring on a different instance, encrypted per-user
+LLM API keys can't be decrypted (users re-enter them); everything else is faithful. The `pg_dump`/`pg_restore`
+shell-out is behind `IDatabaseBackup` so the archive/object orchestration is unit-tested; the real round-trip
+is an integration test that skips when the client tools aren't on the host PATH.
+
 ## Repository layout
 
 ```

@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const authState = { isPlatformAdmin: false };
+const authState = { isPlatformAdmin: false, logout: vi.fn() };
 vi.mock("../auth", () => ({ useAuth: () => authState }));
 vi.mock("../lib/api", () => ({
   api: {
@@ -10,6 +10,8 @@ vi.mock("../lib/api", () => ({
     updateUserSettings: vi.fn(),
     getPlatformSettings: vi.fn().mockResolvedValue({ starterQuotaBytes: 5 * 1024 ** 3, maxQuotaBytes: 50 * 1024 ** 3 }),
     updatePlatformSettings: vi.fn().mockResolvedValue({ starterQuotaBytes: 0, maxQuotaBytes: 0 }),
+    backupUrl: () => "/api/maintenance/backup?access_token=t",
+    restoreBackup: vi.fn().mockResolvedValue(undefined),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -150,6 +152,33 @@ describe("SettingsModal", () => {
     renderModal();
     await screen.findByDisplayValue("https://existing/v1");
     expect(screen.queryByRole("tab", { name: /storage quotas/i })).toBeNull();
+  });
+
+  it("hides the Maintenance tab for non-platform admins", async () => {
+    renderModal();
+    await screen.findByDisplayValue("https://existing/v1");
+    expect(screen.queryByRole("tab", { name: /maintenance/i })).toBeNull();
+  });
+
+  it("shows backup + gated restore on the Maintenance tab for the Platform Administrator", async () => {
+    authState.isPlatformAdmin = true;
+    renderModal();
+    fireEvent.click(await screen.findByRole("tab", { name: /maintenance/i }));
+
+    // Backup is a self-authenticating download link.
+    const link = screen.getByRole("link", { name: /download backup/i });
+    expect(link.getAttribute("href")).toContain("/api/maintenance/backup?access_token=");
+
+    // Restore is disabled until a file is chosen AND the confirmation is checked.
+    const restore = screen.getByRole("button", { name: /^restore$/i });
+    expect((restore as HTMLButtonElement).disabled).toBe(true);
+
+    const file = new File(["zip"], "backup.zip", { type: "application/zip" });
+    fireEvent.change(screen.getByLabelText(/choose a backup file/i), { target: { files: [file] } });
+    expect((restore as HTMLButtonElement).disabled).toBe(true); // file alone isn't enough
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /permanently replace all current data/i }));
+    expect((restore as HTMLButtonElement).disabled).toBe(false); // enabled once both confirmed
   });
 
   it("renders chat tools and saves the master switch + per-tool overrides", async () => {

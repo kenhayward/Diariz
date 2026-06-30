@@ -80,7 +80,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 var isRecordingAsset = path.StartsWithSegments("/api/recordings")
                     && (path.Value!.EndsWith("/audio", StringComparison.OrdinalIgnoreCase)
                         || path.Value!.EndsWith("/content", StringComparison.OrdinalIgnoreCase));
-                if (!string.IsNullOrEmpty(token) && (path.StartsWithSegments("/hubs") || isRecordingAsset))
+                // The platform backup is downloaded via an anchor href (can't set an Authorization header).
+                var isBackup = path.StartsWithSegments("/api/maintenance")
+                    && path.Value!.EndsWith("/backup", StringComparison.OrdinalIgnoreCase);
+                if (!string.IsNullOrEmpty(token) && (path.StartsWithSegments("/hubs") || isRecordingAsset || isBackup))
                     ctx.Token = token;
                 return Task.CompletedTask;
             }
@@ -102,6 +105,11 @@ builder.Services.AddSingleton<IAmazonS3>(_ =>
     return new AmazonS3Client(new BasicAWSCredentials(storage.AccessKey, storage.SecretKey), cfg);
 });
 builder.Services.AddSingleton<IAudioStorage, AudioStorage>();
+
+// ---- Platform backup/restore (shells out to pg_dump/pg_restore — installed in the API image) ----
+builder.Services.AddSingleton<IDatabaseBackup>(_ =>
+    new PgToolsDatabaseBackup(builder.Configuration.GetConnectionString("Postgres")!));
+builder.Services.AddScoped<ISchemaVersion, EfSchemaVersion>();
 
 // ---- Redis job queue ----
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>

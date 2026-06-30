@@ -20,6 +20,8 @@ public interface IAudioStorage
     Task<long?> GetSizeAsync(string key, CancellationToken ct = default);
     /// <summary>Removes the stored blob. Idempotent — succeeds even if the key is absent.</summary>
     Task DeleteAsync(string key, CancellationToken ct = default);
+    /// <summary>Enumerate every object key in the bucket (paginated). Used by the platform backup.</summary>
+    IAsyncEnumerable<string> ListKeysAsync(CancellationToken ct = default);
 }
 
 /// <summary>S3-compatible storage backed by MinIO. Stores original audio blobs. The API streams audio
@@ -98,4 +100,19 @@ public class AudioStorage : IAudioStorage
 
     public Task DeleteAsync(string key, CancellationToken ct = default) =>
         _s3.DeleteObjectAsync(_opts.Bucket, key, ct);
+
+    public async IAsyncEnumerable<string> ListKeysAsync(
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var req = new ListObjectsV2Request { BucketName = _opts.Bucket };
+        ListObjectsV2Response resp;
+        do
+        {
+            resp = await _s3.ListObjectsV2Async(req, ct);
+            // AWS SDK v4 returns a null S3Objects list (not empty) when the bucket has no objects.
+            foreach (var o in resp.S3Objects ?? [])
+                yield return o.Key;
+            req.ContinuationToken = resp.NextContinuationToken;
+        } while (resp.IsTruncated == true);
+    }
 }
