@@ -45,6 +45,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddRecordingAudioDeleted` | `Recording.AudioDeletedAt` (nullable) — audio deleted while keeping the transcript |
 | `AddSectionParentAndPosition` | `Section.ParentId` (self-ref, cascade) + `Section.Position` — two-level sub-grouping |
 | `AddSpeakerMultiSpeaker` | `Speaker.IsMultiSpeaker` (bool) — "Multiple Speakers" slots excluded from voiceprints |
+| `AddActionCompletion` | `RecordingActions.Completed` (bool, default false) + `RecordingActions.CompletedAt` (nullable) — action done-tracking |
 | `AddSummaryUserEdited` | `Summary.IsUserEdited` (bool) + `Summary.UpdatedAt` (nullable) — manual/protected summary edits |
 | `AddTranscriptionProcessingMs` | `Transcription.ProcessingMs` (nullable) — full-pipeline wall-clock time the worker spent |
 | `AddAttachments` | `Attachments` (file/URL supporting documents on a recording, cascade) |
@@ -162,8 +163,11 @@ Extracted/hand-edited action items.
 | `Deadline` | text | free text, may be empty |
 | `Ordinal` | int | 0-based order within the recording |
 | `CreatedAt` | timestamptz | |
+| `Completed` | bool | user-set done flag (default false; reversible) |
+| `CompletedAt` | timestamptz null | when marked done; null = not done |
 
-Index: `(RecordingId, Ordinal)`.
+Index: `(RecordingId, Ordinal)`. The cross-meeting Actions list (`GET /api/actions`) joins to `Recordings`
+for ownership + display name; bulk complete/un-complete via `POST /api/actions/complete`.
 
 #### `Attachments`
 Supporting documents on a recording — an uploaded file (blob) or a URL.

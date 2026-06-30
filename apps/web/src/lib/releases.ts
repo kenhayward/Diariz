@@ -26,7 +26,9 @@ manual reassignment. A **People** screen manages enrolled voiceprints — rename
 merge duplicates, and erase one or all (GDPR) of the stored biometric voiceprints.
 
 It can **summarise** recordings, **extract action items** (with actor and deadline) into an editable
-table, **translate** a transcript (segments, summary, and actions) into your chosen language, and let you
+table, and **track them across all your meetings** in a dedicated **Actions** view — filter by person, mark
+items done (with a completion date), and jump from an action back to the transcript it came from. It can
+**translate** a transcript (segments, summary, and actions) into your chosen language, and let you
 **chat across one or more transcripts** — with file attachments, a context-usage dial, and saved
 conversations — using an OpenAI-compatible LLM endpoint you configure. The chat can also call **built-in
 tools** that search your **whole transcript library** — who said a phrase, what a person said about a topic,
@@ -36,7 +38,8 @@ to open it and jump to the exact segment). Toggle the tools on, and choose which
 documents** (files or URLs) to a recording, open them from the transcript page, and optionally **feed them
 to the chat** (PDFs, text, Office docs, emails/calendar invites are read into text; URLs are fetched).
 Recordings organise into **sections** (with sub-sections) and drag-and-drop ordering, can be **merged**
-into one, and can be browsed as a **list or a calendar**.
+into one, and can be browsed as a **list, a calendar, or a cross-meeting Actions list** (the left panel is
+**Meetings**).
 
 Diariz is **multi-user** with role-based access: people request access (or an administrator adds them),
 an administrator approves, and each user sets up their own account and keeps their own private
@@ -63,6 +66,28 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.46.0",
+    date: "2026-06-30",
+    pr: 98,
+    headline: "Action management — a cross-meeting Actions view with completion tracking",
+    summary:
+      "The left panel is now **Meetings** and gains an **Actions** tab listing every action item across all " +
+      "your transcripts in one place. Filter by person, click an action's title to jump to the transcript it " +
+      "came from, and mark actions **done** (with a completion date) — individually or in bulk via a Select " +
+      "mode like the recordings list. A **Hide completed** toggle clears finished items out of the way. The " +
+      "per-transcript actions table gains the same **Done** checkbox and **Completed** date column. Completion " +
+      "is reversible.",
+    added: [
+      "Actions tab in the left panel: all action items across every meeting, filterable by person.",
+      "Mark actions complete/incomplete (with a completion date) — inline on a transcript, or in bulk from the Actions tab.",
+      "Each action links back to the transcript it was raised in; edit an action from the Actions tab.",
+      "Hide completed toggle to focus on outstanding work.",
+    ],
+    changed: [
+      "The left panel is renamed “Meetings” (it now covers both transcripts and the actions arising from them).",
+    ],
+  },
   {
     version: "0.45.5",
     date: "2026-06-30",

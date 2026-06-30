@@ -320,6 +320,12 @@ namespace Diariz.Domain.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool>("Completed")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 

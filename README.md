@@ -41,6 +41,10 @@ brief grey "Tool call: …" line shows while a tool runs.
 - **Extract action items** from a transcript (Action / Actor / Deadline) with that same LLM, into an
 editable table shown by exception (only after you run it); the actions also travel with the transcript —
 included in the downloads (Text/Markdown/RTF), the emailed transcript, and the chat context.
+- **Manage actions across all your meetings** in a dedicated **Actions** tab (the left panel is now
+**Meetings**): every action item in one list, **filter by person**, mark items **done** with a completion
+date (individually or in bulk, reversible), **hide completed**, and click an action to jump to the transcript
+it came from. The per-transcript table gains the same Done checkbox + Completed date.
 - **Translate** a transcript into your chosen language with that same LLM — the whole recording (segments,
 summary, and actions) or a single segment. Translations are stored as **revisions** over the model's
 original words (so you can always flip back), and exports/email/chat use them.

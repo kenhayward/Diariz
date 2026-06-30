@@ -35,7 +35,7 @@ public class RecordingActionsController : ControllerBase
         _db.Recordings.AnyAsync(r => r.Id == recordingId && r.UserId == UserId);
 
     private static RecordingActionDto ToDto(RecordingAction a) =>
-        new(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal);
+        new(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal, a.Completed, a.CompletedAt);
 
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<RecordingActionDto>>> List(Guid recordingId)
@@ -44,7 +44,7 @@ public class RecordingActionsController : ControllerBase
         var actions = await _db.RecordingActions
             .Where(a => a.RecordingId == recordingId)
             .OrderBy(a => a.Ordinal)
-            .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal))
+            .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal, a.Completed, a.CompletedAt))
             .ToListAsync();
         return actions;
     }

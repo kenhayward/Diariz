@@ -122,13 +122,31 @@ export interface SpeakerProfileDetail {
 }
 
 /// An action item extracted from (or hand-added to) a transcript. All fields are free text; `text` is
-/// the action itself (shown as the "Action" column); `actor`/`deadline` may be empty.
+/// the action itself (shown as the "Action" column); `actor`/`deadline` may be empty. `completed` is a
+/// user-set done flag (reversible); `completedAt` is the ISO timestamp it was marked done (null = not done).
 export interface RecordingAction {
   id: string;
   text: string;
   actor: string;
   deadline: string;
   ordinal: number;
+  completed: boolean;
+  completedAt: string | null;
+}
+
+/// An action across the whole library (the "Actions" tab), carrying its source recording so the row can
+/// link back to that transcript.
+export interface ActionListItem {
+  id: string;
+  recordingId: string;
+  recordingName: string;
+  text: string;
+  actor: string;
+  deadline: string;
+  ordinal: number;
+  completed: boolean;
+  completedAt: string | null;
+  createdAt: string;
 }
 
 export interface RecordingDetail {

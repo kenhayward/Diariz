@@ -44,9 +44,9 @@ describe("Workspace", () => {
 
   it("collapses the left panel and persists the choice", () => {
     renderWorkspace();
-    fireEvent.click(screen.getByRole("button", { name: /collapse recordings panel/i }));
+    fireEvent.click(screen.getByRole("button", { name: /collapse meetings panel/i }));
     expect(screen.queryByText("LIST")).toBeNull();
-    expect(screen.getByRole("button", { name: /expand recordings panel/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /expand meetings panel/i })).toBeTruthy();
     expect(localStorage.getItem("diariz.panels.left")).toBe("false");
   });
 

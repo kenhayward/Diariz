@@ -20,4 +20,9 @@ public class RecordingAction
     /// <summary>Sort order within the recording (0-based).</summary>
     public int Ordinal { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Whether the user has marked this action done. Defaults to false; reversible.</summary>
+    public bool Completed { get; set; }
+    /// <summary>When it was marked done (null = not done). Set on complete, cleared on un-complete.</summary>
+    public DateTimeOffset? CompletedAt { get; set; }
 }
