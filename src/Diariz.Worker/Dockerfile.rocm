@@ -1,0 +1,36 @@
+# syntax=docker/dockerfile:1
+# AMD ROCm transcription worker — the same pipeline as the CUDA worker, but the Whisper ASR step runs on
+# openai-whisper (pure PyTorch) because faster-whisper / CTranslate2 has no AMD GPU support. Alignment
+# (wav2vec2), diarization (pyannote) and voiceprints (SpeechBrain ECAPA) are all PyTorch and run on ROCm
+# unchanged. Run it via deploy/docker-compose.rocm.yml (exposes /dev/kfd + /dev/dri).
+#
+# Initial target: Strix Halo (Ryzen AI Max APU / Radeon 8060S, gfx1151). Strix Halo support is recent, so:
+#   * Pin a `rocm/pytorch` tag whose ROCm (>= 6.4.1) AND bundled torch/torchaudio include gfx1151 kernels.
+#     `latest` is a moving target — for reproducibility pin an explicit tag once you've confirmed one works
+#     on your card (e.g. rocm/pytorch:rocm6.4.x_ubuntu22.04_py3.x_pytorch_release_2.x).
+#   * If the build lacks gfx1151 kernels, set HSA_OVERRIDE_GFX_VERSION (see docker-compose.rocm.yml) to
+#     borrow a nearby arch's kernels (e.g. 11.0.0 = gfx1100).
+# torch + torchaudio come from THIS base image (compiled for the ROCm runtime) — do NOT reinstall them from
+# PyPI, or you'll get CUDA/CPU wheels that won't use the AMD GPU.
+FROM rocm/pytorch:latest
+
+ENV DEBIAN_FRONTEND=noninteractive PYTHONUNBUFFERED=1
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Shared deps (whisperx for align/diarize/load_audio, pyannote, speechbrain, the transformers/hub pins) plus
+# the ROCm-only ASR backend (openai-whisper). requirements.txt does not list torch, so the base image's
+# ROCm torch/torchaudio are left in place. ctranslate2 is pulled in transitively by whisperx but is never
+# used for inference here (ASR_BACKEND=whisper); it imports fine on a non-CUDA host (CUDA libs load lazily).
+COPY requirements.txt requirements-rocm.txt ./
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip3 install -r requirements.txt -r requirements-rocm.txt
+
+COPY . ./
+
+# On AMD, default to the PyTorch Whisper backend. PyTorch-ROCm exposes the AMD GPU as device "cuda".
+ENV ASR_BACKEND=whisper DEVICE=cuda
+
+CMD ["python3", "worker.py"]

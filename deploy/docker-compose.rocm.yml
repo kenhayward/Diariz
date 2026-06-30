@@ -1,0 +1,155 @@
+# Diariz — full stack, AMD ROCm variant of the transcription worker.
+# Run from this directory:  docker compose -f docker-compose.rocm.yml up --build
+# Secrets/config come from ./.env (copy from .env.example).
+#
+# Identical to docker-compose.yml except the `worker` service: it builds Dockerfile.rocm and is given
+# AMD GPU access (/dev/kfd + /dev/dri) instead of the NVIDIA Container Toolkit reservation. The ASR step
+# runs on openai-whisper (PyTorch) because faster-whisper/CTranslate2 has no AMD GPU support; everything
+# else (API, web, infra, the worker's align/diarize/voiceprints) is unchanged. Pick this OR the NVIDIA
+# compose file — both use the `diariz` project name, so only one runs at a time.
+
+name: diariz
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: diariz
+      POSTGRES_USER: diariz
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-diariz}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U diariz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9002:9000"   # S3 API   (host 9002 -> container 9000)
+      - "9003:9001"   # console   (host 9003 -> container 9001)
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: src/Diariz.Api/Dockerfile
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      minio: { condition: service_started }
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=diariz;Username=diariz;Password=${POSTGRES_PASSWORD:-diariz}"
+      Jwt__Key: ${JWT_KEY}
+      Storage__Endpoint: "http://minio:9000"
+      Storage__AccessKey: ${MINIO_ROOT_USER:-minioadmin}
+      Storage__SecretKey: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      JobQueue__RedisConnection: "redis:6379"
+      Worker__CallbackSecret: ${CALLBACK_SECRET}
+      Summarization__ApiBase: ${SUMMARY_API_BASE:-}
+      Summarization__ApiKey: ${SUMMARY_API_KEY:-}
+      Summarization__Model: ${SUMMARY_MODEL:-gpt-4o-mini}
+      Identification__Enabled: ${IDENTIFICATION_ENABLED:-true}
+      Identification__Threshold: ${IDENTIFICATION_THRESHOLD:-0.4}
+      Chat__ContextLength: ${CHAT_CONTEXT_LENGTH:-131072}
+      Chat__ToolsEnabled: ${CHAT_TOOLS_ENABLED:-false}
+      Chat__DisabledTools: ${CHAT_DISABLED_TOOLS:-}
+      Uploads__MaxBytes: ${UPLOAD_MAX_BYTES:-524288000}
+      Uploads__AllowAac: ${UPLOAD_ALLOW_AAC:-true}
+      DataProtection__KeysPath: /keys
+      Seed__Email: ${SEED_EMAIL}
+      Seed__Password: ${SEED_PASSWORD}
+      Seed__FullName: ${SEED_FULL_NAME:-Platform Administrator}
+      App__PublicUrl: ${APP_PUBLIC_URL:-http://localhost:8081}
+      Email__SmtpHost: ${SMTP_HOST:-}
+      Email__SmtpPort: ${SMTP_PORT:-587}
+      Email__User: ${SMTP_USER:-}
+      Email__Password: ${SMTP_PASSWORD:-}
+      Email__From: ${SMTP_FROM:-}
+      Email__UseStartTls: ${SMTP_USE_STARTTLS:-true}
+      Cors__Origins__0: "http://localhost:5173"
+      Cors__Origins__1: "http://localhost:8081"
+    volumes:
+      - apikeys:/keys
+    ports:
+      - "8080:8080"
+
+  web:
+    build:
+      context: ../apps/web
+      args:
+        BUILD_COMMIT: ${BUILD_COMMIT:-}
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "8081:80"   # open the app at http://localhost:8081
+
+  worker:
+    build:
+      context: ../src/Diariz.Worker
+      dockerfile: Dockerfile.rocm
+    depends_on:
+      redis: { condition: service_healthy }
+      minio: { condition: service_started }
+      api: { condition: service_started }
+    environment:
+      REDIS_URL: "redis://redis:6379/0"
+      S3_ENDPOINT: "http://minio:9000"
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET: "recordings"
+      API_BASE_URL: "http://api:8080"
+      CALLBACK_SECRET: ${CALLBACK_SECRET}
+      HF_TOKEN: ${HF_TOKEN}
+      # PyTorch-ROCm exposes the AMD GPU as device "cuda". ASR runs on openai-whisper (CTranslate2 has no
+      # AMD GPU support); COMPUTE_TYPE is unused by that backend but kept for parity with the CUDA stack.
+      DEVICE: ${WORKER_DEVICE:-cuda}
+      ASR_BACKEND: ${WORKER_ASR_BACKEND:-whisper}
+      COMPUTE_TYPE: ${WORKER_COMPUTE_TYPE:-float16}
+      WHISPER_MODEL: ${WHISPER_MODEL:-large-v3}
+      MAX_AUDIO_SECONDS: ${MAX_AUDIO_SECONDS:-14400}
+      ENABLE_SPEAKER_EMBEDDINGS: ${ENABLE_SPEAKER_EMBEDDINGS:-1}
+      # Strix Halo (gfx1151) and some consumer cards aren't in every ROCm build's kernel set. If model load
+      # fails with "invalid device function" / no kernel image, set HSA_OVERRIDE_GFX_VERSION to borrow a
+      # nearby arch's kernels (e.g. 11.0.0 = gfx1100). Leave blank when the build supports your GPU natively.
+      HSA_OVERRIDE_GFX_VERSION: ${HSA_OVERRIDE_GFX_VERSION:-}
+    volumes:
+      - workercache:/root/.cache
+    # AMD ROCm GPU access (replaces the NVIDIA Container Toolkit reservation). The host must have ROCm
+    # installed and the invoking user in the `video`/`render` groups.
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    group_add:
+      - video
+    security_opt:
+      - seccomp:unconfined
+    ipc: host
+
+volumes:
+  pgdata:
+  miniodata:
+  workercache:
+  apikeys:

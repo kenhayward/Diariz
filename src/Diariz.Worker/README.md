@@ -92,6 +92,49 @@ not recommended.
 Set `DEVICE=cpu COMPUTE_TYPE=int8`. It works but is dramatically slower (think minutes of compute per
 minute of audio) — intended for development/CI, not production.
 
+## AMD ROCm (experimental)
+
+There's a parallel **AMD ROCm** worker (`Dockerfile.rocm` + `deploy/docker-compose.rocm.yml`). The pipeline
+is identical except the **Whisper ASR step**: faster-whisper / **CTranslate2 has no AMD GPU support**, so on
+ROCm the ASR runs on **openai-whisper** (pure PyTorch) selected via `ASR_BACKEND=whisper`. Alignment
+(wav2vec2), diarization (pyannote) and voiceprints (SpeechBrain ECAPA) are all PyTorch and run on ROCm
+unchanged — PyTorch-ROCm exposes the AMD GPU as device **`"cuda"`**, so `DEVICE` stays `cuda`.
+
+**Tradeoff:** openai-whisper has no CTranslate2 acceleration, so ASR is slower than the NVIDIA path
+(the word-aligner re-times every segment afterwards, so accuracy is unchanged). The LLM/summarisation
+endpoint is unaffected — it's a separate, implementer-chosen HTTP service.
+
+Run it:
+
+```bash
+cd deploy
+cp .env.example .env   # set HF_TOKEN etc.; WORKER_ASR_BACKEND defaults to "whisper" in the ROCm file
+docker compose -f docker-compose.rocm.yml up --build
+```
+
+The compose file grants AMD GPU access with `devices: /dev/kfd, /dev/dri`, `group_add: video`,
+`security_opt: seccomp:unconfined` (no NVIDIA Container Toolkit). The host needs ROCm installed and the
+user in the `video`/`render` groups.
+
+### Strix Halo (gfx1151) — the initial target
+
+`Dockerfile.rocm` bases on `rocm/pytorch` (torch/torchaudio come from the image, matched to the ROCm
+runtime — don't reinstall them). Strix Halo (Ryzen AI Max APU / Radeon 8060S, **gfx1151**) support is
+recent, so:
+
+- **Pin a `rocm/pytorch` tag** whose ROCm (**≥ 6.4.1**) and bundled torch include gfx1151 kernels. The
+  Dockerfile uses `:latest` for convenience — pin an explicit tag once you've confirmed one works on your
+  card (reproducibility).
+- If model load fails with *"no kernel image" / "invalid device function"*, set
+  **`HSA_OVERRIDE_GFX_VERSION`** (e.g. `11.0.0` to borrow gfx1100 kernels). It's plumbed through the compose
+  env.
+- Strix Halo is an **APU with unified memory** — its "VRAM" is carved from system RAM. Allocate enough
+  GTT/VRAM in BIOS for the ~9 GB working set (large-v3 + align + pyannote).
+
+> **Status: build- and unit-validated, not yet run on AMD hardware.** The ASR-backend switch is unit-tested
+> and the CUDA path is unchanged, but end-to-end ROCm *inference* still needs confirming on a real AMD
+> (Strix Halo) GPU. A PR reporting results + a known-good `rocm/pytorch` tag is very welcome.
+
 ## Local run (outside Docker)
 
 ```bash

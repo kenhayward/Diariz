@@ -63,6 +63,26 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.44.0",
+    date: "2026-06-30",
+    pr: 91,
+    headline: "Experimental AMD ROCm GPU support for the transcription worker",
+    summary:
+      "The transcription worker can now run on **AMD ROCm GPUs** as an alternative to NVIDIA. The Whisper " +
+      "speech-to-text step is now pluggable (`ASR_BACKEND`): NVIDIA keeps faster-whisper/CTranslate2, while " +
+      "AMD uses **openai-whisper** (pure PyTorch) because CTranslate2 has no AMD GPU support. Alignment, " +
+      "speaker diarization and voiceprints already run on ROCm unchanged. Ships a separate ROCm image " +
+      "(`Dockerfile.rocm`) and a standalone stack (`deploy/docker-compose.rocm.yml`), initially targeting " +
+      "AMD Strix Halo (gfx1151). No app/UI change — only the worker differs; the LLM endpoint is unaffected. " +
+      "**Note:** the ROCm path is unit-validated and the NVIDIA path is unchanged, but end-to-end AMD GPU " +
+      "inference still needs confirming on real AMD hardware.",
+    added: [
+      "Pluggable Whisper ASR backend (ASR_BACKEND=whisperx | whisper) so the worker can transcribe on AMD via openai-whisper.",
+      "AMD ROCm worker image (Dockerfile.rocm) and a standalone docker-compose.rocm.yml (GPU via /dev/kfd + /dev/dri).",
+      "Docs for the ROCm path, the faster-whisper-vs-PyTorch tradeoff, and Strix Halo (gfx1151) setup notes.",
+    ],
+  },
+  {
     version: "0.43.1",
     date: "2026-06-30",
     pr: 90,

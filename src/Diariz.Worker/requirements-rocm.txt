@@ -1,0 +1,6 @@
+# Extra deps for the AMD ROCm worker image (Dockerfile.rocm), on top of requirements.txt.
+#
+# faster-whisper (CTranslate2) has no AMD GPU support, so the ROCm worker transcribes with openai-whisper
+# (pure PyTorch) instead — selected via ASR_BACKEND=whisper. The word-aligner re-times every segment
+# afterwards, so segment-level ASR is sufficient. torch/torchaudio come from the rocm/pytorch base image.
+openai-whisper==20231117

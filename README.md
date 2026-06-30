@@ -92,6 +92,9 @@ For diarization you need a Hugging Face token with the `pyannote/speaker-diariza
 terms accepted — see [src/Diariz.Worker/README.md](src/Diariz.Worker/README.md). For **GPU/VRAM
 requirements, tuning for smaller cards, and known-working GPUs**, see the worker's
 [GPU and hardware requirements](src/Diariz.Worker/README.md#gpu-and-hardware-requirements).
+On **AMD ROCm** (experimental) run `docker compose -f docker-compose.rocm.yml up --build` instead — the
+worker transcribes with openai-whisper since CTranslate2 has no AMD GPU support; see the worker README's
+[AMD ROCm](src/Diariz.Worker/README.md#amd-rocm-experimental) section.
 
 ```bash
 # 1. Whole stack — web UI, API, Postgres, Redis, MinIO, GPU worker.

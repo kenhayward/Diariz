@@ -117,3 +117,79 @@ def test_diarize_passes_no_hints_when_none(monkeypatch):
     pipeline._diarize("AUDIO")
 
     assert calls["kw"] == {}
+
+
+# ---- _asr backend dispatch (CUDA faster-whisper vs ROCm openai-whisper) ----
+
+def test_config_asr_backend_defaults_to_whisperx():
+    import importlib
+    import config as config_module
+    importlib.reload(config_module)
+    assert config_module.config.ASR_BACKEND == "whisperx"
+
+
+def test_normalize_segments_keeps_only_start_end_text():
+    raw = [{"start": 1.0, "end": 2.0, "text": "hi", "tokens": [1, 2], "id": 0}]
+    assert pipeline._normalize_segments(raw) == [{"start": 1.0, "end": 2.0, "text": "hi"}]
+
+
+def test_asr_whisperx_backend_uses_faster_whisper(monkeypatch):
+    monkeypatch.setattr(pipeline.config, "ASR_BACKEND", "whisperx")
+    monkeypatch.setattr(pipeline.config, "BATCH_SIZE", 8)
+    captured = {}
+
+    class FakeModel:
+        def transcribe(self, audio, **kwargs):
+            captured["audio"] = audio
+            captured["kwargs"] = kwargs
+            return {"language": "fr", "segments": [{"start": 0.0, "end": 1.0, "text": "bonjour"}]}
+
+    monkeypatch.setattr(pipeline, "_get_whisper", lambda: FakeModel())
+
+    out = pipeline._asr("AUDIO")
+
+    assert captured["kwargs"] == {"batch_size": 8}          # whisperx is batched
+    assert out["language"] == "fr"
+    assert out["segments"] == [{"start": 0.0, "end": 1.0, "text": "bonjour"}]
+
+
+def test_asr_openai_whisper_backend_normalizes_and_sets_fp16(monkeypatch):
+    monkeypatch.setattr(pipeline.config, "ASR_BACKEND", "whisper")
+    monkeypatch.setattr(pipeline.config, "DEVICE", "cuda")  # ROCm also reports "cuda"
+    captured = {}
+
+    class FakeModel:
+        def transcribe(self, audio, **kwargs):
+            captured["audio"] = audio
+            captured["kwargs"] = kwargs
+            # openai-whisper shape: language + rich segments (extra keys must be dropped).
+            return {
+                "language": "en",
+                "text": "hello world",
+                "segments": [{"start": 0.0, "end": 1.2, "text": "hello world", "id": 0, "tokens": [1]}],
+            }
+
+    monkeypatch.setattr(pipeline, "_get_whisper_py", lambda: FakeModel())
+
+    out = pipeline._asr("AUDIO")
+
+    assert captured["kwargs"] == {"fp16": True}             # fp16 on GPU (DEVICE != cpu)
+    assert out["language"] == "en"
+    assert out["segments"] == [{"start": 0.0, "end": 1.2, "text": "hello world"}]
+
+
+def test_asr_openai_whisper_uses_fp32_on_cpu(monkeypatch):
+    monkeypatch.setattr(pipeline.config, "ASR_BACKEND", "whisper")
+    monkeypatch.setattr(pipeline.config, "DEVICE", "cpu")
+    captured = {}
+
+    class FakeModel:
+        def transcribe(self, audio, **kwargs):
+            captured["kwargs"] = kwargs
+            return {"language": "en", "segments": []}
+
+    monkeypatch.setattr(pipeline, "_get_whisper_py", lambda: FakeModel())
+
+    pipeline._asr("AUDIO")
+
+    assert captured["kwargs"] == {"fp16": False}            # fp16 unsupported on CPU
