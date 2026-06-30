@@ -15,7 +15,7 @@ import AttachmentsModal from "../components/AttachmentsModal";
 import AttachmentsSplitButton from "../components/AttachmentsSplitButton";
 import { recordingMenu } from "../components/recordingMenu";
 import { copyRichLink, transcriptUrl } from "../lib/clipboard";
-import { segmentIndexAtMs } from "../lib/transcriptNav";
+import { segmentIndexAtMs, parseMatchTimes } from "../lib/transcriptNav";
 import { formatBytes, formatDate, formatDuration } from "../lib/format";
 import { hasRevisions, segmentText, toggleLabel } from "../lib/transcriptView";
 import { fetchLanguages } from "../lib/languages";
@@ -32,7 +32,7 @@ export default function RecordingDetail() {
   const { id = "" } = useParams();
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: rec } = useQuery({
     queryKey: ["recording", id],
     queryFn: () => api.getRecording(id),
@@ -71,6 +71,22 @@ export default function RecordingDetail() {
       document.getElementById(`seg-${segId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }),
     );
   }, [tParam, rec]);
+
+  // Prev/next across the moments a chat answer cited for this recording (?ts=…).
+  const matchTimes = parseMatchTimes(searchParams.get("ts"));
+  const activeMatch = tParam != null ? Number(tParam) : null;
+  const matchIdx = activeMatch != null ? matchTimes.indexOf(activeMatch) : -1;
+  function goToMatch(idx: number) {
+    const ms = matchTimes[idx];
+    if (ms == null) return;
+    setSearchParams(
+      (prev) => {
+        prev.set("t", String(ms));
+        return prev;
+      },
+      { replace: true },
+    );
+  }
   const [requeuing, setRequeuing] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -594,6 +610,31 @@ export default function RecordingDetail() {
               <audio ref={audioRef} controls onTimeUpdate={onTimeUpdate} className="h-8 min-w-48 flex-1" />
             )}
           </div>
+          {matchTimes.length > 1 && (
+            <div className="sticky top-0 z-10 mb-2 flex items-center gap-2 rounded-md border bg-blue-50 px-3 py-1.5 text-xs text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
+              <span className="font-medium">
+                {t("workspace:matchNav", { k: Math.max(1, matchIdx + 1), n: matchTimes.length })}
+              </span>
+              <div className="ml-auto flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => goToMatch(matchIdx <= 0 ? matchTimes.length - 1 : matchIdx - 1)}
+                  aria-label={t("workspace:prevMatch")}
+                  className="rounded border px-2 py-0.5 hover:bg-blue-100 dark:border-blue-800 dark:hover:bg-blue-900"
+                >
+                  ◀
+                </button>
+                <button
+                  type="button"
+                  onClick={() => goToMatch(matchIdx < 0 || matchIdx >= matchTimes.length - 1 ? 0 : matchIdx + 1)}
+                  aria-label={t("workspace:nextMatch")}
+                  className="rounded border px-2 py-0.5 hover:bg-blue-100 dark:border-blue-800 dark:hover:bg-blue-900"
+                >
+                  ▶
+                </button>
+              </div>
+            </div>
+          )}
           <ul className="space-y-2">
             {rec.current.segments.map((s, i) => (
               <SegmentRow

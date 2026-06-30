@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Diariz.Api.Tools;
 
 namespace Diariz.Api.Services;
@@ -15,6 +16,10 @@ public sealed record ChatToolStartEvent(string Name) : ChatEvent;
 
 /// <summary>A tool call has finished executing.</summary>
 public sealed record ChatToolEndEvent(string Name) : ChatEvent;
+
+/// <summary>A recording a tool referenced — surfaced so the client can linkify plain mentions of that
+/// recording in the assistant's answer even when the model didn't keep the markdown link.</summary>
+public sealed record ChatRefEvent(string Name, string Href) : ChatEvent;
 
 public interface IChatToolOrchestrator
 {
@@ -44,6 +49,7 @@ public sealed class ChatToolOrchestrator : IChatToolOrchestrator
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var messages = seed.Select(m => (object)new { role = m.Role, content = m.Content }).ToList();
+        var seenRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var toolSpecs = tools.Select(t => (object)new
         {
             type = "function",
@@ -83,9 +89,31 @@ public sealed class ChatToolOrchestrator : IChatToolOrchestrator
                 yield return new ChatToolStartEvent(call.Name);
                 var result = await ExecuteAsync(tools, call, ctx, ct);
                 messages.Add(new { role = "tool", tool_call_id = call.Id, content = result });
+                // Surface the recordings this result referenced (once each) so the client can linkify them.
+                foreach (var (name, href) in ExtractRecordingRefs(result))
+                    if (seenRefs.Add(name))
+                        yield return new ChatRefEvent(name, href);
                 yield return new ChatToolEndEvent(call.Name);
             }
         }
+    }
+
+    private static readonly Regex RecordingLinkRegex =
+        new(@"\[([^\]]+)\]\((/recordings/[^)\s]+)\)", RegexOptions.Compiled);
+
+    /// <summary>Pulls (recordingName, recordingHref) pairs out of a tool result's markdown links. The name has
+    /// any trailing " @ mm:ss" stripped and the href is reduced to the whole-recording path.</summary>
+    public static IReadOnlyList<(string Name, string Href)> ExtractRecordingRefs(string toolResult)
+    {
+        var refs = new List<(string, string)>();
+        if (string.IsNullOrEmpty(toolResult)) return refs;
+        foreach (Match m in RecordingLinkRegex.Matches(toolResult))
+        {
+            var name = Regex.Replace(m.Groups[1].Value, @"\s+@\s+[\d:]+$", "").Trim();
+            var href = m.Groups[2].Value.Split('?')[0];
+            if (name.Length > 0) refs.Add((name, href));
+        }
+        return refs;
     }
 
     /// <summary>Finds and runs the named tool, returning its text result. Unknown tools and bad argument JSON

@@ -439,6 +439,7 @@ export const api = {
       onMeta?: (u: ChatUsage) => void;
       onToolStart?: (name: string) => void;
       onToolEnd?: (name: string) => void;
+      onRef?: (name: string, href: string) => void;
       signal?: AbortSignal;
     },
   ): Promise<ChatUsage> {
@@ -481,6 +482,7 @@ export const api = {
           type: string;
           value?: string;
           name?: string;
+          href?: string;
           model?: string;
           message?: string;
           contextUsed?: number;
@@ -492,6 +494,8 @@ export const api = {
           handlers.onToolStart?.(evt.name);
         } else if (evt.type === "tool_end" && evt.name) {
           handlers.onToolEnd?.(evt.name);
+        } else if (evt.type === "ref" && evt.name && evt.href) {
+          handlers.onRef?.(evt.name, evt.href);
         } else if (evt.type === "meta") {
           usage = { model: evt.model ?? "", contextUsed: evt.contextUsed ?? 0, contextTotal: evt.contextTotal ?? 0 };
           handlers.onMeta?.(usage);

@@ -168,8 +168,12 @@ only `hasApiKey`).
   `who_attended`, `speaker_talk_time`, `get_segment_context`) read existing relational data directly. Each tool
   result embeds an in-app **markdown deep-link** (`/recordings/{id}?t={ms}`); the model cites it, and the web
   intercepts the click to open the transcript and **scroll/highlight the segment** at that moment
-  (`lib/transcriptNav.ts`). With tools off, chat is the same single-pass stream as before. Tools run inside the
-  API (no worker) — server-redeploy only.
+  (`lib/transcriptNav.ts`). The orchestrator also emits `ref` events (the recordings a tool referenced) so the
+  web can **linkify plain mentions** the model didn't link (`lib/linkify.ts`); when an answer cites several
+  moments in one recording the transcript shows a **Match k/n prev/next** control (a `?ts=` list). The chat
+  **system prompt** grounds questions in the user's own meetings and (with tools) tells the model to search the
+  transcripts before saying it doesn't know. With tools off, chat is the same single-pass stream as before.
+  Tools run inside the API (no worker) — server-redeploy only.
 
 ## Auth, multi-tenancy, and roles
 

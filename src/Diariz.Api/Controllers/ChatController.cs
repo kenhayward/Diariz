@@ -32,9 +32,12 @@ public class ChatController : ControllerBase
     /// <summary>Appended to the system prompt when tools are active: steers the model to use the built-in
     /// tools to look beyond the supplied context and to report findings in the standard format.</summary>
     private const string ToolSystemInstruction =
-        "You have tools that search the user's full transcript library, which may contain more than the " +
-        "context above. Use a tool whenever a question is about who said something, what a person said about " +
-        "a topic, which recordings exist or mention a topic, action items, summaries, attendees, or talk time. " +
+        "You have tools that search the user's full transcript library, which usually contains far more than " +
+        "the context above. Default to using them: whenever the user asks about a person, company, customer, " +
+        "project, or topic — including open-ended questions like \"what do we know about X\" — call " +
+        "search_transcripts (or a more specific tool) to look across their transcripts BEFORE answering. " +
+        "Never reply that you don't know about something until you have searched and found nothing. Also use a " +
+        "tool for questions about who said something, action items, summaries, attendees, or talk time. " +
         "When you report transcript findings, use the format: When (date/time) · Who (speaker) · What (what was " +
         "said). Each tool result includes a markdown 'Link:' to the recording (and the exact moment); when you " +
         "reference a recording or a specific moment, include that markdown link inline so the user can open the " +
@@ -121,6 +124,9 @@ public class ChatController : ControllerBase
                         break;
                     case ChatToolEndEvent e:
                         await WriteEventAsync(new { type = "tool_end", name = e.Name }, ct);
+                        break;
+                    case ChatRefEvent r:
+                        await WriteEventAsync(new { type = "ref", name = r.Name, href = r.Href }, ct);
                         break;
                 }
             }

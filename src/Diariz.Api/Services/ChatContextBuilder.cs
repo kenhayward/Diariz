@@ -39,9 +39,12 @@ public static class ChatContextBuilder
             body = body[..charBudget] + "\n[context truncated]";
 
         var sb = new StringBuilder();
-        sb.Append("You are a helpful assistant answering questions about the meeting transcript(s) below. ");
-        sb.Append("Base your answers on the provided context; if the answer is not in the context, say so. ");
-        sb.Append("Be concise.\n\n");
+        sb.Append("You are Diariz's assistant. You help the user understand and recall their own meeting ");
+        sb.Append("recordings and transcripts. Treat the user's questions as being about their recordings ");
+        sb.Append("unless they clearly ask for general knowledge: a bare name, company, project, customer, or ");
+        sb.Append("topic refers to what was said in their meetings, even if they don't say \"in the transcripts\". ");
+        sb.Append("Base your answers on the transcript context below (and any tools available to you). When ");
+        sb.Append("something genuinely isn't there, say so briefly. Be concise.\n\n");
         sb.Append(body.Length > 0 ? "Context:\n" + body
             : "No transcript context was provided for this conversation.");
         return sb.ToString();

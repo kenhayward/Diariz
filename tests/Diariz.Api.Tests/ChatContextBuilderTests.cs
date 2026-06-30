@@ -69,13 +69,22 @@ public class ChatContextBuilderTests
     }
 
     [Fact]
+    public void BuildSystemPrompt_GroundsQuestionsInTheUsersMeetings()
+    {
+        var prompt = ChatContextBuilder.BuildSystemPrompt([Standup], null, null);
+        // A bare name/topic should be treated as about their recordings (the user's reported pain point).
+        Assert.Contains("their recordings", prompt);
+        Assert.Contains("general knowledge", prompt);
+    }
+
+    [Fact]
     public void BuildSystemPrompt_TruncatesToCharBudget()
     {
         var big = new TranscriptContext("Big", new string('x', 5000));
         var prompt = ChatContextBuilder.BuildSystemPrompt([big], null, null, charBudget: 500);
 
         // Context body bounded to the budget; total = preamble + budget + a short marker, well under the 5000-char input.
-        Assert.True(prompt.Length < 1000);
+        Assert.True(prompt.Length < 1500);
         Assert.Contains("truncated", prompt);
     }
 

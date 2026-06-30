@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import { parseRecordingLink, recordingLinkPath } from "../lib/transcriptNav";
+import { linkifyRecordings } from "../lib/linkify";
 import { renderMarkdown } from "../lib/markdown";
 import { useActiveRecordingId } from "../lib/useActiveRecordingId";
 import { useSelection } from "../lib/selection";
@@ -36,7 +37,14 @@ export default function ChatPanel() {
     const link = parseRecordingLink(href);
     if (!link) return; // external / non-transcript link — leave default behaviour
     e.preventDefault();
-    navigate(recordingLinkPath(link));
+    // Gather every moment this answer cited for the same recording, so the transcript can offer prev/next.
+    const container = anchor!.closest(".chat-md") ?? threadRef.current;
+    const times = new Set<number>();
+    container?.querySelectorAll("a").forEach((a) => {
+      const l = parseRecordingLink(a.getAttribute("href") ?? "");
+      if (l && l.id === link.id && l.t != null) times.add(l.t);
+    });
+    navigate(recordingLinkPath(link, [...times].sort((a, b) => a - b)));
   }
   // The model's context-window size for the dial (per-user override, else server default).
   const { data: settings } = useQuery({ queryKey: ["user-settings"], queryFn: api.getUserSettings });
@@ -63,6 +71,8 @@ export default function ChatPanel() {
   const [saving, setSaving] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
+  // Recordings the tools referenced this turn (name → href), used to linkify plain mentions on completion.
+  const refsRef = useRef<Map<string, string>>(new Map());
   const threadRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const savedRef = useRef<HTMLDivElement>(null);
@@ -134,6 +144,20 @@ export default function ChatPanel() {
     });
   }
 
+  /// After the turn completes, link any plain mention of a tool-referenced recording that the model didn't
+  /// link itself, so the answer always has clickable transcript references.
+  function linkifyLastAssistant() {
+    const refs = Array.from(refsRef.current, ([name, href]) => ({ name, href }));
+    if (refs.length === 0) return;
+    setMessages((prev) => {
+      const next = prev.slice();
+      const last = next[next.length - 1];
+      if (last?.role === "assistant" && last.content)
+        next[next.length - 1] = { ...last, content: linkifyRecordings(last.content, refs) };
+      return next;
+    });
+  }
+
   function send() {
     const prompt = input.trim();
     if (!prompt || streaming) return;
@@ -148,6 +172,7 @@ export default function ChatPanel() {
 
     const controller = new AbortController();
     abortRef.current = controller;
+    refsRef.current = new Map();
     api
       .chatStream(
         {
@@ -165,11 +190,14 @@ export default function ChatPanel() {
           onMeta: setUsage,
           onToolStart: (name) => setToolLine((s) => toolStarted(s, name)),
           onToolEnd: (name) => setToolLine((s) => toolEnded(s, name)),
+          onRef: (name, href) => refsRef.current.set(name, href),
           signal: controller.signal,
         },
       )
       .then((u) => {
-        if (!controller.signal.aborted) setUsage(u);
+        if (controller.signal.aborted) return;
+        setUsage(u);
+        linkifyLastAssistant();
       })
       .catch((e: unknown) => {
         if (controller.signal.aborted) return;
