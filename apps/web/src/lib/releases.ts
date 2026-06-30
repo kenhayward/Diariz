@@ -42,7 +42,8 @@ Diariz is **multi-user** with role-based access: people request access (or an ad
 an administrator approves, and each user sets up their own account and keeps their own private
 recordings, transcripts, and chats. Each user has a **storage quota** (audio): the Platform
 Administrator sets the starter and maximum, any administrator can raise an individual user, and your
-usage shows in the account menu.
+usage shows in the account menu. The Platform Administrator can also **back up and restore the whole
+platform** (database + stored files) as a single transferable archive from Settings → Maintenance.
 
 The interface is **localized** — pick your language (English, Spanish, French, German today) at signup or
 in Preferences, and downloaded/emailed transcripts use it too. Translations are community-extensible via
@@ -62,6 +63,27 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.45.0",
+    date: "2026-06-30",
+    pr: 92,
+    headline: "Platform backup & restore (Maintenance tab)",
+    summary:
+      "A new **Maintenance** tab in Settings (Platform Administrator only) backs up and restores the **whole " +
+      "platform**. **Back up** downloads one archive containing a full Postgres dump and every stored file " +
+      "(audio + attachments) — keep it safe or move it to another machine. **Restore** uploads such an archive " +
+      "and replaces everything with it. Restore is **destructive** (it replaces ALL data, briefly takes the app " +
+      "offline, and signs you out) and only accepts a backup from the same app version. The backup contains all " +
+      "platform data (password hashes, every recording) so it's a sensitive file — and it deliberately omits the " +
+      "encryption keyring, so after restoring on a fresh instance users re-enter their LLM API keys.",
+    added: [
+      "Maintenance tab: download a full platform backup (Postgres + all object-store files) as one archive.",
+      "Restore the platform from a backup archive, with a strong confirmation and an automatic sign-out.",
+    ],
+    changed: [
+      "The API image now includes the PostgreSQL client tools (pg_dump/pg_restore) used by backup/restore.",
+    ],
+  },
   {
     version: "0.44.0",
     date: "2026-06-30",

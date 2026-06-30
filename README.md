@@ -65,6 +65,9 @@ transcript translation.
 - **Storage quotas**: each user gets an audio-storage quota (starter + maximum set by the Platform
 Administrator; any admin can raise a user up to the maximum). Usage shows in the account menu and
 per-recording; over-quota uploads are rejected.
+- **Backup & restore** (Platform Administrator, Settings → Maintenance): download the whole platform —
+the Postgres database (`pg_dump`) plus every stored file — as one transferable archive, and restore from
+one. Restore is destructive (replaces all data) and only accepts a backup from the same app version.
 
 ## Architecture
 

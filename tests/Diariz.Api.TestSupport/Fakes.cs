@@ -321,6 +321,45 @@ public sealed class FakeAudioStorage : IAudioStorage
         Objects.Remove(key);
         return Task.CompletedTask;
     }
+
+    public async IAsyncEnumerable<string> ListKeysAsync(
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        foreach (var key in Objects.Keys.ToList())
+            yield return key;
+        await Task.CompletedTask;
+    }
+}
+
+/// <summary>In-memory stand-in for the Postgres dump/restore. Records calls and round-trips bytes so the
+/// MaintenanceController's archive/restore orchestration can be tested without pg_dump/pg_restore.</summary>
+public sealed class FakeDatabaseBackup : IDatabaseBackup
+{
+    public byte[] DumpBytes { get; set; } = System.Text.Encoding.UTF8.GetBytes("FAKE-PG-DUMP");
+    public byte[]? RestoredDump { get; private set; }
+    public bool DumpCalled { get; private set; }
+    public bool RestoreCalled { get; private set; }
+
+    public async Task DumpToAsync(Stream destination, CancellationToken ct = default)
+    {
+        DumpCalled = true;
+        await destination.WriteAsync(DumpBytes, ct);
+    }
+
+    public async Task RestoreFromAsync(Stream dump, CancellationToken ct = default)
+    {
+        RestoreCalled = true;
+        using var ms = new MemoryStream();
+        await dump.CopyToAsync(ms, ct);
+        RestoredDump = ms.ToArray();
+    }
+}
+
+/// <summary>Fixed schema version for tests (no EF migrations on the in-memory provider).</summary>
+public sealed class FakeSchemaVersion(string current = "20260615111923_InitialCreate") : ISchemaVersion
+{
+    public string Current { get; set; } = current;
+    public Task<string> CurrentAsync(CancellationToken ct = default) => Task.FromResult(Current);
 }
 
 /// <summary>Stub URL fetcher: returns canned text per URL (or null for "blocked/unreachable").</summary>

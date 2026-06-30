@@ -234,6 +234,24 @@ export const api = {
     return `${baseURL}/api/recordings/${id}/attachments/${attachmentId}/content?access_token=${token}`;
   },
 
+  /// Self-authenticating URL for the whole-platform backup (Platform Admin only). The browser streams the
+  /// `.zip` straight to disk via an anchor href, so nothing is buffered in JS memory.
+  backupUrl(): string {
+    const token = encodeURIComponent(getToken() ?? "");
+    return `${baseURL}/api/maintenance/backup?access_token=${token}`;
+  },
+
+  /// Upload a backup archive to restore the whole platform (destructive). Streams the file as the raw
+  /// request body; `onProgress` receives 0–100.
+  async restoreBackup(file: File, onProgress?: (percent: number) => void): Promise<void> {
+    await http.post("/api/maintenance/restore", file, {
+      headers: { "Content-Type": "application/zip" },
+      onUploadProgress: (e) => {
+        if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100));
+      },
+    });
+  },
+
   /// Translate the whole transcript (segments + summary + actions) into `language` (BCP-47), or the
   /// caller's native language when omitted. Translations land in each segment's revision.
   async translateRecording(id: string, language?: string): Promise<void> {

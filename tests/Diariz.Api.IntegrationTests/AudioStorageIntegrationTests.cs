@@ -86,4 +86,26 @@ public class AudioStorageIntegrationTests(ContainersFixture fx)
         await storage.EnsureBucketAsync();
         Assert.Null(await storage.OpenAsync($"{Guid.NewGuid()}/missing.webm"));
     }
+
+    [Fact]
+    public async Task ListKeysAsync_EnumeratesEveryObject()
+    {
+        var storage = CreateStorage(out _);
+        await storage.EnsureBucketAsync();
+
+        var keys = new[]
+        {
+            $"{Guid.NewGuid()}/audio.webm",
+            $"{Guid.NewGuid()}/attachments/doc.pdf",
+            $"{Guid.NewGuid()}/clip.wav",
+        };
+        foreach (var k in keys)
+            using (var input = new MemoryStream(Encoding.UTF8.GetBytes("x")))
+                await storage.UploadAsync(k, input, "application/octet-stream");
+
+        var listed = new List<string>();
+        await foreach (var k in storage.ListKeysAsync()) listed.Add(k);
+
+        foreach (var k in keys) Assert.Contains(k, listed);
+    }
 }
