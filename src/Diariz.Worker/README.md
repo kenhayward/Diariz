@@ -116,6 +116,18 @@ The compose file grants AMD GPU access with `devices: /dev/kfd, /dev/dri`, `grou
 `security_opt: seccomp:unconfined` (no NVIDIA Container Toolkit). The host needs ROCm installed and the
 user in the `video`/`render` groups.
 
+> ⚠️ **Native Linux only — NOT WSL2 / Docker Desktop on Windows.** This image uses the native-Linux ROCm
+> path (`/dev/kfd` + `/dev/dri`). WSL2 doesn't expose `/dev/kfd` at all — it bridges GPU compute through a
+> different device (`/dev/dxg`) and a WSL-specific ROCm build, which our image doesn't use. Trying to run it
+> under Docker Desktop/WSL2 fails at startup with
+> `error gathering device information while adding custom device "/dev/kfd": no such file or directory`.
+> AMD's "ROCm on WSL" also only supports a short list of discrete Radeon cards — Strix Halo (gfx1151) isn't
+> among them — so WSL2 GPU acceleration for this APU isn't available today. Run the AMD worker on a **native
+> Linux** install (kernel ≥ 6.11, ROCm ≥ 6.4.1). If you must stay on Windows/WSL2, skip this image and run the
+> **standard** worker **CPU-only** instead: use `docker-compose.yml`, comment out the worker's
+> `deploy.resources` GPU block, and set `WORKER_DEVICE=cpu WORKER_COMPUTE_TYPE=int8` (functional everywhere,
+> just far slower — see [CPU-only](#cpu-only)).
+
 ### Strix Halo (gfx1151) — the initial target
 
 `Dockerfile.rocm` bases on `rocm/pytorch` (torch/torchaudio come from the image, matched to the ROCm
