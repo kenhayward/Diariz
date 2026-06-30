@@ -222,10 +222,14 @@ Voiceprints are **per-user** (a user's voiceprints only match their own recordin
   `AudioMergeJob` / `Segment` shapes in sync across both languages.
 - **Merge recordings.** `POST /api/recordings/merge` folds 2+ recordings into the earliest one: it builds a new
   transcription version on the survivor (`TranscriptMerger` lays the source transcripts end-to-end, offsetting
-  timestamps and namespacing speakers), sets it `Merging`, and enqueues an `AudioMergeJob`. The worker
-  concatenates the source audio with **ffmpeg** (libopus/WebM), uploads the combined blob, and calls back to
-  `internal/recordings/merge-result`, which swaps the audio onto the survivor and deletes the now-merged source
-  recordings (rows + blobs); `merge-failure` flags the survivor and keeps the sources.
+  timestamps and namespacing speakers) and **appends every source's action items** to the survivor. The summary
+  is **not** merged (re-generate it). Recordings may have had their **audio deleted** — those contribute only
+  transcript + actions. When **at least one** source still has audio, the survivor is set `Merging` and an
+  `AudioMergeJob` is enqueued with only the **audio-present** blobs; the worker concatenates them with **ffmpeg**
+  (libopus/WebM), uploads the combined blob, and calls back to `internal/recordings/merge-result`, which swaps
+  the audio onto the survivor and deletes the now-merged source recordings (rows + blobs). When **no** source has
+  audio, the merge **finishes synchronously** (no job) — the merged transcript/actions are already on the
+  survivor and the sources are deleted. `merge-failure` flags the survivor and keeps the sources.
 - **Worker → API callback** uses routes `internal/transcriptions/*` and `internal/recordings/merge-*`, both with
   the **`X-Worker-Secret`** shared header (not JWT). Not user-facing.
 - **SignalR** hub `/hubs/transcription` requires JWT; clients auto-join a per-user group (group name = user
