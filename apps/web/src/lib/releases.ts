@@ -64,6 +64,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.45.4",
+    date: "2026-06-30",
+    pr: 96,
+    headline: "Fix: AMD ROCm worker image failed to build (pkg_resources)",
+    summary:
+      "The experimental AMD ROCm worker image (`Dockerfile.rocm`) stopped building: openai-whisper's setup " +
+      "script imports `pkg_resources`, which the latest `setuptools` no longer ships, so its wheel build " +
+      "aborted with *“No module named 'pkg_resources'”* on the `rocm/pytorch` base. The build now constrains " +
+      "`setuptools` to a version that still provides `pkg_resources`, so the image builds again. AMD-only; the " +
+      "NVIDIA worker, API, and web are unaffected.",
+    fixed: [
+      "AMD ROCm worker image (docker-compose.rocm.yml) builds again — pin setuptools<81 for the openai-whisper wheel build.",
+    ],
+  },
+  {
     version: "0.45.3",
     date: "2026-06-30",
     pr: 95,
