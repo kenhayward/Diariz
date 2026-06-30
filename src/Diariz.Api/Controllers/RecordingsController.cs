@@ -485,6 +485,34 @@ public class RecordingsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Delete several segments from the current transcription at once (the Select-mode bulk delete),
+    /// renumbering the survivors once. Ids that aren't on this caller's recording are ignored.</summary>
+    [HttpPost("{id:guid}/segments/delete")]
+    public async Task<IActionResult> DeleteSegments(Guid id, DeleteSegmentsRequest req)
+    {
+        var current = await _db.Transcriptions.Where(t => t.RecordingId == id)
+            .OrderByDescending(t => t.Version).FirstOrDefaultAsync();
+        if (current is null) return NotFound();
+        if (!await _db.Recordings.AnyAsync(r => r.Id == id && r.UserId == UserId)) return NotFound();
+
+        var ids = (req.Ids ?? Array.Empty<Guid>()).ToHashSet();
+        var segments = await _db.Segments
+            .Where(s => s.TranscriptionId == current.Id)
+            .OrderBy(s => s.Ordinal)
+            .ToListAsync();
+
+        var toRemove = segments.Where(s => ids.Contains(s.Id)).ToList();
+        if (toRemove.Count > 0)
+        {
+            _db.Segments.RemoveRange(toRemove);
+            // Renumber the survivors contiguously from 0, once.
+            var ordinal = 0;
+            foreach (var s in segments.Where(s => !ids.Contains(s.Id))) s.Ordinal = ordinal++;
+            await _db.SaveChangesAsync();
+        }
+        return NoContent();
+    }
+
     [HttpPost("{id:guid}/summarize")]
     public async Task<IActionResult> Summarize(Guid id)
     {

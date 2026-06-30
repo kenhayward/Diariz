@@ -719,6 +719,42 @@ public class RecordingsControllerTests
         Assert.IsType<NotFoundResult>(result);
     }
 
+    [Fact]
+    public async Task DeleteSegments_RemovesTheSet_AndRenumbersSurvivorsOnce()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId); // "Hello"(0), "World"(1)
+        var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
+        db.Segments.Add(new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 2000, EndMs = 3000, Original = "Again", Ordinal = 2 });
+        await db.SaveChangesAsync();
+        var hello = await db.Segments.SingleAsync(s => s.Original == "Hello");
+        var again = await db.Segments.SingleAsync(s => s.Original == "Again");
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.DeleteSegments(rec.Id, new DeleteSegmentsRequest(new[] { hello.Id, again.Id }));
+
+        Assert.IsType<NoContentResult>(result);
+        var remaining = await db.Segments.Where(s => s.TranscriptionId == tr.Id).OrderBy(s => s.Ordinal).ToListAsync();
+        var seg = Assert.Single(remaining);
+        Assert.Equal("World", seg.Original);
+        Assert.Equal(0, seg.Ordinal); // renumbered contiguously
+    }
+
+    [Fact]
+    public async Task DeleteSegments_OnAnotherUsersRecording_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var rec = await SeedTranscribedRecording(db, Guid.NewGuid());
+        var seg = await db.Segments.FirstAsync();
+        var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue());
+
+        var result = await controller.DeleteSegments(rec.Id, new DeleteSegmentsRequest(new[] { seg.Id }));
+
+        Assert.IsType<NotFoundResult>(result);
+        Assert.NotNull(await db.Segments.FindAsync(seg.Id)); // untouched
+    }
+
     // ---- Multiple Speakers ----
 
     [Fact]

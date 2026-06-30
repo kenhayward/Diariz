@@ -112,6 +112,10 @@ services address each other by Compose service name (`minio:9000`, `redis:6379`,
    never overriding a manual name, and **skipping any speaker the user flagged `IsMultiSpeaker`**
    ("Multiple Speakers" — overlapping/simultaneous speech, which is also never enrolled into a voiceprint).
    Individual segments can be deleted from a transcript (the survivors renumber); re-transcribe regenerates them.
+   The web transcript panel adds a **Select mode** with bulk operations on the picked segments:
+   `POST .../segments/delete { ids }` (delete the set, renumber once) and `POST .../segments/translate
+   { ids, language? }` (translate just those, one batched LLM call); the panel itself pins to the top on scroll
+   and scrolls its segments internally.
 6. **Notify.** The API pushes **`RecordingStatusChanged`** over **SignalR** (`/hubs/transcription`) to the
    owner's per-user group; the browser refetches and the detail page shows the transcript.
 
@@ -150,7 +154,8 @@ only `hasApiKey`).
   endpoint) via `TranslationClient` → `TranslationPrompt`. It batches segment **Originals** by a char budget,
   writes each translation to the segment's **`Revised`** column (Original preserved), and translates the
   **Summary** + **Actions** text in place; speaker/actor names are kept. `POST .../segments/{segId}/translate`
-  does one segment. The English language name is resolved from `SupportedLanguages`.
+  does one segment, and `POST .../segments/translate { ids, language? }` does a selected set in one batched call.
+  The English language name is resolved from `SupportedLanguages`.
 - **Chat (streaming).** `POST /api/chat/stream` builds a system prompt from the selected transcripts
   (current / selected / none) **plus their action items** and an optional uploaded attachment
   (`ChatContextBuilder`), then streams tokens back via **Server-Sent Events** (`ChatStreamClient`).

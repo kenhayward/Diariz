@@ -67,6 +67,28 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.47.0",
+    date: "2026-06-30",
+    pr: 100,
+    headline: "Transcript panel: pin-on-scroll, an icon toolbar, and segment selection",
+    summary:
+      "The transcript panel is reworked. As you scroll down it now **pins to the top** and the segments scroll " +
+      "**inside** it (scroll back up and the page takes over again), so the controls stay in reach on long " +
+      "transcripts. Those controls move into a compact **icon toolbar** in the panel header — with a small play " +
+      "progress bar — and gain a **Select mode**: tick segments (or just click one) and act on the selection. " +
+      "**Play selected** plays only those segments gaplessly, **Edit** opens a single segment, **Translate** and " +
+      "**Delete** act on the selection (Delete confirms the count), while **Play all** and **Merge** always work " +
+      "on the whole transcript. Clicking a segment no longer auto-plays — it just selects/highlights it.",
+    added: [
+      "The transcript panel pins to the top once reached and scrolls its segments internally.",
+      "Header icon toolbar: Play all · Play selected · Merge · Select · Edit · Translate · Delete, plus a small play progress bar.",
+      "Select mode with per-segment checkboxes; Play selected, Translate selected and Delete selected (with a count confirm) act on the picked segments.",
+    ],
+    changed: [
+      "Clicking a transcript segment now selects/highlights it instead of immediately playing.",
+    ],
+  },
+  {
     version: "0.46.1",
     date: "2026-06-30",
     pr: 99,
