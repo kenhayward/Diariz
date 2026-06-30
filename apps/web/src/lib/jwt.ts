@@ -17,6 +17,13 @@ export function emailFromToken(token: string | null | undefined): string | null 
   return typeof claim === "string" ? claim : null;
 }
 
+/// The signed-in user's id (the JWT `sub` claim), used to scope a locally-stashed unsaved recording so it
+/// is only offered back to the same user on this browser.
+export function userIdFromToken(token: string | null | undefined): string | null {
+  const sub = decodeJwtPayload(token)?.["sub"];
+  return typeof sub === "string" ? sub : null;
+}
+
 export function fullNameFromToken(token: string | null | undefined): string | null {
   const claim = decodeJwtPayload(token)?.["name"];
   return typeof claim === "string" && claim.trim() ? claim : null;

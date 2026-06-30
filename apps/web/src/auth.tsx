@@ -1,6 +1,7 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, getToken, setToken } from "./lib/api";
 import { emailFromToken, fullNameFromToken, rolesFromToken, isAdminFromToken, isPlatformAdminFromToken } from "./lib/jwt";
+import { refreshDelayMs } from "./lib/tokenRefresh";
 import { initialsFromName, initialsFromEmail } from "./lib/initials";
 
 interface AuthState {
@@ -43,6 +44,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     setTokenState(null);
   }
+
+  // Silent sliding-session refresh: re-issue the token shortly before it expires (and when the tab
+  // regains focus, in case timers were throttled). This keeps long sessions — e.g. a 45-minute recording
+  // left untouched — alive, so Stop never lands on a 401. A failed refresh is ignored; the next real
+  // request handles auth normally.
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    let timer: number | undefined;
+
+    async function doRefresh() {
+      try {
+        const res = await api.refresh();
+        if (!cancelled) setSession(res.accessToken); // updates token → effect reschedules
+      } catch {
+        // ignore — leave the current token; a later request will surface any auth failure
+      }
+    }
+
+    function schedule() {
+      const delay = refreshDelayMs(getToken(), Date.now());
+      if (delay == null) return;
+      timer = window.setTimeout(doRefresh, delay);
+    }
+
+    function onFocus() {
+      const delay = refreshDelayMs(getToken(), Date.now());
+      if (delay === 0) void doRefresh(); // within the skew window — refresh now
+    }
+
+    schedule();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [token]);
 
   return (
     <AuthContext.Provider
