@@ -59,6 +59,32 @@ public class WorkerMergeCallbackTests
     }
 
     [Fact]
+    public async Task Result_FreesSourceFileAttachmentBlobs()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var survivor = Rec(userId, $"{userId}/old.webm", size: 50);
+        var other = Rec(userId, $"{userId}/other.webm", size: 70);
+        db.Recordings.AddRange(survivor, other);
+        // A file attachment still hanging off the merged-away source at callback time must not be orphaned.
+        var attKey = $"{userId}/attachments/{Guid.NewGuid()}.pdf";
+        db.Attachments.Add(new Attachment { Id = Guid.NewGuid(), RecordingId = other.Id, Kind = AttachmentKind.File, Name = "late.pdf", BlobKey = attKey, Ordinal = 0 });
+        await db.SaveChangesAsync();
+        storage.Objects[survivor.BlobKey] = Encoding.UTF8.GetBytes("old");
+        storage.Objects[other.BlobKey] = Encoding.UTF8.GetBytes("oth");
+        storage.Objects[attKey] = Encoding.UTF8.GetBytes("pdf");
+        var mergedKey = $"{userId}/merged.webm";
+        storage.Objects[mergedKey] = Encoding.UTF8.GetBytes("combined");
+
+        var result = await Build(db, storage).Result(
+            new AudioMergeResult(survivor.Id, mergedKey, "audio/webm", SizeBytes: 999, DurationMs: 3000, [other.Id]));
+
+        Assert.IsType<OkResult>(result);
+        Assert.False(storage.Objects.ContainsKey(attKey)); // source attachment blob freed (no leak)
+    }
+
+    [Fact]
     public async Task Result_WithWrongSecret_ReturnsUnauthorized()
     {
         using var db = TestDb.Create();

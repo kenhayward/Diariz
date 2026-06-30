@@ -60,6 +60,15 @@ public class WorkerMergeCallbackController : ControllerBase
         foreach (var other in others)
         {
             await _storage.DeleteAsync(other.BlobKey);
+            // The controller reassigns source attachments to the survivor before enqueuing, so normally
+            // there are none here; delete any that slipped in (e.g. attached during the merge window) so
+            // their blobs aren't orphaned when the row is removed.
+            var attachmentKeys = await _db.Attachments
+                .Where(a => a.RecordingId == other.Id && a.BlobKey != null)
+                .Select(a => a.BlobKey!)
+                .ToListAsync();
+            foreach (var key in attachmentKeys)
+                await _storage.DeleteAsync(key);
             _db.Recordings.Remove(other);
         }
         // Drop the survivor's original blob — its audio now lives inside the combined file.
