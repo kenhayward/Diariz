@@ -8,21 +8,30 @@ const profiles: SpeakerProfile[] = [
   { id: "p2", name: "Bob", sampleCount: 2 },
 ];
 
-function row(info: SpeakerInfo | undefined, handlers: Partial<{
-  onRename: (n: string) => void;
-  onAssign: (id: string | null) => void;
-  onNewPerson: () => void;
-  onMulti: () => void;
-}> = {}) {
+function row(
+  info: SpeakerInfo | undefined,
+  handlers: Partial<{
+    onRename: (n: string) => void;
+    onAssign: (id: string | null) => void;
+    onCreate: (name: string) => void;
+    onMulti: () => void;
+    onTogglePlay: () => void;
+    canPlay: boolean;
+    playing: boolean;
+  }> = {},
+) {
   render(
     <SpeakerRow
       label="SPEAKER_00"
       info={info}
       initial={info?.displayName ?? "SPEAKER_00"}
       profiles={profiles}
+      canPlay={handlers.canPlay ?? true}
+      playing={handlers.playing ?? false}
+      onTogglePlay={handlers.onTogglePlay ?? (() => {})}
       onRename={handlers.onRename ?? (() => {})}
       onAssign={handlers.onAssign ?? (() => {})}
-      onNewPerson={handlers.onNewPerson ?? (() => {})}
+      onCreate={handlers.onCreate ?? (() => {})}
       onMulti={handlers.onMulti ?? (() => {})}
     />,
   );
@@ -33,51 +42,62 @@ const speaker = (over: Partial<SpeakerInfo> = {}): SpeakerInfo => ({
   identifiedAuto: false, isMultiSpeaker: false, ...over,
 });
 
+function openAssign() {
+  fireEvent.click(screen.getByRole("button", { name: "Assign SPEAKER_00 to a person" }));
+  return screen.getByRole("combobox");
+}
+
 describe("SpeakerRow", () => {
-  it("selecting a profile assigns the speaker to it", () => {
+  it("assigning via the typeahead picks the chosen person", () => {
     const onAssign = vi.fn();
     row(speaker(), { onAssign });
 
-    fireEvent.change(screen.getByLabelText("Assign SPEAKER_00 to a person"), { target: { value: "p2" } });
+    openAssign();
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "Bob" } });
+    fireEvent.click(screen.getByRole("option", { name: "Bob" }));
 
     expect(onAssign).toHaveBeenCalledWith("p2");
   });
 
-  it("selecting Unassigned passes null", () => {
+  it("the Unassign action passes null", () => {
     const onAssign = vi.fn();
     row(speaker({ displayName: "Alice", profileId: "p1", identifiedAuto: true }), { onAssign });
 
-    fireEvent.change(screen.getByLabelText("Assign SPEAKER_00 to a person"), { target: { value: "" } });
+    openAssign();
+    fireEvent.click(screen.getByRole("option", { name: "Unassigned" }));
 
     expect(onAssign).toHaveBeenCalledWith(null);
   });
 
-  it("choosing + New person triggers enrolment (not an assign)", () => {
+  it("typing an unknown name and choosing Create enrols a new person", () => {
     const onAssign = vi.fn();
-    const onNewPerson = vi.fn();
-    row(speaker(), { onAssign, onNewPerson });
+    const onCreate = vi.fn();
+    row(speaker(), { onAssign, onCreate });
 
-    fireEvent.change(screen.getByLabelText("Assign SPEAKER_00 to a person"), { target: { value: "__new__" } });
+    openAssign();
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "Carol" } });
+    fireEvent.click(screen.getByRole("option", { name: /create "carol"/i }));
 
-    expect(onNewPerson).toHaveBeenCalledOnce();
+    expect(onCreate).toHaveBeenCalledWith("Carol");
     expect(onAssign).not.toHaveBeenCalled();
   });
 
-  it("choosing Multiple Speakers triggers the multi handler (not an assign)", () => {
+  it("the Multiple Speakers action triggers the multi handler (not an assign)", () => {
     const onAssign = vi.fn();
     const onMulti = vi.fn();
     row(speaker(), { onAssign, onMulti });
 
-    fireEvent.change(screen.getByLabelText("Assign SPEAKER_00 to a person"), { target: { value: "__multi__" } });
+    openAssign();
+    fireEvent.click(screen.getByRole("option", { name: "Multiple Speakers" }));
 
     expect(onMulti).toHaveBeenCalledOnce();
     expect(onAssign).not.toHaveBeenCalled();
   });
 
-  it("shows the speaker as Multiple Speakers when flagged", () => {
+  it("shows the speaker as Multiple Speakers on the assignment trigger when flagged", () => {
     row(speaker({ displayName: "Multiple Speakers", isMultiSpeaker: true }));
-    const select = screen.getByLabelText("Assign SPEAKER_00 to a person") as HTMLSelectElement;
-    expect(select.value).toBe("__multi__");
+    const trigger = screen.getByRole("button", { name: "Assign SPEAKER_00 to a person" });
+    expect(trigger.textContent).toContain("Multiple Speakers");
   });
 
   it("shows an auto badge only when identified automatically", () => {
@@ -88,5 +108,17 @@ describe("SpeakerRow", () => {
   it("hides the auto badge for a manually-named speaker", () => {
     row(speaker({ displayName: "Carol" }));
     expect(screen.queryByText("auto")).toBeNull();
+  });
+
+  it("renders a play control that toggles per-speaker playback", () => {
+    const onTogglePlay = vi.fn();
+    row(speaker({ displayName: "Alice" }), { onTogglePlay });
+    fireEvent.click(screen.getByRole("button", { name: /play alice's segments/i }));
+    expect(onTogglePlay).toHaveBeenCalledOnce();
+  });
+
+  it("hides the play control when the recording has no audio", () => {
+    row(speaker({ displayName: "Alice" }), { canPlay: false });
+    expect(screen.queryByRole("button", { name: /play .*segments/i })).toBeNull();
   });
 });

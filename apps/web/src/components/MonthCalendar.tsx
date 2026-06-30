@@ -72,12 +72,13 @@ export default function MonthCalendar({
               aria-pressed={selected}
               aria-current={isToday ? "date" : undefined}
               className={[
-                "flex h-5 items-center justify-center rounded text-[11px] tabular-nums",
+                // A constant 2px inset ring is reserved on every cell; only its colour changes (exactly one
+                // colour class below), so selecting a day never grows the box and the grid can't reflow.
+                "flex h-5 items-center justify-center rounded text-[11px] tabular-nums ring-2 ring-inset",
                 has
                   ? "cursor-pointer bg-green-100 text-green-900 hover:bg-green-200 dark:bg-green-900/40 dark:text-green-200 dark:hover:bg-green-900/60"
-                  : "cursor-default bg-gray-50 text-gray-300 dark:bg-gray-800/60 dark:text-gray-600",
-                selected ? "ring-2 ring-inset ring-green-500 dark:ring-green-400" : "",
-                isToday && !selected ? "ring-1 ring-inset ring-blue-400" : "",
+                  : "cursor-default bg-gray-50 text-gray-400 dark:bg-gray-800/60 dark:text-gray-500",
+                selected ? "ring-green-500 dark:ring-green-400" : isToday ? "ring-blue-400" : "ring-transparent",
               ].join(" ")}
             >
               {day.date.getDate()}
