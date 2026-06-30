@@ -15,7 +15,7 @@ Diariz records audio — from your microphone, or Windows system/loopback audio 
 an existing audio file** (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A), and it transcribes it server-side with
 **WhisperX** (word-level timestamps) and **pyannote** speaker
 diarization. You get speaker-labelled, timestamped segments you can rename, edit, and play back
-(per segment or the whole recording), and can re-transcribe at any time. Edits are kept **separately from
+(per segment, per speaker, or the whole recording), and can re-transcribe at any time. Edits are kept **separately from
 the model's original words**, so a **Show original / Show revised** toggle always gets you back to what the
 model said. You can **merge** consecutive same-speaker rows into single blocks and **email yourself the
 transcript**.
@@ -62,6 +62,31 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.43.0",
+    date: "2026-06-30",
+    pr: 89,
+    headline: "Faster speaker labelling, per-speaker playback, and panel quick-actions",
+    summary:
+      "Recording-detail refinements. The **Summary** and **Speakers** panels gain small toolbars next to " +
+      "their collapse arrow — re-summarise / edit on Summary, and re-identify / manage people on Speakers. " +
+      "The speaker assignment control is now a **typeahead**: start typing to find an enrolled person (handy " +
+      "once you have many), or create a new one from what you typed. Each speaker has a **play button** that " +
+      "auditions just that person's segments. Plus two fixes: renaming a recording updates the list " +
+      "immediately, and the calendar no longer shifts when you pick a day (with clearer greys for empty days).",
+    added: [
+      "Summary panel toolbar: Re-summarise and Edit, beside the collapse control.",
+      "Speakers panel toolbar: Re-identify speakers and Manage people.",
+      "Per-speaker play/pause that plays only that speaker's segments, skipping everyone else.",
+      "Typeahead for assigning a speaker to a person — filter as you type, or create a new person inline.",
+    ],
+    changed: [
+      "The calendar's selected-day highlight sits inside the cell and no longer resizes the calendar; empty days use a darker, more legible grey.",
+    ],
+    fixed: [
+      "Renaming a recording now updates its name in the left list immediately, without a manual refresh.",
+    ],
+  },
   {
     version: "0.42.1",
     date: "2026-06-30",

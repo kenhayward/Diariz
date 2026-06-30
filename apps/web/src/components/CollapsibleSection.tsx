@@ -1,12 +1,14 @@
 import { useState, type ReactNode } from "react";
 
-/// A bordered content panel with a collapsible header. The whole header strip (title → chevron) is the
-/// click target, with a subtle background that darkens on hover, and the chevron matches the kebab scale.
+/// A bordered content panel with a collapsible header. The title→chevron strip toggles collapse; an
+/// optional `headerActions` toolbar sits to the left of the chevron (its own buttons, so it never toggles
+/// the section). Subtle background that darkens on hover; the chevron matches the kebab scale.
 /// Used for the Summary / Speakers / Actions / Transcript panels on the recording detail page.
 export default function CollapsibleSection({
   title,
   defaultCollapsed = false,
   bodyClassName = "px-4 pb-4",
+  headerActions,
   children,
 }: {
   title: string;
@@ -14,24 +16,30 @@ export default function CollapsibleSection({
   /// Classes for the body wrapper. Defaults to padded; pass a flush value (no horizontal padding) when
   /// the content should keep the panel's full width (e.g. the transcript segment rows).
   bodyClassName?: string;
+  /// Optional action buttons rendered in the header (e.g. a small toolbar). Rendered as a sibling of the
+  /// toggle button so clicking them doesn't expand/collapse the section.
+  headerActions?: ReactNode;
   children: ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
   return (
     <div className="overflow-hidden rounded-lg border bg-white dark:border-gray-700 dark:bg-gray-900">
-      <button
-        type="button"
-        aria-label={`${collapsed ? "Expand" : "Collapse"} ${title} section`}
-        aria-expanded={!collapsed}
-        onClick={() => setCollapsed((v) => !v)}
-        className="flex w-full items-center justify-between bg-gray-50 px-4 py-2 text-left hover:bg-gray-100 dark:bg-gray-800/40 dark:hover:bg-gray-800/70"
-      >
-        <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</h2>
-        <span aria-hidden className="text-lg leading-none text-gray-400 dark:text-gray-500">
-          {collapsed ? "▸" : "▾"}
-        </span>
-      </button>
+      <div className="flex items-center bg-gray-50 pr-2 hover:bg-gray-100 dark:bg-gray-800/40 dark:hover:bg-gray-800/70">
+        <button
+          type="button"
+          aria-label={`${collapsed ? "Expand" : "Collapse"} ${title} section`}
+          aria-expanded={!collapsed}
+          onClick={() => setCollapsed((v) => !v)}
+          className="flex flex-1 items-center justify-between px-4 py-2 text-left"
+        >
+          <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</h2>
+          <span aria-hidden className="text-lg leading-none text-gray-400 dark:text-gray-500">
+            {collapsed ? "▸" : "▾"}
+          </span>
+        </button>
+        {headerActions && <div className="flex items-center gap-0.5 pl-1">{headerActions}</div>}
+      </div>
       {!collapsed && <div className={`pt-3 ${bodyClassName}`}>{children}</div>}
     </div>
   );

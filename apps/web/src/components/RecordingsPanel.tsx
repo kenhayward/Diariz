@@ -331,7 +331,8 @@ export default function RecordingsPanel() {
                 onNext={() => stepMonth(1)}
               />
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            {/* Reserve the scrollbar gutter so toggling the day list's scrollbar never shifts its width. */}
+            <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
               {dayRecordings.length === 0 ? (
                 <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("calNoRecordings")}</p>
               ) : (

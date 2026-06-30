@@ -13,14 +13,34 @@ import DownloadTranscriptModal from "../components/DownloadTranscriptModal";
 import SummaryEditModal from "../components/SummaryEditModal";
 import AttachmentsModal from "../components/AttachmentsModal";
 import AttachmentsSplitButton from "../components/AttachmentsSplitButton";
+import PeopleModal from "../components/PeopleModal";
+import SpeakerAssign from "../components/SpeakerAssign";
+import ToolbarButton, { iconProps } from "../components/ToolbarButton";
 import { recordingMenu } from "../components/recordingMenu";
 import { copyRichLink, transcriptUrl } from "../lib/clipboard";
 import { segmentIndexAtMs, parseMatchTimes } from "../lib/transcriptNav";
+import { speakerRanges, rangeAt, nextRangeStart, type PlayRange } from "../lib/segmentPlayback";
 import { formatBytes, formatDate, formatDuration } from "../lib/format";
 import { hasRevisions, segmentText, toggleLabel } from "../lib/transcriptView";
 import { fetchLanguages } from "../lib/languages";
 import { allSpeakersAssigned } from "../lib/speakers";
 import type { SegmentDto, SpeakerInfo, SpeakerProfile } from "../lib/types";
+
+// Feather-style icons for the panel toolbars and the per-speaker play control.
+const RefreshIcon = (
+  <svg {...iconProps}><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>
+);
+const PencilIcon = (
+  <svg {...iconProps}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+);
+const UserCheckIcon = (
+  <svg {...iconProps}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><polyline points="16 11 18 13 22 9" /></svg>
+);
+const UsersIcon = (
+  <svg {...iconProps}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+);
+const PlayIcon = <svg {...iconProps}><polygon points="5 3 19 12 5 21 5 3" /></svg>;
+const PauseIcon = <svg {...iconProps}><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>;
 
 function fmt(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -54,6 +74,10 @@ export default function RecordingDetail() {
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
+  // Per-speaker audition: the label currently playing and that speaker's (merged) play ranges.
+  const [playingSpeaker, setPlayingSpeaker] = useState<string | null>(null);
+  const speakerRangesRef = useRef<PlayRange[]>([]);
+  const [peopleOpen, setPeopleOpen] = useState(false);
 
   // When opened from a chat transcript link (/recordings/:id?t=ms), highlight and scroll to that segment.
   const tParam = searchParams.get("t");
@@ -147,8 +171,9 @@ export default function RecordingDetail() {
     }
   }
 
-  async function newPerson(label: string) {
-    const name = window.prompt(t("workspace:namePrompt"))?.trim();
+  // Enrol a new person from the typeahead's "Create" row, using the text the user typed.
+  async function newPerson(label: string, typedName: string) {
+    const name = typedName.trim();
     if (!name) return;
     setActionError(null);
     try {
@@ -187,6 +212,8 @@ export default function RecordingDetail() {
     await api.renameRecording(id, name.trim() || null);
     setRenaming(false);
     qc.invalidateQueries({ queryKey: ["recording", id] });
+    // Also refresh the left list so its row label updates immediately (not only after a manual refresh).
+    qc.invalidateQueries({ queryKey: ["recordings"] });
   }
 
   // Re-transcribe with the (optional) speaker-count hints chosen in the modal.
@@ -388,6 +415,7 @@ export default function RecordingDetail() {
     const el = audioRef.current;
     if (!el) return;
     setActionError(null);
+    exitSpeakerMode(); // a normal play/seek leaves single-speaker audition
     try {
       if (!el.src) el.src = await api.audioUrl(id);
       el.currentTime = startMs / 1000;
@@ -397,11 +425,55 @@ export default function RecordingDetail() {
     }
   }
 
+  function exitSpeakerMode() {
+    speakerRangesRef.current = [];
+    setPlayingSpeaker(null);
+  }
+
+  // Audition a single speaker: play only their (merged) segments, skipping everyone else's audio.
+  async function playSpeaker(label: string) {
+    const el = audioRef.current;
+    if (!el) return;
+    const ranges = speakerRanges(rec?.current?.segments ?? [], label);
+    if (ranges.length === 0) return;
+    setActionError(null);
+    try {
+      if (!el.src) el.src = await api.audioUrl(id);
+      speakerRangesRef.current = ranges;
+      setPlayingSpeaker(label);
+      el.currentTime = ranges[0].start / 1000;
+      await el.play();
+    } catch (e) {
+      exitSpeakerMode();
+      setActionError(apiErrorMessage(e, t("workspace:errPlayAudio")));
+    }
+  }
+
+  function toggleSpeaker(label: string) {
+    if (playingSpeaker === label) {
+      audioRef.current?.pause();
+      exitSpeakerMode();
+    } else {
+      void playSpeaker(label);
+    }
+  }
+
   function onTimeUpdate() {
     const el = audioRef.current;
     const segs = rec?.current?.segments;
     if (!el || !segs) return;
     const ms = el.currentTime * 1000;
+    // Single-speaker audition: when playback leaves the current range, jump to the speaker's next range
+    // (skipping other speakers) or stop at the end.
+    if (playingSpeaker && speakerRangesRef.current.length && !rangeAt(speakerRangesRef.current, ms)) {
+      const next = nextRangeStart(speakerRangesRef.current, ms);
+      if (next == null) {
+        el.pause();
+        exitSpeakerMode();
+      } else {
+        el.currentTime = next / 1000;
+      }
+    }
     const idx = segs.findIndex((s) => ms >= s.startMs && ms < s.endMs);
     setActiveIdx(idx >= 0 ? idx : null);
   }
@@ -541,7 +613,25 @@ export default function RecordingDetail() {
         <p className="rounded bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">{t("workspace:summarising")}</p>
       )}
       {rec.summary && (
-        <CollapsibleSection title={t("workspace:sectionSummary")}>
+        <CollapsibleSection
+          title={t("workspace:sectionSummary")}
+          headerActions={
+            <>
+              <ToolbarButton
+                label={t("workspace:resummarise")}
+                icon={RefreshIcon}
+                disabled={!hasTranscript || isSummarizing}
+                onClick={summarize}
+              />
+              <ToolbarButton
+                label={t("workspace:editSummaryAction")}
+                icon={PencilIcon}
+                disabled={!hasTranscript}
+                onClick={() => setEditingSummary(true)}
+              />
+            </>
+          }
+        >
           {rec.summary.isUserEdited && (
             <p className="mb-1 text-xs italic text-gray-400 dark:text-gray-500">{t("workspace:summaryEditedHint")}</p>
           )}
@@ -561,7 +651,25 @@ export default function RecordingDetail() {
 
       {labels.length > 0 && (
         // Default collapsed when every speaker is already assigned (nothing left to label).
-        <CollapsibleSection title={t("workspace:sectionSpeakers")} defaultCollapsed={allSpeakersAssigned(rec.speakers)}>
+        <CollapsibleSection
+          title={t("workspace:sectionSpeakers")}
+          defaultCollapsed={allSpeakersAssigned(rec.speakers)}
+          headerActions={
+            <>
+              <ToolbarButton
+                label={t("workspace:reidentifyAction")}
+                icon={UserCheckIcon}
+                disabled={!rec.hasAudio || !hasTranscript}
+                onClick={reidentify}
+              />
+              <ToolbarButton
+                label={t("workspace:managePeople")}
+                icon={UsersIcon}
+                onClick={() => setPeopleOpen(true)}
+              />
+            </>
+          }
+        >
           <div className="flex flex-wrap gap-4">
             {labels.map((label) => {
               const info = rec.speakers.find((s) => s.label === label);
@@ -576,9 +684,12 @@ export default function RecordingDetail() {
                       : rec.speakerNames[label] ?? info?.displayName ?? label
                   }
                   profiles={profiles}
+                  canPlay={rec.hasAudio}
+                  playing={playingSpeaker === label}
+                  onTogglePlay={() => toggleSpeaker(label)}
                   onRename={(name) => rename(label, name)}
                   onAssign={(profileId) => assignSpeaker(label, profileId)}
-                  onNewPerson={() => newPerson(label)}
+                  onCreate={(name) => newPerson(label, name)}
                   onMulti={() => markMulti(label)}
                 />
               );
@@ -696,6 +807,7 @@ export default function RecordingDetail() {
 
       {moving && <MoveToSectionModal recordingId={id} onClose={() => setMoving(false)} />}
       {downloading && <DownloadTranscriptModal recordingId={id} onClose={() => setDownloading(false)} />}
+      {peopleOpen && <PeopleModal onClose={() => setPeopleOpen(false)} />}
 
       {retranscribeOpen && (
         <RetranscribeModal
@@ -940,26 +1052,29 @@ function RecordingNameForm({
   );
 }
 
-const NEW_PERSON = "__new__";
-const MULTI_SPEAKER = "__multi__";
-
 export function SpeakerRow({
   label,
   info,
   initial,
   profiles,
+  canPlay,
+  playing,
+  onTogglePlay,
   onRename,
   onAssign,
-  onNewPerson,
+  onCreate,
   onMulti,
 }: {
   label: string;
   info: SpeakerInfo | undefined;
   initial: string;
   profiles: SpeakerProfile[];
+  canPlay: boolean;
+  playing: boolean;
+  onTogglePlay: () => void;
   onRename: (name: string) => void;
   onAssign: (profileId: string | null) => void;
-  onNewPerson: () => void;
+  onCreate: (name: string) => void;
   onMulti: () => void;
 }) {
   const { t } = useTranslation("workspace");
@@ -980,33 +1095,32 @@ export function SpeakerRow({
           </span>
         )}
       </div>
-      <input
-        value={value}
-        aria-label={t("nameForAria", { label })}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={() => value !== initial && onRename(value)}
-        className="w-40 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+      <div className="flex items-center gap-1">
+        <input
+          value={value}
+          aria-label={t("nameForAria", { label })}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={() => value !== initial && onRename(value)}
+          className="w-40 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+        />
+        {canPlay && (
+          <ToolbarButton
+            label={playing ? t("pauseSpeaker") : t("playSpeaker", { label: value })}
+            icon={playing ? PauseIcon : PlayIcon}
+            active={playing}
+            onClick={onTogglePlay}
+          />
+        )}
+      </div>
+      <SpeakerAssign
+        label={label}
+        profiles={profiles}
+        profileId={info?.profileId ?? null}
+        isMulti={info?.isMultiSpeaker ?? false}
+        onAssign={onAssign}
+        onCreate={onCreate}
+        onMulti={onMulti}
       />
-      <select
-        value={info?.isMultiSpeaker ? MULTI_SPEAKER : info?.profileId ?? ""}
-        aria-label={t("assignAria", { label })}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (v === NEW_PERSON) onNewPerson();
-          else if (v === MULTI_SPEAKER) onMulti();
-          else onAssign(v || null);
-        }}
-        className="w-40 rounded border px-2 py-1 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-      >
-        <option value="">{t("unassigned")}</option>
-        {profiles.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-        <option value={MULTI_SPEAKER}>{t("multipleSpeakers")}</option>
-        <option value={NEW_PERSON}>{t("newPerson")}</option>
-      </select>
     </div>
   );
 }
