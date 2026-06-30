@@ -113,7 +113,7 @@ public class RecordingsController : ControllerBase
         var names = rec.Speakers.ToDictionary(s => s.Label, s => s.DisplayName);
         var actions = rec.Actions
             .OrderBy(a => a.Ordinal)
-            .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal))
+            .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal, a.Completed, a.CompletedAt))
             .ToList();
         var speakers = rec.Speakers
             .OrderBy(s => s.Label)

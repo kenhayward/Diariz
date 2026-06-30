@@ -20,6 +20,7 @@ import type {
   Language,
   PlatformSettings,
   RecordingAction,
+  ActionListItem,
   RecordingDetail,
   RecordingSource,
   RecordingSummary,
@@ -303,6 +304,17 @@ export const api = {
 
   async deleteAction(id: string, actionId: string): Promise<void> {
     await http.delete(`/api/recordings/${id}/actions/${actionId}`);
+  },
+
+  /// Every action across the user's recordings (the "Actions" tab), each tagged with its source recording.
+  async listAllActions(): Promise<ActionListItem[]> {
+    const { data } = await http.get<ActionListItem[]>(`/api/actions`);
+    return data;
+  },
+
+  /// Mark a set of actions complete (or not) in one call — works across recordings. Ids not owned are ignored.
+  async completeActions(ids: string[], completed: boolean): Promise<void> {
+    await http.post(`/api/actions/complete`, { ids, completed });
   },
 
   // ---- Speaker identification (voiceprints) ----

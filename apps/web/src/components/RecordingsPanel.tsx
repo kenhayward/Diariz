@@ -19,8 +19,12 @@ import { buildRecordingTree, reorderBeforeSection, appendSectionUnder, type Sect
 import MonthCalendar from "./MonthCalendar";
 import { recordingDayKeys, recordingsForDay, dayKey } from "../lib/calendar";
 import { useUpload } from "../lib/uploadContext";
+import { distinctActors, filterActions } from "../lib/actionsView";
+import ActionsToolbar from "./ActionsToolbar";
+import ActionsTab from "./ActionsTab";
+import EditActionModal from "./EditActionModal";
 import type { UploadItem } from "../lib/uploadQueue";
-import type { RecordingStatus, RecordingSource, RecordingSummary } from "../lib/types";
+import type { ActionListItem, RecordingStatus, RecordingSource, RecordingSummary } from "../lib/types";
 
 const dragHasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types ?? []).includes("Files");
 
@@ -38,7 +42,7 @@ const statusColor: Record<RecordingStatus, string> = {
 const COLLAPSE_KEY = "diariz.recordings.collapsedGroups";
 const UNGROUPED_KEY = "__ungrouped__";
 const TAB_KEY = "diariz.recordings.tab";
-type PanelTab = "list" | "calendar";
+type PanelTab = "list" | "calendar" | "actions";
 /// Drag payload type marking a section-header drag (vs a recording's "text/plain" id or a file drop).
 const SECTION_MIME = "application/x-diariz-section";
 
@@ -81,12 +85,32 @@ export default function RecordingsPanel() {
 
   // List vs Calendar tab (persisted). The calendar shows the month, focused on today, and lists the
   // selected day's recordings below it.
-  const [tab, setTab] = useState<PanelTab>(() =>
-    localStorage.getItem(TAB_KEY) === "calendar" ? "calendar" : "list");
+  const [tab, setTab] = useState<PanelTab>(() => {
+    const v = localStorage.getItem(TAB_KEY);
+    return v === "calendar" || v === "actions" ? v : "list";
+  });
   function selectTab(next: PanelTab) {
     localStorage.setItem(TAB_KEY, next);
+    // Selection is per-domain (recordings vs actions) — never carry it across a tab switch.
+    selection.clear();
+    selection.setSelectMode(false);
     setTab(next);
   }
+
+  // Actions tab: all actions across the library, filtered by person + hide-complete, with one open editor.
+  const { data: allActions = [] } = useQuery({
+    queryKey: ["actions", "all"],
+    queryFn: api.listAllActions,
+    enabled: tab === "actions",
+  });
+  const [personFilter, setPersonFilter] = useState<string | null>(null);
+  const [hideComplete, setHideComplete] = useState(false);
+  const [editingAction, setEditingAction] = useState<ActionListItem | null>(null);
+  const persons = useMemo(() => distinctActors(allActions), [allActions]);
+  const visibleActions = useMemo(
+    () => filterActions(allActions, { person: personFilter, hideComplete }),
+    [allActions, personFilter, hideComplete],
+  );
   const [month, setMonth] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
@@ -277,7 +301,20 @@ export default function RecordingsPanel() {
       onDrop={onFileDrop}
       className={`flex h-full flex-col ${dragging ? "rounded-md ring-2 ring-inset ring-blue-400 dark:ring-blue-500" : ""}`}
     >
-      <ListToolbar recordings={recordings} listMode={tab === "list"} onError={setOpError} />
+      {tab === "actions" ? (
+        <ActionsToolbar
+          actions={allActions}
+          hideComplete={hideComplete}
+          onToggleHideComplete={() => setHideComplete((v) => !v)}
+          onEdit={() => {
+            const sel = allActions.find((a) => selection.selectedIds.includes(a.id));
+            if (sel) setEditingAction(sel);
+          }}
+          onError={setOpError}
+        />
+      ) : (
+        <ListToolbar recordings={recordings} listMode={tab === "list"} onError={setOpError} />
+      )}
       <div className="flex min-h-0 flex-1">
         <TabStrip tab={tab} onSelect={selectTab} />
         {tab === "list" ? (
@@ -324,7 +361,7 @@ export default function RecordingsPanel() {
               </div>
             )}
           </div>
-        ) : (
+        ) : tab === "calendar" ? (
           // Calendar: the month grid stays fixed at the top; only the selected day's list scrolls.
           // min-w-0 is essential: without it this flex child grows to the widest day-list row, which would
           // stretch the grid-cols-7 month grid wider than the panel and make the calendar appear to resize
@@ -350,13 +387,20 @@ export default function RecordingsPanel() {
               )}
             </div>
           </div>
+        ) : (
+          // Actions: a flat, cross-transcript list with its own filter/select/complete toolbar above.
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+            {opError && <p className="px-3 py-1 text-xs text-red-600 dark:text-red-400">{opError}</p>}
+            <ActionsTab actions={visibleActions} persons={persons} person={personFilter} onPerson={setPersonFilter} />
+          </div>
         )}
       </div>
+      {editingAction && <EditActionModal action={editingAction} onClose={() => setEditingAction(null)} />}
     </div>
   );
 }
 
-/// Vertical List / Calendar tabs, sitting to the left of the panel's scroll area (below the toolbar).
+/// Vertical List / Calendar / Actions tabs, sitting to the left of the panel's scroll area (below the toolbar).
 function TabStrip({ tab, onSelect }: { tab: PanelTab; onSelect: (t: PanelTab) => void }) {
   const { t } = useTranslation("workspace");
   const item = (key: PanelTab, label: string) => (
@@ -377,6 +421,7 @@ function TabStrip({ tab, onSelect }: { tab: PanelTab; onSelect: (t: PanelTab) =>
     <div className="flex w-7 shrink-0 flex-col items-stretch border-r bg-gray-50 dark:border-gray-800 dark:bg-gray-950/40">
       {item("list", t("tabList"))}
       {item("calendar", t("tabCalendar"))}
+      {item("actions", t("tabActions"))}
     </div>
   );
 }

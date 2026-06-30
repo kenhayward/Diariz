@@ -139,6 +139,12 @@ only `hasApiKey`).
   (`ActionsClient` → `ActionsPrompt`), **replaces** the recording's **`RecordingAction`** rows, and sets
   `Recording.ActionsExtractedAt`. Shown "by exception" — the Actions panel appears only once extraction has
   run. Actions also travel into transcript downloads, the emailed transcript, and the chat context.
+- **Action management (cross-meeting).** `ActionsController` exposes a library-wide view: `GET /api/actions`
+  lists every action on the caller's recordings (joined to `Recordings` for ownership + display name, newest
+  recording first), and `POST /api/actions/complete { ids, completed }` bulk-marks actions done/undone (sets/
+  clears `RecordingAction.CompletedAt`; ignores ids the caller doesn't own). Both the new **Actions tab** in
+  the left **Meetings** panel (filter by person, Select-mode multi-complete, Hide-completed, edit, link back to
+  the source transcript) and the per-transcript Actions table's inline **Done** toggle drive this endpoint.
 - **Translate (sync).** `POST /api/recordings/{id}/translate { language? }` translates the current
   transcript into a target language (the request's, else the caller's `NativeLanguage`; 400 if neither, or no
   endpoint) via `TranslationClient` → `TranslationPrompt`. It batches segment **Originals** by a char budget,

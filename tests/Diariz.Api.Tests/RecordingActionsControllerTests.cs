@@ -131,6 +131,7 @@ public class RecordingActionsControllerTests
         Assert.Equal("Do thing", dto.Text);
         Assert.Equal("Alice", dto.Actor);
         Assert.Equal(1, dto.Ordinal);
+        Assert.False(dto.Completed); // new actions start incomplete
         Assert.NotNull((await db.Recordings.FindAsync(rec.Id))!.ActionsExtractedAt); // manual add surfaces the panel
     }
 

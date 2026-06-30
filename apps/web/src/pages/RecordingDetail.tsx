@@ -375,6 +375,17 @@ export default function RecordingDetail() {
     }
   }
 
+  async function toggleActionComplete(actionId: string, completed: boolean) {
+    setActionError(null);
+    try {
+      await api.completeActions([actionId], completed);
+      qc.invalidateQueries({ queryKey: ["recording", id] });
+      qc.invalidateQueries({ queryKey: ["actions", "all"] }); // keep the Actions tab in sync
+    } catch (e) {
+      setActionError(apiErrorMessage(e, t("workspace:errUpdateAction")));
+    }
+  }
+
   async function mergeSegments() {
     if (!window.confirm(t("workspace:confirmMerge"))) return;
     setActionError(null);
@@ -645,6 +656,7 @@ export default function RecordingDetail() {
           actions={rec.actions}
           onAdd={addAction}
           onUpdate={updateAction}
+          onToggleComplete={toggleActionComplete}
           onDelete={removeAction}
         />
       )}

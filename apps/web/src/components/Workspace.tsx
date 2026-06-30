@@ -68,7 +68,7 @@ export default function Workspace() {
             style={{ width: leftWidth }}
             className="flex shrink-0 flex-col border-r bg-white dark:border-gray-700 dark:bg-gray-900"
           >
-            <PanelHeader title={t("panelRecordings")} onCollapse={() => setLeftOpen(false)} chevron="◀" />
+            <PanelHeader title={t("panelMeetings")} onCollapse={() => setLeftOpen(false)} chevron="◀" />
             <div className="min-h-0 flex-1 overflow-y-auto">
               <RecordingsPanel />
             </div>
@@ -82,7 +82,7 @@ export default function Workspace() {
           />
         </>
       ) : (
-        <CollapsedRail label={t("panelRecordings")} onExpand={() => setLeftOpen(true)} chevron="▶" tour="recordings" />
+        <CollapsedRail label={t("panelMeetings")} onExpand={() => setLeftOpen(true)} chevron="▶" tour="recordings" />
       )}
 
       <main data-tour="detail" className="min-w-0 flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950">

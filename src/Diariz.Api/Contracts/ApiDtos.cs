@@ -120,9 +120,21 @@ public record AddUrlAttachmentRequest(string Url, string? Name);
 public record RenameAttachmentRequest(string Name);
 
 // ---- Action items (extracted from a transcript; user-editable) ----
-public record RecordingActionDto(Guid Id, string Text, string Actor, string Deadline, int Ordinal);
+// Completed/CompletedAt default so export/chat projections that don't track completion stay unchanged;
+// the detail + actions-list projections pass the real values.
+public record RecordingActionDto(
+    Guid Id, string Text, string Actor, string Deadline, int Ordinal,
+    bool Completed = false, DateTimeOffset? CompletedAt = null);
 public record CreateRecordingActionRequest(string? Text, string? Actor, string? Deadline);
 public record UpdateRecordingActionRequest(string? Text, string? Actor, string? Deadline);
+
+/// <summary>An action across the user's whole library, carrying its source recording (id + display name)
+/// so the Actions tab can link back to the transcript.</summary>
+public record ActionListItemDto(
+    Guid Id, Guid RecordingId, string RecordingName, string Text, string Actor, string Deadline,
+    int Ordinal, bool Completed, DateTimeOffset? CompletedAt, DateTimeOffset CreatedAt);
+/// <summary>Mark a set of actions complete (or not). Ids not owned by the caller are ignored.</summary>
+public record CompleteActionsRequest(IReadOnlyList<Guid> Ids, bool Completed);
 
 // ---- Speaker identification (voiceprints) ----
 public record SpeakerProfileDto(Guid Id, string Name, int SampleCount);

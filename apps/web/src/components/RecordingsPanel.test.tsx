@@ -32,6 +32,8 @@ vi.mock("../lib/api", () => ({
     extractActions: vi.fn(),
     reidentify: vi.fn(),
     emailTranscript: vi.fn(),
+    listAllActions: vi.fn().mockResolvedValue([]),
+    completeActions: vi.fn().mockResolvedValue(undefined),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -64,6 +66,15 @@ function renderList() {
       </SelectionProvider>
     </QueryClientProvider>,
   );
+}
+
+/// Open a recording row's kebab. Its aria-label is "Actions" (KebabMenu's default) which now also matches
+/// the "Actions" tab button — disambiguate by the kebab's aria-haspopup="menu".
+function openKebab() {
+  const btn = screen
+    .getAllByRole("button", { name: /actions/i })
+    .find((b) => b.getAttribute("aria-haspopup") === "menu");
+  fireEvent.click(btn!);
 }
 
 describe("RecordingsPanel", () => {
@@ -100,7 +111,7 @@ describe("RecordingsPanel", () => {
   it("Summarise action calls the API", async () => {
     renderList();
     await screen.findByText("Weekly Standup");
-    fireEvent.click(screen.getByRole("button", { name: /actions/i }));
+    openKebab();
     fireEvent.click(screen.getByRole("menuitem", { name: /summarise/i }));
     await waitFor(() => expect(api.summarize).toHaveBeenCalledWith("rec-1"));
   });
@@ -109,7 +120,7 @@ describe("RecordingsPanel", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     renderList();
     await screen.findByText("Weekly Standup");
-    fireEvent.click(screen.getByRole("button", { name: /actions/i }));
+    openKebab();
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete" })); // exact: not "Delete audio"
     await waitFor(() => expect(api.deleteRecording).toHaveBeenCalledWith("rec-1"));
   });
@@ -130,7 +141,7 @@ describe("RecordingsPanel", () => {
     (api.deleteAudio as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     renderList();
     await screen.findByText("Weekly Standup");
-    fireEvent.click(screen.getByRole("button", { name: /actions/i }));
+    openKebab();
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete audio" }));
     await waitFor(() => expect(api.deleteAudio).toHaveBeenCalledWith("rec-1"));
   });
@@ -200,7 +211,7 @@ describe("RecordingsPanel", () => {
   it("kebab includes Re-transcribe, Summarise and Move, with a single Download transcript", async () => {
     renderList();
     await screen.findByText("Weekly Standup");
-    fireEvent.click(screen.getByRole("button", { name: /actions/i }));
+    openKebab();
 
     expect(screen.getByRole("menuitem", { name: /re-transcribe/i })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /summarise/i })).toBeTruthy();
@@ -212,7 +223,7 @@ describe("RecordingsPanel", () => {
   it("kebab also offers Extract actions, Re-identify and Email (parity with the detail menu)", async () => {
     renderList();
     await screen.findByText("Weekly Standup");
-    fireEvent.click(screen.getByRole("button", { name: /actions/i }));
+    openKebab();
 
     expect(screen.getByRole("menuitem", { name: /extract actions/i })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /re-identify speakers/i })).toBeTruthy();
@@ -232,11 +243,39 @@ describe("RecordingsPanel", () => {
     renderList();
     await screen.findByText("Weekly Standup");
 
-    fireEvent.click(screen.getByRole("button", { name: /actions/i }));
+    openKebab();
     fireEvent.click(screen.getByRole("menuitem", { name: /extract actions/i }));
 
     expect(confirm).toHaveBeenCalled();
     expect(api.extractActions).not.toHaveBeenCalled(); // declined
+  });
+
+  it("Actions tab lists cross-meeting actions; picking one and Mark complete calls the API", async () => {
+    (api.listAllActions as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: "act-1", recordingId: "rec-1", recordingName: "Weekly Standup", text: "Send the report",
+        actor: "Bob", deadline: "Fri", ordinal: 0, completed: false, completedAt: null,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+    renderList();
+    await screen.findByText("Weekly Standup"); // wait for the panel to finish loading (past the spinner)
+    // Switch to the Actions tab (the vertical tab carries aria-pressed; the row kebab is also "Actions").
+    fireEvent.click(screen.getByRole("button", { name: "Actions", pressed: false }));
+    expect(await screen.findByText("Send the report")).toBeTruthy();
+
+    // Not in select mode: clicking the row (its recording name, not the title link) selects that one action.
+    fireEvent.click(screen.getByText("Weekly Standup"));
+    fireEvent.click(screen.getByRole("button", { name: /mark complete/i }));
+    await waitFor(() => expect(api.completeActions).toHaveBeenCalledWith(["act-1"], true));
+  });
+
+  it("Actions tab shows the empty state when there are no actions", async () => {
+    (api.listAllActions as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    renderList();
+    await screen.findByText("Weekly Standup");
+    fireEvent.click(screen.getByRole("button", { name: "Actions", pressed: false }));
+    expect(await screen.findByText(/no action items yet/i)).toBeTruthy();
   });
 
   it("hides the status pill for settled states but shows in-flight ones", async () => {
