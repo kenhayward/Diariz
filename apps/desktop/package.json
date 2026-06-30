@@ -1,7 +1,7 @@
 {
   "name": "diariz-desktop",
   "private": true,
-  "version": "0.38.0",
+  "version": "0.39.0",
   "description": "Diariz Windows desktop app — a system-tray shell that loads your Diariz server, with mic + Windows system/loopback audio capture.",
   "main": "src/main.js",
   "author": "Ken Hayward",

@@ -210,6 +210,20 @@ export interface UserSettings {
   /// Per-user chat context-window override (tokens); null = use the server default.
   contextWindow: number | null;
   defaultContextWindow: number;
+  /// Effective master switch for chat tool calling (user override ?? server default).
+  toolsEnabled: boolean;
+  defaultToolsEnabled: boolean;
+  /// The catalog of built-in chat tools with their resolved on/off state.
+  tools: ChatToolInfo[];
+}
+
+/// A built-in chat tool's state for the settings panel.
+export interface ChatToolInfo {
+  name: string;
+  title: string;
+  description: string;
+  enabled: boolean;
+  defaultEnabled: boolean;
 }
 
 /// A supported language for content translation (and, when a UI catalog exists, the app UI).
@@ -241,6 +255,10 @@ export interface UpdateUserSettings {
   apiKey?: string | null;
   /// Context-window override; null/0 clears it (falls back to the server default).
   contextWindow?: number | null;
+  /// Master switch for chat tool calling; omit to leave unchanged.
+  toolsEnabled?: boolean;
+  /// Explicit per-tool on/off overrides ({ name: enabled }); omit to leave unchanged.
+  toolOverrides?: Record<string, boolean>;
 }
 
 // ---- Chat ----

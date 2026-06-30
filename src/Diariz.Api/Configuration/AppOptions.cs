@@ -60,6 +60,14 @@ public class ChatOptions
     public const string Section = "Chat";
     /// <summary>Model context window in tokens, used by the context dial. Per-user overridable in Settings.</summary>
     public int ContextLength { get; set; } = 131072;
+
+    /// <summary>Server-wide default for chat tool calling. Off by default (per-user overridable in Settings);
+    /// many self-hosted models don't support OpenAI tool calling, so opt-in is the safe default.</summary>
+    public bool ToolsEnabled { get; set; } = false;
+
+    /// <summary>Comma-separated tool names that are off by default server-wide. Every other registered tool
+    /// is on when tools are enabled. Per-user overridable in Settings.</summary>
+    public string DisabledTools { get; set; } = "";
 }
 
 /// <summary>SMTP settings for transactional email (the account-setup link). When <see cref="Enabled"/>

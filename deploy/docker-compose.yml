@@ -73,6 +73,8 @@ services:
       Identification__Enabled: ${IDENTIFICATION_ENABLED:-true}
       Identification__Threshold: ${IDENTIFICATION_THRESHOLD:-0.4}
       Chat__ContextLength: ${CHAT_CONTEXT_LENGTH:-131072}
+      Chat__ToolsEnabled: ${CHAT_TOOLS_ENABLED:-false}
+      Chat__DisabledTools: ${CHAT_DISABLED_TOOLS:-}
       # Uploaded-audio limits (the "Upload" button). AllowAac=false drops M4A/AAC for commercial caution.
       Uploads__MaxBytes: ${UPLOAD_MAX_BYTES:-524288000}
       Uploads__AllowAac: ${UPLOAD_ALLOW_AAC:-true}

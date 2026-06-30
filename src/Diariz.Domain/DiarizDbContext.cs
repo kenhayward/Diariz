@@ -186,6 +186,8 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.HasKey(s => s.UserId);
             e.Property(s => s.SummaryApiBase).HasMaxLength(512);
             e.Property(s => s.SummaryModel).HasMaxLength(256);
+            if (isNpgsql)
+                e.Property(s => s.ChatToolOverridesJson).HasColumnType("jsonb");
             e.HasOne(s => s.User)
                 .WithOne(u => u.Settings)
                 .HasForeignKey<UserSettings>(s => s.UserId)

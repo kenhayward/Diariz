@@ -48,6 +48,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddSummaryUserEdited` | `Summary.IsUserEdited` (bool) + `Summary.UpdatedAt` (nullable) — manual/protected summary edits |
 | `AddTranscriptionProcessingMs` | `Transcription.ProcessingMs` (nullable) — full-pipeline wall-clock time the worker spent |
 | `AddAttachments` | `Attachments` (file/URL supporting documents on a recording, cascade) |
+| `AddChatToolsSupport` | `UserSettings.ChatToolsEnabled`/`ChatToolOverridesJson`; enables `pg_trgm` + a GIN trigram index `IX_Segments_Text_Trgm` on `coalesce("Revised","Original")` (chat tool fuzzy search) |
 
 ### Entity-relationship overview
 
@@ -133,7 +134,8 @@ A contiguous, single-speaker span of transcribed speech.
 | `Ordinal` | int | order within the transcription |
 | `Embedding` | **vector(768)** null | for RAG retrieval (M3, sized for `nomic-embed-text`); unused/null today; Postgres-only |
 
-Index: `(TranscriptionId, Ordinal)`.
+Indexes: `(TranscriptionId, Ordinal)`; GIN trigram index `IX_Segments_Text_Trgm` on
+`coalesce("Revised","Original")` (Postgres `pg_trgm`) backing the chat tools' fuzzy transcript search.
 
 #### `Summaries`
 LLM summary of a specific transcription version (1:1 with `Transcription`).
@@ -266,6 +268,8 @@ Per-user preferences (1:1 with the user via a **shared primary key** = `UserId`)
 | `SummaryApiKeyEncrypted` | text null | API key **encrypted at rest** (ASP.NET Data Protection); never returned to clients |
 | `SummaryModel` | varchar(256) null | |
 | `ChatContextWindow` | int null | per-user context-window override (tokens); null → server `Chat:ContextLength` |
+| `ChatToolsEnabled` | bool null | chat tool-calling master override; null → server `Chat:ToolsEnabled` |
+| `ChatToolOverridesJson` | jsonb null | explicit per-tool on/off map `{ "tool_name": bool }`; a tool absent follows the server default |
 | `NativeLanguage` | text null | the user's native language (BCP-47); default target when translating transcripts |
 | `UiLanguage` | text null | the language the app UI is shown in (BCP-47); null → follow the browser |
 

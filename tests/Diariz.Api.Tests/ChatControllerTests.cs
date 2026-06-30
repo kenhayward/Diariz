@@ -27,8 +27,10 @@ public class ChatControllerTests
                 : new SummarizationRequestConfig("", "", "test-model", 60),
         };
         var ctxResolver = new ChatContextResolver(db, Options.Create(new ChatOptions { ContextLength = 40000 }));
+        var toolSettings = new FakeChatToolSettingsResolver();
+        var orchestrator = new ChatToolOrchestrator(chat);
         var controller = new ChatController(db, chat, settings, ctxResolver, new AttachmentExtractor(),
-            storage ?? new FakeAudioStorage(), urlFetcher ?? new FakeUrlFetcher())
+            storage ?? new FakeAudioStorage(), urlFetcher ?? new FakeUrlFetcher(), toolSettings, orchestrator)
         {
             ControllerContext = Http.Context(userId),
         };

@@ -1,6 +1,7 @@
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
+using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
 using Microsoft.AspNetCore.Mvc;
@@ -12,12 +13,18 @@ namespace Diariz.Api.Tests;
 public class UserSettingsControllerTests
 {
     private static UserSettingsController Build(
-        DiarizDbContext db, Guid userId, SummarizationOptions? server = null, ChatOptions? chat = null) =>
-        new(db, new FakeApiKeyProtector(), Options.Create(server ?? new SummarizationOptions()),
-            Options.Create(chat ?? new ChatOptions()))
+        DiarizDbContext db, Guid userId, SummarizationOptions? server = null, ChatOptions? chat = null,
+        IEnumerable<Diariz.Api.Tools.IChatTool>? tools = null)
+    {
+        var chatOpts = chat ?? new ChatOptions();
+        var registry = new Diariz.Api.Tools.ChatToolRegistry(tools ?? []);
+        var toolResolver = new ChatToolSettingsResolver(db, registry, Options.Create(chatOpts));
+        return new(db, new FakeApiKeyProtector(), Options.Create(server ?? new SummarizationOptions()),
+            Options.Create(chatOpts), toolResolver)
         {
-            ControllerContext = Http.Context(userId)
+            ControllerContext = Http.Context(userId),
         };
+    }
 
     [Fact]
     public async Task Get_NoSettings_ReturnsEmpty()

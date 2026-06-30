@@ -28,7 +28,10 @@ merge duplicates, and erase one or all (GDPR) of the stored biometric voiceprint
 It can **summarise** recordings, **extract action items** (with actor and deadline) into an editable
 table, **translate** a transcript (segments, summary, and actions) into your chosen language, and let you
 **chat across one or more transcripts** — with file attachments, a context-usage dial, and saved
-conversations — using an OpenAI-compatible LLM endpoint you configure. You can **attach supporting
+conversations — using an OpenAI-compatible LLM endpoint you configure. The chat can also call **built-in
+tools** that search your **whole transcript library** (who said a phrase, what a person said about a topic,
+or which recordings exist/mention something) and answer with **When · Who · What** — toggle the tools on,
+and choose which, under Settings → AI. You can **attach supporting
 documents** (files or URLs) to a recording, open them from the transcript page, and optionally **feed them
 to the chat** (PDFs, text, Office docs, emails/calendar invites are read into text; URLs are fetched).
 Recordings organise into **sections** (with sub-sections) and drag-and-drop ordering, can be **merged**
@@ -58,6 +61,31 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.39.0",
+    date: "2026-06-30",
+    pr: 83,
+    headline: "Chat tools: the assistant can search your whole transcript library",
+    summary:
+      "Chat can now **call built-in tools** to answer questions that go beyond the transcripts loaded into " +
+      "the conversation — it searches your **entire library** when it needs to. Three tools ship: " +
+      "**Who said that** (find who said a phrase), **What did they say** (what a named person said about a " +
+      "topic), and **List recordings** (filter by date, name, speaker, or a *contains* topic that finds " +
+      "recordings whose transcript is about something). Findings come back as **When · Who · What**. While a " +
+      "tool runs you'll see a brief grey *“Tool call: …”* line that clears itself, so the conversation isn't " +
+      "interrupted. Turn tools on (and pick which ones) under **Settings → AI**. Tools are **off by default** " +
+      "and need an LLM endpoint that supports tool calling. Search is powered by a Postgres **trigram index** " +
+      "for fast, typo-tolerant matching.",
+    added: [
+      "Three built-in chat tools: who_said_that, what_did_they_say, list_recordings.",
+      "Settings → AI: a master “Enable chat tools” switch plus a per-tool on/off list.",
+      "Server config: Chat__ToolsEnabled and Chat__DisabledTools env defaults.",
+      "An ephemeral grey “Tool call: …” indicator in the chat while tools run.",
+    ],
+    changed: [
+      "Chat now runs as a bounded tool-calling loop when tools are enabled; with tools off it behaves exactly as before.",
+    ],
+  },
   {
     version: "0.38.0",
     date: "2026-06-29",

@@ -155,6 +155,16 @@ only `hasApiKey`).
   non-http(s) schemes), with a size cap, redirect re-validation, and HTML→text reduction. Conversations
   save to **`ChatSession`** rows (thread + context stored as `jsonb`), so the server stays stateless
   between turns — each request resends the full history and context.
+- **Chat tool calling (built-in transcript tools).** When a user enables tools (master switch + per-tool list,
+  resolved by **`ChatToolSettingsResolver`** — user override ?? server `Chat:ToolsEnabled` / `Chat:DisabledTools`),
+  the chat turn runs as a bounded **agentic loop** (`ChatToolOrchestrator`, ≤5 rounds): it offers the enabled
+  tools to the model, executes any **tool calls** server-side, re-injects their results as `role:"tool"` messages,
+  and repeats until the model answers in text. The stream carries new `tool_start`/`tool_end` SSE events (the web
+  shows a transient grey *"Tool call: …"* line). Tools are `IChatTool`s collected by `IChatToolRegistry`; the
+  three built-ins (`who_said_that`, `what_did_they_say`, `list_recordings`) query **`TranscriptSearch`**, a
+  Postgres **`pg_trgm`** GIN-trigram fuzzy search over the user's own current-version transcripts (a `scope` arg
+  lets the model search the whole library or just the selected recordings). With tools off, chat is the same
+  single-pass stream as before. Tools run inside the API (no worker) — server-redeploy only.
 
 ## Auth, multi-tenancy, and roles
 

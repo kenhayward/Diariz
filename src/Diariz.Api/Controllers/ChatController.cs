@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Diariz.Api.Contracts;
 using Diariz.Api.Services;
+using Diariz.Api.Tools;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -28,6 +29,14 @@ public class ChatController : ControllerBase
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private static readonly SavedChatContextDto EmptyContext = new([], null, null);
 
+    /// <summary>Appended to the system prompt when tools are active: steers the model to use the built-in
+    /// tools to look beyond the supplied context and to report findings in the standard format.</summary>
+    private const string ToolSystemInstruction =
+        "You have tools that search the user's full transcript library, which may contain more than the " +
+        "context above. Use a tool whenever a question is about who said something, what a person said about " +
+        "a topic, or which recordings exist or mention a topic. When you report transcript findings, use the " +
+        "format: When (date/time) · Who (speaker) · What (what was said).";
+
     private readonly DiarizDbContext _db;
     private readonly IChatStreamClient _chat;
     private readonly ISummarizationSettingsResolver _settings;
@@ -35,11 +44,14 @@ public class ChatController : ControllerBase
     private readonly IAttachmentExtractor _extractor;
     private readonly IAudioStorage _storage;
     private readonly IUrlFetcher _urlFetcher;
+    private readonly IChatToolSettingsResolver _toolSettings;
+    private readonly IChatToolOrchestrator _orchestrator;
 
     public ChatController(
         DiarizDbContext db, IChatStreamClient chat, ISummarizationSettingsResolver settings,
         IChatContextResolver contextResolver, IAttachmentExtractor extractor,
-        IAudioStorage storage, IUrlFetcher urlFetcher)
+        IAudioStorage storage, IUrlFetcher urlFetcher,
+        IChatToolSettingsResolver toolSettings, IChatToolOrchestrator orchestrator)
     {
         _db = db;
         _chat = chat;
@@ -48,6 +60,8 @@ public class ChatController : ControllerBase
         _extractor = extractor;
         _storage = storage;
         _urlFetcher = urlFetcher;
+        _toolSettings = toolSettings;
+        _orchestrator = orchestrator;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -70,11 +84,16 @@ public class ChatController : ControllerBase
             ? await LoadAttachmentDocumentsAsync(req.RecordingIds ?? [], ct)
             : [];
 
+        // Resolve the user's enabled tools; when any are active, add a tool-usage instruction so the model
+        // prefers the built-in tools and answers in the standard When / Who / What format.
+        var toolCfg = await _toolSettings.ResolveAsync(UserId, ct);
         var system = ChatContextBuilder.BuildSystemPrompt(contexts, req.AttachmentName, req.AttachmentText, documents);
+        if (toolCfg.ActiveTools.Count > 0) system += "\n\n" + ToolSystemInstruction;
         var history = (req.Messages ?? []).Select(m => new ChatMessage(m.Role, m.Content)).ToList();
         var messages = ChatContextBuilder.BuildMessages(system, history);
         var contextTotal = await _contextResolver.ResolveContextWindowAsync(UserId, ct);
         var promptTokens = messages.Sum(m => ChatContextMeter.EstimateTokens(m.Content));
+        var toolContext = new ChatToolContext(UserId, req.RecordingIds ?? []);
 
         Response.Headers["Content-Type"] = "text/event-stream";
         Response.Headers["Cache-Control"] = "no-cache";
@@ -86,10 +105,21 @@ public class ChatController : ControllerBase
         long completionChars = 0;
         try
         {
-            await foreach (var token in _chat.StreamAsync(cfg, messages, ct))
+            await foreach (var evt in _orchestrator.RunAsync(cfg, messages, toolCfg.ActiveTools, toolContext, ct))
             {
-                completionChars += token.Length;
-                await WriteEventAsync(new { type = "token", value = token }, ct);
+                switch (evt)
+                {
+                    case ChatTokenEvent t:
+                        completionChars += t.Value.Length;
+                        await WriteEventAsync(new { type = "token", value = t.Value }, ct);
+                        break;
+                    case ChatToolStartEvent s:
+                        await WriteEventAsync(new { type = "tool_start", name = s.Name }, ct);
+                        break;
+                    case ChatToolEndEvent e:
+                        await WriteEventAsync(new { type = "tool_end", name = e.Name }, ct);
+                        break;
+                }
             }
             var used = promptTokens + ChatContextMeter.EstimateFromChars(completionChars);
             await WriteEventAsync(new { type = "done", model = cfg.Model, contextUsed = used, contextTotal }, ct);

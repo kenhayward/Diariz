@@ -27,6 +27,9 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState<string | null>(null); // null = untouched, "" = clear, value = set
   const [contextWindow, setContextWindow] = useState("");
+  // Chat tool calling: master switch + per-tool on/off map (keyed by tool name).
+  const [toolsEnabled, setToolsEnabled] = useState(false);
+  const [toolStates, setToolStates] = useState<Record<string, boolean>>({});
 
   // Storage quotas (GB inputs).
   const [starterGb, setStarterGb] = useState("");
@@ -40,6 +43,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       setApiBase(data.apiBase ?? "");
       setModel(data.model ?? "");
       setContextWindow(data.contextWindow != null ? String(data.contextWindow) : "");
+      setToolsEnabled(data.toolsEnabled);
+      setToolStates(Object.fromEntries(data.tools.map((tool) => [tool.name, tool.enabled])));
     }
   }, [data]);
 
@@ -65,6 +70,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         model: model.trim() || null,
         apiKey, // null leaves it unchanged; "" clears; a value sets it
         contextWindow: contextWindow.trim() ? Number(contextWindow) : null,
+        toolsEnabled,
+        toolOverrides: toolStates,
       });
       qc.invalidateQueries({ queryKey: ["user-settings"] });
 
@@ -181,6 +188,44 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 />
                 <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("chatContextHint")}</span>
               </label>
+
+              {/* Chat tools: a master switch plus a per-tool on/off list (disabled when the master is off). */}
+              <div className="border-t pt-3 dark:border-gray-700">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={toolsEnabled}
+                    onChange={(e) => setToolsEnabled(e.target.checked)}
+                  />
+                  <span className="font-medium text-gray-700 dark:text-gray-200">{t("chatToolsEnabled")}</span>
+                </label>
+                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t("chatToolsHint")}</p>
+                {data && data.tools.length > 0 && (
+                  <ul className="mt-2 space-y-1.5">
+                    {data.tools.map((tool) => (
+                      <li key={tool.name}>
+                        <label className="flex items-start gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            disabled={!toolsEnabled}
+                            checked={toolStates[tool.name] ?? tool.enabled}
+                            onChange={(e) =>
+                              setToolStates((s) => ({ ...s, [tool.name]: e.target.checked }))
+                            }
+                          />
+                          <span className={toolsEnabled ? "" : "opacity-50"}>
+                            <span className="text-gray-700 dark:text-gray-200">{tool.title}</span>
+                            <span className="block text-xs text-gray-400 dark:text-gray-500">
+                              {tool.description}
+                            </span>
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           ) : (
             <div className="space-y-3">

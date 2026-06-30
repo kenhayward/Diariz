@@ -434,7 +434,13 @@ export const api = {
       messages: ChatTurn[];
       includeAttachments?: boolean;
     },
-    handlers: { onToken: (token: string) => void; onMeta?: (u: ChatUsage) => void; signal?: AbortSignal },
+    handlers: {
+      onToken: (token: string) => void;
+      onMeta?: (u: ChatUsage) => void;
+      onToolStart?: (name: string) => void;
+      onToolEnd?: (name: string) => void;
+      signal?: AbortSignal;
+    },
   ): Promise<ChatUsage> {
     const res = await fetch(`${baseURL}/api/chat/stream`, {
       method: "POST",
@@ -474,6 +480,7 @@ export const api = {
         const evt = JSON.parse(json) as {
           type: string;
           value?: string;
+          name?: string;
           model?: string;
           message?: string;
           contextUsed?: number;
@@ -481,6 +488,10 @@ export const api = {
         };
         if (evt.type === "token" && evt.value) {
           handlers.onToken(evt.value);
+        } else if (evt.type === "tool_start" && evt.name) {
+          handlers.onToolStart?.(evt.name);
+        } else if (evt.type === "tool_end" && evt.name) {
+          handlers.onToolEnd?.(evt.name);
         } else if (evt.type === "meta") {
           usage = { model: evt.model ?? "", contextUsed: evt.contextUsed ?? 0, contextTotal: evt.contextTotal ?? 0 };
           handlers.onMeta?.(usage);

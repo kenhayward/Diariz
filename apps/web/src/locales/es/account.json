@@ -36,6 +36,8 @@
   "keyWillClear": "La clave guardada se borrará al guardar.",
   "chatContextWindow": "Ventana de contexto del chat (tokens)",
   "chatContextHint": "Controla el indicador de contexto del chat. Deja en blanco para usar el valor del servidor.",
+  "chatToolsEnabled": "Activar herramientas del chat",
+  "chatToolsHint": "Permite que el modelo de chat use herramientas integradas que buscan en tus transcripciones. Requiere un modelo compatible con llamadas a herramientas.",
   "quotasIntro": "Los nuevos usuarios empiezan con la cuota inicial; los administradores pueden aumentarla hasta el máximo.",
   "starterQuota": "Cuota inicial (GB)",
   "maxQuota": "Cuota máxima (GB)",

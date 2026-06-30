@@ -176,11 +176,20 @@ public record TranslateRequest(string? Language = null);
 public record UserSettingsDto(
     string? ApiBase, string? Model, bool HasApiKey,
     string? DefaultApiBase, string? DefaultModel, bool ServerHasApiKey,
-    int? ContextWindow, int DefaultContextWindow);
+    int? ContextWindow, int DefaultContextWindow,
+    bool ToolsEnabled, bool DefaultToolsEnabled, IReadOnlyList<ChatToolDto> Tools);
+
+/// <summary>A chat tool's state for the settings panel: whether it is on for this user
+/// (<paramref name="Enabled"/>) and its server-side default.</summary>
+public record ChatToolDto(string Name, string Title, string Description, bool Enabled, bool DefaultEnabled);
 
 /// <summary>Update request. ApiKey is tri-state: null = leave unchanged, "" = clear, value = set.
-/// ContextWindow: null/&lt;=0 clears the per-user override (falls back to the server default).</summary>
-public record UpdateUserSettingsRequest(string? ApiBase, string? Model, string? ApiKey, int? ContextWindow = null);
+/// ContextWindow: null/&lt;=0 clears the per-user override (falls back to the server default).
+/// ToolsEnabled: null leaves the master switch unchanged; a value sets the per-user override.
+/// ToolOverrides: null leaves the per-tool overrides unchanged; a map (possibly empty) replaces them.</summary>
+public record UpdateUserSettingsRequest(
+    string? ApiBase, string? Model, string? ApiKey, int? ContextWindow = null,
+    bool? ToolsEnabled = null, IReadOnlyDictionary<string, bool>? ToolOverrides = null);
 
 // ---- Chat ----
 public record ChatTurnDto(string Role, string Content);

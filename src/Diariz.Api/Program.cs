@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Diariz.Api.Configuration;
 using Diariz.Api.Hubs;
 using Diariz.Api.Services;
+using Diariz.Api.Tools;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -146,6 +147,15 @@ builder.Services.AddSingleton<IAttachmentExtractor, AttachmentExtractor>();
 builder.Services.AddHttpClient("url-attachments")
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 builder.Services.AddScoped<IUrlFetcher, UrlFetcher>();
+
+// ---- Chat tool calling (built-in transcript tools) ----
+builder.Services.AddScoped<ITranscriptSearch, TranscriptSearch>();
+builder.Services.AddScoped<IChatTool, WhoSaidThatTool>();
+builder.Services.AddScoped<IChatTool, WhatDidTheySayTool>();
+builder.Services.AddScoped<IChatTool, ListRecordingsTool>();
+builder.Services.AddScoped<IChatToolRegistry, ChatToolRegistry>();
+builder.Services.AddScoped<IChatToolSettingsResolver, ChatToolSettingsResolver>();
+builder.Services.AddScoped<IChatToolOrchestrator, ChatToolOrchestrator>();
 
 // ---- App services ----
 builder.Services.AddScoped<ITokenService, TokenService>();

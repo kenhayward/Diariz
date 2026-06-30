@@ -564,6 +564,12 @@ namespace Diariz.Domain.Migrations
                     b.Property<int?>("ChatContextWindow")
                         .HasColumnType("integer");
 
+                    b.Property<string>("ChatToolOverridesJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<bool?>("ChatToolsEnabled")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("NativeLanguage")
                         .HasColumnType("text");
 

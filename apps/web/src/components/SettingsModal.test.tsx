@@ -39,6 +39,9 @@ describe("SettingsModal", () => {
       serverHasApiKey: true,
       contextWindow: null,
       defaultContextWindow: 131072,
+      toolsEnabled: false,
+      defaultToolsEnabled: false,
+      tools: [],
     });
     (api.updateUserSettings as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   });
@@ -62,6 +65,8 @@ describe("SettingsModal", () => {
         model: "gpt-x",
         apiKey: null,
         contextWindow: null,
+        toolsEnabled: false,
+        toolOverrides: {},
       }),
     );
   });
@@ -91,6 +96,9 @@ describe("SettingsModal", () => {
       serverHasApiKey: true,
       contextWindow: null,
       defaultContextWindow: 131072,
+      toolsEnabled: false,
+      defaultToolsEnabled: false,
+      tools: [],
     });
     renderModal();
 
@@ -106,6 +114,8 @@ describe("SettingsModal", () => {
         model: null,
         apiKey: null,
         contextWindow: null,
+        toolsEnabled: false,
+        toolOverrides: {},
       }),
     );
   });
@@ -140,6 +150,44 @@ describe("SettingsModal", () => {
     renderModal();
     await screen.findByDisplayValue("https://existing/v1");
     expect(screen.queryByRole("tab", { name: /storage quotas/i })).toBeNull();
+  });
+
+  it("renders chat tools and saves the master switch + per-tool overrides", async () => {
+    (api.getUserSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      apiBase: null,
+      model: null,
+      hasApiKey: false,
+      defaultApiBase: null,
+      defaultModel: null,
+      serverHasApiKey: false,
+      contextWindow: null,
+      defaultContextWindow: 131072,
+      toolsEnabled: false,
+      defaultToolsEnabled: false,
+      tools: [
+        { name: "who_said_that", title: "Who said that", description: "Find who said a phrase.", enabled: true, defaultEnabled: true },
+        { name: "list_recordings", title: "List recordings", description: "List recordings.", enabled: true, defaultEnabled: true },
+      ],
+    });
+
+    renderModal();
+    await screen.findByText("Who said that"); // tools list rendered once settings loaded
+    const master = screen.getByLabelText(/enable chat tools/i);
+
+    fireEvent.click(master); // turn tools on
+    // Turn one tool off.
+    const toolBoxes = screen.getAllByRole("checkbox");
+    fireEvent.click(toolBoxes[toolBoxes.length - 1]); // last = list_recordings
+    fireEvent.click(screen.getByRole("button", { name: /^ok$/i }));
+
+    await waitFor(() =>
+      expect(api.updateUserSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          toolsEnabled: true,
+          toolOverrides: { who_said_that: true, list_recordings: false },
+        }),
+      ),
+    );
   });
 
   it("lets a Platform Administrator edit the quota defaults (GB → bytes) and saves on OK", async () => {
