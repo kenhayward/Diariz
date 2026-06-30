@@ -130,6 +130,10 @@ recent, so:
   env.
 - Strix Halo is an **APU with unified memory** — its "VRAM" is carved from system RAM. Allocate enough
   GTT/VRAM in BIOS for the ~9 GB working set (large-v3 + align + pyannote).
+- **Build pins `setuptools<81`** for the pip install step. openai-whisper's `setup.py` imports
+  `pkg_resources`, which `setuptools >= 81` no longer ships; the `rocm/pytorch` base bundles a recent pip
+  that otherwise pulls `setuptools >= 81` into the isolated wheel build and fails with *"No module named
+  'pkg_resources'"*. `PIP_CONSTRAINT` scopes the pin to the build (it applies to the isolated build overlay).
 
 > **Status: build- and unit-validated, not yet run on AMD hardware.** The ASR-backend switch is unit-tested
 > and the CUDA path is unchanged, but end-to-end ROCm *inference* still needs confirming on a real AMD

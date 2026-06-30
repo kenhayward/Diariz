@@ -25,8 +25,14 @@ WORKDIR /app
 # ROCm torch/torchaudio are left in place. ctranslate2 is pulled in transitively by whisperx but is never
 # used for inference here (ASR_BACKEND=whisper); it imports fine on a non-CUDA host (CUDA libs load lazily).
 COPY requirements.txt requirements-rocm.txt ./
+# openai-whisper's legacy setup.py does `import pkg_resources`, which setuptools >= 81 no longer ships. The
+# rocm/pytorch base bundles a recent pip (26.x) that pulls setuptools >= 81 into PEP 517 isolated build
+# environments, so the whisper wheel build fails with "No module named 'pkg_resources'". Constrain the
+# build's setuptools to a version that still provides pkg_resources — PIP_CONSTRAINT also applies to the
+# isolated build overlays, so the fix reaches the wheel build, not just the top-level resolve.
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip3 install -r requirements.txt -r requirements-rocm.txt
+    printf 'setuptools<81\n' > /tmp/pip-constraints.txt \
+    && PIP_CONSTRAINT=/tmp/pip-constraints.txt pip3 install -r requirements.txt -r requirements-rocm.txt
 
 COPY . ./
 
