@@ -63,6 +63,25 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.42.0",
+    date: "2026-06-30",
+    pr: 87,
+    headline: "Long recordings no longer sign you out or get lost",
+    summary:
+      "Fixed the bug where leaving the app untouched during a long recording (e.g. a 45-minute meeting) could " +
+      "drop you to the sign-in screen on Stop and lose the recording. Two changes: your **session now refreshes " +
+      "itself silently** before it expires, so it stays alive through a long meeting; and every recording is " +
+      "**saved to your browser the moment you press Stop**, before it uploads — so even if an upload fails, the " +
+      "audio is safe and you're offered to **upload it when you return**.",
+    added: [
+      "Silent sliding-session token refresh (a new /api/auth/refresh endpoint) keeps long sessions alive.",
+      "An unsaved recording is stashed locally and offered for re-upload if its upload didn't complete.",
+    ],
+    fixed: [
+      "Stopping a long, idle recording no longer bounces you to the login screen and discards the audio.",
+    ],
+  },
+  {
     version: "0.41.1",
     date: "2026-06-30",
     pr: 86,

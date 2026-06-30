@@ -1,4 +1,12 @@
 import axios from "axios";
+
+// A per-request opt-out of the global 401→/login redirect (used by the silent token refresh).
+declare module "axios" {
+  export interface AxiosRequestConfig {
+    skipAuthRedirect?: boolean;
+  }
+}
+
 import type {
   AdminUser,
   Attachment,
@@ -50,12 +58,13 @@ http.interceptors.request.use((config) => {
 });
 
 /// On an expired/invalid token the API returns 401. Clear the stale token and send the user to
-/// login rather than leaving them on a silently-empty page. Exported for testing.
+/// login rather than leaving them on a silently-empty page. Exported for testing. A request may opt out
+/// of the redirect (config `skipAuthRedirect`) — used by the silent token refresh, which must fail quietly.
 export function handleAuthError(error: unknown): void {
-  if (axios.isAxiosError(error) && error.response?.status === 401) {
-    setToken(null);
-    if (window.location.pathname !== "/login") window.location.assign("/login");
-  }
+  if (!axios.isAxiosError(error) || error.response?.status !== 401) return;
+  if (error.config?.skipAuthRedirect) return;
+  setToken(null);
+  if (window.location.pathname !== "/login") window.location.assign("/login");
 }
 
 http.interceptors.response.use(
@@ -69,6 +78,13 @@ http.interceptors.response.use(
 export const api = {
   async login(email: string, password: string): Promise<AuthResponse> {
     const { data } = await http.post<AuthResponse>("/api/auth/login", { email, password });
+    return data;
+  },
+
+  /// Re-issue the access token (sliding session). Skips the global 401 redirect so an expired-token
+  /// refresh fails quietly — the next real request handles auth.
+  async refresh(): Promise<AuthResponse> {
+    const { data } = await http.post<AuthResponse>("/api/auth/refresh", null, { skipAuthRedirect: true });
     return data;
   },
 

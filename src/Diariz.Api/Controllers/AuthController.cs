@@ -1,6 +1,7 @@
 using Diariz.Api.Contracts;
 using Diariz.Api.Services;
 using Diariz.Domain.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -104,6 +105,18 @@ public class AuthController : ControllerBase
         user.EmailConfirmed = true;
         await _users.UpdateAsync(user); // also rotates the security stamp → setup token is now single-use
 
+        return await TokenResponse(user);
+    }
+
+    /// <summary>Re-issue an access token for the signed-in user (a sliding session). Requires a still-valid
+    /// token, so the client can refresh silently before expiry — keeping long sessions (e.g. a recording in
+    /// progress) alive without a separate long-lived refresh token.</summary>
+    [Authorize]
+    [HttpPost("refresh")]
+    public async Task<IActionResult> Refresh()
+    {
+        var user = await _users.GetUserAsync(User);
+        if (user is null || !user.IsEnabled) return Unauthorized();
         return await TokenResponse(user);
     }
 

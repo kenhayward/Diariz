@@ -105,6 +105,32 @@ public class AuthControllerTests
         Assert.Contains("disabled", ((ObjectResult)result).Value!.ToString());
     }
 
+    // ---- Refresh (sliding session) ----
+
+    [Fact]
+    public async Task Refresh_AuthedEnabledUser_ReturnsNewToken()
+    {
+        using var host = new IdentityTestHost();
+        var user = await CreateUser(host, "r@x.test", GoodPassword, UserStatus.Active);
+        var controller = BuildController(host);
+        controller.ControllerContext = Http.Context(user.Id);
+
+        var result = await controller.Refresh();
+
+        Assert.IsType<AuthResponse>(Assert.IsType<OkObjectResult>(result).Value);
+    }
+
+    [Fact]
+    public async Task Refresh_DisabledUser_ReturnsUnauthorized()
+    {
+        using var host = new IdentityTestHost();
+        var user = await CreateUser(host, "d@x.test", GoodPassword, UserStatus.Active, enabled: false);
+        var controller = BuildController(host);
+        controller.ControllerContext = Http.Context(user.Id);
+
+        Assert.IsType<UnauthorizedResult>(await controller.Refresh());
+    }
+
     // ---- Request access ----
 
     [Fact]

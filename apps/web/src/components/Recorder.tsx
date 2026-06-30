@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { api, apiErrorMessage } from "../lib/api";
+import { api, apiErrorMessage, getToken } from "../lib/api";
+import { userIdFromToken } from "../lib/jwt";
 import { getStream, isElectron, describeAudioError, type AudioSourceKind } from "../lib/audioSource";
 import { connectTrayRecorder, type RecorderState, type TrayBridge } from "../lib/trayRecorder";
 import { AUDIO_ACCEPT_ATTR } from "../lib/audioFormats";
 import { useUpload } from "../lib/uploadContext";
+import {
+  savePendingRecording,
+  loadPendingRecording,
+  clearPendingRecording,
+  type PendingRecording,
+} from "../lib/pendingRecording";
 
 export default function Recorder({
   onUploaded,
@@ -19,6 +26,23 @@ export default function Recorder({
   const [elapsed, setElapsed] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // An unsaved recording recovered from local storage (its upload failed previously, e.g. the session
+  // expired). Offered back for upload so the audio is never lost.
+  const [pending, setPending] = useState<PendingRecording | null>(null);
+
+  const userId = userIdFromToken(getToken());
+
+  // On mount, surface any unsaved recording stashed for this user.
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    void loadPendingRecording(userId).then((rec) => {
+      if (!cancelled && rec) setPending(rec);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -71,22 +95,53 @@ export default function Recorder({
   async function upload() {
     setBusy(true);
     reportRef.current({ phase: "uploading" });
+    const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+    const durationMs = Date.now() - startRef.current;
+    const source: "Microphone" | "System" = activeSourceRef.current === "system" ? "System" : "Microphone";
+    const prefix = source === "System" ? t("recTitlePrefixSystem") : t("recTitlePrefixMic");
+    const title = `${prefix} ${new Date().toLocaleString()}`;
+    const rec: PendingRecording = { userId: userId ?? "", blob, title, durationMs, source, createdAt: Date.now() };
+
+    // Stash the audio BEFORE uploading. If the upload fails (e.g. an expired session redirects to login),
+    // the recording survives in local storage and is offered for re-upload on the next visit.
+    if (userId) await savePendingRecording(rec);
+
     try {
-      const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-      const durationMs = Date.now() - startRef.current;
-      const kind = activeSourceRef.current;
-      const prefix = kind === "system" ? t("recTitlePrefixSystem") : t("recTitlePrefixMic");
-      const title = `${prefix} ${new Date().toLocaleString()}`;
-      await api.upload(blob, title, durationMs, kind === "system" ? "System" : "Microphone");
+      await api.upload(blob, title, durationMs, source);
+      if (userId) await clearPendingRecording(userId);
+      setPending(null);
       onUploaded();
       reportRef.current({ phase: "idle" });
     } catch (e) {
       const message = apiErrorMessage(e, t("errUpload"));
       setError(message);
+      if (userId) setPending(rec); // safe in storage — show the recovery banner
       reportRef.current({ phase: "error", error: message });
     } finally {
       setBusy(false);
     }
+  }
+
+  async function uploadPending() {
+    if (!pending) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.upload(pending.blob, pending.title, pending.durationMs, pending.source);
+      if (userId) await clearPendingRecording(userId);
+      setPending(null);
+      onUploaded();
+    } catch (e) {
+      setError(apiErrorMessage(e, t("errUpload")));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function discardPending() {
+    if (!window.confirm(t("confirmDiscardRecording"))) return;
+    if (userId) await clearPendingRecording(userId);
+    setPending(null);
   }
 
   // Upload existing audio files (the "Upload" button). The shared upload queue handles validation,
@@ -176,6 +231,29 @@ export default function Recorder({
         {recording && <span className="font-mono text-sm text-red-600">● {mmss}</span>}
         {error && compact && <span className="text-xs text-red-600">{error}</span>}
       </div>
+      {pending && !recording && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+          <span>{t("unsavedRecording", { time: new Date(pending.createdAt).toLocaleString() })}</span>
+          <div className="ml-auto flex gap-2">
+            <button
+              type="button"
+              onClick={uploadPending}
+              disabled={busy}
+              className="rounded bg-amber-600 px-2 py-1 text-xs text-white disabled:opacity-50"
+            >
+              {busy ? t("recUploading") : t("recUploadPending")}
+            </button>
+            <button
+              type="button"
+              onClick={discardPending}
+              disabled={busy}
+              className="rounded border border-amber-400 px-2 py-1 text-xs disabled:opacity-50 dark:border-amber-700"
+            >
+              {t("recDiscardPending")}
+            </button>
+          </div>
+        </div>
+      )}
       {error && !compact && <p className="mt-2 text-sm text-red-600">{error}</p>}
     </div>
   );

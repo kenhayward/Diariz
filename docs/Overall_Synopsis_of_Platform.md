@@ -179,6 +179,11 @@ only `hasApiKey`).
 
 - **ASP.NET Core Identity** (Guid keys) issues **JWT** bearer tokens (`TokenService`). Browsers pass the
   token as `?access_token=` on the SignalR WebSocket handshake (picked up in `Program.cs` `OnMessageReceived`).
+  The token is a **sliding session**: the web client silently calls `POST /api/auth/refresh` (re-issues a token
+  for the still-authenticated user) shortly before expiry, so long sessions — e.g. a recording left running —
+  don't lapse. Recordings are also written to the browser (**IndexedDB**, `lib/pendingRecording.ts`) the moment
+  Stop is pressed, before upload, and offered for re-upload on return if the upload didn't complete — so a
+  session lapse can never lose audio.
 - **RBAC:** `Standard` / `Administrator` / `PlatformAdministrator`. The Platform Administrator is the seed
   user — undeletable, undemotable, non-disable-able.
 - **Access lifecycle:** a person **requests access** (`UserStatus.Requested`) → an admin **grants** it
