@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
+import { parseRecordingLink, recordingLinkPath } from "../lib/transcriptNav";
 import { renderMarkdown } from "../lib/markdown";
 import { useActiveRecordingId } from "../lib/useActiveRecordingId";
 import { useSelection } from "../lib/selection";
@@ -21,8 +23,21 @@ type ContextMode = "current" | "selected" | "none";
 /// context, watch the reply stream in, and save / reload / delete conversations.
 export default function ChatPanel() {
   const { t } = useTranslation("chat");
+  const navigate = useNavigate();
   const activeId = useActiveRecordingId();
   const selection = useSelection();
+
+  /// Intercept clicks on the assistant's transcript deep-links so they open in the middle panel (and seek
+  /// to the moment) via the SPA router, instead of triggering a full page reload.
+  function onThreadClick(e: React.MouseEvent<HTMLDivElement>) {
+    const anchor = (e.target as HTMLElement).closest("a");
+    const href = anchor?.getAttribute("href");
+    if (!href) return;
+    const link = parseRecordingLink(href);
+    if (!link) return; // external / non-transcript link — leave default behaviour
+    e.preventDefault();
+    navigate(recordingLinkPath(link));
+  }
   // The model's context-window size for the dial (per-user override, else server default).
   const { data: settings } = useQuery({ queryKey: ["user-settings"], queryFn: api.getUserSettings });
 
@@ -329,7 +344,7 @@ export default function ChatPanel() {
       </div>
 
       {/* Thread */}
-      <div ref={threadRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+      <div ref={threadRef} onClick={onThreadClick} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
         {messages.length === 0 ? (
           <p className="px-1 text-xs text-gray-400 dark:text-gray-500">{t("intro")}</p>
         ) : (

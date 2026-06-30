@@ -34,8 +34,11 @@ public class ChatController : ControllerBase
     private const string ToolSystemInstruction =
         "You have tools that search the user's full transcript library, which may contain more than the " +
         "context above. Use a tool whenever a question is about who said something, what a person said about " +
-        "a topic, or which recordings exist or mention a topic. When you report transcript findings, use the " +
-        "format: When (date/time) · Who (speaker) · What (what was said).";
+        "a topic, which recordings exist or mention a topic, action items, summaries, attendees, or talk time. " +
+        "When you report transcript findings, use the format: When (date/time) · Who (speaker) · What (what was " +
+        "said). Each tool result includes a markdown 'Link:' to the recording (and the exact moment); when you " +
+        "reference a recording or a specific moment, include that markdown link inline so the user can open the " +
+        "transcript there. Keep the links exactly as given.";
 
     private readonly DiarizDbContext _db;
     private readonly IChatStreamClient _chat;

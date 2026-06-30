@@ -27,6 +27,29 @@ public static class ToolFormat
             ? ctx.SelectedRecordingIds
             : null;
 
+    /// <summary>Parses a time position into milliseconds: accepts <c>mm:ss</c> / <c>h:mm:ss</c>, or a plain
+    /// number of seconds. Returns null when blank/unparseable.</summary>
+    public static long? ParseTimeMs(string? s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return null;
+        s = s.Trim();
+        if (s.Contains(':'))
+        {
+            var parts = s.Split(':');
+            if (parts.Length is < 2 or > 3) return null;
+            if (!parts.All(p => int.TryParse(p, NumberStyles.Integer, CultureInfo.InvariantCulture, out _)))
+                return null;
+            var nums = parts.Select(int.Parse).ToArray();
+            var total = parts.Length == 3
+                ? (nums[0] * 3600) + (nums[1] * 60) + nums[2]
+                : (nums[0] * 60) + nums[1];
+            return (long)total * 1000;
+        }
+        return double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var sec)
+            ? (long)(sec * 1000)
+            : null;
+    }
+
     /// <summary>Parses an ISO-8601 date/time argument as UTC, or null when absent/unparseable.</summary>
     public static DateTimeOffset? ReadDate(JsonElement args, string name)
     {
@@ -46,6 +69,27 @@ public static class ToolFormat
         description = "Which recordings to search: 'all' (the whole library, default) or " +
             "'current' (only the recordings selected as the chat context).",
     };
+
+    /// <summary>A relative, in-app deep-link to a recording, optionally seeking to a segment time
+    /// (ms). The web client opens it in the transcript panel and scrolls to that moment.</summary>
+    public static string RecordingHref(Guid recordingId, long? startMs = null) =>
+        startMs is { } ms ? $"/recordings/{recordingId}?t={ms}" : $"/recordings/{recordingId}";
+
+    /// <summary>A markdown link to a recording moment, e.g. <c>[Budget Review @ 04:12](/recordings/…?t=…)</c>.
+    /// The model is told to cite these so the chat answer can link straight to the transcript.</summary>
+    public static string SegmentLink(Guid recordingId, string recordingName, long startMs) =>
+        $"[{LinkLabel(recordingName)} @ {Offset(startMs)}]({RecordingHref(recordingId, startMs)})";
+
+    /// <summary>A markdown link to a whole recording.</summary>
+    public static string RecordingLink(Guid recordingId, string recordingName) =>
+        $"[{LinkLabel(recordingName)}]({RecordingHref(recordingId)})";
+
+    /// <summary>Strips the markdown link-syntax characters from a label so the link can't be broken.</summary>
+    private static string LinkLabel(string name)
+    {
+        var cleaned = (name ?? "").Replace('[', '(').Replace(']', ')');
+        return string.IsNullOrWhiteSpace(cleaned) ? "recording" : cleaned.Trim();
+    }
 
     /// <summary>The "When" field: the recording date/time plus the segment's offset, e.g.
     /// <c>2026-06-26 13:25 (at 04:12)</c>.</summary>
@@ -82,7 +126,7 @@ public static class ToolFormat
             sb.Append(i + 1).Append(". When: ").Append(When(h.RecordingCreatedAt, h.StartMs))
               .Append(" · Who: ").Append(h.SpeakerName)
               .Append(" · What: \"").Append(Snippet(h.Text)).Append('"')
-              .Append(" [recording: ").Append(h.RecordingName).Append(']')
+              .Append(" · Link: ").Append(SegmentLink(h.RecordingId, h.RecordingName, h.StartMs))
               .Append('\n');
         }
         return sb.ToString().TrimEnd();
@@ -103,6 +147,7 @@ public static class ToolFormat
                 sb.Append(" · Speakers: ").Append(string.Join(", ", r.Speakers));
             if (!string.IsNullOrWhiteSpace(r.BestSnippet))
                 sb.Append(" · Match: \"").Append(Snippet(r.BestSnippet!)).Append('"');
+            sb.Append(" · Link: ").Append(RecordingLink(r.RecordingId, r.RecordingName));
             sb.Append('\n');
         }
         return sb.ToString().TrimEnd();
