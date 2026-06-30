@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
@@ -15,6 +15,7 @@ import AttachmentsModal from "../components/AttachmentsModal";
 import AttachmentsSplitButton from "../components/AttachmentsSplitButton";
 import { recordingMenu } from "../components/recordingMenu";
 import { copyRichLink, transcriptUrl } from "../lib/clipboard";
+import { segmentIndexAtMs } from "../lib/transcriptNav";
 import { formatBytes, formatDate, formatDuration } from "../lib/format";
 import { hasRevisions, segmentText, toggleLabel } from "../lib/transcriptView";
 import { fetchLanguages } from "../lib/languages";
@@ -31,6 +32,7 @@ export default function RecordingDetail() {
   const { id = "" } = useParams();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { data: rec } = useQuery({
     queryKey: ["recording", id],
     queryFn: () => api.getRecording(id),
@@ -52,6 +54,23 @@ export default function RecordingDetail() {
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
+
+  // When opened from a chat transcript link (/recordings/:id?t=ms), highlight and scroll to that segment.
+  const tParam = searchParams.get("t");
+  useEffect(() => {
+    if (tParam == null) return;
+    const ms = Number(tParam);
+    const segs = rec?.current?.segments;
+    if (!Number.isFinite(ms) || !segs || segs.length === 0) return;
+    const idx = segmentIndexAtMs(segs, ms);
+    if (idx < 0) return;
+    setActiveIdx(idx);
+    const segId = segs[idx].id;
+    // Defer until the rows have rendered.
+    requestAnimationFrame(() =>
+      document.getElementById(`seg-${segId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }),
+    );
+  }, [tParam, rec]);
   const [requeuing, setRequeuing] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -980,6 +999,7 @@ function SegmentRow({
   ];
   return (
     <li
+      id={`seg-${seg.id}`}
       onClick={onPlay}
       className={`flex items-start gap-3 rounded-lg border px-4 py-2 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800 ${
         onPlay ? "cursor-pointer" : ""

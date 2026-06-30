@@ -160,11 +160,16 @@ only `hasApiKey`).
   the chat turn runs as a bounded **agentic loop** (`ChatToolOrchestrator`, ≤5 rounds): it offers the enabled
   tools to the model, executes any **tool calls** server-side, re-injects their results as `role:"tool"` messages,
   and repeats until the model answers in text. The stream carries new `tool_start`/`tool_end` SSE events (the web
-  shows a transient grey *"Tool call: …"* line). Tools are `IChatTool`s collected by `IChatToolRegistry`; the
-  three built-ins (`who_said_that`, `what_did_they_say`, `list_recordings`) query **`TranscriptSearch`**, a
-  Postgres **`pg_trgm`** GIN-trigram fuzzy search over the user's own current-version transcripts (a `scope` arg
-  lets the model search the whole library or just the selected recordings). With tools off, chat is the same
-  single-pass stream as before. Tools run inside the API (no worker) — server-redeploy only.
+  shows a transient grey *"Tool call: …"* line). Tools are `IChatTool`s collected by `IChatToolRegistry`. The
+  search-based ones (`who_said_that`, `what_did_they_say`, `search_transcripts`, `when_was_discussed`,
+  `count_mentions`, plus `list_recordings`) query **`TranscriptSearch`**, a Postgres **`pg_trgm`** GIN-trigram
+  fuzzy search over the user's own current-version transcripts (a `scope` arg lets the model search the whole
+  library or just the selected recordings). The EF-based ones (`list_action_items`, `get_recording_summary`,
+  `who_attended`, `speaker_talk_time`, `get_segment_context`) read existing relational data directly. Each tool
+  result embeds an in-app **markdown deep-link** (`/recordings/{id}?t={ms}`); the model cites it, and the web
+  intercepts the click to open the transcript and **scroll/highlight the segment** at that moment
+  (`lib/transcriptNav.ts`). With tools off, chat is the same single-pass stream as before. Tools run inside the
+  API (no worker) — server-redeploy only.
 
 ## Auth, multi-tenancy, and roles
 

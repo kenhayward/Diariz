@@ -31,10 +31,13 @@ erases voiceprints (GDPR — biometric data).
 - **Summarize** recordings (with automatic naming) and **chat across one or more transcripts** — streaming
 replies, a context-usage dial, PDF/text attachments, and saved conversations — via a per-user (or
 server-default) OpenAI-compatible LLM endpoint, with the API key encrypted at rest.
-- **Chat tools** (opt-in, per-user): the assistant can call **built-in tools** that fuzzy-search your **whole
-transcript library** — *who said a phrase*, *what a person said about a topic*, and *list recordings* (by
-date / name / speaker, or a topic the transcript is about) — answering as **When · Who · What**. Search is
-backed by a Postgres `pg_trgm` trigram index; a brief grey "Tool call: …" line shows while a tool runs.
+- **Chat tools** (opt-in, per-user): the assistant can call **built-in tools** that search your **whole
+transcript library** — *who said a phrase*, *what a person said about a topic*, *search transcripts*, *when a
+topic was discussed*, *count mentions*, *list recordings* (by date / name / speaker / topic), *list action
+items*, *get a recording's summary*, *who attended*, *speaker talk time*, and *the lines around a moment* —
+answering as **When · Who · What**. Answers **link back to the transcript**: click a citation to open that
+recording and jump to the exact segment. Fuzzy search is backed by a Postgres `pg_trgm` trigram index; a
+brief grey "Tool call: …" line shows while a tool runs.
 - **Extract action items** from a transcript (Action / Actor / Deadline) with that same LLM, into an
 editable table shown by exception (only after you run it); the actions also travel with the transcript —
 included in the downloads (Text/Markdown/RTF), the emailed transcript, and the chat context.

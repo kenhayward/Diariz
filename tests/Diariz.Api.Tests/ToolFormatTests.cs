@@ -28,17 +28,26 @@ public class ToolFormatTests
     }
 
     [Fact]
-    public void FormatHits_UsesStandardFormat()
+    public void FormatHits_UsesStandardFormat_WithDeepLink()
     {
+        var recId = Guid.NewGuid();
         var hits = new List<TranscriptHit>
         {
-            new(Guid.NewGuid(), "Standup", When1, 252_000, "Alice", "We should cut the budget.", 0.9),
+            new(recId, "Standup", When1, 252_000, "Alice", "We should cut the budget.", 0.9),
         };
         var text = ToolFormat.FormatHits(hits);
         Assert.Contains("When: 2026-06-26 13:25 (at 04:12)", text);
         Assert.Contains("Who: Alice", text);
         Assert.Contains("What: \"We should cut the budget.\"", text);
-        Assert.Contains("[recording: Standup]", text);
+        Assert.Contains($"[Standup @ 04:12](/recordings/{recId}?t=252000)", text);
+    }
+
+    [Fact]
+    public void RecordingHref_OptionalTime()
+    {
+        var id = Guid.NewGuid();
+        Assert.Equal($"/recordings/{id}", ToolFormat.RecordingHref(id));
+        Assert.Equal($"/recordings/{id}?t=5000", ToolFormat.RecordingHref(id, 5000));
     }
 
     [Fact]
@@ -48,15 +57,17 @@ public class ToolFormatTests
     [Fact]
     public void FormatRecordings_IncludesSnippetWhenPresent()
     {
+        var recId = Guid.NewGuid();
         var recs = new List<RecordingHit>
         {
-            new(Guid.NewGuid(), "Budget Review", When1, "Microphone", 60_000, ["Alice", "Bob"], "cut the budget"),
+            new(recId, "Budget Review", When1, "Microphone", 60_000, ["Alice", "Bob"], "cut the budget"),
         };
         var text = ToolFormat.FormatRecordings(recs);
         Assert.Contains("When: 2026-06-26 13:25", text);
         Assert.Contains("Name: Budget Review", text);
         Assert.Contains("Speakers: Alice, Bob", text);
         Assert.Contains("Match: \"cut the budget\"", text);
+        Assert.Contains($"[Budget Review](/recordings/{recId})", text);
     }
 
     [Fact]
@@ -75,6 +86,19 @@ public class ToolFormatTests
         Assert.Null(ToolFormat.ReadString(Args("{\"q\":\"  \"}"), "q"));
         Assert.Null(ToolFormat.ReadString(Args("{}"), "q"));
     }
+
+    [Theory]
+    [InlineData("00:25", 25_000)]
+    [InlineData("1:01:01", 3_661_000)]
+    [InlineData("90", 90_000)]
+    public void ParseTimeMs_ParsesClockAndSeconds(string s, long expected) =>
+        Assert.Equal(expected, ToolFormat.ParseTimeMs(s));
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("abc")]
+    [InlineData("1:2:3:4")]
+    public void ParseTimeMs_RejectsJunk(string s) => Assert.Null(ToolFormat.ParseTimeMs(s));
 
     [Fact]
     public void ReadDate_ParsesIso_OrNull()

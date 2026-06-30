@@ -29,9 +29,10 @@ It can **summarise** recordings, **extract action items** (with actor and deadli
 table, **translate** a transcript (segments, summary, and actions) into your chosen language, and let you
 **chat across one or more transcripts** — with file attachments, a context-usage dial, and saved
 conversations — using an OpenAI-compatible LLM endpoint you configure. The chat can also call **built-in
-tools** that search your **whole transcript library** (who said a phrase, what a person said about a topic,
-or which recordings exist/mention something) and answer with **When · Who · What** — toggle the tools on,
-and choose which, under Settings → AI. You can **attach supporting
+tools** that search your **whole transcript library** — who said a phrase, what a person said about a topic,
+which recordings exist or mention something, action items, summaries, attendees, talk time, and the lines
+around a moment — answering with **When · Who · What** and **linking back to the transcript** (click a link
+to open it and jump to the exact segment). Toggle the tools on, and choose which, under Settings → AI. You can **attach supporting
 documents** (files or URLs) to a recording, open them from the transcript page, and optionally **feed them
 to the chat** (PDFs, text, Office docs, emails/calendar invites are read into text; URLs are fetched).
 Recordings organise into **sections** (with sub-sections) and drag-and-drop ordering, can be **merged**
@@ -61,6 +62,24 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.40.0",
+    date: "2026-06-30",
+    pr: 84,
+    headline: "More chat tools, and clickable transcript links in answers",
+    summary:
+      "The chat assistant gains **eight more tools** and now **links straight to the transcript** in its " +
+      "answers. New tools: **search transcripts** (general topic retrieval), **when was it discussed** " +
+      "(first/last mention), **count mentions** (by speaker), **list action items**, **get recording " +
+      "summary**, **who attended**, **speaker talk time**, and **get segment context** (the lines around a " +
+      "moment). When the assistant cites a recording or a specific moment, it includes a **link** — click it " +
+      "to open that transcript in the middle panel and **jump to the exact segment** (highlighted). All " +
+      "eleven tools appear in **Settings → AI** with individual on/off switches.",
+    added: [
+      "Tools: search_transcripts, when_was_discussed, count_mentions, list_action_items, get_recording_summary, who_attended, speaker_talk_time, get_segment_context.",
+      "Chat answers link to recordings (and exact moments); clicking opens the transcript and scrolls to the segment.",
+    ],
+  },
   {
     version: "0.39.0",
     date: "2026-06-30",
