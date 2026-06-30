@@ -63,6 +63,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.43.1",
+    date: "2026-06-30",
+    pr: 90,
+    headline: "Fix: the calendar no longer resizes when you pick a day",
+    summary:
+      "Follow-up to the calendar work in 0.43.0. The month grid was still stretching to match the " +
+      "longest recording name in the selected day's list, so picking a day with long titles widened the " +
+      "calendar (and pushed Sat/Sun off the edge). Long recording names now truncate instead of forcing the " +
+      "column wider, so the calendar stays a fixed width as you click between days — while still resizing " +
+      "when you drag the panel divider. Verified in-browser against real data (identical grid width across days).",
+    fixed: [
+      "Calendar grid no longer changes width when selecting different days; long recording names truncate in the list.",
+    ],
+  },
+  {
     version: "0.43.0",
     date: "2026-06-30",
     pr: 89,

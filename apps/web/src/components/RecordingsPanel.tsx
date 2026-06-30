@@ -276,7 +276,9 @@ export default function RecordingsPanel() {
       <div className="flex min-h-0 flex-1">
         <TabStrip tab={tab} onSelect={selectTab} />
         {tab === "list" ? (
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          // min-w-0 lets this flex child shrink to the panel width so long recording names truncate
+          // instead of forcing the column wider than the panel.
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
             <UploadStatusList items={upload.items} onClear={upload.clearFinished} />
             {dragging && (
               <p className="px-3 py-2 text-center text-xs font-medium text-blue-600 dark:text-blue-400">
@@ -319,7 +321,10 @@ export default function RecordingsPanel() {
           </div>
         ) : (
           // Calendar: the month grid stays fixed at the top; only the selected day's list scrolls.
-          <div className="flex min-h-0 flex-1 flex-col">
+          // min-w-0 is essential: without it this flex child grows to the widest day-list row, which would
+          // stretch the grid-cols-7 month grid wider than the panel and make the calendar appear to resize
+          // when you pick a day with longer recording names.
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <div className="shrink-0 border-b dark:border-gray-800">
               <MonthCalendar
                 year={month.year}
@@ -332,7 +337,7 @@ export default function RecordingsPanel() {
               />
             </div>
             {/* Reserve the scrollbar gutter so toggling the day list's scrollbar never shifts its width. */}
-            <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
               {dayRecordings.length === 0 ? (
                 <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("calNoRecordings")}</p>
               ) : (
