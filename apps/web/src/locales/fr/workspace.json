@@ -159,6 +159,7 @@
   "colCompletedDate": "Terminée",
   "markCompleteAria": "Marquer l'action {{row}} comme terminée",
   "tabActions": "Actions",
+  "selectActions": "Sélectionner des actions",
   "markComplete": "Marquer terminée",
   "markIncomplete": "Marquer à faire",
   "editAction": "Modifier l'action",

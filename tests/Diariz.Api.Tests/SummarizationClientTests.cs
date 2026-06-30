@@ -36,4 +36,30 @@ public class SummarizationClientTests
         Assert.Contains("local-model", handler.LastRequestBody);
         Assert.Contains("Hello there.", handler.LastRequestBody);
     }
+
+    [Fact]
+    public async Task SummarizeAsync_OmitsReasoningEffort_WhenNotConfigured()
+    {
+        var handler = new FakeHttpMessageHandler(ChatResponse("{\"summary\":\"x\"}"));
+        var client = new SummarizationClient(new HttpClient(handler));
+        var config = new SummarizationRequestConfig("http://llm.test/v1", "k", "m", 60);
+
+        await client.SummarizeAsync(config, Segments, needName: false);
+
+        // Reasoning off → the param must not be sent (older/non-reasoning endpoints reject it).
+        Assert.DoesNotContain("reasoning_effort", handler.LastRequestBody);
+    }
+
+    [Fact]
+    public async Task SummarizeAsync_SendsReasoningEffort_WhenConfigured()
+    {
+        var handler = new FakeHttpMessageHandler(ChatResponse("{\"summary\":\"x\"}"));
+        var client = new SummarizationClient(new HttpClient(handler));
+        var config = new SummarizationRequestConfig("http://llm.test/v1", "k", "m", 60) { ReasoningEffort = "high" };
+
+        await client.SummarizeAsync(config, Segments, needName: false);
+
+        Assert.Contains("reasoning_effort", handler.LastRequestBody);
+        Assert.Contains("high", handler.LastRequestBody);
+    }
 }

@@ -579,6 +579,12 @@ namespace Diariz.Domain.Migrations
                     b.Property<string>("NativeLanguage")
                         .HasColumnType("text");
 
+                    b.Property<string>("ReasoningEffort")
+                        .HasColumnType("text");
+
+                    b.Property<bool?>("ReasoningEnabled")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("SummaryApiBase")
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");

@@ -50,8 +50,11 @@ export default function ActionsToolbar({
         icon={<RefreshIcon />}
       />
       <ToolbarButton
-        label={selectMode ? t("doneSelecting") : t("selectRecordings")}
-        onClick={() => setSelectMode(!selectMode)}
+        label={selectMode ? t("doneSelecting") : t("selectActions")}
+        onClick={() => {
+          if (selectMode) clear(); // leaving Select mode deselects everything (clears the count badge)
+          setSelectMode(!selectMode);
+        }}
         active={selectMode}
         icon={<SelectIcon />}
       />

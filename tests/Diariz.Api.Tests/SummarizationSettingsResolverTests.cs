@@ -98,4 +98,69 @@ public class SummarizationSettingsResolverTests
 
         Assert.False((await resolver.ResolveAsync(Guid.NewGuid())).Enabled);
     }
+
+    // ---- Reasoning (effective effort: null = omit the field) ----
+
+    [Fact]
+    public async Task Reasoning_OffByDefault_NoEffort()
+    {
+        using var db = TestDb.Create();
+        var resolver = new SummarizationSettingsResolver(
+            db, Options.Create(new SummarizationOptions { ApiBase = "https://s/v1" }), new FakeApiKeyProtector());
+
+        Assert.Null((await resolver.ResolveAsync(Guid.NewGuid())).ReasoningEffort);
+    }
+
+    [Fact]
+    public async Task Reasoning_ServerEnabled_UsesServerEffort()
+    {
+        using var db = TestDb.Create();
+        var resolver = new SummarizationSettingsResolver(
+            db,
+            Options.Create(new SummarizationOptions
+            {
+                ApiBase = "https://s/v1", ReasoningEnabled = true, ReasoningEffort = "high",
+            }),
+            new FakeApiKeyProtector());
+
+        Assert.Equal("high", (await resolver.ResolveAsync(Guid.NewGuid())).ReasoningEffort);
+    }
+
+    [Fact]
+    public async Task Reasoning_UserEffort_OverridesServer()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.UserSettings.Add(new UserSettings { UserId = userId, ReasoningEnabled = true, ReasoningEffort = "low" });
+        await db.SaveChangesAsync();
+
+        var resolver = new SummarizationSettingsResolver(
+            db,
+            Options.Create(new SummarizationOptions
+            {
+                ApiBase = "https://s/v1", ReasoningEnabled = false, ReasoningEffort = "high",
+            }),
+            new FakeApiKeyProtector());
+
+        Assert.Equal("low", (await resolver.ResolveAsync(userId)).ReasoningEffort);
+    }
+
+    [Fact]
+    public async Task Reasoning_UserDisables_OverridesServerEnabled()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.UserSettings.Add(new UserSettings { UserId = userId, ReasoningEnabled = false });
+        await db.SaveChangesAsync();
+
+        var resolver = new SummarizationSettingsResolver(
+            db,
+            Options.Create(new SummarizationOptions
+            {
+                ApiBase = "https://s/v1", ReasoningEnabled = true, ReasoningEffort = "high",
+            }),
+            new FakeApiKeyProtector());
+
+        Assert.Null((await resolver.ResolveAsync(userId)).ReasoningEffort);
+    }
 }
