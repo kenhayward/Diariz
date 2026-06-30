@@ -83,7 +83,9 @@ public class MaintenanceController : ControllerBase
             throw;
         }
 
-        var name = $"diariz-backup-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}.zip";
+        // Tag the filename with the app version (Vx_xx_x) so restores can be matched to a build at a glance.
+        var ver = "V" + (typeof(MaintenanceController).Assembly.GetName().Version?.ToString(3) ?? "0.0.0").Replace('.', '_');
+        var name = $"diariz-backup-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}-{ver}.zip";
         var stream = new FileStream(tempPath, FileMode.Open, FileAccess.Read, FileShare.None, 1 << 16,
             FileOptions.Asynchronous | FileOptions.DeleteOnClose);
         return File(stream, "application/zip", name);

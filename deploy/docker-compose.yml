@@ -68,6 +68,9 @@ services:
       Summarization__ApiBase: ${SUMMARY_API_BASE:-}
       Summarization__ApiKey: ${SUMMARY_API_KEY:-}
       Summarization__Model: ${SUMMARY_MODEL:-gpt-4o-mini}
+      # Reasoning models: send reasoning_effort on LLM requests. Off by default; per-user overridable in Settings.
+      Summarization__ReasoningEnabled: ${SUMMARY_REASONING_ENABLED:-false}
+      Summarization__ReasoningEffort: ${SUMMARY_REASONING_EFFORT:-medium}
       # Speaker identification (voiceprints). Threshold is the max cosine distance for an
       # auto-match — conservative by default; tune per your audio (lower = stricter).
       Identification__Enabled: ${IDENTIFICATION_ENABLED:-true}

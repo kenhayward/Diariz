@@ -50,7 +50,12 @@ public class UserSettingsController : ControllerBase
             DefaultToolsEnabled: _chatDefaults.ToolsEnabled,
             Tools: tools.Catalog
                 .Select(c => new ChatToolDto(c.Name, c.Title, c.Description, c.Enabled, c.DefaultEnabled))
-                .ToList());
+                .ToList(),
+            // Reasoning: effective (user override ?? server default) + the server default for the placeholder.
+            ReasoningEnabled: s?.ReasoningEnabled ?? _serverDefaults.ReasoningEnabled,
+            ReasoningEffort: NullIfBlank(s?.ReasoningEffort) ?? _serverDefaults.ReasoningEffort,
+            DefaultReasoningEnabled: _serverDefaults.ReasoningEnabled,
+            DefaultReasoningEffort: _serverDefaults.ReasoningEffort);
     }
 
     private static string? NullIfBlank(string? v) => string.IsNullOrWhiteSpace(v) ? null : v;
@@ -83,6 +88,11 @@ public class UserSettingsController : ControllerBase
             s.ChatToolOverridesJson = req.ToolOverrides.Count > 0
                 ? System.Text.Json.JsonSerializer.Serialize(req.ToolOverrides)
                 : null;
+
+        // Reasoning: a value sets the master override (null leaves it unchanged); a blank effort clears the
+        // per-user level (server default applies).
+        if (req.ReasoningEnabled is not null) s.ReasoningEnabled = req.ReasoningEnabled;
+        s.ReasoningEffort = Blank(req.ReasoningEffort);
 
         await _db.SaveChangesAsync();
         return NoContent();

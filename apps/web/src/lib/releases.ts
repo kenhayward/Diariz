@@ -34,7 +34,8 @@ conversations — using an OpenAI-compatible LLM endpoint you configure. The cha
 tools** that search your **whole transcript library** — who said a phrase, what a person said about a topic,
 which recordings exist or mention something, action items, summaries, attendees, talk time, and the lines
 around a moment — answering with **When · Who · What** and **linking back to the transcript** (click a link
-to open it and jump to the exact segment). Toggle the tools on, and choose which, under Settings → AI. You can **attach supporting
+to open it and jump to the exact segment). Toggle the tools on, and choose which, under Settings → AI — where you
+can also **enable reasoning** (and pick a level) for reasoning-capable models. You can **attach supporting
 documents** (files or URLs) to a recording, open them from the transcript page, and optionally **feed them
 to the chat** (PDFs, text, Office docs, emails/calendar invites are read into text; URLs are fetched).
 Recordings organise into **sections** (with sub-sections) and drag-and-drop ordering, can be **merged**
@@ -66,6 +67,29 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.48.0",
+    date: "2026-06-30",
+    pr: 101,
+    headline: "Reasoning controls for the LLM, plus a batch of settings & action tweaks",
+    summary:
+      "Settings → AI gains a **reasoning** toggle and **level** (Low / Medium / High). Turn it on and Diariz " +
+      "sends an OpenAI-style `reasoning_effort` on every LLM request — summaries, action extraction, " +
+      "translation and chat — so reasoning-capable models think before answering (leave it off for models " +
+      "that don't support it; it falls back to the server default). Alongside it, a handful of smaller fixes: " +
+      "the **edit-action** text box now grows to fit its contents, the actions toolbar's **Select** tooltip " +
+      "reads “Select actions” and leaving Select mode clears the selection (so the count badge disappears), and " +
+      "the **platform backup** filename now ends with the app version (e.g. `…-V0_48_0.zip`) so you can match an " +
+      "archive to a build at a glance.",
+    added: [
+      "Settings → AI: enable reasoning and pick a level (Low / Medium / High); applied as reasoning_effort across summaries, actions, translation and chat (per-user, with a server default).",
+    ],
+    changed: [
+      "The edit-action dialog's action field auto-expands vertically as you type.",
+      "The actions toolbar Select tooltip now reads “Select actions”, and turning Select mode off clears the selection.",
+      "Platform backup archives are now named with the app version suffix (…-Vx_xx_x.zip).",
+    ],
+  },
   {
     version: "0.47.0",
     date: "2026-06-30",

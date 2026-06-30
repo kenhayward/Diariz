@@ -44,6 +44,10 @@ describe("SettingsModal", () => {
       toolsEnabled: false,
       defaultToolsEnabled: false,
       tools: [],
+      reasoningEnabled: false,
+      reasoningEffort: "medium",
+      defaultReasoningEnabled: false,
+      defaultReasoningEffort: "medium",
     });
     (api.updateUserSettings as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   });
@@ -69,6 +73,8 @@ describe("SettingsModal", () => {
         contextWindow: null,
         toolsEnabled: false,
         toolOverrides: {},
+        reasoningEnabled: false,
+        reasoningEffort: "medium",
       }),
     );
   });
@@ -101,6 +107,10 @@ describe("SettingsModal", () => {
       toolsEnabled: false,
       defaultToolsEnabled: false,
       tools: [],
+      reasoningEnabled: false,
+      reasoningEffort: "medium",
+      defaultReasoningEnabled: false,
+      defaultReasoningEffort: "medium",
     });
     renderModal();
 
@@ -118,6 +128,8 @@ describe("SettingsModal", () => {
         contextWindow: null,
         toolsEnabled: false,
         toolOverrides: {},
+        reasoningEnabled: false,
+        reasoningEffort: "medium",
       }),
     );
   });
@@ -204,9 +216,8 @@ describe("SettingsModal", () => {
     const master = screen.getByLabelText(/enable chat tools/i);
 
     fireEvent.click(master); // turn tools on
-    // Turn one tool off.
-    const toolBoxes = screen.getAllByRole("checkbox");
-    fireEvent.click(toolBoxes[toolBoxes.length - 1]); // last = list_recordings
+    // Turn one tool off (target by name so other checkboxes — e.g. reasoning — don't shift the index).
+    fireEvent.click(screen.getByRole("checkbox", { name: /list recordings/i }));
     fireEvent.click(screen.getByRole("button", { name: /^ok$/i }));
 
     await waitFor(() =>
@@ -215,6 +226,25 @@ describe("SettingsModal", () => {
           toolsEnabled: true,
           toolOverrides: { who_said_that: true, list_recordings: false },
         }),
+      ),
+    );
+  });
+
+  it("reveals the reasoning level when reasoning is enabled and saves both", async () => {
+    renderModal();
+    await screen.findByDisplayValue("https://existing/v1");
+
+    // Level select is hidden until reasoning is turned on.
+    expect(screen.queryByLabelText(/reasoning level/i)).toBeNull();
+
+    fireEvent.click(screen.getByLabelText(/enable reasoning/i));
+    const level = await screen.findByLabelText(/reasoning level/i);
+    fireEvent.change(level, { target: { value: "high" } });
+    fireEvent.click(screen.getByRole("button", { name: /^ok$/i }));
+
+    await waitFor(() =>
+      expect(api.updateUserSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ reasoningEnabled: true, reasoningEffort: "high" }),
       ),
     );
   });

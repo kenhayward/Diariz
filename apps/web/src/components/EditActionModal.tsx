@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
@@ -15,6 +15,16 @@ export default function EditActionModal({ action, onClose }: { action: ActionLis
   const [deadline, setDeadline] = useState(action.deadline);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
+
+  // Grow the action textarea to fit its content (a long action shouldn't sit in a one-line box).
+  function autosize() {
+    const el = textRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }
+  useEffect(() => autosize(), []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -55,7 +65,17 @@ export default function EditActionModal({ action, onClose }: { action: ActionLis
         <h2 className="text-base font-semibold dark:text-gray-100">{t("editAction")}</h2>
         <label className="block text-xs text-gray-500 dark:text-gray-400">
           {t("colAction")}
-          <input autoFocus value={text} onChange={(e) => setText(e.target.value)} className={`mt-1 ${field}`} />
+          <textarea
+            ref={textRef}
+            autoFocus
+            rows={1}
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value);
+              autosize();
+            }}
+            className={`mt-1 max-h-[50vh] resize-none overflow-hidden ${field}`}
+          />
         </label>
         <label className="block text-xs text-gray-500 dark:text-gray-400">
           {t("colActor")}

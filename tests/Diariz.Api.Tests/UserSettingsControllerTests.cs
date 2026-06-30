@@ -147,6 +147,34 @@ public class UserSettingsControllerTests
     }
 
     [Fact]
+    public async Task Reasoning_RoundTrips_AndExposesServerDefaults()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var server = new SummarizationOptions { ReasoningEnabled = false, ReasoningEffort = "medium" };
+
+        await Build(db, userId, server).Update(new UpdateUserSettingsRequest(
+            "https://a", "m", null, ReasoningEnabled: true, ReasoningEffort: "high"));
+
+        var dto = await Build(db, userId, server).Get();
+        Assert.True(dto.ReasoningEnabled);
+        Assert.Equal("high", dto.ReasoningEffort);
+        Assert.False(dto.DefaultReasoningEnabled);
+        Assert.Equal("medium", dto.DefaultReasoningEffort);
+    }
+
+    [Fact]
+    public async Task Reasoning_NoOverride_ReflectsServerDefaults()
+    {
+        using var db = TestDb.Create();
+        var server = new SummarizationOptions { ReasoningEnabled = true, ReasoningEffort = "low" };
+
+        var dto = await Build(db, Guid.NewGuid(), server).Get();
+        Assert.True(dto.ReasoningEnabled);
+        Assert.Equal("low", dto.ReasoningEffort);
+    }
+
+    [Fact]
     public async Task Settings_AreScopedPerUser()
     {
         using var db = TestDb.Create();

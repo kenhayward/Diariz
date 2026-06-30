@@ -78,9 +78,15 @@ public class ChatStreamClient : IChatStreamClient
         SummarizationRequestConfig config, IReadOnlyList<object> messages,
         IReadOnlyList<object>? tools, [EnumeratorCancellation] CancellationToken ct = default)
     {
-        object body = tools is { Count: > 0 }
-            ? new { model = config.Model, temperature = 0.3, stream = true, messages, tools, tool_choice = "auto" }
-            : new { model = config.Model, temperature = 0.3, stream = true, messages };
+        var body = new Dictionary<string, object?>
+        {
+            ["model"] = config.Model,
+            ["temperature"] = 0.3,
+            ["stream"] = true,
+            ["messages"] = messages,
+        };
+        if (tools is { Count: > 0 }) { body["tools"] = tools; body["tool_choice"] = "auto"; }
+        if (config.ReasoningEffort is not null) body["reasoning_effort"] = config.ReasoningEffort;
 
         var resp = await SendRawAsync(config, body, ct);
         using (resp)
@@ -107,13 +113,14 @@ public class ChatStreamClient : IChatStreamClient
     private async Task<HttpResponseMessage> SendAsync(
         SummarizationRequestConfig config, IReadOnlyList<ChatMessage> messages, CancellationToken ct)
     {
-        var body = new
+        var body = new Dictionary<string, object?>
         {
-            model = config.Model,
-            temperature = 0.3,
-            stream = true,
-            messages = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray()
+            ["model"] = config.Model,
+            ["temperature"] = 0.3,
+            ["stream"] = true,
+            ["messages"] = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray(),
         };
+        if (config.ReasoningEffort is not null) body["reasoning_effort"] = config.ReasoningEffort;
         return await SendRawAsync(config, body, ct);
     }
 

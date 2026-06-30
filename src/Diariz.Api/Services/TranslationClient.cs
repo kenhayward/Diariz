@@ -57,12 +57,13 @@ public class TranslationClient : ITranslationClient
         IReadOnlyList<(int Index, string Text)> batch, string[] result, CancellationToken ct)
     {
         var messages = TranslationPrompt.BuildMessages(targetLanguage, batch);
-        var body = new
+        var body = new Dictionary<string, object?>
         {
-            model = config.Model,
-            temperature = 0.1,
-            messages = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray()
+            ["model"] = config.Model,
+            ["temperature"] = 0.1,
+            ["messages"] = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray(),
         };
+        if (config.ReasoningEffort is not null) body["reasoning_effort"] = config.ReasoningEffort;
 
         using var req = new HttpRequestMessage(HttpMethod.Post, $"{config.ApiBase.TrimEnd('/')}/chat/completions")
         {

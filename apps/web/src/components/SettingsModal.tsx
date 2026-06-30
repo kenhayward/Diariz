@@ -31,6 +31,9 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   // Chat tool calling: master switch + per-tool on/off map (keyed by tool name).
   const [toolsEnabled, setToolsEnabled] = useState(false);
   const [toolStates, setToolStates] = useState<Record<string, boolean>>({});
+  // Reasoning: on/off + effort level ("low"|"medium"|"high").
+  const [reasoningEnabled, setReasoningEnabled] = useState(false);
+  const [reasoningEffort, setReasoningEffort] = useState("medium");
 
   // Storage quotas (GB inputs).
   const [starterGb, setStarterGb] = useState("");
@@ -46,6 +49,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       setContextWindow(data.contextWindow != null ? String(data.contextWindow) : "");
       setToolsEnabled(data.toolsEnabled);
       setToolStates(Object.fromEntries(data.tools.map((tool) => [tool.name, tool.enabled])));
+      setReasoningEnabled(data.reasoningEnabled);
+      setReasoningEffort(data.reasoningEffort || "medium");
     }
   }, [data]);
 
@@ -73,6 +78,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         contextWindow: contextWindow.trim() ? Number(contextWindow) : null,
         toolsEnabled,
         toolOverrides: toolStates,
+        reasoningEnabled,
+        reasoningEffort,
       });
       qc.invalidateQueries({ queryKey: ["user-settings"] });
 
@@ -228,6 +235,34 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                       </li>
                     ))}
                   </ul>
+                )}
+              </div>
+
+              {/* Reasoning: on/off + effort level (only for reasoning-capable models). */}
+              <div className="border-t pt-3 dark:border-gray-700">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={reasoningEnabled}
+                    onChange={(e) => setReasoningEnabled(e.target.checked)}
+                  />
+                  <span className="font-medium text-gray-700 dark:text-gray-200">{t("reasoningEnabled")}</span>
+                </label>
+                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t("reasoningHint")}</p>
+                {reasoningEnabled && (
+                  <label className="mt-2 block text-sm">
+                    <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("reasoningLevel")}</span>
+                    <select
+                      value={reasoningEffort}
+                      onChange={(e) => setReasoningEffort(e.target.value)}
+                      aria-label={t("reasoningLevel")}
+                      className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                    >
+                      <option value="low">{t("reasoningLow")}</option>
+                      <option value="medium">{t("reasoningMedium")}</option>
+                      <option value="high">{t("reasoningHigh")}</option>
+                    </select>
+                  </label>
                 )}
               </div>
             </div>

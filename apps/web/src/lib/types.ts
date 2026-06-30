@@ -233,6 +233,11 @@ export interface UserSettings {
   defaultToolsEnabled: boolean;
   /// The catalog of built-in chat tools with their resolved on/off state.
   tools: ChatToolInfo[];
+  /// Effective reasoning toggle + level (user override ?? server default) for reasoning models.
+  reasoningEnabled: boolean;
+  reasoningEffort: string; // "low" | "medium" | "high"
+  defaultReasoningEnabled: boolean;
+  defaultReasoningEffort: string;
 }
 
 /// A built-in chat tool's state for the settings panel.
@@ -277,6 +282,10 @@ export interface UpdateUserSettings {
   toolsEnabled?: boolean;
   /// Explicit per-tool on/off overrides ({ name: enabled }); omit to leave unchanged.
   toolOverrides?: Record<string, boolean>;
+  /// Reasoning: send an OpenAI-style reasoning_effort on LLM requests; omit to leave unchanged.
+  reasoningEnabled?: boolean;
+  /// Reasoning level ("low"|"medium"|"high"); blank clears the per-user override.
+  reasoningEffort?: string;
 }
 
 // ---- Chat ----

@@ -129,7 +129,10 @@ clobbering manual names.
 The same per-user-or-server LLM config (`UserSettings` ?? server `Summarization` defaults, resolved by
 `SummarizationSettingsResolver`) powers four features. The API key is **encrypted at rest** (ASP.NET Data
 Protection, keyring on the `DataProtection:KeysPath` volume) and is **write-only** over the API (`GET` returns
-only `hasApiKey`).
+only `hasApiKey`). The resolved config also carries an optional **`reasoning_effort`** (`UserSettings.ReasoningEnabled`/
+`ReasoningEffort` ?? server `Summarization:ReasoningEnabled`/`ReasoningEffort`); when reasoning is on, every LLM
+client (summarise / actions / translation / chat) adds the field to its `/chat/completions` body, and when off the
+field is **omitted entirely** so non-reasoning endpoints aren't broken.
 
 - **Summarise (async).** `POST /api/recordings/{id}/summarize` sets status `Summarizing` and enqueues on a
   **second Redis stream `summarization-jobs`** (group `summarizers`). The API's **only stream consumer**,

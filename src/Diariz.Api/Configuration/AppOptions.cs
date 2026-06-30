@@ -45,6 +45,15 @@ public class SummarizationOptions
     public string ApiKey { get; set; } = "";
     public string Model { get; set; } = "gpt-4o-mini";
     public int TimeoutSeconds { get; set; } = 120;
+
+    /// <summary>Server-wide default for sending an OpenAI-style <c>reasoning_effort</c> on LLM requests
+    /// (reasoning models). Off by default; per-user overridable in Settings. Many endpoints reject the
+    /// param, so opt-in is the safe default.</summary>
+    public bool ReasoningEnabled { get; set; } = false;
+
+    /// <summary>Default reasoning effort when enabled: <c>low</c> | <c>medium</c> | <c>high</c>.</summary>
+    public string ReasoningEffort { get; set; } = "medium";
+
     public string StreamKey { get; set; } = "summarization-jobs";
     public string ConsumerGroup { get; set; } = "summarizers";
     public string ConsumerName { get; set; } = "api-1";

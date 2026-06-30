@@ -42,6 +42,8 @@ public class MaintenanceControllerTests
 
         var file = Assert.IsType<FileStreamResult>(result);
         Assert.Equal("application/zip", file.ContentType);
+        // The download name carries the app version as Vx_xx_x (e.g. diariz-backup-…-V0_47_0.zip).
+        Assert.Matches(@"^diariz-backup-\d{8}-\d{6}-V\d+_\d+_\d+\.zip$", file.FileDownloadName);
         Assert.True(backup.DumpCalled);
 
         using var zip = new ZipArchive(file.FileStream, ZipArchiveMode.Read); // disposing closes + deletes the temp

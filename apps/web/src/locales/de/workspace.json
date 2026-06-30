@@ -159,6 +159,7 @@
   "colCompletedDate": "Erledigt am",
   "markCompleteAria": "Aktion {{row}} als erledigt markieren",
   "tabActions": "Aktionen",
+  "selectActions": "Aktionen auswählen",
   "markComplete": "Als erledigt markieren",
   "markIncomplete": "Als offen markieren",
   "editAction": "Aktion bearbeiten",

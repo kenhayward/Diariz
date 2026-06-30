@@ -159,6 +159,7 @@
   "colCompletedDate": "Completed",
   "markCompleteAria": "Mark action {{row}} complete",
   "tabActions": "Actions",
+  "selectActions": "Select actions",
   "markComplete": "Mark complete",
   "markIncomplete": "Mark incomplete",
   "editAction": "Edit action",

@@ -35,4 +35,12 @@ public class UserSettings
 
     /// <summary>The language the app UI is shown in (BCP-47). Null = follow the browser / default.</summary>
     public string? UiLanguage { get; set; }
+
+    /// <summary>Send an OpenAI-style <c>reasoning_effort</c> on LLM requests (for reasoning models). Null
+    /// falls back to the server default (<c>Summarization:ReasoningEnabled</c>).</summary>
+    public bool? ReasoningEnabled { get; set; }
+
+    /// <summary>Reasoning effort level when enabled: <c>low</c> | <c>medium</c> | <c>high</c>. Null falls back
+    /// to the server default (<c>Summarization:ReasoningEffort</c>).</summary>
+    public string? ReasoningEffort { get; set; }
 }

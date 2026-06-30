@@ -9,6 +9,10 @@ namespace Diariz.Api.Services;
 public record SummarizationRequestConfig(string ApiBase, string ApiKey, string Model, int TimeoutSeconds)
 {
     public bool Enabled => !string.IsNullOrWhiteSpace(ApiBase);
+
+    /// <summary>The <c>reasoning_effort</c> to send on requests, or null to omit the field entirely (the
+    /// resolver leaves it null when reasoning is off, so clients never send it to non-reasoning endpoints).</summary>
+    public string? ReasoningEffort { get; init; }
 }
 
 public interface ISummarizationSettingsResolver
@@ -33,11 +37,20 @@ public class SummarizationSettingsResolver : ISummarizationSettingsResolver
     public async Task<SummarizationRequestConfig> ResolveAsync(Guid userId, CancellationToken ct = default)
     {
         var s = await _db.UserSettings.FindAsync([userId], ct);
+
+        // Reasoning: user override ?? server default. When on, the effort is the user's value ?? the
+        // server's; when off, leave it null so clients omit the param entirely.
+        var reasoningOn = s?.ReasoningEnabled ?? _opts.ReasoningEnabled;
+        var effort = reasoningOn ? Coalesce(s?.ReasoningEffort, _opts.ReasoningEffort) : null;
+
         return new SummarizationRequestConfig(
             ApiBase: Coalesce(s?.SummaryApiBase, _opts.ApiBase),
             ApiKey: Coalesce(_protector.Unprotect(s?.SummaryApiKeyEncrypted), _opts.ApiKey),
             Model: Coalesce(s?.SummaryModel, _opts.Model),
-            TimeoutSeconds: _opts.TimeoutSeconds);
+            TimeoutSeconds: _opts.TimeoutSeconds)
+        {
+            ReasoningEffort = effort,
+        };
     }
 
     private static string Coalesce(string? user, string server) =>
