@@ -64,6 +64,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.45.3",
+    date: "2026-06-30",
+    pr: 95,
+    headline: "Fix: the recordings list now auto-scrolls while you drag",
+    summary:
+      "Reordering a recording or section by drag-and-drop was awkward across a long list: if the drop target " +
+      "sat off-screen, the list didn't scroll to reveal it, so you couldn't reach it. Now, dragging near the " +
+      "top or bottom edge of the list (or the calendar day's list) scrolls it automatically — faster the closer " +
+      "you are to the edge — so you can drop anywhere in a large structure.",
+    fixed: [
+      "The recordings list auto-scrolls when you drag a recording or section near its top/bottom edge, so off-screen drop targets are reachable.",
+    ],
+  },
+  {
     version: "0.45.2",
     date: "2026-06-30",
     pr: 94,

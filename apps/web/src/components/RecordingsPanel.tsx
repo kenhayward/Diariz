@@ -14,6 +14,7 @@ import { copyRichLink, transcriptUrl } from "../lib/clipboard";
 import { useSelection } from "../lib/selection";
 import { formatDuration } from "../lib/format";
 import { computeReorder } from "../lib/reorder";
+import { useDragAutoScroll } from "../lib/dragAutoScroll";
 import { buildRecordingTree, reorderBeforeSection, appendSectionUnder, type SectionNode } from "../lib/recordingTree";
 import MonthCalendar from "./MonthCalendar";
 import { recordingDayKeys, recordingsForDay, dayKey } from "../lib/calendar";
@@ -154,6 +155,10 @@ export default function RecordingsPanel() {
   const upload = useUpload();
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
+  // Native HTML5 DnD doesn't scroll the list while dragging near its edges, so a drop target outside the
+  // viewport is unreachable in a long tree. These auto-scroll the list / day-list during any drag.
+  const listScrollRef = useDragAutoScroll<HTMLDivElement>();
+  const dayScrollRef = useDragAutoScroll<HTMLDivElement>();
   function onFileDragEnter(e: React.DragEvent) {
     if (!dragHasFiles(e)) return;
     dragDepth.current += 1;
@@ -278,7 +283,7 @@ export default function RecordingsPanel() {
         {tab === "list" ? (
           // min-w-0 lets this flex child shrink to the panel width so long recording names truncate
           // instead of forcing the column wider than the panel.
-          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+          <div ref={listScrollRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto">
             <UploadStatusList items={upload.items} onClear={upload.clearFinished} />
             {dragging && (
               <p className="px-3 py-2 text-center text-xs font-medium text-blue-600 dark:text-blue-400">
@@ -337,7 +342,7 @@ export default function RecordingsPanel() {
               />
             </div>
             {/* Reserve the scrollbar gutter so toggling the day list's scrollbar never shifts its width. */}
-            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+            <div ref={dayScrollRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
               {dayRecordings.length === 0 ? (
                 <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("calNoRecordings")}</p>
               ) : (
