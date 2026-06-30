@@ -227,6 +227,15 @@ Dockerfile force-installs it), `transformers==4.48.0` + `huggingface_hub==0.27.1
 Diarization is gated: you **must** set `HF_TOKEN` and accept the `pyannote/speaker-diarization-3.1`
 + `pyannote/segmentation-3.0` terms on Hugging Face, or jobs fail. CPU-only: `DEVICE=cpu COMPUTE_TYPE=int8` (slow).
 
+**ASR backend / AMD ROCm.** The Whisper step is pluggable via `ASR_BACKEND` (`config.py` → `pipeline._asr`):
+`whisperx` = faster-whisper/CTranslate2 (CUDA default) or `whisper` = openai-whisper (pure PyTorch). The
+PyTorch path exists so the worker can run on **AMD ROCm**, where CTranslate2 has no GPU support — see
+`src/Diariz.Worker/Dockerfile.rocm` (base `rocm/pytorch`, no torch reinstall) and the standalone
+`deploy/docker-compose.rocm.yml` (AMD GPU via `/dev/kfd` + `/dev/dri`, `ASR_BACKEND=whisper`). Alignment/
+diarization/voiceprints are unchanged — PyTorch-ROCm keeps the **`"cuda"` device string**, so `DEVICE` stays
+`cuda` on AMD. The API/web are vendor-agnostic; only the worker image differs. Initial target: Strix Halo
+(gfx1151); ROCm inference is not yet hardware-validated (the ASR dispatch is unit-tested; CUDA path unchanged).
+
 Worker tests (pytest, no GPU): `pip install -r requirements-test.txt && python -m pytest`. The suite
 stubs `whisperx` (`tests/conftest.py`) so `torch`/CUDA aren't needed — it covers the callback contract
 (`callback.py`), job orchestration + temp cleanup (`worker.handle`), and segment shaping

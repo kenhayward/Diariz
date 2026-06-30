@@ -16,3 +16,6 @@ sys.modules.setdefault("whisperx", MagicMock())
 # speechbrain (+torch) are imported lazily inside pipeline._get_embedder(), which the
 # tests never call (they pass a stub embedder), so a top-level stub is enough for safety.
 sys.modules.setdefault("speechbrain", MagicMock())
+# openai-whisper (the ROCm ASR backend) is imported lazily inside pipeline._get_whisper_py();
+# stub it so the ASR-dispatch tests can drive it without torch installed.
+sys.modules.setdefault("whisper", MagicMock())

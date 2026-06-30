@@ -272,6 +272,15 @@ jobs fail. CPU-only is possible (`DEVICE=cpu COMPUTE_TYPE=int8`, slow). Models l
 across jobs. Real working-set VRAM is ~9 GB during transcription (large-v3 + align + pyannote). See the README
 for measured numbers and tuning (`WHISPER_MODEL`, `COMPUTE_TYPE`, `BATCH_SIZE`).
 
+**Pluggable ASR backend (NVIDIA + AMD).** The Whisper transcription step is selectable via `ASR_BACKEND`:
+`whisperx` (faster-whisper / CTranslate2 — the CUDA default) or `whisper` (openai-whisper, pure PyTorch).
+This exists so the worker can also run on **AMD ROCm**, where CTranslate2 has no GPU support: a parallel
+image (`src/Diariz.Worker/Dockerfile.rocm`) and a standalone stack (`deploy/docker-compose.rocm.yml`, AMD GPU
+via `/dev/kfd` + `/dev/dri`) run the same pipeline with `ASR_BACKEND=whisper`. Alignment, diarization and
+voiceprints are PyTorch and run on ROCm unchanged (PyTorch-ROCm keeps the `"cuda"` device string). Initial
+target: Strix Halo (gfx1151). The API/web are vendor-agnostic — only the worker image differs. The
+openai-whisper backend is slower than faster-whisper but accuracy is unchanged (the aligner re-times words).
+
 ## Repository layout
 
 ```

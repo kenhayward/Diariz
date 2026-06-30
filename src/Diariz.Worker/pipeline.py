@@ -13,12 +13,14 @@ from config import config
 log = logging.getLogger("pipeline")
 
 _whisper_model = None
+_whisper_py_model = None
 _align_cache = {}  # language_code -> (model, metadata)
 _diarize_model = None
 _embedder = None
 
 
 def _get_whisper():
+    """faster-whisper (CTranslate2) ASR model — the default backend (CUDA/CPU)."""
     global _whisper_model
     if _whisper_model is None:
         log.info("Loading Whisper model %s on %s (%s)",
@@ -26,6 +28,33 @@ def _get_whisper():
         _whisper_model = whisperx.load_model(
             config.WHISPER_MODEL, config.DEVICE, compute_type=config.COMPUTE_TYPE)
     return _whisper_model
+
+
+def _get_whisper_py():
+    """openai-whisper (pure PyTorch) ASR model — the AMD ROCm backend, where CTranslate2 has no GPU
+    support. Imported lazily so the default (faster-whisper) image doesn't need openai-whisper installed."""
+    global _whisper_py_model
+    if _whisper_py_model is None:
+        import whisper
+        log.info("Loading openai-whisper model %s on %s", config.WHISPER_MODEL, config.DEVICE)
+        _whisper_py_model = whisper.load_model(config.WHISPER_MODEL, device=config.DEVICE)
+    return _whisper_py_model
+
+
+def _normalize_segments(segments) -> list[dict]:
+    """Reduce ASR segments to the minimal {start, end, text} the word-aligner consumes. Pure — different
+    backends return extra keys (tokens/ids/probabilities) the rest of the pipeline doesn't use."""
+    return [{"start": s["start"], "end": s["end"], "text": s.get("text", "")} for s in segments]
+
+
+def _asr(audio) -> dict:
+    """Whisper transcription step, backend-pluggable. Returns {language, segments[{start,end,text}]}.
+    The aligner re-times every word afterwards, so the backend only needs decent segment text + language."""
+    if config.ASR_BACKEND == "whisper":
+        result = _get_whisper_py().transcribe(audio, fp16=config.DEVICE != "cpu")
+    else:
+        result = _get_whisper().transcribe(audio, batch_size=config.BATCH_SIZE)
+    return {"language": result.get("language", "en"), "segments": _normalize_segments(result["segments"])}
 
 
 def _get_align(language_code: str):
@@ -177,14 +206,14 @@ def transcribe(audio_path: str, min_speakers=None, max_speakers=None) -> dict:
         raise ValueError(
             f"Audio is too long ({duration_ms // 1000}s); the limit is {int(config.MAX_AUDIO_SECONDS)}s.")
 
-    # 1. Transcribe
-    result = _get_whisper().transcribe(audio, batch_size=config.BATCH_SIZE)
-    language = result.get("language", "en")
+    # 1. Transcribe (backend-pluggable: faster-whisper on CUDA, openai-whisper on AMD ROCm)
+    asr = _asr(audio)
+    language = asr["language"]
 
     # 2. Word-level alignment
     align_model, metadata = _get_align(language)
     result = whisperx.align(
-        result["segments"], align_model, metadata, audio, config.DEVICE,
+        asr["segments"], align_model, metadata, audio, config.DEVICE,
         return_char_alignments=False)
 
     # 3. Diarization (with optional speaker-count hints) + speaker assignment

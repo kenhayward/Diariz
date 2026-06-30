@@ -22,8 +22,12 @@ class Config:
     CALLBACK_SECRET = os.getenv("CALLBACK_SECRET", "change-me")
 
     # Models
-    DEVICE = os.getenv("DEVICE", "cuda")  # "cuda" or "cpu"
-    COMPUTE_TYPE = os.getenv("COMPUTE_TYPE", "float16")  # use "int8" on CPU
+    DEVICE = os.getenv("DEVICE", "cuda")  # "cuda" or "cpu" (PyTorch-ROCm also reports "cuda" for AMD GPUs)
+    COMPUTE_TYPE = os.getenv("COMPUTE_TYPE", "float16")  # use "int8" on CPU (faster-whisper/CTranslate2 only)
+    # Whisper ASR backend. "whisperx" = faster-whisper (CTranslate2, CUDA/CPU — the default). "whisper" =
+    # openai-whisper (pure PyTorch) for AMD ROCm, where CTranslate2 has no GPU support. Alignment,
+    # diarization and voiceprints are PyTorch and run on either backend unchanged.
+    ASR_BACKEND = os.getenv("ASR_BACKEND", "whisperx")  # "whisperx" | "whisper"
     WHISPER_MODEL = os.getenv("WHISPER_MODEL", "large-v3")
     BATCH_SIZE = int(os.getenv("BATCH_SIZE", "16"))
     HF_TOKEN = os.getenv("HF_TOKEN", "")  # required for pyannote diarization
