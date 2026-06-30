@@ -113,6 +113,13 @@ export default function RecordingDetail() {
     return () => void hub.stop();
   }, [id, qc]);
 
+  // Transient action banners belong to the recording that produced them — clear them when the route
+  // switches to a different recording so they don't bleed onto an unrelated transcript.
+  useEffect(() => {
+    setActionInfo(null);
+    setActionError(null);
+  }, [id]);
+
   const labels = useMemo(() => {
     const set = new Set<string>();
     rec?.current?.segments.forEach((s) => set.add(s.speaker));
