@@ -64,6 +64,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.45.2",
+    date: "2026-06-30",
+    pr: 94,
+    headline: "Deploy: one .env works for both the NVIDIA and AMD stacks",
+    summary:
+      "Tidies the two Docker Compose stacks so a single `.env` is safe for either. The Whisper ASR backend " +
+      "is no longer an env var — it's intrinsic to the compose file you run (the AMD `docker-compose.rocm.yml` " +
+      "hardcodes openai-whisper; the NVIDIA stack uses faster-whisper), so a shared `.env` carried between " +
+      "machines can't accidentally force the wrong backend and break the AMD worker. No app behaviour change.",
+    changed: [
+      "The AMD ROCm compose hardcodes the openai-whisper ASR backend; WORKER_ASR_BACKEND removed from .env.example.",
+    ],
+  },
+  {
     version: "0.45.1",
     date: "2026-06-30",
     pr: 93,
