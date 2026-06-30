@@ -64,6 +64,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.45.1",
+    date: "2026-06-30",
+    pr: 93,
+    headline: "Fix: platform backup download failed immediately",
+    summary:
+      "The 0.45.0 backup download failed straight away (the browser showed a tiny, broken `.zip`). The server " +
+      "was streaming the archive directly to the HTTP response, but the zip writer needs synchronous writes " +
+      "that the web server disallows on the network stream, so it aborted the moment the archive finished. The " +
+      "backup is now assembled to a temp file and streamed back — downloads work, and a failed database dump " +
+      "now returns a clear error instead of a truncated file.",
+    fixed: [
+      "Platform backup (Settings → Maintenance) now downloads correctly instead of failing with a broken zip.",
+    ],
+  },
+  {
     version: "0.45.0",
     date: "2026-06-30",
     pr: 92,

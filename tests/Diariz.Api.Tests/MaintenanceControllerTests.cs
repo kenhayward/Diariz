@@ -16,10 +16,9 @@ public class MaintenanceControllerTests
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
     private static MaintenanceController Build(
-        FakeAudioStorage storage, FakeDatabaseBackup backup, string migration = Migration, Stream? responseBody = null)
+        FakeAudioStorage storage, FakeDatabaseBackup backup, string migration = Migration)
     {
         var ctx = Http.Context(Guid.NewGuid(), [Roles.PlatformAdministrator]);
-        if (responseBody is not null) ctx.HttpContext.Response.Body = responseBody;
         return new MaintenanceController(storage, backup, new FakeSchemaVersion(migration)) { ControllerContext = ctx };
     }
 
@@ -38,15 +37,14 @@ public class MaintenanceControllerTests
         storage.Objects["u1/rec.webm"] = Encoding.UTF8.GetBytes("AUDIO-BYTES");
         storage.Objects["u1/attachments/a.pdf"] = Encoding.UTF8.GetBytes("PDF-BYTES");
         var backup = new FakeDatabaseBackup { DumpBytes = Encoding.UTF8.GetBytes("PGDUMP-XYZ") };
-        var body = new MemoryStream();
 
-        var result = await Build(storage, backup, responseBody: body).Backup();
+        var result = await Build(storage, backup).Backup();
 
-        Assert.IsType<EmptyResult>(result);
+        var file = Assert.IsType<FileStreamResult>(result);
+        Assert.Equal("application/zip", file.ContentType);
         Assert.True(backup.DumpCalled);
 
-        body.Position = 0;
-        using var zip = new ZipArchive(body, ZipArchiveMode.Read);
+        using var zip = new ZipArchive(file.FileStream, ZipArchiveMode.Read); // disposing closes + deletes the temp
 
         var manifest = JsonSerializer.Deserialize<BackupManifest>(ReadEntry(zip, "manifest.json"), JsonOpts)!;
         Assert.Equal(Migration, manifest.MigrationId);
