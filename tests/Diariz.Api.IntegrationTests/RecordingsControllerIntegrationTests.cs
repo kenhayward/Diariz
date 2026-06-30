@@ -85,6 +85,43 @@ public class RecordingsControllerIntegrationTests(ContainersFixture fx)
     }
 
     [Fact]
+    public async Task Merge_ReassignsSourceAttachmentToSurvivor_SurvivingTheSourceRowDeletion()
+    {
+        // The merge moves the merged-away source's attachments onto the survivor before the source row is
+        // deleted. This is the real-Postgres guard: the Attachment FK has ON DELETE CASCADE, so EF must
+        // UPDATE the row's RecordingId before DELETEing the old parent — otherwise the cascade would take it.
+        Guid userId, survivorId, sourceId, attId;
+        await using (var db = fx.CreateDbContext())
+        {
+            var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = "u@x.test" };
+            // No audio on either → the merge settles synchronously and deletes the source row in one SaveChanges.
+            var early = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = "k1", CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-5), AudioDeletedAt = DateTimeOffset.UtcNow, SizeBytes = 0, DurationMs = 1000, Status = RecordingStatus.Transcribed };
+            var later = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = "k2", CreatedAt = DateTimeOffset.UtcNow, AudioDeletedAt = DateTimeOffset.UtcNow, SizeBytes = 0, DurationMs = 2000, Status = RecordingStatus.Transcribed };
+            var trE = new Transcription { Id = Guid.NewGuid(), RecordingId = early.Id, Model = "m", Version = 1 };
+            var trL = new Transcription { Id = Guid.NewGuid(), RecordingId = later.Id, Model = "m", Version = 1 };
+            var att = new Attachment { Id = Guid.NewGuid(), RecordingId = later.Id, Kind = AttachmentKind.File, Name = "doc.pdf", BlobKey = $"{user.Id}/attachments/x.pdf", SizeBytes = 10, Ordinal = 0 };
+            db.AddRange(user, early, later, trE, trL,
+                new Segment { Id = Guid.NewGuid(), TranscriptionId = trE.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 1000, Original = "Hello", Ordinal = 0 },
+                new Segment { Id = Guid.NewGuid(), TranscriptionId = trL.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 2000, Original = "World", Ordinal = 0 },
+                new Speaker { Id = Guid.NewGuid(), RecordingId = early.Id, Label = "SPEAKER_00", DisplayName = "A" },
+                new Speaker { Id = Guid.NewGuid(), RecordingId = later.Id, Label = "SPEAKER_00", DisplayName = "B" },
+                att);
+            await db.SaveChangesAsync();
+            (userId, survivorId, sourceId, attId) = (user.Id, early.Id, later.Id, att.Id);
+        }
+
+        await using (var db = fx.CreateDbContext())
+            Assert.IsType<AcceptedResult>(
+                await Build(db, userId).Merge(new MergeRecordingsRequest([sourceId, survivorId])));
+
+        await using var verify = fx.CreateDbContext();
+        Assert.Null(await verify.Recordings.FindAsync(sourceId)); // source row deleted
+        var moved = await verify.Attachments.FindAsync(attId);
+        Assert.NotNull(moved);                                    // survived the source deletion (not cascaded)
+        Assert.Equal(survivorId, moved!.RecordingId);             // reassigned onto the survivor
+    }
+
+    [Fact]
     public async Task DeleteAudio_FreesQuota_FlagsDeleted_AndAudioBecomes404()
     {
         Guid userId, recId;

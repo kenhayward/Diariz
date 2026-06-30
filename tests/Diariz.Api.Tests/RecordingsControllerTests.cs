@@ -1219,6 +1219,34 @@ public class RecordingsControllerTests
         Assert.True(storage.Objects.ContainsKey(rec.BlobKey));
     }
 
+    [Fact]
+    public async Task Delete_AlsoFreesFileAttachmentBlobs_LeavingUrlAttachments()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        storage.Objects[rec.BlobKey] = Encoding.UTF8.GetBytes("audio");
+        var f1 = $"{userId}/attachments/{Guid.NewGuid()}.pdf";
+        var f2 = $"{userId}/attachments/{Guid.NewGuid()}.docx";
+        db.Attachments.AddRange(
+            new Attachment { Id = Guid.NewGuid(), RecordingId = rec.Id, Kind = AttachmentKind.File, Name = "a.pdf", BlobKey = f1, Ordinal = 0 },
+            new Attachment { Id = Guid.NewGuid(), RecordingId = rec.Id, Kind = AttachmentKind.File, Name = "b.docx", BlobKey = f2, Ordinal = 1 },
+            new Attachment { Id = Guid.NewGuid(), RecordingId = rec.Id, Kind = AttachmentKind.Url, Name = "link", Url = "https://x.test", Ordinal = 2 });
+        storage.Objects[f1] = Encoding.UTF8.GetBytes("pdf");
+        storage.Objects[f2] = Encoding.UTF8.GetBytes("doc");
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue(), storage);
+
+        var result = await controller.Delete(rec.Id);
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Null(await db.Recordings.FindAsync(rec.Id));
+        Assert.False(storage.Objects.ContainsKey(rec.BlobKey)); // audio freed
+        Assert.False(storage.Objects.ContainsKey(f1));          // file-attachment blobs freed (no leak)
+        Assert.False(storage.Objects.ContainsKey(f2));
+    }
+
     // ---- Transcript download ----
 
     private static async Task<Recording> SeedTranscribedRecording(
@@ -1645,6 +1673,62 @@ public class RecordingsControllerTests
         var merged = await db.Transcriptions.Where(t => t.RecordingId == early.Id).OrderByDescending(t => t.Version).FirstAsync();
         var segs = await db.Segments.Where(s => s.TranscriptionId == merged.Id).OrderBy(s => s.Ordinal).ToListAsync();
         Assert.Equal(["Hello", "World"], segs.Select(s => s.Original));
+    }
+
+    [Fact]
+    public async Task Merge_SyncPath_MovesSourceAttachmentsOntoSurvivor_WithoutFreeingBlobs()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        // No audio on either → synchronous merge that deletes the source row.
+        var early = await SeedMergeable(db, userId, DateTimeOffset.UtcNow.AddMinutes(-5), 1000, "Hello");
+        var later = await SeedMergeable(db, userId, DateTimeOffset.UtcNow, 2000, "World");
+        foreach (var r in new[] { early, later }) { r.AudioDeletedAt = DateTimeOffset.UtcNow; r.SizeBytes = 0; }
+        var sKey = $"{userId}/attachments/{Guid.NewGuid()}.pdf";  // survivor's own attachment
+        var m1 = $"{userId}/attachments/{Guid.NewGuid()}.pdf";    // source file attachment
+        db.Attachments.Add(new Attachment { Id = Guid.NewGuid(), RecordingId = early.Id, Kind = AttachmentKind.File, Name = "survivor.pdf", BlobKey = sKey, Ordinal = 0 });
+        db.Attachments.AddRange(
+            new Attachment { Id = Guid.NewGuid(), RecordingId = later.Id, Kind = AttachmentKind.File, Name = "src1.pdf", BlobKey = m1, Ordinal = 0 },
+            new Attachment { Id = Guid.NewGuid(), RecordingId = later.Id, Kind = AttachmentKind.Url, Name = "link", Url = "https://x.test", Ordinal = 1 });
+        storage.Objects[sKey] = Encoding.UTF8.GetBytes("a");
+        storage.Objects[m1] = Encoding.UTF8.GetBytes("b");
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue(), storage);
+
+        var result = await controller.Merge(new MergeRecordingsRequest([later.Id, early.Id]));
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Null(await db.Recordings.FindAsync(later.Id));                 // source removed
+        // The source's attachments now hang off the survivor, appended after its own — nothing orphaned.
+        var moved = await db.Attachments.Where(a => a.RecordingId == early.Id).OrderBy(a => a.Ordinal).ToListAsync();
+        Assert.Equal(["survivor.pdf", "src1.pdf", "link"], moved.Select(a => a.Name));
+        Assert.Equal([0, 1, 2], moved.Select(a => a.Ordinal));
+        Assert.Empty(await db.Attachments.Where(a => a.RecordingId == later.Id).ToListAsync());
+        Assert.True(storage.Objects.ContainsKey(sKey)); // blobs kept (still referenced by the survivor)
+        Assert.True(storage.Objects.ContainsKey(m1));
+    }
+
+    [Fact]
+    public async Task Merge_AsyncPath_MovesSourceAttachmentsOntoSurvivor_BeforeEnqueue()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var early = await SeedMergeable(db, userId, DateTimeOffset.UtcNow.AddMinutes(-5), 1000, "Hello"); // has audio
+        var later = await SeedMergeable(db, userId, DateTimeOffset.UtcNow, 2000, "World");                 // has audio
+        var m1 = $"{userId}/attachments/{Guid.NewGuid()}.pdf";
+        db.Attachments.Add(new Attachment { Id = Guid.NewGuid(), RecordingId = later.Id, Kind = AttachmentKind.File, Name = "src1.pdf", BlobKey = m1, Ordinal = 0 });
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, queue);
+
+        var result = await controller.Merge(new MergeRecordingsRequest([later.Id, early.Id]));
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Single(queue.AudioMergeEnqueued); // async (worker still deletes the source row later)
+        // The reassignment happens in the controller, so by callback time the source has no attachments to orphan.
+        Assert.Equal("src1.pdf", (await db.Attachments.SingleAsync(a => a.RecordingId == early.Id)).Name);
+        Assert.Empty(await db.Attachments.Where(a => a.RecordingId == later.Id).ToListAsync());
     }
 
     [Fact]

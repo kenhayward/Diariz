@@ -586,13 +586,23 @@ public class RecordingsController : ControllerBase
         var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
         if (rec is null) return NotFound();
 
-        // Remove the blob first: a dangling DB row is safer (and retriable) than an orphaned blob.
-        // The DB cascade clears Transcriptions -> Segments + Summary, and Speakers.
+        // Remove the blobs first: a dangling DB row is safer (and retriable) than an orphaned blob.
+        // The DB cascade clears Transcriptions -> Segments + Summary, Speakers, and Attachment rows — but
+        // not their object-storage blobs, so the uploaded-attachment files must be deleted explicitly too.
         await _storage.DeleteAsync(rec.BlobKey);
+        foreach (var key in await FileAttachmentKeysAsync(rec.Id))
+            await _storage.DeleteAsync(key);
         _db.Recordings.Remove(rec);
         await _db.SaveChangesAsync();
         return NoContent();
     }
+
+    /// <summary>Object-storage keys of a recording's uploaded-file attachments (URL attachments have none).</summary>
+    private async Task<List<string>> FileAttachmentKeysAsync(Guid recordingId) =>
+        await _db.Attachments
+            .Where(a => a.RecordingId == recordingId && a.BlobKey != null)
+            .Select(a => a.BlobKey!)
+            .ToListAsync();
 
     /// <summary>Delete just the audio blob, keeping the transcript and metadata. Frees the recording's
     /// bytes against the owner's quota (SizeBytes -> 0) and flags <see cref="Recording.AudioDeletedAt"/>.
@@ -722,7 +732,29 @@ public class RecordingsController : ControllerBase
         }
         if (mergedAnyAction) survivor.ActionsExtractedAt ??= DateTimeOffset.UtcNow;
 
-        var deleteIds = ordered.Skip(1).Select(r => r.Id).ToList();
+        // Carry the merged-away recordings' attachments onto the survivor so the user keeps every attached
+        // document — and so their blobs stay referenced rather than being orphaned when the source rows are
+        // dropped (here in the sync path, or by the worker callback in the async one). Ordinals continue
+        // after the survivor's existing attachments.
+        var sourceIds = ordered.Skip(1).Select(r => r.Id).ToList();
+        var movingAttachments = await _db.Attachments
+            .Where(a => sourceIds.Contains(a.RecordingId))
+            .ToListAsync();
+        if (movingAttachments.Count > 0)
+        {
+            var nextAttachmentOrdinal = (await _db.Attachments
+                .Where(a => a.RecordingId == survivor.Id)
+                .Select(a => (int?)a.Ordinal).MaxAsync() ?? -1) + 1;
+            // Keep a stable order: each source in merge (chronological) order, its attachments by ordinal.
+            foreach (var a in movingAttachments
+                .OrderBy(a => sourceIds.IndexOf(a.RecordingId)).ThenBy(a => a.Ordinal))
+            {
+                a.RecordingId = survivor.Id;
+                a.Ordinal = nextAttachmentOrdinal++;
+            }
+        }
+
+        var deleteIds = sourceIds;
         var audioSources = ordered.Where(r => r.HasAudio).ToList();
 
         if (audioSources.Count == 0)

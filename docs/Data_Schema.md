@@ -330,6 +330,10 @@ rendered on demand by the API from the database.
 - The key is stored on `Recording.BlobKey`; `Recording.ContentType` holds the MIME type.
 - **Attachment files** use key `{userId}/attachments/{attachmentId}{ext}` (stored on `Attachment.BlobKey`);
   the API streams them back same-origin (inline) and counts their bytes toward the user's quota.
+- **Blob lifecycle on delete/merge:** deleting a recording also deletes its attachment-file blobs (the DB
+  cascade only removes the rows). Merging **moves** the merged-away recordings' attachments onto the survivor
+  (rows reparented, blobs kept), so nothing is orphaned; the audio-merge worker callback also defensively
+  frees any attachment blob still on a source it removes.
 
 ### Access pattern (who reads/writes)
 

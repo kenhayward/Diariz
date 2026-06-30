@@ -63,6 +63,25 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.42.1",
+    date: "2026-06-30",
+    pr: 88,
+    headline: "Fix: deleting or merging recordings no longer leaks attachment files",
+    summary:
+      "Closed a storage leak where a recording's **uploaded attachment files** were left behind in object " +
+      "storage when the recording was **deleted** or **merged** into another — the database rows went away but " +
+      "the underlying files didn't. Now deleting a recording also frees its attachment files, and **merging keeps " +
+      "the attachments**: they move onto the surviving recording (so you don't lose documents you attached to a " +
+      "merged-away recording) rather than being discarded.",
+    changed: [
+      "Merging recordings now carries the merged-away recordings' attachments onto the surviving recording.",
+    ],
+    fixed: [
+      "Deleting a recording now removes its uploaded attachment files from storage (previously orphaned).",
+      "Merging recordings no longer orphans the source recordings' attachment files.",
+    ],
+  },
+  {
     version: "0.42.0",
     date: "2026-06-30",
     pr: 87,
