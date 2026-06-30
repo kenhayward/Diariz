@@ -7,6 +7,12 @@
 # runs on openai-whisper (PyTorch) because faster-whisper/CTranslate2 has no AMD GPU support; everything
 # else (API, web, infra, the worker's align/diarize/voiceprints) is unchanged. Pick this OR the NVIDIA
 # compose file — both use the `diariz` project name, so only one runs at a time.
+#
+# REQUIRES NATIVE LINUX (kernel >= 6.11, ROCm >= 6.4.1) — NOT WSL2 / Docker Desktop on Windows. WSL2 has no
+# /dev/kfd (it bridges GPU compute via /dev/dxg + a WSL-specific ROCm this image doesn't use), so it fails at
+# startup with: error gathering device information while adding custom device "/dev/kfd": no such file or
+# directory. On Windows/WSL2, run the standard worker CPU-only instead (docker-compose.yml + WORKER_DEVICE=cpu
+# WORKER_COMPUTE_TYPE=int8). See src/Diariz.Worker/README.md -> AMD ROCm.
 
 name: diariz
 

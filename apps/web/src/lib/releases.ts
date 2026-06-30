@@ -64,6 +64,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.45.5",
+    date: "2026-06-30",
+    pr: 97,
+    headline: "Docs: AMD ROCm worker needs native Linux (not WSL2)",
+    summary:
+      "Documents a gotcha for the experimental AMD ROCm worker: it needs the native-Linux GPU device " +
+      "`/dev/kfd`, which **WSL2 / Docker Desktop on Windows does not expose**, so it fails to start there with " +
+      "*“no such file or directory”* for `/dev/kfd`. The worker README and `docker-compose.rocm.yml` now spell " +
+      "this out and point Windows/WSL2 users at the CPU-only fallback (standard compose, `WORKER_DEVICE=cpu`). " +
+      "Docs only — no behaviour change.",
+    changed: [
+      "Worker README + docker-compose.rocm.yml note the AMD ROCm worker requires native Linux (not WSL2) and link the CPU-only fallback.",
+    ],
+  },
+  {
     version: "0.45.4",
     date: "2026-06-30",
     pr: 96,
