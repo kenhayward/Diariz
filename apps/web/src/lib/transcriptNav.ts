@@ -23,9 +23,27 @@ export function parseRecordingLink(href: string): RecordingLink | null {
   }
 }
 
-/// The path to navigate to for a parsed link (round-trips through the same query shape).
-export function recordingLinkPath(link: RecordingLink): string {
-  return link.t != null ? `/recordings/${link.id}?t=${link.t}` : `/recordings/${link.id}`;
+/// The path to navigate to for a parsed link. When the answer cited several moments in the same recording,
+/// pass them all as `allTimes` — they ride along as `ts=` so the transcript can offer prev/next navigation,
+/// with the clicked moment (or the first) as the active `t`.
+export function recordingLinkPath(link: RecordingLink, allTimes?: number[]): string {
+  const params = new URLSearchParams();
+  const active = link.t ?? (allTimes && allTimes.length > 0 ? allTimes[0] : null);
+  if (active != null) params.set("t", String(active));
+  if (allTimes && allTimes.length > 1) params.set("ts", allTimes.join(","));
+  const qs = params.toString();
+  return qs ? `/recordings/${link.id}?${qs}` : `/recordings/${link.id}`;
+}
+
+/// Parses the `ts` query value (a comma-separated list of ms positions) into a sorted, de-duplicated list.
+export function parseMatchTimes(raw: string | null): number[] {
+  if (!raw) return [];
+  const nums = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => /^\d+$/.test(s))
+    .map(Number);
+  return [...new Set(nums)].sort((a, b) => a - b);
 }
 
 /// The index of the segment that contains `ms` (start ≤ ms < end), else the nearest by start time, else -1.

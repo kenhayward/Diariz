@@ -63,6 +63,27 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.41.0",
+    date: "2026-06-30",
+    pr: 85,
+    headline: "Chat recognises transcript questions, links reliably, and jumps between matches",
+    summary:
+      "Three chat improvements. **(1) Better recognition:** the assistant now treats your questions as being " +
+      "about your own meetings by default — asking \"what do we know about {customer}\" makes it search your " +
+      "transcripts instead of replying that it doesn't know, without you having to say \"based on the " +
+      "transcripts\". **(2) Reliable links:** when the model mentions a recording by name but forgets to keep " +
+      "the link, the app now **links it for you** (from the recordings the tools actually used). **(3) Jump " +
+      "between matches:** when an answer cites several moments in the same recording, opening one shows a " +
+      "**Match k of n** control with ◀ / ▶ to step through the others, each highlighted in the transcript.",
+    added: [
+      "A Match k/n previous/next control in the transcript when a chat answer cited several moments there.",
+      "Automatic linking of recording mentions the model didn't link (from tool references).",
+    ],
+    changed: [
+      "The chat system prompt grounds questions in the user's own transcripts and tells the model to search before saying it doesn't know.",
+    ],
+  },
+  {
     version: "0.40.0",
     date: "2026-06-30",
     pr: 84,

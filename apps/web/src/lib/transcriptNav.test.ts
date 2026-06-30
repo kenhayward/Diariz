@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseRecordingLink, recordingLinkPath, segmentIndexAtMs } from "./transcriptNav";
+import { parseRecordingLink, recordingLinkPath, parseMatchTimes, segmentIndexAtMs } from "./transcriptNav";
 
 describe("parseRecordingLink", () => {
   it("parses a recording link with a time", () => {
@@ -25,6 +25,26 @@ describe("recordingLinkPath", () => {
   it("round-trips", () => {
     expect(recordingLinkPath({ id: "x", t: 5000 })).toBe("/recordings/x?t=5000");
     expect(recordingLinkPath({ id: "x", t: null })).toBe("/recordings/x");
+  });
+
+  it("carries all cited moments as ts for prev/next navigation", () => {
+    expect(recordingLinkPath({ id: "x", t: 5000 }, [1000, 5000, 9000])).toBe(
+      "/recordings/x?t=5000&ts=1000%2C5000%2C9000",
+    );
+  });
+
+  it("omits ts when there's only one moment", () => {
+    expect(recordingLinkPath({ id: "x", t: 5000 }, [5000])).toBe("/recordings/x?t=5000");
+  });
+});
+
+describe("parseMatchTimes", () => {
+  it("parses, dedups and sorts", () => {
+    expect(parseMatchTimes("9000,1000,5000,1000")).toEqual([1000, 5000, 9000]);
+  });
+  it("handles empty / junk", () => {
+    expect(parseMatchTimes(null)).toEqual([]);
+    expect(parseMatchTimes("a,b")).toEqual([]);
   });
 });
 

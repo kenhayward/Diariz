@@ -79,6 +79,41 @@ public class ChatToolOrchestratorTests
     }
 
     [Fact]
+    public void ExtractRecordingRefs_PullsNameAndWholeRecordingHref()
+    {
+        var rid = Guid.NewGuid();
+        var result =
+            $"1. When: … · Who: Alice · What: \"hi\" · Link: [Budget Review @ 04:12](/recordings/{rid}?t=252000)\n" +
+            $"2. When: … · Who: Bob · What: \"yo\" · Link: [Budget Review @ 06:00](/recordings/{rid}?t=360000)";
+
+        var refs = ChatToolOrchestrator.ExtractRecordingRefs(result);
+
+        Assert.Contains(refs, r => r.Name == "Budget Review" && r.Href == $"/recordings/{rid}");
+    }
+
+    [Fact]
+    public async Task ToolRun_EmitsRefEvents_ForReferencedRecordings()
+    {
+        var rid = Guid.NewGuid();
+        var stub = new StubChatTool("who_said_that",
+            $"1. When: x · Who: Alice · What: \"hi\" · Link: [Acme Sync @ 01:00](/recordings/{rid}?t=60000)");
+        var chat = new FakeChatStreamClient
+        {
+            ChunkRounds =
+            [
+                [new ChatStreamDelta(null, [new ToolCallFragment(0, "c1", "who_said_that", "{}")], "tool_calls")],
+                [new ChatStreamDelta("Alice mentioned it.", null, null)],
+            ],
+        };
+
+        var events = await Run(chat, [stub]);
+
+        var refEvt = Assert.Single(events.OfType<ChatRefEvent>());
+        Assert.Equal("Acme Sync", refEvt.Name);
+        Assert.Equal($"/recordings/{rid}", refEvt.Href);
+    }
+
+    [Fact]
     public async Task LoopIsBounded_ByMaxToolRounds()
     {
         // The model "always" wants to call a tool; the orchestrator must still terminate.
