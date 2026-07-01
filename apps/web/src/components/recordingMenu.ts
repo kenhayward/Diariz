@@ -9,6 +9,9 @@ export interface RecordingMenuHandlers {
   onCopyLink: () => void;
   /// Optional (detail page only): manually edit the transcript's summary.
   onEditSummary?: () => void;
+  /// Optional (detail page only): (re)generate the meeting minutes with the LLM. Lets existing recordings
+  /// that predate the feature get minutes without opening the (absent) minutes panel.
+  onGenerateMinutes?: () => void;
   onMove: () => void;
   /// Optional (detail page only): extract action items from the transcript with the LLM.
   onExtractActions?: () => void;
@@ -48,6 +51,9 @@ export function recordingMenu(h: RecordingMenuHandlers, t: TFunction): KebabActi
     { label: t("recordings:summarise"), onClick: h.onSummarise, disabled: !h.hasTranscript || h.isSummarizing },
     ...(h.onEditSummary
       ? [{ label: t("recordings:editSummary"), onClick: h.onEditSummary, disabled: !h.hasTranscript }]
+      : []),
+    ...(h.onGenerateMinutes
+      ? [{ label: t("recordings:generateMinutes"), onClick: h.onGenerateMinutes, disabled: !h.hasTranscript || h.isSummarizing }]
       : []),
     ...(h.onExtractActions
       ? [{ label: t("recordings:extractActions"), onClick: h.onExtractActions, disabled: !h.hasTranscript }]

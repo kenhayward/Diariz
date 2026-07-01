@@ -2,6 +2,7 @@
   "rename": "Rename",
   "copyLink": "Copy link",
   "editSummary": "Edit summary",
+  "generateMinutes": "Generate meeting minutes",
   "retranscribe": "Re-transcribe",
   "summarise": "Summarise",
   "extractActions": "Extract actions",

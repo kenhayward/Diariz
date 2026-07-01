@@ -105,20 +105,19 @@ describe("RecordingDetail", () => {
     (api.emailMeetingMinutes as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   });
 
-  it("renders the meeting minutes (expanded) and Re-create calls the API", async () => {
+  it("keeps the meeting minutes collapsed by default; Re-create (header) calls the API", async () => {
     renderPage({ ...base, meetingMinutes: minutes });
-    // Expanded by default: the rendered Markdown body is visible without expanding.
-    expect(await screen.findByText("We met and agreed.")).toBeTruthy();
+    const recreate = await screen.findByRole("button", { name: /re-create minutes/i });
+    // Collapsed by default: the rendered Markdown body isn't shown until expanded.
+    expect(screen.queryByText("We met and agreed.")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /re-create minutes/i }));
+    fireEvent.click(recreate);
     await waitFor(() => expect(api.generateMeetingMinutes).toHaveBeenCalledWith("rec-123"));
   });
 
   it("Email minutes with no attachments emails directly", async () => {
     renderPage({ ...base, meetingMinutes: minutes });
-    await screen.findByText("We met and agreed.");
-
-    fireEvent.click(screen.getByRole("button", { name: /email minutes to me/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /email minutes to me/i }));
     await waitFor(() => expect(api.emailMeetingMinutes).toHaveBeenCalledWith("rec-123", false));
   });
 
@@ -127,14 +126,23 @@ describe("RecordingDetail", () => {
       { id: "a1", kind: "File", name: "doc.pdf", contentType: "application/pdf", sizeBytes: 8, url: null, ordinal: 0 },
     ]);
     renderPage({ ...base, meetingMinutes: minutes });
-    await screen.findByText("We met and agreed.");
 
-    fireEvent.click(screen.getByRole("button", { name: /email minutes to me/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /email minutes to me/i }));
     // Directly emailing must NOT have happened — the include-attachments prompt appears first.
     expect(api.emailMeetingMinutes).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole("button", { name: /include attachments/i }));
 
     await waitFor(() => expect(api.emailMeetingMinutes).toHaveBeenCalledWith("rec-123", true));
+  });
+
+  it("Generate meeting minutes (kebab) calls the API even when the recording has none yet", async () => {
+    renderPage(base); // base.meetingMinutes is null (an existing recording predating minutes)
+    await screen.findByText("Hi");
+
+    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /generate meeting minutes/i }));
+
+    await waitFor(() => expect(api.generateMeetingMinutes).toHaveBeenCalledWith("rec-123"));
   });
 
   it("re-transcribe (kebab) opens a modal and re-transcribes on confirm", async () => {

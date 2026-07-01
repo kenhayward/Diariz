@@ -193,11 +193,6 @@ export default function RecordingDetail() {
     [rec],
   );
 
-  async function rename(label: string, name: string) {
-    await api.renameSpeaker(id, label, name);
-    qc.invalidateQueries({ queryKey: ["recording", id] });
-  }
-
   async function assignSpeaker(label: string, profileId: string | null) {
     setActionError(null);
     try {
@@ -677,6 +672,7 @@ export default function RecordingDetail() {
     onRetranscribe: () => setRetranscribeOpen(true),
     onSummarise: summarize,
     onEditSummary: () => setEditingSummary(true),
+    onGenerateMinutes: recreateMinutes,
     onExtractActions: extractActions,
     onReidentify: reidentify,
     onTranslate: nativeLang ? translateRecording : undefined,
@@ -696,7 +692,10 @@ export default function RecordingDetail() {
     onDelete: async () => {
       if (!window.confirm(t("workspace:confirmDelete", { name: rec.name ?? rec.title }))) return;
       await api.deleteRecording(id);
+      // Leave the (now-deleted) transcript so no further action targets a missing recording, and refresh the list.
       navigate("/");
+      qc.invalidateQueries({ queryKey: ["recordings"] });
+      qc.invalidateQueries({ queryKey: ["user-storage"] });
     },
     hasTranscript,
     hasAudio: rec.hasAudio,
@@ -800,9 +799,37 @@ export default function RecordingDetail() {
       {isSummarizing && !rec.summary && (
         <p className="rounded bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">{t("workspace:summarising")}</p>
       )}
+      {rec.summary && (
+        <CollapsibleSection
+          title={t("workspace:sectionSummary")}
+          defaultCollapsed
+          headerActions={
+            <>
+              <ToolbarButton
+                label={t("workspace:resummarise")}
+                icon={RefreshIcon}
+                disabled={!hasTranscript || isSummarizing}
+                onClick={summarize}
+              />
+              <ToolbarButton
+                label={t("workspace:editSummaryAction")}
+                icon={PencilIcon}
+                disabled={!hasTranscript}
+                onClick={() => setEditingSummary(true)}
+              />
+            </>
+          }
+        >
+          {rec.summary.isUserEdited && (
+            <p className="mb-1 text-xs italic text-gray-400 dark:text-gray-500">{t("workspace:summaryEditedHint")}</p>
+          )}
+          <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{rec.summary.text}</p>
+        </CollapsibleSection>
+      )}
       {rec.meetingMinutes && (
         <CollapsibleSection
           title={t("workspace:sectionMeetingMinutes")}
+          defaultCollapsed
           headerActions={
             <>
               <ToolbarButton
@@ -839,33 +866,6 @@ export default function RecordingDetail() {
               [&_td]:border [&_td]:px-2 [&_td]:py-1 dark:[&_th]:border-gray-700 dark:[&_td]:border-gray-700"
             dangerouslySetInnerHTML={{ __html: renderMarkdown(rec.meetingMinutes.text) }}
           />
-        </CollapsibleSection>
-      )}
-      {rec.summary && (
-        <CollapsibleSection
-          title={t("workspace:sectionSummary")}
-          defaultCollapsed
-          headerActions={
-            <>
-              <ToolbarButton
-                label={t("workspace:resummarise")}
-                icon={RefreshIcon}
-                disabled={!hasTranscript || isSummarizing}
-                onClick={summarize}
-              />
-              <ToolbarButton
-                label={t("workspace:editSummaryAction")}
-                icon={PencilIcon}
-                disabled={!hasTranscript}
-                onClick={() => setEditingSummary(true)}
-              />
-            </>
-          }
-        >
-          {rec.summary.isUserEdited && (
-            <p className="mb-1 text-xs italic text-gray-400 dark:text-gray-500">{t("workspace:summaryEditedHint")}</p>
-          )}
-          <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{rec.summary.text}</p>
         </CollapsibleSection>
       )}
 
@@ -922,7 +922,6 @@ export default function RecordingDetail() {
                   onDelete={(name) => deleteSpeaker(label, name)}
                   onPrev={() => goToSpeakerSegment(label, "prev")}
                   onNext={() => goToSpeakerSegment(label, "next")}
-                  onRename={(name) => rename(label, name)}
                   onAssign={(profileId) => assignSpeaker(label, profileId)}
                   onCreate={(name) => newPerson(label, name)}
                   onMulti={() => markMulti(label)}
@@ -1359,7 +1358,6 @@ export function SpeakerRow({
   onDelete,
   onPrev,
   onNext,
-  onRename,
   onAssign,
   onCreate,
   onMulti,
@@ -1375,35 +1373,29 @@ export function SpeakerRow({
   onDelete: (name: string) => void;
   onPrev: () => void;
   onNext: () => void;
-  onRename: (name: string) => void;
   onAssign: (profileId: string | null) => void;
   onCreate: (name: string) => void;
   onMulti: () => void;
 }) {
   const { t } = useTranslation("workspace");
-  const [value, setValue] = useState(initial);
-  // Keep the field in sync when identification/reassignment changes the name out from under us.
-  useEffect(() => setValue(initial), [initial]);
+  // The display name for the per-speaker action labels (the assignment typeahead owns the editing UI).
+  const name = initial;
 
-  // One line per speaker: label · name · assign typeahead · segment count · toolbar (play/delete/prev/next).
+  // One line per speaker: [label · auto] · assign typeahead · segment count · toolbar (play/prev/next/delete).
+  // The leading label column is fixed-width so the assign box and the items after it line up across rows.
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs text-gray-400 dark:text-gray-500">{label}</span>
-      {info?.identifiedAuto && (
-        <span
-          title={t("autoNameTitle")}
-          className="rounded bg-blue-100 px-1 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
-        >
-          {t("autoBadge")}
-        </span>
-      )}
-      <input
-        value={value}
-        aria-label={t("nameForAria", { label })}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={() => value !== initial && onRename(value)}
-        className="w-40 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-      />
+      <div className="flex w-32 shrink-0 items-center gap-1">
+        <span className="text-xs text-gray-400 dark:text-gray-500">{label}</span>
+        {info?.identifiedAuto && (
+          <span
+            title={t("autoNameTitle")}
+            className="rounded bg-blue-100 px-1 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+          >
+            {t("autoBadge")}
+          </span>
+        )}
+      </div>
       <SpeakerAssign
         label={label}
         profiles={profiles}
@@ -1419,15 +1411,15 @@ export function SpeakerRow({
       <div className="flex items-center gap-0.5">
         {canPlay && (
           <ToolbarButton
-            label={playing ? t("pauseSpeaker") : t("playSpeaker", { label: value })}
+            label={playing ? t("pauseSpeaker") : t("playSpeaker", { label: name })}
             icon={playing ? PauseIcon : PlayIcon}
             active={playing}
             onClick={onTogglePlay}
           />
         )}
-        <ToolbarButton label={t("prevSpeakerSegment", { label: value })} icon={ChevronLeftIcon} onClick={onPrev} />
-        <ToolbarButton label={t("nextSpeakerSegment", { label: value })} icon={ChevronRightIcon} onClick={onNext} />
-        <ToolbarButton label={t("deleteSpeaker", { label: value })} icon={TrashIcon} onClick={() => onDelete(value)} />
+        <ToolbarButton label={t("prevSpeakerSegment", { label: name })} icon={ChevronLeftIcon} onClick={onPrev} />
+        <ToolbarButton label={t("nextSpeakerSegment", { label: name })} icon={ChevronRightIcon} onClick={onNext} />
+        <ToolbarButton label={t("deleteSpeaker", { label: name })} icon={TrashIcon} onClick={() => onDelete(name)} />
       </div>
     </div>
   );

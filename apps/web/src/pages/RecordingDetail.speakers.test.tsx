@@ -11,7 +11,6 @@ const profiles: SpeakerProfile[] = [
 function row(
   info: SpeakerInfo | undefined,
   handlers: Partial<{
-    onRename: (n: string) => void;
     onAssign: (id: string | null) => void;
     onCreate: (name: string) => void;
     onMulti: () => void;
@@ -37,7 +36,6 @@ function row(
       onDelete={handlers.onDelete ?? (() => {})}
       onPrev={handlers.onPrev ?? (() => {})}
       onNext={handlers.onNext ?? (() => {})}
-      onRename={handlers.onRename ?? (() => {})}
       onAssign={handlers.onAssign ?? (() => {})}
       onCreate={handlers.onCreate ?? (() => {})}
       onMulti={handlers.onMulti ?? (() => {})}
