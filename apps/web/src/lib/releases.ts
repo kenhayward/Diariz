@@ -75,20 +75,25 @@ export const RELEASES: Release[] = [
     version: "0.55.0",
     date: "2026-07-01",
     pr: 111,
-    headline: "Action items extract automatically; the Meeting Minutes panel is always available",
+    headline: "Action items extract automatically — and the minutes now use the same set",
     summary:
-      "**Action items now extract automatically** as part of the transcription pipeline — alongside the " +
-      "summary and meeting minutes — so a recording arrives with its actions already pulled out (when an LLM " +
-      "endpoint is configured). The automatic pass runs once and never overwrites actions you've added or " +
-      "edited; the panel's refresh button still re-extracts on demand. The **Meeting Minutes** panel is now " +
-      "**always shown** (collapsed by default) even before minutes exist, with its refresh button to generate " +
-      "them — matching the Actions panel. The meeting-minutes prompt also now receives the **meeting time** " +
-      "(a new `{meeting_time}` placeholder) in addition to the date.",
+      "**Action items now extract automatically** as part of the transcription pipeline (when an LLM endpoint " +
+      "is configured), so a recording arrives with its actions already pulled out. The automatic pass runs once " +
+      "and never overwrites actions you've added or edited; the panel's refresh button still re-extracts on " +
+      "demand. The **extractor was reworked** to be more thorough (it was previously too conservative and " +
+      "missed items the meeting minutes caught): it now reasons before answering and captures decisions and " +
+      "follow-ups, not only explicit commitments. The **meeting minutes are generated from that same canonical " +
+      "action set**, so the minutes' Action Items table and the recording's Actions panel always match. The " +
+      "**Meeting Minutes** panel is now **always shown** (collapsed) even before minutes exist, with a refresh " +
+      "button to generate them. The meeting-minutes prompt also receives the **meeting time** (a new " +
+      "`{meeting_time}` placeholder) in addition to the date.",
     added: [
       "Action items are extracted automatically during the transcription pipeline (in-process actions worker), gated on the same LLM config as the summary.",
-      "The meeting-minutes prompt gains a {meeting_time} placeholder (the recording's time of day).",
+      "The meeting-minutes prompt gains {meeting_time} and {action_items} placeholders (the recording's time of day, and the extracted action set).",
     ],
     changed: [
+      "Reworked the action-extraction prompt for completeness (reason-first, capture decisions/follow-ups, higher temperature) so it no longer under-reports.",
+      "Meeting minutes now render the recording's already-extracted action items verbatim — so the minutes' Action Items table matches the Actions panel exactly (the pipeline runs actions, then the minutes).",
       "The Meeting Minutes panel is always shown (collapsed) with a refresh button to generate them, even when the recording has none yet.",
       "Automatic action extraction runs once per recording and never clobbers manually added/edited actions (an explicit re-extract still replaces them).",
     ],

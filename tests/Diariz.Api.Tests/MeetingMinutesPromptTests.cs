@@ -46,6 +46,30 @@ public class MeetingMinutesPromptTests
     }
 
     [Fact]
+    public void BuildMessages_RendersSuppliedActionItems_IntoTheActionsPlaceholder()
+    {
+        var template = "Actions:\n{action_items}\n\n## Transcript:";
+        var ctx = new MeetingMinutesContext(
+            null, "T", [], null, [new ExtractedAction("Send the report", "Bob", "2026-03-06")]);
+
+        var system = MeetingMinutesPrompt.BuildMessages(template, ctx, Segments, 16000)[0].Content;
+
+        Assert.Contains("Send the report", system);
+        Assert.Contains("Bob", system);
+        Assert.Contains("2026-03-06", system);
+        Assert.DoesNotContain("{action_items}", system);
+    }
+
+    [Fact]
+    public void BuildMessages_ActionItemsPlaceholder_FallsBackWhenNoneSupplied()
+    {
+        var template = "Actions:\n{action_items}\n\n## Transcript:";
+        var ctx = new MeetingMinutesContext(null, "T", [], null); // no actions
+        var system = MeetingMinutesPrompt.BuildMessages(template, ctx, Segments, 16000)[0].Content;
+        Assert.Contains("derive the action items from the transcript", system);
+    }
+
+    [Fact]
     public void BuildMessages_UsesPlaceholders_WhenMetadataMissing()
     {
         var ctx = new MeetingMinutesContext(null, "", [], null);
@@ -61,6 +85,7 @@ public class MeetingMinutesPromptTests
     {
         Assert.Contains("{meeting_date}", MeetingMinutesPrompt.DefaultTemplate);
         Assert.Contains("{meeting_time}", MeetingMinutesPrompt.DefaultTemplate);
+        Assert.Contains("{action_items}", MeetingMinutesPrompt.DefaultTemplate);
         Assert.Contains("{speaker_list}", MeetingMinutesPrompt.DefaultTemplate);
         Assert.Contains("## Transcript:", MeetingMinutesPrompt.DefaultTemplate);
         Assert.Contains("emojis", MeetingMinutesPrompt.DefaultTemplate);

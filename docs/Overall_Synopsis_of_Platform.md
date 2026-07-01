@@ -154,12 +154,15 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   with the JSON contract, which stays machine-controlled).
 - **Meeting minutes (async).** A **third Redis stream `meeting-minutes-jobs`** (group `minute-takers`) with its
   own `MeetingMinutesWorker` (singleton `BackgroundService`) generates a formal, emailable **`MeetingMinutes`**
-  (GitHub-flavoured Markdown; `MeetingMinutesClient`/`Prompt`) from the transcript. It is enqueued **alongside
-  the summary** after transcription (same effective per-user config gates both), and re-runnable via
-  `POST /api/recordings/{id}/meeting-minutes/generate`. The minutes **instruction prompt lives in the editable
-  template** `prompts/meeting-minutes.md` — `{meeting_date}`/`{meeting_time}`/`{meeting_title}`/`{speaker_list}`/
-  `{meeting_duration}` are substituted and the transcript is attached as a **separate user (data) turn** so it
-  can't be read as instructions. Minutes **do not own `Recording.Status`** (so they never
+  (GitHub-flavoured Markdown; `MeetingMinutesClient`/`Prompt`) from the transcript. It is **chained after action
+  extraction** (the actions worker enqueues it when it finishes) so the minutes can render the **canonical
+  extracted action set** — the processor loads the recording's `RecordingAction`s and fills `{action_items}`,
+  and the prompt tells the model to render exactly those in its Action Items table (keeping the minutes' actions
+  and the Actions panel identical). Re-runnable via `POST /api/recordings/{id}/meeting-minutes/generate`. The
+  minutes **instruction prompt lives in the editable template** `prompts/meeting-minutes.md` —
+  `{meeting_date}`/`{meeting_time}`/`{meeting_title}`/`{speaker_list}`/`{meeting_duration}`/`{action_items}` are
+  substituted and the transcript is attached as a **separate user (data) turn** so it can't be read as
+  instructions. Minutes **do not own `Recording.Status`** (so they never
   race the summary's status transitions) — the processor notifies over SignalR to trigger a refetch. Minutes can
   be **hand-edited** (`PUT .../meeting-minutes`, sets `IsUserEdited`; auto-generator then skips) and **emailed on
   their own** (`POST .../meeting-minutes/email {includeAttachments}`) — the Markdown is rendered to HTML with
@@ -169,7 +172,8 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
 - **Extract actions (pipeline + on demand).** Action items are extracted **automatically as part of the
   pipeline**: a **fourth Redis stream `actions-jobs`** (group `actions-extractors`) with its own `ActionsWorker`
   (singleton `BackgroundService`) runs `ActionsProcessor` → `ActionsClient`/`ActionsPrompt`, enqueued **alongside
-  the summary + minutes** after transcription (same effective per-user config gates all three). The automatic
+  the summary** after transcription (same effective per-user config gates both) and, when it finishes, **chains
+  the minutes job** (so the minutes render the same set). The automatic
   pass **skips any recording whose `Recording.ActionsExtractedAt` is already set** (extraction ran, or the user
   added an action), so a re-transcribe never clobbers manual edits; like minutes it is **status-neutral** and
   notifies over SignalR. An explicit re-extract stays synchronous: `POST /api/recordings/{id}/actions/extract`

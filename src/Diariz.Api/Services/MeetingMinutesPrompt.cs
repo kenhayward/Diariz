@@ -4,12 +4,15 @@ using Diariz.Api.Contracts;
 
 namespace Diariz.Api.Services;
 
-/// <summary>Per-meeting values substituted into the minutes prompt template's <c>{placeholders}</c>.</summary>
+/// <summary>Per-meeting values substituted into the minutes prompt template's <c>{placeholders}</c>. The
+/// <paramref name="Actions"/> are the canonical, already-extracted action items — the minutes render them
+/// verbatim so the minutes' Action Items table matches the recording's Actions panel.</summary>
 public record MeetingMinutesContext(
     DateTimeOffset? MeetingDate,
     string Title,
     IReadOnlyList<string> Attendees,
-    long? DurationMs);
+    long? DurationMs,
+    IReadOnlyList<ExtractedAction>? Actions = null);
 
 /// <summary>
 /// Pure (no IO) rendering of the meeting-minutes prompt and extraction of the Markdown response, so the
@@ -54,8 +57,10 @@ clearly marked [placeholder]. Do not fabricate.
 1. Discussion summary — grouped by theme, not chronological; concise and
 decision-oriented.
 1. Decisions.
-1. Action items — table: Action | Owner | Due date. Use "TBC" where owner or
-date is not stated.
+1. Action items — a table: Action | Owner | Due date. **Render exactly the
+action items supplied under "Action Items" in the Meeting Data below — do not
+add, invent, merge or drop any.** Use "TBC" where an owner or due date is blank.
+If no action items are supplied, derive them from the transcript instead.
 1. Open questions / parking lot.
 1. Next steps / next meeting.
 
@@ -72,6 +77,9 @@ Title: {meeting_title}
 Attendees:{speaker_list}
 Duration:{meeting_duration}
 
+Action Items (already extracted — render these in the Action Items table):
+{action_items}
+
 ## Transcript:
 """;
 
@@ -86,7 +94,8 @@ Duration:{meeting_duration}
             .Replace("{meeting_time}", FormatTime(ctx.MeetingDate))
             .Replace("{meeting_title}", string.IsNullOrWhiteSpace(ctx.Title) ? "[placeholder]" : ctx.Title.Trim())
             .Replace("{speaker_list}", FormatAttendees(ctx.Attendees))
-            .Replace("{meeting_duration}", FormatDuration(ctx.DurationMs));
+            .Replace("{meeting_duration}", FormatDuration(ctx.DurationMs))
+            .Replace("{action_items}", FormatActions(ctx.Actions));
 
         var transcript = PromptTranscript.Build(segments, charBudget);
         return [new ChatMessage("system", rendered), new ChatMessage("user", transcript)];
@@ -95,6 +104,16 @@ Duration:{meeting_duration}
     private static string FormatDate(DateTimeOffset? d) => d?.ToString("yyyy-MM-dd") ?? "[placeholder]";
 
     private static string FormatTime(DateTimeOffset? d) => d?.ToString("HH:mm") ?? "[placeholder]";
+
+    /// <summary>Render the canonical extracted actions as a plain list for the prompt (Owner/Due left blank
+    /// when unknown). Empty → a marker telling the model to derive them from the transcript instead.</summary>
+    private static string FormatActions(IReadOnlyList<ExtractedAction>? actions)
+    {
+        var items = actions?.Where(a => !string.IsNullOrWhiteSpace(a.Text)).ToList() ?? [];
+        if (items.Count == 0) return "[none supplied — derive the action items from the transcript]";
+        return string.Join("\n", items.Select(a =>
+            $"- Action: {a.Text.Trim()} | Owner: {a.Actor.Trim()} | Due: {a.Deadline.Trim()}"));
+    }
 
     private static string FormatAttendees(IReadOnlyList<string> attendees)
     {

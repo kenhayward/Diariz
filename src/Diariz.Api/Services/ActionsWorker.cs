@@ -83,9 +83,11 @@ public class ActionsWorker : BackgroundService
                 var ctx = scope.ServiceProvider.GetRequiredService<DiarizDbContext>();
                 var client = scope.ServiceProvider.GetRequiredService<IActionsClient>();
                 var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
-                // Read the (editable) template per job so edits apply without an API restart.
+                var queue = scope.ServiceProvider.GetRequiredService<IJobQueue>();
+                // Read the (editable) template per job so edits apply without an API restart. The processor
+                // chains the minutes job when it finishes (so minutes render the canonical action set).
                 await ActionsProcessor.ProcessAsync(
-                    ctx, client, resolver, _hub, job,
+                    ctx, client, resolver, _hub, queue, job,
                     _prompts.Get("extract-actions", ActionsPrompt.DefaultTemplate), _log, ct);
             }
         }

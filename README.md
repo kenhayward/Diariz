@@ -52,10 +52,11 @@ answering as **When · Who · What**. Answers **link back to the transcript**: c
 recording and jump to the exact segment. Fuzzy search is backed by a Postgres `pg_trgm` trigram index; a
 brief grey "Tool call: …" line shows while a tool runs.
 - **Extract action items** (Action / Actor / Deadline) with that same LLM — **automatically as part of the
-transcription pipeline** (alongside the summary and minutes), into an editable table in an always-available
-**Action items** panel (collapsed by default, with a refresh button to re-extract). The automatic pass runs
-once and never overwrites actions you've added or edited. The actions also travel with the transcript —
-included in the downloads (Text/Markdown/RTF), the emailed transcript, and the chat context.
+transcription pipeline**, into an editable table in an always-available **Action items** panel (collapsed by
+default, with a refresh button to re-extract). The automatic pass runs once and never overwrites actions
+you've added or edited. The **meeting minutes are generated from that same action set**, so the minutes' Action
+Items table and the Actions panel always match. The actions also travel with the transcript — included in the
+downloads (Text/Markdown/RTF), the emailed transcript, and the chat context.
 - **Manage actions across all your meetings** in a dedicated **Actions** tab (the left panel is now
 **Meetings**): every action item in one list, **filter by person**, mark items **done** with a completion
 date (individually or in bulk, reversible), **hide completed**, and click an action to jump to the transcript
