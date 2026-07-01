@@ -75,6 +75,7 @@
   "emailMinutes": "M'envoyer le compte rendu par e-mail",
   "minutesEditTitle": "Modifier le compte rendu de réunion",
   "minutesEditedHint": "Modifié par vous",
+  "minutesEmpty": "Pas encore de compte rendu — utilisez le bouton d’actualisation pour le générer.",
   "emailedMinutes": "Compte rendu de réunion envoyé par e-mail.",
   "generatingMinutes": "Génération du compte rendu de réunion…",
   "errMinutes": "Impossible de mettre à jour le compte rendu de réunion.",

@@ -29,8 +29,8 @@ merge duplicates, and erase one or all (GDPR) of the stored biometric voiceprint
 
 It can **summarise** recordings and generate a full set of **professional meeting minutes** (headings, lists,
 tables — no emojis) that you can edit in a rich editor, re-create, and **email to yourself** (with or without
-the recording's attachments). It can **extract action items** (with actor and deadline) into an editable
-table, and **track them across all your meetings** in a dedicated **Actions** view — filter by person, mark
+the recording's attachments). It **automatically extracts action items** (with actor and deadline) as part of
+the pipeline into an editable table, and **tracks them across all your meetings** in a dedicated **Actions** view — filter by person, mark
 items done (with a completion date), and jump from an action back to the transcript it came from. It can
 **translate** a transcript (segments, summary, and actions) into your chosen language, and let you
 **chat across one or more transcripts** — with file attachments, a context-usage dial, and saved
@@ -71,6 +71,28 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.55.0",
+    date: "2026-07-01",
+    pr: 111,
+    headline: "Action items extract automatically; the Meeting Minutes panel is always available",
+    summary:
+      "**Action items now extract automatically** as part of the transcription pipeline — alongside the " +
+      "summary and meeting minutes — so a recording arrives with its actions already pulled out (when an LLM " +
+      "endpoint is configured). The automatic pass runs once and never overwrites actions you've added or " +
+      "edited; the panel's refresh button still re-extracts on demand. The **Meeting Minutes** panel is now " +
+      "**always shown** (collapsed by default) even before minutes exist, with its refresh button to generate " +
+      "them — matching the Actions panel. The meeting-minutes prompt also now receives the **meeting time** " +
+      "(a new `{meeting_time}` placeholder) in addition to the date.",
+    added: [
+      "Action items are extracted automatically during the transcription pipeline (in-process actions worker), gated on the same LLM config as the summary.",
+      "The meeting-minutes prompt gains a {meeting_time} placeholder (the recording's time of day).",
+    ],
+    changed: [
+      "The Meeting Minutes panel is always shown (collapsed) with a refresh button to generate them, even when the recording has none yet.",
+      "Automatic action extraction runs once per recording and never clobbers manually added/edited actions (an explicit re-extract still replaces them).",
+    ],
+  },
   {
     version: "0.54.1",
     date: "2026-07-01",

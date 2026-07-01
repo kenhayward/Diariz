@@ -75,6 +75,7 @@
   "emailMinutes": "Email minutes to me",
   "minutesEditTitle": "Edit meeting minutes",
   "minutesEditedHint": "Edited by you",
+  "minutesEmpty": "No meeting minutes yet — use the refresh button to generate them.",
   "emailedMinutes": "Meeting minutes emailed to you.",
   "generatingMinutes": "Generating meeting minutes…",
   "errMinutes": "Could not update the meeting minutes.",

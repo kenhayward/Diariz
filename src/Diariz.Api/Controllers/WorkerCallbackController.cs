@@ -114,6 +114,9 @@ public class WorkerCallbackController : ControllerBase
             // Meeting minutes generate in parallel with the summary (same effective config gates both). The
             // minutes job doesn't own the recording status, so it never races the summary's status transitions.
             await _queue.EnqueueMeetingMinutesAsync(new MeetingMinutesJob(transcription.RecordingId, transcription.Id));
+            // Action items are extracted in the same pass (its worker skips recordings already extracted, so a
+            // re-transcribe never clobbers manual edits). Also status-neutral — no race with the summary.
+            await _queue.EnqueueActionsAsync(new ActionsJob(transcription.RecordingId, transcription.Id));
         }
 
         await _hub.NotifyStatusAsync(transcription.Recording.UserId, transcription.RecordingId,

@@ -299,6 +299,7 @@ public sealed class FakeJobQueue : IJobQueue
     public List<TranscriptionJob> Enqueued { get; } = new();
     public List<SummarizationJob> SummarizationEnqueued { get; } = new();
     public List<MeetingMinutesJob> MeetingMinutesEnqueued { get; } = new();
+    public List<ActionsJob> ActionsEnqueued { get; } = new();
     public List<AudioMergeJob> AudioMergeEnqueued { get; } = new();
 
     public Task EnqueueAsync(TranscriptionJob job, CancellationToken ct = default)
@@ -316,6 +317,12 @@ public sealed class FakeJobQueue : IJobQueue
     public Task EnqueueMeetingMinutesAsync(MeetingMinutesJob job, CancellationToken ct = default)
     {
         MeetingMinutesEnqueued.Add(job);
+        return Task.CompletedTask;
+    }
+
+    public Task EnqueueActionsAsync(ActionsJob job, CancellationToken ct = default)
+    {
+        ActionsEnqueued.Add(job);
         return Task.CompletedTask;
     }
 

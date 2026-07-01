@@ -135,6 +135,18 @@ describe("RecordingDetail", () => {
     await waitFor(() => expect(api.emailMeetingMinutes).toHaveBeenCalledWith("rec-123", true));
   });
 
+  it("always shows the Meeting Minutes panel (collapsed, empty) when the recording has none", async () => {
+    renderPage(base); // base.meetingMinutes is null
+    // The panel header + its Re-create button are present; Edit/Email stay disabled until minutes exist.
+    expect(await screen.findByRole("heading", { name: /meeting minutes/i })).toBeTruthy();
+    expect((screen.getByRole("button", { name: /re-create minutes/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /edit minutes/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /email minutes to me/i }) as HTMLButtonElement).disabled).toBe(true);
+    // The empty-state hint shows once expanded.
+    fireEvent.click(screen.getByRole("button", { name: /expand meeting minutes section/i }));
+    expect(screen.getByText(/no meeting minutes yet/i)).toBeTruthy();
+  });
+
   it("Generate meeting minutes (kebab) calls the API even when the recording has none yet", async () => {
     renderPage(base); // base.meetingMinutes is null (an existing recording predating minutes)
     await screen.findByText("Hi");

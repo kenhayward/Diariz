@@ -75,6 +75,7 @@
   "emailMinutes": "Enviarme el acta por correo",
   "minutesEditTitle": "Editar el acta de la reunión",
   "minutesEditedHint": "Editado por ti",
+  "minutesEmpty": "Aún no hay actas — usa el botón de actualizar para generarlas.",
   "emailedMinutes": "Acta de la reunión enviada a tu correo.",
   "generatingMinutes": "Generando el acta de la reunión…",
   "errMinutes": "No se pudo actualizar el acta de la reunión.",

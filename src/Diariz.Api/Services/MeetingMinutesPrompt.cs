@@ -67,6 +67,7 @@ code fences and do not use emojis.
 
 **Meeting Data**
 Meeting Date: {meeting_date}
+Meeting Time: {meeting_time}
 Title: {meeting_title}
 Attendees:{speaker_list}
 Duration:{meeting_duration}
@@ -82,6 +83,7 @@ Duration:{meeting_duration}
     {
         var rendered = (template ?? DefaultTemplate)
             .Replace("{meeting_date}", FormatDate(ctx.MeetingDate))
+            .Replace("{meeting_time}", FormatTime(ctx.MeetingDate))
             .Replace("{meeting_title}", string.IsNullOrWhiteSpace(ctx.Title) ? "[placeholder]" : ctx.Title.Trim())
             .Replace("{speaker_list}", FormatAttendees(ctx.Attendees))
             .Replace("{meeting_duration}", FormatDuration(ctx.DurationMs));
@@ -91,6 +93,8 @@ Duration:{meeting_duration}
     }
 
     private static string FormatDate(DateTimeOffset? d) => d?.ToString("yyyy-MM-dd") ?? "[placeholder]";
+
+    private static string FormatTime(DateTimeOffset? d) => d?.ToString("HH:mm") ?? "[placeholder]";
 
     private static string FormatAttendees(IReadOnlyList<string> attendees)
     {

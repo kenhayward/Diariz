@@ -14,7 +14,8 @@ public class MeetingMinutesPromptTests
 
     private const string Template =
         "Instructions here — no emojis.\n\n**Meeting Data**\nMeeting Date: {meeting_date}\n" +
-        "Title: {meeting_title}\nAttendees:{speaker_list}\nDuration:{meeting_duration}\n\n## Transcript:";
+        "Meeting Time: {meeting_time}\nTitle: {meeting_title}\nAttendees:{speaker_list}\n" +
+        "Duration:{meeting_duration}\n\n## Transcript:";
 
     private static string ChatResponse(string content) =>
         JsonSerializer.Serialize(new { choices = new[] { new { message = new { content } } } });
@@ -32,6 +33,7 @@ public class MeetingMinutesPromptTests
         var system = msgs[0];
         Assert.Equal("system", system.Role);
         Assert.Contains("Meeting Date: 2026-03-04", system.Content);
+        Assert.Contains("Meeting Time: 09:00", system.Content);
         Assert.Contains("Title: Weekly Sync", system.Content);
         Assert.Contains("Attendees: Alice, Bob", system.Content);
         Assert.Contains("Duration: 1h 05m", system.Content);
@@ -49,6 +51,7 @@ public class MeetingMinutesPromptTests
         var ctx = new MeetingMinutesContext(null, "", [], null);
         var system = MeetingMinutesPrompt.BuildMessages(Template, ctx, Segments, 16000)[0].Content;
         Assert.Contains("Meeting Date: [placeholder]", system);
+        Assert.Contains("Meeting Time: [placeholder]", system);
         Assert.Contains("Attendees: [placeholder]", system);
         Assert.Contains("Duration: [placeholder]", system);
     }
@@ -57,6 +60,7 @@ public class MeetingMinutesPromptTests
     public void DefaultTemplate_HasTheMeetingDataPlaceholders_AndNoEmojiGuidance()
     {
         Assert.Contains("{meeting_date}", MeetingMinutesPrompt.DefaultTemplate);
+        Assert.Contains("{meeting_time}", MeetingMinutesPrompt.DefaultTemplate);
         Assert.Contains("{speaker_list}", MeetingMinutesPrompt.DefaultTemplate);
         Assert.Contains("## Transcript:", MeetingMinutesPrompt.DefaultTemplate);
         Assert.Contains("emojis", MeetingMinutesPrompt.DefaultTemplate);

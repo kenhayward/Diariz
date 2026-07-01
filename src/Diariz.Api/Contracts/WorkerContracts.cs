@@ -20,6 +20,12 @@ public record MeetingMinutesJob(
     Guid RecordingId,
     Guid TranscriptionId);
 
+/// <summary>Job payload for async action-item extraction (as part of the pipeline), consumed by the API's
+/// ActionsWorker. Only auto-extracts when the recording has never had actions extracted.</summary>
+public record ActionsJob(
+    Guid RecordingId,
+    Guid TranscriptionId);
+
 /// <summary>One diarized, timestamped segment returned by the worker.</summary>
 public record SegmentResult(
     string Speaker,

@@ -42,6 +42,7 @@ code fences and do not use emojis.
 
 **Meeting Data**
 Meeting Date: {meeting_date}
+Meeting Time: {meeting_time}
 Title: {meeting_title}
 Attendees:{speaker_list}
 Duration:{meeting_duration}

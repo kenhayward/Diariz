@@ -179,6 +179,10 @@ public class WorkerCallbackControllerTests
         var minutesJob = Assert.Single(queue.MeetingMinutesEnqueued);
         Assert.Equal(recordingId, minutesJob.RecordingId);
         Assert.Equal(transcriptionId, minutesJob.TranscriptionId);
+        // Action items are extracted in the same pass.
+        var actionsJob = Assert.Single(queue.ActionsEnqueued);
+        Assert.Equal(recordingId, actionsJob.RecordingId);
+        Assert.Equal(transcriptionId, actionsJob.TranscriptionId);
         // The owner is notified with the new status.
         Assert.Contains(hub.Sent, m => m.Method == "RecordingStatusChanged");
     }
@@ -194,6 +198,7 @@ public class WorkerCallbackControllerTests
 
         Assert.Equal(RecordingStatus.Transcribed, (await db.Recordings.FindAsync(recordingId))!.Status);
         Assert.Empty(queue.SummarizationEnqueued);
+        Assert.Empty(queue.ActionsEnqueued);
     }
 
     [Fact]

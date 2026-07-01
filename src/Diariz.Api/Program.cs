@@ -23,6 +23,7 @@ builder.Services.Configure<JobQueueOptions>(builder.Configuration.GetSection(Job
 builder.Services.Configure<WorkerOptions>(builder.Configuration.GetSection(WorkerOptions.Section));
 builder.Services.Configure<SummarizationOptions>(builder.Configuration.GetSection(SummarizationOptions.Section));
 builder.Services.Configure<MeetingMinutesOptions>(builder.Configuration.GetSection(MeetingMinutesOptions.Section));
+builder.Services.Configure<ActionsOptions>(builder.Configuration.GetSection(ActionsOptions.Section));
 builder.Services.Configure<ChatOptions>(builder.Configuration.GetSection(ChatOptions.Section));
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.Section));
 builder.Services.Configure<AppPublicOptions>(builder.Configuration.GetSection(AppPublicOptions.Section));
@@ -142,6 +143,8 @@ builder.Services.AddHostedService<SummarizationWorker>();
 // ---- Meeting minutes (shares the per-user summarisation config; its own stream + consumer) ----
 builder.Services.AddHttpClient<IMeetingMinutesClient, MeetingMinutesClient>();
 builder.Services.AddHostedService<MeetingMinutesWorker>();
+// Action extraction also runs in the pipeline (its own stream/worker), reusing IActionsClient (registered above).
+builder.Services.AddHostedService<ActionsWorker>();
 
 // ---- Editable LLM prompt templates (summarise / extract-actions / meeting-minutes) ----
 // Prefer the content root's prompts/ (dev + published output), else the app base dir. Read per use so edits
