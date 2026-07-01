@@ -137,7 +137,10 @@ describe("Recorder source selection", () => {
     (getStream as Mock).mockResolvedValue(fakeStream);
     render(<Recorder onUploaded={() => {}} />);
 
-    fireEvent.change(await screen.findByRole("combobox"), { target: { value: "dev:bbb" } });
+    // Wait for the async device load to populate the options before selecting — otherwise a slow
+    // runner can click Record before the label is known, resolving the source without its label.
+    await screen.findByRole("option", { name: "USB Headset" });
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "dev:bbb" } });
     fireEvent.click(screen.getByRole("button", { name: /record/i }));
 
     await waitFor(() =>

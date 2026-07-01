@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import CollapsibleSection from "./CollapsibleSection";
 
 describe("CollapsibleSection", () => {
@@ -19,19 +19,31 @@ describe("CollapsibleSection", () => {
     expect(screen.getByText("Body text")).toBeTruthy();
   });
 
-  it("does not toggle when clicking the title text — only the chevron collapses", () => {
-    // The title is a plain heading (not a button) so it never collides with same-named controls
-    // elsewhere (e.g. the 'Actions' kebab). The collapse control is the chevron alone.
+  it("toggles when clicking the title text — the header (outside the toolbar) is the hit area", () => {
+    // The title is a heading, not a button, so clicking it never collides with same-named controls
+    // elsewhere (e.g. the 'Actions' kebab), but it still toggles the section.
     render(
       <CollapsibleSection title="Speakers">
         <p>Body</p>
       </CollapsibleSection>,
     );
     fireEvent.click(screen.getByText("Speakers"));
-    expect(screen.getByText("Body")).toBeTruthy(); // still expanded — the heading is inert
+    expect(screen.queryByText("Body")).toBeNull(); // collapsed
 
-    fireEvent.click(screen.getByRole("button", { name: /collapse speakers section/i }));
-    expect(screen.queryByText("Body")).toBeNull();
+    fireEvent.click(screen.getByText("Speakers"));
+    expect(screen.getByText("Body")).toBeTruthy(); // expanded again
+  });
+
+  it("does not toggle when clicking a header-action button (toolbar is outside the hit area)", () => {
+    const onAct = vi.fn();
+    render(
+      <CollapsibleSection title="Summary" headerActions={<button onClick={onAct}>Act</button>}>
+        <p>Body</p>
+      </CollapsibleSection>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Act" }));
+    expect(onAct).toHaveBeenCalledOnce();
+    expect(screen.getByText("Body")).toBeTruthy(); // still expanded — the toolbar doesn't toggle
   });
 
   it("honours defaultCollapsed", () => {

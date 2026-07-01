@@ -708,7 +708,7 @@ export default function RecordingDetail() {
 
   return (
     <div
-      className="relative space-y-5"
+      className="relative space-y-2.5"
       onDragOver={(e) => {
         // Only react to file drags (ignore in-app text/section drags).
         if (Array.from(e.dataTransfer.types).includes("Files")) {
@@ -809,16 +809,17 @@ export default function RecordingDetail() {
           headerActions={
             <>
               <ToolbarButton
-                label={t("workspace:resummarise")}
-                icon={RefreshIcon}
-                disabled={!hasTranscript || isSummarizing}
-                onClick={summarize}
-              />
-              <ToolbarButton
                 label={t("workspace:editSummaryAction")}
                 icon={PencilIcon}
                 disabled={!hasTranscript}
                 onClick={() => setEditingSummary(true)}
+              />
+              {/* Refresh sits last (just before the chevron) so the re-run icon lines up across panels. */}
+              <ToolbarButton
+                label={t("workspace:resummarise")}
+                icon={RefreshIcon}
+                disabled={!hasTranscript || isSummarizing}
+                onClick={summarize}
               />
             </>
           }
@@ -836,12 +837,6 @@ export default function RecordingDetail() {
           headerActions={
             <>
               <ToolbarButton
-                label={t("workspace:recreateMeetingMinutes")}
-                icon={RefreshIcon}
-                disabled={!hasTranscript || isSummarizing}
-                onClick={recreateMinutes}
-              />
-              <ToolbarButton
                 label={t("workspace:editMeetingMinutes")}
                 icon={PencilIcon}
                 disabled={!hasTranscript}
@@ -852,6 +847,13 @@ export default function RecordingDetail() {
                 icon={MailIcon}
                 disabled={!hasTranscript}
                 onClick={emailMinutes}
+              />
+              {/* Refresh sits last (just before the chevron) so the re-run icon lines up across panels. */}
+              <ToolbarButton
+                label={t("workspace:recreateMeetingMinutes")}
+                icon={RefreshIcon}
+                disabled={!hasTranscript || isSummarizing}
+                onClick={recreateMinutes}
               />
             </>
           }
@@ -892,15 +894,16 @@ export default function RecordingDetail() {
           headerActions={
             <>
               <ToolbarButton
+                label={t("workspace:managePeople")}
+                icon={UsersIcon}
+                onClick={() => setPeopleOpen(true)}
+              />
+              {/* Refresh sits last (just before the chevron) so the re-run icon lines up across panels. */}
+              <ToolbarButton
                 label={t("workspace:reidentifyAction")}
                 icon={RefreshIcon}
                 disabled={!rec.hasAudio || !hasTranscript}
                 onClick={reidentify}
-              />
-              <ToolbarButton
-                label={t("workspace:managePeople")}
-                icon={UsersIcon}
-                onClick={() => setPeopleOpen(true)}
               />
             </>
           }

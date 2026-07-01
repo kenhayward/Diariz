@@ -22,14 +22,16 @@ shell — which can also **start/stop recording from its system-tray menu** (in 
 notifications). Or **upload existing audio files** to transcribe (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A) —
 via the Upload button or by **dragging several onto the recordings list**, with per-file status.
 - **Transcribe + diarize** server-side with WhisperX (large-v3, word-level timestamps) and pyannote 3.1,
-producing speaker-labelled, timestamped segments you can rename, edit, and play back (per segment or whole).
-Edits are kept **separately from the model's original words** — a ✎ marks revised rows and a **Show original /
-Show revised** toggle flips the whole transcript, so you can always get back to what the model said.
-Re-transcribe with a chosen model at any time (with optional **min/max speaker hints** for pyannote when
-voices are merged), **merge** consecutive same-speaker rows, and **email yourself** the formatted transcript.
-The transcript panel **pins to the top** as you scroll (its segments then scroll internally) and has a header
-**icon toolbar** with a small play bar and a **Select mode** — tick segments (or click one) to **play, edit,
-translate, or delete** just the selection, while **Play all** and **Merge** always act on the whole transcript.
+producing speaker-labelled, timestamped segments you can rename, edit, and play back (per segment, per speaker,
+or the whole recording). A **Speakers** panel lists each speaker with their segment count and **total talk time**,
+plays or steps through just their segments, and reassigns them. Edits are kept **separately from the model's
+original words** — a ✎ marks revised rows and a **Show original / Show revised** toggle flips the whole
+transcript, so you can always get back to what the model said. Re-transcribe with a chosen model at any time
+(with optional **min/max speaker hints** for pyannote when voices are merged), **merge** consecutive
+same-speaker rows, and **email yourself** the formatted transcript. The transcript panel **pins to the top** as
+you scroll (its segments then scroll internally) and has a header **icon toolbar** with a play bar (which plays
+the whole recording) and a **Select mode** — tick segments (or click one) to **play, edit, translate, or delete**
+just the selection, while **Merge** always acts on the whole transcript.
 - **Identify speakers** across recordings: enrol a person from a recording's speaker and Diariz recognises
 that voice automatically in later recordings (SpeechBrain ECAPA voiceprints in pgvector, cosine matching),
 with manual reassignment. A **People** screen renames, prunes training samples, merges duplicates, and
@@ -49,8 +51,9 @@ answering as **When · Who · What**. Answers **link back to the transcript**: c
 recording and jump to the exact segment. Fuzzy search is backed by a Postgres `pg_trgm` trigram index; a
 brief grey "Tool call: …" line shows while a tool runs.
 - **Extract action items** from a transcript (Action / Actor / Deadline) with that same LLM, into an
-editable table shown by exception (only after you run it); the actions also travel with the transcript —
-included in the downloads (Text/Markdown/RTF), the emailed transcript, and the chat context.
+editable table in an always-available **Action items** panel (collapsed by default, with a refresh button to
+extract or re-extract); the actions also travel with the transcript — included in the downloads
+(Text/Markdown/RTF), the emailed transcript, and the chat context.
 - **Manage actions across all your meetings** in a dedicated **Actions** tab (the left panel is now
 **Meetings**): every action item in one list, **filter by person**, mark items **done** with a completion
 date (individually or in bulk, reversible), **hide completed**, and click an action to jump to the transcript
