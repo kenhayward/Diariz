@@ -13,7 +13,8 @@ public class RecordingActionsControllerTests
 {
     private static RecordingActionsController Build(
         DiarizDbContext db, Guid userId, IActionsClient client, ISummarizationSettingsResolver? settings = null) =>
-        new(db, client, settings ?? new FakeSummarizationSettingsResolver())
+        new(db, client, settings ?? new FakeSummarizationSettingsResolver(),
+            new FilePromptTemplateProvider("nonexistent")) // no file → falls back to the built-in default
         { ControllerContext = Http.Context(userId) };
 
     private static async Task<Recording> SeedTranscribed(DiarizDbContext db, Guid userId)

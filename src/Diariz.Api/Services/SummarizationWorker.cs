@@ -18,16 +18,18 @@ public class SummarizationWorker : BackgroundService
     private readonly IServiceScopeFactory _scopes;
     private readonly IConnectionMultiplexer _redis;
     private readonly IHubContext<TranscriptionHub> _hub;
+    private readonly IPromptTemplateProvider _prompts;
     private readonly SummarizationOptions _opts;
     private readonly ILogger<SummarizationWorker> _log;
 
     public SummarizationWorker(
         IServiceScopeFactory scopes, IConnectionMultiplexer redis, IHubContext<TranscriptionHub> hub,
-        IOptions<SummarizationOptions> opts, ILogger<SummarizationWorker> log)
+        IPromptTemplateProvider prompts, IOptions<SummarizationOptions> opts, ILogger<SummarizationWorker> log)
     {
         _scopes = scopes;
         _redis = redis;
         _hub = hub;
+        _prompts = prompts;
         _opts = opts.Value;
         _log = log;
     }
@@ -79,7 +81,9 @@ public class SummarizationWorker : BackgroundService
                 var ctx = scope.ServiceProvider.GetRequiredService<DiarizDbContext>();
                 var client = scope.ServiceProvider.GetRequiredService<ISummarizationClient>();
                 var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
-                await SummarizationProcessor.ProcessAsync(ctx, client, resolver, _hub, job, _log, ct);
+                // Read the (editable) template per job so edits apply without an API restart.
+                var template = _prompts.Get("summarise", SummarizationPrompt.DefaultTemplate);
+                await SummarizationProcessor.ProcessAsync(ctx, client, resolver, _hub, job, template, _log, ct);
             }
         }
         catch (Exception ex)

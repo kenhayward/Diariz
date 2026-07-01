@@ -43,7 +43,7 @@ public class SummarizationProcessorTests
         var resolver = new FakeSummarizationSettingsResolver(); // default config Model = "test-model"
         var hub = new FakeHubContext();
 
-        await SummarizationProcessor.ProcessAsync(db, client, resolver, hub, Job(rec, tr), NullLogger.Instance);
+        await SummarizationProcessor.ProcessAsync(db, client, resolver, hub, Job(rec, tr), SummarizationPrompt.DefaultTemplate, NullLogger.Instance);
 
         var summary = await db.Summaries.SingleAsync(s => s.TranscriptionId == tr.Id);
         Assert.Equal("The key points.", summary.Text);
@@ -69,7 +69,7 @@ public class SummarizationProcessorTests
         var client = new FakeSummarizationClient { Result = new SummaryResult("Summary.", "Generated Title") };
 
         await SummarizationProcessor.ProcessAsync(db, client, new FakeSummarizationSettingsResolver(),
-            new FakeHubContext(), Job(rec, tr), NullLogger.Instance);
+            new FakeHubContext(), Job(rec, tr), SummarizationPrompt.DefaultTemplate, NullLogger.Instance);
 
         var reloaded = await db.Recordings.FindAsync(rec.Id);
         Assert.Equal("Generated Title", reloaded!.Name);
@@ -86,7 +86,7 @@ public class SummarizationProcessorTests
         var hub = new FakeHubContext();
 
         await SummarizationProcessor.ProcessAsync(db, client, new FakeSummarizationSettingsResolver(),
-            hub, Job(rec, tr), NullLogger.Instance);
+            hub, Job(rec, tr), SummarizationPrompt.DefaultTemplate, NullLogger.Instance);
 
         var reloaded = await db.Recordings.FindAsync(rec.Id);
         Assert.Equal(RecordingStatus.Failed, reloaded!.Status);
@@ -110,7 +110,7 @@ public class SummarizationProcessorTests
         var client = new FakeSummarizationClient { Result = new SummaryResult("LLM-generated", "Name") };
 
         await SummarizationProcessor.ProcessAsync(db, client, new FakeSummarizationSettingsResolver(),
-            new FakeHubContext(), Job(rec, tr), NullLogger.Instance);
+            new FakeHubContext(), Job(rec, tr), SummarizationPrompt.DefaultTemplate, NullLogger.Instance);
 
         var summary = await db.Summaries.SingleAsync(s => s.TranscriptionId == tr.Id);
         Assert.Equal("my edit", summary.Text);   // user edit preserved
@@ -127,7 +127,7 @@ public class SummarizationProcessorTests
         var client = new FakeSummarizationClient();
 
         await SummarizationProcessor.ProcessAsync(db, client, new FakeSummarizationSettingsResolver(),
-            new FakeHubContext(), Job(rec, tr), NullLogger.Instance);
+            new FakeHubContext(), Job(rec, tr), SummarizationPrompt.DefaultTemplate, NullLogger.Instance);
 
         var reloaded = await db.Recordings.FindAsync(rec.Id);
         Assert.Equal(RecordingStatus.Failed, reloaded!.Status);

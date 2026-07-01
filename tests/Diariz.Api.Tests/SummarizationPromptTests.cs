@@ -22,7 +22,7 @@ public class SummarizationPromptTests
     [Fact]
     public void BuildMessages_HasSystemAndUser_WithTranscript()
     {
-        var msgs = SummarizationPrompt.BuildMessages(Segments, needName: false);
+        var msgs = SummarizationPrompt.BuildMessages(SummarizationPrompt.DefaultTemplate, Segments, needName: false);
 
         Assert.Equal(2, msgs.Count);
         Assert.Equal("system", msgs[0].Role);
@@ -34,14 +34,14 @@ public class SummarizationPromptTests
     [Fact]
     public void BuildMessages_AsksForName_OnlyWhenNeeded()
     {
-        Assert.Contains("\"name\"", SummarizationPrompt.BuildMessages(Segments, needName: true)[0].Content);
-        Assert.DoesNotContain("\"name\"", SummarizationPrompt.BuildMessages(Segments, needName: false)[0].Content);
+        Assert.Contains("\"name\"", SummarizationPrompt.BuildMessages(SummarizationPrompt.DefaultTemplate, Segments, needName: true)[0].Content);
+        Assert.DoesNotContain("\"name\"", SummarizationPrompt.BuildMessages(SummarizationPrompt.DefaultTemplate, Segments, needName: false)[0].Content);
     }
 
     [Fact]
     public void BuildMessages_TruncatesTranscriptToCharBudget()
     {
-        var user = SummarizationPrompt.BuildMessages(Segments, needName: false, charBudget: 10)[1].Content;
+        var user = SummarizationPrompt.BuildMessages(SummarizationPrompt.DefaultTemplate, Segments, needName: false, charBudget: 10)[1].Content;
         // "Transcript:\n" prefix + 10 chars of transcript.
         Assert.True(user.Length <= "Transcript:\n".Length + 10);
     }

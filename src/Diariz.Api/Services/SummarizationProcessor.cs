@@ -18,7 +18,8 @@ public static class SummarizationProcessor
 {
     public static async Task ProcessAsync(
         DiarizDbContext db, ISummarizationClient client, ISummarizationSettingsResolver resolver,
-        IHubContext<TranscriptionHub> hub, SummarizationJob job, ILogger logger, CancellationToken ct = default)
+        IHubContext<TranscriptionHub> hub, SummarizationJob job, string template, ILogger logger,
+        CancellationToken ct = default)
     {
         var rec = await db.Recordings.FirstOrDefaultAsync(r => r.Id == job.RecordingId, ct);
         if (rec is null) return; // recording deleted before the job ran — nothing to do.
@@ -61,7 +62,7 @@ public static class SummarizationProcessor
             if (!cfg.Enabled) throw new InvalidOperationException("Summarisation is not configured.");
 
             var needName = string.IsNullOrWhiteSpace(rec.Name);
-            var result = await client.SummarizeAsync(cfg, segs, needName, ct);
+            var result = await client.SummarizeAsync(cfg, segs, needName, template, ct);
 
             var summary = transcription.Summary;
             if (summary is null)

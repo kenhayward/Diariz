@@ -17,7 +17,7 @@ public class ActionsPromptTests
     [Fact]
     public void BuildMessages_AsksForAJsonArrayOfActions_WithTheTranscript()
     {
-        var msgs = ActionsPrompt.BuildMessages(Segments);
+        var msgs = ActionsPrompt.BuildMessages(ActionsPrompt.DefaultTemplate, Segments);
 
         Assert.Equal("system", msgs[0].Role);
         Assert.Contains("action", msgs[0].Content, StringComparison.OrdinalIgnoreCase);

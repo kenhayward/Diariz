@@ -13,19 +13,20 @@ public record ExtractedAction(string Text, string Actor, string Deadline);
 /// </summary>
 public static class ActionsPrompt
 {
-    public static IReadOnlyList<ChatMessage> BuildMessages(
-        IReadOnlyList<SegmentDto> segments, int charBudget = PromptTranscript.DefaultCharBudget)
-    {
-        var system =
-            "You extract action items from a meeting transcript. An action item is a concrete task someone " +
-            "agreed or was asked to do. For each one capture the task, who is responsible (the actor), and any " +
-            "deadline. The actor and deadline may be unknown — use an empty string when so. " +
-            "There may be NO action items; in that case return an empty array. " +
-            "Respond with ONLY a strict minified JSON array of the form " +
-            "[{\"action\": string, \"actor\": string, \"deadline\": string}]. Do not wrap it in code fences.";
+    /// <summary>Fallback template used when <c>prompts/extract-actions.md</c> is missing/unreadable. Keep in
+    /// sync with that file (the file is authoritative and editable without a rebuild).</summary>
+    public const string DefaultTemplate =
+        "You extract action items from a meeting transcript. An action item is a concrete task someone agreed " +
+        "or was asked to do. For each one capture the task, who is responsible (the actor), and any deadline. " +
+        "The actor and deadline may be unknown — use an empty string when so. There may be NO action items; in " +
+        "that case return an empty array. Respond with ONLY a strict minified JSON array of the form " +
+        "[{\"action\": string, \"actor\": string, \"deadline\": string}]. Do not wrap it in code fences.";
 
+    public static IReadOnlyList<ChatMessage> BuildMessages(
+        string template, IReadOnlyList<SegmentDto> segments, int charBudget = PromptTranscript.DefaultCharBudget)
+    {
         var user = "Transcript:\n" + PromptTranscript.Build(segments, charBudget);
-        return [new ChatMessage("system", system), new ChatMessage("user", user)];
+        return [new ChatMessage("system", template ?? DefaultTemplate), new ChatMessage("user", user)];
     }
 
     public static IReadOnlyList<ExtractedAction> ParseResponse(string responseJson)

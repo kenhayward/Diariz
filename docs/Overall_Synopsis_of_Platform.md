@@ -149,14 +149,15 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   notifies over SignalR. It XACKs even on failure to avoid poison-message loops. A summary can also be
   **written/edited by hand** — `PUT /api/recordings/{id}/summary` (works with no LLM configured) sets
   `Summary.IsUserEdited`; the automatic summariser then **skips** that summary, and a user-initiated
-  re-summarise clears the flag first (the UI warns before overwriting).
+  re-summarise clears the flag first (the UI warns before overwriting). Its instruction prompt is the
+  **editable** `prompts/summarise.md` (see the editable-prompts note below; `{output_shape}` is substituted
+  with the JSON contract, which stays machine-controlled).
 - **Meeting minutes (async).** A **third Redis stream `meeting-minutes-jobs`** (group `minute-takers`) with its
   own `MeetingMinutesWorker` (singleton `BackgroundService`) generates a formal, emailable **`MeetingMinutes`**
   (GitHub-flavoured Markdown; `MeetingMinutesClient`/`Prompt`) from the transcript. It is enqueued **alongside
   the summary** after transcription (same effective per-user config gates both), and re-runnable via
-  `POST /api/recordings/{id}/meeting-minutes/generate`. The minutes **instruction prompt lives in an editable
-  template** `prompts/meeting-minutes.md` (`IMeetingMinutesPromptProvider`, read **per job** so edits apply
-  without an API restart; falls back to a built-in default) — `{meeting_date}`/`{meeting_title}`/`{speaker_list}`/
+  `POST /api/recordings/{id}/meeting-minutes/generate`. The minutes **instruction prompt lives in the editable
+  template** `prompts/meeting-minutes.md` — `{meeting_date}`/`{meeting_title}`/`{speaker_list}`/
   `{meeting_duration}` are substituted and the transcript is attached as a **separate user (data) turn** so it
   can't be read as instructions. Minutes **do not own `Recording.Status`** (so they never
   race the summary's status transitions) — the processor notifies over SignalR to trigger a refetch. Minutes can
@@ -168,7 +169,13 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
 - **Extract actions (sync).** `POST /api/recordings/{id}/actions/extract` calls the LLM inline
   (`ActionsClient` → `ActionsPrompt`), **replaces** the recording's **`RecordingAction`** rows, and sets
   `Recording.ActionsExtractedAt`. Shown "by exception" — the Actions panel appears only once extraction has
-  run. Actions also travel into transcript downloads, the emailed transcript, and the chat context.
+  run. Actions also travel into transcript downloads, the emailed transcript, and the chat context. Its
+  instruction prompt is the **editable** `prompts/extract-actions.md`.
+- **Editable prompt templates.** The summarise, action-extraction, and meeting-minutes instruction prompts each
+  live as a Markdown file under `prompts/` (`summarise.md` / `extract-actions.md` / `meeting-minutes.md`), read
+  via a single `IPromptTemplateProvider` (`prompts/<name>.md`) **on each use** so edits (or a volume mount) apply
+  without an API restart; each falls back to a built-in default (`*Prompt.DefaultTemplate`) if the file is
+  missing/unreadable. The files ship in the published image (`Diariz.Api.csproj` copies `prompts/**`).
 - **Action management (cross-meeting).** `ActionsController` exposes a library-wide view: `GET /api/actions`
   lists every action on the caller's recordings (joined to `Recordings` for ownership + display name, newest
   recording first), and `POST /api/actions/complete { ids, completed }` bulk-marks actions done/undone (sets/

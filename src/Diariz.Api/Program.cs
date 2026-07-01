@@ -141,12 +141,15 @@ builder.Services.AddHostedService<SummarizationWorker>();
 
 // ---- Meeting minutes (shares the per-user summarisation config; its own stream + consumer) ----
 builder.Services.AddHttpClient<IMeetingMinutesClient, MeetingMinutesClient>();
-// Editable prompt template — prefer the content root's prompts/ (dev + published output), else the app base dir.
-var minutesPromptPath = Directory.Exists(Path.Combine(builder.Environment.ContentRootPath, "prompts"))
-    ? Path.Combine(builder.Environment.ContentRootPath, "prompts", "meeting-minutes.md")
-    : Path.Combine(AppContext.BaseDirectory, "prompts", "meeting-minutes.md");
-builder.Services.AddSingleton<IMeetingMinutesPromptProvider>(_ => new FileMeetingMinutesPromptProvider(minutesPromptPath));
 builder.Services.AddHostedService<MeetingMinutesWorker>();
+
+// ---- Editable LLM prompt templates (summarise / extract-actions / meeting-minutes) ----
+// Prefer the content root's prompts/ (dev + published output), else the app base dir. Read per use so edits
+// apply without an API restart; a missing file falls back to the built-in default in code.
+var promptsDir = Directory.Exists(Path.Combine(builder.Environment.ContentRootPath, "prompts"))
+    ? Path.Combine(builder.Environment.ContentRootPath, "prompts")
+    : Path.Combine(AppContext.BaseDirectory, "prompts");
+builder.Services.AddSingleton<IPromptTemplateProvider>(_ => new FilePromptTemplateProvider(promptsDir));
 
 // ---- Localized export/email labels (runtime JSON, not compiled .resx) ----
 // Prefer the content root's locales/ (present in dev and copied to the published output), falling back to

@@ -64,14 +64,16 @@ public sealed class FakeSummarizationClient : ISummarizationClient
     public int Calls { get; private set; }
     public bool LastNeedName { get; private set; }
     public SummarizationRequestConfig? LastConfig { get; private set; }
+    public string? LastTemplate { get; private set; }
 
     public Task<SummaryResult> SummarizeAsync(
-        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, bool needName,
+        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, bool needName, string template,
         CancellationToken ct = default)
     {
         Calls++;
         LastNeedName = needName;
         LastConfig = config;
+        LastTemplate = template;
         if (ThrowOnCall is not null) throw ThrowOnCall;
         return Task.FromResult(Result);
     }
@@ -106,13 +108,16 @@ public sealed class FakeActionsClient : IActionsClient
     public int Calls { get; private set; }
     public SummarizationRequestConfig? LastConfig { get; private set; }
     public IReadOnlyList<SegmentDto>? LastSegments { get; private set; }
+    public string? LastTemplate { get; private set; }
 
     public Task<IReadOnlyList<ExtractedAction>> ExtractAsync(
-        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, CancellationToken ct = default)
+        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
+        CancellationToken ct = default)
     {
         Calls++;
         LastConfig = config;
         LastSegments = segments;
+        LastTemplate = template;
         if (ThrowOnCall is not null) throw ThrowOnCall;
         return Task.FromResult<IReadOnlyList<ExtractedAction>>(Result);
     }

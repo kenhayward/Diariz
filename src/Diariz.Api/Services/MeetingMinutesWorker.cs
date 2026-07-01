@@ -19,13 +19,13 @@ public class MeetingMinutesWorker : BackgroundService
     private readonly IServiceScopeFactory _scopes;
     private readonly IConnectionMultiplexer _redis;
     private readonly IHubContext<TranscriptionHub> _hub;
-    private readonly IMeetingMinutesPromptProvider _prompts;
+    private readonly IPromptTemplateProvider _prompts;
     private readonly MeetingMinutesOptions _opts;
     private readonly ILogger<MeetingMinutesWorker> _log;
 
     public MeetingMinutesWorker(
         IServiceScopeFactory scopes, IConnectionMultiplexer redis, IHubContext<TranscriptionHub> hub,
-        IMeetingMinutesPromptProvider prompts, IOptions<MeetingMinutesOptions> opts,
+        IPromptTemplateProvider prompts, IOptions<MeetingMinutesOptions> opts,
         ILogger<MeetingMinutesWorker> log)
     {
         _scopes = scopes;
@@ -85,7 +85,9 @@ public class MeetingMinutesWorker : BackgroundService
                 var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
                 // Read the (editable) template per job so edits apply without an API restart.
                 await MeetingMinutesProcessor.ProcessAsync(
-                    ctx, client, resolver, _hub, job, _prompts.GetTemplate(), _opts.TranscriptCharBudget, _log, ct);
+                    ctx, client, resolver, _hub, job,
+                    _prompts.Get("meeting-minutes", MeetingMinutesPrompt.DefaultTemplate),
+                    _opts.TranscriptCharBudget, _log, ct);
             }
         }
         catch (Exception ex)
