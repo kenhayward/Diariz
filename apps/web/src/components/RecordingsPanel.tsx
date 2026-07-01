@@ -679,7 +679,7 @@ function GroupHeadingButton({
   return (
     <div
       className={`flex min-w-0 items-center gap-1 ${
-        withBg ? "w-full bg-indigo-50 px-3 py-1 dark:bg-indigo-950/40" : "flex-1"
+        withBg ? "w-full bg-indigo-50 px-3 py-0.5 dark:bg-indigo-950/40" : "flex-1"
       }`}
     >
       {leading}
@@ -805,7 +805,7 @@ function SectionHeading({
     // The whole header row is the drag source (no separate handle) — it highlights on hover, mirroring the
     // recording rows. Dragging is disabled while renaming so text can be selected in the input.
     <div
-      className={`flex items-center justify-between bg-indigo-50 py-1 pr-3 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 ${
+      className={`flex items-center justify-between bg-indigo-50 py-0.5 pr-3 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 ${
         nested ? "pl-7" : "pl-3"
       }`}
       draggable={!renaming}
@@ -946,7 +946,7 @@ function RecordingRow({
     // disabled while renaming so text can be selected in the input. The inner NavLink keeps draggable=false
     // so grabbing the name still drags the row, not the link.
     <li
-      className={`py-2 pr-3 ${indentClass}`}
+      className={`py-0.5 pr-3 ${indentClass}`}
       draggable={!renaming}
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", r.id);
@@ -981,20 +981,22 @@ function RecordingRow({
           <NavLink
             to={`/recordings/${r.id}`}
             draggable={false}
+            // Single-line row: name + right-aligned duration. Source + date (and the full, untruncated name)
+            // move to the hover tooltip to keep the list dense.
+            title={`${r.name ?? r.title} — ${sourceLabel(r.source, t)} · ${new Date(r.createdAt).toLocaleDateString(i18n.language)}`}
             className={({ isActive }) =>
-              `min-w-0 flex-1 rounded px-1 py-0.5 ${
+              `flex min-w-0 flex-1 items-baseline gap-2 rounded px-1 py-0.5 leading-tight ${
                 isActive ? "bg-blue-50 dark:bg-blue-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-800"
               }`
             }
           >
-            <div className="truncate text-sm font-medium dark:text-gray-100">{r.name ?? r.title}</div>
-            {/* Source · date on the left; duration right-aligned (tabular-nums) so durations line up down the list. */}
-            <div className="flex items-baseline justify-between gap-2 text-xs text-gray-500 dark:text-gray-400">
-              <span className="truncate">
-                {sourceLabel(r.source, t)} · {new Date(r.createdAt).toLocaleDateString(i18n.language)}
-              </span>
-              <span className="shrink-0 tabular-nums">{formatDuration(r.durationMs)}</span>
-            </div>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium dark:text-gray-100">
+              {r.name ?? r.title}
+            </span>
+            {/* Duration right-aligned (tabular-nums) so durations line up down the list. */}
+            <span className="shrink-0 tabular-nums text-xs text-gray-500 dark:text-gray-400">
+              {formatDuration(r.durationMs)}
+            </span>
           </NavLink>
         )}
         {showStatusBadge(r.status) && (
