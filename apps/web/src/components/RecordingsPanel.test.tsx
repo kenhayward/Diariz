@@ -102,10 +102,12 @@ describe("RecordingsPanel", () => {
     expect(await screen.findByText("Weekly Standup")).toBeTruthy();
   });
 
-  it("shows the name as primary and the source label as secondary", async () => {
+  it("shows the name on the row and moves source · date into the hover title", async () => {
     renderList();
-    expect(await screen.findByText("Weekly Standup")).toBeTruthy();
-    expect(screen.getByText(/System audio/)).toBeTruthy();
+    const link = await screen.findByRole("link", { name: /weekly standup/i });
+    // Source + date are no longer a visible second line — they live in the row's hover tooltip.
+    expect(link.getAttribute("title")).toMatch(/System audio/);
+    expect(screen.queryByText(/System audio/)).toBeNull();
   });
 
   it("Summarise action calls the API", async () => {

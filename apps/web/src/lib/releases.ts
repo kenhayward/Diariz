@@ -70,6 +70,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.51.0",
+    date: "2026-07-01",
+    pr: 106,
+    headline: "Denser recordings list and scrollable user/people tables",
+    summary:
+      "The **recordings list** is now much more compact — section headers and rows are roughly half the height, " +
+      "so more meetings fit on screen. Each recording is a single line (name + duration); the source and date " +
+      "moved into the **hover tooltip**. In the account menu, **Manage Users** and **People** are now proper " +
+      "tables with a **sticky header** and a scrollable body, so the title, Add-User form, and column headings " +
+      "stay put while long lists scroll — much better with many users or enrolled voiceprints. People keeps its " +
+      "expandable per-person training-sample detail (play / remove).",
+    changed: [
+      "Recordings list is denser: single-line rows (source · date shown on hover) and shorter section headers.",
+      "Manage Users is a columnar, scrollable table (User / Type / Status / Storage / Actions) with a sticky header.",
+      "People is a scrollable table (one row per person) with a sticky header, keeping the expandable training-sample view.",
+    ],
+  },
+  {
     version: "0.50.0",
     date: "2026-07-01",
     pr: 105,

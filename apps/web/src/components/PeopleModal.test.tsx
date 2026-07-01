@@ -53,6 +53,13 @@ describe("PeopleModal", () => {
     expect(screen.getByRole("button", { name: "Bob" })).toBeTruthy();
   });
 
+  it("renders people as a table with a column header row", async () => {
+    render_();
+    await screen.findByRole("button", { name: "Alice" });
+    expect(screen.getByRole("columnheader", { name: /name/i })).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: /samples/i })).toBeTruthy();
+  });
+
   it("renames a person", async () => {
     render_();
     fireEvent.click(await screen.findByRole("button", { name: "Alice" }));

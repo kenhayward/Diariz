@@ -102,12 +102,20 @@ describe("ManageUsersModal", () => {
     render_();
     await screen.findByText("plat@x.test");
 
-    const platRow = screen.getByText("plat@x.test").closest("li")!;
-    const selfRow = screen.getByText("me@x.test").closest("li")!;
-    const otherRow = screen.getByText("other@x.test").closest("li")!;
+    const platRow = screen.getByText("plat@x.test").closest("tr")!;
+    const selfRow = screen.getByText("me@x.test").closest("tr")!;
+    const otherRow = screen.getByText("other@x.test").closest("tr")!;
 
     expect(within(platRow).queryByRole("button", { name: /delete/i })).toBeNull();
     expect(within(selfRow).queryByRole("button", { name: /delete/i })).toBeNull();
     expect(within(otherRow).getByRole("button", { name: /delete/i })).toBeTruthy();
+  });
+
+  it("renders the users as a table with a column header row", async () => {
+    mock(api.listUsers).mockResolvedValue([u({ id: "a", email: "a@x.test" })]);
+    render_();
+    await screen.findByText("a@x.test");
+    expect(screen.getByRole("columnheader", { name: /user/i })).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: /storage/i })).toBeTruthy();
   });
 });

@@ -63,36 +63,51 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
       <div
         role="dialog"
         aria-label={t("title")}
-        className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-lg border bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900"
+        className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-lg border bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-1 text-base font-semibold dark:text-gray-100">{t("title")}</h2>
-        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">{t("description")}</p>
+        {/* Pinned header. */}
+        <h2 className="shrink-0 text-base font-semibold dark:text-gray-100">{t("title")}</h2>
+        <p className="mb-3 shrink-0 text-xs text-gray-500 dark:text-gray-400">{t("description")}</p>
 
-        {error && <p className="mb-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
-        {isLoading && <p className="text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>}
+        {error && <p className="mb-2 shrink-0 text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {isLoading && <p className="shrink-0 text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>}
         {!isLoading && people.length === 0 && (
-          <p className="text-sm text-gray-500 dark:text-gray-400">{t("empty")}</p>
+          <p className="shrink-0 text-sm text-gray-500 dark:text-gray-400">{t("empty")}</p>
         )}
 
-        <ul className="divide-y dark:divide-gray-800">
-          {people.map((p) => (
-            <PersonRow
-              key={p.id}
-              person={p}
-              others={people.filter((o) => o.id !== p.id)}
-              expanded={expandedId === p.id}
-              onToggle={() => setExpandedId((cur) => (cur === p.id ? null : p.id))}
-              act={act}
-              onPlay={playSample}
-            />
-          ))}
-        </ul>
+        {/* Scrollable people table (one row per person; the ▸ expand adds a detail row). Sticky header. */}
+        {people.length > 0 && (
+          <div className="min-h-0 flex-1 overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-white text-left text-xs text-gray-400 dark:bg-gray-900 dark:text-gray-500">
+                <tr>
+                  <th className="py-1 pr-2 font-medium">{t("colName")}</th>
+                  <th className="py-1 pr-2 font-medium">{t("colSamples")}</th>
+                  <th className="py-1 font-medium">{t("colActions")}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y dark:divide-gray-800">
+                {people.map((p) => (
+                  <PersonRow
+                    key={p.id}
+                    person={p}
+                    others={people.filter((o) => o.id !== p.id)}
+                    expanded={expandedId === p.id}
+                    onToggle={() => setExpandedId((cur) => (cur === p.id ? null : p.id))}
+                    act={act}
+                    onPlay={playSample}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-        {/* Shared player for listening to training samples. */}
-        <audio ref={audioRef} controls className="mt-3 w-full" />
+        {/* Shared player for listening to training samples — pinned so it's always reachable while scrolling. */}
+        <audio ref={audioRef} controls className="mt-3 w-full shrink-0" />
 
-        <div className="mt-4 flex items-center justify-between border-t pt-3 dark:border-gray-700">
+        <div className="mt-4 flex shrink-0 items-center justify-between border-t pt-3 dark:border-gray-700">
           {people.length > 0 ? (
             <button
               onClick={eraseAll}
@@ -146,112 +161,118 @@ function PersonRow({
   }
 
   return (
-    <li className="py-2 text-sm dark:text-gray-200">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-2">
-          <button
-            aria-label={expanded ? t("collapse", { name: person.name }) : t("expand", { name: person.name })}
-            onClick={onToggle}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-          >
-            {expanded ? "▾" : "▸"}
-          </button>
-          {renaming ? (
-            <input
-              autoFocus
-              value={name}
-              aria-label={t("rename", { name: person.name })}
-              onChange={(e) => setName(e.target.value)}
-              onBlur={saveName}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") saveName();
-                if (e.key === "Escape") {
-                  setName(person.name);
-                  setRenaming(false);
-                }
-              }}
-              className="w-40 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            />
-          ) : (
-            <button onClick={() => setRenaming(true)} className="truncate font-medium hover:underline">
-              {person.name}
-            </button>
-          )}
-          <span className="shrink-0 text-xs text-gray-500 dark:text-gray-400">
-            {t("sampleCount", { count: person.sampleCount })}
-          </span>
-        </span>
-
-        <span className="flex shrink-0 items-center gap-1.5">
-          {others.length > 0 && (
-            <select
-              aria-label={t("mergeAria", { name: person.name })}
-              value=""
-              onChange={(e) => {
-                const sourceId = e.target.value;
-                if (!sourceId) return;
-                const src = others.find((o) => o.id === sourceId);
-                if (src && window.confirm(t("confirmMerge", { source: src.name, target: person.name })))
-                  act(() => api.mergeSpeakerProfiles(person.id, sourceId), person.id);
-              }}
-              className="rounded border px-1 py-1 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+    <>
+      <tr className="align-top dark:text-gray-200">
+        {/* Name: expand toggle + click-to-rename. */}
+        <td className="py-2 pr-2">
+          <span className="flex min-w-0 items-center gap-2">
+            <button
+              aria-label={expanded ? t("collapse", { name: person.name }) : t("expand", { name: person.name })}
+              onClick={onToggle}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
             >
-              <option value="">{t("mergeIn")}</option>
-              {others.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name}
-                </option>
-              ))}
-            </select>
-          )}
-          <button
-            onClick={() => {
-              if (window.confirm(t("confirmDelete", { name: person.name })))
-                act(() => api.deleteSpeakerProfile(person.id));
-            }}
-            className="rounded border border-red-300 px-2 py-1 text-xs text-red-600 dark:border-red-800 dark:text-red-400"
-          >
-            {t("delete")}
-          </button>
-        </span>
-      </div>
+              {expanded ? "▾" : "▸"}
+            </button>
+            {renaming ? (
+              <input
+                autoFocus
+                value={name}
+                aria-label={t("rename", { name: person.name })}
+                onChange={(e) => setName(e.target.value)}
+                onBlur={saveName}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveName();
+                  if (e.key === "Escape") {
+                    setName(person.name);
+                    setRenaming(false);
+                  }
+                }}
+                className="w-40 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              />
+            ) : (
+              <button onClick={() => setRenaming(true)} className="truncate font-medium hover:underline">
+                {person.name}
+              </button>
+            )}
+          </span>
+        </td>
+        <td className="py-2 pr-2 text-xs text-gray-500 dark:text-gray-400">
+          {t("sampleCount", { count: person.sampleCount })}
+        </td>
+        <td className="py-2">
+          <span className="flex flex-wrap items-center gap-1.5">
+            {others.length > 0 && (
+              <select
+                aria-label={t("mergeAria", { name: person.name })}
+                value=""
+                onChange={(e) => {
+                  const sourceId = e.target.value;
+                  if (!sourceId) return;
+                  const src = others.find((o) => o.id === sourceId);
+                  if (src && window.confirm(t("confirmMerge", { source: src.name, target: person.name })))
+                    act(() => api.mergeSpeakerProfiles(person.id, sourceId), person.id);
+                }}
+                className="rounded border px-1 py-1 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              >
+                <option value="">{t("mergeIn")}</option>
+                {others.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              onClick={() => {
+                if (window.confirm(t("confirmDelete", { name: person.name })))
+                  act(() => api.deleteSpeakerProfile(person.id));
+              }}
+              className="rounded border border-red-300 px-2 py-1 text-xs text-red-600 dark:border-red-800 dark:text-red-400"
+            >
+              {t("delete")}
+            </button>
+          </span>
+        </td>
+      </tr>
 
       {expanded && (
-        <div className="mt-2 pl-6">
-          {detail && (
-            <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">
-              {t("statsLabels", { count: detail.identifiedCount })} ·{" "}
-              {t("statsTrained", { count: detail.contributions.length })}
-            </p>
-          )}
-          <ul className="space-y-1">
-            {detail?.contributions.map((c) => (
-              <li key={c.id} className="flex items-center justify-between gap-2 text-xs">
-                <span className="min-w-0 truncate">
-                  <span className="font-medium">{c.recordingName}</span>
-                  <span className="text-gray-500 dark:text-gray-400"> · {c.speakerLabel}</span>
-                </span>
-                <span className="flex shrink-0 gap-1.5">
-                  <button
-                    aria-label={t("playAria", { name: c.recordingName })}
-                    onClick={() => onPlay(c.recordingId, c.startMs)}
-                    className="rounded border px-2 py-0.5 text-[11px] dark:border-gray-700"
-                  >
-                    {t("play")}
-                  </button>
-                  <button
-                    aria-label={t("removeAria", { name: c.recordingName })}
-                    onClick={() => act(() => api.removeProfileContribution(person.id, c.id), person.id)}
-                    className="rounded border px-2 py-0.5 text-[11px] dark:border-gray-700"
-                  >
-                    {t("common:remove")}
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <tr>
+          <td colSpan={3} className="pb-2 pl-6">
+            {detail && (
+              <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">
+                {t("statsLabels", { count: detail.identifiedCount })} ·{" "}
+                {t("statsTrained", { count: detail.contributions.length })}
+              </p>
+            )}
+            <ul className="space-y-1">
+              {detail?.contributions.map((c) => (
+                <li key={c.id} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="min-w-0 truncate">
+                    <span className="font-medium">{c.recordingName}</span>
+                    <span className="text-gray-500 dark:text-gray-400"> · {c.speakerLabel}</span>
+                  </span>
+                  <span className="flex shrink-0 gap-1.5">
+                    <button
+                      aria-label={t("playAria", { name: c.recordingName })}
+                      onClick={() => onPlay(c.recordingId, c.startMs)}
+                      className="rounded border px-2 py-0.5 text-[11px] dark:border-gray-700"
+                    >
+                      {t("play")}
+                    </button>
+                    <button
+                      aria-label={t("removeAria", { name: c.recordingName })}
+                      onClick={() => act(() => api.removeProfileContribution(person.id, c.id), person.id)}
+                      className="rounded border px-2 py-0.5 text-[11px] dark:border-gray-700"
+                    >
+                      {t("common:remove")}
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </td>
+        </tr>
       )}
-    </li>
+    </>
   );
 }
