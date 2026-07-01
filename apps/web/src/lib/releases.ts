@@ -91,6 +91,7 @@ export const RELEASES: Release[] = [
     ],
     changed: [
       "Minutes are generated automatically alongside the summary when an LLM endpoint is configured.",
+      "The minutes instruction prompt lives in an editable server file (prompts/meeting-minutes.md) — administrators can tweak the wording without a rebuild.",
     ],
   },
   {

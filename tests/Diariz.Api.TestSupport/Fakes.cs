@@ -85,17 +85,14 @@ public sealed class FakeMeetingMinutesClient : IMeetingMinutesClient
     public Exception? ThrowOnCall { get; set; }
     public int Calls { get; private set; }
     public SummarizationRequestConfig? LastConfig { get; private set; }
-    public DateTimeOffset? LastMeetingDate { get; private set; }
-    public int LastCharBudget { get; private set; }
+    public IReadOnlyList<ChatMessage>? LastMessages { get; private set; }
 
     public Task<string> GenerateAsync(
-        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, DateTimeOffset? meetingDate,
-        int charBudget, CancellationToken ct = default)
+        SummarizationRequestConfig config, IReadOnlyList<ChatMessage> messages, CancellationToken ct = default)
     {
         Calls++;
         LastConfig = config;
-        LastMeetingDate = meetingDate;
-        LastCharBudget = charBudget;
+        LastMessages = messages;
         if (ThrowOnCall is not null) throw ThrowOnCall;
         return Task.FromResult(Result);
     }

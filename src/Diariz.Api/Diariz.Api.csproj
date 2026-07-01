@@ -39,4 +39,9 @@
     <Content Update="locales\**\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- Editable LLM prompt templates, read at runtime (edit/mount without a rebuild). -->
+  <ItemGroup>
+    <Content Include="prompts\**\*.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

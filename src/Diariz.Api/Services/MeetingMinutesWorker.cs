@@ -19,16 +19,19 @@ public class MeetingMinutesWorker : BackgroundService
     private readonly IServiceScopeFactory _scopes;
     private readonly IConnectionMultiplexer _redis;
     private readonly IHubContext<TranscriptionHub> _hub;
+    private readonly IMeetingMinutesPromptProvider _prompts;
     private readonly MeetingMinutesOptions _opts;
     private readonly ILogger<MeetingMinutesWorker> _log;
 
     public MeetingMinutesWorker(
         IServiceScopeFactory scopes, IConnectionMultiplexer redis, IHubContext<TranscriptionHub> hub,
-        IOptions<MeetingMinutesOptions> opts, ILogger<MeetingMinutesWorker> log)
+        IMeetingMinutesPromptProvider prompts, IOptions<MeetingMinutesOptions> opts,
+        ILogger<MeetingMinutesWorker> log)
     {
         _scopes = scopes;
         _redis = redis;
         _hub = hub;
+        _prompts = prompts;
         _opts = opts.Value;
         _log = log;
     }
@@ -80,8 +83,9 @@ public class MeetingMinutesWorker : BackgroundService
                 var ctx = scope.ServiceProvider.GetRequiredService<DiarizDbContext>();
                 var client = scope.ServiceProvider.GetRequiredService<IMeetingMinutesClient>();
                 var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
+                // Read the (editable) template per job so edits apply without an API restart.
                 await MeetingMinutesProcessor.ProcessAsync(
-                    ctx, client, resolver, _hub, job, _opts.TranscriptCharBudget, _log, ct);
+                    ctx, client, resolver, _hub, job, _prompts.GetTemplate(), _opts.TranscriptCharBudget, _log, ct);
             }
         }
         catch (Exception ex)

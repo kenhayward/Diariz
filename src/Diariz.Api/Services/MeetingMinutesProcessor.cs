@@ -20,7 +20,7 @@ public static class MeetingMinutesProcessor
 {
     public static async Task ProcessAsync(
         DiarizDbContext db, IMeetingMinutesClient client, ISummarizationSettingsResolver resolver,
-        IHubContext<TranscriptionHub> hub, MeetingMinutesJob job, int charBudget, ILogger logger,
+        IHubContext<TranscriptionHub> hub, MeetingMinutesJob job, string template, int charBudget, ILogger logger,
         CancellationToken ct = default)
     {
         var rec = await db.Recordings.FirstOrDefaultAsync(r => r.Id == job.RecordingId, ct);
@@ -56,7 +56,10 @@ public static class MeetingMinutesProcessor
             var cfg = await resolver.ResolveAsync(rec.UserId, ct);
             if (!cfg.Enabled) throw new InvalidOperationException("Summarisation is not configured.");
 
-            var markdown = await client.GenerateAsync(cfg, segs, rec.CreatedAt, charBudget, ct);
+            var attendees = segs.Select(s => s.SpeakerDisplay).Distinct().ToList();
+            var context = new MeetingMinutesContext(rec.CreatedAt, rec.Name ?? rec.Title, attendees, rec.DurationMs);
+            var messages = MeetingMinutesPrompt.BuildMessages(template, context, segs, charBudget);
+            var markdown = await client.GenerateAsync(cfg, messages, ct);
 
             var minutes = transcription.MeetingMinutes;
             if (minutes is null)

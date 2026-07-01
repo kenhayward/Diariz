@@ -1,16 +1,14 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using Diariz.Api.Contracts;
 
 namespace Diariz.Api.Services;
 
 public interface IMeetingMinutesClient
 {
-    /// <summary>Generate meeting minutes (Markdown) for the segments against the resolved (per-user) config,
-    /// optionally seeding the prompt with the meeting date. Returns the model's Markdown.</summary>
+    /// <summary>Generate meeting minutes (Markdown) from the pre-built chat messages against the resolved
+    /// (per-user) config. Returns the model's Markdown.</summary>
     Task<string> GenerateAsync(
-        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, DateTimeOffset? meetingDate,
-        int charBudget, CancellationToken ct = default);
+        SummarizationRequestConfig config, IReadOnlyList<ChatMessage> messages, CancellationToken ct = default);
 }
 
 /// <summary>Calls an OpenAI-compatible /chat/completions endpoint to produce meeting minutes, reusing the
@@ -22,10 +20,8 @@ public class MeetingMinutesClient : IMeetingMinutesClient
     public MeetingMinutesClient(HttpClient http) => _http = http;
 
     public async Task<string> GenerateAsync(
-        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, DateTimeOffset? meetingDate,
-        int charBudget, CancellationToken ct = default)
+        SummarizationRequestConfig config, IReadOnlyList<ChatMessage> messages, CancellationToken ct = default)
     {
-        var messages = MeetingMinutesPrompt.BuildMessages(segments, meetingDate, charBudget);
         var body = new Dictionary<string, object?>
         {
             ["model"] = config.Model,

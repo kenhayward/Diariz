@@ -141,6 +141,11 @@ builder.Services.AddHostedService<SummarizationWorker>();
 
 // ---- Meeting minutes (shares the per-user summarisation config; its own stream + consumer) ----
 builder.Services.AddHttpClient<IMeetingMinutesClient, MeetingMinutesClient>();
+// Editable prompt template — prefer the content root's prompts/ (dev + published output), else the app base dir.
+var minutesPromptPath = Directory.Exists(Path.Combine(builder.Environment.ContentRootPath, "prompts"))
+    ? Path.Combine(builder.Environment.ContentRootPath, "prompts", "meeting-minutes.md")
+    : Path.Combine(AppContext.BaseDirectory, "prompts", "meeting-minutes.md");
+builder.Services.AddSingleton<IMeetingMinutesPromptProvider>(_ => new FileMeetingMinutesPromptProvider(minutesPromptPath));
 builder.Services.AddHostedService<MeetingMinutesWorker>();
 
 // ---- Localized export/email labels (runtime JSON, not compiled .resx) ----

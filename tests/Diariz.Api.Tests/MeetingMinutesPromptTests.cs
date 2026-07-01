@@ -12,34 +12,54 @@ public class MeetingMinutesPromptTests
         new SegmentDto(Guid.NewGuid(), "SPEAKER_01", "Bob", 1000, 2000, "Agreed."),
     ];
 
+    private const string Template =
+        "Instructions here — no emojis.\n\n**Meeting Data**\nMeeting Date: {meeting_date}\n" +
+        "Title: {meeting_title}\nAttendees:{speaker_list}\nDuration:{meeting_duration}\n\n## Transcript:";
+
     private static string ChatResponse(string content) =>
         JsonSerializer.Serialize(new { choices = new[] { new { message = new { content } } } });
 
     [Fact]
-    public void BuildMessages_System_IsProfessionalMarkdown_NoEmojis_NotJson()
+    public void BuildMessages_SubstitutesPlaceholders_AndPutsTranscriptInAUserTurn()
     {
-        var msgs = MeetingMinutesPrompt.BuildMessages(Segments, meetingDate: null, charBudget: 16000);
+        var ctx = new MeetingMinutesContext(
+            new DateTimeOffset(2026, 3, 4, 9, 0, 0, TimeSpan.Zero), "Weekly Sync",
+            ["Alice", "Bob"], (60 + 5) * 60_000L); // 1h 05m
 
+        var msgs = MeetingMinutesPrompt.BuildMessages(Template, ctx, Segments, 16000);
+
+        Assert.Equal(2, msgs.Count);
         var system = msgs[0];
         Assert.Equal("system", system.Role);
-        Assert.Contains("meeting minutes", system.Content, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Markdown", system.Content);
-        Assert.Contains("Action Items", system.Content);
-        Assert.Contains("emojis", system.Content); // instructs NOT to use them
-        // Minutes are Markdown, not the summary's JSON contract.
-        Assert.DoesNotContain("JSON", system.Content, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Meeting Date: 2026-03-04", system.Content);
+        Assert.Contains("Title: Weekly Sync", system.Content);
+        Assert.Contains("Attendees: Alice, Bob", system.Content);
+        Assert.Contains("Duration: 1h 05m", system.Content);
+        Assert.DoesNotContain("{", system.Content); // every placeholder substituted
+
+        var user = msgs[1];
+        Assert.Equal("user", user.Role);
+        Assert.Contains("Alice: Let's ship on Friday.", user.Content); // transcript is the (data) turn
+        Assert.DoesNotContain("Instructions here", user.Content);      // instructions stay in the system turn
     }
 
     [Fact]
-    public void BuildMessages_User_CarriesTranscript_AndOptionalMeetingDate()
+    public void BuildMessages_UsesPlaceholders_WhenMetadataMissing()
     {
-        var withDate = MeetingMinutesPrompt.BuildMessages(
-            Segments, new DateTimeOffset(2026, 3, 4, 9, 0, 0, TimeSpan.Zero), 16000);
-        Assert.Contains("Meeting date: 2026-03-04", withDate[1].Content);
-        Assert.Contains("Alice: Let's ship on Friday.", withDate[1].Content);
+        var ctx = new MeetingMinutesContext(null, "", [], null);
+        var system = MeetingMinutesPrompt.BuildMessages(Template, ctx, Segments, 16000)[0].Content;
+        Assert.Contains("Meeting Date: [placeholder]", system);
+        Assert.Contains("Attendees: [placeholder]", system);
+        Assert.Contains("Duration: [placeholder]", system);
+    }
 
-        var noDate = MeetingMinutesPrompt.BuildMessages(Segments, meetingDate: null, charBudget: 16000);
-        Assert.DoesNotContain("Meeting date:", noDate[1].Content);
+    [Fact]
+    public void DefaultTemplate_HasTheMeetingDataPlaceholders_AndNoEmojiGuidance()
+    {
+        Assert.Contains("{meeting_date}", MeetingMinutesPrompt.DefaultTemplate);
+        Assert.Contains("{speaker_list}", MeetingMinutesPrompt.DefaultTemplate);
+        Assert.Contains("## Transcript:", MeetingMinutesPrompt.DefaultTemplate);
+        Assert.Contains("emojis", MeetingMinutesPrompt.DefaultTemplate);
     }
 
     [Fact]

@@ -154,7 +154,11 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   own `MeetingMinutesWorker` (singleton `BackgroundService`) generates a formal, emailable **`MeetingMinutes`**
   (GitHub-flavoured Markdown; `MeetingMinutesClient`/`Prompt`) from the transcript. It is enqueued **alongside
   the summary** after transcription (same effective per-user config gates both), and re-runnable via
-  `POST /api/recordings/{id}/meeting-minutes/generate`. Minutes **do not own `Recording.Status`** (so they never
+  `POST /api/recordings/{id}/meeting-minutes/generate`. The minutes **instruction prompt lives in an editable
+  template** `prompts/meeting-minutes.md` (`IMeetingMinutesPromptProvider`, read **per job** so edits apply
+  without an API restart; falls back to a built-in default) — `{meeting_date}`/`{meeting_title}`/`{speaker_list}`/
+  `{meeting_duration}` are substituted and the transcript is attached as a **separate user (data) turn** so it
+  can't be read as instructions. Minutes **do not own `Recording.Status`** (so they never
   race the summary's status transitions) — the processor notifies over SignalR to trigger a refetch. Minutes can
   be **hand-edited** (`PUT .../meeting-minutes`, sets `IsUserEdited`; auto-generator then skips) and **emailed on
   their own** (`POST .../meeting-minutes/email {includeAttachments}`) — the Markdown is rendered to HTML with
