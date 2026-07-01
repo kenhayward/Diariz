@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { parseRecordingLink, recordingLinkPath, parseMatchTimes, segmentIndexAtMs } from "./transcriptNav";
+import {
+  parseRecordingLink,
+  recordingLinkPath,
+  parseMatchTimes,
+  segmentIndexAtMs,
+  nextSpeakerSegment,
+  prevSpeakerSegment,
+} from "./transcriptNav";
 
 describe("parseRecordingLink", () => {
   it("parses a recording link with a time", () => {
@@ -65,5 +72,36 @@ describe("segmentIndexAtMs", () => {
 
   it("returns -1 for an empty list", () => {
     expect(segmentIndexAtMs([], 100)).toBe(-1);
+  });
+});
+
+describe("nextSpeakerSegment / prevSpeakerSegment", () => {
+  // A: 0,3 · B: 1,2,4
+  const segs = [
+    { speaker: "A" },
+    { speaker: "B" },
+    { speaker: "B" },
+    { speaker: "A" },
+    { speaker: "B" },
+  ];
+
+  it("finds the first segment for a speaker when nothing is highlighted", () => {
+    expect(nextSpeakerSegment(segs, "A", -1)).toBe(0);
+    expect(nextSpeakerSegment(segs, "B", -1)).toBe(1);
+    expect(prevSpeakerSegment(segs, "A", segs.length)).toBe(3);
+    expect(prevSpeakerSegment(segs, "B", segs.length)).toBe(4);
+  });
+
+  it("moves to the correct neighbour from a highlighted position", () => {
+    expect(nextSpeakerSegment(segs, "A", 0)).toBe(3);
+    expect(nextSpeakerSegment(segs, "B", 1)).toBe(2);
+    expect(prevSpeakerSegment(segs, "B", 4)).toBe(2);
+    expect(prevSpeakerSegment(segs, "A", 3)).toBe(0);
+  });
+
+  it("clamps at the ends (null when there is no further segment)", () => {
+    expect(nextSpeakerSegment(segs, "A", 3)).toBeNull();
+    expect(prevSpeakerSegment(segs, "A", 0)).toBeNull();
+    expect(nextSpeakerSegment(segs, "C", -1)).toBeNull(); // unknown speaker
   });
 });

@@ -70,6 +70,27 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.52.0",
+    date: "2026-07-01",
+    pr: 107,
+    headline: "Per-speaker toolbar in the transcript, and a collapsed summary",
+    summary:
+      "The transcript's **Speakers** panel is now one compact line per speaker, showing the segment **count** " +
+      "and a small **toolbar**: play/pause that speaker, **jump to their previous / next segment**, and a " +
+      "**delete** that removes all of that speaker's segments (with confirmation). Deleting a speaker's segments " +
+      "removes them from the list — and now also clears their stored voiceprint for the recording, so the data " +
+      "matches what you see. The **Summary** section also starts **collapsed** by default, so the transcript is " +
+      "right there when you open a recording.",
+    added: [
+      "Each speaker row gains a segment count and a toolbar: play, delete-all-segments (confirmed), and previous/next-segment navigation.",
+    ],
+    changed: [
+      "The Speakers panel is one line per speaker.",
+      "The Summary section starts collapsed by default.",
+      "Deleting all of a speaker's segments now also prunes that speaker's stored voiceprint for the recording.",
+    ],
+  },
+  {
     version: "0.51.0",
     date: "2026-07-01",
     pr: 106,

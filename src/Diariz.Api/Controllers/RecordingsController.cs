@@ -481,8 +481,21 @@ public class RecordingsController : ControllerBase
         var ordinal = 0;
         foreach (var s in survivors) s.Ordinal = ordinal++;
 
+        await PruneOrphanSpeakersAsync(id, survivors);
         await _db.SaveChangesAsync();
         return NoContent();
+    }
+
+    /// <summary>Remove Speaker rows for this recording whose label no longer appears in any remaining segment
+    /// (so deleting a speaker's last segment drops it from the Speakers list and clears its stored voiceprint).
+    /// The enrolled Person profile is untouched — Segment↔Speaker is a label match, not an FK.</summary>
+    private async Task PruneOrphanSpeakersAsync(Guid recordingId, IEnumerable<Segment> survivors)
+    {
+        var live = survivors.Select(s => s.SpeakerLabel).ToHashSet();
+        var orphans = await _db.Speakers
+            .Where(sp => sp.RecordingId == recordingId && !live.Contains(sp.Label))
+            .ToListAsync();
+        if (orphans.Count > 0) _db.Speakers.RemoveRange(orphans);
     }
 
     /// <summary>Delete several segments from the current transcription at once (the Select-mode bulk delete),
@@ -506,8 +519,10 @@ public class RecordingsController : ControllerBase
         {
             _db.Segments.RemoveRange(toRemove);
             // Renumber the survivors contiguously from 0, once.
+            var survivors = segments.Where(s => !ids.Contains(s.Id)).ToList();
             var ordinal = 0;
-            foreach (var s in segments.Where(s => !ids.Contains(s.Id))) s.Ordinal = ordinal++;
+            foreach (var s in survivors) s.Ordinal = ordinal++;
+            await PruneOrphanSpeakersAsync(id, survivors);
             await _db.SaveChangesAsync();
         }
         return NoContent();

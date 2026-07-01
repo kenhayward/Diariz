@@ -129,8 +129,12 @@ describe("RecordingDetail", () => {
     expect(await screen.findByText(/transcribed in 1:05/)).toBeTruthy();
   });
 
-  it("renders the summary text when present", async () => {
+  it("keeps the summary collapsed by default and reveals its text on expand", async () => {
     renderPage({ ...base, summary: { model: "gpt", text: "The key decisions.", createdAt: base.createdAt } });
+    // Collapsed by default: the header is present but the body text is not rendered yet.
+    const header = await screen.findByRole("button", { name: /summary section/i });
+    expect(screen.queryByText("The key decisions.")).toBeNull();
+    fireEvent.click(header);
     expect(await screen.findByText("The key decisions.")).toBeTruthy();
   });
 

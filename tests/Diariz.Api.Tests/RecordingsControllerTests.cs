@@ -742,6 +742,42 @@ public class RecordingsControllerTests
     }
 
     [Fact]
+    public async Task DeleteSegments_RemovingASpeakersLastSegment_PrunesThatSpeakerRow()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId); // "Hello"/"World" both SPEAKER_00 + Speaker SPEAKER_00
+        var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
+        db.Speakers.Add(new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_01", DisplayName = "Bob" });
+        var bob = new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_01", StartMs = 4000, EndMs = 5000, Original = "Bye", Ordinal = 2 };
+        db.Segments.Add(bob);
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.DeleteSegments(rec.Id, new DeleteSegmentsRequest(new[] { bob.Id }));
+
+        Assert.IsType<NoContentResult>(result);
+        var labels = await db.Speakers.Where(s => s.RecordingId == rec.Id).Select(s => s.Label).ToListAsync();
+        Assert.DoesNotContain("SPEAKER_01", labels); // its last segment is gone → row pruned
+        Assert.Contains("SPEAKER_00", labels);       // still has segments → kept
+    }
+
+    [Fact]
+    public async Task DeleteSegments_LeavingSomeOfASpeakersSegments_KeepsTheSpeakerRow()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId); // "Hello"/"World" both SPEAKER_00
+        var hello = await db.Segments.SingleAsync(s => s.Original == "Hello");
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.DeleteSegments(rec.Id, new DeleteSegmentsRequest(new[] { hello.Id }));
+
+        var labels = await db.Speakers.Where(s => s.RecordingId == rec.Id).Select(s => s.Label).ToListAsync();
+        Assert.Contains("SPEAKER_00", labels); // "World" is still SPEAKER_00 → kept
+    }
+
+    [Fact]
     public async Task DeleteSegments_OnAnotherUsersRecording_ReturnsNotFound()
     {
         using var db = TestDb.Create();

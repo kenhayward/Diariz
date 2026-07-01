@@ -16,6 +16,10 @@ function row(
     onCreate: (name: string) => void;
     onMulti: () => void;
     onTogglePlay: () => void;
+    onDelete: (name: string) => void;
+    onPrev: () => void;
+    onNext: () => void;
+    count: number;
     canPlay: boolean;
     playing: boolean;
   }> = {},
@@ -25,10 +29,14 @@ function row(
       label="SPEAKER_00"
       info={info}
       initial={info?.displayName ?? "SPEAKER_00"}
+      count={handlers.count ?? 3}
       profiles={profiles}
       canPlay={handlers.canPlay ?? true}
       playing={handlers.playing ?? false}
       onTogglePlay={handlers.onTogglePlay ?? (() => {})}
+      onDelete={handlers.onDelete ?? (() => {})}
+      onPrev={handlers.onPrev ?? (() => {})}
+      onNext={handlers.onNext ?? (() => {})}
       onRename={handlers.onRename ?? (() => {})}
       onAssign={handlers.onAssign ?? (() => {})}
       onCreate={handlers.onCreate ?? (() => {})}
@@ -120,5 +128,28 @@ describe("SpeakerRow", () => {
   it("hides the play control when the recording has no audio", () => {
     row(speaker({ displayName: "Alice" }), { canPlay: false });
     expect(screen.queryByRole("button", { name: /play .*segments/i })).toBeNull();
+  });
+
+  it("shows the speaker's segment count", () => {
+    row(speaker({ displayName: "Alice" }), { count: 4 });
+    expect(screen.getByText("4 segments")).toBeTruthy();
+  });
+
+  it("Delete confirms then calls onDelete with the current name", () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const onDelete = vi.fn();
+    row(speaker({ displayName: "Alice" }), { onDelete });
+    fireEvent.click(screen.getByRole("button", { name: /delete alice's segments/i }));
+    expect(onDelete).toHaveBeenCalledWith("Alice");
+  });
+
+  it("Prev / Next trigger the speaker-segment navigation handlers", () => {
+    const onPrev = vi.fn();
+    const onNext = vi.fn();
+    row(speaker({ displayName: "Alice" }), { onPrev, onNext });
+    fireEvent.click(screen.getByRole("button", { name: /previous segment for alice/i }));
+    fireEvent.click(screen.getByRole("button", { name: /next segment for alice/i }));
+    expect(onPrev).toHaveBeenCalledOnce();
+    expect(onNext).toHaveBeenCalledOnce();
   });
 });
