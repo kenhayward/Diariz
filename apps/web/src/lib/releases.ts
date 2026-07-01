@@ -72,6 +72,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.54.1",
+    date: "2026-07-01",
+    pr: 110,
+    headline: "README caught up with the transcript-panel changes",
+    summary:
+      "Documentation only. The project **README**'s feature list was brought in line with the recent " +
+      "transcript-panel work: the **Speakers** panel now shows each speaker's **total talk time** next to their " +
+      "segment count, the transcript's **play bar plays the whole recording** (the separate \"Play all\" button " +
+      "was removed), and **action items** live in an always-available panel (collapsed by default, with a " +
+      "refresh button to extract or re-extract). No application or behaviour changes.",
+    changed: [
+      "README feature list updated to match the 0.54.0 transcript-panel changes (per-speaker talk time, play-bar plays the whole recording, always-available Action items panel).",
+    ],
+  },
+  {
     version: "0.54.0",
     date: "2026-07-01",
     pr: 109,
