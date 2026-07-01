@@ -39,7 +39,8 @@ erases voiceprints (GDPR — biometric data).
 - **Summarize** recordings (with automatic naming) and generate a full set of **professional meeting minutes**
 (Markdown: headings, lists, tables — no emojis) as part of the pipeline; edit them in a **WYSIWYG editor**,
 re-create them, or **email them to yourself** (optionally with the recording's attachments). The minutes also
-travel with the emailed transcript and the Markdown/text/RTF downloads.
+travel with the emailed transcript and the Markdown/text/RTF downloads. The Meeting Minutes panel is always
+available (collapsed) with a refresh button to generate them on any recording.
 - **Chat across one or more transcripts** — streaming
 replies, a context-usage dial, PDF/text attachments, and saved conversations — via a per-user (or
 server-default) OpenAI-compatible LLM endpoint, with the API key encrypted at rest.
@@ -50,10 +51,12 @@ items*, *get a recording's summary*, *who attended*, *speaker talk time*, and *t
 answering as **When · Who · What**. Answers **link back to the transcript**: click a citation to open that
 recording and jump to the exact segment. Fuzzy search is backed by a Postgres `pg_trgm` trigram index; a
 brief grey "Tool call: …" line shows while a tool runs.
-- **Extract action items** from a transcript (Action / Actor / Deadline) with that same LLM, into an
-editable table in an always-available **Action items** panel (collapsed by default, with a refresh button to
-extract or re-extract); the actions also travel with the transcript — included in the downloads
-(Text/Markdown/RTF), the emailed transcript, and the chat context.
+- **Extract action items** (Action / Actor / Deadline) with that same LLM — **automatically as part of the
+transcription pipeline**, into an editable table in an always-available **Action items** panel (collapsed by
+default, with a refresh button to re-extract). The automatic pass runs once and never overwrites actions
+you've added or edited. The **meeting minutes are generated from that same action set**, so the minutes' Action
+Items table and the Actions panel always match. The actions also travel with the transcript — included in the
+downloads (Text/Markdown/RTF), the emailed transcript, and the chat context.
 - **Manage actions across all your meetings** in a dedicated **Actions** tab (the left panel is now
 **Meetings**): every action item in one list, **filter by person**, mark items **done** with a completion
 date (individually or in bulk, reversible), **hide completed**, and click an action to jump to the transcript

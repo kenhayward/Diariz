@@ -57,7 +57,14 @@ public static class MeetingMinutesProcessor
             if (!cfg.Enabled) throw new InvalidOperationException("Summarisation is not configured.");
 
             var attendees = segs.Select(s => s.SpeakerDisplay).Distinct().ToList();
-            var context = new MeetingMinutesContext(rec.CreatedAt, rec.Name ?? rec.Title, attendees, rec.DurationMs);
+            // The canonical extracted actions — the minutes render these verbatim so the minutes' Action
+            // Items table matches the recording's Actions panel (the actions worker runs before minutes).
+            var actions = await db.RecordingActions
+                .Where(a => a.RecordingId == rec.Id)
+                .OrderBy(a => a.Ordinal)
+                .Select(a => new ExtractedAction(a.Text, a.Actor, a.Deadline))
+                .ToListAsync(ct);
+            var context = new MeetingMinutesContext(rec.CreatedAt, rec.Name ?? rec.Title, attendees, rec.DurationMs, actions);
             var messages = MeetingMinutesPrompt.BuildMessages(template, context, segs, charBudget);
             var markdown = await client.GenerateAsync(cfg, messages, ct);
 

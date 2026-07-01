@@ -78,6 +78,17 @@ public class MeetingMinutesOptions
     public string ConsumerName { get; set; } = "api-1";
 }
 
+/// <summary>Config for the in-process action-extraction worker (runs actions as part of the pipeline,
+/// alongside the summary + minutes). The LLM endpoint/model/key come from the per-user summarisation config.</summary>
+public class ActionsOptions
+{
+    public const string Section = "Actions";
+
+    public string StreamKey { get; set; } = "actions-jobs";
+    public string ConsumerGroup { get; set; } = "actions-extractors";
+    public string ConsumerName { get; set; } = "api-1";
+}
+
 /// <summary>Chat-specific settings. The LLM endpoint/model/key are shared with summarisation
 /// (per-user, via <c>UserSettings</c>); only the context-window size is chat-specific.</summary>
 public class ChatOptions

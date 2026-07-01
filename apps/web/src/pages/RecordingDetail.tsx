@@ -830,49 +830,55 @@ export default function RecordingDetail() {
           <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{rec.summary.text}</p>
         </CollapsibleSection>
       )}
-      {rec.meetingMinutes && (
-        <CollapsibleSection
-          title={t("workspace:sectionMeetingMinutes")}
-          defaultCollapsed
-          headerActions={
-            <>
-              <ToolbarButton
-                label={t("workspace:editMeetingMinutes")}
-                icon={PencilIcon}
-                disabled={!hasTranscript}
-                onClick={() => setEditingMinutes(true)}
-              />
-              <ToolbarButton
-                label={t("workspace:emailMinutes")}
-                icon={MailIcon}
-                disabled={!hasTranscript}
-                onClick={emailMinutes}
-              />
-              {/* Refresh sits last (just before the chevron) so the re-run icon lines up across panels. */}
-              <ToolbarButton
-                label={t("workspace:recreateMeetingMinutes")}
-                icon={RefreshIcon}
-                disabled={!hasTranscript || isSummarizing}
-                onClick={recreateMinutes}
-              />
-            </>
-          }
-        >
-          {rec.meetingMinutes.isUserEdited && (
-            <p className="mb-1 text-xs italic text-gray-400 dark:text-gray-500">{t("workspace:minutesEditedHint")}</p>
-          )}
-          <div
-            className="break-words text-sm text-gray-800 dark:text-gray-200
-              [&_h1]:mb-2 [&_h1]:mt-1 [&_h1]:text-lg [&_h1]:font-bold
-              [&_h2]:mb-1 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold
-              [&_h3]:mb-1 [&_h3]:mt-2 [&_h3]:font-semibold
-              [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-1
-              [&_table]:my-2 [&_table]:border-collapse [&_th]:border [&_th]:px-2 [&_th]:py-1 [&_th]:font-semibold
-              [&_td]:border [&_td]:px-2 [&_td]:py-1 dark:[&_th]:border-gray-700 dark:[&_td]:border-gray-700"
-            dangerouslySetInnerHTML={{ __html: renderMarkdown(rec.meetingMinutes.text) }}
-          />
-        </CollapsibleSection>
-      )}
+      {/* Always shown (collapsed) so minutes can be generated on any recording. The refresh button in its
+          header (re-)creates them; Edit/Email stay disabled until minutes exist. */}
+      <CollapsibleSection
+        title={t("workspace:sectionMeetingMinutes")}
+        defaultCollapsed
+        headerActions={
+          <>
+            <ToolbarButton
+              label={t("workspace:editMeetingMinutes")}
+              icon={PencilIcon}
+              disabled={!rec.meetingMinutes}
+              onClick={() => setEditingMinutes(true)}
+            />
+            <ToolbarButton
+              label={t("workspace:emailMinutes")}
+              icon={MailIcon}
+              disabled={!rec.meetingMinutes}
+              onClick={emailMinutes}
+            />
+            {/* Refresh sits last (just before the chevron) so the re-run icon lines up across panels. */}
+            <ToolbarButton
+              label={t("workspace:recreateMeetingMinutes")}
+              icon={RefreshIcon}
+              disabled={!hasTranscript || isSummarizing}
+              onClick={recreateMinutes}
+            />
+          </>
+        }
+      >
+        {rec.meetingMinutes ? (
+          <>
+            {rec.meetingMinutes.isUserEdited && (
+              <p className="mb-1 text-xs italic text-gray-400 dark:text-gray-500">{t("workspace:minutesEditedHint")}</p>
+            )}
+            <div
+              className="break-words text-sm text-gray-800 dark:text-gray-200
+                [&_h1]:mb-2 [&_h1]:mt-1 [&_h1]:text-lg [&_h1]:font-bold
+                [&_h2]:mb-1 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold
+                [&_h3]:mb-1 [&_h3]:mt-2 [&_h3]:font-semibold
+                [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-1
+                [&_table]:my-2 [&_table]:border-collapse [&_th]:border [&_th]:px-2 [&_th]:py-1 [&_th]:font-semibold
+                [&_td]:border [&_td]:px-2 [&_td]:py-1 dark:[&_th]:border-gray-700 dark:[&_td]:border-gray-700"
+              dangerouslySetInnerHTML={{ __html: renderMarkdown(rec.meetingMinutes.text) }}
+            />
+          </>
+        ) : (
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t("workspace:minutesEmpty")}</p>
+        )}
+      </CollapsibleSection>
 
       {/* Always shown (collapsed) so actions can be (re)extracted or added on any recording. The refresh
           button in its header runs extraction. */}

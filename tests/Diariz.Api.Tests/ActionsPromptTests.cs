@@ -87,4 +87,24 @@ public class ActionsPromptTests
     {
         Assert.Empty(ActionsPrompt.ParseResponse(Chat("I could not find any actions.")));
     }
+
+    [Fact]
+    public void ParseResponse_TakesTheArrayAfterReasoning_EvenWithBracketsInTheProse()
+    {
+        // The improved prompt lets the model reason first (which may contain brackets) then emit the array last.
+        var content =
+            "Decisions: we picked option [B]. Commitments: Bob to send the report.\n\n" +
+            """[{"action":"Send the report","actor":"Bob","deadline":"2026-03-06"}]""";
+        var a = Assert.Single(ActionsPrompt.ParseResponse(Chat(content)));
+        Assert.Equal("Send the report", a.Text);
+        Assert.Equal("2026-03-06", a.Deadline);
+    }
+
+    [Fact]
+    public void ParseResponse_IgnoresBracketsInsideStrings()
+    {
+        var content = """[{"action":"Review the [draft] contract","actor":"","deadline":""}]""";
+        var a = Assert.Single(ActionsPrompt.ParseResponse(Chat(content)));
+        Assert.Equal("Review the [draft] contract", a.Text);
+    }
 }

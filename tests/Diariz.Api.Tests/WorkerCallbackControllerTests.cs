@@ -175,10 +175,12 @@ public class WorkerCallbackControllerTests
         var job = Assert.Single(queue.SummarizationEnqueued);
         Assert.Equal(recordingId, job.RecordingId);
         Assert.Equal(transcriptionId, job.TranscriptionId);
-        // Meeting minutes generate in parallel with the summary (same effective config gates both).
-        var minutesJob = Assert.Single(queue.MeetingMinutesEnqueued);
-        Assert.Equal(recordingId, minutesJob.RecordingId);
-        Assert.Equal(transcriptionId, minutesJob.TranscriptionId);
+        // Action items are extracted next; the callback no longer enqueues minutes directly — the actions
+        // worker chains the minutes job when it finishes (so minutes render the canonical action set).
+        var actionsJob = Assert.Single(queue.ActionsEnqueued);
+        Assert.Equal(recordingId, actionsJob.RecordingId);
+        Assert.Equal(transcriptionId, actionsJob.TranscriptionId);
+        Assert.Empty(queue.MeetingMinutesEnqueued);
         // The owner is notified with the new status.
         Assert.Contains(hub.Sent, m => m.Method == "RecordingStatusChanged");
     }
@@ -194,6 +196,7 @@ public class WorkerCallbackControllerTests
 
         Assert.Equal(RecordingStatus.Transcribed, (await db.Recordings.FindAsync(recordingId))!.Status);
         Assert.Empty(queue.SummarizationEnqueued);
+        Assert.Empty(queue.ActionsEnqueued);
     }
 
     [Fact]

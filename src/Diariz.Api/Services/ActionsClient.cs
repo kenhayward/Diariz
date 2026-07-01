@@ -30,7 +30,7 @@ public class ActionsClient : IActionsClient
         var body = new Dictionary<string, object?>
         {
             ["model"] = config.Model,
-            ["temperature"] = 0.1,
+            ["temperature"] = 0.3,
             ["messages"] = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray(),
         };
         if (config.ReasoningEffort is not null) body["reasoning_effort"] = config.ReasoningEffort;

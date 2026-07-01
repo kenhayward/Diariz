@@ -75,6 +75,7 @@
   "emailMinutes": "Protokoll per E-Mail an mich senden",
   "minutesEditTitle": "Besprechungsprotokoll bearbeiten",
   "minutesEditedHint": "Von dir bearbeitet",
+  "minutesEmpty": "Noch kein Protokoll — mit der Aktualisieren-Schaltfläche erzeugen.",
   "emailedMinutes": "Besprechungsprotokoll per E-Mail gesendet.",
   "generatingMinutes": "Besprechungsprotokoll wird erstellt…",
   "errMinutes": "Das Besprechungsprotokoll konnte nicht aktualisiert werden.",

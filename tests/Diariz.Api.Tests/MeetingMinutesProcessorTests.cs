@@ -68,6 +68,29 @@ public class MeetingMinutesProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_InjectsTheRecordingsCanonicalActions_IntoThePrompt()
+    {
+        using var db = TestDb.Create();
+        var (rec, tr) = await Seed(db, Guid.NewGuid());
+        db.RecordingActions.Add(new RecordingAction
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Send the Q3 report", Actor = "Bob",
+            Deadline = "2026-03-06", Ordinal = 0,
+        });
+        await db.SaveChangesAsync();
+        var client = new FakeMeetingMinutesClient { Result = "# Minutes" };
+
+        await MeetingMinutesProcessor.ProcessAsync(
+            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
+            Job(rec, tr), Template, 16000, NullLogger.Instance);
+
+        // The extracted action is supplied to the model (so the minutes render the same set as the panel).
+        var system = client.LastMessages![0].Content;
+        Assert.Contains("Send the Q3 report", system);
+        Assert.Contains("Bob", system);
+    }
+
+    [Fact]
     public async Task ProcessAsync_UpdatesExistingMinutes()
     {
         using var db = TestDb.Create();

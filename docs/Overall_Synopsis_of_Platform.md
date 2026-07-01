@@ -154,23 +154,32 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   with the JSON contract, which stays machine-controlled).
 - **Meeting minutes (async).** A **third Redis stream `meeting-minutes-jobs`** (group `minute-takers`) with its
   own `MeetingMinutesWorker` (singleton `BackgroundService`) generates a formal, emailable **`MeetingMinutes`**
-  (GitHub-flavoured Markdown; `MeetingMinutesClient`/`Prompt`) from the transcript. It is enqueued **alongside
-  the summary** after transcription (same effective per-user config gates both), and re-runnable via
-  `POST /api/recordings/{id}/meeting-minutes/generate`. The minutes **instruction prompt lives in the editable
-  template** `prompts/meeting-minutes.md` — `{meeting_date}`/`{meeting_title}`/`{speaker_list}`/
-  `{meeting_duration}` are substituted and the transcript is attached as a **separate user (data) turn** so it
-  can't be read as instructions. Minutes **do not own `Recording.Status`** (so they never
+  (GitHub-flavoured Markdown; `MeetingMinutesClient`/`Prompt`) from the transcript. It is **chained after action
+  extraction** (the actions worker enqueues it when it finishes) so the minutes can render the **canonical
+  extracted action set** — the processor loads the recording's `RecordingAction`s and fills `{action_items}`,
+  and the prompt tells the model to render exactly those in its Action Items table (keeping the minutes' actions
+  and the Actions panel identical). Re-runnable via `POST /api/recordings/{id}/meeting-minutes/generate`. The
+  minutes **instruction prompt lives in the editable template** `prompts/meeting-minutes.md` —
+  `{meeting_date}`/`{meeting_time}`/`{meeting_title}`/`{speaker_list}`/`{meeting_duration}`/`{action_items}` are
+  substituted and the transcript is attached as a **separate user (data) turn** so it can't be read as
+  instructions. Minutes **do not own `Recording.Status`** (so they never
   race the summary's status transitions) — the processor notifies over SignalR to trigger a refetch. Minutes can
   be **hand-edited** (`PUT .../meeting-minutes`, sets `IsUserEdited`; auto-generator then skips) and **emailed on
   their own** (`POST .../meeting-minutes/email {includeAttachments}`) — the Markdown is rendered to HTML with
   **Markdig** and, when requested, the recording's file attachments are attached (`IEmailSender` gained an
   attachments parameter). Minutes also ride along in the emailed transcript and the md/txt/rtf downloads. The web
   edits them in a **WYSIWYG editor** (TipTap) that round-trips Markdown.
-- **Extract actions (sync).** `POST /api/recordings/{id}/actions/extract` calls the LLM inline
-  (`ActionsClient` → `ActionsPrompt`), **replaces** the recording's **`RecordingAction`** rows, and sets
-  `Recording.ActionsExtractedAt`. Shown "by exception" — the Actions panel appears only once extraction has
-  run. Actions also travel into transcript downloads, the emailed transcript, and the chat context. Its
-  instruction prompt is the **editable** `prompts/extract-actions.md`.
+- **Extract actions (pipeline + on demand).** Action items are extracted **automatically as part of the
+  pipeline**: a **fourth Redis stream `actions-jobs`** (group `actions-extractors`) with its own `ActionsWorker`
+  (singleton `BackgroundService`) runs `ActionsProcessor` → `ActionsClient`/`ActionsPrompt`, enqueued **alongside
+  the summary** after transcription (same effective per-user config gates both) and, when it finishes, **chains
+  the minutes job** (so the minutes render the same set). The automatic
+  pass **skips any recording whose `Recording.ActionsExtractedAt` is already set** (extraction ran, or the user
+  added an action), so a re-transcribe never clobbers manual edits; like minutes it is **status-neutral** and
+  notifies over SignalR. An explicit re-extract stays synchronous: `POST /api/recordings/{id}/actions/extract`
+  calls the LLM inline and **replaces** the recording's **`RecordingAction`** rows. Actions also travel into
+  transcript downloads, the emailed transcript, and the chat context. Its instruction prompt is the **editable**
+  `prompts/extract-actions.md` (`{calendar_date}` substituted).
 - **Editable prompt templates.** The summarise, action-extraction, and meeting-minutes instruction prompts each
   live as a Markdown file under `prompts/` (`summarise.md` / `extract-actions.md` / `meeting-minutes.md`), read
   via a single `IPromptTemplateProvider` (`prompts/<name>.md`) **on each use** so edits (or a volume mount) apply
@@ -283,10 +292,10 @@ Voiceprints are **per-user** (a user's voiceprints only match their own recordin
 
 ## Cross-boundary contracts (the non-obvious glue)
 
-- **Redis Streams, four of them.** `transcription-jobs`/`workers` and `audio-merge-jobs` (both API → Python
+- **Redis Streams, five of them.** `transcription-jobs`/`workers` and `audio-merge-jobs` (both API → Python
   worker, sharing the `workers` group — the worker `XREADGROUP`s both streams and dispatches by stream key) and
-  two API-internal streams with their own in-process consumers: `summarization-jobs`/`summarizers` and
-  `meeting-minutes-jobs`/`minute-takers`. Job payloads are **PascalCase JSON**
+  three API-internal streams with their own in-process consumers: `summarization-jobs`/`summarizers`,
+  `meeting-minutes-jobs`/`minute-takers`, and `actions-jobs`/`actions-extractors`. Job payloads are **PascalCase JSON**
   so .NET produces and Python/.NET consume without renaming. Keep `TranscriptionJob` / `TranscriptionResult` /
   `AudioMergeJob` / `Segment` shapes in sync across both languages.
 - **Merge recordings.** `POST /api/recordings/merge` folds 2+ recordings into the earliest one: it builds a new
