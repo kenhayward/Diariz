@@ -72,15 +72,19 @@ export const RELEASES: Release[] = [
     version: "0.49.2",
     date: "2026-07-01",
     pr: 104,
-    headline: "Tidier microphone list",
+    headline: "Tidier, simpler microphone picker",
     summary:
-      "The microphone dropdown no longer lists the same physical mic three times. Windows/Chromium expose " +
-      "synthetic **“Default - …”** and **“Communications - …”** entries that are just aliases of a real device — " +
-      "these are now dropped (the **Microphone (default)** entry at the top already covers the OS default). The " +
-      "trailing USB hardware code (e.g. **(046d:0ab1)**) is also stripped from device names for readability, so a " +
-      "Blue Yeti now shows once as “Microphone (Yeti Nano)”.",
+      "Cleanups to the microphone dropdown. It no longer lists the same physical mic three times — " +
+      "Windows/Chromium expose synthetic **“Default - …”** and **“Communications - …”** entries that are just " +
+      "aliases of a real device, so those are dropped (the **Microphone (default)** entry at the top already " +
+      "covers the OS default), and the trailing USB hardware code (e.g. **(046d:0ab1)**) is stripped for " +
+      "readability — a Blue Yeti now shows once as “Microphone (Yeti Nano)”. The awkward **“Allow microphone to " +
+      "list devices…”** link is also gone: opening the picker now triggers the browser's normal microphone " +
+      "prompt, and if no mic is available you get a plain **“No microphone detected — check your browser and " +
+      "system microphone permissions”** hint instead of a click-then-error.",
     fixed: [
       "Microphone dropdown no longer duplicates each physical mic as Default/Communications aliases, and drops the (vendor:product) hardware code from device names.",
+      "Replaced the “Allow microphone to list devices…” link with the browser's natural permission prompt (on opening the picker) plus a clear no-microphone hint.",
     ],
   },
   {

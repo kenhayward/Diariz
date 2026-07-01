@@ -52,7 +52,7 @@
   "sourceMicrophone": "Microphone",
   "sourceMicDefault": "Microphone (par défaut)",
   "sourceMicNumbered": "Microphone {{n}}",
-  "allowMicToList": "Autoriser le microphone pour lister les appareils…",
+  "noMicHint": "Aucun microphone détecté. Vérifiez les autorisations du microphone du navigateur et du système.",
   "audioSettings": "Paramètres audio",
   "constraintEcho": "Annulation d'écho",
   "constraintNoise": "Suppression du bruit",

@@ -52,7 +52,7 @@
   "sourceMicrophone": "Microphone",
   "sourceMicDefault": "Microphone (default)",
   "sourceMicNumbered": "Microphone {{n}}",
-  "allowMicToList": "Allow microphone to list devices…",
+  "noMicHint": "No microphone detected. Check your browser and system microphone permissions.",
   "audioSettings": "Audio settings",
   "constraintEcho": "Echo cancellation",
   "constraintNoise": "Noise suppression",
