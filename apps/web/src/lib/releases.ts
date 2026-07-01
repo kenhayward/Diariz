@@ -10,7 +10,8 @@ export const LICENSE = "Apache-2.0";
 /// Short summary of what the app does today, shown in the About box (markdown). Update this whenever
 /// the app's scope changes.
 export const CAPABILITIES = `
-Diariz records audio — from your microphone (**choose a specific input and tune capture**), or Windows
+Diariz records audio — from your microphone (**choose a specific input and tune capture**, with a **live
+input-level meter** while recording), or Windows
 system/loopback audio via the desktop app
 (which can also **start and stop recording straight from its system-tray menu**) — or you can **upload
 an existing audio file** (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A), and it transcribes it server-side with
@@ -68,6 +69,23 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.50.0",
+    date: "2026-07-01",
+    pr: 105,
+    headline: "See your microphone level while recording",
+    summary:
+      "While a recording is in progress the toolbar now shows a **live input-level meter** — a small bar next " +
+      "to the timer that fills green→amber→red with the sound coming in, so you can see at a glance that your " +
+      "microphone is actually being picked up. It reads the same audio that's being recorded (nothing is echoed " +
+      "to your speakers). If the input stays silent for about 15 seconds a **subtle grey hint** appears in case " +
+      "the mic is muted — it's deliberately patient so normal pauses in a meeting don't trigger it, and it " +
+      "vanishes the moment sound returns.",
+    added: [
+      "A live input-level meter next to the recording timer, so you can confirm your microphone is being received.",
+      "A subtle 'no sound detected' hint after ~15s of silence while recording (clears as soon as sound returns).",
+    ],
+  },
   {
     version: "0.49.2",
     date: "2026-07-01",

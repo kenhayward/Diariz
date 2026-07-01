@@ -53,6 +53,7 @@
   "sourceMicDefault": "Micrófono (predeterminado)",
   "sourceMicNumbered": "Micrófono {{n}}",
   "noMicHint": "No se detectó ningún micrófono. Revisa los permisos de micrófono del navegador y del sistema.",
+  "noSoundHint": "No se detecta sonido: comprueba que el micrófono no esté silenciado.",
   "audioSettings": "Ajustes de audio",
   "constraintEcho": "Cancelación de eco",
   "constraintNoise": "Supresión de ruido",
