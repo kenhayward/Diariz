@@ -1,22 +1,34 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import CollapsibleSection from "./CollapsibleSection";
+import ToolbarButton, { iconProps } from "./ToolbarButton";
 import type { RecordingAction } from "../lib/types";
 
 type Patch = { text?: string; actor?: string; deadline?: string };
 
-/// The "by exception" panel below the Summary listing extracted action items as an inline-editable
-/// table (Done / Action / Actor / Deadline / Completed — all free text bar the Done toggle). The parent
-/// owns persistence: each edit commits on blur via `onUpdate`, the Done checkbox toggles via
+const RefreshIcon = (
+  <svg {...iconProps}><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></svg>
+);
+
+/// The panel below the Summary/Minutes listing extracted action items as an inline-editable table
+/// (Done / Action / Actor / Deadline / Completed — all free text bar the Done toggle). Always shown and
+/// collapsed by default; the header's refresh button runs LLM extraction (replacing the current list). The
+/// parent owns persistence: each edit commits on blur via `onUpdate`, the Done checkbox toggles via
 /// `onToggleComplete`, and add/remove go through `onAdd`/`onDelete`.
 export default function ActionsPanel({
   actions,
+  onExtract,
+  extractDisabled,
   onAdd,
   onUpdate,
   onToggleComplete,
   onDelete,
 }: {
   actions: RecordingAction[];
+  /// Run LLM action-extraction (replaces the list). Rendered as a refresh button in the panel header.
+  onExtract: () => void;
+  /// Disabled (no transcript) state for the extract button.
+  extractDisabled: boolean;
   onAdd: () => void;
   onUpdate: (id: string, patch: Patch) => void;
   onToggleComplete: (id: string, completed: boolean) => void;
@@ -24,7 +36,13 @@ export default function ActionsPanel({
 }) {
   const { t } = useTranslation("workspace");
   return (
-    <CollapsibleSection title={t("actionsTitle")}>
+    <CollapsibleSection
+      title={t("actionsTitle")}
+      defaultCollapsed
+      headerActions={
+        <ToolbarButton label={t("extractActionsAction")} icon={RefreshIcon} onClick={onExtract} disabled={extractDisabled} />
+      }
+    >
       {actions.length === 0 ? (
         <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">{t("noActions")}</p>
       ) : (

@@ -63,7 +63,8 @@ export default function SpeakerAssign({
     "block w-full px-3 py-1.5 text-left text-xs hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200";
 
   return (
-    <div className="relative w-40" ref={ref}>
+    // Fixed, generous width so any speaker name fits and the following row items line up across speakers.
+    <div className="relative w-64" ref={ref}>
       <button
         type="button"
         aria-label={t("assignAria", { label })}

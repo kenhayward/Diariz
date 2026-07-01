@@ -72,6 +72,40 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.54.0",
+    date: "2026-07-01",
+    pr: 109,
+    headline: "Transcript panel polish + a generate-minutes shortcut and a delete fix",
+    summary:
+      "A batch of transcript-page refinements. The **Actions** (kebab) menu gains **Generate meeting minutes**, " +
+      "so recordings that predate the feature (or never got minutes) can create them without the minutes panel. " +
+      "The **Speakers** panel is cleaner — the redundant second name box is gone, the assignment box is wider " +
+      "(any name fits) and the rows line up — and each speaker now shows their **total talk time** next to the " +
+      "segment count. The **Action items** panel is now always present (starting collapsed) with its own " +
+      "**refresh** button to (re-)extract, so extraction moves off the main toolbar; the **Summary** and " +
+      "**Speakers** re-run controls use the same refresh icon. The **Summary** panel now sits **above** Meeting " +
+      "Minutes and both start **collapsed**, and every panel's **collapse/expand chevron moved to the end** of " +
+      "its header (after the toolbar). The redundant **Play all** button is gone (the player bar already plays " +
+      "the whole recording). Bug fix: deleting the open recording from the list no longer leaves its transcript " +
+      "on screen (which made follow-up actions fail) — the page clears on delete from either the list or the " +
+      "transcript menu.",
+    added: [
+      "\"Generate meeting minutes\" in the transcript Actions (kebab) menu.",
+      "Each speaker in the Speakers panel now shows their total talk time alongside the segment count.",
+    ],
+    changed: [
+      "Speakers panel: removed the duplicate name field, widened the assignment box, and aligned the rows.",
+      "The Action items panel is always shown (starting collapsed) with a refresh button to extract/re-extract; the standalone \"Extract actions\" toolbar button is gone.",
+      "Re-run controls (Summary, Speakers re-identify, Actions extract) share a consistent refresh icon.",
+      "Removed the redundant \"Play all\" button — the player bar already plays the whole recording.",
+      "Summary panel moved above Meeting Minutes; both start collapsed.",
+      "Each panel's collapse/expand chevron is now the last control in the header (after the toolbar).",
+    ],
+    fixed: [
+      "Deleting the currently-open recording (from the list or the transcript menu) now clears the transcript page instead of leaving a stale, un-actionable transcript on screen.",
+    ],
+  },
+  {
     version: "0.53.0",
     date: "2026-07-01",
     pr: 108,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,6 +12,7 @@ import DownloadTranscriptModal from "./DownloadTranscriptModal";
 import { recordingMenu } from "./recordingMenu";
 import { copyRichLink, transcriptUrl } from "../lib/clipboard";
 import { useSelection } from "../lib/selection";
+import { useActiveRecordingId } from "../lib/useActiveRecordingId";
 import { formatDuration } from "../lib/format";
 import { computeReorder } from "../lib/reorder";
 import { useDragAutoScroll } from "../lib/dragAutoScroll";
@@ -888,6 +889,8 @@ function RecordingRow({
 }) {
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const activeRecordingId = useActiveRecordingId();
   const [renaming, setRenaming] = useState(false);
   const [moving, setMoving] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -933,6 +936,9 @@ function RecordingRow({
     onDelete: run(async () => {
       if (!window.confirm(t("workspace:confirmDelete", { name: r.name ?? r.title }))) return;
       await api.deleteRecording(r.id);
+      // If the deleted recording is the one open in the detail panel, leave it — otherwise its transcript
+      // stays on screen and any further action targets a now-missing recording.
+      if (activeRecordingId === r.id) navigate("/");
       refresh();
       qc.invalidateQueries({ queryKey: ["user-storage"] });
     }),

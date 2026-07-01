@@ -19,13 +19,18 @@ describe("CollapsibleSection", () => {
     expect(screen.getByText("Body text")).toBeTruthy();
   });
 
-  it("collapses when clicking the title text — the whole header strip is the hit area", () => {
+  it("does not toggle when clicking the title text — only the chevron collapses", () => {
+    // The title is a plain heading (not a button) so it never collides with same-named controls
+    // elsewhere (e.g. the 'Actions' kebab). The collapse control is the chevron alone.
     render(
       <CollapsibleSection title="Speakers">
         <p>Body</p>
       </CollapsibleSection>,
     );
-    fireEvent.click(screen.getByText("Speakers")); // title sits inside the header button
+    fireEvent.click(screen.getByText("Speakers"));
+    expect(screen.getByText("Body")).toBeTruthy(); // still expanded — the heading is inert
+
+    fireEvent.click(screen.getByRole("button", { name: /collapse speakers section/i }));
     expect(screen.queryByText("Body")).toBeNull();
   });
 

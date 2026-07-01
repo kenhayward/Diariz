@@ -182,6 +182,7 @@
   "newSubSectionPlaceholder": "New sub-section in {{parent}}",
   "selectRecordingAria": "Select {{name}}",
   "actionsTitle": "Actions",
+  "extractActionsAction": "Extract action items",
   "noActions": "No actions identified — add one below.",
   "colAction": "Action",
   "colActor": "Actor",
