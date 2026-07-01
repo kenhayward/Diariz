@@ -7,7 +7,6 @@ import {
   isElectron,
   describeAudioError,
   listInputDevices,
-  micPermissionState,
   unlockDeviceLabels,
   type AudioSourceKind,
 } from "../lib/audioSource";
@@ -99,6 +98,8 @@ export default function Recorder({
   const activeSourceRef = useRef<AudioSourceKind>("mic");
   // Reports phase changes to the Electron tray; a no-op in a plain browser.
   const reportRef = useRef<(s: RecorderState) => void>(() => {});
+  // Wraps the ⚙ button + its popover, so an outside click / Escape can close it.
+  const cogRef = useRef<HTMLDivElement>(null);
 
   // Re-enumerate inputs (mount, hot-plug via devicechange, and after a grant unlocks labels). Also
   // re-resolves a specific-mic selection against the new list so an unplugged device falls back cleanly.
@@ -119,13 +120,16 @@ export default function Recorder({
     const saved = loadSavedSource();
     let cancelled = false;
     void (async () => {
-      // Only enumerate specifics when permission is already granted; otherwise the browser withholds
-      // labels/ids and the "Allow microphone…" affordance handles unlocking them.
-      const perm = await micPermissionState();
-      const list =
-        perm === "granted"
-          ? await listInputDevices().catch(() => ({ devices: [], hasLabels: false }))
-          : { devices: [] as InputDevice[], hasLabels: false };
+      // Always enumerate — `enumerateDevices()` never triggers a permission prompt, and it returns
+      // real labels whenever this origin already has mic access (e.g. after recording once). We do NOT
+      // gate on navigator.permissions: that query is unreliable (returns "prompt" in Electron and some
+      // browsers even when access is granted and labels are available), which would wrongly hide the
+      // user's connected mics. If labels are genuinely withheld, hasLabels stays false and the
+      // "Allow microphone…" affordance handles unlocking them.
+      const list = await listInputDevices().catch(() => ({
+        devices: [] as InputDevice[],
+        hasLabels: false,
+      }));
       if (cancelled) return;
       setDevices(list.devices);
       setHasLabels(list.hasLabels);
@@ -140,6 +144,23 @@ export default function Recorder({
       md?.removeEventListener?.("devicechange", onChange);
     };
   }, [refreshDevices]);
+
+  // Close the audio-settings popover on an outside click or Escape (same pattern as KebabMenu).
+  useEffect(() => {
+    if (!cogOpen) return;
+    function onDown(e: MouseEvent) {
+      if (cogRef.current && !cogRef.current.contains(e.target as Node)) setCogOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setCogOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [cogOpen]);
 
   function persistSource(sel: SourceSelection) {
     try {
@@ -336,7 +357,7 @@ export default function Recorder({
         </select>
 
         {/* Capture-constraint popover — mic only (loopback ignores these). */}
-        <div className="relative">
+        <div className="relative" ref={cogRef}>
           <button
             type="button"
             onClick={() => setCogOpen((o) => !o)}
@@ -350,6 +371,20 @@ export default function Recorder({
           </button>
           {cogOpen && selection.kind !== "system" && (
             <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded border bg-white p-3 text-sm shadow-lg dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  {t("audioSettings")}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCogOpen(false)}
+                  aria-label={t("close")}
+                  title={t("close")}
+                  className="rounded px-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+                >
+                  ✕
+                </button>
+              </div>
               {(
                 [
                   ["echoCancellation", t("constraintEcho")],
