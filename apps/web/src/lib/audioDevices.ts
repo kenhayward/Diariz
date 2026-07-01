@@ -58,6 +58,27 @@ export const DEFAULT_CONSTRAINTS: AudioConstraints = {
 
 const DEVICE_PREFIX = "dev:";
 
+// Windows/Chromium exposes two synthetic input entries that are aliases of a real device — deviceId
+// "default" ("Default - …") and "communications" ("Communications - …"). We already offer our own
+// "Microphone (default)" (OS default) at the top, so listing these would just duplicate the physical
+// mic under confusing names. Drop them and keep the real devices.
+const ALIAS_DEVICE_IDS = new Set(["default", "communications"]);
+
+// Trailing USB vendor:product code some browsers append, e.g. "Microphone (Yeti Nano) (046d:0ab1)".
+const HARDWARE_ID_SUFFIX = /\s*\([0-9a-f]{4}:[0-9a-f]{4}\)\s*$/i;
+
+/** Strip the trailing `(vvvv:pppp)` hardware id from a device label; leave other parentheticals alone. */
+export function cleanDeviceLabel(label: string): string {
+  return label.replace(HARDWARE_ID_SUFFIX, "");
+}
+
+/** Drop the Windows default/communications alias entries and clean each remaining device's label. */
+export function normalizeInputDevices(devices: InputDevice[]): InputDevice[] {
+  return devices
+    .filter((d) => !ALIAS_DEVICE_IDS.has(d.deviceId))
+    .map((d) => ({ deviceId: d.deviceId, label: cleanDeviceLabel(d.label) }));
+}
+
 /** Decode a dropdown/persisted token into a selection. Unknown/blank → default (never throws). */
 export function parseSourceToken(value: string): SourceSelection {
   if (value === "system") return { kind: "system" };

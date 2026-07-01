@@ -5,6 +5,8 @@ import {
   buildSourceOptions,
   resolvePersistedSource,
   toMediaTrackConstraints,
+  cleanDeviceLabel,
+  normalizeInputDevices,
   DEFAULT_CONSTRAINTS,
   type InputDevice,
   type SourceOptionLabels,
@@ -112,6 +114,38 @@ describe("resolvePersistedSource (fallback ladder)", () => {
     expect(resolvePersistedSource({ token: "dev:ccc", label: "Gone Mic" }, devices)).toEqual({
       kind: "default",
     });
+  });
+});
+
+describe("cleanDeviceLabel", () => {
+  it("strips a trailing USB vendor:product hardware code", () => {
+    expect(cleanDeviceLabel("Microphone (Yeti Nano) (046d:0ab1)")).toBe("Microphone (Yeti Nano)");
+  });
+
+  it("leaves labels without a hardware code untouched (incl. non-hex parentheticals)", () => {
+    expect(cleanDeviceLabel("Stereo Mix (Realtek(R) Audio)")).toBe("Stereo Mix (Realtek(R) Audio)");
+    expect(cleanDeviceLabel("Built-in Mic")).toBe("Built-in Mic");
+  });
+});
+
+describe("normalizeInputDevices", () => {
+  it("drops the Windows default/communications aliases and strips hardware codes", () => {
+    const raw: InputDevice[] = [
+      { deviceId: "default", label: "Default - Microphone (Yeti Nano) (046d:0ab1)" },
+      { deviceId: "communications", label: "Communications - Microphone (Yeti Nano) (046d:0ab1)" },
+      { deviceId: "abc123", label: "Microphone (Yeti Nano) (046d:0ab1)" },
+      { deviceId: "def456", label: "Stereo Mix (Realtek(R) Audio)" },
+    ];
+    expect(normalizeInputDevices(raw)).toEqual([
+      { deviceId: "abc123", label: "Microphone (Yeti Nano)" },
+      { deviceId: "def456", label: "Stereo Mix (Realtek(R) Audio)" },
+    ]);
+  });
+
+  it("keeps a device list that has no aliases unchanged (labels cleaned)", () => {
+    expect(normalizeInputDevices([{ deviceId: "x", label: "USB Mic (1234:abcd)" }])).toEqual([
+      { deviceId: "x", label: "USB Mic" },
+    ]);
   });
 });
 

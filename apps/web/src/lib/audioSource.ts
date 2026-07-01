@@ -5,6 +5,7 @@
 
 import {
   toMediaTrackConstraints,
+  normalizeInputDevices,
   type AudioConstraints,
   type InputDevice,
   type SourceSelection,
@@ -59,9 +60,13 @@ export interface InputDeviceList {
 export async function listInputDevices(): Promise<InputDeviceList> {
   if (!navigator.mediaDevices?.enumerateDevices) return { devices: [], hasLabels: false };
   const all = await navigator.mediaDevices.enumerateDevices();
-  const devices = all
-    .filter((d) => d.kind === "audioinput" && d.deviceId)
-    .map((d) => ({ deviceId: d.deviceId, label: d.label }));
+  // Drop the Windows default/communications aliases and strip hardware-id suffixes so the same
+  // physical mic isn't listed three times with a "(vvvv:pppp)" code appended.
+  const devices = normalizeInputDevices(
+    all
+      .filter((d) => d.kind === "audioinput" && d.deviceId)
+      .map((d) => ({ deviceId: d.deviceId, label: d.label })),
+  );
   const hasLabels = devices.some((d) => d.label !== "");
   return { devices, hasLabels };
 }
