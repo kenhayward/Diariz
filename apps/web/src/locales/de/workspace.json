@@ -53,6 +53,7 @@
   "sourceMicDefault": "Mikrofon (Standard)",
   "sourceMicNumbered": "Mikrofon {{n}}",
   "noMicHint": "Kein Mikrofon erkannt. Prüfen Sie die Mikrofonberechtigungen von Browser und System.",
+  "noSoundHint": "Kein Ton erkannt – prüfen Sie, ob Ihr Mikrofon nicht stummgeschaltet ist.",
   "audioSettings": "Audioeinstellungen",
   "constraintEcho": "Echounterdrückung",
   "constraintNoise": "Rauschunterdrückung",

@@ -88,8 +88,10 @@ services address each other by Compose service name (`minio:9000`, `redis:6379`,
    loopback audio; or the user uploads a file. For microphone capture the user can pick a **specific input
    device** (`enumerateDevices()`; the choice is persisted in `localStorage` and re-resolved against the live
    device list on hot-plug via `lib/audioDevices.ts`) and toggle **capture constraints** (echo cancellation /
-   noise suppression / auto gain / mono) applied to `getUserMedia`. The client `POST`s multipart to
-   `POST /api/recordings` (`source = Microphone | System | Upload`).
+   noise suppression / auto gain / mono) applied to `getUserMedia`. While recording, a **Web Audio
+   `AnalyserNode`** taps the same stream to drive a live **input-level meter** (`lib/audioLevel.ts` +
+   `InputLevelMeter.tsx`; a passive read, not connected to output) with a subtle sustained-silence hint. The
+   client `POST`s multipart to `POST /api/recordings` (`source = Microphone | System | Upload`).
 2. **Store + enqueue.** The API streams the blob into **MinIO** (`recordings` bucket, key `{userId}/{recordingId}{ext}`),
    writes a **`Recording`** row, creates a **`Transcription`** row (version 1) and **enqueues a job** on the
    Redis stream **`transcription-jobs`** (consumer group **`workers`**). Uploads are gated by magic-byte

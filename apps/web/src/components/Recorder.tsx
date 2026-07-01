@@ -22,6 +22,7 @@ import {
   type SourceSelection,
 } from "../lib/audioDevices";
 import { connectTrayRecorder, type RecorderState, type TrayBridge } from "../lib/trayRecorder";
+import InputLevelMeter from "./InputLevelMeter";
 import { AUDIO_ACCEPT_ATTR } from "../lib/audioFormats";
 import { useUpload } from "../lib/uploadContext";
 import {
@@ -71,6 +72,8 @@ export default function Recorder({
   // Used to show the "no microphone detected" hint only after an attempt that came back empty.
   const [labelsTried, setLabelsTried] = useState(false);
   const [recording, setRecording] = useState(false);
+  // True once the input has been near-silent for a sustained period while recording (see InputLevelMeter).
+  const [silent, setSilent] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +96,8 @@ export default function Recorder({
   }, [userId]);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
+  // The live recording stream, exposed to the level meter while recording (nulled in recorder.onstop).
+  const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const startRef = useRef(0);
   const timerRef = useRef<number | null>(null);
@@ -221,11 +226,13 @@ export default function Recorder({
     setError(null);
     try {
       const stream = await getStream(sel, coarse === "mic" ? constraints : undefined);
+      streamRef.current = stream; // exposed so the level meter can tap it while recording
       const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
       chunksRef.current = [];
       recorder.ondataavailable = (e) => e.data.size > 0 && chunksRef.current.push(e.data);
       recorder.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
         void upload();
       };
       recorder.start();
@@ -253,6 +260,7 @@ export default function Recorder({
   function stop() {
     if (timerRef.current) window.clearInterval(timerRef.current);
     setRecording(false);
+    setSilent(false);
     recorderRef.current?.stop();
   }
 
@@ -449,7 +457,12 @@ export default function Recorder({
           data-testid="upload-input"
         />
 
-        {recording && <span className="font-mono text-sm text-red-600">● {mmss}</span>}
+        {recording && (
+          <>
+            <span className="font-mono text-sm text-red-600">● {mmss}</span>
+            <InputLevelMeter stream={streamRef.current} onSilentChange={setSilent} />
+          </>
+        )}
         {error && compact && <span className="text-xs text-red-600">{error}</span>}
       </div>
       {pending && !recording && (
@@ -478,6 +491,11 @@ export default function Recorder({
       {error && !compact && <p className="mt-2 text-sm text-red-600">{error}</p>}
       {labelsTried && !hasLabels && !recording && !error && (
         <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{t("noMicHint")}</p>
+      )}
+      {recording && silent && (
+        <p role="status" aria-live="polite" className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          {t("noSoundHint")}
+        </p>
       )}
     </div>
   );
