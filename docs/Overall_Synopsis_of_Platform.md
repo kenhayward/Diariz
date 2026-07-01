@@ -85,8 +85,11 @@ services address each other by Compose service name (`minio:9000`, `redis:6379`,
 ## Core data flow: capture → transcript
 
 1. **Capture/upload.** The web `Recorder` (`MediaRecorder`) records mic or — in the desktop shell — Windows
-   loopback audio; or the user uploads a file. The client `POST`s multipart to `POST /api/recordings`
-   (`source = Microphone | System | Upload`).
+   loopback audio; or the user uploads a file. For microphone capture the user can pick a **specific input
+   device** (`enumerateDevices()`; the choice is persisted in `localStorage` and re-resolved against the live
+   device list on hot-plug via `lib/audioDevices.ts`) and toggle **capture constraints** (echo cancellation /
+   noise suppression / auto gain / mono) applied to `getUserMedia`. The client `POST`s multipart to
+   `POST /api/recordings` (`source = Microphone | System | Upload`).
 2. **Store + enqueue.** The API streams the blob into **MinIO** (`recordings` bucket, key `{userId}/{recordingId}{ext}`),
    writes a **`Recording`** row, creates a **`Transcription`** row (version 1) and **enqueues a job** on the
    Redis stream **`transcription-jobs`** (consumer group **`workers`**). Uploads are gated by magic-byte

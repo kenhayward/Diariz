@@ -3,12 +3,27 @@
 // Electron shell (the main process installs a loopback display-media handler on
 // Windows). In a plain browser it falls back to tab/screen audio where available.
 
+import {
+  toMediaTrackConstraints,
+  type AudioConstraints,
+  type InputDevice,
+  type SourceSelection,
+} from "./audioDevices";
+
+// Coarse kind kept for the Electron tray + upload-title path (the tray only knows mic vs system).
 export type AudioSourceKind = "mic" | "system";
 
 export const isElectron = Boolean((window as any).diariz?.isElectron);
 
-export async function getMicStream(): Promise<MediaStream> {
-  return navigator.mediaDevices.getUserMedia({ audio: true });
+export async function getMicStream(
+  deviceId?: string,
+  constraints?: MediaTrackConstraints,
+): Promise<MediaStream> {
+  // No device + no constraints ⇒ exactly today's behaviour (OS-default input, browser DSP defaults).
+  if (!deviceId && !constraints) return navigator.mediaDevices.getUserMedia({ audio: true });
+  const audio: MediaTrackConstraints = { ...(constraints ?? {}) };
+  if (deviceId) audio.deviceId = { exact: deviceId };
+  return navigator.mediaDevices.getUserMedia({ audio });
 }
 
 export async function getSystemStream(): Promise<MediaStream> {
@@ -22,8 +37,55 @@ export async function getSystemStream(): Promise<MediaStream> {
   return new MediaStream(stream.getAudioTracks());
 }
 
-export async function getStream(kind: AudioSourceKind): Promise<MediaStream> {
-  return kind === "system" ? getSystemStream() : getMicStream();
+// Capture from a resolved selection. System loopback ignores the mic constraints (they don't apply);
+// mic capture applies the chosen device id + DSP/channel constraints.
+export async function getStream(
+  selection: SourceSelection,
+  constraints?: AudioConstraints,
+): Promise<MediaStream> {
+  if (selection.kind === "system") return getSystemStream();
+  const mtc = constraints ? toMediaTrackConstraints(constraints) : undefined;
+  return getMicStream(selection.kind === "device" ? selection.deviceId : undefined, mtc);
+}
+
+export interface InputDeviceList {
+  devices: InputDevice[];
+  /** True once the browser exposes real device labels (only after a getUserMedia grant). */
+  hasLabels: boolean;
+}
+
+// Enumerate microphone inputs. Before a getUserMedia grant, browsers withhold labels (empty strings)
+// and often a stable device id, so `hasLabels` tells the UI whether it can show specific mics.
+export async function listInputDevices(): Promise<InputDeviceList> {
+  if (!navigator.mediaDevices?.enumerateDevices) return { devices: [], hasLabels: false };
+  const all = await navigator.mediaDevices.enumerateDevices();
+  const devices = all
+    .filter((d) => d.kind === "audioinput" && d.deviceId)
+    .map((d) => ({ deviceId: d.deviceId, label: d.label }));
+  const hasLabels = devices.some((d) => d.label !== "");
+  return { devices, hasLabels };
+}
+
+export type MicPermission = "granted" | "denied" | "prompt" | "unknown";
+
+// Query the mic permission where supported (Chromium). Firefox/Safari lack the "microphone" name →
+// "unknown", so the UI degrades gracefully (offers the "Allow…" affordance rather than assuming).
+export async function micPermissionState(): Promise<MicPermission> {
+  try {
+    const perms = (navigator as { permissions?: Permissions }).permissions;
+    if (!perms?.query) return "unknown";
+    const status = await perms.query({ name: "microphone" as PermissionName });
+    return status.state as MicPermission;
+  } catch {
+    return "unknown";
+  }
+}
+
+// A throwaway grant purely to unlock device labels (the affordance behind "Allow microphone to list
+// devices…"). Tracks are stopped immediately; the caller re-enumerates afterwards.
+export async function unlockDeviceLabels(): Promise<void> {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  stream.getTracks().forEach((t) => t.stop());
 }
 
 /// Turn a getUserMedia/getDisplayMedia failure into an actionable message. The browser reports the

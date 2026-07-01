@@ -1,8 +1,27 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage, getToken } from "../lib/api";
 import { userIdFromToken } from "../lib/jwt";
-import { getStream, isElectron, describeAudioError, type AudioSourceKind } from "../lib/audioSource";
+import {
+  getStream,
+  isElectron,
+  describeAudioError,
+  listInputDevices,
+  micPermissionState,
+  unlockDeviceLabels,
+  type AudioSourceKind,
+} from "../lib/audioSource";
+import {
+  parseSourceToken,
+  formatSourceToken,
+  buildSourceOptions,
+  resolvePersistedSource,
+  DEFAULT_CONSTRAINTS,
+  type AudioConstraints,
+  type InputDevice,
+  type PersistedSource,
+  type SourceSelection,
+} from "../lib/audioDevices";
 import { connectTrayRecorder, type RecorderState, type TrayBridge } from "../lib/trayRecorder";
 import { AUDIO_ACCEPT_ATTR } from "../lib/audioFormats";
 import { useUpload } from "../lib/uploadContext";
@@ -13,6 +32,27 @@ import {
   type PendingRecording,
 } from "../lib/pendingRecording";
 
+const SOURCE_KEY = "diariz.recorder.source";
+const CONSTRAINTS_KEY = "diariz.recorder.audioConstraints";
+
+function loadSavedSource(): PersistedSource | null {
+  try {
+    const raw = localStorage.getItem(SOURCE_KEY);
+    return raw ? (JSON.parse(raw) as PersistedSource) : null;
+  } catch {
+    return null;
+  }
+}
+
+function loadSavedConstraints(): AudioConstraints {
+  try {
+    const raw = localStorage.getItem(CONSTRAINTS_KEY);
+    return raw ? { ...DEFAULT_CONSTRAINTS, ...(JSON.parse(raw) as Partial<AudioConstraints>) } : DEFAULT_CONSTRAINTS;
+  } catch {
+    return DEFAULT_CONSTRAINTS;
+  }
+}
+
 export default function Recorder({
   onUploaded,
   compact = false,
@@ -21,7 +61,13 @@ export default function Recorder({
   compact?: boolean;
 }) {
   const { t } = useTranslation("workspace");
-  const [source, setSource] = useState<AudioSourceKind>("mic");
+  // The chosen source: default mic / a specific mic / system. `selection` carries the deviceId + label
+  // so we can survive device-id rotation (see resolvePersistedSource).
+  const [selection, setSelection] = useState<SourceSelection>({ kind: "default" });
+  const [devices, setDevices] = useState<InputDevice[]>([]);
+  const [hasLabels, setHasLabels] = useState(false);
+  const [constraints, setConstraints] = useState<AudioConstraints>(DEFAULT_CONSTRAINTS);
+  const [cogOpen, setCogOpen] = useState(false);
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -48,16 +94,104 @@ export default function Recorder({
   const chunksRef = useRef<Blob[]>([]);
   const startRef = useRef(0);
   const timerRef = useRef<number | null>(null);
-  // The source actually being recorded (tray commands pass it explicitly, so we
-  // can't rely on the `source` state having flushed by upload time).
+  // The coarse source actually being recorded (mic vs system); the tray only speaks in these terms,
+  // and the upload title/enum needs it, so we can't rely on `selection` state having flushed.
   const activeSourceRef = useRef<AudioSourceKind>("mic");
   // Reports phase changes to the Electron tray; a no-op in a plain browser.
   const reportRef = useRef<(s: RecorderState) => void>(() => {});
 
-  async function start(kind: AudioSourceKind = source) {
+  // Re-enumerate inputs (mount, hot-plug via devicechange, and after a grant unlocks labels). Also
+  // re-resolves a specific-mic selection against the new list so an unplugged device falls back cleanly.
+  const refreshDevices = useCallback(async () => {
+    const list = await listInputDevices().catch(() => ({ devices: [], hasLabels: false }));
+    setDevices(list.devices);
+    setHasLabels(list.hasLabels);
+    setSelection((cur) =>
+      cur.kind === "device"
+        ? resolvePersistedSource({ token: formatSourceToken(cur), label: cur.label }, list.devices)
+        : cur,
+    );
+  }, []);
+
+  // On mount: restore persisted source + constraints, enumerate devices, subscribe to hot-plug.
+  useEffect(() => {
+    setConstraints(loadSavedConstraints());
+    const saved = loadSavedSource();
+    let cancelled = false;
+    void (async () => {
+      // Only enumerate specifics when permission is already granted; otherwise the browser withholds
+      // labels/ids and the "Allow microphone…" affordance handles unlocking them.
+      const perm = await micPermissionState();
+      const list =
+        perm === "granted"
+          ? await listInputDevices().catch(() => ({ devices: [], hasLabels: false }))
+          : { devices: [] as InputDevice[], hasLabels: false };
+      if (cancelled) return;
+      setDevices(list.devices);
+      setHasLabels(list.hasLabels);
+      setSelection(resolvePersistedSource(saved, list.devices));
+    })();
+
+    const md = navigator.mediaDevices;
+    const onChange = () => void refreshDevices();
+    md?.addEventListener?.("devicechange", onChange);
+    return () => {
+      cancelled = true;
+      md?.removeEventListener?.("devicechange", onChange);
+    };
+  }, [refreshDevices]);
+
+  function persistSource(sel: SourceSelection) {
+    try {
+      localStorage.setItem(SOURCE_KEY, JSON.stringify({ token: formatSourceToken(sel), label: sel.label }));
+    } catch {
+      /* storage unavailable — non-fatal */
+    }
+  }
+
+  function onSelectSource(e: ChangeEvent<HTMLSelectElement>) {
+    const sel = parseSourceToken(e.target.value);
+    if (sel.kind === "device") sel.label = devices.find((d) => d.deviceId === sel.deviceId)?.label || undefined;
+    setSelection(sel);
+    persistSource(sel);
+    if (sel.kind === "system") setCogOpen(false); // constraints don't apply to loopback
+  }
+
+  function toggleConstraint(key: keyof AudioConstraints) {
+    setConstraints((c) => {
+      const next = { ...c, [key]: !c[key] };
+      try {
+        localStorage.setItem(CONSTRAINTS_KEY, JSON.stringify(next));
+      } catch {
+        /* non-fatal */
+      }
+      return next;
+    });
+  }
+
+  async function allowMicLabels() {
     setError(null);
     try {
-      const stream = await getStream(kind);
+      await unlockDeviceLabels();
+      await refreshDevices();
+    } catch (e) {
+      setError(describeAudioError(e, "mic", isElectron));
+    }
+  }
+
+  // `trayKind` is set only when the Electron tray drives us (it speaks coarse mic/system); the on-screen
+  // button passes nothing and records the current `selection`. A tray "mic" maps to the current specific
+  // mic (or default), "system" to loopback.
+  async function start(trayKind?: AudioSourceKind) {
+    let sel: SourceSelection;
+    if (trayKind === "system") sel = { kind: "system" };
+    else if (trayKind === "mic") sel = selection.kind === "system" ? { kind: "default" } : selection;
+    else sel = selection;
+
+    const coarse: AudioSourceKind = sel.kind === "system" ? "system" : "mic";
+    setError(null);
+    try {
+      const stream = await getStream(sel, coarse === "mic" ? constraints : undefined);
       const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
       chunksRef.current = [];
       recorder.ondataavailable = (e) => e.data.size > 0 && chunksRef.current.push(e.data);
@@ -67,8 +201,7 @@ export default function Recorder({
       };
       recorder.start();
       recorderRef.current = recorder;
-      activeSourceRef.current = kind;
-      setSource(kind);
+      activeSourceRef.current = coarse;
       startRef.current = Date.now();
       setElapsed(0);
       timerRef.current = window.setInterval(
@@ -76,11 +209,13 @@ export default function Recorder({
         250,
       );
       setRecording(true);
-      reportRef.current({ phase: "recording", source: kind });
+      reportRef.current({ phase: "recording", source: coarse });
+      // A mic grant unlocks device labels — re-enumerate so specifics appear next time.
+      if (coarse === "mic") void refreshDevices();
     } catch (e) {
       // Log the raw cause (DOMException name/message) so the actual failure is diagnosable.
       console.error("Audio capture failed:", e);
-      const message = describeAudioError(e, kind, isElectron);
+      const message = describeAudioError(e, coarse, isElectron);
       setError(message);
       reportRef.current({ phase: "error", error: message });
     }
@@ -183,17 +318,69 @@ export default function Recorder({
     <div className={compact ? "" : "rounded-lg border bg-white p-4 dark:border-gray-700 dark:bg-gray-900"}>
       <div className="flex items-center gap-2">
         <select
-          value={source}
-          onChange={(e) => setSource(e.target.value as AudioSourceKind)}
+          value={formatSourceToken(selection)}
+          onChange={onSelectSource}
           disabled={recording}
+          aria-label={t("sourceMicrophone")}
           className="rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         >
-          <option value="mic">{t("sourceMicrophone")}</option>
-          <option value="system">
-            {t("sourceSystem")}
-            {isElectron ? "" : t("systemDesktopSuffix")}
-          </option>
+          {buildSourceOptions(devices, hasLabels, {
+            micDefault: t("sourceMicDefault"),
+            system: `${t("sourceSystem")}${isElectron ? "" : t("systemDesktopSuffix")}`,
+            numbered: (n) => t("sourceMicNumbered", { n }),
+          }).map((o) => (
+            <option key={o.token} value={o.token}>
+              {o.label}
+            </option>
+          ))}
         </select>
+
+        {/* Capture-constraint popover — mic only (loopback ignores these). */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setCogOpen((o) => !o)}
+            disabled={recording || selection.kind === "system"}
+            title={t("audioSettings")}
+            aria-label={t("audioSettings")}
+            aria-expanded={cogOpen}
+            className="rounded border px-2 py-1 text-sm disabled:opacity-40 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
+          >
+            ⚙
+          </button>
+          {cogOpen && selection.kind !== "system" && (
+            <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded border bg-white p-3 text-sm shadow-lg dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
+              {(
+                [
+                  ["echoCancellation", t("constraintEcho")],
+                  ["noiseSuppression", t("constraintNoise")],
+                  ["autoGainControl", t("constraintAgc")],
+                  ["mono", t("constraintMono")],
+                ] as const
+              ).map(([key, label]) => (
+                <label key={key} className="flex items-center gap-2 py-1">
+                  <input
+                    type="checkbox"
+                    checked={constraints[key]}
+                    onChange={() => toggleConstraint(key)}
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("constraintsMicOnlyHint")}</p>
+            </div>
+          )}
+        </div>
+
+        {!hasLabels && !recording && (
+          <button
+            type="button"
+            onClick={allowMicLabels}
+            className="text-xs text-blue-600 underline hover:text-blue-700 dark:text-blue-400"
+          >
+            {t("allowMicToList")}
+          </button>
+        )}
 
         {recording ? (
           <button onClick={stop} className="rounded bg-red-600 px-3 py-1.5 text-sm text-white">
