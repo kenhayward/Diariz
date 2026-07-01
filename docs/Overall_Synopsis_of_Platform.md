@@ -218,8 +218,13 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   `count_mentions`, plus `list_recordings`) query **`TranscriptSearch`**, a Postgres **`pg_trgm`** GIN-trigram
   fuzzy search over the user's own current-version transcripts (a `scope` arg lets the model search the whole
   library or just the selected recordings). The EF-based ones (`list_action_items`, `get_recording_summary`,
-  `who_attended`, `speaker_talk_time`, `get_segment_context`) read existing relational data directly. Each tool
-  result embeds an in-app **markdown deep-link** (`/recordings/{id}?t={ms}`); the model cites it, and the web
+  `who_attended`, `speaker_talk_time`, `get_segment_context`) read existing relational data directly. A single
+  **write** tool, `send_email` (`SendEmailTool`), lets the assistant email the user a composed subject+body — it
+  **always** sends to the owner's registered `ApplicationUser.Email` (no recipient parameter; any address in the
+  args is ignored) via `IEmailSender`, and is **off by default** (in the default `Chat:DisabledTools`) since it
+  is the only side-effecting tool. The chat **system prompt** also now names the current user (`FullName` +
+  `Email`, via `ChatContextBuilder`) so the model knows who it is helping and writes emails as being from them.
+  Each read tool's result embeds an in-app **markdown deep-link** (`/recordings/{id}?t={ms}`); the model cites it, and the web
   intercepts the click to open the transcript and **scroll/highlight the segment** at that moment
   (`lib/transcriptNav.ts`). The orchestrator also emits `ref` events (the recordings a tool referenced) so the
   web can **linkify plain mentions** the model didn't link (`lib/linkify.ts`); when an answer cites several

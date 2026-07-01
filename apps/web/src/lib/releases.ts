@@ -38,7 +38,9 @@ conversations — using an OpenAI-compatible LLM endpoint you configure. The cha
 tools** that search your **whole transcript library** — who said a phrase, what a person said about a topic,
 which recordings exist or mention something, action items, summaries, attendees, talk time, and the lines
 around a moment — answering with **When · Who · What** and **linking back to the transcript** (click a link
-to open it and jump to the exact segment). Toggle the tools on, and choose which, under Settings → AI — where you
+to open it and jump to the exact segment). It can also **email you** (yourself only) a message it composes —
+a summary, action items, or notes — with the tool always delivering to your own registered address. Toggle
+the tools on, and choose which, under Settings → AI — where you
 can also **enable reasoning** (and pick a level) for reasoning-capable models. You can **attach supporting
 documents** (files or URLs) to a recording, open them from the transcript page, and optionally **feed them
 to the chat** (PDFs, text, Office docs, emails/calendar invites are read into text; URLs are fetched).
@@ -71,6 +73,26 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.56.0",
+    date: "2026-07-01",
+    pr: 112,
+    headline: "New chat tool: email yourself a message the assistant composes",
+    summary:
+      "The chat assistant gains a **Send email to me** tool: ask it to email you a summary, the action items, " +
+      "or any notes it has prepared, and it composes the subject and body and sends it. For safety it can " +
+      "**only ever email you** — the recipient is always your own registered account address, there is no way " +
+      "for it to send to anyone else, and because it's the only tool that *does* something (rather than just " +
+      "reading), it is **off by default**: turn it on under **Settings → AI** alongside the other tools. The " +
+      "chat also now knows **who you are** (your name and email are part of its context), so the messages it " +
+      "writes read as being from you.",
+    added: [
+      "A \"Send email to me\" chat tool — the assistant composes a subject and body and emails it to your own account address (opt-in under Settings → AI).",
+    ],
+    changed: [
+      "The chat context now includes the signed-in user's name and email, so the assistant knows who it is helping and can sign emails as them.",
+    ],
+  },
   {
     version: "0.55.0",
     date: "2026-07-01",

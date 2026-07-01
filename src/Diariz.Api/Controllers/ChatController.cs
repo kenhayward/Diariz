@@ -93,7 +93,13 @@ public class ChatController : ControllerBase
         // Resolve the user's enabled tools; when any are active, add a tool-usage instruction so the model
         // prefers the built-in tools and answers in the standard When / Who / What format.
         var toolCfg = await _toolSettings.ResolveAsync(UserId, ct);
-        var system = ChatContextBuilder.BuildSystemPrompt(contexts, req.AttachmentName, req.AttachmentText, documents);
+        // Identify the current user in the system prompt (name the model can sign emails as, and the address
+        // the send_email tool always delivers to).
+        var me = await _db.Users.Where(u => u.Id == UserId)
+            .Select(u => new { u.FullName, u.Email }).FirstOrDefaultAsync(ct);
+        var system = ChatContextBuilder.BuildSystemPrompt(
+            contexts, req.AttachmentName, req.AttachmentText, documents,
+            ChatContextBuilder.DefaultCharBudget, me?.FullName, me?.Email);
         if (toolCfg.ActiveTools.Count > 0) system += "\n\n" + ToolSystemInstruction;
         var history = (req.Messages ?? []).Select(m => new ChatMessage(m.Role, m.Content)).ToList();
         var messages = ChatContextBuilder.BuildMessages(system, history);

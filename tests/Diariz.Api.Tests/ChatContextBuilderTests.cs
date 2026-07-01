@@ -29,6 +29,23 @@ public class ChatContextBuilderTests
     }
 
     [Fact]
+    public void BuildSystemPrompt_NamesTheCurrentUser_WhenProvided()
+    {
+        var prompt = ChatContextBuilder.BuildSystemPrompt(
+            [Standup], null, null, null, ChatContextBuilder.DefaultCharBudget, "Alice Smith", "alice@example.com");
+
+        Assert.Contains("Alice Smith", prompt);
+        Assert.Contains("alice@example.com", prompt);
+    }
+
+    [Fact]
+    public void BuildSystemPrompt_OmitsUserLine_WhenNoIdentityProvided()
+    {
+        var prompt = ChatContextBuilder.BuildSystemPrompt([Standup], null, null);
+        Assert.DoesNotContain("You are assisting", prompt);
+    }
+
+    [Fact]
     public void BuildSystemPrompt_IncludesAttachment_WhenPresent()
     {
         var prompt = ChatContextBuilder.BuildSystemPrompt([Standup], "spec.pdf", "The widget must be blue.");

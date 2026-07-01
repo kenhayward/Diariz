@@ -102,8 +102,9 @@ public class ChatOptions
     public bool ToolsEnabled { get; set; } = false;
 
     /// <summary>Comma-separated tool names that are off by default server-wide. Every other registered tool
-    /// is on when tools are enabled. Per-user overridable in Settings.</summary>
-    public string DisabledTools { get; set; } = "";
+    /// is on when tools are enabled. Per-user overridable in Settings. <c>send_email</c> is off by default
+    /// because it is the only tool with a side effect (it emails the user).</summary>
+    public string DisabledTools { get; set; } = "send_email";
 }
 
 /// <summary>SMTP settings for transactional email (the account-setup link). When <see cref="Enabled"/>
