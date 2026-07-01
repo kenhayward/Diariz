@@ -45,10 +45,16 @@ export default function CollapsibleSection({
           collapsed ? "rounded-b-lg" : ""
         }`}
       >
-        {/* Title is a plain heading (not a button) so it never collides with same-named controls elsewhere
-            (e.g. the "Actions" kebab). The collapse control is the chevron — the LAST item on the strip,
-            after the toolbar — so it's always in the same place across panels. */}
-        <h2 className="flex-1 px-4 py-2 text-sm font-medium text-gray-500 dark:text-gray-400">{title}</h2>
+        {/* Title is a heading (not a button) so it never collides with same-named controls elsewhere
+            (e.g. the "Actions" kebab), but clicking it — and the empty header space up to the toolbar —
+            toggles the section. The chevron (the LAST item on the strip, after the toolbar) is the
+            keyboard-accessible toggle and stays in the same place across panels. */}
+        <h2
+          className="flex-1 cursor-pointer px-4 py-2 text-sm font-medium text-gray-500 dark:text-gray-400"
+          onClick={() => setCollapsed((v) => !v)}
+        >
+          {title}
+        </h2>
         {headerActions && <div className="flex items-center gap-0.5">{headerActions}</div>}
         <button
           type="button"

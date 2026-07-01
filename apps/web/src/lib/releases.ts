@@ -75,14 +75,20 @@ export const RELEASES: Release[] = [
     version: "0.54.1",
     date: "2026-07-01",
     pr: 110,
-    headline: "README caught up with the transcript-panel changes",
+    headline: "Recording-page panel polish + README catch-up",
     summary:
-      "Documentation only. The project **README**'s feature list was brought in line with the recent " +
-      "transcript-panel work: the **Speakers** panel now shows each speaker's **total talk time** next to their " +
-      "segment count, the transcript's **play bar plays the whole recording** (the separate \"Play all\" button " +
-      "was removed), and **action items** live in an always-available panel (collapsed by default, with a " +
-      "refresh button to extract or re-extract). No application or behaviour changes.",
+      "Small refinements to the recording page's collapsible panels, plus a documentation catch-up. Each " +
+      "panel's **re-run (refresh) icon now sits at the end of its toolbar**, just before the collapse chevron, " +
+      "so the refresh buttons line up vertically down the Summary / Meeting Minutes / Actions / Speakers panels. " +
+      "You can once again **click a panel's header** (anywhere outside its toolbar) to expand or collapse it, not " +
+      "just the chevron. The **vertical spacing between the recording page's sections was roughly halved** so " +
+      "more fits on screen. The **README**'s feature list was also brought in line with the recent " +
+      "transcript-panel work (per-speaker talk time, the play bar plays the whole recording, the always-available " +
+      "Action items panel).",
     changed: [
+      "Each panel's refresh icon moved to the end of its toolbar (before the chevron) so the refresh buttons line up across the Summary, Meeting Minutes, Actions, and Speakers panels.",
+      "Clicking a panel header (outside the toolbar) again toggles expand/collapse, not just the chevron.",
+      "Roughly halved the vertical spacing between the recording page's sections.",
       "README feature list updated to match the 0.54.0 transcript-panel changes (per-speaker talk time, play-bar plays the whole recording, always-available Action items panel).",
     ],
   },
