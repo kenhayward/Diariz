@@ -7,10 +7,11 @@ namespace Diariz.Api.Services;
 public interface IActionsClient
 {
     /// <summary>Ask the resolved (per-user) LLM to extract action items from the segments using the given
-    /// prompt <paramref name="template"/>. Returns an empty list when the transcript has none.</summary>
+    /// prompt <paramref name="template"/> (with the meeting date substituted). Returns an empty list when the
+    /// transcript has none.</summary>
     Task<IReadOnlyList<ExtractedAction>> ExtractAsync(
         SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
-        CancellationToken ct = default);
+        DateTimeOffset? meetingDate, CancellationToken ct = default);
 }
 
 /// <summary>Calls an OpenAI-compatible /chat/completions endpoint to extract actions, using a per-request
@@ -23,9 +24,9 @@ public class ActionsClient : IActionsClient
 
     public async Task<IReadOnlyList<ExtractedAction>> ExtractAsync(
         SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
-        CancellationToken ct = default)
+        DateTimeOffset? meetingDate, CancellationToken ct = default)
     {
-        var messages = ActionsPrompt.BuildMessages(template, segments);
+        var messages = ActionsPrompt.BuildMessages(template, segments, meetingDate);
         var body = new Dictionary<string, object?>
         {
             ["model"] = config.Model,

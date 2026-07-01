@@ -82,7 +82,7 @@ public class RecordingActionsController : ControllerBase
             .ToList();
 
         var template = _prompts.Get("extract-actions", ActionsPrompt.DefaultTemplate);
-        var extracted = await _client.ExtractAsync(cfg, segs, template);
+        var extracted = await _client.ExtractAsync(cfg, segs, template, rec.CreatedAt);
 
         // Replace the whole list with the fresh extraction.
         _db.RecordingActions.RemoveRange(rec.Actions);

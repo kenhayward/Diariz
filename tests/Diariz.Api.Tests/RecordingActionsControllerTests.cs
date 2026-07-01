@@ -54,6 +54,8 @@ public class RecordingActionsControllerTests
         Assert.Equal(new[] { 0, 1 }, dtos.Select(d => d.Ordinal).ToArray());
         Assert.Equal(1, client.Calls);
         Assert.Equal("Alice: Bob, send the report.", client.LastSegments![0].SpeakerDisplay + ": " + client.LastSegments![0].Text);
+        // The recording's date flows into the prompt (for {calendar_date} → deadline resolution).
+        Assert.Equal((await db.Recordings.FindAsync(rec.Id))!.CreatedAt, client.LastMeetingDate);
 
         var saved = await db.RecordingActions.Where(a => a.RecordingId == rec.Id).ToListAsync();
         Assert.Equal(2, saved.Count);

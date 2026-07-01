@@ -17,12 +17,22 @@ public class ActionsPromptTests
     [Fact]
     public void BuildMessages_AsksForAJsonArrayOfActions_WithTheTranscript()
     {
-        var msgs = ActionsPrompt.BuildMessages(ActionsPrompt.DefaultTemplate, Segments);
+        var msgs = ActionsPrompt.BuildMessages(
+            ActionsPrompt.DefaultTemplate, Segments, new DateTimeOffset(2026, 3, 4, 9, 0, 0, TimeSpan.Zero));
 
         Assert.Equal("system", msgs[0].Role);
         Assert.Contains("action", msgs[0].Content, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("JSON", msgs[0].Content, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Meeting date: 2026-03-04", msgs[0].Content); // {calendar_date} substituted
+        Assert.DoesNotContain("{calendar_date}", msgs[0].Content);
         Assert.Contains("Alice: Bob, please send the report by Friday.", msgs[1].Content);
+    }
+
+    [Fact]
+    public void BuildMessages_UsesUnknown_WhenNoMeetingDate()
+    {
+        var msgs = ActionsPrompt.BuildMessages(ActionsPrompt.DefaultTemplate, Segments, meetingDate: null);
+        Assert.Contains("Meeting date: [unknown]", msgs[0].Content);
     }
 
     [Fact]

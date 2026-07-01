@@ -109,15 +109,17 @@ public sealed class FakeActionsClient : IActionsClient
     public SummarizationRequestConfig? LastConfig { get; private set; }
     public IReadOnlyList<SegmentDto>? LastSegments { get; private set; }
     public string? LastTemplate { get; private set; }
+    public DateTimeOffset? LastMeetingDate { get; private set; }
 
     public Task<IReadOnlyList<ExtractedAction>> ExtractAsync(
         SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
-        CancellationToken ct = default)
+        DateTimeOffset? meetingDate, CancellationToken ct = default)
     {
         Calls++;
         LastConfig = config;
         LastSegments = segments;
         LastTemplate = template;
+        LastMeetingDate = meetingDate;
         if (ThrowOnCall is not null) throw ThrowOnCall;
         return Task.FromResult<IReadOnlyList<ExtractedAction>>(Result);
     }
