@@ -39,16 +39,12 @@ const PencilIcon = (
 const MailIcon = (
   <svg {...iconProps}><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
 );
-const UserCheckIcon = (
-  <svg {...iconProps}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><polyline points="16 11 18 13 22 9" /></svg>
-);
 const UsersIcon = (
   <svg {...iconProps}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
 );
 const PlayIcon = <svg {...iconProps}><polygon points="5 3 19 12 5 21 5 3" /></svg>;
 const PauseIcon = <svg {...iconProps}><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>;
 // Play-all = a "from the start" glyph (skip-to-start bar + triangle).
-const PlayAllIcon = <svg {...iconProps}><polygon points="7 4 18 12 7 20 7 4" /><line x1="4" y1="4" x2="4" y2="20" /></svg>;
 const SelectIcon = <svg {...iconProps}><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>;
 const MergeIcon = <svg {...iconProps}><path d="M6 3v6a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3" /><line x1="12" y1="15" x2="12" y2="21" /></svg>;
 const TrashIcon = <svg {...iconProps}><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>;
@@ -184,6 +180,14 @@ export default function RecordingDetail() {
   const speakerCounts = useMemo(() => {
     const m = new Map<string, number>();
     rec?.current?.segments.forEach((s) => m.set(s.speaker, (m.get(s.speaker) ?? 0) + 1));
+    return m;
+  }, [rec]);
+
+  // Total spoken time (ms) per speaker, summed from their segments — shown next to the segment count.
+  const speakerDurations = useMemo(() => {
+    const m = new Map<string, number>();
+    rec?.current?.segments.forEach((s) =>
+      m.set(s.speaker, (m.get(s.speaker) ?? 0) + Math.max(0, s.endMs - s.startMs)));
     return m;
   }, [rec]);
 
@@ -759,7 +763,6 @@ export default function RecordingDetail() {
             onCopyLink={copyLink}
             onRetranscribe={() => setRetranscribeOpen(true)}
             onMove={() => setMoving(true)}
-            onExtractActions={extractActions}
             onEmailTranscript={emailTranscript}
             onDownloadTranscript={() => setDownloading(true)}
             hasTranscript={hasTranscript}
@@ -869,16 +872,17 @@ export default function RecordingDetail() {
         </CollapsibleSection>
       )}
 
-      {/* Shown by exception — only once the user has run "Extract actions" for this recording. */}
-      {rec.actionsExtracted && (
-        <ActionsPanel
-          actions={rec.actions}
-          onAdd={addAction}
-          onUpdate={updateAction}
-          onToggleComplete={toggleActionComplete}
-          onDelete={removeAction}
-        />
-      )}
+      {/* Always shown (collapsed) so actions can be (re)extracted or added on any recording. The refresh
+          button in its header runs extraction. */}
+      <ActionsPanel
+        actions={rec.actions}
+        onExtract={extractActions}
+        extractDisabled={!hasTranscript}
+        onAdd={addAction}
+        onUpdate={updateAction}
+        onToggleComplete={toggleActionComplete}
+        onDelete={removeAction}
+      />
 
       {labels.length > 0 && (
         // Default collapsed when every speaker is already assigned (nothing left to label).
@@ -889,7 +893,7 @@ export default function RecordingDetail() {
             <>
               <ToolbarButton
                 label={t("workspace:reidentifyAction")}
-                icon={UserCheckIcon}
+                icon={RefreshIcon}
                 disabled={!rec.hasAudio || !hasTranscript}
                 onClick={reidentify}
               />
@@ -915,6 +919,7 @@ export default function RecordingDetail() {
                       : rec.speakerNames[label] ?? info?.displayName ?? label
                   }
                   count={speakerCounts.get(label) ?? 0}
+                  durationMs={speakerDurations.get(label) ?? 0}
                   profiles={profiles}
                   canPlay={rec.hasAudio}
                   playing={playingSpeaker === label}
@@ -967,7 +972,6 @@ export default function RecordingDetail() {
                   <span className="font-mono text-[10px] tabular-nums text-gray-400 dark:text-gray-500">{fmt(audioCur * 1000)}</span>
                 </div>
               )}
-              <ToolbarButton label={t("workspace:playAll")} icon={PlayAllIcon} onClick={() => playFrom(0)} disabled={!rec.hasAudio} />
               <ToolbarButton
                 label={t("workspace:playSelected")}
                 icon={PlayIcon}
@@ -1351,6 +1355,7 @@ export function SpeakerRow({
   info,
   initial,
   count,
+  durationMs,
   profiles,
   canPlay,
   playing,
@@ -1366,6 +1371,7 @@ export function SpeakerRow({
   info: SpeakerInfo | undefined;
   initial: string;
   count: number;
+  durationMs: number;
   profiles: SpeakerProfile[];
   canPlay: boolean;
   playing: boolean;
@@ -1405,8 +1411,8 @@ export function SpeakerRow({
         onCreate={onCreate}
         onMulti={onMulti}
       />
-      <span className="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
-        {t("speakerSegmentCount", { count })}
+      <span className="w-40 shrink-0 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
+        {t("speakerSegmentCount", { count })} · {formatDuration(durationMs)}
       </span>
       <div className="flex items-center gap-0.5">
         {canPlay && (

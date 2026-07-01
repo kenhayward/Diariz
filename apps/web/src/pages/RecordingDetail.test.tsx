@@ -271,23 +271,24 @@ describe("RecordingDetail", () => {
     expect(await screen.findByText(/emailed to your account/i)).toBeTruthy();
   });
 
-  it("extracts actions via the toolbar and shows the actions panel", async () => {
+  it("extracts actions via the Actions panel refresh button and lists them", async () => {
     (api.extractActions as ReturnType<typeof vi.fn>).mockResolvedValue([
       { id: "act-1", text: "Send the report", actor: "Bob", deadline: "Friday", ordinal: 0 },
     ]);
     renderPage(base);
     await screen.findByText("Hi");
 
-    // After extraction the page refetches; the recording now reports actionsExtracted = true with the action.
+    // After extraction the page refetches; the recording now reports the extracted action.
     (api.getRecording as ReturnType<typeof vi.fn>).mockResolvedValue({
       ...base,
       actionsExtracted: true,
       actions: [{ id: "act-1", text: "Send the report", actor: "Bob", deadline: "Friday", ordinal: 0 }],
     });
-    fireEvent.click(screen.getByRole("button", { name: "Extract actions" }));
+    fireEvent.click(screen.getByRole("button", { name: /extract action items/i }));
 
     await waitFor(() => expect(api.extractActions).toHaveBeenCalledWith("rec-123"));
-    expect(await screen.findByRole("heading", { name: /actions/i })).toBeTruthy();
+    // The panel is collapsed by default — expand it to see the extracted row.
+    fireEvent.click(await screen.findByRole("button", { name: /expand actions section/i }));
     expect((await screen.findByLabelText("Action 1") as HTMLInputElement).value).toBe("Send the report");
   });
 
@@ -297,7 +298,7 @@ describe("RecordingDetail", () => {
     renderPage(base);
     await screen.findByText("Hi");
 
-    fireEvent.click(screen.getByRole("button", { name: "Extract actions" }));
+    fireEvent.click(screen.getByRole("button", { name: /extract action items/i }));
     expect(await screen.findByText(/extracting actions from the transcript/i)).toBeTruthy();
 
     resolve([]); // finish the extraction → banner clears
@@ -338,7 +339,7 @@ describe("RecordingDetail", () => {
     );
 
     await screen.findByText("Hi");
-    fireEvent.click(screen.getByRole("button", { name: "Extract actions" }));
+    fireEvent.click(screen.getByRole("button", { name: /extract action items/i }));
     expect(await screen.findByText(/extracted 1 action/i)).toBeTruthy();
 
     // Navigate to a different recording — the transient banner must not carry over.
@@ -347,10 +348,13 @@ describe("RecordingDetail", () => {
     expect(screen.queryByText(/extracted 1 action/i)).toBeNull();
   });
 
-  it("does not show the actions panel until extraction has run", async () => {
+  it("always shows the Actions panel (collapsed) with an extract button, even before extraction", async () => {
     renderPage(base);
     await screen.findByText("Hi");
-    expect(screen.queryByRole("heading", { name: /^actions$/i })).toBeNull();
+    // The panel header + its extract button are present; the body (Add action) stays hidden until expanded.
+    expect(screen.getByRole("heading", { name: /^actions$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /extract action items/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /add action/i })).toBeNull();
   });
 
   it("selects a segment and edits it from the toolbar, saving the new text", async () => {

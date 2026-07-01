@@ -9,7 +9,6 @@ export default function DetailToolbar({
   onCopyLink,
   onRetranscribe,
   onMove,
-  onExtractActions,
   onEmailTranscript,
   onDownloadTranscript,
   hasTranscript,
@@ -19,7 +18,6 @@ export default function DetailToolbar({
   onCopyLink: () => void;
   onRetranscribe: () => void;
   onMove: () => void;
-  onExtractActions: () => void;
   onEmailTranscript: () => void;
   onDownloadTranscript: () => void;
   hasTranscript: boolean;
@@ -33,12 +31,6 @@ export default function DetailToolbar({
       <ToolbarButton label={t("copyLink")} onClick={onCopyLink} icon={<LinkIcon />} />
       {hasAudio && <ToolbarButton label={t("retranscribe")} onClick={onRetranscribe} icon={<RefreshIcon />} />}
       <ToolbarButton label={t("moveToSectionShort")} onClick={onMove} icon={<FolderIcon />} />
-      <ToolbarButton
-        label={t("extractActions")}
-        onClick={onExtractActions}
-        icon={<ChecklistIcon />}
-        disabled={!hasTranscript}
-      />
       <ToolbarButton
         label={t("emailTranscript")}
         onClick={onEmailTranscript}
@@ -76,12 +68,6 @@ const RefreshIcon = () => (
 const FolderIcon = () => (
   <svg {...iconProps}>
     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-  </svg>
-);
-const ChecklistIcon = () => (
-  <svg {...iconProps}>
-    <path d="M9 11l3 3L22 4" />
-    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
   </svg>
 );
 const MailIcon = () => (

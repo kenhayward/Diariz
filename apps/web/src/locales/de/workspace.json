@@ -182,6 +182,7 @@
   "newSubSectionPlaceholder": "Neuer Unterabschnitt in {{parent}}",
   "selectRecordingAria": "{{name}} auswählen",
   "actionsTitle": "Aktionen",
+  "extractActionsAction": "Aufgaben extrahieren",
   "noActions": "Keine Aktionen erkannt – füge unten eine hinzu.",
   "colAction": "Aktion",
   "colActor": "Verantwortlich",

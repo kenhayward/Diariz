@@ -8,7 +8,6 @@ function build(overrides: Partial<Parameters<typeof DetailToolbar>[0]> = {}) {
     onCopyLink: vi.fn(),
     onRetranscribe: vi.fn(),
     onMove: vi.fn(),
-    onExtractActions: vi.fn(),
     onEmailTranscript: vi.fn(),
     onDownloadTranscript: vi.fn(),
     hasTranscript: true,
@@ -24,7 +23,6 @@ const NAMES = [
   "Copy link",
   "Re-transcribe",
   "Move to section",
-  "Extract actions",
   "Email me the transcript",
   "Download transcript",
 ];
@@ -46,21 +44,18 @@ describe("DetailToolbar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy link" }));
     fireEvent.click(screen.getByRole("button", { name: "Re-transcribe" }));
     fireEvent.click(screen.getByRole("button", { name: "Move to section" }));
-    fireEvent.click(screen.getByRole("button", { name: "Extract actions" }));
     fireEvent.click(screen.getByRole("button", { name: "Email me the transcript" }));
     fireEvent.click(screen.getByRole("button", { name: "Download transcript" }));
     expect(p.onRename).toHaveBeenCalledTimes(1);
     expect(p.onCopyLink).toHaveBeenCalledTimes(1);
     expect(p.onRetranscribe).toHaveBeenCalledTimes(1);
     expect(p.onMove).toHaveBeenCalledTimes(1);
-    expect(p.onExtractActions).toHaveBeenCalledTimes(1);
     expect(p.onEmailTranscript).toHaveBeenCalledTimes(1);
     expect(p.onDownloadTranscript).toHaveBeenCalledTimes(1);
   });
 
   it("disables the transcript-dependent buttons when there is no transcript", () => {
     build({ hasTranscript: false });
-    expect((screen.getByRole("button", { name: "Extract actions" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Email me the transcript" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Download transcript" }) as HTMLButtonElement).disabled).toBe(true);
     // Rename / Re-transcribe / Move don't depend on a transcript.

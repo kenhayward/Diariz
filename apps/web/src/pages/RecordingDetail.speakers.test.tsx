@@ -19,6 +19,7 @@ function row(
     onPrev: () => void;
     onNext: () => void;
     count: number;
+    durationMs: number;
     canPlay: boolean;
     playing: boolean;
   }> = {},
@@ -29,6 +30,7 @@ function row(
       info={info}
       initial={info?.displayName ?? "SPEAKER_00"}
       count={handlers.count ?? 3}
+      durationMs={handlers.durationMs ?? 0}
       profiles={profiles}
       canPlay={handlers.canPlay ?? true}
       playing={handlers.playing ?? false}
@@ -128,9 +130,10 @@ describe("SpeakerRow", () => {
     expect(screen.queryByRole("button", { name: /play .*segments/i })).toBeNull();
   });
 
-  it("shows the speaker's segment count", () => {
-    row(speaker({ displayName: "Alice" }), { count: 4 });
-    expect(screen.getByText("4 segments")).toBeTruthy();
+  it("shows the speaker's segment count and total duration", () => {
+    row(speaker({ displayName: "Alice" }), { count: 4, durationMs: 65_000 });
+    // Rendered together as "4 segments · 1:05".
+    expect(screen.getByText(/4 segments · 1:05/)).toBeTruthy();
   });
 
   it("Delete confirms then calls onDelete with the current name", () => {

@@ -13,8 +13,10 @@ const action = (over: Partial<RecordingAction> = {}): RecordingAction => ({
 });
 
 function build(actions: RecordingAction[]) {
-  const handlers = { onAdd: vi.fn(), onUpdate: vi.fn(), onDelete: vi.fn() };
-  render(<ActionsPanel actions={actions} {...handlers} />);
+  const handlers = { onAdd: vi.fn(), onUpdate: vi.fn(), onDelete: vi.fn(), onToggleComplete: vi.fn(), onExtract: vi.fn() };
+  render(<ActionsPanel actions={actions} extractDisabled={false} {...handlers} />);
+  // The panel starts collapsed — expand it so the table / Add button are visible for assertions.
+  fireEvent.click(screen.getByRole("button", { name: /expand actions section/i }));
   return handlers;
 }
 
@@ -79,5 +81,11 @@ describe("ActionsPanel", () => {
     expect(screen.getByText(/no actions identified/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /add action/i }));
     expect(h.onAdd).toHaveBeenCalled();
+  });
+
+  it("runs extraction via the header refresh button", () => {
+    const h = build([action()]);
+    fireEvent.click(screen.getByRole("button", { name: /extract action items/i }));
+    expect(h.onExtract).toHaveBeenCalledTimes(1);
   });
 });
