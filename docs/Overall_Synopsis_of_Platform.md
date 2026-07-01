@@ -221,8 +221,9 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   `who_attended`, `speaker_talk_time`, `get_segment_context`) read existing relational data directly. A single
   **write** tool, `send_email` (`SendEmailTool`), lets the assistant email the user a composed subject+body — it
   **always** sends to the owner's registered `ApplicationUser.Email` (no recipient parameter; any address in the
-  args is ignored) via `IEmailSender`, and is **off by default** (in the default `Chat:DisabledTools`) since it
-  is the only side-effecting tool. The chat **system prompt** also now names the current user (`FullName` +
+  args is ignored) via `IEmailSender`. It is on by default like the read tools (safe because it can only ever
+  reach the user's own address); a user/operator can disable it in Settings / `Chat:DisabledTools`. The chat
+  **system prompt** also now names the current user (`FullName` +
   `Email`, via `ChatContextBuilder`) so the model knows who it is helping and writes emails as being from them.
   Each read tool's result embeds an in-app **markdown deep-link** (`/recordings/{id}?t={ms}`); the model cites it, and the web
   intercepts the click to open the transcript and **scroll/highlight the segment** at that moment

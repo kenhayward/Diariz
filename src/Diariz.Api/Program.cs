@@ -185,7 +185,8 @@ builder.Services.AddScoped<IChatTool, GetRecordingSummaryTool>();
 builder.Services.AddScoped<IChatTool, WhoAttendedTool>();
 builder.Services.AddScoped<IChatTool, SpeakerTalkTimeTool>();
 builder.Services.AddScoped<IChatTool, GetSegmentContextTool>();
-// A write tool (sends the user an email) — off by default (see ChatOptions.DisabledTools); users opt in.
+// A write tool (emails the signed-in user their own address). On by default like the others; a user or
+// operator can turn it off in Settings / Chat:DisabledTools.
 builder.Services.AddScoped<IChatTool, SendEmailTool>();
 builder.Services.AddScoped<IChatToolRegistry, ChatToolRegistry>();
 builder.Services.AddScoped<IChatToolSettingsResolver, ChatToolSettingsResolver>();

@@ -9,8 +9,9 @@ namespace Diariz.Api.Tools;
 /// Tool: compose and send an email to the signed-in user's OWN registered account address. The recipient is
 /// always the current user's registration email — there is deliberately no recipient parameter, and any
 /// address the model might invent is ignored — so the assistant can never email a third party. The body is
-/// authored by the model (plain text or Markdown) and rendered to HTML. Unlike the other (read-only) tools,
-/// this one has a side effect, so it is <b>off by default</b> and the user opts in under Settings → AI.
+/// authored by the model (plain text or Markdown) and rendered to HTML. It has a side effect (unlike the other,
+/// read-only tools) but is safe to leave on by default since it can only ever reach the user's own address; a
+/// user or operator can still disable it in Settings / <c>Chat:DisabledTools</c>.
 /// </summary>
 public sealed class SendEmailTool : IChatTool
 {
