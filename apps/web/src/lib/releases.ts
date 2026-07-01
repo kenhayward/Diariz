@@ -10,7 +10,8 @@ export const LICENSE = "Apache-2.0";
 /// Short summary of what the app does today, shown in the About box (markdown). Update this whenever
 /// the app's scope changes.
 export const CAPABILITIES = `
-Diariz records audio — from your microphone, or Windows system/loopback audio via the desktop app
+Diariz records audio — from your microphone (**choose a specific input and tune capture**), or Windows
+system/loopback audio via the desktop app
 (which can also **start and stop recording straight from its system-tray menu**) — or you can **upload
 an existing audio file** (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A), and it transcribes it server-side with
 **WhisperX** (word-level timestamps) and **pyannote** speaker
@@ -67,6 +68,25 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.49.0",
+    date: "2026-07-01",
+    pr: 102,
+    headline: "Choose a specific microphone and tune capture",
+    summary:
+      "The recorder's source dropdown now lists **Microphone (default)**, then each **specific microphone** " +
+      "connected to your machine, with **System audio** at the bottom — so you can capture from a particular " +
+      "headset or interface instead of just the OS default. Your choice is **remembered** between sessions, and " +
+      "the list refreshes live when you plug or unplug a device. A new **⚙ audio-settings** popover next to the " +
+      "dropdown lets you tune microphone capture: **echo cancellation**, **noise suppression**, **auto gain**, and " +
+      "**mono** (all on by default, matching previous behaviour). Device labels appear once you grant microphone " +
+      "access (there's an **Allow microphone to list devices…** prompt, or just record once). Desktop tray recording " +
+      "honours whichever microphone you've selected.",
+    added: [
+      "Pick a specific microphone from the recorder's source dropdown (Microphone (default) → each device → System audio); the choice is remembered and the list refreshes on hot-plug.",
+      "An audio-settings (⚙) popover to toggle echo cancellation, noise suppression, auto gain, and mono for microphone capture.",
+    ],
+  },
   {
     version: "0.48.0",
     date: "2026-06-30",

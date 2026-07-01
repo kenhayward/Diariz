@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 
 // A JWT-shaped token whose payload decodes to { sub: "u1" } (used for the per-user pending key).
@@ -14,6 +14,9 @@ vi.mock("../lib/audioSource", () => ({
   getStream: vi.fn(),
   isElectron: false,
   describeAudioError: () => "audio error",
+  listInputDevices: vi.fn().mockResolvedValue({ devices: [], hasLabels: false }),
+  micPermissionState: vi.fn().mockResolvedValue("granted"),
+  unlockDeviceLabels: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../lib/pendingRecording", () => ({
   savePendingRecording: vi.fn().mockResolvedValue(undefined),
@@ -22,8 +25,29 @@ vi.mock("../lib/pendingRecording", () => ({
 }));
 
 import { api } from "../lib/api";
+import { getStream, listInputDevices } from "../lib/audioSource";
 import { loadPendingRecording, clearPendingRecording } from "../lib/pendingRecording";
 import Recorder from "./Recorder";
+
+// jsdom has no MediaRecorder; a minimal stub lets start() run without capturing real audio.
+class FakeMediaRecorder {
+  ondataavailable: ((e: unknown) => void) | null = null;
+  onstop: (() => void) | null = null;
+  state = "inactive";
+  constructor(
+    public stream: unknown,
+    public opts: unknown,
+  ) {}
+  start() {
+    this.state = "recording";
+  }
+  stop() {
+    this.state = "inactive";
+    this.onstop?.();
+  }
+}
+(globalThis as unknown as { MediaRecorder: unknown }).MediaRecorder = FakeMediaRecorder;
+const fakeStream = { getTracks: () => [], getAudioTracks: () => [], getVideoTracks: () => [] };
 
 const pending = {
   userId: "u1",
@@ -35,7 +59,10 @@ const pending = {
 };
 
 describe("Recorder recovery", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
 
   it("offers an unsaved recording and uploads it on demand", async () => {
     (loadPendingRecording as Mock).mockResolvedValue(pending);
@@ -72,5 +99,93 @@ describe("Recorder recovery", () => {
     render(<Recorder onUploaded={() => {}} />);
     await screen.findByRole("button", { name: /record/i });
     expect(screen.queryByRole("button", { name: /upload now/i })).toBeNull();
+  });
+});
+
+describe("Recorder source selection", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: false });
+  });
+
+  it("lists Microphone (default), then specific mics, then System audio last", async () => {
+    (listInputDevices as Mock).mockResolvedValue({
+      devices: [
+        { deviceId: "aaa", label: "Built-in Mic" },
+        { deviceId: "bbb", label: "USB Headset" },
+      ],
+      hasLabels: true,
+    });
+    render(<Recorder onUploaded={() => {}} />);
+
+    await screen.findByRole("option", { name: "USB Headset" });
+    const select = screen.getByRole("combobox");
+    expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "Microphone (default)",
+      "Built-in Mic",
+      "USB Headset",
+      "System audio (desktop only)",
+    ]);
+  });
+
+  it("records the chosen specific mic with the current capture constraints", async () => {
+    (listInputDevices as Mock).mockResolvedValue({
+      devices: [{ deviceId: "bbb", label: "USB Headset" }],
+      hasLabels: true,
+    });
+    (getStream as Mock).mockResolvedValue(fakeStream);
+    render(<Recorder onUploaded={() => {}} />);
+
+    fireEvent.change(await screen.findByRole("combobox"), { target: { value: "dev:bbb" } });
+    fireEvent.click(screen.getByRole("button", { name: /record/i }));
+
+    await waitFor(() =>
+      expect(getStream).toHaveBeenCalledWith(
+        { kind: "device", deviceId: "bbb", label: "USB Headset" },
+        { echoCancellation: true, noiseSuppression: true, autoGainControl: true, mono: true },
+      ),
+    );
+  });
+
+  it("restores a persisted specific-mic choice on mount", async () => {
+    localStorage.setItem(
+      "diariz.recorder.source",
+      JSON.stringify({ token: "dev:bbb", label: "USB Headset" }),
+    );
+    (listInputDevices as Mock).mockResolvedValue({
+      devices: [{ deviceId: "bbb", label: "USB Headset" }],
+      hasLabels: true,
+    });
+    render(<Recorder onUploaded={() => {}} />);
+
+    const select = (await screen.findByRole("combobox")) as HTMLSelectElement;
+    await waitFor(() => expect(select.value).toBe("dev:bbb"));
+  });
+
+  it("feeds cog constraint changes into capture", async () => {
+    (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
+    (getStream as Mock).mockResolvedValue(fakeStream);
+    render(<Recorder onUploaded={() => {}} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /audio settings/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /noise suppression/i }));
+    fireEvent.click(screen.getByRole("button", { name: /record/i }));
+
+    await waitFor(() =>
+      expect(getStream).toHaveBeenCalledWith(
+        { kind: "default" },
+        expect.objectContaining({ noiseSuppression: false }),
+      ),
+    );
+  });
+
+  it("disables the audio-settings cog when System audio is selected", async () => {
+    (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
+    render(<Recorder onUploaded={() => {}} />);
+
+    fireEvent.change(await screen.findByRole("combobox"), { target: { value: "system" } });
+    const cog = screen.getByRole("button", { name: /audio settings/i }) as HTMLButtonElement;
+    expect(cog.disabled).toBe(true);
   });
 });
