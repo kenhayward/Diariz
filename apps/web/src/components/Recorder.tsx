@@ -67,6 +67,9 @@ export default function Recorder({
   const [hasLabels, setHasLabels] = useState(false);
   const [constraints, setConstraints] = useState<AudioConstraints>(DEFAULT_CONSTRAINTS);
   const [cogOpen, setCogOpen] = useState(false);
+  // True once we've asked the browser for mic access to reveal device labels (on first picker focus).
+  // Used to show the "no microphone detected" hint only after an attempt that came back empty.
+  const [labelsTried, setLabelsTried] = useState(false);
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -190,13 +193,18 @@ export default function Recorder({
     });
   }
 
-  async function allowMicLabels() {
-    setError(null);
+  // When the user opens the source picker and we don't yet have device labels, ask the browser for mic
+  // access once — this is the natural permission prompt (no bespoke "Allow…" link needed). On success we
+  // re-enumerate so specific mics appear; on failure the "no microphone" hint explains it. We deliberately
+  // don't raise a red capture error just from focusing the picker.
+  async function ensureDeviceLabels() {
+    if (hasLabels || labelsTried) return;
+    setLabelsTried(true);
     try {
       await unlockDeviceLabels();
       await refreshDevices();
-    } catch (e) {
-      setError(describeAudioError(e, "mic", isElectron));
+    } catch {
+      /* denied or no device — the empty-state hint covers it */
     }
   }
 
@@ -341,6 +349,7 @@ export default function Recorder({
         <select
           value={formatSourceToken(selection)}
           onChange={onSelectSource}
+          onFocus={ensureDeviceLabels}
           disabled={recording}
           aria-label={t("sourceMicrophone")}
           className="rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
@@ -407,16 +416,6 @@ export default function Recorder({
           )}
         </div>
 
-        {!hasLabels && !recording && (
-          <button
-            type="button"
-            onClick={allowMicLabels}
-            className="text-xs text-blue-600 underline hover:text-blue-700 dark:text-blue-400"
-          >
-            {t("allowMicToList")}
-          </button>
-        )}
-
         {recording ? (
           <button onClick={stop} className="rounded bg-red-600 px-3 py-1.5 text-sm text-white">
             {t("recStop")}
@@ -477,6 +476,9 @@ export default function Recorder({
         </div>
       )}
       {error && !compact && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {labelsTried && !hasLabels && !recording && !error && (
+        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{t("noMicHint")}</p>
+      )}
     </div>
   );
 }

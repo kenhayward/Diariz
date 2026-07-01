@@ -25,7 +25,7 @@ vi.mock("../lib/pendingRecording", () => ({
 }));
 
 import { api } from "../lib/api";
-import { getStream, listInputDevices, micPermissionState } from "../lib/audioSource";
+import { getStream, listInputDevices, micPermissionState, unlockDeviceLabels } from "../lib/audioSource";
 import { loadPendingRecording, clearPendingRecording } from "../lib/pendingRecording";
 import Recorder from "./Recorder";
 
@@ -223,5 +223,36 @@ describe("Recorder source selection", () => {
     render(<Recorder onUploaded={() => {}} />);
 
     expect(await screen.findByRole("option", { name: "USB Headset" })).toBeTruthy();
+  });
+
+  it("requests mic access when the picker is focused and labels aren't available yet", async () => {
+    (listInputDevices as Mock)
+      .mockResolvedValueOnce({ devices: [], hasLabels: false }) // mount: no labels yet
+      .mockResolvedValue({ devices: [{ deviceId: "bbb", label: "USB Headset" }], hasLabels: true }); // after grant
+    render(<Recorder onUploaded={() => {}} />);
+
+    fireEvent.focus(await screen.findByRole("combobox"));
+
+    expect(await screen.findByRole("option", { name: "USB Headset" })).toBeTruthy();
+    expect(unlockDeviceLabels).toHaveBeenCalled();
+  });
+
+  it("shows a no-microphone hint when focusing the picker but access can't be granted", async () => {
+    (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: false });
+    (unlockDeviceLabels as Mock).mockRejectedValue(
+      Object.assign(new Error("x"), { name: "NotFoundError" }),
+    );
+    render(<Recorder onUploaded={() => {}} />);
+
+    fireEvent.focus(await screen.findByRole("combobox"));
+
+    expect(await screen.findByText(/no microphone detected/i)).toBeTruthy();
+  });
+
+  it("no longer shows the bespoke 'allow microphone' link", async () => {
+    (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: false });
+    render(<Recorder onUploaded={() => {}} />);
+    await screen.findByRole("combobox");
+    expect(screen.queryByRole("button", { name: /allow microphone/i })).toBeNull();
   });
 });
