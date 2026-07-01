@@ -11,6 +11,9 @@ import CollapsibleSection from "../components/CollapsibleSection";
 import MoveToSectionModal from "../components/MoveToSectionModal";
 import DownloadTranscriptModal from "../components/DownloadTranscriptModal";
 import SummaryEditModal from "../components/SummaryEditModal";
+import MeetingMinutesEditModal from "../components/MeetingMinutesEditModal";
+import EmailMinutesModal from "../components/EmailMinutesModal";
+import { renderMarkdown } from "../lib/markdown";
 import AttachmentsModal from "../components/AttachmentsModal";
 import AttachmentsSplitButton from "../components/AttachmentsSplitButton";
 import PeopleModal from "../components/PeopleModal";
@@ -32,6 +35,9 @@ const RefreshIcon = (
 );
 const PencilIcon = (
   <svg {...iconProps}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+);
+const MailIcon = (
+  <svg {...iconProps}><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>
 );
 const UserCheckIcon = (
   <svg {...iconProps}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><polyline points="16 11 18 13 22 9" /></svg>
@@ -140,6 +146,8 @@ export default function RecordingDetail() {
   const [moving, setMoving] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [editingSummary, setEditingSummary] = useState(false);
+  const [editingMinutes, setEditingMinutes] = useState(false);
+  const [emailMinutesOpen, setEmailMinutesOpen] = useState(false);
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [editingSeg, setEditingSeg] = useState<SegmentDto | null>(null);
@@ -284,6 +292,54 @@ export default function RecordingDetail() {
       await qc.invalidateQueries({ queryKey: ["recording", id] });
     } catch (e) {
       setActionError(apiErrorMessage(e, t("workspace:errEditSummary")));
+    }
+  }
+
+  // Re-create the meeting minutes via the LLM — confirm first when the user has hand-edited them.
+  async function recreateMinutes() {
+    if (rec?.meetingMinutes?.isUserEdited && !window.confirm(t("workspace:confirmRecreateMinutes"))) return;
+    setActionError(null);
+    setActionInfo(null);
+    try {
+      await api.generateMeetingMinutes(id);
+      setActionInfo(t("workspace:generatingMinutes"));
+      await qc.invalidateQueries({ queryKey: ["recording", id] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e, t("workspace:errMinutes")));
+    }
+  }
+
+  // Save hand-edited meeting minutes (Markdown; flagged user-edited so the auto-generator won't clobber them).
+  async function saveMinutes(markdown: string) {
+    setActionError(null);
+    try {
+      await api.updateMeetingMinutes(id, markdown);
+      setEditingMinutes(false);
+      await qc.invalidateQueries({ queryKey: ["recording", id] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e, t("workspace:errMinutes")));
+    }
+  }
+
+  // Email the minutes to me. With attachments, ask whether to include them first; otherwise send directly.
+  function emailMinutes() {
+    if (attachments.length > 0) {
+      setEmailMinutesOpen(true);
+      return;
+    }
+    void sendMinutesEmail(false);
+  }
+
+  async function sendMinutesEmail(includeAttachments: boolean) {
+    setActionError(null);
+    setActionInfo(null);
+    try {
+      await api.emailMeetingMinutes(id, includeAttachments);
+      setEmailMinutesOpen(false);
+      setActionInfo(t("workspace:emailedMinutes"));
+    } catch (e) {
+      setEmailMinutesOpen(false);
+      setActionError(apiErrorMessage(e, t("workspace:errEmail")));
     }
   }
 
@@ -744,6 +800,47 @@ export default function RecordingDetail() {
       {isSummarizing && !rec.summary && (
         <p className="rounded bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">{t("workspace:summarising")}</p>
       )}
+      {rec.meetingMinutes && (
+        <CollapsibleSection
+          title={t("workspace:sectionMeetingMinutes")}
+          headerActions={
+            <>
+              <ToolbarButton
+                label={t("workspace:recreateMeetingMinutes")}
+                icon={RefreshIcon}
+                disabled={!hasTranscript || isSummarizing}
+                onClick={recreateMinutes}
+              />
+              <ToolbarButton
+                label={t("workspace:editMeetingMinutes")}
+                icon={PencilIcon}
+                disabled={!hasTranscript}
+                onClick={() => setEditingMinutes(true)}
+              />
+              <ToolbarButton
+                label={t("workspace:emailMinutes")}
+                icon={MailIcon}
+                disabled={!hasTranscript}
+                onClick={emailMinutes}
+              />
+            </>
+          }
+        >
+          {rec.meetingMinutes.isUserEdited && (
+            <p className="mb-1 text-xs italic text-gray-400 dark:text-gray-500">{t("workspace:minutesEditedHint")}</p>
+          )}
+          <div
+            className="break-words text-sm text-gray-800 dark:text-gray-200
+              [&_h1]:mb-2 [&_h1]:mt-1 [&_h1]:text-lg [&_h1]:font-bold
+              [&_h2]:mb-1 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold
+              [&_h3]:mb-1 [&_h3]:mt-2 [&_h3]:font-semibold
+              [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-1
+              [&_table]:my-2 [&_table]:border-collapse [&_th]:border [&_th]:px-2 [&_th]:py-1 [&_th]:font-semibold
+              [&_td]:border [&_td]:px-2 [&_td]:py-1 dark:[&_th]:border-gray-700 dark:[&_td]:border-gray-700"
+            dangerouslySetInnerHTML={{ __html: renderMarkdown(rec.meetingMinutes.text) }}
+          />
+        </CollapsibleSection>
+      )}
       {rec.summary && (
         <CollapsibleSection
           title={t("workspace:sectionSummary")}
@@ -975,6 +1072,22 @@ export default function RecordingDetail() {
           initial={rec.summary?.text ?? ""}
           onClose={() => setEditingSummary(false)}
           onSave={saveSummary}
+        />
+      )}
+
+      {editingMinutes && (
+        <MeetingMinutesEditModal
+          initial={rec.meetingMinutes?.text ?? ""}
+          onClose={() => setEditingMinutes(false)}
+          onSave={saveMinutes}
+        />
+      )}
+
+      {emailMinutesOpen && (
+        <EmailMinutesModal
+          count={attachments.length}
+          onCancel={() => setEmailMinutesOpen(false)}
+          onChoose={sendMinutesEmail}
         />
       )}
 

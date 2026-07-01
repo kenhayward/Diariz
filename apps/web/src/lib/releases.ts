@@ -27,7 +27,9 @@ recognises that voice in later recordings automatically (using **SpeechBrain ECA
 manual reassignment. A **People** screen manages enrolled voiceprints — rename, prune training samples,
 merge duplicates, and erase one or all (GDPR) of the stored biometric voiceprints.
 
-It can **summarise** recordings, **extract action items** (with actor and deadline) into an editable
+It can **summarise** recordings and generate a full set of **professional meeting minutes** (headings, lists,
+tables — no emojis) that you can edit in a rich editor, re-create, and **email to yourself** (with or without
+the recording's attachments). It can **extract action items** (with actor and deadline) into an editable
 table, and **track them across all your meetings** in a dedicated **Actions** view — filter by person, mark
 items done (with a completion date), and jump from an action back to the transcript it came from. It can
 **translate** a transcript (segments, summary, and actions) into your chosen language, and let you
@@ -69,6 +71,29 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.53.0",
+    date: "2026-07-01",
+    pr: 108,
+    headline: "Meeting Minutes — a formatted, emailable write-up of every recording",
+    summary:
+      "Every transcribed recording now gets a set of **professional meeting minutes** — generated as part of " +
+      "the pipeline from the transcript, with headings, lists, tables, and bold (and deliberately **no emojis**). " +
+      "The new **Meeting Minutes** section on the recording page starts expanded and has a toolbar: **Re-create** " +
+      "them, **Edit** them in a rich (WYSIWYG) editor, or **Email them to yourself**. Emailing sends only the " +
+      "minutes, and — when the recording has attachments — asks whether to include them. The minutes also ride " +
+      "along in the existing **Email transcript** action and the **Markdown / text / RTF downloads**. Minutes use " +
+      "the same LLM endpoint you already configure for summaries.",
+    added: [
+      "A Meeting Minutes section on each recording (expanded by default) with Re-create, Edit (WYSIWYG), and Email-to-me.",
+      "\"Email minutes to me\" sends only the minutes and offers to include the recording's attachments.",
+      "Meeting minutes are included in the emailed transcript and in the .md / .txt / .rtf downloads.",
+    ],
+    changed: [
+      "Minutes are generated automatically alongside the summary when an LLM endpoint is configured.",
+      "The summarise, action-extraction, and meeting-minutes instruction prompts each live in an editable server file (prompts/*.md) — administrators can tweak the wording without a rebuild.",
+    ],
+  },
   {
     version: "0.52.0",
     date: "2026-07-01",

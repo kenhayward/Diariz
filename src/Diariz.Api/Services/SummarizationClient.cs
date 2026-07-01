@@ -6,10 +6,11 @@ namespace Diariz.Api.Services;
 
 public interface ISummarizationClient
 {
-    /// <summary>Summarise the segments against the resolved (per-user) config; when
-    /// <paramref name="needName"/> is true, also asks the model for a short recording name.</summary>
+    /// <summary>Summarise the segments against the resolved (per-user) config using the given prompt
+    /// <paramref name="template"/>; when <paramref name="needName"/> is true, also asks the model for a short
+    /// recording name.</summary>
     Task<SummaryResult> SummarizeAsync(
-        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, bool needName,
+        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, bool needName, string template,
         CancellationToken ct = default);
 }
 
@@ -21,10 +22,10 @@ public class SummarizationClient : ISummarizationClient
     public SummarizationClient(HttpClient http) => _http = http;
 
     public async Task<SummaryResult> SummarizeAsync(
-        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, bool needName,
+        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, bool needName, string template,
         CancellationToken ct = default)
     {
-        var messages = SummarizationPrompt.BuildMessages(segments, needName);
+        var messages = SummarizationPrompt.BuildMessages(template, segments, needName);
         var body = new Dictionary<string, object?>
         {
             ["model"] = config.Model,

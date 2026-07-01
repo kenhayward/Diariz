@@ -109,7 +109,12 @@ public class WorkerCallbackController : ControllerBase
         await _db.SaveChangesAsync();
 
         if (autoSummarise)
+        {
             await _queue.EnqueueSummarizationAsync(new SummarizationJob(transcription.RecordingId, transcription.Id));
+            // Meeting minutes generate in parallel with the summary (same effective config gates both). The
+            // minutes job doesn't own the recording status, so it never races the summary's status transitions.
+            await _queue.EnqueueMeetingMinutesAsync(new MeetingMinutesJob(transcription.RecordingId, transcription.Id));
+        }
 
         await _hub.NotifyStatusAsync(transcription.Recording.UserId, transcription.RecordingId,
             transcription.Recording.Status.ToString());

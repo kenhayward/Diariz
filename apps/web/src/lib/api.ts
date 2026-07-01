@@ -212,6 +212,21 @@ export const api = {
     await http.put(`/api/recordings/${id}/summary`, { text });
   },
 
+  /// Re-create the meeting minutes via the LLM (overwrites a hand-edited copy; the UI warns first).
+  async generateMeetingMinutes(id: string): Promise<void> {
+    await http.post(`/api/recordings/${id}/meeting-minutes/generate`);
+  },
+
+  /// Manually edit the meeting minutes (Markdown; flags them user-edited; works without an LLM).
+  async updateMeetingMinutes(id: string, text: string): Promise<void> {
+    await http.put(`/api/recordings/${id}/meeting-minutes`, { text });
+  },
+
+  /// Email just the meeting minutes to the signed-in user, optionally attaching the recording's files.
+  async emailMeetingMinutes(id: string, includeAttachments: boolean): Promise<void> {
+    await http.post(`/api/recordings/${id}/meeting-minutes/email`, { includeAttachments });
+  },
+
   // ---- Attachments (supporting documents) ----
   async listAttachments(id: string): Promise<Attachment[]> {
     const { data } = await http.get<Attachment[]>(`/api/recordings/${id}/attachments`);

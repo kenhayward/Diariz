@@ -16,6 +16,9 @@ vi.mock("../lib/api", () => ({
     renameRecording: vi.fn(),
     deleteRecording: vi.fn(),
     summarize: vi.fn(),
+    generateMeetingMinutes: vi.fn(),
+    updateMeetingMinutes: vi.fn(),
+    emailMeetingMinutes: vi.fn(),
     audioUrl: vi.fn(),
     downloadTranscript: vi.fn(),
     downloadAudio: vi.fn(),
@@ -67,10 +70,13 @@ const base: RecordingDetailType = {
     segments: [{ id: "seg-1", speaker: "SPEAKER_00", speakerDisplay: "Alice", startMs: 0, endMs: 1000, text: "Hi" }],
   },
   summary: null,
+  meetingMinutes: null,
   actions: [],
   actionsExtracted: false,
   hasAudio: true,
-};
+} as unknown as RecordingDetailType;
+
+const minutes = { model: "gpt", text: "## Overview\n\nWe met and agreed.", createdAt: base.createdAt, isUserEdited: false };
 
 function renderPage(rec: RecordingDetailType) {
   (api.getRecording as ReturnType<typeof vi.fn>).mockResolvedValue(rec);
@@ -94,6 +100,41 @@ describe("RecordingDetail", () => {
     (api.summarize as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.audioUrl as ReturnType<typeof vi.fn>).mockResolvedValue("blob:audio");
     (api.listSpeakerProfiles as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (api.listAttachments as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (api.generateMeetingMinutes as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (api.emailMeetingMinutes as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+  });
+
+  it("renders the meeting minutes (expanded) and Re-create calls the API", async () => {
+    renderPage({ ...base, meetingMinutes: minutes });
+    // Expanded by default: the rendered Markdown body is visible without expanding.
+    expect(await screen.findByText("We met and agreed.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /re-create minutes/i }));
+    await waitFor(() => expect(api.generateMeetingMinutes).toHaveBeenCalledWith("rec-123"));
+  });
+
+  it("Email minutes with no attachments emails directly", async () => {
+    renderPage({ ...base, meetingMinutes: minutes });
+    await screen.findByText("We met and agreed.");
+
+    fireEvent.click(screen.getByRole("button", { name: /email minutes to me/i }));
+    await waitFor(() => expect(api.emailMeetingMinutes).toHaveBeenCalledWith("rec-123", false));
+  });
+
+  it("Email minutes with attachments prompts to include them", async () => {
+    (api.listAttachments as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "a1", kind: "File", name: "doc.pdf", contentType: "application/pdf", sizeBytes: 8, url: null, ordinal: 0 },
+    ]);
+    renderPage({ ...base, meetingMinutes: minutes });
+    await screen.findByText("We met and agreed.");
+
+    fireEvent.click(screen.getByRole("button", { name: /email minutes to me/i }));
+    // Directly emailing must NOT have happened — the include-attachments prompt appears first.
+    expect(api.emailMeetingMinutes).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole("button", { name: /include attachments/i }));
+
+    await waitFor(() => expect(api.emailMeetingMinutes).toHaveBeenCalledWith("rec-123", true));
   });
 
   it("re-transcribe (kebab) opens a modal and re-transcribes on confirm", async () => {

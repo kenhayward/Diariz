@@ -62,6 +62,22 @@ public class SummarizationOptions
     public bool Enabled => !string.IsNullOrWhiteSpace(ApiBase);
 }
 
+/// <summary>Meeting-minutes generation. The LLM endpoint/model/key/reasoning are shared with summarisation
+/// (resolved per-user via <c>ISummarizationSettingsResolver</c>); only the stream and transcript budget are
+/// minutes-specific (minutes cover more of the conversation than a short summary).</summary>
+public class MeetingMinutesOptions
+{
+    public const string Section = "MeetingMinutes";
+
+    /// <summary>Upper bound on transcript characters sent to the model. Larger than the summary budget —
+    /// minutes need more of the conversation to be accurate.</summary>
+    public int TranscriptCharBudget { get; set; } = 16000;
+
+    public string StreamKey { get; set; } = "meeting-minutes-jobs";
+    public string ConsumerGroup { get; set; } = "minute-takers";
+    public string ConsumerName { get; set; } = "api-1";
+}
+
 /// <summary>Chat-specific settings. The LLM endpoint/model/key are shared with summarisation
 /// (per-user, via <c>UserSettings</c>); only the context-window size is chat-specific.</summary>
 public class ChatOptions

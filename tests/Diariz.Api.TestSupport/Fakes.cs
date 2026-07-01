@@ -64,14 +64,37 @@ public sealed class FakeSummarizationClient : ISummarizationClient
     public int Calls { get; private set; }
     public bool LastNeedName { get; private set; }
     public SummarizationRequestConfig? LastConfig { get; private set; }
+    public string? LastTemplate { get; private set; }
 
     public Task<SummaryResult> SummarizeAsync(
-        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, bool needName,
+        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, bool needName, string template,
         CancellationToken ct = default)
     {
         Calls++;
         LastNeedName = needName;
         LastConfig = config;
+        LastTemplate = template;
+        if (ThrowOnCall is not null) throw ThrowOnCall;
+        return Task.FromResult(Result);
+    }
+}
+
+/// <summary>Stub <see cref="IMeetingMinutesClient"/> — returns canned Markdown or throws, and records the
+/// arguments it was called with.</summary>
+public sealed class FakeMeetingMinutesClient : IMeetingMinutesClient
+{
+    public string Result { get; set; } = "# Meeting\n\nMinutes body.";
+    public Exception? ThrowOnCall { get; set; }
+    public int Calls { get; private set; }
+    public SummarizationRequestConfig? LastConfig { get; private set; }
+    public IReadOnlyList<ChatMessage>? LastMessages { get; private set; }
+
+    public Task<string> GenerateAsync(
+        SummarizationRequestConfig config, IReadOnlyList<ChatMessage> messages, CancellationToken ct = default)
+    {
+        Calls++;
+        LastConfig = config;
+        LastMessages = messages;
         if (ThrowOnCall is not null) throw ThrowOnCall;
         return Task.FromResult(Result);
     }
@@ -85,13 +108,18 @@ public sealed class FakeActionsClient : IActionsClient
     public int Calls { get; private set; }
     public SummarizationRequestConfig? LastConfig { get; private set; }
     public IReadOnlyList<SegmentDto>? LastSegments { get; private set; }
+    public string? LastTemplate { get; private set; }
+    public DateTimeOffset? LastMeetingDate { get; private set; }
 
     public Task<IReadOnlyList<ExtractedAction>> ExtractAsync(
-        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, CancellationToken ct = default)
+        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
+        DateTimeOffset? meetingDate, CancellationToken ct = default)
     {
         Calls++;
         LastConfig = config;
         LastSegments = segments;
+        LastTemplate = template;
+        LastMeetingDate = meetingDate;
         if (ThrowOnCall is not null) throw ThrowOnCall;
         return Task.FromResult<IReadOnlyList<ExtractedAction>>(Result);
     }
@@ -129,10 +157,14 @@ public sealed class FakeEmailSender : IEmailSender
 {
     public bool Sent { get; set; } = true;
     public List<(string To, string Subject, string Body)> Messages { get; } = new();
+    /// <summary>Attachments passed on the most recent send (empty when none).</summary>
+    public List<EmailAttachment> LastAttachments { get; private set; } = new();
 
-    public Task<bool> SendAsync(string to, string subject, string htmlBody, CancellationToken ct = default)
+    public Task<bool> SendAsync(string to, string subject, string htmlBody,
+        IEnumerable<EmailAttachment>? attachments = null, CancellationToken ct = default)
     {
         Messages.Add((to, subject, htmlBody));
+        LastAttachments = attachments?.ToList() ?? new();
         return Task.FromResult(Sent);
     }
 }
@@ -266,6 +298,7 @@ public sealed class FakeJobQueue : IJobQueue
 {
     public List<TranscriptionJob> Enqueued { get; } = new();
     public List<SummarizationJob> SummarizationEnqueued { get; } = new();
+    public List<MeetingMinutesJob> MeetingMinutesEnqueued { get; } = new();
     public List<AudioMergeJob> AudioMergeEnqueued { get; } = new();
 
     public Task EnqueueAsync(TranscriptionJob job, CancellationToken ct = default)
@@ -277,6 +310,12 @@ public sealed class FakeJobQueue : IJobQueue
     public Task EnqueueSummarizationAsync(SummarizationJob job, CancellationToken ct = default)
     {
         SummarizationEnqueued.Add(job);
+        return Task.CompletedTask;
+    }
+
+    public Task EnqueueMeetingMinutesAsync(MeetingMinutesJob job, CancellationToken ct = default)
+    {
+        MeetingMinutesEnqueued.Add(job);
         return Task.CompletedTask;
     }
 

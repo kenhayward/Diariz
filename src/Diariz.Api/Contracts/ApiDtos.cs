@@ -79,6 +79,16 @@ public record SummaryDto(string Model, string Text, DateTimeOffset CreatedAt, bo
 /// <summary>Manually create or edit a transcript's summary (the current transcription version).</summary>
 public record UpdateSummaryRequest(string Text);
 
+/// <summary>LLM-generated (or hand-edited) meeting minutes for the current transcription — GitHub-flavoured
+/// Markdown.</summary>
+public record MeetingMinutesDto(string Model, string Text, DateTimeOffset CreatedAt, bool IsUserEdited = false);
+
+/// <summary>Manually create or edit the current transcript's meeting minutes (Markdown).</summary>
+public record UpdateMeetingMinutesRequest(string Text);
+
+/// <summary>Email the meeting minutes to the signed-in user, optionally attaching the recording's files.</summary>
+public record EmailMeetingMinutesRequest(bool IncludeAttachments = false);
+
 public record TranscriptionDto(
     Guid Id,
     string Model,
@@ -104,6 +114,7 @@ public record RecordingDetailDto(
     IReadOnlyList<SpeakerInfoDto> Speakers,
     TranscriptionDto? Current,
     SummaryDto? Summary,
+    MeetingMinutesDto? MeetingMinutes,
     IReadOnlyList<RecordingActionDto> Actions,
     bool ActionsExtracted,
     bool HasAudio);

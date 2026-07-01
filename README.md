@@ -34,7 +34,11 @@ translate, or delete** just the selection, while **Play all** and **Merge** alwa
 that voice automatically in later recordings (SpeechBrain ECAPA voiceprints in pgvector, cosine matching),
 with manual reassignment. A **People** screen renames, prunes training samples, merges duplicates, and
 erases voiceprints (GDPR — biometric data).
-- **Summarize** recordings (with automatic naming) and **chat across one or more transcripts** — streaming
+- **Summarize** recordings (with automatic naming) and generate a full set of **professional meeting minutes**
+(Markdown: headings, lists, tables — no emojis) as part of the pipeline; edit them in a **WYSIWYG editor**,
+re-create them, or **email them to yourself** (optionally with the recording's attachments). The minutes also
+travel with the emailed transcript and the Markdown/text/RTF downloads.
+- **Chat across one or more transcripts** — streaming
 replies, a context-usage dial, PDF/text attachments, and saved conversations — via a per-user (or
 server-default) OpenAI-compatible LLM endpoint, with the API key encrypted at rest.
 - **Chat tools** (opt-in, per-user): the assistant can call **built-in tools** that search your **whole

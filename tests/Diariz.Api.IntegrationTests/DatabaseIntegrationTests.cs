@@ -67,6 +67,39 @@ public class DatabaseIntegrationTests(ContainersFixture fx)
     }
 
     [Fact]
+    public async Task MeetingMinutes_RoundTrip_UniqueIndex_AndCascadeOnTranscriptionDelete()
+    {
+        var user = await SeedUser();
+        var recId = Guid.NewGuid();
+        var trId = Guid.NewGuid();
+
+        await using (var db = fx.CreateDbContext())
+        {
+            db.Recordings.Add(new Recording { Id = recId, UserId = user.Id, BlobKey = "k" });
+            db.Transcriptions.Add(new Transcription { Id = trId, RecordingId = recId, Model = "m", Version = 1 });
+            db.MeetingMinutes.Add(new MeetingMinutes { Id = Guid.NewGuid(), TranscriptionId = trId, Model = "gpt", Text = "# Minutes" });
+            await db.SaveChangesAsync();
+        }
+
+        // A second minutes row for the same transcription violates the unique index.
+        await using (var db = fx.CreateDbContext())
+        {
+            db.MeetingMinutes.Add(new MeetingMinutes { Id = Guid.NewGuid(), TranscriptionId = trId, Model = "gpt", Text = "dup" });
+            await Assert.ThrowsAnyAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        }
+
+        // Deleting the transcription cascades the minutes row.
+        await using (var db = fx.CreateDbContext())
+        {
+            db.Transcriptions.Remove(await db.Transcriptions.SingleAsync(t => t.Id == trId));
+            await db.SaveChangesAsync();
+        }
+
+        await using var verify = fx.CreateDbContext();
+        Assert.False(await verify.MeetingMinutes.AnyAsync(m => m.TranscriptionId == trId));
+    }
+
+    [Fact]
     public async Task DeletingRecording_CascadesItsActions()
     {
         var user = await SeedUser();

@@ -20,13 +20,16 @@ public class RecordingActionsController : ControllerBase
     private readonly DiarizDbContext _db;
     private readonly IActionsClient _client;
     private readonly ISummarizationSettingsResolver _settings;
+    private readonly IPromptTemplateProvider _prompts;
 
     public RecordingActionsController(
-        DiarizDbContext db, IActionsClient client, ISummarizationSettingsResolver settings)
+        DiarizDbContext db, IActionsClient client, ISummarizationSettingsResolver settings,
+        IPromptTemplateProvider prompts)
     {
         _db = db;
         _client = client;
         _settings = settings;
+        _prompts = prompts;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -78,7 +81,8 @@ public class RecordingActionsController : ControllerBase
                 s.StartMs, s.EndMs, s.Original, s.Revised))
             .ToList();
 
-        var extracted = await _client.ExtractAsync(cfg, segs);
+        var template = _prompts.Get("extract-actions", ActionsPrompt.DefaultTemplate);
+        var extracted = await _client.ExtractAsync(cfg, segs, template, rec.CreatedAt);
 
         // Replace the whole list with the fresh extraction.
         _db.RecordingActions.RemoveRange(rec.Actions);

@@ -11,5 +11,7 @@
   "text": "Texto",
   "none": "(ninguno)",
   "sentFromDiariz": "Enviado desde Diariz",
-  "subject": "Transcripción de {name}"
+  "subject": "Transcripción de {name}",
+  "meetingMinutes": "Acta de la reunión",
+  "minutesSubject": "Acta de la reunión de {name}"
 }

@@ -15,6 +15,11 @@ public record SummarizationJob(
     Guid RecordingId,
     Guid TranscriptionId);
 
+/// <summary>Job payload for async meeting-minutes generation, consumed by the API's MeetingMinutesWorker.</summary>
+public record MeetingMinutesJob(
+    Guid RecordingId,
+    Guid TranscriptionId);
+
 /// <summary>One diarized, timestamped segment returned by the worker.</summary>
 public record SegmentResult(
     string Speaker,

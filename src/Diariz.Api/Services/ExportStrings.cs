@@ -17,7 +17,9 @@ public record ExportStrings(
     string Text,
     string None,
     string SentFromDiariz,
-    string Subject)
+    string Subject,
+    string MeetingMinutes,
+    string MinutesSubject)
 {
     /// <summary>The authoritative English labels — the default when no localizer is supplied (keeps the
     /// formatters usable on their own) and the fallback for any key a translation omits.</summary>
@@ -34,8 +36,13 @@ public record ExportStrings(
         Text: "Text",
         None: "(none)",
         SentFromDiariz: "Sent from Diariz",
-        Subject: "Transcript for {name}");
+        Subject: "Transcript for {name}",
+        MeetingMinutes: "Meeting Minutes",
+        MinutesSubject: "Meeting minutes for {name}");
 
     /// <summary>The email subject for a recording, with <c>{name}</c> substituted.</summary>
     public string SubjectFor(string name) => Subject.Replace("{name}", name);
+
+    /// <summary>The email subject for a recording's meeting minutes, with <c>{name}</c> substituted.</summary>
+    public string MinutesSubjectFor(string name) => MinutesSubject.Replace("{name}", name);
 }

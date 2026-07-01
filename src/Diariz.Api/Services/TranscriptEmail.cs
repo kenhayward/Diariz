@@ -12,7 +12,8 @@ public static class TranscriptEmail
         (strings ?? ExportStrings.English).SubjectFor(name);
 
     public static string BuildHtml(string name, string? summary, IReadOnlyList<SegmentDto> segments,
-        IReadOnlyList<RecordingActionDto>? actions = null, ExportStrings? strings = null)
+        IReadOnlyList<RecordingActionDto>? actions = null, ExportStrings? strings = null,
+        string? minutesHtml = null)
     {
         var s10n = strings ?? ExportStrings.English;
         var sb = new StringBuilder();
@@ -23,6 +24,13 @@ public static class TranscriptEmail
         sb.Append("<p><strong>").Append(Enc(s10n.Summary)).Append("</strong><br>")
           .Append(string.IsNullOrWhiteSpace(summary) ? "&mdash;" : Enc(summary!).Replace("\n", "<br>"))
           .Append("</p>");
+
+        // Meeting minutes (pre-rendered Markdown → HTML by the caller), when present.
+        if (!string.IsNullOrWhiteSpace(minutesHtml))
+        {
+            sb.Append("<p><strong>").Append(Enc(s10n.MeetingMinutes)).Append("</strong></p>");
+            sb.Append(minutesHtml);
+        }
 
         if (actions is { Count: > 0 })
         {
