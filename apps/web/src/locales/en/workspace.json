@@ -59,6 +59,7 @@
   "constraintAgc": "Auto gain",
   "constraintMono": "Mono",
   "constraintsMicOnlyHint": "Applies to microphone capture only.",
+  "close": "Close",
   "translating": "Translating…",
   "summarising": "Summarising…",
   "queuing": "Queuing…",

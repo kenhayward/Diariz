@@ -69,6 +69,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.49.1",
+    date: "2026-07-01",
+    pr: 103,
+    headline: "Microphone picker fixes: connected mics now list, and the settings popover closes",
+    summary:
+      "Two fixes to the new microphone controls. Your **connected microphones now appear in the dropdown** " +
+      "whenever the browser already has mic access (e.g. after you've recorded once) — the previous build " +
+      "gated the device list on a `navigator.permissions` query that is unreliable (it reports “prompt” in the " +
+      "desktop app and some browsers even when access is granted), so specific mics could stay hidden. " +
+      "Enumerating devices never triggers a permission pop-up, so it now always runs. Separately, the " +
+      "**⚙ audio-settings popover** now closes on an outside click or Escape and has an explicit **✕ close** " +
+      "button for discoverability.",
+    fixed: [
+      "Connected microphones now list in the recorder dropdown when mic access is already granted (device enumeration no longer gated on the unreliable permissions query).",
+      "The audio-settings (⚙) popover closes on outside-click / Escape and has a close button.",
+    ],
+  },
+  {
     version: "0.49.0",
     date: "2026-07-01",
     pr: 102,

@@ -25,7 +25,7 @@ vi.mock("../lib/pendingRecording", () => ({
 }));
 
 import { api } from "../lib/api";
-import { getStream, listInputDevices } from "../lib/audioSource";
+import { getStream, listInputDevices, micPermissionState } from "../lib/audioSource";
 import { loadPendingRecording, clearPendingRecording } from "../lib/pendingRecording";
 import Recorder from "./Recorder";
 
@@ -187,5 +187,41 @@ describe("Recorder source selection", () => {
     fireEvent.change(await screen.findByRole("combobox"), { target: { value: "system" } });
     const cog = screen.getByRole("button", { name: /audio settings/i }) as HTMLButtonElement;
     expect(cog.disabled).toBe(true);
+  });
+
+  it("closes the audio-settings popover on an outside click", async () => {
+    (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
+    render(<Recorder onUploaded={() => {}} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /audio settings/i }));
+    expect(screen.getByRole("checkbox", { name: /mono/i })).toBeTruthy();
+
+    fireEvent.mouseDown(document.body);
+    await waitFor(() => expect(screen.queryByRole("checkbox", { name: /mono/i })).toBeNull());
+  });
+
+  it("closes the audio-settings popover via its close button", async () => {
+    (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
+    render(<Recorder onUploaded={() => {}} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /audio settings/i }));
+    fireEvent.click(screen.getByRole("button", { name: /close/i }));
+    await waitFor(() => expect(screen.queryByRole("checkbox", { name: /mono/i })).toBeNull());
+  });
+
+  it("lists connected mics even when the permission query is not 'granted'", async () => {
+    // navigator.permissions.query is unreliable (returns "prompt" in Electron even when labels are
+    // available), so enumeration must not be gated on it.
+    (micPermissionState as Mock).mockResolvedValue("prompt");
+    (listInputDevices as Mock).mockResolvedValue({
+      devices: [
+        { deviceId: "aaa", label: "Built-in Mic" },
+        { deviceId: "bbb", label: "USB Headset" },
+      ],
+      hasLabels: true,
+    });
+    render(<Recorder onUploaded={() => {}} />);
+
+    expect(await screen.findByRole("option", { name: "USB Headset" })).toBeTruthy();
   });
 });
