@@ -21,6 +21,11 @@ public sealed record ChatToolEndEvent(string Name) : ChatEvent;
 /// recording in the assistant's answer even when the model didn't keep the markdown link.</summary>
 public sealed record ChatRefEvent(string Name, string Href) : ChatEvent;
 
+/// <summary>A note the model asked to save as a Markdown attachment (via the add_as_attachment tool), with the
+/// candidate recordings. The client saves it — one candidate → directly; several → the user picks.</summary>
+public sealed record ChatAttachmentDraftEvent(
+    string Name, string Content, IReadOnlyList<Tools.DraftRecording> Recordings) : ChatEvent;
+
 public interface IChatToolOrchestrator
 {
     /// <summary>Runs a chat turn, looping over tool calls until the model produces a text answer (or the
@@ -50,6 +55,9 @@ public sealed class ChatToolOrchestrator : IChatToolOrchestrator
     {
         var messages = seed.Select(m => (object)new { role = m.Role, content = m.Content }).ToList();
         var seenRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // A per-turn sink tools can write client actions to (drained after each tool runs).
+        var effects = new ChatToolEffects();
+        var toolCtx = ctx with { Effects = effects };
         var toolSpecs = tools.Select(t => (object)new
         {
             type = "function",
@@ -87,12 +95,16 @@ public sealed class ChatToolOrchestrator : IChatToolOrchestrator
             foreach (var call in calls)
             {
                 yield return new ChatToolStartEvent(call.Name);
-                var result = await ExecuteAsync(tools, call, ctx, ct);
+                var result = await ExecuteAsync(tools, call, toolCtx, ct);
                 messages.Add(new { role = "tool", tool_call_id = call.Id, content = result });
                 // Surface the recordings this result referenced (once each) so the client can linkify them.
                 foreach (var (name, href) in ExtractRecordingRefs(result))
                     if (seenRefs.Add(name))
                         yield return new ChatRefEvent(name, href);
+                // Drain any client-side effects the tool queued (e.g. an attachment to save).
+                foreach (var d in effects.AttachmentDrafts)
+                    yield return new ChatAttachmentDraftEvent(d.Name, d.Content, d.Recordings);
+                effects.AttachmentDrafts.Clear();
                 yield return new ChatToolEndEvent(call.Name);
             }
         }

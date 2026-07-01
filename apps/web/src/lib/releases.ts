@@ -39,7 +39,8 @@ tools** that search your **whole transcript library** — who said a phrase, wha
 which recordings exist or mention something, action items, summaries, attendees, talk time, and the lines
 around a moment — answering with **When · Who · What** and **linking back to the transcript** (click a link
 to open it and jump to the exact segment). It can also **email you** (yourself only) a message it composes —
-a summary, action items, or notes — always delivering to your own registered address. Toggle
+a summary, action items, or notes — always delivering to your own registered address, or **save that output
+to a transcript as a Markdown attachment**. Toggle
 the tools on, and choose which, under Settings → AI — where you
 can also **enable reasoning** (and pick a level) for reasoning-capable models. You can **attach supporting
 documents** (files or URLs) to a recording, open them from the transcript page, and optionally **feed them
@@ -77,16 +78,18 @@ export const RELEASES: Release[] = [
     version: "0.56.0",
     date: "2026-07-01",
     pr: 112,
-    headline: "New chat tool: email yourself a message the assistant composes",
+    headline: "New chat tools: email yourself a message, or save the assistant's output to a transcript",
     summary:
-      "The chat assistant gains a **Send email to me** tool: ask it to email you a summary, the action items, " +
-      "or any notes it has prepared, and it composes the subject and body and sends it. It can **only ever " +
-      "email you** — the recipient is always your own registered account address, with no way to send to " +
-      "anyone else — so it is **on by default** with the other tools (you can still turn it off under " +
-      "**Settings → AI**). The chat also now knows **who you are** (your name and email are part of its " +
-      "context), so the messages it writes read as being from you.",
+      "The chat assistant gains two **write** tools. **Send email to me** composes a subject and body and " +
+      "emails it to you — it can **only ever email you** (your own registered account address, no way to send " +
+      "to anyone else). **Add as attachment** saves content it has prepared (a summary, notes, a table…) onto a " +
+      "transcript as a Markdown attachment: with one transcript in the chat's context it adds it there; with " +
+      "several selected, you pick which one from a short list. Both are **on by default** with the other tools " +
+      "(toggle any of them under **Settings → AI**). The chat also now knows **who you are** (your name and " +
+      "email are part of its context), so the messages it writes read as being from you.",
     added: [
-      "A \"Send email to me\" chat tool — the assistant composes a subject and body and emails it to your own account address (on by default; toggle under Settings → AI).",
+      "A \"Send email to me\" chat tool — the assistant composes a subject and body and emails it to your own account address.",
+      "An \"Add as attachment\" chat tool — saves the assistant's output to a transcript as a Markdown attachment (you pick the transcript when several are selected).",
     ],
     changed: [
       "The chat context now includes the signed-in user's name and email, so the assistant knows who it is helping and can sign emails as them.",

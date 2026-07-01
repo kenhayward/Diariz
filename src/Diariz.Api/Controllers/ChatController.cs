@@ -134,6 +134,15 @@ public class ChatController : ControllerBase
                     case ChatRefEvent r:
                         await WriteEventAsync(new { type = "ref", name = r.Name, href = r.Href }, ct);
                         break;
+                    case ChatAttachmentDraftEvent a:
+                        await WriteEventAsync(new
+                        {
+                            type = "attachment",
+                            name = a.Name,
+                            content = a.Content,
+                            recordings = a.Recordings.Select(x => new { id = x.Id, title = x.Title }),
+                        }, ct);
+                        break;
                 }
             }
             var used = promptTokens + ChatContextMeter.EstimateFromChars(completionChars);

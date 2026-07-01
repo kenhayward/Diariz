@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Services;
@@ -97,6 +98,55 @@ public class AttachmentsController : ControllerBase
         _db.Attachments.Add(attachment);
         await _db.SaveChangesAsync();
         return ToDto(attachment);
+    }
+
+    /// <summary>Create a Markdown attachment from text content (the chat "add as attachment" tool posts here).
+    /// Stored as a <c>.md</c> file blob with <c>text/markdown</c> content type; quota-enforced like any file.</summary>
+    [HttpPost("markdown")]
+    public async Task<ActionResult<AttachmentDto>> AddMarkdown(Guid recordingId, AddMarkdownAttachmentRequest req)
+    {
+        if (!await OwnsAsync(recordingId)) return NotFound();
+        if (string.IsNullOrWhiteSpace(req.Content)) return BadRequest("Content is required.");
+
+        var bytes = Encoding.UTF8.GetBytes(req.Content);
+        if (bytes.Length > _options.MaxBytes)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge,
+                $"Attachment too large. The maximum is {_options.MaxBytes / (1024 * 1024)} MB.");
+
+        var quota = await _db.Users.Where(u => u.Id == UserId).Select(u => u.QuotaBytes).FirstOrDefaultAsync();
+        var used = await _usage.UsedBytesAsync(UserId);
+        if (used + bytes.Length > quota)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge,
+                "Storage quota exceeded. Delete some recordings/attachments or ask an administrator to raise your quota.");
+
+        var id = Guid.NewGuid();
+        var blobKey = $"{UserId}/attachments/{id}.md";
+        await using (var ms = new MemoryStream(bytes))
+            await _storage.UploadAsync(blobKey, ms, "text/markdown");
+
+        var attachment = new Attachment
+        {
+            Id = id,
+            RecordingId = recordingId,
+            Kind = AttachmentKind.File,
+            Name = MarkdownName(req.Name),
+            BlobKey = blobKey,
+            ContentType = "text/markdown",
+            SizeBytes = bytes.Length,
+            Ordinal = await NextOrdinalAsync(recordingId),
+        };
+        _db.Attachments.Add(attachment);
+        await _db.SaveChangesAsync();
+        return ToDto(attachment);
+    }
+
+    /// <summary>A safe display name for a Markdown attachment: strip any path, default to "note", ensure it
+    /// ends in <c>.md</c>.</summary>
+    private static string MarkdownName(string? name)
+    {
+        var trimmed = SafeName(Path.GetFileName(name ?? "") ?? "");
+        if (trimmed.Length == 0) trimmed = "note";
+        return trimmed.EndsWith(".md", StringComparison.OrdinalIgnoreCase) ? trimmed : trimmed + ".md";
     }
 
     /// <summary>Attach a URL (address + optional display name).</summary>

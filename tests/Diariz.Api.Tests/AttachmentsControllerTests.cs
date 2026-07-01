@@ -39,6 +39,69 @@ public class AttachmentsControllerTests
     }
 
     [Fact]
+    public async Task AddMarkdown_StoresMdBlob_CreatesRow_WithMarkdownType()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await Seed(db, userId);
+        var storage = new FakeAudioStorage();
+        var controller = Build(db, userId, storage);
+
+        var result = await controller.AddMarkdown(rec.Id, new AddMarkdownAttachmentRequest("Meeting notes", "# Notes\n\n- one"));
+
+        var dto = Assert.IsType<AttachmentDto>(result.Value);
+        Assert.Equal(AttachmentKind.File, dto.Kind);
+        Assert.Equal("Meeting notes.md", dto.Name);          // .md appended
+        Assert.Equal("text/markdown", dto.ContentType);
+
+        var a = await db.Attachments.SingleAsync();
+        Assert.Equal($"{userId}/attachments/{a.Id}.md", a.BlobKey);
+        Assert.True(storage.Objects.ContainsKey(a.BlobKey!));
+        Assert.Equal(Encoding.UTF8.GetByteCount("# Notes\n\n- one"), a.SizeBytes);
+    }
+
+    [Fact]
+    public async Task AddMarkdown_KeepsMdExtension_AndDefaultsBlankNameToNote()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await Seed(db, userId);
+        var c = Build(db, userId);
+
+        var kept = Assert.IsType<AttachmentDto>((await c.AddMarkdown(rec.Id, new AddMarkdownAttachmentRequest("summary.md", "x"))).Value);
+        Assert.Equal("summary.md", kept.Name);
+
+        var blank = Assert.IsType<AttachmentDto>((await c.AddMarkdown(rec.Id, new AddMarkdownAttachmentRequest("  ", "x"))).Value);
+        Assert.Equal("note.md", blank.Name);
+    }
+
+    [Fact]
+    public async Task AddMarkdown_NotOwned_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await Seed(db, userId);
+        var controller = Build(db, userId);
+
+        var result = await controller.AddMarkdown(Guid.NewGuid(), new AddMarkdownAttachmentRequest("n", "c"));
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task AddMarkdown_OverQuota_Returns413()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await Seed(db, userId, quota: 10);
+        var controller = Build(db, userId);
+
+        var result = await controller.AddMarkdown(rec.Id, new AddMarkdownAttachmentRequest("n", new string('x', 100)));
+        var obj = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status413PayloadTooLarge, obj.StatusCode);
+        Assert.Empty(await db.Attachments.ToListAsync());
+    }
+
+    [Fact]
     public async Task AddFile_StoresBlob_CreatesRow_AndCountsTowardQuota()
     {
         using var db = TestDb.Create();

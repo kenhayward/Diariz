@@ -218,12 +218,18 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   `count_mentions`, plus `list_recordings`) query **`TranscriptSearch`**, a Postgres **`pg_trgm`** GIN-trigram
   fuzzy search over the user's own current-version transcripts (a `scope` arg lets the model search the whole
   library or just the selected recordings). The EF-based ones (`list_action_items`, `get_recording_summary`,
-  `who_attended`, `speaker_talk_time`, `get_segment_context`) read existing relational data directly. A single
-  **write** tool, `send_email` (`SendEmailTool`), lets the assistant email the user a composed subject+body — it
-  **always** sends to the owner's registered `ApplicationUser.Email` (no recipient parameter; any address in the
-  args is ignored) via `IEmailSender`. It is on by default like the read tools (safe because it can only ever
-  reach the user's own address); a user/operator can disable it in Settings / `Chat:DisabledTools`. The chat
-  **system prompt** also now names the current user (`FullName` +
+  `who_attended`, `speaker_talk_time`, `get_segment_context`) read existing relational data directly. Two
+  **write** tools act rather than read: `send_email` (`SendEmailTool`) emails the user a composed subject+body —
+  it **always** sends to the owner's registered `ApplicationUser.Email` (no recipient parameter; any address in
+  the args is ignored) via `IEmailSender`; and `add_as_attachment` (`AddAsAttachmentTool`) saves prepared content
+  to a transcript as a Markdown attachment. The attachment tool doesn't write directly — it queues an
+  `AttachmentDraft` on a per-turn `ChatToolEffects` sink that the orchestrator drains into a **`ChatAttachmentDraftEvent`**
+  (SSE `attachment` event carrying the name, Markdown, and candidate recordings). The web resolves the
+  destination — one in-context transcript → POST it straight to `POST /api/recordings/{id}/attachments/markdown`;
+  several → a picker modal, then the same endpoint (which stores a `.md`/`text/markdown` file blob, quota-enforced).
+  Both write tools are on by default (safe: email only ever reaches the user; the note only their own transcripts);
+  either can be disabled in Settings / `Chat:DisabledTools`. The chat **system prompt** also now names the current
+  user (`FullName` +
   `Email`, via `ChatContextBuilder`) so the model knows who it is helping and writes emails as being from them.
   Each read tool's result embeds an in-app **markdown deep-link** (`/recordings/{id}?t={ms}`); the model cites it, and the web
   intercepts the click to open the transcript and **scroll/highlight the segment** at that moment
