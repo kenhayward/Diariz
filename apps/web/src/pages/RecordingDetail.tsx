@@ -18,7 +18,7 @@ import SpeakerAssign from "../components/SpeakerAssign";
 import ToolbarButton, { iconProps } from "../components/ToolbarButton";
 import { recordingMenu } from "../components/recordingMenu";
 import { copyRichLink, transcriptUrl } from "../lib/clipboard";
-import { segmentIndexAtMs, parseMatchTimes } from "../lib/transcriptNav";
+import { segmentIndexAtMs, parseMatchTimes, nextSpeakerSegment, prevSpeakerSegment } from "../lib/transcriptNav";
 import { speakerRanges, selectedRanges, rangeAt, nextRangeStart, type PlayRange } from "../lib/segmentPlayback";
 import { formatBytes, formatDate, formatDuration } from "../lib/format";
 import { hasRevisions, segmentText } from "../lib/transcriptView";
@@ -48,6 +48,8 @@ const MergeIcon = <svg {...iconProps}><path d="M6 3v6a6 6 0 0 0 6 6 6 6 0 0 0 6-
 const TrashIcon = <svg {...iconProps}><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>;
 const GlobeIcon = <svg {...iconProps}><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>;
 const EyeIcon = <svg {...iconProps}><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" /><circle cx="12" cy="12" r="3" /></svg>;
+const ChevronLeftIcon = <svg {...iconProps}><polyline points="15 18 9 12 15 6" /></svg>;
+const ChevronRightIcon = <svg {...iconProps}><polyline points="9 18 15 12 9 6" /></svg>;
 
 function fmt(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -168,6 +170,13 @@ export default function RecordingDetail() {
     const set = new Set<string>();
     rec?.current?.segments.forEach((s) => set.add(s.speaker));
     return [...set];
+  }, [rec]);
+
+  // Segment count per speaker (shown in each speaker's row).
+  const speakerCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    rec?.current?.segments.forEach((s) => m.set(s.speaker, (m.get(s.speaker) ?? 0) + 1));
+    return m;
   }, [rec]);
 
   // Labels flagged "Multiple Speakers" — their segment/speaker display is localised in-app.
@@ -464,6 +473,40 @@ export default function RecordingDetail() {
     }
   }
 
+  // Delete every segment attributed to one speaker (the backend then prunes the now-empty speaker row,
+  // so it drops out of the list on refetch).
+  async function deleteSpeaker(label: string, name: string) {
+    const ids = (rec?.current?.segments ?? []).filter((s) => s.speaker === label).map((s) => s.id);
+    if (ids.length === 0) return;
+    if (!window.confirm(t("workspace:confirmDeleteSpeaker", { name, count: ids.length }))) return;
+    setActionError(null);
+    try {
+      if (playingSpeaker === label) {
+        audioRef.current?.pause();
+        exitSpeakerMode();
+      }
+      await api.deleteSegments(id, ids);
+      qc.invalidateQueries({ queryKey: ["recording", id] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e, t("workspace:errDeleteSegment")));
+    }
+  }
+
+  // Scroll to + highlight this speaker's next/previous segment relative to the currently-active row.
+  function goToSpeakerSegment(label: string, dir: "next" | "prev") {
+    const segs = rec?.current?.segments ?? [];
+    const idx =
+      dir === "next"
+        ? nextSpeakerSegment(segs, label, activeIdx ?? -1)
+        : prevSpeakerSegment(segs, label, activeIdx ?? segs.length);
+    if (idx == null) return;
+    setActiveIdx(idx);
+    const segId = segs[idx].id;
+    requestAnimationFrame(() =>
+      document.getElementById(`seg-${segId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }),
+    );
+  }
+
   // Play only the selected segments, gaplessly (skipping the gaps between non-adjacent picks).
   async function playSelected() {
     const el = audioRef.current;
@@ -704,6 +747,7 @@ export default function RecordingDetail() {
       {rec.summary && (
         <CollapsibleSection
           title={t("workspace:sectionSummary")}
+          defaultCollapsed
           headerActions={
             <>
               <ToolbarButton
@@ -760,7 +804,7 @@ export default function RecordingDetail() {
             </>
           }
         >
-          <div className="flex flex-wrap gap-4">
+          <div className="flex flex-col gap-2">
             {labels.map((label) => {
               const info = rec.speakers.find((s) => s.label === label);
               return (
@@ -773,10 +817,14 @@ export default function RecordingDetail() {
                       ? t("workspace:multipleSpeakers")
                       : rec.speakerNames[label] ?? info?.displayName ?? label
                   }
+                  count={speakerCounts.get(label) ?? 0}
                   profiles={profiles}
                   canPlay={rec.hasAudio}
                   playing={playingSpeaker === label}
                   onTogglePlay={() => toggleSpeaker(label)}
+                  onDelete={(name) => deleteSpeaker(label, name)}
+                  onPrev={() => goToSpeakerSegment(label, "prev")}
+                  onNext={() => goToSpeakerSegment(label, "next")}
                   onRename={(name) => rename(label, name)}
                   onAssign={(profileId) => assignSpeaker(label, profileId)}
                   onCreate={(name) => newPerson(label, name)}
@@ -1190,10 +1238,14 @@ export function SpeakerRow({
   label,
   info,
   initial,
+  count,
   profiles,
   canPlay,
   playing,
   onTogglePlay,
+  onDelete,
+  onPrev,
+  onNext,
   onRename,
   onAssign,
   onCreate,
@@ -1202,10 +1254,14 @@ export function SpeakerRow({
   label: string;
   info: SpeakerInfo | undefined;
   initial: string;
+  count: number;
   profiles: SpeakerProfile[];
   canPlay: boolean;
   playing: boolean;
   onTogglePlay: () => void;
+  onDelete: (name: string) => void;
+  onPrev: () => void;
+  onNext: () => void;
   onRename: (name: string) => void;
   onAssign: (profileId: string | null) => void;
   onCreate: (name: string) => void;
@@ -1216,36 +1272,25 @@ export function SpeakerRow({
   // Keep the field in sync when identification/reassignment changes the name out from under us.
   useEffect(() => setValue(initial), [initial]);
 
+  // One line per speaker: label · name · assign typeahead · segment count · toolbar (play/delete/prev/next).
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-1">
-        <span className="text-xs text-gray-400 dark:text-gray-500">{label}</span>
-        {info?.identifiedAuto && (
-          <span
-            title={t("autoNameTitle")}
-            className="rounded bg-blue-100 px-1 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
-          >
-            {t("autoBadge")}
-          </span>
-        )}
-      </div>
-      <div className="flex items-center gap-1">
-        <input
-          value={value}
-          aria-label={t("nameForAria", { label })}
-          onChange={(e) => setValue(e.target.value)}
-          onBlur={() => value !== initial && onRename(value)}
-          className="w-40 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-        />
-        {canPlay && (
-          <ToolbarButton
-            label={playing ? t("pauseSpeaker") : t("playSpeaker", { label: value })}
-            icon={playing ? PauseIcon : PlayIcon}
-            active={playing}
-            onClick={onTogglePlay}
-          />
-        )}
-      </div>
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs text-gray-400 dark:text-gray-500">{label}</span>
+      {info?.identifiedAuto && (
+        <span
+          title={t("autoNameTitle")}
+          className="rounded bg-blue-100 px-1 text-[10px] font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+        >
+          {t("autoBadge")}
+        </span>
+      )}
+      <input
+        value={value}
+        aria-label={t("nameForAria", { label })}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => value !== initial && onRename(value)}
+        className="w-40 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+      />
       <SpeakerAssign
         label={label}
         profiles={profiles}
@@ -1255,6 +1300,22 @@ export function SpeakerRow({
         onCreate={onCreate}
         onMulti={onMulti}
       />
+      <span className="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
+        {t("speakerSegmentCount", { count })}
+      </span>
+      <div className="flex items-center gap-0.5">
+        {canPlay && (
+          <ToolbarButton
+            label={playing ? t("pauseSpeaker") : t("playSpeaker", { label: value })}
+            icon={playing ? PauseIcon : PlayIcon}
+            active={playing}
+            onClick={onTogglePlay}
+          />
+        )}
+        <ToolbarButton label={t("prevSpeakerSegment", { label: value })} icon={ChevronLeftIcon} onClick={onPrev} />
+        <ToolbarButton label={t("nextSpeakerSegment", { label: value })} icon={ChevronRightIcon} onClick={onNext} />
+        <ToolbarButton label={t("deleteSpeaker", { label: value })} icon={TrashIcon} onClick={() => onDelete(value)} />
+      </div>
     </div>
   );
 }

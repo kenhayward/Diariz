@@ -117,6 +117,9 @@ services address each other by Compose service name (`minio:9000`, `redis:6379`,
    never overriding a manual name, and **skipping any speaker the user flagged `IsMultiSpeaker`**
    ("Multiple Speakers" — overlapping/simultaneous speech, which is also never enrolled into a voiceprint).
    Individual segments can be deleted from a transcript (the survivors renumber); re-transcribe regenerates them.
+   Deleting segments also **prunes any `Speaker` row whose label no longer appears** in a surviving segment, so
+   deleting all of one speaker's segments (the per-speaker Delete in the Speakers panel) removes that speaker —
+   and its stored voiceprint — from the recording.
    The web transcript panel adds a **Select mode** with bulk operations on the picked segments:
    `POST .../segments/delete { ids }` (delete the set, renumber once) and `POST .../segments/translate
    { ids, language? }` (translate just those, one batched LLM call); the panel itself pins to the top on scroll
