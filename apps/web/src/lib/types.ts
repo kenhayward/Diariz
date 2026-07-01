@@ -57,6 +57,15 @@ export interface SummaryDto {
   isUserEdited: boolean;
 }
 
+export interface MeetingMinutesDto {
+  model: string;
+  /// GitHub-flavoured Markdown (headings, lists, tables, bold).
+  text: string;
+  createdAt: string;
+  /// The user hand-edited these minutes; the auto-generator won't overwrite them without a warning.
+  isUserEdited: boolean;
+}
+
 export interface SegmentDto {
   id: string;
   speaker: string;
@@ -166,6 +175,7 @@ export interface RecordingDetail {
   speakers: SpeakerInfo[];
   current: TranscriptionDto | null;
   summary: SummaryDto | null;
+  meetingMinutes: MeetingMinutesDto | null;
   /// Extracted action items (only meaningful once `actionsExtracted` is true).
   actions: RecordingAction[];
   /// Whether action extraction has been run — drives the "show the Actions panel by exception" rule.

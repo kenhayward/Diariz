@@ -106,6 +106,8 @@ public class RecordingsController : ControllerBase
                 .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal))
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.Summary)
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                .ThenInclude(t => t.MeetingMinutes)
             .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
 
         if (rec is null) return NotFound();
@@ -130,10 +132,13 @@ public class RecordingsController : ControllerBase
             current.ProcessingMs);
         SummaryDto? sDto = current?.Summary is null ? null
             : new(current.Summary.Model, current.Summary.Text, current.Summary.CreatedAt, current.Summary.IsUserEdited);
+        MeetingMinutesDto? mDto = current?.MeetingMinutes is null ? null
+            : new(current.MeetingMinutes.Model, current.MeetingMinutes.Text, current.MeetingMinutes.CreatedAt,
+                current.MeetingMinutes.IsUserEdited);
 
         return new RecordingDetailDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.SizeBytes,
             rec.Status, rec.Error, rec.CreatedAt, rec.MinSpeakers, rec.MaxSpeakers, names, speakers, tDto, sDto,
-            actions, rec.ActionsExtractedAt != null, rec.HasAudio);
+            mDto, actions, rec.ActionsExtractedAt != null, rec.HasAudio);
     }
 
     /// <summary>Upload an audio file and kick off transcription.</summary>
@@ -408,6 +413,8 @@ public class RecordingsController : ControllerBase
                 .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal))
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.Summary)
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                .ThenInclude(t => t.MeetingMinutes)
             .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
         if (rec is null) return NotFound();
 
@@ -432,8 +439,54 @@ public class RecordingsController : ControllerBase
 
         var name = rec.Name ?? rec.Title;
         var labels = await ExportLabelsAsync();
-        var html = TranscriptEmail.BuildHtml(name, current.Summary?.Text, segs, actions, labels);
+        var minutesHtml = string.IsNullOrWhiteSpace(current.MeetingMinutes?.Text)
+            ? null : MarkdownRenderer.ToHtml(current.MeetingMinutes!.Text);
+        var html = TranscriptEmail.BuildHtml(name, current.Summary?.Text, segs, actions, labels, minutesHtml);
         var sent = await _email.SendAsync(address!, TranscriptEmail.Subject(name, labels), html);
+        if (!sent) return BadRequest("Email isn't configured on the server. Contact an administrator.");
+        return Ok();
+    }
+
+    /// <summary>Email just the meeting minutes (Markdown → HTML) to the signed-in user's account address,
+    /// optionally attaching the recording's uploaded files.</summary>
+    [HttpPost("{id:guid}/meeting-minutes/email")]
+    public async Task<IActionResult> EmailMeetingMinutes(Guid id, EmailMeetingMinutesRequest req)
+    {
+        var rec = await _db.Recordings
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                .ThenInclude(t => t.MeetingMinutes)
+            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+
+        var current = rec.Transcriptions.FirstOrDefault();
+        if (current?.MeetingMinutes is null || string.IsNullOrWhiteSpace(current.MeetingMinutes.Text))
+            return BadRequest("There are no meeting minutes to email yet.");
+
+        var address = await _db.Users.Where(u => u.Id == UserId).Select(u => u.Email).FirstOrDefaultAsync();
+        if (string.IsNullOrWhiteSpace(address)) return BadRequest("Your account has no email address.");
+
+        var name = rec.Name ?? rec.Title;
+        var labels = await ExportLabelsAsync();
+        var html = MeetingMinutesEmail.BuildHtml(name, MarkdownRenderer.ToHtml(current.MeetingMinutes.Text), labels);
+
+        List<EmailAttachment>? files = null;
+        if (req.IncludeAttachments)
+        {
+            var attachments = await _db.Attachments
+                .Where(a => a.RecordingId == id && a.Kind == AttachmentKind.File && a.BlobKey != null)
+                .OrderBy(a => a.Ordinal)
+                .ToListAsync();
+            files = new List<EmailAttachment>();
+            foreach (var a in attachments)
+            {
+                await using var stream = await _storage.OpenReadAsync(a.BlobKey!);
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+                files.Add(new EmailAttachment(a.Name, a.ContentType ?? "application/octet-stream", ms.ToArray()));
+            }
+        }
+
+        var sent = await _email.SendAsync(address!, MeetingMinutesEmail.Subject(name, labels), html, files);
         if (!sent) return BadRequest("Email isn't configured on the server. Contact an administrator.");
         return Ok();
     }
@@ -585,6 +638,61 @@ public class RecordingsController : ControllerBase
 
         // The recording now has a summary — reflect that in its status (without clobbering an in-flight job).
         if (rec.Status is RecordingStatus.Transcribed) rec.Status = RecordingStatus.Summarized;
+
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>Re-create the current transcription's meeting minutes via the LLM. Clears the protected-edit
+    /// flag first (the UI warns), so this explicit re-create overwrites hand-edited minutes.</summary>
+    [HttpPost("{id:guid}/meeting-minutes/generate")]
+    public async Task<IActionResult> GenerateMeetingMinutes(Guid id)
+    {
+        var rec = await _db.Recordings
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                .ThenInclude(t => t.MeetingMinutes)
+            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+
+        var current = rec.Transcriptions.FirstOrDefault();
+        if (current is null) return NotFound();
+
+        var cfg = await _summarization.ResolveAsync(UserId);
+        if (!cfg.Enabled)
+            return BadRequest("Summarisation is not configured. Set an LLM endpoint in Settings.");
+
+        if (current.MeetingMinutes is { IsUserEdited: true } m) m.IsUserEdited = false;
+
+        await _queue.EnqueueMeetingMinutesAsync(new MeetingMinutesJob(rec.Id, current.Id));
+        await _db.SaveChangesAsync();
+        return Accepted();
+    }
+
+    /// <summary>Manually create or edit the current transcription's meeting minutes (Markdown). Works even
+    /// with no LLM configured, and marks the minutes user-edited so the automatic generator won't overwrite
+    /// them.</summary>
+    [HttpPut("{id:guid}/meeting-minutes")]
+    public async Task<IActionResult> UpdateMeetingMinutes(Guid id, UpdateMeetingMinutesRequest req)
+    {
+        var rec = await _db.Recordings
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                .ThenInclude(t => t.MeetingMinutes)
+            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+
+        var current = rec.Transcriptions.FirstOrDefault();
+        if (current is null) return NotFound();
+
+        var minutes = current.MeetingMinutes;
+        if (minutes is null)
+        {
+            minutes = new MeetingMinutes { Id = Guid.NewGuid(), TranscriptionId = current.Id };
+            _db.MeetingMinutes.Add(minutes);
+        }
+        minutes.Text = req.Text ?? string.Empty;
+        minutes.Model = MeetingMinutes.UserEditedModel;
+        minutes.IsUserEdited = true;
+        minutes.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _db.SaveChangesAsync();
         return NoContent();
@@ -915,6 +1023,8 @@ public class RecordingsController : ControllerBase
                 .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal))
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.Summary)
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                .ThenInclude(t => t.MeetingMinutes)
             .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
         if (rec is null) return NotFound();
 
@@ -932,6 +1042,7 @@ public class RecordingsController : ControllerBase
 
         var name = rec.Name ?? rec.Title;
         var summary = current.Summary?.Text;
+        var minutes = current.MeetingMinutes?.Text;
         var actions = rec.Actions
             .OrderBy(a => a.Ordinal)
             .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal))
@@ -940,10 +1051,10 @@ public class RecordingsController : ControllerBase
         var labels = await ExportLabelsAsync();
         var (body, mime, ext) = format switch
         {
-            "md" => (TranscriptFormatter.ToMarkdown(name, summary, segs, actions, labels), "text/markdown", "md"),
-            "rtf" => (TranscriptFormatter.ToRtf(name, summary, segs, actions, labels), "application/rtf", "rtf"),
+            "md" => (TranscriptFormatter.ToMarkdown(name, summary, segs, actions, labels, minutes), "text/markdown", "md"),
+            "rtf" => (TranscriptFormatter.ToRtf(name, summary, segs, actions, labels, minutes), "application/rtf", "rtf"),
             "srt" => (TranscriptFormatter.ToSrt(segs), "application/x-subrip", "srt"),
-            _ => (TranscriptFormatter.ToText(name, summary, segs, actions, labels), "text/plain", "txt"),
+            _ => (TranscriptFormatter.ToText(name, summary, segs, actions, labels, minutes), "text/plain", "txt"),
         };
         return File(Encoding.UTF8.GetBytes(body), mime, $"{Slug(name)}.{ext}");
     }

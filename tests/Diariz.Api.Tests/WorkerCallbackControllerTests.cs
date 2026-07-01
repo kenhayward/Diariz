@@ -175,6 +175,10 @@ public class WorkerCallbackControllerTests
         var job = Assert.Single(queue.SummarizationEnqueued);
         Assert.Equal(recordingId, job.RecordingId);
         Assert.Equal(transcriptionId, job.TranscriptionId);
+        // Meeting minutes generate in parallel with the summary (same effective config gates both).
+        var minutesJob = Assert.Single(queue.MeetingMinutesEnqueued);
+        Assert.Equal(recordingId, minutesJob.RecordingId);
+        Assert.Equal(transcriptionId, minutesJob.TranscriptionId);
         // The owner is notified with the new status.
         Assert.Contains(hub.Sent, m => m.Method == "RecordingStatusChanged");
     }

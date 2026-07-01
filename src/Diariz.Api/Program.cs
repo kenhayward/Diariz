@@ -22,6 +22,7 @@ builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection(Stor
 builder.Services.Configure<JobQueueOptions>(builder.Configuration.GetSection(JobQueueOptions.Section));
 builder.Services.Configure<WorkerOptions>(builder.Configuration.GetSection(WorkerOptions.Section));
 builder.Services.Configure<SummarizationOptions>(builder.Configuration.GetSection(SummarizationOptions.Section));
+builder.Services.Configure<MeetingMinutesOptions>(builder.Configuration.GetSection(MeetingMinutesOptions.Section));
 builder.Services.Configure<ChatOptions>(builder.Configuration.GetSection(ChatOptions.Section));
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.Section));
 builder.Services.Configure<AppPublicOptions>(builder.Configuration.GetSection(AppPublicOptions.Section));
@@ -137,6 +138,10 @@ builder.Services.AddHttpClient<IActionsClient, ActionsClient>();
 builder.Services.AddHttpClient<ITranslationClient, TranslationClient>();
 builder.Services.AddScoped<ISummarizationSettingsResolver, SummarizationSettingsResolver>();
 builder.Services.AddHostedService<SummarizationWorker>();
+
+// ---- Meeting minutes (shares the per-user summarisation config; its own stream + consumer) ----
+builder.Services.AddHttpClient<IMeetingMinutesClient, MeetingMinutesClient>();
+builder.Services.AddHostedService<MeetingMinutesWorker>();
 
 // ---- Localized export/email labels (runtime JSON, not compiled .resx) ----
 // Prefer the content root's locales/ (present in dev and copied to the published output), falling back to

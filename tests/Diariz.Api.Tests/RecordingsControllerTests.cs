@@ -1335,6 +1335,182 @@ public class RecordingsControllerTests
         return rec;
     }
 
+    private static async Task AddMinutes(DiarizDbContext db, Guid recId, string text, bool userEdited = false)
+    {
+        var tr = await db.Transcriptions.OrderByDescending(t => t.Version)
+            .FirstAsync(t => t.RecordingId == recId);
+        db.MeetingMinutes.Add(new MeetingMinutes
+        {
+            Id = Guid.NewGuid(), TranscriptionId = tr.Id, Model = userEdited ? "user" : "m", Text = text,
+            IsUserEdited = userEdited,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    // ---- Meeting minutes ----
+
+    [Fact]
+    public async Task GenerateMeetingMinutes_EnqueuesJob_WhenConfigured()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
+        var controller = Build(db, userId, queue);
+
+        var result = await controller.GenerateMeetingMinutes(rec.Id);
+
+        Assert.IsType<AcceptedResult>(result);
+        var job = Assert.Single(queue.MeetingMinutesEnqueued);
+        Assert.Equal(rec.Id, job.RecordingId);
+        Assert.Equal(tr.Id, job.TranscriptionId);
+    }
+
+    [Fact]
+    public async Task GenerateMeetingMinutes_ClearsUserEditedFlag_SoTheForcedRecreateOverwrites()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        await AddMinutes(db, rec.Id, "hand edit", userEdited: true);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.GenerateMeetingMinutes(rec.Id);
+
+        var minutes = await db.MeetingMinutes.SingleAsync();
+        Assert.False(minutes.IsUserEdited); // cleared, so the queued job may overwrite it
+    }
+
+    [Fact]
+    public async Task GenerateMeetingMinutes_WhenNotConfigured_ReturnsBadRequest_AndDoesNotEnqueue()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var controller = Build(db, userId, queue, summarizationEnabled: false);
+
+        Assert.IsType<BadRequestObjectResult>(await controller.GenerateMeetingMinutes(rec.Id));
+        Assert.Empty(queue.MeetingMinutesEnqueued);
+    }
+
+    [Fact]
+    public async Task UpdateMeetingMinutes_CreatesRow_MarksUserEdited()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.UpdateMeetingMinutes(rec.Id, new UpdateMeetingMinutesRequest("# My minutes"));
+
+        Assert.IsType<NoContentResult>(result);
+        var minutes = await db.MeetingMinutes.SingleAsync();
+        Assert.Equal("# My minutes", minutes.Text);
+        Assert.True(minutes.IsUserEdited);
+        Assert.Equal(MeetingMinutes.UserEditedModel, minutes.Model);
+    }
+
+    [Fact]
+    public async Task EmailMeetingMinutes_SendsMinutesOnly_ToUser()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var rec = await SeedTranscribedRecording(db, userId, name: "Team Sync");
+        await AddMinutes(db, rec.Id, "# Team Sync\n\n## Overview\n\nWe met.");
+        var email = new FakeEmailSender { Sent = true };
+        var controller = Build(db, userId, new FakeJobQueue(), email: email);
+
+        var result = await controller.EmailMeetingMinutes(rec.Id, new EmailMeetingMinutesRequest(false));
+
+        Assert.IsType<OkResult>(result);
+        var msg = Assert.Single(email.Messages);
+        Assert.Equal($"{userId}@x.test", msg.To);
+        Assert.Equal("Meeting minutes for Team Sync", msg.Subject);
+        Assert.Contains("Overview", msg.Body);        // rendered from the Markdown
+        Assert.DoesNotContain("Alice", msg.Body);     // NOT the transcript — minutes only
+        Assert.Empty(email.LastAttachments);
+    }
+
+    [Fact]
+    public async Task EmailMeetingMinutes_WhenNoMinutes_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var rec = await SeedTranscribedRecording(db, userId, name: "X");
+        var controller = Build(db, userId, new FakeJobQueue(), email: new FakeEmailSender());
+
+        Assert.IsType<BadRequestObjectResult>(
+            await controller.EmailMeetingMinutes(rec.Id, new EmailMeetingMinutesRequest(false)));
+    }
+
+    [Fact]
+    public async Task EmailMeetingMinutes_IncludeAttachments_AttachesRecordingFiles()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var rec = await SeedTranscribedRecording(db, userId, name: "X");
+        await AddMinutes(db, rec.Id, "# X");
+        var storage = new FakeAudioStorage();
+        storage.Objects[$"{userId}/attachments/doc.pdf"] = Encoding.UTF8.GetBytes("PDFBYTES");
+        db.Attachments.Add(new Attachment
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Kind = AttachmentKind.File, Name = "doc.pdf",
+            BlobKey = $"{userId}/attachments/doc.pdf", ContentType = "application/pdf", SizeBytes = 8, Ordinal = 0,
+        });
+        await db.SaveChangesAsync();
+        var email = new FakeEmailSender { Sent = true };
+        var controller = Build(db, userId, new FakeJobQueue(), storage: storage, email: email);
+
+        var result = await controller.EmailMeetingMinutes(rec.Id, new EmailMeetingMinutesRequest(true));
+
+        Assert.IsType<OkResult>(result);
+        var attachment = Assert.Single(email.LastAttachments);
+        Assert.Equal("doc.pdf", attachment.FileName);
+        Assert.Equal("application/pdf", attachment.ContentType);
+        Assert.Equal("PDFBYTES", Encoding.UTF8.GetString(attachment.Content));
+    }
+
+    [Fact]
+    public async Task EmailTranscript_IncludesMeetingMinutes_WhenPresent()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var rec = await SeedTranscribedRecording(db, userId, name: "Team Sync");
+        await AddMinutes(db, rec.Id, "## Overview\n\nWe met and agreed.");
+        var email = new FakeEmailSender { Sent = true };
+        var controller = Build(db, userId, new FakeJobQueue(), email: email);
+
+        await controller.EmailTranscript(rec.Id);
+
+        var msg = Assert.Single(email.Messages);
+        Assert.Contains("Meeting Minutes", msg.Body);   // the section label
+        Assert.Contains("We met and agreed.", msg.Body); // rendered minutes
+        Assert.Contains("Alice", msg.Body);              // still carries the transcript
+    }
+
+    [Fact]
+    public async Task TranscriptMd_IncludesMeetingMinutes_WhenPresent()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId, name: "Team Sync");
+        await AddMinutes(db, rec.Id, "## Overview\n\nKey points.");
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.TranscriptMd(rec.Id);
+
+        var file = Assert.IsType<FileContentResult>(result);
+        var md = Encoding.UTF8.GetString(file.FileContents);
+        Assert.Contains("## Meeting Minutes", md);
+        Assert.Contains("Key points.", md);
+    }
+
     [Fact]
     public async Task TranscriptTxt_ReturnsTextFile_WithSpeakerNames_AndSlugFilename()
     {

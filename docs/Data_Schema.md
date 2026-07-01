@@ -51,6 +51,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddAttachments` | `Attachments` (file/URL supporting documents on a recording, cascade) |
 | `AddChatToolsSupport` | `UserSettings.ChatToolsEnabled`/`ChatToolOverridesJson`; enables `pg_trgm` + a GIN trigram index `IX_Segments_Text_Trgm` on `coalesce("Revised","Original")` (chat tool fuzzy search) |
 | `AddReasoningToUserSettings` | `UserSettings.ReasoningEnabled` (bool null) + `UserSettings.ReasoningEffort` (text null) — per-user `reasoning_effort` on LLM requests |
+| `AddMeetingMinutes` | `MeetingMinutes` (1:1 with `Transcription`, cascade, unique on `TranscriptionId`) — LLM-generated emailable meeting minutes (Markdown) |
 
 ### Entity-relationship overview
 
@@ -63,7 +64,8 @@ ApplicationUser (AspNetUsers)
  └─1:n─ Recording               (FK UserId)
          ├─1:n─ Transcription   (cascade)         (RecordingId, Version) unique
          │       ├─1:n─ Segment (cascade)         Embedding vector(768)?
-         │       └─1:1─ Summary (cascade)
+         │       ├─1:1─ Summary (cascade)
+         │       └─1:1─ MeetingMinutes (cascade)
          ├─1:n─ Speaker         (cascade)         Embedding vector(192)?, (RecordingId, Label) unique
          │       └─n:1─ SpeakerProfile (SetNull)  ProfileId
          └─1:n─ RecordingAction (cascade)
@@ -150,6 +152,20 @@ LLM summary of a specific transcription version (1:1 with `Transcription`).
 | `Text` | text | |
 | `CreatedAt` | timestamptz | |
 | `IsUserEdited` | bool | user hand-wrote/edited it — the auto-summariser won't overwrite it |
+| `UpdatedAt` | timestamptz null | when the user last edited it |
+
+#### `MeetingMinutes`
+LLM-generated (or hand-edited) meeting minutes for a transcription version (1:1 with `Transcription`),
+stored as GitHub-flavoured Markdown. Mirrors `Summaries`; generated in-pipeline on its own Redis stream.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `TranscriptionId` | uuid FK → Transcriptions | unique (1:1), cascade |
+| `Model` | text | LLM model id used (or `user` for hand-edited minutes) |
+| `Text` | text | Markdown (headings, lists, tables, bold) |
+| `CreatedAt` | timestamptz | |
+| `IsUserEdited` | bool | user hand-edited it — the auto-generator won't overwrite it |
 | `UpdatedAt` | timestamptz null | when the user last edited it |
 
 #### `RecordingActions`

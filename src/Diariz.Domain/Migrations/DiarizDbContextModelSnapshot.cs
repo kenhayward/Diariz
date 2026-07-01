@@ -181,6 +181,40 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("ChatSessions");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.MeetingMinutes", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsUserEdited")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TranscriptionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TranscriptionId")
+                        .IsUnique();
+
+                    b.ToTable("MeetingMinutes");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.PlatformSettings", b =>
                 {
                     b.Property<int>("Id")
@@ -756,6 +790,17 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.MeetingMinutes", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.Transcription", "Transcription")
+                        .WithOne("MeetingMinutes")
+                        .HasForeignKey("Diariz.Domain.Entities.MeetingMinutes", "TranscriptionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Transcription");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.ProfileContribution", b =>
                 {
                     b.HasOne("Diariz.Domain.Entities.SpeakerProfile", "Profile")
@@ -980,6 +1025,8 @@ namespace Diariz.Domain.Migrations
 
             modelBuilder.Entity("Diariz.Domain.Entities.Transcription", b =>
                 {
+                    b.Navigation("MeetingMinutes");
+
                     b.Navigation("Segments");
 
                     b.Navigation("Summary");

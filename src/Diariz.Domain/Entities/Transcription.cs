@@ -28,4 +28,5 @@ public class Transcription
 
     public ICollection<Segment> Segments { get; set; } = new List<Segment>();
     public Summary? Summary { get; set; }
+    public MeetingMinutes? MeetingMinutes { get; set; }
 }

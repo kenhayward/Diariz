@@ -13,6 +13,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<Segment> Segments => Set<Segment>();
     public DbSet<Speaker> Speakers => Set<Speaker>();
     public DbSet<Summary> Summaries => Set<Summary>();
+    public DbSet<MeetingMinutes> MeetingMinutes => Set<MeetingMinutes>();
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
     public DbSet<Section> Sections => Set<Section>();
     public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
@@ -118,6 +119,10 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.HasOne(t => t.Summary)
                 .WithOne(s => s.Transcription!)
                 .HasForeignKey<Summary>(s => s.TranscriptionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(t => t.MeetingMinutes)
+                .WithOne(m => m.Transcription!)
+                .HasForeignKey<MeetingMinutes>(m => m.TranscriptionId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

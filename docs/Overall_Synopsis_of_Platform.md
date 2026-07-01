@@ -63,7 +63,7 @@ services address each other by Compose service name (`minio:9000`, `redis:6379`,
    │  ASP.NET Core API  (src/Diariz.Api  +  Diariz.Domain)        │
    │   • JWT auth + RBAC          • SignalR hub (/hubs/transcription)│
    │   • Recordings / Sections / Speakers / Actions / Chat / Admin │
-   │   • In-process SummarizationWorker (BackgroundService)        │
+   │   • In-process Summarization + MeetingMinutes workers (BGSvc) │
    └───┬───────────────┬──────────────────┬──────────────┬────────┘
        │ EF Core        │ S3 SDK            │ Redis Streams │ HTTP /chat/completions
        ▼                ▼                   ▼              ▼
@@ -150,6 +150,17 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   **written/edited by hand** — `PUT /api/recordings/{id}/summary` (works with no LLM configured) sets
   `Summary.IsUserEdited`; the automatic summariser then **skips** that summary, and a user-initiated
   re-summarise clears the flag first (the UI warns before overwriting).
+- **Meeting minutes (async).** A **third Redis stream `meeting-minutes-jobs`** (group `minute-takers`) with its
+  own `MeetingMinutesWorker` (singleton `BackgroundService`) generates a formal, emailable **`MeetingMinutes`**
+  (GitHub-flavoured Markdown; `MeetingMinutesClient`/`Prompt`) from the transcript. It is enqueued **alongside
+  the summary** after transcription (same effective per-user config gates both), and re-runnable via
+  `POST /api/recordings/{id}/meeting-minutes/generate`. Minutes **do not own `Recording.Status`** (so they never
+  race the summary's status transitions) — the processor notifies over SignalR to trigger a refetch. Minutes can
+  be **hand-edited** (`PUT .../meeting-minutes`, sets `IsUserEdited`; auto-generator then skips) and **emailed on
+  their own** (`POST .../meeting-minutes/email {includeAttachments}`) — the Markdown is rendered to HTML with
+  **Markdig** and, when requested, the recording's file attachments are attached (`IEmailSender` gained an
+  attachments parameter). Minutes also ride along in the emailed transcript and the md/txt/rtf downloads. The web
+  edits them in a **WYSIWYG editor** (TipTap) that round-trips Markdown.
 - **Extract actions (sync).** `POST /api/recordings/{id}/actions/extract` calls the LLM inline
   (`ActionsClient` → `ActionsPrompt`), **replaces** the recording's **`RecordingAction`** rows, and sets
   `Recording.ActionsExtractedAt`. Shown "by exception" — the Actions panel appears only once extraction has
@@ -261,9 +272,10 @@ Voiceprints are **per-user** (a user's voiceprints only match their own recordin
 
 ## Cross-boundary contracts (the non-obvious glue)
 
-- **Redis Streams, three of them.** `transcription-jobs`/`workers` and `audio-merge-jobs` (both API → Python
+- **Redis Streams, four of them.** `transcription-jobs`/`workers` and `audio-merge-jobs` (both API → Python
   worker, sharing the `workers` group — the worker `XREADGROUP`s both streams and dispatches by stream key) and
-  `summarization-jobs`/`summarizers` (API → its own in-process consumer). Job payloads are **PascalCase JSON**
+  two API-internal streams with their own in-process consumers: `summarization-jobs`/`summarizers` and
+  `meeting-minutes-jobs`/`minute-takers`. Job payloads are **PascalCase JSON**
   so .NET produces and Python/.NET consume without renaming. Keep `TranscriptionJob` / `TranscriptionResult` /
   `AudioMergeJob` / `Segment` shapes in sync across both languages.
 - **Merge recordings.** `POST /api/recordings/merge` folds 2+ recordings into the earliest one: it builds a new

@@ -11,14 +11,19 @@ public static class TranscriptFormatter
 {
     private const string EmDash = "—";
 
-    /// <summary>Plain text: headings, the summary, the actions (if any), then one paragraph per segment.</summary>
+    /// <summary>Plain text: headings, the summary, the meeting minutes (if any), the actions (if any), then
+    /// one paragraph per segment. Minutes are emitted as their Markdown source (readable as text; full
+    /// heading/table rendering only applies to the Markdown and email outputs).</summary>
     public static string ToText(string name, string? summary, IReadOnlyList<SegmentDto> segments,
-        IReadOnlyList<RecordingActionDto>? actions = null, ExportStrings? strings = null)
+        IReadOnlyList<RecordingActionDto>? actions = null, ExportStrings? strings = null,
+        string? minutes = null)
     {
         var s10n = strings ?? ExportStrings.English;
         var sb = new StringBuilder();
         sb.Append(s10n.TranscriptName).Append('\n').Append(name).Append("\n\n");
         sb.Append(s10n.Summary).Append('\n').Append(string.IsNullOrWhiteSpace(summary) ? EmDash : summary!.Trim()).Append("\n\n");
+        if (!string.IsNullOrWhiteSpace(minutes))
+            sb.Append(s10n.MeetingMinutes).Append('\n').Append(minutes!.Trim()).Append("\n\n");
         if (actions is { Count: > 0 })
         {
             sb.Append(s10n.Actions).Append('\n');
@@ -36,15 +41,19 @@ public static class TranscriptFormatter
         return Regex.Replace(sb.ToString(), @"(\r\n|\r|\n){2,}", "\n");
     }
 
-    /// <summary>Markdown: headings, the summary, an actions table (if any), then a Time/Speaker/Text table.</summary>
+    /// <summary>Markdown: headings, the summary, the meeting minutes (if any, embedded verbatim as Markdown),
+    /// an actions table (if any), then a Time/Speaker/Text table.</summary>
     public static string ToMarkdown(string name, string? summary, IReadOnlyList<SegmentDto> segments,
-        IReadOnlyList<RecordingActionDto>? actions = null, ExportStrings? strings = null)
+        IReadOnlyList<RecordingActionDto>? actions = null, ExportStrings? strings = null,
+        string? minutes = null)
     {
         var s10n = strings ?? ExportStrings.English;
         var sb = new StringBuilder();
         sb.Append("# ").Append(name).Append("\n\n");
         sb.Append("## ").Append(s10n.Summary).Append("\n\n")
           .Append(string.IsNullOrWhiteSpace(summary) ? $"_{s10n.None}_" : summary!.Trim()).Append("\n\n");
+        if (!string.IsNullOrWhiteSpace(minutes))
+            sb.Append("## ").Append(s10n.MeetingMinutes).Append("\n\n").Append(minutes!.Trim()).Append("\n\n");
         if (actions is { Count: > 0 })
         {
             sb.Append("## ").Append(s10n.Actions).Append("\n\n");
@@ -72,7 +81,8 @@ public static class TranscriptFormatter
     /// <summary>Rich Text Format: bold headings, the summary, an actions table (if any), then a table of
     /// time, speaker, and text.</summary>
     public static string ToRtf(string name, string? summary, IReadOnlyList<SegmentDto> segments,
-        IReadOnlyList<RecordingActionDto>? actions = null, ExportStrings? strings = null)
+        IReadOnlyList<RecordingActionDto>? actions = null, ExportStrings? strings = null,
+        string? minutes = null)
     {
         var s10n = strings ?? ExportStrings.English;
         string Bold(string label) => @"{\b " + Rtf(label) + "}"; // bold, RTF-escaped (labels may have accents)
@@ -87,6 +97,8 @@ public static class TranscriptFormatter
         // Extra paragraph mark after the summary for breathing room before the table.
         sb.Append(Bold(s10n.Summary)).Append(@"\line ")
           .Append(string.IsNullOrWhiteSpace(summary) ? Rtf(EmDash) : Rtf(summary!.Trim())).Append(@"\par\par").Append('\n');
+        if (!string.IsNullOrWhiteSpace(minutes))
+            sb.Append(Bold(s10n.MeetingMinutes)).Append(@"\line ").Append(Rtf(minutes!.Trim())).Append(@"\par\par").Append('\n');
         if (actions is { Count: > 0 })
         {
             sb.Append(Bold(s10n.Actions)).Append(@"\par").Append('\n');

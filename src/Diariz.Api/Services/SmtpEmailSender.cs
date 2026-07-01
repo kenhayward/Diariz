@@ -19,7 +19,8 @@ public class SmtpEmailSender : IEmailSender
         _log = log;
     }
 
-    public async Task<bool> SendAsync(string to, string subject, string htmlBody, CancellationToken ct = default)
+    public async Task<bool> SendAsync(string to, string subject, string htmlBody,
+        IEnumerable<EmailAttachment>? attachments = null, CancellationToken ct = default)
     {
         if (!_opts.Enabled)
             return false; // not configured → caller falls back to the displayed link
@@ -28,7 +29,11 @@ public class SmtpEmailSender : IEmailSender
         msg.From.Add(MailboxAddress.Parse(string.IsNullOrWhiteSpace(_opts.From) ? _opts.User : _opts.From));
         msg.To.Add(MailboxAddress.Parse(to));
         msg.Subject = subject;
-        msg.Body = new BodyBuilder { HtmlBody = htmlBody }.ToMessageBody();
+        var builder = new BodyBuilder { HtmlBody = htmlBody };
+        if (attachments is not null)
+            foreach (var a in attachments)
+                builder.Attachments.Add(a.FileName, a.Content, ContentType.Parse(a.ContentType));
+        msg.Body = builder.ToMessageBody();
 
         try
         {
