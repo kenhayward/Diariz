@@ -77,6 +77,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.61.1",
+    date: "2026-07-02",
+    pr: 118,
+    headline: "Fix: merging recordings failed at the upload step",
+    summary:
+      "Merging two or more recordings failed while saving the combined audio (the worker logged a " +
+      "`FileNotFoundError: 'recordings'`). The worker was passing the storage bucket name where the local " +
+      "file path belongs — boto3's upload and download take their file/bucket arguments in opposite orders. " +
+      "Fixed, with a regression test that checks the argument wiring directly (the worker's other tests stub " +
+      "the upload wholesale, so it went unnoticed).",
+    fixed: [
+      "Merging recordings no longer fails at the final upload step (the worker uploaded with boto3's arguments in the wrong order, raising FileNotFoundError: 'recordings').",
+    ],
+  },
+  {
     version: "0.61.0",
     date: "2026-07-02",
     pr: 117,
