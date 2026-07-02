@@ -268,7 +268,16 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   picture on `PictureUrl` (a `picture` JWT claim → account-menu avatar). New Google users land as `Requested`
   (same admin-approval gate; an admin granting a Google account activates it directly, no setup link); a
   verified Google email matching an existing account **auto-links**. Web-only for now — the Electron shell
-  hides the button (Google blocks OAuth in embedded webviews). Later phases add Gmail/Calendar scopes.
+  hides the button (Google blocks OAuth in embedded webviews).
+- **Google data access (opt-in, Phase 2):** a Google-linked user can grant **Calendar (read)** and/or
+  **Gmail (drafts)** from Preferences via an **incremental-consent, offline** flow (`AuthController`
+  `POST google/connect` → the shared `google/callback` branches on a `mode` in the state cookie →
+  `google/disconnect` revokes). The **refresh token is encrypted at rest** on `UserSettings`
+  (`IGoogleTokenProtector`, dedicated Data-Protection purpose); `IGoogleTokenProvider` mints short-lived
+  access tokens on demand (cached in-memory, never persisted or sent to the browser) and clears a
+  revoked/expired token. Scopes `calendar.readonly` + `gmail.compose` are Google **sensitive** scopes
+  (operator enables them on the OAuth app; unverified apps work for the owner + test users). The features
+  that use these (save minutes as a Gmail draft; match a recording to its calendar meeting) land in later PRs.
 - **Isolation:** every recording/section/chat/voiceprint query filters by `UserId` from the JWT
   `NameIdentifier` claim. **Storage quotas** (audio bytes) are per-user: the Platform Administrator sets the
   starter + maximum (`PlatformSettings`), any admin can raise an individual user up to the max.

@@ -275,6 +275,8 @@ export interface UserProfile {
   nativeLanguage: string | null;
   uiLanguage: string | null;
   googleConnected: boolean; // account is linked to a Google identity
+  googleCalendar: boolean; // user granted Google Calendar read access
+  googleGmail: boolean; // user granted Gmail draft access
 }
 
 export interface UpdateUserProfile {

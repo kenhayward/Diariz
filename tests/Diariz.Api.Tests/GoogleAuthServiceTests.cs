@@ -40,10 +40,10 @@ public class GoogleAuthServiceTests
     // ---- Authorization URL ----
 
     [Fact]
-    public void BuildAuthorizationUrl_CarriesClientRedirectStateChallengeAndScopes()
+    public void BuildAuthorizationUrl_SignIn_CarriesClientRedirectStateChallengeAndScopes()
     {
         var url = Build().BuildAuthorizationUrl(
-            "https://diariz.example/api/auth/google/callback", "st4te", "chall3nge");
+            "https://diariz.example/api/auth/google/callback", "st4te", "chall3nge", GoogleAuthService.SignInScope, offline: false);
 
         Assert.StartsWith("https://accounts.google.com/o/oauth2/v2/auth?", url);
         Assert.Contains("client_id=cid.apps.googleusercontent.com", url);
@@ -51,9 +51,22 @@ public class GoogleAuthServiceTests
         Assert.Contains("code_challenge=chall3nge", url);
         Assert.Contains("code_challenge_method=S256", url);
         Assert.Contains("state=st4te", url);
-        // scope "openid email profile" url-encoded (spaces → %20 or +).
         Assert.Contains("scope=openid", url);
-        Assert.Contains("redirect_uri=https", url);
+        Assert.Contains("access_type=online", url);
+        Assert.DoesNotContain("include_granted_scopes", url);
+    }
+
+    [Fact]
+    public void BuildAuthorizationUrl_Offline_RequestsRefreshTokenAndIncrementalConsent()
+    {
+        var scope = $"openid email {GoogleAuthService.CalendarReadScope} {GoogleAuthService.GmailComposeScope}";
+        var url = Build().BuildAuthorizationUrl("https://x/callback", "s", "c", scope, offline: true);
+
+        Assert.Contains("access_type=offline", url);
+        Assert.Contains("prompt=consent", url);
+        Assert.Contains("include_granted_scopes=true", url);
+        Assert.Contains("calendar.readonly", url);
+        Assert.Contains("gmail.compose", url);
     }
 
     [Fact]
