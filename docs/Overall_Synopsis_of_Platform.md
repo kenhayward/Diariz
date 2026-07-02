@@ -283,8 +283,13 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   calls **`IGoogleGmailClient.CreateDraftAsync`** — a MimeKit MIME message base64url-encoded into a
   `POST https://gmail.googleapis.com/gmail/v1/users/me/drafts` (Bearer access token from
   `IGoogleTokenProvider`). It creates a **draft only** in the user's own mailbox (never sends), 400s without
-  the grant, and returns `{ draftUrl }` (the web app opens it). The other feature (match a recording to its
-  calendar meeting) lands in a later PR.
+  the grant, and returns `{ draftUrl }` (the web app opens it).
+- **Match a recording to its calendar meeting (Phase 2 feature):** with the Calendar grant, the recording's
+  Overview calls **`GET /api/recordings/{id}/calendar-match`**, which asks **`IGoogleCalendarClient.ListEventsAsync`**
+  for the user's primary-calendar events around the recording's wall-clock span (`CreatedAt` .. `+DurationMs`,
+  padded ±30 min), and returns the **best time-overlapping** event (`GoogleCalendarClient.PickBest`) as
+  `{ match }` (or `null`). Read-only (`calendar.readonly`); 400s without the grant. The Overview shows the
+  matched meeting with a link to the Google Calendar event.
 - **Isolation:** every recording/section/chat/voiceprint query filters by `UserId` from the JWT
   `NameIdentifier` claim. **Storage quotas** (audio bytes) are per-user: the Platform Administrator sets the
   starter + maximum (`PlatformSettings`), any admin can raise an individual user up to the max.

@@ -56,7 +56,9 @@ Diariz is **multi-user** with role-based access: people request access (or an ad
 an administrator approves, and each user sets up their own account and keeps their own private
 recordings, transcripts, and chats. Users can also **sign in with Google** (when an administrator has
 configured it) — Diariz reads their name, email, and profile picture (shown in the account menu), still
-subject to admin approval for new sign-ups. Each user has a **storage quota** (audio): the Platform
+subject to admin approval for new sign-ups. A Google-linked user can opt in (Preferences → Google) to let
+Diariz **read their Google Calendar** — so a recording's Overview shows the **meeting it overlaps** — and
+**save meeting minutes as a Gmail draft**; both are revocable and can be disconnected any time. Each user has a **storage quota** (audio): the Platform
 Administrator sets the starter and maximum, any administrator can raise an individual user, and your
 usage shows in the account menu. The Platform Administrator can also **back up and restore the whole
 platform** (database + stored files) as a single transferable archive from Settings → Maintenance.
@@ -79,6 +81,20 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.67.0",
+    date: "2026-07-02",
+    pr: 154,
+    headline: "See the calendar meeting a recording came from",
+    summary:
+      "If you've connected Google and opted in to **Calendar** (Preferences → Google), a recording's **Overview** " +
+      "now shows the **Google Calendar meeting it overlaps** — matched by time — with a link straight to the event. " +
+      "Handy for confirming which meeting a recording belongs to. Calendar access is **read-only**; nothing is " +
+      "written to your calendar. Shown only when you've granted Calendar access.",
+    added: [
+      "Overview tab: shows the matching Google Calendar meeting (by time overlap), linking to the event.",
+    ],
+  },
   {
     version: "0.66.0",
     date: "2026-07-02",

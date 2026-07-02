@@ -84,6 +84,13 @@ export default function RecordingDetail() {
   const { data: profile } = useQuery({ queryKey: ["user-profile"], queryFn: api.getProfile });
   const { data: languages = [] } = useQuery({ queryKey: ["languages"], queryFn: fetchLanguages });
   const nativeLang = languages.find((l) => l.code === profile?.nativeLanguage) ?? null;
+  // If the user has connected Google Calendar, find the meeting this recording overlaps (shown on Overview).
+  const { data: calendarMatch } = useQuery({
+    queryKey: ["calendar-match", id],
+    queryFn: () => api.getCalendarMatch(id),
+    enabled: Boolean(id) && profile?.googleCalendar === true,
+    retry: false,
+  });
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
@@ -782,6 +789,25 @@ export default function RecordingDetail() {
             <dd className="text-gray-800 dark:text-gray-200">{formatTimeHm(rec.createdAt)}</dd>
             <dt className="text-gray-500 dark:text-gray-400">{t("workspace:durationLabel")}</dt>
             <dd className="text-gray-800 dark:text-gray-200">{formatDurationHm(rec.durationMs)}</dd>
+            {calendarMatch && (
+              <>
+                <dt className="text-gray-500 dark:text-gray-400">{t("workspace:meetingLabel")}</dt>
+                <dd className="text-gray-800 dark:text-gray-200">
+                  {calendarMatch.htmlLink ? (
+                    <a
+                      href={calendarMatch.htmlLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-indigo-600 hover:underline dark:text-indigo-400"
+                    >
+                      {calendarMatch.summary || t("workspace:meetingUntitled")}
+                    </a>
+                  ) : (
+                    calendarMatch.summary || t("workspace:meetingUntitled")
+                  )}
+                </dd>
+              </>
+            )}
           </dl>
           <h3 className="mb-1 text-base font-semibold text-gray-800 dark:text-gray-100">{t("workspace:sectionSummary")}</h3>
           {rec.summary ? (

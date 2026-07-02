@@ -213,6 +213,7 @@ builder.Services.AddSingleton<IGoogleTokenProtector, GoogleTokenProtector>();
 builder.Services.AddScoped<IGoogleTokenProvider, GoogleTokenProvider>();
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient<IGoogleGmailClient, GoogleGmailClient>();
+builder.Services.AddHttpClient<IGoogleCalendarClient, GoogleCalendarClient>();
 
 // ---- App services ----
 builder.Services.AddScoped<ITokenService, TokenService>();

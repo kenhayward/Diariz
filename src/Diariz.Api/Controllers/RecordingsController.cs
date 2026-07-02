@@ -29,13 +29,15 @@ public class RecordingsController : ControllerBase
     private readonly UploadOptions _uploads;
     private readonly IExportLocalizer? _exportLocalizer;
     private readonly IGoogleGmailClient? _gmail;
+    private readonly IGoogleCalendarClient? _calendar;
     private readonly string _defaultModel;
 
     public RecordingsController(
         DiarizDbContext db, IAudioStorage storage, IJobQueue queue,
         IHubContext<TranscriptionHub> hub, IConfiguration config,
         ISummarizationSettingsResolver summarization, IEmailSender email, ISpeakerIdentifier identifier,
-        IOptions<UploadOptions> uploads, IExportLocalizer? exportLocalizer = null, IGoogleGmailClient? gmail = null)
+        IOptions<UploadOptions> uploads, IExportLocalizer? exportLocalizer = null, IGoogleGmailClient? gmail = null,
+        IGoogleCalendarClient? calendar = null)
     {
         _db = db;
         _storage = storage;
@@ -47,6 +49,7 @@ public class RecordingsController : ControllerBase
         _uploads = uploads.Value;
         _exportLocalizer = exportLocalizer;
         _gmail = gmail;
+        _calendar = calendar;
         _defaultModel = config["Transcription:DefaultModel"] ?? "whisperx-large-v3";
     }
 
@@ -521,6 +524,39 @@ public class RecordingsController : ControllerBase
         var draftUrl = await _gmail!.CreateDraftAsync(UserId, address!, MeetingMinutesEmail.Subject(name, labels), html, ct);
         if (draftUrl is null) return BadRequest("Your Google connection needs reauthorising — reconnect Gmail in Preferences.");
         return Ok(new { draftUrl });
+    }
+
+    /// <summary>Find the Google Calendar meeting this recording was most likely captured during (by time
+    /// overlap against the recording's wall-clock span). Requires the user to have granted Calendar access.
+    /// Returns <c>{ match: null }</c> when nothing overlaps.</summary>
+    [HttpGet("{id:guid}/calendar-match")]
+    public async Task<IActionResult> CalendarMatch(Guid id, CancellationToken ct)
+    {
+        var settings = await _db.UserSettings.FindAsync([UserId], ct);
+        if (settings?.GoogleCalendarGranted != true)
+            return BadRequest("Connect Google Calendar in Preferences to match meetings.");
+
+        var rec = await _db.Recordings
+            .Where(r => r.Id == id && r.UserId == UserId)
+            .Select(r => new { r.CreatedAt, r.DurationMs })
+            .FirstOrDefaultAsync(ct);
+        if (rec is null) return NotFound();
+
+        // The recording's wall-clock span, padded so a meeting that started a little before recording began
+        // (or a recording started a touch late) still matches.
+        var pad = TimeSpan.FromMinutes(30);
+        var recStart = rec.CreatedAt;
+        var recEnd = rec.CreatedAt.AddMilliseconds(rec.DurationMs);
+        var events = await _calendar!.ListEventsAsync(UserId, recStart - pad, recEnd + pad, ct);
+        if (events is null) return BadRequest("Your Google connection needs reauthorising — reconnect Calendar in Preferences.");
+
+        var best = GoogleCalendarClient.PickBest(events, recStart, recEnd);
+        return Ok(new
+        {
+            match = best is null
+                ? null
+                : new { best.Id, best.Summary, Start = best.Start, End = best.End, best.HtmlLink },
+        });
     }
 
     [HttpPut("{id:guid}/segments/{segmentId:guid}")]

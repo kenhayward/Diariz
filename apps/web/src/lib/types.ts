@@ -279,6 +279,15 @@ export interface UserProfile {
   googleGmail: boolean; // user granted Gmail draft access
 }
 
+/// A Google Calendar meeting matched to a recording by time overlap.
+export interface CalendarMatch {
+  id: string;
+  summary: string | null;
+  start: string; // ISO
+  end: string; // ISO
+  htmlLink: string | null;
+}
+
 export interface UpdateUserProfile {
   fullName: string | null;
   nativeLanguage: string | null;
