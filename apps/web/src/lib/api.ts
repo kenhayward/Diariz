@@ -97,6 +97,19 @@ export const api = {
     return data;
   },
 
+  /// After a successful Google sign-in the API leaves the access token in a one-time HttpOnly cookie; the
+  /// callback page swaps it for the token here (a JSON body, so no proxy can strip it). Returns null if the
+  /// handoff cookie is absent/expired. Skips the global 401 redirect so we can show a friendly error.
+  async exchangeGoogleToken(): Promise<string | null> {
+    try {
+      const { data } = await http.post<{ accessToken: string }>(
+        "/api/auth/google/exchange", null, { withCredentials: true, skipAuthRedirect: true });
+      return data.accessToken ?? null;
+    } catch {
+      return null;
+    }
+  },
+
   // ---- Access requests / account setup (public) ----
 
   async requestAccess(email: string, fullName?: string): Promise<void> {

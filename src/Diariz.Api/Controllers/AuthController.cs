@@ -242,24 +242,40 @@ public class AuthController : ControllerBase
     }
 
     private const string AuthHandoffCookie = "diariz_auth";
-    private const string HandoffPath = "/auth/google/callback";
+    private const string HandoffCookiePath = "/api/auth/google";
+    private const string SpaCallbackPath = "/auth/google/callback";
 
-    /// <summary>Hand the freshly-minted JWT to the SPA via a short-lived, same-origin cookie (the SPA reads
-    /// it in JS, then deletes it) rather than a URL fragment: a fragment on a redirect's Location header can
-    /// be stripped by intermediary reverse proxies, silently dropping the token. The cookie never appears in
-    /// a URL / access log / Referer, and is scoped to the callback path.</summary>
+    /// <summary>Hand the freshly-minted JWT to the SPA without ever putting it in a URL. The token rides in a
+    /// short-lived, <b>HttpOnly</b> cookie scoped to the Google auth path; the SPA then trades it for the
+    /// token via <c>POST google/exchange</c> (a JSON body, like normal login). This survives hostile reverse
+    /// proxies that strip URL fragments <i>and</i> force <c>HttpOnly</c> on cookies (both of which defeat any
+    /// JS-visible handoff). The token never appears in a URL, access log, or Referer.</summary>
     private async Task<IActionResult> SignedInRedirectAsync(ApplicationUser user)
     {
         var (token, _) = _tokens.CreateAccessToken(user, await _users.GetRolesAsync(user));
-        Response.Cookies.Append(AuthHandoffCookie, token, new CookieOptions
-        {
-            HttpOnly = false,             // the SPA must read it from document.cookie
-            Secure = Request.IsHttps,
-            SameSite = SameSiteMode.Lax,  // same-origin redirect from our own callback endpoint
-            Path = HandoffPath,
-            MaxAge = TimeSpan.FromMinutes(2),
-        });
-        return Redirect($"{WebBase()}{HandoffPath}");
+        Response.Cookies.Append(AuthHandoffCookie, token, HandoffCookieOptions());
+        return Redirect($"{WebBase()}{SpaCallbackPath}");
+    }
+
+    private CookieOptions HandoffCookieOptions() => new()
+    {
+        HttpOnly = true,               // read server-side only (via the exchange endpoint)
+        Secure = Request.IsHttps,
+        SameSite = SameSiteMode.Lax,   // stored from the top-level redirect; sent on the same-origin exchange
+        Path = HandoffCookiePath,
+        MaxAge = TimeSpan.FromMinutes(2),
+    };
+
+    /// <summary>Public: the SPA lands on <c>/auth/google/callback</c> after a successful Google sign-in and
+    /// calls this to swap the one-time handoff cookie for its access token (returned in the JSON body, then
+    /// the cookie is expired). 401 when there is no handoff cookie.</summary>
+    [HttpPost("google/exchange")]
+    public IActionResult GoogleExchange()
+    {
+        var token = Request.Cookies[AuthHandoffCookie];
+        Response.Cookies.Delete(AuthHandoffCookie, HandoffCookieOptions());
+        if (string.IsNullOrEmpty(token)) return Unauthorized();
+        return Ok(new { accessToken = token }); // the SPA reads the token's expiry from the JWT itself
     }
 
     private CookieOptions StateCookieOptions() => new()

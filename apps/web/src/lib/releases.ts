@@ -80,6 +80,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.63.3",
+    date: "2026-07-02",
+    pr: 149,
+    headline: "Google sign-in: hardened token handoff",
+    summary:
+      "Some reverse proxies rewrite responses aggressively — stripping the URL fragment from redirects and " +
+      "forcing `HttpOnly` on cookies — which defeated every browser-visible way of handing the signed-in " +
+      "token to the app. The app now retrieves the token the same way normal login does: after Google " +
+      "sign-in it calls a small endpoint that returns the token in a JSON body (from a one-time HttpOnly " +
+      "cookie), which no proxy tampers with. The token still never appears in a URL, log, or Referer.",
+    fixed: [
+      "Google sign-in now completes behind aggressive reverse proxies (that strip URL fragments and force HttpOnly on cookies) by exchanging a one-time HttpOnly handoff cookie for the token via POST /api/auth/google/exchange.",
+    ],
+  },
+  {
     version: "0.63.2",
     date: "2026-07-02",
     pr: 148,
