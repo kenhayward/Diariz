@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: npm
@@ -66,7 +66,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # need history to diff the branch against its base
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
       # A translation-only PR may touch at most one non-English locale folder (core PRs are exempt).

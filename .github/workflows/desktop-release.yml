@@ -23,7 +23,7 @@ jobs:
         working-directory: apps/desktop
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           # Node 22: the test runner's glob support (`node --test "src/**/*.test.js"`)
           # only exists on Node >= 21; Node 20 treats the pattern as a literal path.
