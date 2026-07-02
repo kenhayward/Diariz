@@ -76,6 +76,38 @@ public class AttachmentsControllerTests
     }
 
     [Fact]
+    public async Task AddMarkdown_PreservesPunctuationInName_IncludingColon()
+    {
+        // "Email: <subject>" names (from the send_email tool) must survive intact — on Windows
+        // Path.GetFileName would treat ':' as the volume separator and drop the "Email:" prefix.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await Seed(db, userId);
+        var c = Build(db, userId);
+
+        var dto = Assert.IsType<AttachmentDto>(
+            (await c.AddMarkdown(rec.Id, new AddMarkdownAttachmentRequest("Email: Follow-ups", "x"))).Value);
+        Assert.Equal("Email: Follow-ups.md", dto.Name);
+    }
+
+    [Fact]
+    public async Task AddMarkdown_StripsSmuggledDirectoryPath_FromName()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await Seed(db, userId);
+        var c = Build(db, userId);
+
+        var win = Assert.IsType<AttachmentDto>(
+            (await c.AddMarkdown(rec.Id, new AddMarkdownAttachmentRequest(@"..\..\secret", "x"))).Value);
+        Assert.Equal("secret.md", win.Name);
+
+        var nix = Assert.IsType<AttachmentDto>(
+            (await c.AddMarkdown(rec.Id, new AddMarkdownAttachmentRequest("../../secret2", "x"))).Value);
+        Assert.Equal("secret2.md", nix.Name);
+    }
+
+    [Fact]
     public async Task AddMarkdown_NotOwned_ReturnsNotFound()
     {
         using var db = TestDb.Create();

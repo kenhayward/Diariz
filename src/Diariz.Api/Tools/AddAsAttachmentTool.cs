@@ -44,10 +44,7 @@ public sealed class AddAsAttachmentTool : IChatTool
         var displayName = string.IsNullOrWhiteSpace(name) ? "note" : name!;
 
         // Candidates are the in-context recordings the user actually owns.
-        var candidates = await _db.Recordings
-            .Where(r => r.UserId == ctx.UserId && ctx.SelectedRecordingIds.Contains(r.Id))
-            .Select(r => new DraftRecording(r.Id, r.Name ?? r.Title))
-            .ToListAsync(ct);
+        var candidates = await AttachmentTargets.ForContextAsync(_db, ctx, ct);
         if (candidates.Count == 0)
             return "There is no transcript in context to attach to. Ask the user to select a transcript, then try again.";
 
