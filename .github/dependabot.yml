@@ -1,14 +1,16 @@
 # Dependabot version-update configuration.
 #
-# This file only drives scheduled *version* updates. Dependabot *alerts* and *security updates* (which
-# react to the GitHub Advisory Database) are enabled separately under Settings -> Code security, not here.
+# Monthly cadence + one grouped PR per ecosystem, to keep the update volume low (a weekly, un-grouped
+# config produced ~17 individual PRs at once). Dependabot *alerts* and *security updates* (which react to
+# the GitHub Advisory Database) are enabled separately under Settings -> Code security, not here, and are
+# unaffected by this cadence.
 version: 2
 updates:
   # Web SPA (React/Vite/Tailwind).
   - package-ecosystem: "npm"
     directory: "/apps/web"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
     groups:
       web-deps:
         patterns: ["*"]
@@ -17,32 +19,41 @@ updates:
   - package-ecosystem: "npm"
     directory: "/apps/desktop"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
     groups:
       desktop-deps:
         patterns: ["*"]
 
-  # .NET API + Domain. packages.lock.json (see Directory.Build.props) lets Dependabot bump transitives too.
+  # .NET API + Domain. Grouped so a framework bump (e.g. the ASP.NET/EF 9 -> 10 alignment) arrives as one
+  # coordinated PR instead of individual bumps that can't build on their own.
   - package-ecosystem: "nuget"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    groups:
+      nuget-deps:
+        patterns: ["*"]
 
   # Python transcription worker. The GPU/compat stack is deliberately pinned (see CLAUDE.md) — let
-  # Dependabot watch for security advisories but do NOT open version-bump PRs for those packages, or it
-  # will keep proposing breaking upgrades.
+  # Dependabot watch for security advisories but do NOT open version-bump PRs for those packages.
   - package-ecosystem: "pip"
     directory: "/src/Diariz.Worker"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    groups:
+      worker-deps:
+        patterns: ["*"]
     ignore:
       - dependency-name: "whisperx"
       - dependency-name: "transformers"
       - dependency-name: "huggingface_hub"
       - dependency-name: "ctranslate2"
 
-  # The GitHub Actions used by the CI/desktop-release workflows.
+  # The GitHub Actions used by the CI/desktop-release/CodeQL workflows.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
+    groups:
+      actions-deps:
+        patterns: ["*"]
