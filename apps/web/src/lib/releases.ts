@@ -90,6 +90,9 @@ export const RELEASES: Release[] = [
     changed: [
       "CI runs on GitHub-hosted runners (ubuntu-latest for tests, windows-latest for the desktop installer) rather than a self-hosted runner; the .NET SDK and Python are now provisioned by setup actions.",
     ],
+    fixed: [
+      "Attachment names now strip a smuggled directory path on every platform. The previous sanitisation relied on Path.GetFileName, which only strips backslashes on Windows — so on the Linux production servers a name like “..\\..\\secret” slipped through unstripped. (Surfaced by running the tests on Linux.)",
+    ],
   },
   {
     version: "0.62.1",
