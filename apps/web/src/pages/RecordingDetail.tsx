@@ -104,7 +104,20 @@ export default function RecordingDetail() {
     setSelectedSegIds(new Set());
   }, [id]);
 
-  // When opened from a chat transcript link (/recordings/:id?t=ms), highlight and scroll to that segment.
+  // Active detail tab, persisted globally (like the left "Meetings" panel) so it survives reloads and
+  // navigating between recordings. Defaults to Overview — but a chat transcript deep-link (?t=…) targets a
+  // segment in the Transcript tab, so open on that tab when the URL carries one.
+  const [tab, setTab] = useState<string>(() =>
+    searchParams.get("t") != null ? "transcript" : localStorage.getItem(DETAIL_TAB_KEY) ?? "overview",
+  );
+  const selectTab = (key: string) => {
+    setTab(key);
+    localStorage.setItem(DETAIL_TAB_KEY, key);
+  };
+
+  // When opened from a chat transcript link (/recordings/:id?t=ms), switch to the Transcript tab (so the
+  // segment is rendered), then highlight and scroll to it. The nested rAF waits one extra frame so the tab's
+  // content has committed even when we had to switch tabs first.
   const tParam = searchParams.get("t");
   useEffect(() => {
     if (tParam == null) return;
@@ -113,11 +126,14 @@ export default function RecordingDetail() {
     if (!Number.isFinite(ms) || !segs || segs.length === 0) return;
     const idx = segmentIndexAtMs(segs, ms);
     if (idx < 0) return;
+    setTab("transcript");
     setActiveIdx(idx);
     const segId = segs[idx].id;
-    // Defer until the rows have rendered.
+    // Defer until the (possibly just-switched) transcript rows have rendered.
     requestAnimationFrame(() =>
-      document.getElementById(`seg-${segId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }),
+      requestAnimationFrame(() =>
+        document.getElementById(`seg-${segId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }),
+      ),
     );
   }, [tParam, rec]);
 
@@ -145,13 +161,6 @@ export default function RecordingDetail() {
   const [editingSummary, setEditingSummary] = useState(false);
   const [editingMinutes, setEditingMinutes] = useState(false);
   const [emailMinutesOpen, setEmailMinutesOpen] = useState(false);
-  // Active detail tab, persisted globally (like the left "Meetings" panel) so it survives reloads and
-  // navigating between recordings. Defaults to Overview.
-  const [tab, setTab] = useState<string>(() => localStorage.getItem(DETAIL_TAB_KEY) ?? "overview");
-  const selectTab = (key: string) => {
-    setTab(key);
-    localStorage.setItem(DETAIL_TAB_KEY, key);
-  };
   const [dragging, setDragging] = useState(false);
   const [editingSeg, setEditingSeg] = useState<SegmentDto | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);

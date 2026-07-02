@@ -35,9 +35,12 @@ export interface ToolsLabels {
   heading: string;
   disabled: string;
   none: string;
+  colName: string;
+  colDescription: string;
 }
 
-/// Markdown for "/tools": the enabled chat tools (title + description), or a note when tools are off / none on.
+/// Markdown for "/tools": the enabled chat tools as a two-column table (name + description), or a note when
+/// tools are off / none on. Pipes in the labels are escaped so the Markdown table stays intact.
 export function buildToolsOutput(
   tools: { title: string; description: string; enabled: boolean }[],
   masterEnabled: boolean,
@@ -46,7 +49,12 @@ export function buildToolsOutput(
   if (!masterEnabled) return labels.disabled;
   const on = tools.filter((t) => t.enabled);
   if (on.length === 0) return labels.none;
-  return `**${labels.heading}**\n\n` + on.map((t) => `- **${t.title}** — ${t.description}`).join("\n");
+  const esc = (s: string) => s.replace(/\|/g, "\\|");
+  const rows = on.map((t) => `| ${esc(t.title)} | ${esc(t.description)} |`).join("\n");
+  return (
+    `**${labels.heading}**\n\n` +
+    `| ${esc(labels.colName)} | ${esc(labels.colDescription)} |\n| --- | --- |\n${rows}`
+  );
 }
 
 /// Markdown for "/help": the available slash commands.
