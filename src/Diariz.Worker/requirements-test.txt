@@ -5,7 +5,7 @@
 # real so module imports (callback/worker/storage/config) are exercised as shipped.
 pytest==8.3.4
 requests==2.32.3
-redis==5.2.1
+redis==8.0.1
 boto3==1.35.99
 # numpy is a real (non-GPU) dependency of pipeline._speaker_embeddings — installed so the
 # voiceprint-pooling logic runs under test with a stub embedder (no torch/speechbrain needed).
