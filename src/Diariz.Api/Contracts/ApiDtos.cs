@@ -15,7 +15,7 @@ public record SetupRequest(string Email, string Token, string FullName, string P
 // ---- Admin user management ----
 public record AdminUserDto(
     Guid Id, string Email, string? FullName, string AccountType, UserStatus Status, bool IsEnabled,
-    long QuotaBytes, long UsedBytes);
+    long QuotaBytes, long UsedBytes, bool HasGoogle = false);
 public record AddUserRequest(string Email, string? FullName = null);
 public record SetQuotaRequest(long QuotaBytes);
 public record SetRoleRequest(string Role);

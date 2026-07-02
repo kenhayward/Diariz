@@ -9,6 +9,22 @@ public class JwtOptions
     public int AccessTokenMinutes { get; set; } = 120;
 }
 
+/// <summary>Google OAuth 2.0 sign-in (server-side authorization-code flow). Sign-in is available only when
+/// both a client id and secret are configured; otherwise the endpoints 404 and the web login hides the
+/// Google button.</summary>
+public class GoogleAuthOptions
+{
+    public const string Section = "GoogleAuth";
+    public string ClientId { get; set; } = "";
+    public string ClientSecret { get; set; } = "";
+    /// <summary>Explicit OAuth redirect URI. Empty = derive from the request as
+    /// <c>{scheme}://{host}/api/auth/google/callback</c>. Must exactly match a URI registered on the
+    /// Google OAuth client.</summary>
+    public string RedirectUri { get; set; } = "";
+
+    public bool Enabled => !string.IsNullOrWhiteSpace(ClientId) && !string.IsNullOrWhiteSpace(ClientSecret);
+}
+
 public class StorageOptions
 {
     public const string Section = "Storage";

@@ -92,6 +92,10 @@ still have it; recordings whose audio was deleted merge their transcript only (t
 - **Multi-user RBAC**: Standard / Administrator / Platform Administrator roles, an access-request →
 admin-grant → account-setup lifecycle (one-time email link, with an in-app fallback when SMTP is
 unconfigured), and admin user management. Each user's data is isolated to them. Light/Dark/Auto theming.
+- **Sign in with Google** (optional): OAuth 2.0 sign-in that reads the user's name, email, and profile
+picture (shown in the account menu). New Google sign-ups still require admin approval, and a Google email
+matching an existing account links to it automatically. Enabled when the operator configures a Google
+OAuth client; web-only for now (the desktop app keeps password login).
 - **Preferences**: every user can change their own **display name** and pick their **native** and **app**
 language (chosen at signup or later from the account menu) — groundwork for upcoming UI localization and
 transcript translation.

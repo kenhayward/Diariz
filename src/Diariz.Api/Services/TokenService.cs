@@ -29,6 +29,10 @@ public class TokenService : ITokenService
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             new("name", user.FullName ?? string.Empty),
         };
+        // Profile picture (from a linked Google account) — lets the SPA render the avatar straight from the
+        // token. Only present when set, so password-only accounts fall back to initials.
+        if (!string.IsNullOrEmpty(user.PictureUrl))
+            claims.Add(new Claim("picture", user.PictureUrl));
         foreach (var role in roles)
             claims.Add(new Claim(ClaimTypes.Role, role));
 

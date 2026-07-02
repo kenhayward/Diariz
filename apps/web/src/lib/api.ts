@@ -90,6 +90,13 @@ export const api = {
     return data;
   },
 
+  /// Which external sign-in providers the server has configured (public). Used to show/hide the
+  /// "Sign in with Google" button on the login page.
+  async getAuthProviders(): Promise<{ google: boolean }> {
+    const { data } = await http.get<{ google: boolean }>("/api/auth/providers");
+    return data;
+  },
+
   // ---- Access requests / account setup (public) ----
 
   async requestAccess(email: string, fullName?: string): Promise<void> {

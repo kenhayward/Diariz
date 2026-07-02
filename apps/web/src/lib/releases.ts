@@ -54,7 +54,9 @@ extracting, uploading) and your storage usage, transcription usage, and total tr
 
 Diariz is **multi-user** with role-based access: people request access (or an administrator adds them),
 an administrator approves, and each user sets up their own account and keeps their own private
-recordings, transcripts, and chats. Each user has a **storage quota** (audio): the Platform
+recordings, transcripts, and chats. Users can also **sign in with Google** (when an administrator has
+configured it) — Diariz reads their name, email, and profile picture (shown in the account menu), still
+subject to admin approval for new sign-ups. Each user has a **storage quota** (audio): the Platform
 Administrator sets the starter and maximum, any administrator can raise an individual user, and your
 usage shows in the account menu. The Platform Administrator can also **back up and restore the whole
 platform** (database + stored files) as a single transferable archive from Settings → Maintenance.
@@ -77,6 +79,26 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.63.0",
+    date: "2026-07-02",
+    pr: 146,
+    headline: "Sign in with Google",
+    summary:
+      "You can now **sign in with Google**. Click **Sign in with Google** on the login page to register or " +
+      "sign in with your Google account — Diariz reads your name, email, and profile picture (which replaces " +
+      "your initials in the account menu). New Google sign-ups still require an administrator's approval, and " +
+      "if your Google email matches an existing account the two are linked automatically. This first phase " +
+      "covers login only; reading Gmail/Calendar to line transcripts up with meetings comes later. Google " +
+      "sign-in appears only when an administrator has configured it, and is web-only for now (the desktop app " +
+      "keeps password login).",
+    added: [
+      "Sign in with Google on the login page (server-side OAuth 2.0 authorization-code flow with PKCE).",
+      "Your Google profile picture replaces your initials in the account-menu avatar (falling back to initials if it can't load).",
+      "First-time Google users are created pending admin approval; an admin approving a Google account activates it directly (no setup link). Manage Users shows which accounts use Google.",
+      "A Google sign-in whose verified email matches an existing account links to it automatically.",
+    ],
+  },
   {
     version: "0.62.6",
     date: "2026-07-02",

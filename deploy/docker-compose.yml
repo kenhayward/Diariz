@@ -87,6 +87,11 @@ services:
       Seed__Password: ${SEED_PASSWORD}
       Seed__FullName: ${SEED_FULL_NAME:-Platform Administrator}
       App__PublicUrl: ${APP_PUBLIC_URL:-http://localhost:8081}
+      # Google sign-in (optional). Leave the client id/secret empty to disable it (the login page then hides
+      # the Google button). RedirectUri is derived from App__PublicUrl when left blank.
+      GoogleAuth__ClientId: ${GOOGLE_CLIENT_ID:-}
+      GoogleAuth__ClientSecret: ${GOOGLE_CLIENT_SECRET:-}
+      GoogleAuth__RedirectUri: ${GOOGLE_REDIRECT_URI:-}
       Email__SmtpHost: ${SMTP_HOST:-}
       Email__SmtpPort: ${SMTP_PORT:-587}
       Email__User: ${SMTP_USER:-}

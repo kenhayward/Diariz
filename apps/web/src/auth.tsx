@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, getToken, setToken } from "./lib/api";
-import { emailFromToken, fullNameFromToken, rolesFromToken, isAdminFromToken, isPlatformAdminFromToken } from "./lib/jwt";
+import { emailFromToken, fullNameFromToken, pictureFromToken, rolesFromToken, isAdminFromToken, isPlatformAdminFromToken } from "./lib/jwt";
 import { refreshDelayMs } from "./lib/tokenRefresh";
 import { initialsFromName, initialsFromEmail } from "./lib/initials";
 
@@ -12,6 +12,8 @@ interface AuthState {
   isAdmin: boolean;
   isPlatformAdmin: boolean;
   initials: string;
+  /// Profile picture URL from a linked Google account, or null (then the avatar shows initials).
+  pictureUrl: string | null;
   login: (email: string, password: string) => Promise<void>;
   /// Adopt an access token directly (e.g. after account setup auto-signs the user in).
   setSession: (token: string) => void;
@@ -29,6 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = useMemo(() => isAdminFromToken(token), [token]);
   const isPlatformAdmin = useMemo(() => isPlatformAdminFromToken(token), [token]);
   const initials = useMemo(() => (fullName ? initialsFromName(fullName) : initialsFromEmail(email)), [fullName, email]);
+  const pictureUrl = useMemo(() => pictureFromToken(token), [token]);
 
   function setSession(accessToken: string) {
     setToken(accessToken);
@@ -85,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ isAuthed: Boolean(token), email, fullName, roles, isAdmin, isPlatformAdmin, initials, login, setSession, logout }}
+      value={{ isAuthed: Boolean(token), email, fullName, roles, isAdmin, isPlatformAdmin, initials, pictureUrl, login, setSession, logout }}
     >
       {children}
     </AuthContext.Provider>

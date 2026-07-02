@@ -99,6 +99,11 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.Property(u => u.FullName).HasMaxLength(256);
             // Default backfills existing rows on migration and any user created without an explicit quota.
             e.Property(u => u.QuotaBytes).HasDefaultValue(Entities.PlatformSettings.DefaultStarterQuotaBytes);
+            // Google linkage: one Google identity maps to at most one user. Nullable, so multiple NULLs
+            // (password-only accounts) coexist under a unique index in Postgres.
+            e.Property(u => u.GoogleSubject).HasMaxLength(256);
+            e.HasIndex(u => u.GoogleSubject).IsUnique();
+            e.Property(u => u.PictureUrl).HasMaxLength(1024);
         });
 
         // Platform-wide settings: a single seeded row (Id = 1).

@@ -80,7 +80,11 @@ public class RbacIntegrationTests(ContainersFixture fx)
         var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
         var db = sp.GetRequiredService<DiarizDbContext>();
         var platform = new PlatformSettingsService(db);
-        var auth = new AuthController(users, Tokens(), platform);
+        var auth = new AuthController(users, Tokens(), platform,
+            new GoogleAuthService(new HttpClient(), Options.Create(new GoogleAuthOptions())),
+            new GoogleSignInHandler(users, platform),
+            Options.Create(new GoogleAuthOptions()), Options.Create(new AppPublicOptions()),
+            sp.GetRequiredService<IDataProtectionProvider>());
 
         var email = $"life-{Guid.NewGuid():N}@x.test";
 

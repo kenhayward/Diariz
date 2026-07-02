@@ -23,7 +23,7 @@ const THEMES: { value: ThemeChoice; key: string }[] = [
 
 export default function UserMenu() {
   const { t } = useTranslation("account");
-  const { initials, email, fullName, isAdmin, logout } = useAuth();
+  const { initials, pictureUrl, email, fullName, isAdmin, logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const tour = useTour();
   const { data: storage } = useQuery({ queryKey: ["user-storage"], queryFn: api.getUserStorage });
@@ -61,7 +61,7 @@ export default function UserMenu() {
         data-tour="account"
         onClick={() => setOpen((v) => !v)}
       >
-        <Avatar initials={initials} />
+        <Avatar initials={initials} pictureUrl={pictureUrl} />
       </button>
 
       {open && (

@@ -4,6 +4,7 @@ using Diariz.Api.Controllers;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain.Entities;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -15,14 +16,23 @@ public class AuthControllerTests
 {
     private const string GoodPassword = "Sup3rSecret!";
 
-    private static AuthController BuildController(IdentityTestHost host)
+    private static AuthController BuildController(
+        IdentityTestHost host, IGoogleAuthService? google = null, AppPublicOptions? appOpts = null,
+        GoogleAuthOptions? googleOpts = null)
     {
         var tokens = new TokenService(Options.Create(new JwtOptions
         {
             Key = "test-signing-key-at-least-32-bytes-long!!",
             AccessTokenMinutes = 60,
         }));
-        return new AuthController(host.Users, tokens, new PlatformSettingsService(host.Db));
+        var platform = new PlatformSettingsService(host.Db);
+        return new AuthController(
+            host.Users, tokens, platform,
+            google ?? new FakeGoogleAuthService { Enabled = false },
+            new GoogleSignInHandler(host.Users, platform),
+            Options.Create(googleOpts ?? new GoogleAuthOptions()),
+            Options.Create(appOpts ?? new AppPublicOptions()),
+            new EphemeralDataProtectionProvider());
     }
 
     private static async Task<ApplicationUser> CreateUser(
@@ -247,5 +257,177 @@ public class AuthControllerTests
         Assert.True(good.Valid);
         Assert.Equal("set@x.test", good.Email);
         Assert.False(bad.Valid);
+    }
+
+    // ---- Google sign-in ----
+
+    private const string WebBase = "http://localhost:8081";
+    private static AppPublicOptions PublicOpts => new() { PublicUrl = WebBase };
+
+    [Fact]
+    public void Providers_ReflectsWhetherGoogleIsEnabled()
+    {
+        using var host = new IdentityTestHost();
+
+        var on = BuildController(host, new FakeGoogleAuthService { Enabled = true });
+        var off = BuildController(host, new FakeGoogleAuthService { Enabled = false });
+
+        Assert.Equal("{ google = True }", ((OkObjectResult)on.Providers()).Value!.ToString());
+        Assert.Equal("{ google = False }", ((OkObjectResult)off.Providers()).Value!.ToString());
+    }
+
+    [Fact]
+    public void GoogleStart_WhenDisabled_ReturnsNotFound()
+    {
+        using var host = new IdentityTestHost();
+        var controller = BuildController(host, new FakeGoogleAuthService { Enabled = false });
+        controller.ControllerContext = Http.Context();
+
+        Assert.IsType<NotFoundResult>(controller.GoogleStart());
+    }
+
+    [Fact]
+    public void GoogleStart_WhenEnabled_RedirectsToGoogle_AndSetsStateCookie()
+    {
+        using var host = new IdentityTestHost();
+        var controller = BuildController(host, new FakeGoogleAuthService { Enabled = true }, PublicOpts);
+        controller.ControllerContext = Http.Context();
+
+        var redirect = Assert.IsType<RedirectResult>(controller.GoogleStart());
+
+        Assert.StartsWith("https://accounts.google.com/", redirect.Url);
+        Assert.Contains("diariz_g_oauth=", controller.Response.Headers.SetCookie.ToString());
+    }
+
+    [Fact]
+    public async Task GoogleCallback_WhenDisabled_ReturnsNotFound()
+    {
+        using var host = new IdentityTestHost();
+        var controller = BuildController(host, new FakeGoogleAuthService { Enabled = false });
+        controller.ControllerContext = Http.Context();
+
+        Assert.IsType<NotFoundResult>(await controller.GoogleCallback("code", "state", null));
+    }
+
+    [Fact]
+    public async Task GoogleCallback_MissingCode_RedirectsToLoginWithError()
+    {
+        using var host = new IdentityTestHost();
+        var controller = BuildController(host, new FakeGoogleAuthService { Enabled = true }, PublicOpts);
+        controller.ControllerContext = Http.Context();
+
+        var redirect = Assert.IsType<RedirectResult>(await controller.GoogleCallback(code: null, state: null, error: "access_denied"));
+
+        Assert.Equal($"{WebBase}/login?googleError=failed", redirect.Url);
+    }
+
+    [Fact]
+    public async Task GoogleCallback_HappyPath_LinkedActiveUser_RedirectsToSpaWithToken()
+    {
+        using var host = new IdentityTestHost();
+        await CreateGoogleUser(host, "g@x.test", "google-sub", UserStatus.Active);
+        var google = new FakeGoogleAuthService
+        {
+            Enabled = true,
+            Result = new GoogleUserInfo("google-sub", "g@x.test", true, "Grace", "https://pic/g.png", null),
+        };
+        var controller = BuildController(host, google, PublicOpts);
+
+        // Start sets the one-time state cookie; reuse the same controller so its state protector matches.
+        controller.ControllerContext = Http.Context();
+        controller.GoogleStart();
+        var cookie = CookieValue(controller.Response.Headers.SetCookie.ToString(), "diariz_g_oauth");
+
+        // Callback with the captured state + the cookie echoed back (as the browser would).
+        var cbCtx = Http.Context();
+        cbCtx.HttpContext.Request.Headers["Cookie"] = $"diariz_g_oauth={cookie}";
+        controller.ControllerContext = cbCtx;
+        var redirect = Assert.IsType<RedirectResult>(
+            await controller.GoogleCallback("auth-code", google.CapturedState, null));
+
+        Assert.StartsWith($"{WebBase}/auth/google/callback#token=", redirect.Url);
+    }
+
+    [Fact]
+    public async Task GoogleCallback_PendingUser_RedirectsToLoginPending()
+    {
+        using var host = new IdentityTestHost();
+        await host.SeedRolesAsync();
+        var google = new FakeGoogleAuthService
+        {
+            Enabled = true,
+            Result = new GoogleUserInfo("new-sub", "new@x.test", true, "New", null, null),
+        };
+        var controller = BuildController(host, google, PublicOpts);
+
+        controller.ControllerContext = Http.Context();
+        controller.GoogleStart();
+        var cookie = CookieValue(controller.Response.Headers.SetCookie.ToString(), "diariz_g_oauth");
+        var cbCtx = Http.Context();
+        cbCtx.HttpContext.Request.Headers["Cookie"] = $"diariz_g_oauth={cookie}";
+        controller.ControllerContext = cbCtx;
+
+        var redirect = Assert.IsType<RedirectResult>(
+            await controller.GoogleCallback("auth-code", google.CapturedState, null));
+
+        Assert.Equal($"{WebBase}/login?googleError=pending", redirect.Url);
+        Assert.Equal(UserStatus.Requested, (await host.Users.FindByEmailAsync("new@x.test"))!.Status);
+    }
+
+    [Fact]
+    public async Task GoogleCallback_StateMismatch_RedirectsToLoginFailed()
+    {
+        using var host = new IdentityTestHost();
+        var google = new FakeGoogleAuthService { Enabled = true, Result = new GoogleUserInfo("s", "e@x.test", true, null, null, null) };
+        var controller = BuildController(host, google, PublicOpts);
+
+        controller.ControllerContext = Http.Context();
+        controller.GoogleStart();
+        var cookie = CookieValue(controller.Response.Headers.SetCookie.ToString(), "diariz_g_oauth");
+        var cbCtx = Http.Context();
+        cbCtx.HttpContext.Request.Headers["Cookie"] = $"diariz_g_oauth={cookie}";
+        controller.ControllerContext = cbCtx;
+
+        var redirect = Assert.IsType<RedirectResult>(
+            await controller.GoogleCallback("auth-code", "not-the-saved-state", null));
+
+        Assert.Equal($"{WebBase}/login?googleError=failed", redirect.Url);
+    }
+
+    private static async Task<ApplicationUser> CreateGoogleUser(
+        IdentityTestHost host, string email, string sub, UserStatus status)
+    {
+        var user = new ApplicationUser
+        {
+            UserName = email, Email = email, Status = status, IsEnabled = true,
+            EmailConfirmed = true, GoogleSubject = sub,
+        };
+        await host.Users.CreateAsync(user);
+        return user;
+    }
+
+    private static string CookieValue(string setCookieHeader, string name)
+    {
+        // "name=VALUE; path=/...; ..." → VALUE
+        var start = setCookieHeader.IndexOf(name + "=", StringComparison.Ordinal) + name.Length + 1;
+        var end = setCookieHeader.IndexOf(';', start);
+        return setCookieHeader[start..(end < 0 ? setCookieHeader.Length : end)];
+    }
+
+    private sealed class FakeGoogleAuthService : IGoogleAuthService
+    {
+        public bool Enabled { get; init; }
+        public GoogleUserInfo? Result { get; init; }
+        public string CapturedState { get; private set; } = "";
+
+        public string BuildAuthorizationUrl(string redirectUri, string state, string codeChallenge)
+        {
+            CapturedState = state;
+            return $"https://accounts.google.com/o/oauth2/v2/auth?state={state}";
+        }
+
+        public Task<GoogleUserInfo> ExchangeCodeAsync(
+            string code, string codeVerifier, string redirectUri, CancellationToken ct = default) =>
+            Task.FromResult(Result!);
     }
 }
