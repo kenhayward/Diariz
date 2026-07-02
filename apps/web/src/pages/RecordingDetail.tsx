@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import { createHub } from "../lib/signalr";
+import { useStatus } from "../lib/status";
 import KebabMenu from "../components/KebabMenu";
 import DetailToolbar from "../components/DetailToolbar";
 import ActionsTable from "../components/ActionsTable";
@@ -170,6 +171,16 @@ export default function RecordingDetail() {
   // model's original words.
   const [showOriginal, setShowOriginal] = useState(false);
   const [translating, setTranslating] = useState(false);
+
+  // Mirror this page's transient state into the app-wide bottom status bar (the in-page banners stay too).
+  // Status-based pipeline progress (transcribing/summarising/merging/queuing) is derived by the bar from the
+  // recordings list; here we surface the client-only actions that aren't recording statuses.
+  const { setStatus } = useStatus();
+  useEffect(() => { if (extracting) setStatus(t("workspace:extractingActions"), "progress"); }, [extracting]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (translating) setStatus(t("workspace:translating"), "progress"); }, [translating]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (requeuing) setStatus(t("workspace:retranscribing"), "progress"); }, [requeuing]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (actionInfo) setStatus(actionInfo, "success"); }, [actionInfo]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (actionError) setStatus(actionError, "error"); }, [actionError]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const hub = createHub((e) => {

@@ -2,6 +2,7 @@
   "storageUsage": "Speicher {{used}} / {{total}} ({{percent}} %)",
   "transcriptionTotal": "Transkription {{clock}}",
   "transcriptionTotalDays": "Transkription {{days}} Tage {{clock}}",
+  "transcriptsTotal": "{{n}} Transkripte",
   "preferences": "Präferenzen",
   "settings": "Einstellungen",
   "manageUsers": "Benutzer verwalten",

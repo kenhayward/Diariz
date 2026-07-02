@@ -64,6 +64,8 @@
   "translating": "Translating…",
   "summarising": "Summarising…",
   "queuing": "Queuing…",
+  "transcribing": "Transcribing…",
+  "statusUploading": "Uploading {{count}}…",
   "merging": "Merging audio…",
   "extractingActions": "Extracting actions from the transcript…",
   "meetingDateLabel": "Meeting Date",

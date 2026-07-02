@@ -49,7 +49,8 @@ documents** (files or URLs) to a recording, open them from the transcript page, 
 to the chat** (PDFs, text, Office docs, emails/calendar invites are read into text; URLs are fetched).
 Recordings organise into **sections** (with sub-sections) and drag-and-drop ordering, can be **merged**
 into one, and can be browsed as a **list, a calendar, or a cross-meeting Actions list** (the left panel is
-**Meetings**).
+**Meetings**). A **status bar** along the bottom shows live progress (transcribing, summarising, merging,
+extracting, uploading) and your storage usage, transcription usage, and total transcripts.
 
 Diariz is **multi-user** with role-based access: people request access (or an administrator adds them),
 an administrator approves, and each user sets up their own account and keeps their own private
@@ -76,6 +77,21 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.62.0",
+    date: "2026-07-02",
+    pr: 119,
+    headline: "A status bar along the bottom of the app",
+    summary:
+      "A **status bar** now sits locked along the bottom of the page (it never scrolls). On the left it shows " +
+      "**progress messages** in their usual colours — transcribing, summarising, merging, extracting actions, " +
+      "uploading, and errors — for work on any of your recordings. On the right it shows, `|`-delimited, your " +
+      "**storage usage**, **transcription usage**, and **total number of transcripts** (the same figures as the " +
+      "account menu).",
+    added: [
+      "A bottom status bar: left-aligned progress messages (transcribing/summarising/merging/extracting/uploading, in their tone colours) and right-aligned storage usage · transcription usage · total transcripts.",
+    ],
+  },
   {
     version: "0.61.1",
     date: "2026-07-02",
