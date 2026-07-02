@@ -3,7 +3,7 @@
 # tests/conftest.py) because the segment-shaping/orchestration logic under test
 # does not need the models. The lightweight runtime deps below are installed for
 # real so module imports (callback/worker/storage/config) are exercised as shipped.
-pytest==9.0.3
+pytest==9.1.1
 requests==2.34.2
 redis==8.0.1
 boto3==1.43.39
