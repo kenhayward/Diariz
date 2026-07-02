@@ -82,7 +82,10 @@ public class GoogleAuthService : IGoogleAuthService
         using var resp = await _http.SendAsync(req, ct);
         var body = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
-            throw new InvalidOperationException($"Google token exchange failed ({(int)resp.StatusCode}).");
+            // Include Google's error body (e.g. {"error":"invalid_client"} / "redirect_uri_mismatch") — it is
+            // the actual cause and is logged by the caller. Truncated so a huge body can't flood the log.
+            throw new InvalidOperationException(
+                $"Google token exchange failed ({(int)resp.StatusCode}): {Truncate(body, 500)}");
 
         var token = JsonSerializer.Deserialize<TokenResponse>(body);
         if (string.IsNullOrEmpty(token?.IdToken))
@@ -96,6 +99,9 @@ public class GoogleAuthService : IGoogleAuthService
             payload.Subject, payload.Email ?? "", payload.EmailVerified,
             payload.Name, payload.Picture, payload.HostedDomain);
     }
+
+    private static string Truncate(string s, int max) =>
+        string.IsNullOrEmpty(s) || s.Length <= max ? s : s[..max] + "…";
 
     private sealed record TokenResponse
     {

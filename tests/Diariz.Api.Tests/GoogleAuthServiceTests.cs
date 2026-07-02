@@ -1,3 +1,4 @@
+using System.Net;
 using Diariz.Api.Configuration;
 using Diariz.Api.Services;
 using Microsoft.Extensions.Options;
@@ -6,8 +7,8 @@ namespace Diariz.Api.Tests;
 
 public class GoogleAuthServiceTests
 {
-    private static GoogleAuthService Build(GoogleAuthOptions? opts = null) =>
-        new(new HttpClient(), Options.Create(opts ?? new GoogleAuthOptions
+    private static GoogleAuthService Build(GoogleAuthOptions? opts = null, HttpMessageHandler? handler = null) =>
+        new(handler is null ? new HttpClient() : new HttpClient(handler), Options.Create(opts ?? new GoogleAuthOptions
         {
             ClientId = "cid.apps.googleusercontent.com",
             ClientSecret = "secret",
@@ -61,5 +62,26 @@ public class GoogleAuthServiceTests
         Assert.True(Build().Enabled);
         Assert.False(Build(new GoogleAuthOptions { ClientId = "cid" }).Enabled); // no secret
         Assert.False(Build(new GoogleAuthOptions()).Enabled);
+    }
+
+    // ---- Token exchange error surfacing ----
+
+    [Fact]
+    public async Task ExchangeCodeAsync_OnGoogleError_SurfacesTheErrorBody()
+    {
+        // Google returns e.g. 401 {"error":"invalid_client"} — the exception must carry that so it's logged.
+        var svc = Build(handler: new StubHandler(HttpStatusCode.Unauthorized, "{\"error\":\"invalid_client\"}"));
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => svc.ExchangeCodeAsync("code", "verifier", "https://x/callback"));
+
+        Assert.Contains("401", ex.Message);
+        Assert.Contains("invalid_client", ex.Message);
+    }
+
+    private sealed class StubHandler(HttpStatusCode status, string body) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body) });
     }
 }

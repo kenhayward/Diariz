@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Controllers;
@@ -26,11 +27,12 @@ public class AuthController : ControllerBase
     private readonly GoogleAuthOptions _googleOpts;
     private readonly AppPublicOptions _appOpts;
     private readonly ITimeLimitedDataProtector _stateProtector;
+    private readonly ILogger<AuthController> _logger;
 
     public AuthController(
         UserManager<ApplicationUser> users, ITokenService tokens, IPlatformSettingsService platform,
         IGoogleAuthService google, IGoogleSignInHandler googleSignIn, IOptions<GoogleAuthOptions> googleOpts,
-        IOptions<AppPublicOptions> appOpts, IDataProtectionProvider dataProtection)
+        IOptions<AppPublicOptions> appOpts, IDataProtectionProvider dataProtection, ILogger<AuthController> logger)
     {
         _users = users;
         _tokens = tokens;
@@ -40,6 +42,7 @@ public class AuthController : ControllerBase
         _googleOpts = googleOpts.Value;
         _appOpts = appOpts.Value;
         _stateProtector = dataProtection.CreateProtector("Diariz.GoogleOAuthState").ToTimeLimitedDataProtector();
+        _logger = logger;
     }
 
     [HttpPost("login")]
@@ -182,21 +185,53 @@ public class AuthController : ControllerBase
         var cookie = Request.Cookies[StateCookie];
         Response.Cookies.Delete(StateCookie, StateCookieOptions());
 
-        if (!string.IsNullOrEmpty(error) || string.IsNullOrEmpty(code)
-            || string.IsNullOrEmpty(state) || string.IsNullOrEmpty(cookie))
+        // Failures are logged at Warning (the callback otherwise redirects to a friendly page with no trace)
+        // and carry a distinct ?googleError= code so the cause is visible from the URL too.
+        if (!string.IsNullOrEmpty(error))
+        {
+            _logger.LogWarning("Google sign-in: provider returned error '{Error}'.", error);
             return RedirectToLogin("failed");
+        }
+        if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state))
+        {
+            _logger.LogWarning("Google sign-in callback missing code or state.");
+            return RedirectToLogin("failed");
+        }
+        if (string.IsNullOrEmpty(cookie))
+        {
+            _logger.LogWarning("Google sign-in: state cookie absent on callback — the browser didn't return it "
+                + "(SameSite/proxy) or the Data Protection keyring changed since /start.");
+            return RedirectToLogin("failed_state");
+        }
 
         OAuthState? saved;
         try { saved = JsonSerializer.Deserialize<OAuthState>(_stateProtector.Unprotect(cookie)); }
-        catch { return RedirectToLogin("failed"); }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Google sign-in: could not unprotect the state cookie — Data Protection "
+                + "keyring mismatch (KeysPath volume not persisted/shared?) or the cookie expired.");
+            return RedirectToLogin("failed_state");
+        }
         if (saved is null || !FixedTimeEquals(saved.State, state))
-            return RedirectToLogin("failed"); // CSRF / tampered / expired
+        {
+            _logger.LogWarning("Google sign-in: state mismatch (possible CSRF, or a stale/duplicate callback).");
+            return RedirectToLogin("failed_state");
+        }
 
         GoogleUserInfo info;
         try { info = await _google.ExchangeCodeAsync(code, saved.Verifier, CallbackUri()); }
-        catch { return RedirectToLogin("failed"); }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Google sign-in: token exchange / ID-token validation failed "
+                + "(redirect_uri={RedirectUri}). Common causes: wrong client secret, an unregistered redirect "
+                + "URI, or the server can't reach oauth2.googleapis.com.", CallbackUri());
+            return RedirectToLogin("failed_exchange");
+        }
 
         var result = await _googleSignIn.SignInAsync(info);
+        if (result.Outcome == GoogleSignInOutcome.Rejected)
+            _logger.LogWarning("Google sign-in rejected for {Email}: {Reason}", info.Email, result.Reason);
+
         return result.Outcome switch
         {
             GoogleSignInOutcome.SignedIn => Redirect(await SuccessRedirectAsync(result.User!)),

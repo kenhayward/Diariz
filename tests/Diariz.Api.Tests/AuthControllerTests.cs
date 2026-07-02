@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Tests;
@@ -32,7 +33,8 @@ public class AuthControllerTests
             new GoogleSignInHandler(host.Users, platform),
             Options.Create(googleOpts ?? new GoogleAuthOptions()),
             Options.Create(appOpts ?? new AppPublicOptions()),
-            new EphemeralDataProtectionProvider());
+            new EphemeralDataProtectionProvider(),
+            NullLogger<AuthController>.Instance);
     }
 
     private static async Task<ApplicationUser> CreateUser(
@@ -391,7 +393,7 @@ public class AuthControllerTests
         var redirect = Assert.IsType<RedirectResult>(
             await controller.GoogleCallback("auth-code", "not-the-saved-state", null));
 
-        Assert.Equal($"{WebBase}/login?googleError=failed", redirect.Url);
+        Assert.Equal($"{WebBase}/login?googleError=failed_state", redirect.Url);
     }
 
     private static async Task<ApplicationUser> CreateGoogleUser(
