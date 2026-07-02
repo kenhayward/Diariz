@@ -30,6 +30,7 @@
   "emailedTranscript": "Transcription envoyée par e-mail à l'adresse de votre compte.",
   "errEmail": "Impossible d'envoyer la transcription par e-mail.",
   "reidentified": "Identification des intervenants relancée avec vos empreintes vocales actuelles.",
+  "reidentifying": "Réidentification des intervenants…",
   "errReidentify": "Impossible de réidentifier les intervenants.",
   "errPlayAudio": "Impossible de lire l'audio.",
   "confirmDelete": "Supprimer « {{name}} » ? Cette action est irréversible.",
