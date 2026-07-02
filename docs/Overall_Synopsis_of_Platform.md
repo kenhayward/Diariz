@@ -276,8 +276,15 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   (`IGoogleTokenProtector`, dedicated Data-Protection purpose); `IGoogleTokenProvider` mints short-lived
   access tokens on demand (cached in-memory, never persisted or sent to the browser) and clears a
   revoked/expired token. Scopes `calendar.readonly` + `gmail.compose` are Google **sensitive** scopes
-  (operator enables them on the OAuth app; unverified apps work for the owner + test users). The features
-  that use these (save minutes as a Gmail draft; match a recording to its calendar meeting) land in later PRs.
+  (operator enables them on the OAuth app; unverified apps work for the owner + test users).
+- **Save meeting minutes as a Gmail draft (Phase 2 feature):** with the Gmail grant, the Minutes tab's
+  **Save as Gmail draft** button hits **`POST /api/recordings/{id}/meeting-minutes/gmail-draft`**
+  (`RecordingsController`), which renders the current minutes to HTML (`MeetingMinutesEmail.BuildHtml`) and
+  calls **`IGoogleGmailClient.CreateDraftAsync`** — a MimeKit MIME message base64url-encoded into a
+  `POST https://gmail.googleapis.com/gmail/v1/users/me/drafts` (Bearer access token from
+  `IGoogleTokenProvider`). It creates a **draft only** in the user's own mailbox (never sends), 400s without
+  the grant, and returns `{ draftUrl }` (the web app opens it). The other feature (match a recording to its
+  calendar meeting) lands in a later PR.
 - **Isolation:** every recording/section/chat/voiceprint query filters by `UserId` from the JWT
   `NameIdentifier` claim. **Storage quotas** (audio bytes) are per-user: the Platform Administrator sets the
   starter + maximum (`PlatformSettings`), any admin can raise an individual user up to the max.

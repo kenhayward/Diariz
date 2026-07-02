@@ -44,7 +44,8 @@ with manual reassignment. A **People** screen renames, prunes training samples, 
 erases voiceprints (GDPR — biometric data).
 - **Summarize** recordings (with automatic naming) and generate a full set of **professional meeting minutes**
 (Markdown: headings, lists, tables — no emojis) as part of the pipeline; edit them in a **WYSIWYG editor**,
-re-create them, or **email them to yourself** (optionally with the recording's attachments). The minutes also
+re-create them, **email them to yourself** (optionally with the recording's attachments), or — once you've
+connected Google — **save them as a draft in your own Gmail**. The minutes also
 travel with the emailed transcript and the Markdown/text/RTF downloads. The Meeting Minutes panel is always
 available (collapsed) with a refresh button to generate them on any recording.
 - **Chat across one or more transcripts** — streaming
