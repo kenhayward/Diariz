@@ -22,7 +22,7 @@ import { recordingMenu } from "../components/recordingMenu";
 import { copyRichLink, transcriptUrl } from "../lib/clipboard";
 import { segmentIndexAtMs, parseMatchTimes, nextSpeakerSegment, prevSpeakerSegment } from "../lib/transcriptNav";
 import { speakerRanges, selectedRanges, rangeAt, nextRangeStart, type PlayRange } from "../lib/segmentPlayback";
-import { formatBytes, formatDate, formatDuration } from "../lib/format";
+import { formatBytes, formatDate, formatDuration, formatLongDate, formatTimeHm, formatDurationHm } from "../lib/format";
 import { hasRevisions, segmentText } from "../lib/transcriptView";
 import { fetchLanguages } from "../lib/languages";
 import type { SegmentDto, SpeakerInfo, SpeakerProfile } from "../lib/types";
@@ -735,15 +735,28 @@ export default function RecordingDetail() {
           />
         </>
       ),
-      content: rec.summary ? (
+      content: (
         <div className="px-4 pb-4">
-          {rec.summary.isUserEdited && (
-            <p className="mb-1 text-xs italic text-gray-400 dark:text-gray-500">{t("workspace:summaryEditedHint")}</p>
+          <dl className="mb-4 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
+            <dt className="text-gray-500 dark:text-gray-400">{t("workspace:meetingDateLabel")}</dt>
+            <dd className="text-gray-800 dark:text-gray-200">{formatLongDate(rec.createdAt, i18n.language)}</dd>
+            <dt className="text-gray-500 dark:text-gray-400">{t("workspace:meetingTimeLabel")}</dt>
+            <dd className="text-gray-800 dark:text-gray-200">{formatTimeHm(rec.createdAt)}</dd>
+            <dt className="text-gray-500 dark:text-gray-400">{t("workspace:durationLabel")}</dt>
+            <dd className="text-gray-800 dark:text-gray-200">{formatDurationHm(rec.durationMs)}</dd>
+          </dl>
+          <h3 className="mb-1 text-base font-semibold text-gray-800 dark:text-gray-100">{t("workspace:sectionSummary")}</h3>
+          {rec.summary ? (
+            <>
+              {rec.summary.isUserEdited && (
+                <p className="mb-1 text-xs italic text-gray-400 dark:text-gray-500">{t("workspace:summaryEditedHint")}</p>
+              )}
+              <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{rec.summary.text}</p>
+            </>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400">{t("workspace:overviewEmpty")}</p>
           )}
-          <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{rec.summary.text}</p>
         </div>
-      ) : (
-        <p className="px-4 pb-4 text-sm text-gray-500 dark:text-gray-400">{t("workspace:overviewEmpty")}</p>
       ),
     },
     {

@@ -26,6 +26,37 @@ export function formatDate(iso: string, locale?: string): string {
   return new Date(iso).toLocaleDateString(locale || undefined);
 }
 
+const ORD = ["th", "st", "nd", "rd"];
+
+/// An extended, human date for the given locale, e.g. English "23rd March 2026". English locales get an
+/// ordinal day suffix; other locales use their natural long form ("23 mars 2026", "23. März 2026") via `Intl`.
+export function formatLongDate(iso: string, locale?: string): string {
+  const d = new Date(iso);
+  const lang = (locale ?? "en").toLowerCase();
+  if (lang.startsWith("en")) {
+    const day = d.getDate();
+    const v = day % 100;
+    const suffix = ORD[(v - 20) % 10] || ORD[v] || ORD[0];
+    const month = d.toLocaleDateString(locale || undefined, { month: "long" });
+    return `${day}${suffix} ${month} ${d.getFullYear()}`;
+  }
+  return d.toLocaleDateString(locale || undefined, { day: "numeric", month: "long", year: "numeric" });
+}
+
+/// Time of day as fixed 24-hour "hh:mm" (local timezone), e.g. 09:05, 14:30.
+export function formatTimeHm(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/// Duration (ms) as fixed "hh:mm" (hours:minutes, both zero-padded), e.g. 65000 → "00:01", 3900000 → "01:05".
+export function formatDurationHm(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
 /// Percentage of quota used (0 when there's no quota), rounded to a whole number.
 export function storagePercent(usedBytes: number, quotaBytes: number): number {
   if (quotaBytes <= 0) return 0;

@@ -121,6 +121,16 @@ describe("RecordingDetail", () => {
     expect((await loaded()).getAttribute("aria-selected")).toBe("true");
   });
 
+  it("shows Meeting Date / Time / Duration and a Summary heading on the Overview tab", async () => {
+    renderPage({ ...base, durationMs: 3_900_000 }); // 1h 05m
+    await loaded();
+    expect(screen.getByText("Meeting Date")).toBeTruthy();
+    expect(screen.getByText("Meeting Time")).toBeTruthy();
+    expect(screen.getByText("01:05")).toBeTruthy(); // duration hh:mm
+    // "Summary" appears both as the tab label and the in-tab heading.
+    expect(screen.getByRole("heading", { name: "Summary" })).toBeTruthy();
+  });
+
   it("switches to the Minutes tab; Re-create calls the API", async () => {
     renderPage({ ...base, meetingMinutes: minutes });
     await loaded();
