@@ -78,6 +78,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.62.2",
+    date: "2026-07-02",
+    pr: 121,
+    headline: "CI moved to GitHub-hosted runners",
+    summary:
+      "Continuous integration now runs on **GitHub-hosted runners** instead of a self-hosted machine — the " +
+      ".NET, web, worker, and locale checks run on `ubuntu-latest` and the desktop installer builds on " +
+      "`windows-latest`. This is a maintenance change with no effect on the app itself; it's a prerequisite " +
+      "for making the source repository public safely.",
+    changed: [
+      "CI runs on GitHub-hosted runners (ubuntu-latest for tests, windows-latest for the desktop installer) rather than a self-hosted runner; the .NET SDK and Python are now provisioned by setup actions.",
+    ],
+  },
+  {
     version: "0.62.1",
     date: "2026-07-02",
     pr: 120,
