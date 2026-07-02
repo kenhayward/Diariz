@@ -75,6 +75,25 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.57.0",
+    date: "2026-07-02",
+    pr: 113,
+    headline: "Chat slash commands (/tools, /help) + emailed notes render properly",
+    summary:
+      "Chat now understands **slash commands**, handled entirely in the browser and **never sent to the " +
+      "model**: **`/tools`** lists the chat tools you have enabled, and **`/help`** lists the commands. " +
+      "Because they're client-side, typing `/tools` always just shows the list — it can no longer be " +
+      "misread by the model as a request to run a tool. Fix: notes sent by the **Send email to me** tool now " +
+      "render **properly formatted** — tables, lists and bold come through as formatting instead of raw " +
+      "Markdown (the email previously used a basic renderer that didn't handle GitHub-flavoured Markdown).",
+    added: [
+      "Chat slash commands handled client-side (never sent to the model): /tools lists your enabled tools, /help lists the commands.",
+    ],
+    fixed: [
+      "The \"Send email to me\" tool rendered the assistant's Markdown with a basic renderer, so tables/lists could arrive as raw Markdown — it now uses the full renderer and an email-friendly layout.",
+    ],
+  },
+  {
     version: "0.56.0",
     date: "2026-07-01",
     pr: 112,

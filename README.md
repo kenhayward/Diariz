@@ -54,7 +54,8 @@ else), and **add its output to a transcript** (an *add-as-attachment* tool that 
 Markdown attachment — you pick the transcript when several are selected). Answers
 **link back to the transcript**: click a citation to open that
 recording and jump to the exact segment. Fuzzy search is backed by a Postgres `pg_trgm` trigram index; a
-brief grey "Tool call: …" line shows while a tool runs.
+brief grey "Tool call: …" line shows while a tool runs. Type **`/tools`** to list the tools you have enabled or
+**`/help`** for the commands — these are handled in the browser and never sent to the model.
 - **Extract action items** (Action / Actor / Deadline) with that same LLM — **automatically as part of the
 transcription pipeline**, into an editable table in an always-available **Action items** panel (collapsed by
 default, with a refresh button to re-extract). The automatic pass runs once and never overwrites actions

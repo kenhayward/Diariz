@@ -39,6 +39,23 @@ public class SendEmailToolTests
     }
 
     [Fact]
+    public async Task Execute_RendersMarkdownToHtml_IncludingGfmTables()
+    {
+        using var db = TestDb.Create();
+        var me = SeedUser(db, "me@example.com");
+        var email = new FakeEmailSender();
+
+        await new SendEmailTool(db, email).ExecuteAsync(
+            Args("""{"subject":"S","body":"**Bold**\n\n| A | B |\n|---|---|\n| 1 | 2 |"}"""),
+            new ChatToolContext(me, []), default);
+
+        var body = Assert.Single(email.Messages).Body;
+        Assert.Contains("<strong>Bold</strong>", body);   // markdown converted to HTML
+        Assert.Contains("<table", body);                  // GitHub-flavoured table rendered
+        Assert.DoesNotContain("| A | B |", body);          // no raw markdown left over
+    }
+
+    [Fact]
     public async Task Execute_IgnoresAnyRecipientInArgs_AlwaysUsesTheOwnersAddress()
     {
         using var db = TestDb.Create();
