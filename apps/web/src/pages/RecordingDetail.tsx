@@ -378,19 +378,6 @@ export default function RecordingDetail() {
     }
   }
 
-  // Save the minutes as a draft in the user's connected Gmail; open the draft in a new tab on success.
-  async function saveMinutesAsGmailDraft() {
-    setActionError(null);
-    setActionInfo(null);
-    try {
-      const draftUrl = await api.saveMinutesAsGmailDraft(id);
-      setActionInfo(t("workspace:savedGmailDraft"));
-      window.open(draftUrl, "_blank", "noopener");
-    } catch (e) {
-      setActionError(apiErrorMessage(e, t("workspace:errGmailDraft")));
-    }
-  }
-
   const refreshAttachments = () => {
     qc.invalidateQueries({ queryKey: ["attachments", id] });
     qc.invalidateQueries({ queryKey: ["user-storage"] }); // attachment bytes count toward quota
@@ -840,14 +827,6 @@ export default function RecordingDetail() {
             disabled={!rec.meetingMinutes}
             onClick={emailMinutes}
           />
-          {profile?.googleGmail && (
-            <ToolbarButton
-              label={t("workspace:saveGmailDraft")}
-              icon={MailIcon}
-              disabled={!rec.meetingMinutes}
-              onClick={saveMinutesAsGmailDraft}
-            />
-          )}
           <ToolbarButton
             label={t("workspace:recreateMeetingMinutes")}
             icon={RefreshIcon}

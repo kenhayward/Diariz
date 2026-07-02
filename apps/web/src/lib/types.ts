@@ -276,7 +276,6 @@ export interface UserProfile {
   uiLanguage: string | null;
   googleConnected: boolean; // account is linked to a Google identity
   googleCalendar: boolean; // user granted Google Calendar read access
-  googleGmail: boolean; // user granted Gmail draft access
 }
 
 /// A Google Calendar meeting matched to a recording by time overlap.

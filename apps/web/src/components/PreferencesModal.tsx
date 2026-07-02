@@ -21,7 +21,6 @@ export default function PreferencesModal({ onClose }: { onClose: () => void }) {
   const [nativeLanguage, setNativeLanguage] = useState("");
   const [uiLanguage, setUiLanguage] = useState("");
   const [gCalendar, setGCalendar] = useState(false);
-  const [gGmail, setGGmail] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -31,7 +30,6 @@ export default function PreferencesModal({ onClose }: { onClose: () => void }) {
       setNativeLanguage(profile.nativeLanguage ?? "");
       setUiLanguage(profile.uiLanguage ?? "");
       setGCalendar(profile.googleCalendar);
-      setGGmail(profile.googleGmail);
     }
   }, [profile]);
 
@@ -39,7 +37,7 @@ export default function PreferencesModal({ onClose }: { onClose: () => void }) {
     setError(null);
     try {
       // Full-page navigation to Google's consent screen; it returns to /?google=connected.
-      window.location.assign(await api.connectGoogle({ calendar: gCalendar, gmail: gGmail }));
+      window.location.assign(await api.connectGoogle({ calendar: gCalendar }));
     } catch (e) {
       setError(apiErrorMessage(e, t("googleConnectError")));
     }
@@ -50,7 +48,6 @@ export default function PreferencesModal({ onClose }: { onClose: () => void }) {
     try {
       await api.disconnectGoogle();
       setGCalendar(false);
-      setGGmail(false);
       qc.invalidateQueries({ queryKey: ["user-profile"] });
     } catch (e) {
       setError(apiErrorMessage(e, t("googleDisconnectError")));
@@ -158,21 +155,17 @@ export default function PreferencesModal({ onClose }: { onClose: () => void }) {
                   <input type="checkbox" checked={gCalendar} onChange={(e) => setGCalendar(e.target.checked)} />
                   <span className="dark:text-gray-200">{t("googleCalendarRead")}</span>
                 </label>
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={gGmail} onChange={(e) => setGGmail(e.target.checked)} />
-                  <span className="dark:text-gray-200">{t("googleGmailDrafts")}</span>
-                </label>
                 <p className="text-xs text-gray-400 dark:text-gray-500">{t("googleDataHint")}</p>
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={connectGoogleData}
-                    disabled={!gCalendar && !gGmail}
+                    disabled={!gCalendar}
                     className="rounded border px-2 py-1 text-xs hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
                   >
                     {t("googleConnectData")}
                   </button>
-                  {(profile.googleCalendar || profile.googleGmail) && (
+                  {profile.googleCalendar && (
                     <button
                       type="button"
                       onClick={disconnectGoogleData}

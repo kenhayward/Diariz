@@ -269,21 +269,16 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   (same admin-approval gate; an admin granting a Google account activates it directly, no setup link); a
   verified Google email matching an existing account **auto-links**. Web-only for now — the Electron shell
   hides the button (Google blocks OAuth in embedded webviews).
-- **Google data access (opt-in, Phase 2):** a Google-linked user can grant **Calendar (read)** and/or
-  **Gmail (drafts)** from Preferences via an **incremental-consent, offline** flow (`AuthController`
+- **Google data access (opt-in, Phase 2):** a Google-linked user can grant **Calendar (read)** from
+  Preferences via an **incremental-consent, offline** flow (`AuthController`
   `POST google/connect` → the shared `google/callback` branches on a `mode` in the state cookie →
   `google/disconnect` revokes). The **refresh token is encrypted at rest** on `UserSettings`
   (`IGoogleTokenProtector`, dedicated Data-Protection purpose); `IGoogleTokenProvider` mints short-lived
   access tokens on demand (cached in-memory, never persisted or sent to the browser) and clears a
-  revoked/expired token. Scopes `calendar.readonly` + `gmail.compose` are Google **sensitive** scopes
-  (operator enables them on the OAuth app; unverified apps work for the owner + test users).
-- **Save meeting minutes as a Gmail draft (Phase 2 feature):** with the Gmail grant, the Minutes tab's
-  **Save as Gmail draft** button hits **`POST /api/recordings/{id}/meeting-minutes/gmail-draft`**
-  (`RecordingsController`), which renders the current minutes to HTML (`MeetingMinutesEmail.BuildHtml`) and
-  calls **`IGoogleGmailClient.CreateDraftAsync`** — a MimeKit MIME message base64url-encoded into a
-  `POST https://gmail.googleapis.com/gmail/v1/users/me/drafts` (Bearer access token from
-  `IGoogleTokenProvider`). It creates a **draft only** in the user's own mailbox (never sends), 400s without
-  the grant, and returns `{ draftUrl }` (the web app opens it).
+  revoked/expired token. `calendar.readonly` is a Google **sensitive** scope (operator enables it on the OAuth
+  app; unverified apps work for the owner + test users). *Gmail draft creation was removed in 0.67.1 — Gmail
+  scopes are **restricted** and would require a recurring third-party security assessment to verify; the
+  minutes-email-to-self feature covers that need.*
 - **Match a recording to its calendar meeting (Phase 2 feature):** with the Calendar grant, the recording's
   Overview calls **`GET /api/recordings/{id}/calendar-match`**, which asks **`IGoogleCalendarClient.ListEventsAsync`**
   for the user's primary-calendar events around the recording's wall-clock span (`CreatedAt` .. `+DurationMs`,

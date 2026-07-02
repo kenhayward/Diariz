@@ -19,7 +19,6 @@ vi.mock("../lib/api", () => ({
     generateMeetingMinutes: vi.fn(),
     updateMeetingMinutes: vi.fn(),
     emailMeetingMinutes: vi.fn(),
-    saveMinutesAsGmailDraft: vi.fn(),
     getCalendarMatch: vi.fn().mockResolvedValue(null),
     audioUrl: vi.fn(),
     downloadTranscript: vi.fn(),
@@ -202,28 +201,6 @@ describe("RecordingDetail", () => {
     expect(api.emailMeetingMinutes).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole("button", { name: /include attachments/i }));
     await waitFor(() => expect(api.emailMeetingMinutes).toHaveBeenCalledWith("rec-123", true));
-  });
-
-  it("hides the Gmail-draft button unless the user has granted Gmail access", async () => {
-    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleGmail: false });
-    renderPage({ ...base, meetingMinutes: minutes });
-    await loaded();
-    openTab(/minutes/i);
-    expect(screen.queryByRole("button", { name: /save as gmail draft/i })).toBeNull();
-  });
-
-  it("Save as Gmail draft calls the API and opens the returned draft URL", async () => {
-    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleGmail: true });
-    (api.saveMinutesAsGmailDraft as ReturnType<typeof vi.fn>).mockResolvedValue("https://mail.google.com/mail/u/0/#drafts");
-    const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
-    renderPage({ ...base, meetingMinutes: minutes });
-    await loaded();
-    openTab(/minutes/i);
-    fireEvent.click(await screen.findByRole("button", { name: /save as gmail draft/i }));
-    await waitFor(() => expect(api.saveMinutesAsGmailDraft).toHaveBeenCalledWith("rec-123"));
-    await waitFor(() =>
-      expect(openSpy).toHaveBeenCalledWith("https://mail.google.com/mail/u/0/#drafts", "_blank", "noopener"));
-    openSpy.mockRestore();
   });
 
   it("Minutes tab shows an empty state and disables Edit/Email when there are none", async () => {

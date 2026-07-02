@@ -44,8 +44,7 @@ with manual reassignment. A **People** screen renames, prunes training samples, 
 erases voiceprints (GDPR — biometric data).
 - **Summarize** recordings (with automatic naming) and generate a full set of **professional meeting minutes**
 (Markdown: headings, lists, tables — no emojis) as part of the pipeline; edit them in a **WYSIWYG editor**,
-re-create them, **email them to yourself** (optionally with the recording's attachments), or — once you've
-connected Google — **save them as a draft in your own Gmail**. The minutes also
+re-create them, or **email them to yourself** (optionally with the recording's attachments). The minutes also
 travel with the emailed transcript and the Markdown/text/RTF downloads. The Meeting Minutes panel is always
 available (collapsed) with a refresh button to generate them on any recording.
 - **Chat across one or more transcripts** — streaming
@@ -97,9 +96,8 @@ unconfigured), and admin user management. Each user's data is isolated to them. 
 picture (shown in the account menu). New Google sign-ups still require admin approval, and a Google email
 matching an existing account links to it automatically. Enabled when the operator configures a Google
 OAuth client; web-only for now (the desktop app keeps password login). A Google-linked user can opt in
-(Preferences → Google) to let Diariz **read their Google Calendar** (so a recording's Overview shows the
-**matching meeting**) and **save meeting minutes as a Gmail draft** — both revocable, read-only calendar,
-draft-only Gmail.
+(Preferences → Google) to let Diariz **read their Google Calendar** (read-only) so a recording's Overview
+shows the **matching meeting** — a revocable grant.
 - **Preferences**: every user can change their own **display name** and pick their **native** and **app**
 language (chosen at signup or later from the account menu) — groundwork for upcoming UI localization and
 transcript translation.

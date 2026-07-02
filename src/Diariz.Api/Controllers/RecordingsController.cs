@@ -28,7 +28,6 @@ public class RecordingsController : ControllerBase
     private readonly ISpeakerIdentifier _identifier;
     private readonly UploadOptions _uploads;
     private readonly IExportLocalizer? _exportLocalizer;
-    private readonly IGoogleGmailClient? _gmail;
     private readonly IGoogleCalendarClient? _calendar;
     private readonly string _defaultModel;
 
@@ -36,7 +35,7 @@ public class RecordingsController : ControllerBase
         DiarizDbContext db, IAudioStorage storage, IJobQueue queue,
         IHubContext<TranscriptionHub> hub, IConfiguration config,
         ISummarizationSettingsResolver summarization, IEmailSender email, ISpeakerIdentifier identifier,
-        IOptions<UploadOptions> uploads, IExportLocalizer? exportLocalizer = null, IGoogleGmailClient? gmail = null,
+        IOptions<UploadOptions> uploads, IExportLocalizer? exportLocalizer = null,
         IGoogleCalendarClient? calendar = null)
     {
         _db = db;
@@ -48,7 +47,6 @@ public class RecordingsController : ControllerBase
         _identifier = identifier;
         _uploads = uploads.Value;
         _exportLocalizer = exportLocalizer;
-        _gmail = gmail;
         _calendar = calendar;
         _defaultModel = config["Transcription:DefaultModel"] ?? "whisperx-large-v3";
     }
@@ -494,36 +492,6 @@ public class RecordingsController : ControllerBase
         var sent = await _email.SendAsync(address!, MeetingMinutesEmail.Subject(name, labels), html, files);
         if (!sent) return BadRequest("Email isn't configured on the server. Contact an administrator.");
         return Ok();
-    }
-
-    /// <summary>Save the meeting minutes (Markdown → HTML) as a draft in the signed-in user's connected Gmail
-    /// account. Requires the user to have granted Gmail access in Preferences.</summary>
-    [HttpPost("{id:guid}/meeting-minutes/gmail-draft")]
-    public async Task<IActionResult> SaveMeetingMinutesAsGmailDraft(Guid id, CancellationToken ct)
-    {
-        var settings = await _db.UserSettings.FindAsync([UserId], ct);
-        if (settings?.GoogleGmailGranted != true)
-            return BadRequest("Connect Gmail in Preferences to save drafts.");
-
-        var rec = await _db.Recordings
-            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
-                .ThenInclude(t => t.MeetingMinutes)
-            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId, ct);
-        if (rec is null) return NotFound();
-
-        var current = rec.Transcriptions.FirstOrDefault();
-        if (current?.MeetingMinutes is null || string.IsNullOrWhiteSpace(current.MeetingMinutes.Text))
-            return BadRequest("There are no meeting minutes to save yet.");
-
-        var address = await _db.Users.Where(u => u.Id == UserId).Select(u => u.Email).FirstOrDefaultAsync(ct);
-        if (string.IsNullOrWhiteSpace(address)) return BadRequest("Your account has no email address.");
-
-        var name = rec.Name ?? rec.Title;
-        var labels = await ExportLabelsAsync();
-        var html = MeetingMinutesEmail.BuildHtml(name, MarkdownRenderer.ToHtml(current.MeetingMinutes.Text), labels);
-        var draftUrl = await _gmail!.CreateDraftAsync(UserId, address!, MeetingMinutesEmail.Subject(name, labels), html, ct);
-        if (draftUrl is null) return BadRequest("Your Google connection needs reauthorising — reconnect Gmail in Preferences.");
-        return Ok(new { draftUrl });
     }
 
     /// <summary>Find the Google Calendar meeting this recording was most likely captured during (by time

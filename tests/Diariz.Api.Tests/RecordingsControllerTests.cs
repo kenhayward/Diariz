@@ -19,7 +19,7 @@ public class RecordingsControllerTests
     private static RecordingsController Build(DiarizDbContext db, Guid userId, FakeJobQueue queue,
         FakeAudioStorage? storage = null, bool summarizationEnabled = true, FakeEmailSender? email = null,
         FakeSpeakerIdentifier? identifier = null, UploadOptions? uploads = null, IExportLocalizer? exportLocalizer = null,
-        IGoogleGmailClient? gmail = null, IGoogleCalendarClient? calendar = null)
+        IGoogleCalendarClient? calendar = null)
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" })
@@ -30,7 +30,7 @@ public class RecordingsControllerTests
             new FakeApiKeyProtector());
         return new RecordingsController(db, storage ?? new FakeAudioStorage(), queue, new FakeHubContext(), config,
             resolver, email ?? new FakeEmailSender(), identifier ?? new FakeSpeakerIdentifier(),
-            Options.Create(uploads ?? new UploadOptions()), exportLocalizer, gmail, calendar)
+            Options.Create(uploads ?? new UploadOptions()), exportLocalizer, calendar)
         {
             ControllerContext = Http.Context(userId)
         };
@@ -48,22 +48,6 @@ public class RecordingsControllerTests
         {
             TimeMin = timeMin; TimeMax = timeMax;
             return Task.FromResult(Events);
-        }
-    }
-
-    /// <summary>Records the draft request so tests can assert what was sent, and returns a canned URL.</summary>
-    private sealed class FakeGmailClient : IGoogleGmailClient
-    {
-        public string? ReturnUrl { get; set; } = "https://mail.google.com/mail/u/0/#drafts";
-        public Guid? UserId { get; private set; }
-        public string? To { get; private set; }
-        public string? Subject { get; private set; }
-        public string? Html { get; private set; }
-
-        public Task<string?> CreateDraftAsync(Guid userId, string toEmail, string subject, string htmlBody, CancellationToken ct = default)
-        {
-            UserId = userId; To = toEmail; Subject = subject; Html = htmlBody;
-            return Task.FromResult(ReturnUrl);
         }
     }
 
@@ -1505,83 +1489,6 @@ public class RecordingsControllerTests
         Assert.Equal("doc.pdf", attachment.FileName);
         Assert.Equal("application/pdf", attachment.ContentType);
         Assert.Equal("PDFBYTES", Encoding.UTF8.GetString(attachment.Content));
-    }
-
-    // ---- Save meeting minutes as a Gmail draft ----
-
-    private static void GrantGmail(DiarizDbContext db, Guid userId) =>
-        db.UserSettings.Add(new Domain.Entities.UserSettings { UserId = userId, GoogleGmailGranted = true });
-
-    [Fact]
-    public async Task SaveMinutesAsGmailDraft_WhenGmailNotGranted_ReturnsBadRequest()
-    {
-        using var db = TestDb.Create();
-        var userId = Guid.NewGuid();
-        await SeedUser(db, userId);
-        var rec = await SeedTranscribedRecording(db, userId, name: "Team Sync");
-        await AddMinutes(db, rec.Id, "# Team Sync");
-        var gmail = new FakeGmailClient();
-        var controller = Build(db, userId, new FakeJobQueue(), gmail: gmail);
-
-        var result = await controller.SaveMeetingMinutesAsGmailDraft(rec.Id, default);
-
-        Assert.IsType<BadRequestObjectResult>(result);
-        Assert.Null(gmail.UserId); // never reached the Gmail client
-    }
-
-    [Fact]
-    public async Task SaveMinutesAsGmailDraft_CreatesDraft_AddressedToTheUser()
-    {
-        using var db = TestDb.Create();
-        var userId = Guid.NewGuid();
-        await SeedUser(db, userId);
-        var rec = await SeedTranscribedRecording(db, userId, name: "Team Sync");
-        await AddMinutes(db, rec.Id, "# Team Sync\n\n## Overview\n\nWe met.");
-        GrantGmail(db, userId);
-        await db.SaveChangesAsync();
-        var gmail = new FakeGmailClient();
-        var controller = Build(db, userId, new FakeJobQueue(), gmail: gmail);
-
-        var result = await controller.SaveMeetingMinutesAsGmailDraft(rec.Id, default);
-
-        var ok = Assert.IsType<OkObjectResult>(result);
-        Assert.Contains("mail.google.com", System.Text.Json.JsonSerializer.Serialize(ok.Value));
-        Assert.Equal(userId, gmail.UserId);
-        Assert.Equal($"{userId}@x.test", gmail.To);
-        Assert.Equal("Meeting minutes for Team Sync", gmail.Subject);
-        Assert.Contains("Overview", gmail.Html);   // rendered from the Markdown
-    }
-
-    [Fact]
-    public async Task SaveMinutesAsGmailDraft_WhenNoMinutes_ReturnsBadRequest()
-    {
-        using var db = TestDb.Create();
-        var userId = Guid.NewGuid();
-        await SeedUser(db, userId);
-        var rec = await SeedTranscribedRecording(db, userId, name: "X");
-        GrantGmail(db, userId);
-        await db.SaveChangesAsync();
-        var controller = Build(db, userId, new FakeJobQueue(), gmail: new FakeGmailClient());
-
-        Assert.IsType<BadRequestObjectResult>(
-            await controller.SaveMeetingMinutesAsGmailDraft(rec.Id, default));
-    }
-
-    [Fact]
-    public async Task SaveMinutesAsGmailDraft_WhenTokenExpired_ReturnsBadRequest()
-    {
-        using var db = TestDb.Create();
-        var userId = Guid.NewGuid();
-        await SeedUser(db, userId);
-        var rec = await SeedTranscribedRecording(db, userId, name: "X");
-        await AddMinutes(db, rec.Id, "# X");
-        GrantGmail(db, userId);
-        await db.SaveChangesAsync();
-        var gmail = new FakeGmailClient { ReturnUrl = null }; // refresh token revoked/expired
-        var controller = Build(db, userId, new FakeJobQueue(), gmail: gmail);
-
-        Assert.IsType<BadRequestObjectResult>(
-            await controller.SaveMeetingMinutesAsGmailDraft(rec.Id, default));
     }
 
     // ---- Calendar match ----

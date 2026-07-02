@@ -89,8 +89,8 @@ export default function AboutModal({ onClose }: { onClose: () => void }) {
             Optional <strong>Sign in with Google</strong> uses Google's OAuth 2.0 sign-in (via the
             Apache-2.0 <code>Google.Apis.Auth</code> library); Google's terms and privacy policy apply, and
             it is available only when the operator has configured it. You can also <strong>opt in</strong> to
-            let Diariz read your <strong>Google Calendar</strong> and create <strong>Gmail drafts</strong> in
-            your account; that access is revocable any time from Preferences.
+            let Diariz read your <strong>Google Calendar</strong> (read-only); that access is revocable any
+            time from Preferences.
           </p>
         </div>
 

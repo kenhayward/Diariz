@@ -436,7 +436,7 @@ public class AuthControllerTests
         var controller = BuildController(host, new FakeGoogleAuthService { Enabled = true }, PublicOpts);
         controller.ControllerContext = Http.Context(user.Id);
 
-        Assert.IsType<BadRequestObjectResult>(await controller.GoogleConnect(new ConnectGoogleRequest(Calendar: true, Gmail: false)));
+        Assert.IsType<BadRequestObjectResult>(await controller.GoogleConnect(new ConnectGoogleRequest(Calendar: true)));
     }
 
     [Fact]
@@ -448,12 +448,11 @@ public class AuthControllerTests
         var controller = BuildController(host, google, PublicOpts);
         controller.ControllerContext = Http.Context(user.Id);
 
-        var ok = Assert.IsType<OkObjectResult>(await controller.GoogleConnect(new ConnectGoogleRequest(Calendar: true, Gmail: true)));
+        var ok = Assert.IsType<OkObjectResult>(await controller.GoogleConnect(new ConnectGoogleRequest(Calendar: true)));
 
         Assert.Contains("authorizationUrl", ok.Value!.ToString());
         Assert.True(google.CapturedOffline);
         Assert.Contains("calendar.readonly", google.CapturedScope);
-        Assert.Contains("gmail.compose", google.CapturedScope);
         Assert.Contains("diariz_g_oauth=", controller.Response.Headers.SetCookie.ToString());
     }
 
@@ -465,7 +464,7 @@ public class AuthControllerTests
         var controller = BuildController(host, new FakeGoogleAuthService { Enabled = true }, PublicOpts);
         controller.ControllerContext = Http.Context(user.Id);
 
-        Assert.IsType<BadRequestObjectResult>(await controller.GoogleConnect(new ConnectGoogleRequest(false, false)));
+        Assert.IsType<BadRequestObjectResult>(await controller.GoogleConnect(new ConnectGoogleRequest(false)));
     }
 
     [Fact]
@@ -483,7 +482,7 @@ public class AuthControllerTests
 
         // Start the connect (sets the signed state cookie on this controller instance).
         controller.ControllerContext = Http.Context(user.Id);
-        await controller.GoogleConnect(new ConnectGoogleRequest(Calendar: true, Gmail: false));
+        await controller.GoogleConnect(new ConnectGoogleRequest(Calendar: true));
         var cookie = CookieValue(controller.Response.Headers.SetCookie.ToString(), "diariz_g_oauth");
 
         // Google redirects back to the callback with the captured state + the cookie echoed.
@@ -496,7 +495,6 @@ public class AuthControllerTests
         var s = await host.Db.UserSettings.FindAsync(user.Id);
         Assert.NotNull(s!.GoogleRefreshTokenEncrypted);
         Assert.True(s.GoogleCalendarGranted);
-        Assert.False(s.GoogleGmailGranted); // only Calendar was in the returned scope
     }
 
     [Fact]
@@ -506,7 +504,7 @@ public class AuthControllerTests
         var user = await CreateGoogleUser(host, "g@x.test", "sub-1", UserStatus.Active);
         host.Db.UserSettings.Add(new UserSettings
         {
-            UserId = user.Id, GoogleRefreshTokenEncrypted = "enc", GoogleCalendarGranted = true, GoogleGmailGranted = true,
+            UserId = user.Id, GoogleRefreshTokenEncrypted = "enc", GoogleCalendarGranted = true,
         });
         await host.Db.SaveChangesAsync();
         var controller = BuildController(host, new FakeGoogleAuthService { Enabled = true });
@@ -517,7 +515,6 @@ public class AuthControllerTests
         var s = await host.Db.UserSettings.FindAsync(user.Id);
         Assert.Null(s!.GoogleRefreshTokenEncrypted);
         Assert.False(s.GoogleCalendarGranted);
-        Assert.False(s.GoogleGmailGranted);
     }
 
     private static async Task<ApplicationUser> CreateGoogleUser(
