@@ -23,6 +23,11 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("worker")
 
+# XREADGROUP blocks server-side for this long per poll (ms). The socket read timeout is set a little
+# larger than this so a normal empty poll never trips it — only a genuinely unreachable Redis does.
+BLOCK_MS = 5000
+RECONNECT_DELAY = 2  # seconds to back off after a Redis timeout/disconnect before retrying
+
 
 def ensure_group(r: redis.Redis, stream_key: str) -> None:
     try:
@@ -82,29 +87,19 @@ def handle_merge(job: dict) -> None:
                 os.remove(path)
 
 
-def main() -> None:
-    # Restore pre-2.6 torch.load behaviour before any model checkpoint is loaded
-    # (pyannote/whisperx checkpoints fail under torch>=2.6's weights_only=True).
-    torch_compat.restore_legacy_torch_load()
-
-    r = redis.Redis.from_url(config.REDIS_URL, decode_responses=True)
-    while True:
+def run_loop(r: redis.Redis, keep_going=lambda: True) -> None:
+    """Consume jobs until stopped. A long-running blocking consumer must survive transient Redis hiccups:
+    a socket read timeout or a dropped connection (e.g. Redis restart) is caught and retried rather than
+    crashing the worker. ``keep_going`` is a test seam; production runs forever."""
+    while keep_going():
         try:
-            r.ping()
-            break
-        except redis.ConnectionError:
-            log.info("Waiting for Redis at %s ...", config.REDIS_URL)
-            time.sleep(2)
-
-    ensure_group(r, config.STREAM_KEY)
-    ensure_group(r, config.MERGE_STREAM_KEY)
-    log.info("Worker %s listening on streams %s, %s",
-             config.CONSUMER_NAME, config.STREAM_KEY, config.MERGE_STREAM_KEY)
-
-    while True:
-        resp = r.xreadgroup(
-            config.CONSUMER_GROUP, config.CONSUMER_NAME,
-            {config.STREAM_KEY: ">", config.MERGE_STREAM_KEY: ">"}, count=1, block=5000)
+            resp = r.xreadgroup(
+                config.CONSUMER_GROUP, config.CONSUMER_NAME,
+                {config.STREAM_KEY: ">", config.MERGE_STREAM_KEY: ">"}, count=1, block=BLOCK_MS)
+        except (redis.TimeoutError, redis.ConnectionError) as e:
+            log.warning("Redis unavailable (%s); retrying in %ds", e, RECONNECT_DELAY)
+            time.sleep(RECONNECT_DELAY)
+            continue
         if not resp:
             continue
         for stream, messages in resp:
@@ -117,6 +112,33 @@ def main() -> None:
                         handle(job)
                 finally:
                     r.xack(stream, config.CONSUMER_GROUP, msg_id)
+
+
+def main() -> None:
+    # Restore pre-2.6 torch.load behaviour before any model checkpoint is loaded
+    # (pyannote/whisperx checkpoints fail under torch>=2.6's weights_only=True).
+    torch_compat.restore_legacy_torch_load()
+
+    # socket_timeout > BLOCK_MS so a normal blocking poll never trips it; socket_keepalive detects a
+    # silently-dropped connection. (redis-py 8 otherwise lets a blocking XREADGROUP surface a socket
+    # read timeout, which used to crash the worker on its very first poll.)
+    r = redis.Redis.from_url(
+        config.REDIS_URL, decode_responses=True,
+        socket_timeout=BLOCK_MS / 1000 + 5, socket_keepalive=True)
+    while True:
+        try:
+            r.ping()
+            break
+        except (redis.ConnectionError, redis.TimeoutError):
+            log.info("Waiting for Redis at %s ...", config.REDIS_URL)
+            time.sleep(2)
+
+    ensure_group(r, config.STREAM_KEY)
+    ensure_group(r, config.MERGE_STREAM_KEY)
+    log.info("Worker %s listening on streams %s, %s",
+             config.CONSUMER_NAME, config.STREAM_KEY, config.MERGE_STREAM_KEY)
+
+    run_loop(r)
 
 
 if __name__ == "__main__":

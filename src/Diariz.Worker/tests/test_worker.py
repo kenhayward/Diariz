@@ -1,5 +1,8 @@
 """Tests for the job orchestration + temp-file cleanup in worker.handle()."""
+import json
 import os
+
+import redis
 
 import worker
 
@@ -151,3 +154,69 @@ def test_handle_merge_failure_reports_and_cleans_up(monkeypatch, tmp_path):
     assert "ffmpeg missing" in outcome["err"]
     assert "result" not in outcome
     assert not os.path.exists(str(a))  # downloaded sources cleaned up
+
+
+# ---- Consume loop (dispatch + resilience) ----
+
+class _FakeRedis:
+    """Minimal Redis stand-in: `responses` is a list of XREADGROUP return values, yielded per poll."""
+    def __init__(self, responses):
+        self._responses = list(responses)
+        self.acked = []
+
+    def xreadgroup(self, group, consumer, streams, count, block):
+        return self._responses.pop(0) if self._responses else []
+
+    def xack(self, stream, group, msg_id):
+        self.acked.append((stream, msg_id))
+
+
+def _keep_going(n):
+    """Return a keep_going() callable that is True n times, then False (bounds the test loop)."""
+    seq = iter([True] * n + [False])
+    return lambda: next(seq)
+
+
+def test_run_loop_dispatches_transcription_job_and_acks(monkeypatch):
+    handled = []
+    monkeypatch.setattr(worker, "handle", lambda job: handled.append(job))
+    msg = [(worker.config.STREAM_KEY,
+            [("5-0", {"job": json.dumps({"TranscriptionId": "t1", "BlobKey": "b"})})])]
+    r = _FakeRedis([msg])
+
+    worker.run_loop(r, keep_going=_keep_going(2))
+
+    assert handled == [{"TranscriptionId": "t1", "BlobKey": "b"}]
+    assert r.acked == [(worker.config.STREAM_KEY, "5-0")]
+
+
+def test_run_loop_routes_merge_jobs_to_handle_merge(monkeypatch):
+    merged = []
+    monkeypatch.setattr(worker, "handle_merge", lambda job: merged.append(job))
+    msg = [(worker.config.MERGE_STREAM_KEY,
+            [("9-0", {"job": json.dumps({"RecordingId": "r1"})})])]
+    r = _FakeRedis([msg])
+
+    worker.run_loop(r, keep_going=_keep_going(2))
+
+    assert merged == [{"RecordingId": "r1"}]
+    assert r.acked == [(worker.config.MERGE_STREAM_KEY, "9-0")]
+
+
+def test_run_loop_survives_redis_timeout_and_connection_errors(monkeypatch):
+    """A socket read timeout or dropped connection must be retried, not crash the worker."""
+    monkeypatch.setattr(worker.time, "sleep", lambda *_: None)  # don't actually back off in the test
+    errors = iter([redis.TimeoutError("timed out"), redis.ConnectionError("reset")])
+
+    class Flaky:
+        def __init__(self):
+            self.polls = 0
+
+        def xreadgroup(self, *a, **k):
+            self.polls += 1
+            raise next(errors)
+
+    r = Flaky()
+    worker.run_loop(r, keep_going=_keep_going(2))  # two flaky polls, then stop — must not raise
+
+    assert r.polls == 2
