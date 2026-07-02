@@ -1,10 +1,66 @@
 import { describe, it, expect } from "vitest";
-import { dayKey, isoToDayKey, buildMonthGrid, recordingDayKeys, recordingsForDay } from "./calendar";
-import type { RecordingSummary } from "./types";
+import {
+  dayKey, isoToDayKey, buildMonthGrid, recordingDayKeys, recordingsForDay,
+  eventDayKeys, visibleGridRange, dayItems,
+} from "./calendar";
+import type { CalendarEvent, RecordingSummary } from "./types";
 
 const rec = (id: string, createdAt: string): RecordingSummary => ({
   id, title: id, name: null, source: "Microphone", durationMs: 0, status: "Transcribed",
   createdAt, sectionId: null, sectionName: null, hasActions: false, hasAudio: true,
+});
+
+/// Build an event from local Date parts so the ISO round-trips back to the same local day regardless of
+/// the machine timezone (keeps these tests deterministic in CI).
+const ev = (id: string, start: Date, end: Date): CalendarEvent => ({
+  id, summary: id, start: start.toISOString(), end: end.toISOString(), htmlLink: null,
+});
+
+describe("eventDayKeys", () => {
+  it("maps a single-day timed event to its day", () => {
+    const keys = eventDayKeys([ev("a", new Date(2026, 6, 2, 9, 0), new Date(2026, 6, 2, 10, 0))]);
+    expect([...keys]).toEqual(["2026-07-02"]);
+  });
+
+  it("treats an all-day event's exclusive midnight end as not spilling into the next day", () => {
+    // Google all-day: start 07-02 00:00, end 07-03 00:00 (exclusive) → only 07-02.
+    const keys = eventDayKeys([ev("a", new Date(2026, 6, 2), new Date(2026, 6, 3))]);
+    expect([...keys]).toEqual(["2026-07-02"]);
+  });
+
+  it("expands a multi-day event across every day it spans", () => {
+    const keys = eventDayKeys([ev("a", new Date(2026, 6, 2, 22, 0), new Date(2026, 6, 4, 2, 0))]);
+    expect([...keys].sort()).toEqual(["2026-07-02", "2026-07-03", "2026-07-04"]);
+  });
+});
+
+describe("visibleGridRange", () => {
+  it("spans the first visible cell to the day after the last visible cell", () => {
+    const { timeMin, timeMax } = visibleGridRange(2026, 6); // July 2026
+    // July 1 2026 is a Wednesday; Monday-first grid starts Mon June 29.
+    expect(isoToDayKey(timeMin)).toBe("2026-06-29");
+    // timeMax is exclusive (one day past the last cell), so it must be strictly after any July day.
+    expect(new Date(timeMax).getTime()).toBeGreaterThan(new Date(2026, 6, 31).getTime());
+  });
+});
+
+describe("dayItems", () => {
+  it("merges recordings and events for the day, ordered by time", () => {
+    const recordings = [rec("r10", new Date(2026, 6, 2, 10, 0).toISOString())];
+    const events = [ev("e9", new Date(2026, 6, 2, 9, 0), new Date(2026, 6, 2, 9, 30))];
+    const items = dayItems(recordings, events, "2026-07-02");
+    expect(items.map((i) => i.type)).toEqual(["event", "recording"]); // 09:00 event before 10:00 recording
+    expect(items[0].type === "event" && items[0].event.id).toBe("e9");
+    expect(items[1].type === "recording" && items[1].recording.id).toBe("r10");
+  });
+
+  it("includes an event that spans into the day but excludes other days' items", () => {
+    const events = [ev("span", new Date(2026, 6, 1, 22, 0), new Date(2026, 6, 3, 1, 0))];
+    const recordings = [rec("other", new Date(2026, 6, 5, 10, 0).toISOString())];
+    const items = dayItems(recordings, events, "2026-07-02");
+    expect(items).toHaveLength(1);
+    expect(items[0].type === "event" && items[0].event.id).toBe("span");
+  });
 });
 
 describe("dayKey", () => {

@@ -12,6 +12,7 @@ import type {
   Attachment,
   AttachmentDraft,
   AuthResponse,
+  CalendarEvent,
   CalendarMatch,
   ChatAttachment,
   ChatConversation,
@@ -266,6 +267,13 @@ export const api = {
   async getCalendarMatch(id: string): Promise<CalendarMatch | null> {
     const { data } = await http.get<{ match: CalendarMatch | null }>(`/api/recordings/${id}/calendar-match`);
     return data.match;
+  },
+
+  /// The user's Google Calendar events in a date window (for the recordings Calendar tab). Returns an
+  /// empty list when Calendar isn't connected. Requires the user to have granted Calendar access.
+  async getCalendarEvents(timeMin: string, timeMax: string): Promise<CalendarEvent[]> {
+    const { data } = await http.get<CalendarEvent[]>("/api/calendar/events", { params: { timeMin, timeMax } });
+    return data;
   },
 
   // ---- Attachments (supporting documents) ----

@@ -278,14 +278,17 @@ export interface UserProfile {
   googleCalendar: boolean; // user granted Google Calendar read access
 }
 
-/// A Google Calendar meeting matched to a recording by time overlap.
-export interface CalendarMatch {
+/// A Google Calendar event (used both for the per-recording match and the Calendar-tab month list).
+export interface CalendarEvent {
   id: string;
   summary: string | null;
   start: string; // ISO
   end: string; // ISO
   htmlLink: string | null;
 }
+
+/// A Google Calendar meeting matched to a recording by time overlap (same shape as an event).
+export type CalendarMatch = CalendarEvent;
 
 export interface UpdateUserProfile {
   fullName: string | null;
