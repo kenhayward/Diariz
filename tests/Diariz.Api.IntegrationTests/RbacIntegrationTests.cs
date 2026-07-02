@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.IntegrationTests;
@@ -84,7 +85,7 @@ public class RbacIntegrationTests(ContainersFixture fx)
             new GoogleAuthService(new HttpClient(), Options.Create(new GoogleAuthOptions())),
             new GoogleSignInHandler(users, platform),
             Options.Create(new GoogleAuthOptions()), Options.Create(new AppPublicOptions()),
-            sp.GetRequiredService<IDataProtectionProvider>());
+            sp.GetRequiredService<IDataProtectionProvider>(), NullLogger<AuthController>.Instance);
 
         var email = $"life-{Guid.NewGuid():N}@x.test";
 

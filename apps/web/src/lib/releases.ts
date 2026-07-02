@@ -80,6 +80,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.63.1",
+    date: "2026-07-02",
+    pr: 147,
+    headline: "Diagnose Google sign-in failures",
+    summary:
+      "Google sign-in failures were collapsed into a single generic message with nothing in the server " +
+      "logs, making them impossible to diagnose. The callback now **logs the exact cause** (state-cookie " +
+      "problem, token-exchange error including Google's own error text, or a rejected account) and the " +
+      "browser URL carries a specific `googleError` code. The API also now honours the reverse proxy's " +
+      "`X-Forwarded-Proto`, so it correctly detects HTTPS behind nginx (needed for the sign-in state " +
+      "cookie's `Secure` flag). No change to a working sign-in.",
+    fixed: [
+      "Google sign-in callback logs the specific failure (state/cookie, token exchange with Google's error body, or account rejection) instead of a silent generic error.",
+      "API honours X-Forwarded-Proto from the reverse proxy so Request.IsHttps/Scheme are correct behind nginx.",
+    ],
+  },
+  {
     version: "0.63.0",
     date: "2026-07-02",
     pr: 146,

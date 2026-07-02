@@ -9,6 +9,7 @@ using Diariz.Api.Tools;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -31,6 +32,16 @@ builder.Services.Configure<AppPublicOptions>(builder.Configuration.GetSection(Ap
 builder.Services.Configure<IdentificationOptions>(builder.Configuration.GetSection(IdentificationOptions.Section));
 builder.Services.Configure<UploadOptions>(builder.Configuration.GetSection(UploadOptions.Section));
 builder.Services.Configure<AttachmentOptions>(builder.Configuration.GetSection(AttachmentOptions.Section));
+
+// Honour X-Forwarded-* from the reverse proxy (nginx/TLS terminator) so Request.Scheme/IsHttps reflect the
+// browser's HTTPS — needed for the OAuth state cookie's Secure flag and any request-derived URLs. The proxy
+// is on the container network, so clear the default trusted-proxy allowlist to trust it.
+builder.Services.Configure<ForwardedHeadersOptions>(o =>
+{
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    o.KnownNetworks.Clear();
+    o.KnownProxies.Clear();
+});
 
 var jwt = builder.Configuration.GetSection(JwtOptions.Section).Get<JwtOptions>() ?? new JwtOptions();
 var storage = builder.Configuration.GetSection(StorageOptions.Section).Get<StorageOptions>() ?? new StorageOptions();
@@ -227,6 +238,9 @@ await using (var scope = app.Services.CreateAsyncScope())
     await Seeder.SeedRolesAsync(sp);
     await Seeder.SeedDefaultUserAsync(sp, app.Configuration);
 }
+
+// Must run before auth/cookie handling so the pipeline sees the real client scheme.
+app.UseForwardedHeaders();
 
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
