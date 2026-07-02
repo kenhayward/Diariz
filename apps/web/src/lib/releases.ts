@@ -80,6 +80,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.63.4",
+    date: "2026-07-02",
+    pr: 150,
+    headline: "Transcription worker survives Redis hiccups",
+    summary:
+      "The transcription worker crashed on startup when its blocking read from the Redis job queue hit a " +
+      "socket timeout (a behaviour change in the pinned redis client), and had no resilience to a Redis " +
+      "restart. The worker now uses a socket timeout wider than its poll window and retries transient " +
+      "timeouts/disconnects instead of exiting. Worker-only change — no effect on the API or web.",
+    fixed: [
+      "Transcription worker no longer crashes on a Redis socket-read timeout or a dropped connection — it retries and keeps consuming jobs.",
+    ],
+  },
+  {
     version: "0.63.3",
     date: "2026-07-02",
     pr: 149,
