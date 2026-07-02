@@ -75,6 +75,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.58.0",
+    date: "2026-07-02",
+    pr: 114,
+    headline: "More chat slash commands + an autocomplete popup",
+    summary:
+      "Building on `/tools` and `/help`, chat gains more **client-side commands** (handled in the browser, " +
+      "never sent to the model): **`/clear`** starts a new conversation, **`/context`** shows what the chat " +
+      "can currently see (scope, transcript count, model, token usage), **`/save`** and **`/load`** manage " +
+      "saved conversations, **`/copy`** copies the assistant's last reply, and **`/retry`** re-asks the last " +
+      "question. Typing **`/`** now opens a small **autocomplete popup** listing the matching commands — click " +
+      "one (or press Enter) to run it.",
+    added: [
+      "Chat commands: /clear (new conversation), /context (show current scope/model/token usage), /save, /load, /copy (last reply), /retry (re-ask last question).",
+      "An autocomplete popup when the chat input starts with \"/\", listing the matching commands.",
+    ],
+  },
+  {
     version: "0.57.0",
     date: "2026-07-02",
     pr: 113,

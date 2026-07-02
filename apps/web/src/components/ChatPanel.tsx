@@ -15,7 +15,15 @@ import {
   toolCallLineText,
   type ToolCallLineState,
 } from "../lib/toolCallLine";
-import { parseChatCommand, buildToolsOutput, buildHelpOutput, type ChatCommand } from "../lib/chatCommands";
+import {
+  parseChatCommand,
+  buildToolsOutput,
+  buildHelpOutput,
+  bulletList,
+  matchCommands,
+  type ChatCommand,
+  type CommandInfo,
+} from "../lib/chatCommands";
 import type { AttachmentDraft, ChatConversationSummary, ChatTurn, ChatUsage } from "../lib/types";
 import ContextDial from "./ContextDial";
 import PickRecordingModal from "./PickRecordingModal";
@@ -189,43 +197,101 @@ export default function ChatPanel() {
     else setPickerDraft(draft);
   }
 
-  /// Render a client-side slash command's output (Markdown). Never touches the model.
-  function runCommand(cmd: ChatCommand): string {
+  /// The slash commands, in the order shown by the autocomplete popup and /help (client-side only).
+  const commandInfos: CommandInfo[] = [
+    { cmd: "clear", command: "/clear", description: t("cmdHelpClear") },
+    { cmd: "context", command: "/context", description: t("cmdHelpContext") },
+    { cmd: "copy", command: "/copy", description: t("cmdHelpCopy") },
+    { cmd: "help", command: "/help", description: t("cmdHelpHelp") },
+    { cmd: "load", command: "/load", description: t("cmdHelpLoad") },
+    { cmd: "retry", command: "/retry", description: t("cmdHelpRetry") },
+    { cmd: "save", command: "/save", description: t("cmdHelpSave") },
+    { cmd: "tools", command: "/tools", description: t("cmdHelpTools") },
+  ];
+
+  // Autocomplete: commands whose name starts with what's typed (only while the input is a "/…" and not busy).
+  const commandMatches = streaming ? [] : matchCommands(input, commandInfos);
+
+  /// Markdown for the output-only commands (/tools, /help, /context). Action commands are handled in runSlash.
+  function commandText(cmd: ChatCommand): string {
     if (cmd === "tools")
       return buildToolsOutput(settings?.tools ?? [], settings?.toolsEnabled ?? false, {
         heading: t("cmdToolsHeading"),
         disabled: t("cmdToolsDisabled"),
         none: t("cmdToolsNone"),
       });
-    return buildHelpOutput(
-      [
-        { command: "/tools", description: t("cmdHelpTools") },
-        { command: "/help", description: t("cmdHelpHelp") },
-      ],
-      t("cmdHelpHeading"),
+    if (cmd === "context")
+      return bulletList(t("cmdContextHeading"), [
+        t("cmdContextScope", { scope: contextLabel }),
+        t("cmdContextCount", { count: recordingIds.length }),
+        t("cmdContextModel", { model: dialModel || "—" }),
+        t("cmdContextUsage", { used: dialUsed.toLocaleString(), total: dialTotal.toLocaleString() }),
+      ]);
+    return buildHelpOutput(commandInfos, t("cmdHelpHeading"));
+  }
+
+  /// Copy the assistant's most recent reply to the clipboard.
+  function copyLastReply() {
+    const last = [...messages].reverse().find((m) => m.role === "assistant" && m.content.trim());
+    if (!last) {
+      setCommandOutput(t("cmdCopyNone"));
+      return;
+    }
+    navigator.clipboard?.writeText(last.content).then(
+      () => setCommandOutput(t("cmdCopied")),
+      () => setCommandOutput(t("cmdCopyFailed")),
     );
   }
 
-  function send() {
-    const prompt = input.trim();
-    if (!prompt || streaming) return;
-
-    // Slash commands are handled entirely client-side — they never reach the model (so "/tools" always
-    // just lists the tools and can't trigger a spurious tool call).
-    const command = parseChatCommand(prompt);
-    if (command) {
-      setCommandOutput(runCommand(command));
-      setInput("");
+  /// Re-ask the last question (drops the trailing assistant reply and streams a fresh one).
+  function retry() {
+    if (streaming) return;
+    let history = messages.slice();
+    if (history.length > 0 && history[history.length - 1].role === "assistant") history = history.slice(0, -1);
+    if (history.length === 0 || history[history.length - 1].role !== "user") {
+      setCommandOutput(t("cmdRetryNone"));
       return;
     }
+    runTurn(history);
+  }
 
+  /// Run a client-side slash command. Never sent to the model.
+  function runSlash(cmd: ChatCommand) {
+    setInput("");
+    switch (cmd) {
+      case "tools":
+      case "help":
+      case "context":
+        setCommandOutput(commandText(cmd));
+        break;
+      case "clear":
+        clearThread();
+        setCommandOutput(null);
+        break;
+      case "save":
+        setCommandOutput(null);
+        void saveConversation();
+        break;
+      case "load":
+        setCommandOutput(null);
+        void toggleSavedList();
+        break;
+      case "copy":
+        copyLastReply();
+        break;
+      case "retry":
+        setCommandOutput(null);
+        retry();
+        break;
+    }
+  }
+
+  /// Stream one turn for the given history (which must end in a user turn). Shared by send() and retry().
+  function runTurn(history: ChatTurn[]) {
     setError(null);
     setSaveStatus(null);
     setCommandOutput(null);
-
-    const history: ChatTurn[] = [...messages, { role: "user", content: prompt }];
     setMessages([...history, { role: "assistant", content: "" }]);
-    setInput("");
     setStreaming(true);
     setPickerOpen(false);
     setAttachNotice(null);
@@ -271,6 +337,22 @@ export default function ChatPanel() {
         setToolLine(emptyToolCallLine);
         setStreaming(false);
       });
+  }
+
+  function send() {
+    const prompt = input.trim();
+    if (!prompt || streaming) return;
+
+    // Slash commands are handled entirely client-side — they never reach the model (so "/tools" always
+    // just lists the tools and can't trigger a spurious tool call).
+    const command = parseChatCommand(prompt);
+    if (command) {
+      runSlash(command);
+      return;
+    }
+
+    setInput("");
+    runTurn([...messages, { role: "user", content: prompt }]);
   }
 
   function stop() {
@@ -596,6 +678,25 @@ export default function ChatPanel() {
           </div>
         )}
 
+        {/* Slash-command autocomplete (opens upward, above the input). */}
+        {commandMatches.length > 0 && (
+          <div className="mt-2 overflow-hidden rounded-lg border bg-white shadow dark:border-gray-700 dark:bg-gray-800">
+            {commandMatches.map((c) => (
+              <button
+                key={c.command}
+                type="button"
+                // Keep focus in the textarea; mousedown fires before blur so the popup doesn't flicker.
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => runSlash(c.cmd)}
+                className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <span className="font-mono text-sm text-blue-600 dark:text-blue-400">{c.command}</span>
+                <span className="truncate text-xs text-gray-500 dark:text-gray-400">{c.description}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Input */}
         <div className="mt-2 flex items-end gap-2">
           <textarea
@@ -604,7 +705,10 @@ export default function ChatPanel() {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                send();
+                // If a partial "/cmd" is typed, Enter runs the top match; a complete command falls through
+                // to send() (which parses + runs it), and normal text is sent to the model.
+                if (commandMatches.length > 0 && !parseChatCommand(input)) runSlash(commandMatches[0].cmd);
+                else send();
               }
             }}
             rows={2}
