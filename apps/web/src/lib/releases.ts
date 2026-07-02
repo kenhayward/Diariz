@@ -78,6 +78,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.62.4",
+    date: "2026-07-02",
+    pr: 140,
+    headline: "CodeQL security scanning (incl. C#)",
+    summary:
+      "Adds a CodeQL code-scanning workflow covering **C#, JavaScript/TypeScript, Python, and GitHub " +
+      "Actions**. The C# leg does a real .NET build so the API is analysed properly (GitHub's default " +
+      "setup can't build C#). Maintenance only — no effect on the app.",
+    added: [
+      "A CodeQL workflow (.github/workflows/codeql.yml) scanning C# (built), JS/TS, Python, and Actions on push, PR, and weekly.",
+    ],
+  },
+  {
     version: "0.62.3",
     date: "2026-07-02",
     pr: 122,
