@@ -14,5 +14,5 @@ speechbrain==1.0.2
 
 matplotlib==3.9.4
 redis==8.0.1
-boto3==1.35.99
+boto3==1.43.39
 requests==2.34.2
