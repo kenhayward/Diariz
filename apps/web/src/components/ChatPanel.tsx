@@ -219,6 +219,8 @@ export default function ChatPanel() {
         heading: t("cmdToolsHeading"),
         disabled: t("cmdToolsDisabled"),
         none: t("cmdToolsNone"),
+        colName: t("cmdToolsColName"),
+        colDescription: t("cmdToolsColDesc"),
       });
     if (cmd === "context")
       return bulletList(t("cmdContextHeading"), [
@@ -565,7 +567,12 @@ export default function ChatPanel() {
                 </button>
               </div>
               <div
-                className="chat-md break-words"
+                className="chat-md break-words
+                  [&_table]:my-1 [&_table]:w-full [&_table]:border-collapse
+                  [&_th]:border [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_th]:font-semibold
+                  [&_td]:border [&_td]:px-2 [&_td]:py-1 [&_td]:align-top
+                  dark:[&_th]:border-gray-700 dark:[&_td]:border-gray-700
+                  [&_ul]:list-disc [&_ul]:pl-5 [&_li]:my-0.5"
                 dangerouslySetInnerHTML={{ __html: renderMarkdown(commandOutput) }}
               />
             </div>

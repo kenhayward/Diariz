@@ -29,12 +29,13 @@ clearly marked [placeholder]. Do not fabricate.
 1. Discussion summary — grouped by theme, not chronological; concise and
 decision-oriented.
 1. Decisions.
-1. Action items — a table: Action | Owner | Due date. **Render exactly the
-action items supplied under "Action Items" in the Meeting Data below — do not
-add, invent, merge or drop any.** Use "TBC" where an owner or due date is blank.
-If no action items are supplied, derive them from the transcript instead.
 1. Open questions / parking lot.
-1. Next steps / next meeting.
+1. Next steps / next meeting — narrative only.
+
+Do NOT produce an "Action Items", "Actions", "Tasks" or "To-dos" section or
+table, and do not list individual action items anywhere. The action items are
+compiled separately from the meeting's tracked actions and appended
+automatically after your output.
 
 TONE: professional, concise, third person, past tense, suitable for external
 email. No filler, no editorialising.
@@ -48,8 +49,5 @@ Meeting Time: {meeting_time}
 Title: {meeting_title}
 Attendees:{speaker_list}
 Duration:{meeting_duration}
-
-Action Items (already extracted — render these in the Action Items table):
-{action_items}
 
 ## Transcript:

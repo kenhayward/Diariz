@@ -68,7 +68,7 @@ public class MeetingMinutesProcessorTests
     }
 
     [Fact]
-    public async Task ProcessAsync_InjectsTheRecordingsCanonicalActions_IntoThePrompt()
+    public async Task ProcessAsync_AppendsTheRecordingsCanonicalActions_Deterministically()
     {
         using var db = TestDb.Create();
         var (rec, tr) = await Seed(db, Guid.NewGuid());
@@ -78,16 +78,20 @@ public class MeetingMinutesProcessorTests
             Deadline = "2026-03-06", Ordinal = 0,
         });
         await db.SaveChangesAsync();
-        var client = new FakeMeetingMinutesClient { Result = "# Minutes" };
+        // The model deliberately returns NO action items — they must still appear, sourced from the panel.
+        var client = new FakeMeetingMinutesClient { Result = "# Minutes\n\nDiscussion happened." };
 
         await MeetingMinutesProcessor.ProcessAsync(
             db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
             Job(rec, tr), Template, 16000, NullLogger.Instance);
 
-        // The extracted action is supplied to the model (so the minutes render the same set as the panel).
-        var system = client.LastMessages![0].Content;
-        Assert.Contains("Send the Q3 report", system);
-        Assert.Contains("Bob", system);
+        var minutes = await db.MeetingMinutes.SingleAsync(m => m.TranscriptionId == tr.Id);
+        Assert.StartsWith("# Minutes", minutes.Text);                       // the model's narrative is kept
+        Assert.Contains("## Action Items", minutes.Text);                   // the section is appended by us
+        Assert.Contains("| Send the Q3 report | Bob | 2026-03-06 |", minutes.Text);
+
+        // The actions are NOT injected into the prompt — the model isn't asked to produce them.
+        Assert.DoesNotContain("Send the Q3 report", client.LastMessages![0].Content);
     }
 
     [Fact]

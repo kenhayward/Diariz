@@ -121,6 +121,34 @@ describe("RecordingDetail", () => {
     expect((await loaded()).getAttribute("aria-selected")).toBe("true");
   });
 
+  it("shows Meeting Date / Time / Duration and a Summary heading on the Overview tab", async () => {
+    renderPage({ ...base, durationMs: 3_900_000 }); // 1h 05m
+    await loaded();
+    expect(screen.getByText("Meeting Date")).toBeTruthy();
+    expect(screen.getByText("Meeting Time")).toBeTruthy();
+    expect(screen.getByText("01:05")).toBeTruthy(); // duration hh:mm
+    // "Summary" appears both as the tab label and the in-tab heading.
+    expect(screen.getByRole("heading", { name: "Summary" })).toBeTruthy();
+  });
+
+  it("opens on the Transcript tab when the URL carries a segment deep-link (?t=)", async () => {
+    (api.getRecording as ReturnType<typeof vi.fn>).mockResolvedValue(base);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={["/recordings/rec-123?t=500"]}>
+          <Routes>
+            <Route path="/recordings/:id" element={<RecordingDetail />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    // Despite the default being Overview, the deep-link forces the Transcript tab so the segment is shown.
+    const transcriptTab = await screen.findByRole("tab", { name: /transcript/i });
+    expect(transcriptTab.getAttribute("aria-selected")).toBe("true");
+    expect(await screen.findByText("Hi")).toBeTruthy();
+  });
+
   it("switches to the Minutes tab; Re-create calls the API", async () => {
     renderPage({ ...base, meetingMinutes: minutes });
     await loaded();

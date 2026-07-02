@@ -22,7 +22,7 @@ import { recordingMenu } from "../components/recordingMenu";
 import { copyRichLink, transcriptUrl } from "../lib/clipboard";
 import { segmentIndexAtMs, parseMatchTimes, nextSpeakerSegment, prevSpeakerSegment } from "../lib/transcriptNav";
 import { speakerRanges, selectedRanges, rangeAt, nextRangeStart, type PlayRange } from "../lib/segmentPlayback";
-import { formatBytes, formatDate, formatDuration } from "../lib/format";
+import { formatBytes, formatDate, formatDuration, formatLongDate, formatTimeHm, formatDurationHm } from "../lib/format";
 import { hasRevisions, segmentText } from "../lib/transcriptView";
 import { fetchLanguages } from "../lib/languages";
 import type { SegmentDto, SpeakerInfo, SpeakerProfile } from "../lib/types";
@@ -104,7 +104,20 @@ export default function RecordingDetail() {
     setSelectedSegIds(new Set());
   }, [id]);
 
-  // When opened from a chat transcript link (/recordings/:id?t=ms), highlight and scroll to that segment.
+  // Active detail tab, persisted globally (like the left "Meetings" panel) so it survives reloads and
+  // navigating between recordings. Defaults to Overview — but a chat transcript deep-link (?t=…) targets a
+  // segment in the Transcript tab, so open on that tab when the URL carries one.
+  const [tab, setTab] = useState<string>(() =>
+    searchParams.get("t") != null ? "transcript" : localStorage.getItem(DETAIL_TAB_KEY) ?? "overview",
+  );
+  const selectTab = (key: string) => {
+    setTab(key);
+    localStorage.setItem(DETAIL_TAB_KEY, key);
+  };
+
+  // When opened from a chat transcript link (/recordings/:id?t=ms), switch to the Transcript tab (so the
+  // segment is rendered), then highlight and scroll to it. The nested rAF waits one extra frame so the tab's
+  // content has committed even when we had to switch tabs first.
   const tParam = searchParams.get("t");
   useEffect(() => {
     if (tParam == null) return;
@@ -113,11 +126,14 @@ export default function RecordingDetail() {
     if (!Number.isFinite(ms) || !segs || segs.length === 0) return;
     const idx = segmentIndexAtMs(segs, ms);
     if (idx < 0) return;
+    setTab("transcript");
     setActiveIdx(idx);
     const segId = segs[idx].id;
-    // Defer until the rows have rendered.
+    // Defer until the (possibly just-switched) transcript rows have rendered.
     requestAnimationFrame(() =>
-      document.getElementById(`seg-${segId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }),
+      requestAnimationFrame(() =>
+        document.getElementById(`seg-${segId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }),
+      ),
     );
   }, [tParam, rec]);
 
@@ -145,13 +161,6 @@ export default function RecordingDetail() {
   const [editingSummary, setEditingSummary] = useState(false);
   const [editingMinutes, setEditingMinutes] = useState(false);
   const [emailMinutesOpen, setEmailMinutesOpen] = useState(false);
-  // Active detail tab, persisted globally (like the left "Meetings" panel) so it survives reloads and
-  // navigating between recordings. Defaults to Overview.
-  const [tab, setTab] = useState<string>(() => localStorage.getItem(DETAIL_TAB_KEY) ?? "overview");
-  const selectTab = (key: string) => {
-    setTab(key);
-    localStorage.setItem(DETAIL_TAB_KEY, key);
-  };
   const [dragging, setDragging] = useState(false);
   const [editingSeg, setEditingSeg] = useState<SegmentDto | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -735,15 +744,28 @@ export default function RecordingDetail() {
           />
         </>
       ),
-      content: rec.summary ? (
+      content: (
         <div className="px-4 pb-4">
-          {rec.summary.isUserEdited && (
-            <p className="mb-1 text-xs italic text-gray-400 dark:text-gray-500">{t("workspace:summaryEditedHint")}</p>
+          <dl className="mb-4 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
+            <dt className="text-gray-500 dark:text-gray-400">{t("workspace:meetingDateLabel")}</dt>
+            <dd className="text-gray-800 dark:text-gray-200">{formatLongDate(rec.createdAt, i18n.language)}</dd>
+            <dt className="text-gray-500 dark:text-gray-400">{t("workspace:meetingTimeLabel")}</dt>
+            <dd className="text-gray-800 dark:text-gray-200">{formatTimeHm(rec.createdAt)}</dd>
+            <dt className="text-gray-500 dark:text-gray-400">{t("workspace:durationLabel")}</dt>
+            <dd className="text-gray-800 dark:text-gray-200">{formatDurationHm(rec.durationMs)}</dd>
+          </dl>
+          <h3 className="mb-1 text-base font-semibold text-gray-800 dark:text-gray-100">{t("workspace:sectionSummary")}</h3>
+          {rec.summary ? (
+            <>
+              {rec.summary.isUserEdited && (
+                <p className="mb-1 text-xs italic text-gray-400 dark:text-gray-500">{t("workspace:summaryEditedHint")}</p>
+              )}
+              <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{rec.summary.text}</p>
+            </>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400">{t("workspace:overviewEmpty")}</p>
           )}
-          <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{rec.summary.text}</p>
         </div>
-      ) : (
-        <p className="px-4 pb-4 text-sm text-gray-500 dark:text-gray-400">{t("workspace:overviewEmpty")}</p>
       ),
     },
     {

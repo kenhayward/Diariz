@@ -56,16 +56,21 @@ describe("bulletList", () => {
 });
 
 describe("buildToolsOutput", () => {
-  const labels = { heading: "Available tools", disabled: "Tools are off.", none: "None enabled." };
+  const labels = {
+    heading: "Available tools", disabled: "Tools are off.", none: "None enabled.",
+    colName: "Tool", colDescription: "What it does",
+  };
   const tools = [
     { title: "Search transcripts", description: "Search everything.", enabled: true },
     { title: "Send email", description: "Email you.", enabled: false },
   ];
 
-  it("lists only the enabled tools", () => {
+  it("lists only the enabled tools as a two-column table", () => {
     const out = buildToolsOutput(tools, true, labels);
     expect(out).toContain("Available tools");
-    expect(out).toContain("Search transcripts");
+    expect(out).toContain("| Tool | What it does |"); // table header
+    expect(out).toContain("| --- | --- |"); // table separator row
+    expect(out).toContain("| Search transcripts | Search everything. |"); // enabled tool row
     expect(out).not.toContain("Send email"); // disabled tool omitted
   });
 

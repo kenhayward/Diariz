@@ -1,18 +1,19 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Diariz.Api.Contracts;
 
 namespace Diariz.Api.Services;
 
-/// <summary>Per-meeting values substituted into the minutes prompt template's <c>{placeholders}</c>. The
-/// <paramref name="Actions"/> are the canonical, already-extracted action items — the minutes render them
-/// verbatim so the minutes' Action Items table matches the recording's Actions panel.</summary>
+/// <summary>Per-meeting values substituted into the minutes prompt template's <c>{placeholders}</c>. Action
+/// items are deliberately NOT part of the prompt: the model is told not to produce them, and the processor
+/// appends the recording's canonical actions deterministically (see <see cref="MeetingMinutesPrompt.WithActionItems"/>)
+/// so the minutes' Action Items table always matches the Actions panel exactly.</summary>
 public record MeetingMinutesContext(
     DateTimeOffset? MeetingDate,
     string Title,
     IReadOnlyList<string> Attendees,
-    long? DurationMs,
-    IReadOnlyList<ExtractedAction>? Actions = null);
+    long? DurationMs);
 
 /// <summary>
 /// Pure (no IO) rendering of the meeting-minutes prompt and extraction of the Markdown response, so the
@@ -57,12 +58,13 @@ clearly marked [placeholder]. Do not fabricate.
 1. Discussion summary — grouped by theme, not chronological; concise and
 decision-oriented.
 1. Decisions.
-1. Action items — a table: Action | Owner | Due date. **Render exactly the
-action items supplied under "Action Items" in the Meeting Data below — do not
-add, invent, merge or drop any.** Use "TBC" where an owner or due date is blank.
-If no action items are supplied, derive them from the transcript instead.
 1. Open questions / parking lot.
-1. Next steps / next meeting.
+1. Next steps / next meeting — narrative only.
+
+Do NOT produce an "Action Items", "Actions", "Tasks" or "To-dos" section or
+table, and do not list individual action items anywhere. The action items are
+compiled separately from the meeting's tracked actions and appended
+automatically after your output.
 
 TONE: professional, concise, third person, past tense, suitable for external
 email. No filler, no editorialising.
@@ -76,9 +78,6 @@ Meeting Time: {meeting_time}
 Title: {meeting_title}
 Attendees:{speaker_list}
 Duration:{meeting_duration}
-
-Action Items (already extracted — render these in the Action Items table):
-{action_items}
 
 ## Transcript:
 """;
@@ -94,26 +93,44 @@ Action Items (already extracted — render these in the Action Items table):
             .Replace("{meeting_time}", FormatTime(ctx.MeetingDate))
             .Replace("{meeting_title}", string.IsNullOrWhiteSpace(ctx.Title) ? "[placeholder]" : ctx.Title.Trim())
             .Replace("{speaker_list}", FormatAttendees(ctx.Attendees))
-            .Replace("{meeting_duration}", FormatDuration(ctx.DurationMs))
-            .Replace("{action_items}", FormatActions(ctx.Actions));
+            .Replace("{meeting_duration}", FormatDuration(ctx.DurationMs));
 
         var transcript = PromptTranscript.Build(segments, charBudget);
         return [new ChatMessage("system", rendered), new ChatMessage("user", transcript)];
     }
 
+    /// <summary>Build the deterministic <c>## Action Items</c> Markdown table from the recording's canonical
+    /// actions (the Actions panel) — the model is told NOT to produce one, so this is the single source. Owner
+    /// and due date are left blank when unknown; pipe characters are escaped so the table stays intact. Returns
+    /// an empty string when there are no actions (the section is then omitted).</summary>
+    public static string RenderActionItems(IReadOnlyList<ExtractedAction>? actions)
+    {
+        var items = actions?.Where(a => !string.IsNullOrWhiteSpace(a.Text)).ToList() ?? [];
+        if (items.Count == 0) return "";
+
+        var sb = new StringBuilder();
+        sb.Append("## Action Items\n\n");
+        sb.Append("| Action | Owner | Due date |\n");
+        sb.Append("| --- | --- | --- |\n");
+        foreach (var a in items)
+            sb.Append($"| {Cell(a.Text)} | {Cell(a.Actor)} | {Cell(a.Deadline)} |\n");
+        return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>Append the deterministic Action Items section to the model's minutes (blank-line separated).
+    /// A no-op when there are no actions.</summary>
+    public static string WithActionItems(string minutes, IReadOnlyList<ExtractedAction>? actions)
+    {
+        var section = RenderActionItems(actions);
+        return section.Length == 0 ? minutes ?? "" : $"{(minutes ?? "").TrimEnd()}\n\n{section}\n";
+    }
+
+    private static string Cell(string? s) =>
+        string.IsNullOrWhiteSpace(s) ? "" : s.Trim().Replace("|", "\\|").Replace("\r", " ").Replace("\n", " ");
+
     private static string FormatDate(DateTimeOffset? d) => d?.ToString("yyyy-MM-dd") ?? "[placeholder]";
 
     private static string FormatTime(DateTimeOffset? d) => d?.ToString("HH:mm") ?? "[placeholder]";
-
-    /// <summary>Render the canonical extracted actions as a plain list for the prompt (Owner/Due left blank
-    /// when unknown). Empty → a marker telling the model to derive them from the transcript instead.</summary>
-    private static string FormatActions(IReadOnlyList<ExtractedAction>? actions)
-    {
-        var items = actions?.Where(a => !string.IsNullOrWhiteSpace(a.Text)).ToList() ?? [];
-        if (items.Count == 0) return "[none supplied — derive the action items from the transcript]";
-        return string.Join("\n", items.Select(a =>
-            $"- Action: {a.Text.Trim()} | Owner: {a.Actor.Trim()} | Due: {a.Deadline.Trim()}"));
-    }
 
     private static string FormatAttendees(IReadOnlyList<string> attendees)
     {

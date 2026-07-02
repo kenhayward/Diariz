@@ -46,27 +46,44 @@ public class MeetingMinutesPromptTests
     }
 
     [Fact]
-    public void BuildMessages_RendersSuppliedActionItems_IntoTheActionsPlaceholder()
+    public void RenderActionItems_BuildsATableFromTheCanonicalActions()
     {
-        var template = "Actions:\n{action_items}\n\n## Transcript:";
-        var ctx = new MeetingMinutesContext(
-            null, "T", [], null, [new ExtractedAction("Send the report", "Bob", "2026-03-06")]);
+        var md = MeetingMinutesPrompt.RenderActionItems(
+        [
+            new ExtractedAction("Send the report", "Bob", "2026-03-06"),
+            new ExtractedAction("Book the room", "", ""), // blank owner/due render as empty cells
+        ]);
 
-        var system = MeetingMinutesPrompt.BuildMessages(template, ctx, Segments, 16000)[0].Content;
-
-        Assert.Contains("Send the report", system);
-        Assert.Contains("Bob", system);
-        Assert.Contains("2026-03-06", system);
-        Assert.DoesNotContain("{action_items}", system);
+        Assert.Contains("## Action Items", md);
+        Assert.Contains("| Action | Owner | Due date |", md);
+        Assert.Contains("| Send the report | Bob | 2026-03-06 |", md);
+        Assert.Contains("| Book the room |  |  |", md);
     }
 
     [Fact]
-    public void BuildMessages_ActionItemsPlaceholder_FallsBackWhenNoneSupplied()
+    public void RenderActionItems_EscapesPipes_SkipsBlankRows_EmptyWhenNone()
     {
-        var template = "Actions:\n{action_items}\n\n## Transcript:";
-        var ctx = new MeetingMinutesContext(null, "T", [], null); // no actions
-        var system = MeetingMinutesPrompt.BuildMessages(template, ctx, Segments, 16000)[0].Content;
-        Assert.Contains("derive the action items from the transcript", system);
+        var md = MeetingMinutesPrompt.RenderActionItems(
+        [
+            new ExtractedAction("A | B split", "Al", ""),
+            new ExtractedAction("   ", "x", "y"), // blank action text → skipped
+        ]);
+        Assert.Contains("A \\| B split", md);   // pipe escaped so the table stays intact
+        Assert.DoesNotContain("| x |", md);     // the blank-text row is dropped
+
+        Assert.Equal("", MeetingMinutesPrompt.RenderActionItems(null));
+        Assert.Equal("", MeetingMinutesPrompt.RenderActionItems([]));
+    }
+
+    [Fact]
+    public void WithActionItems_AppendsTheSection_OrLeavesMinutesUnchangedWhenNoActions()
+    {
+        Assert.Equal("# Minutes", MeetingMinutesPrompt.WithActionItems("# Minutes", null));
+
+        var appended = MeetingMinutesPrompt.WithActionItems("# Minutes", [new ExtractedAction("Do X", "", "")]);
+        Assert.StartsWith("# Minutes", appended);
+        Assert.Contains("## Action Items", appended);
+        Assert.Contains("Do X", appended);
     }
 
     [Fact]
@@ -85,10 +102,12 @@ public class MeetingMinutesPromptTests
     {
         Assert.Contains("{meeting_date}", MeetingMinutesPrompt.DefaultTemplate);
         Assert.Contains("{meeting_time}", MeetingMinutesPrompt.DefaultTemplate);
-        Assert.Contains("{action_items}", MeetingMinutesPrompt.DefaultTemplate);
         Assert.Contains("{speaker_list}", MeetingMinutesPrompt.DefaultTemplate);
         Assert.Contains("## Transcript:", MeetingMinutesPrompt.DefaultTemplate);
         Assert.Contains("emojis", MeetingMinutesPrompt.DefaultTemplate);
+        // Actions are appended deterministically — no placeholder, and the model is told not to produce them.
+        Assert.DoesNotContain("{action_items}", MeetingMinutesPrompt.DefaultTemplate);
+        Assert.Contains("Do NOT produce an \"Action Items\"", MeetingMinutesPrompt.DefaultTemplate);
     }
 
     [Fact]
