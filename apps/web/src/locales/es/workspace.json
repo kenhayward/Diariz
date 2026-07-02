@@ -70,6 +70,8 @@
   "merging": "Combinando audio…",
   "extractingActions": "Extrayendo acciones de la transcripción…",
   "meetingDateLabel": "Fecha de la reunión",
+  "meetingLabel": "Reunión",
+  "meetingUntitled": "(evento sin título)",
   "meetingTimeLabel": "Hora de la reunión",
   "durationLabel": "Duración",
   "detailTabOverview": "Resumen",

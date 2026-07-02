@@ -96,7 +96,10 @@ unconfigured), and admin user management. Each user's data is isolated to them. 
 - **Sign in with Google** (optional): OAuth 2.0 sign-in that reads the user's name, email, and profile
 picture (shown in the account menu). New Google sign-ups still require admin approval, and a Google email
 matching an existing account links to it automatically. Enabled when the operator configures a Google
-OAuth client; web-only for now (the desktop app keeps password login).
+OAuth client; web-only for now (the desktop app keeps password login). A Google-linked user can opt in
+(Preferences → Google) to let Diariz **read their Google Calendar** (so a recording's Overview shows the
+**matching meeting**) and **save meeting minutes as a Gmail draft** — both revocable, read-only calendar,
+draft-only Gmail.
 - **Preferences**: every user can change their own **display name** and pick their **native** and **app**
 language (chosen at signup or later from the account menu) — groundwork for upcoming UI localization and
 transcript translation.

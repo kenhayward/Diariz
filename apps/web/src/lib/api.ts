@@ -12,6 +12,7 @@ import type {
   Attachment,
   AttachmentDraft,
   AuthResponse,
+  CalendarMatch,
   ChatAttachment,
   ChatConversation,
   ChatConversationSummary,
@@ -264,6 +265,13 @@ export const api = {
   async saveMinutesAsGmailDraft(id: string): Promise<string> {
     const { data } = await http.post<{ draftUrl: string }>(`/api/recordings/${id}/meeting-minutes/gmail-draft`);
     return data.draftUrl;
+  },
+
+  /// The Google Calendar meeting this recording most likely overlaps (by time), or null if none.
+  /// Requires the user to have granted Calendar access in Preferences.
+  async getCalendarMatch(id: string): Promise<CalendarMatch | null> {
+    const { data } = await http.get<{ match: CalendarMatch | null }>(`/api/recordings/${id}/calendar-match`);
+    return data.match;
   },
 
   // ---- Attachments (supporting documents) ----

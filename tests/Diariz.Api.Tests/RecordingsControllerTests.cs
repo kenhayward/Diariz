@@ -19,7 +19,7 @@ public class RecordingsControllerTests
     private static RecordingsController Build(DiarizDbContext db, Guid userId, FakeJobQueue queue,
         FakeAudioStorage? storage = null, bool summarizationEnabled = true, FakeEmailSender? email = null,
         FakeSpeakerIdentifier? identifier = null, UploadOptions? uploads = null, IExportLocalizer? exportLocalizer = null,
-        IGoogleGmailClient? gmail = null)
+        IGoogleGmailClient? gmail = null, IGoogleCalendarClient? calendar = null)
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" })
@@ -30,10 +30,25 @@ public class RecordingsControllerTests
             new FakeApiKeyProtector());
         return new RecordingsController(db, storage ?? new FakeAudioStorage(), queue, new FakeHubContext(), config,
             resolver, email ?? new FakeEmailSender(), identifier ?? new FakeSpeakerIdentifier(),
-            Options.Create(uploads ?? new UploadOptions()), exportLocalizer, gmail)
+            Options.Create(uploads ?? new UploadOptions()), exportLocalizer, gmail, calendar)
         {
             ControllerContext = Http.Context(userId)
         };
+    }
+
+    /// <summary>Returns canned events and records the query window.</summary>
+    private sealed class FakeCalendarClient : IGoogleCalendarClient
+    {
+        public IReadOnlyList<CalendarEvent>? Events { get; set; } = new List<CalendarEvent>();
+        public DateTimeOffset? TimeMin { get; private set; }
+        public DateTimeOffset? TimeMax { get; private set; }
+
+        public Task<IReadOnlyList<CalendarEvent>?> ListEventsAsync(
+            Guid userId, DateTimeOffset timeMin, DateTimeOffset timeMax, CancellationToken ct = default)
+        {
+            TimeMin = timeMin; TimeMax = timeMax;
+            return Task.FromResult(Events);
+        }
     }
 
     /// <summary>Records the draft request so tests can assert what was sent, and returns a canned URL.</summary>
@@ -1567,6 +1582,98 @@ public class RecordingsControllerTests
 
         Assert.IsType<BadRequestObjectResult>(
             await controller.SaveMeetingMinutesAsGmailDraft(rec.Id, default));
+    }
+
+    // ---- Calendar match ----
+
+    private static async Task<Recording> SeedRecordingAt(DiarizDbContext db, Guid userId, DateTimeOffset createdAt, long durationMs)
+    {
+        var rec = new Recording { Id = Guid.NewGuid(), UserId = userId, BlobKey = "k", CreatedAt = createdAt, DurationMs = durationMs };
+        db.Recordings.Add(rec);
+        await db.SaveChangesAsync();
+        return rec;
+    }
+
+    private static void GrantCalendar(DiarizDbContext db, Guid userId) =>
+        db.UserSettings.Add(new Domain.Entities.UserSettings { UserId = userId, GoogleCalendarGranted = true });
+
+    [Fact]
+    public async Task CalendarMatch_WhenCalendarNotGranted_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var rec = await SeedRecordingAt(db, userId, DateTimeOffset.Parse("2026-07-02T09:00:00Z"), 3_600_000);
+        var cal = new FakeCalendarClient();
+        var controller = Build(db, userId, new FakeJobQueue(), calendar: cal);
+
+        Assert.IsType<BadRequestObjectResult>(await controller.CalendarMatch(rec.Id, default));
+        Assert.Null(cal.TimeMin); // never reached the Calendar client
+    }
+
+    [Fact]
+    public async Task CalendarMatch_ReturnsBestOverlappingEvent_AndPadsTheWindow()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var rec = await SeedRecordingAt(db, userId, DateTimeOffset.Parse("2026-07-02T09:00:00Z"), 3_600_000); // 09:00–10:00
+        GrantCalendar(db, userId);
+        await db.SaveChangesAsync();
+        var cal = new FakeCalendarClient
+        {
+            Events = new List<CalendarEvent>
+            {
+                new("early", "Earlier", DateTimeOffset.Parse("2026-07-02T08:00:00Z"), DateTimeOffset.Parse("2026-07-02T09:05:00Z"), null),
+                new("main", "Planning", DateTimeOffset.Parse("2026-07-02T09:00:00Z"), DateTimeOffset.Parse("2026-07-02T10:00:00Z"), "https://cal/main"),
+            },
+        };
+        var controller = Build(db, userId, new FakeJobQueue(), calendar: cal);
+
+        var ok = Assert.IsType<OkObjectResult>(await controller.CalendarMatch(rec.Id, default));
+        var json = System.Text.Json.JsonSerializer.Serialize(ok.Value);
+        Assert.Contains("Planning", json);
+        Assert.Contains("https://cal/main", json);
+        // Window padded ±30 min around the recording span.
+        Assert.Equal(DateTimeOffset.Parse("2026-07-02T08:30:00Z"), cal.TimeMin);
+        Assert.Equal(DateTimeOffset.Parse("2026-07-02T10:30:00Z"), cal.TimeMax);
+    }
+
+    [Fact]
+    public async Task CalendarMatch_WhenNothingOverlaps_ReturnsNullMatch()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var rec = await SeedRecordingAt(db, userId, DateTimeOffset.Parse("2026-07-02T09:00:00Z"), 600_000);
+        GrantCalendar(db, userId);
+        await db.SaveChangesAsync();
+        var cal = new FakeCalendarClient
+        {
+            Events = new List<CalendarEvent>
+            {
+                new("far", "Way earlier", DateTimeOffset.Parse("2026-07-02T06:00:00Z"), DateTimeOffset.Parse("2026-07-02T06:30:00Z"), null),
+            },
+        };
+        var controller = Build(db, userId, new FakeJobQueue(), calendar: cal);
+
+        var ok = Assert.IsType<OkObjectResult>(await controller.CalendarMatch(rec.Id, default));
+        Assert.Contains("\"match\":null", System.Text.Json.JsonSerializer.Serialize(ok.Value));
+    }
+
+    [Fact]
+    public async Task CalendarMatch_WhenTokenExpired_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var rec = await SeedRecordingAt(db, userId, DateTimeOffset.Parse("2026-07-02T09:00:00Z"), 600_000);
+        GrantCalendar(db, userId);
+        await db.SaveChangesAsync();
+        var cal = new FakeCalendarClient { Events = null }; // refresh token revoked/expired
+        var controller = Build(db, userId, new FakeJobQueue(), calendar: cal);
+
+        Assert.IsType<BadRequestObjectResult>(await controller.CalendarMatch(rec.Id, default));
     }
 
     [Fact]

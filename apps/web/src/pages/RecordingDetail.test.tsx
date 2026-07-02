@@ -20,6 +20,7 @@ vi.mock("../lib/api", () => ({
     updateMeetingMinutes: vi.fn(),
     emailMeetingMinutes: vi.fn(),
     saveMinutesAsGmailDraft: vi.fn(),
+    getCalendarMatch: vi.fn().mockResolvedValue(null),
     audioUrl: vi.fn(),
     downloadTranscript: vi.fn(),
     downloadAudio: vi.fn(),
@@ -130,6 +131,26 @@ describe("RecordingDetail", () => {
     expect(screen.getByText("01:05")).toBeTruthy(); // duration hh:mm
     // "Summary" appears both as the tab label and the in-tab heading.
     expect(screen.getByRole("heading", { name: "Summary" })).toBeTruthy();
+  });
+
+  it("shows the matching Google Calendar meeting on the Overview when Calendar is connected", async () => {
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true });
+    (api.getCalendarMatch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt, htmlLink: "https://cal/evt1",
+    });
+    renderPage(base);
+    await loaded();
+    const link = await screen.findByRole("link", { name: "Quarterly Planning" });
+    expect(link.getAttribute("href")).toBe("https://cal/evt1");
+    expect(screen.getByText("Meeting")).toBeTruthy();
+  });
+
+  it("does not query the calendar when Calendar isn't connected", async () => {
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: false });
+    renderPage(base);
+    await loaded();
+    expect(api.getCalendarMatch).not.toHaveBeenCalled();
+    expect(screen.queryByText("Meeting")).toBeNull();
   });
 
   it("opens on the Transcript tab when the URL carries a segment deep-link (?t=)", async () => {
