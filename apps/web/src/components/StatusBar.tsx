@@ -45,7 +45,7 @@ export default function StatusBar() {
   fields.push(t("account:transcriptsTotal", { n: recordings.length.toLocaleString(i18n.language) }));
 
   return (
-    <footer className="flex h-7 shrink-0 items-center gap-3 border-t bg-white px-3 text-xs dark:border-gray-800 dark:bg-gray-900">
+    <footer className="flex h-5 shrink-0 items-center gap-3 border-t bg-white px-3 text-xs dark:border-gray-700 dark:bg-gray-900">
       <span className={`min-w-0 flex-1 truncate ${message ? toneClass(message.tone) : ""}`}>
         {message?.text ?? ""}
       </span>

@@ -88,6 +88,7 @@ export const RELEASES: Release[] = [
       "until it finishes.",
     fixed: [
       "Re-identify speakers now shows a “Re-identifying speakers…” progress message in the status bar while it runs, and disables the button until it completes.",
+      "The status bar is shorter, and its top border now matches the side-panel borders (so the panels no longer look like they continue below it).",
     ],
   },
   {
