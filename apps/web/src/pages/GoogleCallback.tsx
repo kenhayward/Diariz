@@ -1,18 +1,18 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
+import { CLEAR_HANDOFF_COOKIE, parseHandoffToken } from "../lib/googleHandoff";
 
-/// Landing route after Google sign-in. The API redirects here as `/auth/google/callback#token=<jwt>`,
-/// keeping the token in the URL fragment (never sent to the server / logs). We adopt it and go to the app.
-/// (Failures are redirected by the API to `/login?googleError=…` instead, so they never reach here.)
+/// Landing route after Google sign-in. The API redirects here (`/auth/google/callback`) after placing the
+/// JWT in a short-lived, same-origin cookie — proxy-safe, unlike a URL fragment. We adopt it, clear the
+/// cookie, and go to the app. (Failures are redirected by the API to `/login?googleError=…` instead.)
 export default function GoogleCallback() {
   const { setSession } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = new URLSearchParams(window.location.hash.replace(/^#/, "")).get("token");
-    // Strip the fragment so the token isn't left in the address bar or browser history.
-    window.history.replaceState(null, "", window.location.pathname);
+    const token = parseHandoffToken(document.cookie);
+    document.cookie = CLEAR_HANDOFF_COOKIE; // one-time — expire it immediately
     if (token) {
       setSession(token);
       navigate("/", { replace: true });

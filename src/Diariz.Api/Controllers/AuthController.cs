@@ -234,18 +234,32 @@ public class AuthController : ControllerBase
 
         return result.Outcome switch
         {
-            GoogleSignInOutcome.SignedIn => Redirect(await SuccessRedirectAsync(result.User!)),
+            GoogleSignInOutcome.SignedIn => await SignedInRedirectAsync(result.User!),
             GoogleSignInOutcome.AwaitingApproval => RedirectToLogin("pending"),
             GoogleSignInOutcome.Disabled => RedirectToLogin("disabled"),
             _ => RedirectToLogin("failed"),
         };
     }
 
-    private async Task<string> SuccessRedirectAsync(ApplicationUser user)
+    private const string AuthHandoffCookie = "diariz_auth";
+    private const string HandoffPath = "/auth/google/callback";
+
+    /// <summary>Hand the freshly-minted JWT to the SPA via a short-lived, same-origin cookie (the SPA reads
+    /// it in JS, then deletes it) rather than a URL fragment: a fragment on a redirect's Location header can
+    /// be stripped by intermediary reverse proxies, silently dropping the token. The cookie never appears in
+    /// a URL / access log / Referer, and is scoped to the callback path.</summary>
+    private async Task<IActionResult> SignedInRedirectAsync(ApplicationUser user)
     {
         var (token, _) = _tokens.CreateAccessToken(user, await _users.GetRolesAsync(user));
-        // Token in the fragment (not the query) so it never lands in server logs or a Referer header.
-        return $"{WebBase()}/auth/google/callback#token={Uri.EscapeDataString(token)}";
+        Response.Cookies.Append(AuthHandoffCookie, token, new CookieOptions
+        {
+            HttpOnly = false,             // the SPA must read it from document.cookie
+            Secure = Request.IsHttps,
+            SameSite = SameSiteMode.Lax,  // same-origin redirect from our own callback endpoint
+            Path = HandoffPath,
+            MaxAge = TimeSpan.FromMinutes(2),
+        });
+        return Redirect($"{WebBase()}{HandoffPath}");
     }
 
     private CookieOptions StateCookieOptions() => new()

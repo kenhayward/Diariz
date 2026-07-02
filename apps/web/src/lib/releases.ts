@@ -80,6 +80,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.63.2",
+    date: "2026-07-02",
+    pr: 148,
+    headline: "Fix Google sign-in behind a reverse proxy",
+    summary:
+      "Google sign-in completed on the server but the browser landed back on the login page. The API " +
+      "handed the freshly-minted token to the app in the redirect's URL **fragment**, and a reverse proxy " +
+      "in front of the app stripped that fragment — so the app never received the token. The token is now " +
+      "delivered via a short-lived, same-origin **cookie** the app reads and immediately clears, which " +
+      "survives any proxy (and still never appears in a URL, log, or Referer).",
+    fixed: [
+      "Google sign-in now signs you in behind reverse proxies that strip URL fragments — the token is handed off via a short-lived same-origin cookie instead of the redirect fragment.",
+    ],
+  },
+  {
     version: "0.63.1",
     date: "2026-07-02",
     pr: 147,
