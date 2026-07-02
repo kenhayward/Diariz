@@ -195,7 +195,11 @@ public sealed class AttachmentExtractor : IAttachmentExtractor
 
     private static string SafeName(string? fileName)
     {
-        var name = Path.GetFileName(fileName ?? "").Trim();
+        // Strip any directory path cross-platform (take everything after the last '/' or '\'). Path.GetFileName
+        // only strips '\' on Windows, so on the Linux servers a name like "a\b.pdf" would keep its path here.
+        var raw = fileName ?? "";
+        var cut = raw.LastIndexOfAny(new[] { '/', '\\' });
+        var name = (cut >= 0 ? raw[(cut + 1)..] : raw).Trim();
         return string.IsNullOrEmpty(name) ? "attachment" : name;
     }
 }

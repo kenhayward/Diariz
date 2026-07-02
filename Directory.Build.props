@@ -1,0 +1,10 @@
+<Project>
+  <!-- Applies to every .csproj in the repo (Api, Domain, and the test projects). -->
+  <PropertyGroup>
+    <!-- Emit a packages.lock.json next to each project so the GitHub dependency graph and Dependabot
+         track transitive NuGet packages precisely (direct PackageReferences alone are only tracked
+         loosely). This does NOT enable locked-mode restore, so it won't fail a build when a package is
+         bumped — it just keeps the lock file in step. Regenerate with `dotnet restore`. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+</Project>

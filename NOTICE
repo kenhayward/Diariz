@@ -1,0 +1,41 @@
+Diariz
+Copyright (c) Ken Hayward
+
+This product is licensed under the GNU Affero General Public License v3.0 (see LICENSE),
+or under a separate commercial licence (see the Licensing section of README.md).
+
+------------------------------------------------------------------------------------------
+Third-party components
+------------------------------------------------------------------------------------------
+
+This software depends on third-party open-source components, each under its own licence.
+The list below is provided for attribution; it is not exhaustive of transitive dependencies
+(see the package manifests and lock files for the full set: apps/web/package-lock.json,
+apps/desktop/package-lock.json, src/Diariz.Worker/requirements.txt, and the NuGet
+packages.lock.json files). The About box in the app also credits the major components.
+
+Apache License 2.0 components (their NOTICE terms are acknowledged here):
+  - Microsoft.EntityFrameworkCore and related packages
+  - AWSSDK.S3
+  - Hugging Face transformers, huggingface_hub
+  - SpeechBrain
+  - boto3, requests
+  - Testcontainers (.NET)
+  - xUnit.net
+
+MIT / BSD / other permissive components include (non-exhaustive):
+  - React, Vite, Tailwind CSS, axios, @microsoft/signalr, @tanstack/react-query (MIT)
+  - Electron, electron-builder, electron-updater (MIT)
+  - Npgsql, StackExchange.Redis, MailKit/MimeKit, PdfPig (MIT / BSD / Apache-2.0)
+  - WhisperX (MIT), CTranslate2 (MIT), OpenAI Whisper large-v3 weights (MIT)
+  - pyannote.audio models speaker-diarization-3.1 / segmentation-3.0 (MIT, gated)
+  - PyTorch, torchaudio, NumPy (BSD)
+  - dompurify (MPL-2.0 OR Apache-2.0; used under Apache-2.0)
+
+Model / dataset usage terms (see README "Licensing & commercial use" for detail):
+  - SpeechBrain ECAPA voiceprint weights are trained on the VoxCeleb dataset, published for
+    research / non-commercial use.
+  - MinIO (object storage) is licensed under AGPL-3.0 and is used unmodified as a separate
+    container; it can be swapped for any S3-compatible store.
+
+Full licence texts are available from each component's upstream project.
