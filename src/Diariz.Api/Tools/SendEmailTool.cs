@@ -30,7 +30,8 @@ public sealed class SendEmailTool : IChatTool
         "Email the signed-in user their own content (e.g. a summary, action items, or notes you have prepared). " +
         "It is ALWAYS delivered to the current user's own account address — you cannot choose or change the " +
         "recipient. Provide a subject and a body (plain text or simple Markdown). Use this only when the user " +
-        "asks to be emailed something, and write the body as if it is from them.";
+        "asks to be emailed something, and write the body as if it is from them. A copy of the sent email is " +
+        "also saved to the transcript in context as a Markdown attachment (titled \"Email: <subject>\").";
 
     public object ParametersSchema => new
     {
@@ -64,8 +65,20 @@ public sealed class SendEmailTool : IChatTool
         var html = $"<div style=\"font-family:Arial,Helvetica,sans-serif;color:#111;line-height:1.5;\">" +
             $"{MarkdownRenderer.ToHtml(body)}</div>";
         var sent = await _email.SendAsync(address, subject, html, null, ct);
-        return sent
-            ? $"Email sent to {address}."
-            : "Email isn't configured on the server, so nothing was sent. Ask an administrator to set it up.";
+        if (!sent)
+            return "Email isn't configured on the server, so nothing was sent. Ask an administrator to set it up.";
+
+        // File a copy of the sent email on the transcript in context, as a Markdown attachment — same selection
+        // flow as add_as_attachment: one candidate → added there; several → the user picks. The content is the
+        // model's Markdown body (not the HTML), so it stays readable/editable like any other note.
+        List<DraftRecording> candidates =
+            ctx.Effects is null ? [] : await AttachmentTargets.ForContextAsync(_db, ctx, ct);
+        if (candidates.Count == 0)
+            return $"Email sent to {address}. (No transcript is in context, so no copy was saved as an attachment.)";
+
+        ctx.Effects!.AttachmentDrafts.Add(new AttachmentDraft($"Email: {subject}", body, candidates));
+        return candidates.Count == 1
+            ? $"Email sent to {address}; a copy will be saved as an attachment on {candidates[0].Title}."
+            : $"Email sent to {address}; the user will choose which of the {candidates.Count} selected transcripts to save a copy to.";
     }
 }

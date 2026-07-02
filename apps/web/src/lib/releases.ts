@@ -39,7 +39,8 @@ tools** that search your **whole transcript library** — who said a phrase, wha
 which recordings exist or mention something, action items, summaries, attendees, talk time, and the lines
 around a moment — answering with **When · Who · What** and **linking back to the transcript** (click a link
 to open it and jump to the exact segment). It can also **email you** (yourself only) a message it composes —
-a summary, action items, or notes — always delivering to your own registered address, or **save that output
+a summary, action items, or notes — always delivering to your own registered address (and it **files a copy
+of that email onto the transcript** as a Markdown attachment), or **save that output
 to a transcript as a Markdown attachment**. Toggle
 the tools on, and choose which, under Settings → AI — where you
 can also **enable reasoning** (and pick a level) for reasoning-capable models. You can **attach supporting
@@ -74,6 +75,21 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.59.0",
+    date: "2026-07-02",
+    pr: 115,
+    headline: "\"Send email to me\" also saves a copy to the transcript",
+    summary:
+      "When the chat's **Send email to me** tool sends you an email, it now also **saves a copy onto the " +
+      "transcript** as a Markdown attachment, titled **\"Email: <subject>\"** with the email body as its " +
+      "content. It uses the same destination flow as **Add as attachment**: with one transcript in the chat's " +
+      "context the copy is added there; with several selected, you pick which one. If no transcript is in " +
+      "context the email is still sent — there's just nothing to attach the copy to.",
+    added: [
+      "The \"Send email to me\" chat tool now files a copy of each sent email onto the transcript as a Markdown attachment (\"Email: <subject>\"), using the same single/pick-one selection as Add as attachment.",
+    ],
+  },
   {
     version: "0.58.0",
     date: "2026-07-02",

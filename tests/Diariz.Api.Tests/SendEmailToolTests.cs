@@ -20,6 +20,17 @@ public class SendEmailToolTests
         return id;
     }
 
+    private static Guid SeedRecording(DiarizDbContext db, Guid userId, string name)
+    {
+        var id = Guid.NewGuid();
+        db.Recordings.Add(new Recording
+        {
+            Id = id, UserId = userId, Title = name, Name = name, BlobKey = "k", Status = RecordingStatus.Transcribed,
+        });
+        db.SaveChanges();
+        return id;
+    }
+
     [Fact]
     public async Task Execute_SendsToTheUsersRegisteredEmail_WithSubjectAndBody()
     {
@@ -110,6 +121,94 @@ public class SendEmailToolTests
 
         Assert.Empty(email.Messages);
         Assert.Contains("no email", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Execute_WhenSent_AndSingleRecordingInContext_QueuesEmailAsAttachment()
+    {
+        using var db = TestDb.Create();
+        var me = SeedUser(db, "me@example.com");
+        var rec = SeedRecording(db, me, "Standup");
+        var email = new FakeEmailSender();
+        var effects = new ChatToolEffects();
+
+        var result = await new SendEmailTool(db, email).ExecuteAsync(
+            Args("""{"subject":"Follow-ups","body":"# Actions\n\n- do x"}"""),
+            new ChatToolContext(me, [rec], effects), default);
+
+        Assert.Single(email.Messages); // the email still goes out
+        var draft = Assert.Single(effects.AttachmentDrafts);
+        Assert.Equal("Email: Follow-ups", draft.Name);        // title = "Email: " + subject
+        Assert.Equal("# Actions\n\n- do x", draft.Content);   // the Markdown body is the file content
+        Assert.Equal(rec, Assert.Single(draft.Recordings).Id);
+        Assert.Contains("Standup", result);                   // tells the model where the copy lands
+    }
+
+    [Fact]
+    public async Task Execute_WhenSent_MultipleSelected_QueuesDraftWithAllCandidates()
+    {
+        using var db = TestDb.Create();
+        var me = SeedUser(db, "me@example.com");
+        var a = SeedRecording(db, me, "Standup");
+        var b = SeedRecording(db, me, "Retro");
+        var email = new FakeEmailSender();
+        var effects = new ChatToolEffects();
+
+        await new SendEmailTool(db, email).ExecuteAsync(
+            Args("""{"subject":"S","body":"b"}"""),
+            new ChatToolContext(me, [a, b], effects), default);
+
+        Assert.Equal(2, Assert.Single(effects.AttachmentDrafts).Recordings.Count); // the user will pick one
+    }
+
+    [Fact]
+    public async Task Execute_OnlyCandidatesTheUserOwns_AreOffered()
+    {
+        using var db = TestDb.Create();
+        var me = SeedUser(db, "me@example.com");
+        var mine = SeedRecording(db, me, "Mine");
+        var theirs = SeedRecording(db, SeedUser(db, "other@example.com"), "Theirs");
+        var email = new FakeEmailSender();
+        var effects = new ChatToolEffects();
+
+        await new SendEmailTool(db, email).ExecuteAsync(
+            Args("""{"subject":"S","body":"b"}"""),
+            new ChatToolContext(me, [mine, theirs], effects), default);
+
+        Assert.Equal(mine, Assert.Single(Assert.Single(effects.AttachmentDrafts).Recordings).Id);
+    }
+
+    [Fact]
+    public async Task Execute_WhenSent_ButNoRecordingInContext_SendsWithoutAttaching()
+    {
+        using var db = TestDb.Create();
+        var me = SeedUser(db, "me@example.com");
+        var email = new FakeEmailSender();
+        var effects = new ChatToolEffects();
+
+        var result = await new SendEmailTool(db, email).ExecuteAsync(
+            Args("""{"subject":"S","body":"b"}"""),
+            new ChatToolContext(me, [], effects), default);
+
+        Assert.Single(email.Messages);           // the email still goes out
+        Assert.Empty(effects.AttachmentDrafts);  // nothing to attach it to
+        Assert.Contains("me@example.com", result);
+    }
+
+    [Fact]
+    public async Task Execute_WhenNotSent_DoesNotQueueAnAttachment()
+    {
+        using var db = TestDb.Create();
+        var me = SeedUser(db, "me@example.com");
+        var rec = SeedRecording(db, me, "Standup");
+        var email = new FakeEmailSender { Sent = false }; // server email disabled
+        var effects = new ChatToolEffects();
+
+        await new SendEmailTool(db, email).ExecuteAsync(
+            Args("""{"subject":"S","body":"b"}"""),
+            new ChatToolContext(me, [rec], effects), default);
+
+        Assert.Empty(effects.AttachmentDrafts); // no email went out, so nothing is filed
     }
 
     [Fact]

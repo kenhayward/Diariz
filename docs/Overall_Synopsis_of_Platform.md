@@ -221,8 +221,10 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   `who_attended`, `speaker_talk_time`, `get_segment_context`) read existing relational data directly. Two
   **write** tools act rather than read: `send_email` (`SendEmailTool`) emails the user a composed subject+body —
   it **always** sends to the owner's registered `ApplicationUser.Email` (no recipient parameter; any address in
-  the args is ignored) via `IEmailSender`; and `add_as_attachment` (`AddAsAttachmentTool`) saves prepared content
-  to a transcript as a Markdown attachment. The attachment tool doesn't write directly — it queues an
+  the args is ignored) via `IEmailSender`, and on a successful send it also **files a copy of the email onto the
+  transcript** as a Markdown attachment (named `Email: <subject>`, body as content); and `add_as_attachment`
+  (`AddAsAttachmentTool`) saves prepared content to a transcript as a Markdown attachment. Neither write tool
+  touches storage directly — each queues an
   `AttachmentDraft` on a per-turn `ChatToolEffects` sink that the orchestrator drains into a **`ChatAttachmentDraftEvent`**
   (SSE `attachment` event carrying the name, Markdown, and candidate recordings). The web resolves the
   destination — one in-context transcript → POST it straight to `POST /api/recordings/{id}/attachments/markdown`;
