@@ -81,6 +81,16 @@ describe("buildToolsOutput", () => {
   it("reports when tools are on but none are enabled", () => {
     expect(buildToolsOutput([{ title: "X", description: "y", enabled: false }], true, labels)).toBe("None enabled.");
   });
+
+  it("escapes backslashes, pipes, and newlines so the table row stays intact", () => {
+    const out = buildToolsOutput(
+      [{ title: "a\\b|c", description: "one\ntwo", enabled: true }],
+      true,
+      labels,
+    );
+    // backslash escaped first (\\), then pipe (\|); newline collapsed to a space.
+    expect(out).toContain("| a\\\\b\\|c | one two |");
+  });
 });
 
 describe("buildHelpOutput", () => {

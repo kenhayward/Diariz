@@ -78,6 +78,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.62.5",
+    date: "2026-07-02",
+    pr: 141,
+    headline: "Harden the /tools table escaping",
+    summary:
+      "The `/tools` command builds a Markdown table from the tool names/descriptions. The escaping only " +
+      "handled pipe characters; it now also escapes backslashes and collapses newlines, so a value can't " +
+      "distort the table. (Flagged by CodeQL as incomplete sanitisation; the input is app-defined, so it " +
+      "was cosmetic rather than exploitable.)",
+    fixed: [
+      "The /tools Markdown table now escapes backslashes and newlines in tool labels, not just pipes, so the table always renders intact.",
+    ],
+  },
+  {
     version: "0.62.4",
     date: "2026-07-02",
     pr: 140,
