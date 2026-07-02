@@ -18,7 +18,7 @@
     <PackageReference Include="MimeKit" Version="4.17.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.*" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.*" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
     <!-- Direct pin to override the transitive Microsoft.OpenApi 2.0.0 (from AspNetCore.OpenApi), which has
          a high-severity advisory GHSA-v5pm-xwqc-g5wc (stack overflow on circular schema refs). 2.7.5 is the
          first patched release on the 2.x line. -->
