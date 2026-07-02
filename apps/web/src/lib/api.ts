@@ -10,6 +10,7 @@ declare module "axios" {
 import type {
   AdminUser,
   Attachment,
+  AttachmentDraft,
   AuthResponse,
   ChatAttachment,
   ChatConversation,
@@ -240,6 +241,10 @@ export const api = {
   },
   async addUrlAttachment(id: string, url: string, name?: string): Promise<Attachment> {
     const { data } = await http.post<Attachment>(`/api/recordings/${id}/attachments/url`, { url, name });
+    return data;
+  },
+  async addMarkdownAttachment(id: string, name: string, content: string): Promise<Attachment> {
+    const { data } = await http.post<Attachment>(`/api/recordings/${id}/attachments/markdown`, { name, content });
     return data;
   },
   async renameAttachment(id: string, attachmentId: string, name: string): Promise<void> {
@@ -511,6 +516,7 @@ export const api = {
       onToolStart?: (name: string) => void;
       onToolEnd?: (name: string) => void;
       onRef?: (name: string, href: string) => void;
+      onAttachmentDraft?: (draft: AttachmentDraft) => void;
       signal?: AbortSignal;
     },
   ): Promise<ChatUsage> {
@@ -554,6 +560,8 @@ export const api = {
           value?: string;
           name?: string;
           href?: string;
+          content?: string;
+          recordings?: { id: string; title: string }[];
           model?: string;
           message?: string;
           contextUsed?: number;
@@ -567,6 +575,8 @@ export const api = {
           handlers.onToolEnd?.(evt.name);
         } else if (evt.type === "ref" && evt.name && evt.href) {
           handlers.onRef?.(evt.name, evt.href);
+        } else if (evt.type === "attachment" && evt.name && evt.content !== undefined && evt.recordings) {
+          handlers.onAttachmentDraft?.({ name: evt.name, content: evt.content, recordings: evt.recordings });
         } else if (evt.type === "meta") {
           usage = { model: evt.model ?? "", contextUsed: evt.contextUsed ?? 0, contextTotal: evt.contextTotal ?? 0 };
           handlers.onMeta?.(usage);

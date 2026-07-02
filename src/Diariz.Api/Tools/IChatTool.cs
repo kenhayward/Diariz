@@ -2,9 +2,27 @@ using System.Text.Json;
 
 namespace Diariz.Api.Tools;
 
-/// <summary>The per-request context a tool runs in: the owning user and the recordings currently selected as
-/// chat context (used when the model asks a tool to search <c>scope:"current"</c>).</summary>
-public sealed record ChatToolContext(Guid UserId, IReadOnlyList<Guid> SelectedRecordingIds);
+/// <summary>One of the chat-context recordings a draft attachment could be saved to (id + display title).</summary>
+public sealed record DraftRecording(Guid Id, string Title);
+
+/// <summary>A note a tool prepared to be saved to a transcript as a Markdown attachment, with the candidate
+/// recordings (the selected ones). The client resolves the destination — one → add it; several → let the user
+/// pick.</summary>
+public sealed record AttachmentDraft(string Name, string Content, IReadOnlyList<DraftRecording> Recordings);
+
+/// <summary>A side-channel a tool can use to surface client-side actions from inside <c>ExecuteAsync</c> (the
+/// orchestrator drains it after the tool runs and emits the matching stream events). Currently just pending
+/// attachment drafts.</summary>
+public sealed class ChatToolEffects
+{
+    public List<AttachmentDraft> AttachmentDrafts { get; } = new();
+}
+
+/// <summary>The per-request context a tool runs in: the owning user, the recordings currently selected as
+/// chat context (used when the model asks a tool to search <c>scope:"current"</c>), and an optional
+/// <see cref="ChatToolEffects"/> sink for tools that drive the client (the orchestrator supplies it).</summary>
+public sealed record ChatToolContext(
+    Guid UserId, IReadOnlyList<Guid> SelectedRecordingIds, ChatToolEffects? Effects = null);
 
 /// <summary>A built-in chat tool the LLM can call. Implementations are stateless and resolve their data
 /// dependencies (e.g. <see cref="Services.ITranscriptSearch"/>) via DI; all data access is scoped to

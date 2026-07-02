@@ -338,3 +338,11 @@ export interface ChatAttachment {
   chars: number;
   text: string;
 }
+
+/// A note the chat assistant prepared to save to a transcript as a Markdown attachment (via the
+/// add_as_attachment tool), plus the candidate recordings. One → add directly; several → let the user pick.
+export interface AttachmentDraft {
+  name: string;
+  content: string;
+  recordings: { id: string; title: string }[];
+}

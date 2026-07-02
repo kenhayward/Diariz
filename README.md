@@ -48,7 +48,11 @@ server-default) OpenAI-compatible LLM endpoint, with the API key encrypted at re
 transcript library** — *who said a phrase*, *what a person said about a topic*, *search transcripts*, *when a
 topic was discussed*, *count mentions*, *list recordings* (by date / name / speaker / topic), *list action
 items*, *get a recording's summary*, *who attended*, *speaker talk time*, and *the lines around a moment* —
-answering as **When · Who · What**. Answers **link back to the transcript**: click a citation to open that
+answering as **When · Who · What**. Two **write** tools let it act: **email you** (a *send-email* tool that
+composes a subject + body and always delivers to your **own** registered address — it can never email anyone
+else), and **add its output to a transcript** (an *add-as-attachment* tool that saves prepared content as a
+Markdown attachment — you pick the transcript when several are selected). Answers
+**link back to the transcript**: click a citation to open that
 recording and jump to the exact segment. Fuzzy search is backed by a Postgres `pg_trgm` trigram index; a
 brief grey "Tool call: …" line shows while a tool runs.
 - **Extract action items** (Action / Actor / Deadline) with that same LLM — **automatically as part of the

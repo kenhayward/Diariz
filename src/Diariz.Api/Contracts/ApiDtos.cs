@@ -127,6 +127,8 @@ public record AttachmentDto(
     Guid Id, AttachmentKind Kind, string Name, string? ContentType, long SizeBytes, string? Url, int Ordinal);
 /// <summary>Attach a URL (address + optional display name) to a recording.</summary>
 public record AddUrlAttachmentRequest(string Url, string? Name);
+/// <summary>Create a Markdown attachment from text content (used by the chat "add as attachment" tool).</summary>
+public record AddMarkdownAttachmentRequest(string Name, string Content);
 /// <summary>Rename an attachment.</summary>
 public record RenameAttachmentRequest(string Name);
 

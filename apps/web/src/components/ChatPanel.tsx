@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import { parseRecordingLink, recordingLinkPath } from "../lib/transcriptNav";
 import { linkifyRecordings } from "../lib/linkify";
@@ -15,8 +15,9 @@ import {
   toolCallLineText,
   type ToolCallLineState,
 } from "../lib/toolCallLine";
-import type { ChatConversationSummary, ChatTurn, ChatUsage } from "../lib/types";
+import type { AttachmentDraft, ChatConversationSummary, ChatTurn, ChatUsage } from "../lib/types";
 import ContextDial from "./ContextDial";
+import PickRecordingModal from "./PickRecordingModal";
 
 type ContextMode = "current" | "selected" | "none";
 
@@ -27,6 +28,12 @@ export default function ChatPanel() {
   const navigate = useNavigate();
   const activeId = useActiveRecordingId();
   const selection = useSelection();
+  const qc = useQueryClient();
+  // The chat "add as attachment" tool: the model queues a note during the turn; we act once the reply lands —
+  // one transcript in context → add it; several → let the user pick one.
+  const pendingDraftRef = useRef<AttachmentDraft | null>(null);
+  const [pickerDraft, setPickerDraft] = useState<AttachmentDraft | null>(null);
+  const [attachNotice, setAttachNotice] = useState<string | null>(null);
 
   /// Intercept clicks on the assistant's transcript deep-links so they open in the middle panel (and seek
   /// to the moment) via the SPA router, instead of triggering a full page reload.
@@ -158,6 +165,27 @@ export default function ChatPanel() {
     });
   }
 
+  /// Save a chat-prepared note to a transcript as a Markdown attachment, refresh that recording's attachments,
+  /// and show a short confirmation.
+  async function createMarkdownAttachment(draft: AttachmentDraft, rec: { id: string; title: string }) {
+    try {
+      await api.addMarkdownAttachment(rec.id, draft.name, draft.content);
+      qc.invalidateQueries({ queryKey: ["attachments", rec.id] });
+      setAttachNotice(t("attachAdded", { name: draft.name, title: rec.title }));
+    } catch {
+      setAttachNotice(t("attachFailed"));
+    }
+  }
+
+  /// Once the reply completes, act on any attachment the tool queued: one candidate → add it; several → ask.
+  function resolvePendingDraft() {
+    const draft = pendingDraftRef.current;
+    pendingDraftRef.current = null;
+    if (!draft || draft.recordings.length === 0) return;
+    if (draft.recordings.length === 1) void createMarkdownAttachment(draft, draft.recordings[0]);
+    else setPickerDraft(draft);
+  }
+
   function send() {
     const prompt = input.trim();
     if (!prompt || streaming) return;
@@ -169,6 +197,8 @@ export default function ChatPanel() {
     setInput("");
     setStreaming(true);
     setPickerOpen(false);
+    setAttachNotice(null);
+    pendingDraftRef.current = null;
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -191,6 +221,7 @@ export default function ChatPanel() {
           onToolStart: (name) => setToolLine((s) => toolStarted(s, name)),
           onToolEnd: (name) => setToolLine((s) => toolEnded(s, name)),
           onRef: (name, href) => refsRef.current.set(name, href),
+          onAttachmentDraft: (d) => (pendingDraftRef.current = d),
           signal: controller.signal,
         },
       )
@@ -198,6 +229,7 @@ export default function ChatPanel() {
         if (controller.signal.aborted) return;
         setUsage(u);
         linkifyLastAssistant();
+        resolvePendingDraft();
       })
       .catch((e: unknown) => {
         if (controller.signal.aborted) return;
@@ -503,6 +535,15 @@ export default function ChatPanel() {
           )}
         </div>
 
+        {attachNotice && (
+          <div className="mt-2 flex items-center justify-between gap-2 rounded bg-green-50 px-2 py-1 text-xs text-green-700 dark:bg-green-900/30 dark:text-green-300">
+            <span className="truncate">{attachNotice}</span>
+            <button type="button" aria-label={t("common:dismiss", { defaultValue: "Dismiss" })} onClick={() => setAttachNotice(null)} className="shrink-0 text-green-600 hover:text-green-800 dark:text-green-400">
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Input */}
         <div className="mt-2 flex items-end gap-2">
           <textarea
@@ -539,6 +580,18 @@ export default function ChatPanel() {
           )}
         </div>
       </div>
+
+      {pickerDraft && (
+        <PickRecordingModal
+          draft={pickerDraft}
+          onCancel={() => setPickerDraft(null)}
+          onPick={async (recId) => {
+            const rec = pickerDraft.recordings.find((r) => r.id === recId);
+            setPickerDraft(null);
+            if (rec) await createMarkdownAttachment(pickerDraft, rec);
+          }}
+        />
+      )}
     </div>
   );
 }

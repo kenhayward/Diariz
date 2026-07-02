@@ -16,7 +16,8 @@ public static class ChatContextBuilder
 
     public static string BuildSystemPrompt(
         IReadOnlyList<TranscriptContext> transcripts, string? attachmentName, string? attachmentText,
-        IReadOnlyList<TranscriptContext>? documents = null, int charBudget = DefaultCharBudget)
+        IReadOnlyList<TranscriptContext>? documents = null, int charBudget = DefaultCharBudget,
+        string? userName = null, string? userEmail = null)
     {
         var context = new StringBuilder();
         foreach (var t in transcripts)
@@ -45,6 +46,18 @@ public static class ChatContextBuilder
         sb.Append("topic refers to what was said in their meetings, even if they don't say \"in the transcripts\". ");
         sb.Append("Base your answers on the transcript context below (and any tools available to you). When ");
         sb.Append("something genuinely isn't there, say so briefly. Be concise.\n\n");
+
+        // Identify the current user so the model knows who it is helping — and, when it emails them (the
+        // send_email tool always delivers to this address), can write the message as being from them.
+        if (!string.IsNullOrWhiteSpace(userName) || !string.IsNullOrWhiteSpace(userEmail))
+        {
+            sb.Append("You are assisting ");
+            sb.Append(string.IsNullOrWhiteSpace(userName) ? "the signed-in user" : userName!.Trim());
+            if (!string.IsNullOrWhiteSpace(userEmail)) sb.Append(" (").Append(userEmail!.Trim()).Append(')');
+            sb.Append(". Any email you send on their behalf is delivered to this address; write it as being ")
+              .Append("from them.\n\n");
+        }
+
         sb.Append(body.Length > 0 ? "Context:\n" + body
             : "No transcript context was provided for this conversation.");
         return sb.ToString();

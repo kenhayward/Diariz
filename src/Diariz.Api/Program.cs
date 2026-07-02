@@ -185,6 +185,11 @@ builder.Services.AddScoped<IChatTool, GetRecordingSummaryTool>();
 builder.Services.AddScoped<IChatTool, WhoAttendedTool>();
 builder.Services.AddScoped<IChatTool, SpeakerTalkTimeTool>();
 builder.Services.AddScoped<IChatTool, GetSegmentContextTool>();
+// A write tool (emails the signed-in user their own address). On by default like the others; a user or
+// operator can turn it off in Settings / Chat:DisabledTools.
+builder.Services.AddScoped<IChatTool, SendEmailTool>();
+// A write tool that saves prepared content to a transcript as a Markdown attachment (client resolves which).
+builder.Services.AddScoped<IChatTool, AddAsAttachmentTool>();
 builder.Services.AddScoped<IChatToolRegistry, ChatToolRegistry>();
 builder.Services.AddScoped<IChatToolSettingsResolver, ChatToolSettingsResolver>();
 builder.Services.AddScoped<IChatToolOrchestrator, ChatToolOrchestrator>();
