@@ -9,16 +9,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AWSSDK.S3" Version="4.0.24.4" />
+    <PackageReference Include="AWSSDK.S3" Version="4.0.100.1" />
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.1.0" />
     <PackageReference Include="Markdig" Version="1.3.2" />
     <!-- Pin a patched System.IO.Packaging (OpenXml pulls a transitive 8.0.0 with a high-severity advisory). -->
     <PackageReference Include="System.IO.Packaging" Version="9.0.9" />
     <PackageReference Include="MailKit" Version="4.17.0" />
     <PackageReference Include="MimeKit" Version="4.17.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.*" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.*" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.8" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
     <!-- Direct pin to override the transitive Microsoft.OpenApi 2.0.0 (from AspNetCore.OpenApi), which has
          a high-severity advisory GHSA-v5pm-xwqc-g5wc (stack overflow on circular schema refs). 2.7.5 is the
          first patched release on the 2.x line. -->
