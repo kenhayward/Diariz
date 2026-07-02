@@ -17,7 +17,7 @@ permissions:
 jobs:
   build:
     name: Build Windows installer
-    runs-on: [self-hosted]
+    runs-on: windows-latest
     defaults:
       run:
         working-directory: apps/desktop
@@ -37,8 +37,4 @@ jobs:
       - name: Build + publish installer (GitHub Releases)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # electron-builder caches winCodeSign/nsis under the user profile; the
-          # Network Service runner account's profile may not be writable, so pin the
-          # cache to a writable workspace dir.
-          ELECTRON_BUILDER_CACHE: ${{ github.workspace }}\.electron-builder-cache
         run: npm run publish

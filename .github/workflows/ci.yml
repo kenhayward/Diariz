@@ -6,7 +6,7 @@ on:
   pull_request:
   workflow_dispatch:
 
-# One run per ref; cancel superseded runs so they don't pile up on the single runner.
+# One run per ref; cancel superseded runs so stale pushes don't keep burning runner time.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -17,29 +17,33 @@ permissions:
 jobs:
   dotnet-unit:
     name: .NET unit
-    runs-on: [self-hosted]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Uses the .NET 10 SDK pre-installed on the self-hosted runner (setup-dotnet can't
-      # write to C:\Program Files\dotnet without admin).
-      - name: dotnet version
-        run: dotnet --version
+      # No global.json, so pin the SDK explicitly. setup-dotnet installs into the hosted
+      # runner's tool cache — the self-hosted "can't write to C:\Program Files" hack is gone.
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
       - name: Unit tests
         run: dotnet test tests/Diariz.Api.Tests/Diariz.Api.Tests.csproj -c Release
 
   dotnet-integration:
     name: .NET integration (Testcontainers)
-    runs-on: [self-hosted]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Spins up real Postgres/pgvector, Redis, and MinIO — requires Docker on the runner.
-      # Uses the runner's pre-installed .NET 10 SDK (see note in the unit job).
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      # Spins up real Postgres/pgvector, Redis, and MinIO via Testcontainers — Docker is
+      # preinstalled on ubuntu-latest, so no Docker-host workaround is needed.
       - name: Integration tests
         run: dotnet test tests/Diariz.Api.IntegrationTests/Diariz.Api.IntegrationTests.csproj -c Release
 
   web:
     name: Web (vitest)
-    runs-on: [self-hosted]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -56,7 +60,7 @@ jobs:
 
   locale-gate:
     name: Locale single-language gate
-    runs-on: [self-hosted]
+    runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -72,20 +76,17 @@ jobs:
 
   worker:
     name: Worker (pytest)
-    runs-on: [self-hosted]
-    # Absolute path to the all-users Python. The runner runs as Network Service, which has no
-    # user PATH, so we call Python directly instead of relying on PATH (and avoid setup-python,
-    # which can't install its own build on this runner).
-    env:
-      PYTHON: 'C:\Program Files\Python313\python.exe'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: python version
-        run: '& "$env:PYTHON" --version'
-      # whisperx/torch are stubbed in the tests, so only the lightweight deps are installed.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      # whisperx/torch are stubbed in the tests, so only the lightweight deps are installed
+      # (no GPU needed).
       - name: Install test deps
         working-directory: src/Diariz.Worker
-        run: '& "$env:PYTHON" -m pip install -r requirements-test.txt'
+        run: python -m pip install -r requirements-test.txt
       - name: Test
         working-directory: src/Diariz.Worker
-        run: '& "$env:PYTHON" -m pytest'
+        run: python -m pytest

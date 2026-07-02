@@ -89,7 +89,7 @@ public class AttachmentsController : ControllerBase
             Id = id,
             RecordingId = recordingId,
             Kind = AttachmentKind.File,
-            Name = SafeName(Path.GetFileName(file.FileName)), // strip any smuggled path
+            Name = SafeName(StripPath(file.FileName)), // strip any smuggled path (cross-platform)
             BlobKey = blobKey,
             ContentType = file.ContentType ?? "application/octet-stream",
             SizeBytes = file.Length,
@@ -144,7 +144,7 @@ public class AttachmentsController : ControllerBase
     /// ends in <c>.md</c>.</summary>
     private static string MarkdownName(string? name)
     {
-        var trimmed = SafeName(Path.GetFileName(name ?? "") ?? "");
+        var trimmed = SafeName(StripPath(name ?? ""));
         if (trimmed.Length == 0) trimmed = "note";
         return trimmed.EndsWith(".md", StringComparison.OrdinalIgnoreCase) ? trimmed : trimmed + ".md";
     }
@@ -222,5 +222,16 @@ public class AttachmentsController : ControllerBase
     {
         var trimmed = name.Trim();
         return trimmed.Length > 256 ? trimmed[..256] : trimmed;
+    }
+
+    /// <summary>Strip any smuggled directory path from a user-supplied name, taking everything after the
+    /// last <c>/</c> or <c>\</c>. Unlike <see cref="Path.GetFileName(string?)"/> this is OS-independent:
+    /// on Linux GetFileName ignores <c>\</c>, so <c>..\..\secret</c> would pass through unstripped (the
+    /// API runs in Linux containers). It also never treats <c>:</c> as a volume separator, so names like
+    /// <c>"Email: subject"</c> survive intact.</summary>
+    private static string StripPath(string name)
+    {
+        var cut = name.LastIndexOfAny(new[] { '/', '\\' });
+        return cut >= 0 ? name[(cut + 1)..] : name;
     }
 }

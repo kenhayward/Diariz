@@ -157,6 +157,22 @@ public class AttachmentsControllerTests
     }
 
     [Fact]
+    public async Task AddFile_StripsSmuggledWindowsPath_FromFileName()
+    {
+        // A malicious multipart could smuggle a backslash path in the filename. Path.GetFileName only
+        // strips '\' on Windows, so on the Linux production containers it would pass through — the name
+        // must be stripped on every platform.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await Seed(db, userId);
+        var controller = Build(db, userId, new FakeAudioStorage());
+
+        var dto = Assert.IsType<AttachmentDto>(
+            (await controller.AddFile(rec.Id, FileOf(@"..\..\evil.pdf", "application/pdf", Encoding.UTF8.GetBytes("%PDF-1.4")))).Value);
+        Assert.Equal("evil.pdf", dto.Name);
+    }
+
+    [Fact]
     public async Task AddFile_OverTheSizeCap_Returns413()
     {
         using var db = TestDb.Create();
