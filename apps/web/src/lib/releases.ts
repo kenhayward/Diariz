@@ -78,6 +78,18 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.62.6",
+    date: "2026-07-02",
+    pr: 142,
+    headline: "Calmer Dependabot cadence",
+    summary:
+      "Dependabot now runs **monthly** and produces **one grouped PR per ecosystem** instead of many " +
+      "individual weekly PRs. Maintenance only — no effect on the app.",
+    changed: [
+      "Dependabot version updates are monthly and grouped per ecosystem (npm web, npm desktop, nuget, pip, github-actions), cutting update-PR volume; security alerts/updates are unaffected.",
+    ],
+  },
+  {
     version: "0.62.5",
     date: "2026-07-02",
     pr: 141,
