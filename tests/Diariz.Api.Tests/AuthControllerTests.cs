@@ -347,7 +347,9 @@ public class AuthControllerTests
         var redirect = Assert.IsType<RedirectResult>(
             await controller.GoogleCallback("auth-code", google.CapturedState, null));
 
-        Assert.StartsWith($"{WebBase}/auth/google/callback#token=", redirect.Url);
+        // Token is delivered via a same-origin cookie (proxy-safe), not a URL fragment.
+        Assert.Equal($"{WebBase}/auth/google/callback", redirect.Url);
+        Assert.Contains("diariz_auth=", controller.Response.Headers.SetCookie.ToString());
     }
 
     [Fact]
