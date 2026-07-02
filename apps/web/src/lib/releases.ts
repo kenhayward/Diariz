@@ -5,7 +5,7 @@
 export const TAGLINE = "Smart Meeting Transcription";
 export const GITHUB_URL = "https://github.com/kenhayward/Diariz";
 export const COPYRIGHT = "© Ken Hayward";
-export const LICENSE = "Apache-2.0";
+export const LICENSE = "AGPL-3.0";
 
 /// Short summary of what the app does today, shown in the About box (markdown). Update this whenever
 /// the app's scope changes.
@@ -77,6 +77,24 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.62.3",
+    date: "2026-07-02",
+    pr: 122,
+    headline: "Repository hardening for going open-source",
+    summary:
+      "Housekeeping to prepare the source repository to be made public: a Dependabot config, a security " +
+      "policy, contributor and attribution files, and NuGet lock files for precise dependency tracking. " +
+      "No user-facing behaviour changes. Also corrects the licence shown in the About box to **AGPL-3.0** " +
+      "(it previously read Apache-2.0).",
+    added: [
+      "Repository meta files for open-sourcing: .github/dependabot.yml, SECURITY.md, NOTICE, CONTRIBUTING.md, and CODEOWNERS.",
+      "NuGet lock files (packages.lock.json) so the dependency graph and Dependabot track transitive .NET packages precisely.",
+    ],
+    fixed: [
+      "The About box now shows the correct licence (AGPL-3.0) instead of Apache-2.0.",
+    ],
+  },
   {
     version: "0.62.2",
     date: "2026-07-02",

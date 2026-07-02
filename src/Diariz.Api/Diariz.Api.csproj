@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- App version — keep in sync with /version.json (see CLAUDE.md versioning rule). -->
-    <Version>0.62.2</Version>
+    <Version>0.62.3</Version>
   </PropertyGroup>
 
   <ItemGroup>
