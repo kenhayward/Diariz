@@ -24,7 +24,7 @@ import type { AdminUser } from "../lib/types";
 
 const u = (over: Partial<AdminUser>): AdminUser => ({
   id: "id", email: "e@x.test", fullName: null, accountType: "Standard", status: "Active", isEnabled: true,
-  quotaBytes: 5 * 1024 ** 3, usedBytes: 0, ...over,
+  quotaBytes: 5 * 1024 ** 3, usedBytes: 0, hasGoogle: false, ...over,
 });
 
 const mock = (f: unknown) => f as ReturnType<typeof vi.fn>;
@@ -63,6 +63,16 @@ describe("ManageUsersModal", () => {
     mock(api.listUsers).mockResolvedValue([u({ id: "i1", email: "inv@x.test", status: "Invited" })]);
     render_();
     expect(await screen.findByText(/awaiting setup/i)).toBeTruthy();
+  });
+
+  it("shows a Google badge only for Google-linked users", async () => {
+    mock(api.listUsers).mockResolvedValue([
+      u({ id: "g1", email: "goog@x.test", hasGoogle: true }),
+      u({ id: "p1", email: "pass@x.test", hasGoogle: false }),
+    ]);
+    render_();
+    await screen.findByText("goog@x.test");
+    expect(screen.getAllByText("Google")).toHaveLength(1); // exactly the one linked user
   });
 
   it("promotes a standard user", async () => {

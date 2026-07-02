@@ -201,6 +201,7 @@ export interface AdminUser {
   isEnabled: boolean;
   quotaBytes: number;
   usedBytes: number;
+  hasGoogle: boolean; // account is linked to a Google identity
 }
 
 /// The signed-in user's storage usage vs quota (bytes), plus total transcription wall-clock time (ms).
@@ -273,6 +274,7 @@ export interface UserProfile {
   fullName: string | null;
   nativeLanguage: string | null;
   uiLanguage: string | null;
+  googleConnected: boolean; // account is linked to a Google identity
 }
 
 export interface UpdateUserProfile {

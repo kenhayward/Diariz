@@ -18,6 +18,7 @@
   "colActions": "Acciones",
   "confirmDeleteUser": "¿Eliminar {{email}}? Esto borra todas sus grabaciones.",
   "disabled": "deshabilitado",
+  "google": "Google",
   "quota": "Cuota",
   "gb": "GB",
   "quotaForAria": "Cuota para {{email}} (GB)",

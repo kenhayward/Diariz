@@ -189,8 +189,10 @@ public record TranslateSegmentsRequest(IReadOnlyList<Guid> Ids, string? Language
 public record LanguageDto(string Code, string EnglishName, string NativeName, bool Rtl);
 
 /// <summary>The signed-in user's editable profile: display name + language preferences (BCP-47, or null
-/// = not set / follow the browser). Email is read-only.</summary>
-public record UserProfileDto(string Email, string? FullName, string? NativeLanguage, string? UiLanguage);
+/// = not set / follow the browser). Email is read-only. <paramref name="GoogleConnected"/> is true when the
+/// account is linked to a Google identity (used by the Preferences "Google account" section).</summary>
+public record UserProfileDto(
+    string Email, string? FullName, string? NativeLanguage, string? UiLanguage, bool GoogleConnected = false);
 
 /// <summary>Self-service profile update. Each field is trimmed; blank clears it. Language codes must be
 /// in the supported set (else 400).</summary>
