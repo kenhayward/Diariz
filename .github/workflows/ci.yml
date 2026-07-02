@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
       # No global.json, so pin the SDK explicitly. setup-dotnet installs into the hosted
       # runner's tool cache — the self-hosted "can't write to C:\Program Files" hack is gone.
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
       - name: Unit tests
@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
       # Spins up real Postgres/pgvector, Redis, and MinIO via Testcontainers — Docker is
