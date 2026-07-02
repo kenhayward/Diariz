@@ -301,6 +301,21 @@ describe("RecordingDetail", () => {
     await waitFor(() => expect(api.reidentify).toHaveBeenCalledWith("rec-123"));
   });
 
+  it("disables the Speakers-tab re-identify button while it runs (shows it's in progress)", async () => {
+    let resolve!: () => void;
+    (api.reidentify as ReturnType<typeof vi.fn>).mockReturnValue(new Promise<void>((r) => (resolve = r)));
+    renderPage(base);
+    await loaded();
+    openTab(/speakers/i);
+
+    const btn = () => screen.getByRole("button", { name: /re-identify speakers/i }) as HTMLButtonElement;
+    expect(btn().disabled).toBe(false);
+    fireEvent.click(btn());
+    await waitFor(() => expect(btn().disabled).toBe(true)); // in-flight → disabled
+    resolve();
+    await waitFor(() => expect(btn().disabled).toBe(false)); // settles back
+  });
+
   it("emails the transcript via the kebab and confirms", async () => {
     (api.emailTranscript as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     renderPage(base);

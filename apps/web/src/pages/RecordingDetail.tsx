@@ -156,6 +156,7 @@ export default function RecordingDetail() {
   const [requeuing, setRequeuing] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  const [reidentifying, setReidentifying] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [moving, setMoving] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -178,6 +179,7 @@ export default function RecordingDetail() {
   const { setStatus } = useStatus();
   useEffect(() => { if (extracting) setStatus(t("workspace:extractingActions"), "progress"); }, [extracting]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (translating) setStatus(t("workspace:translating"), "progress"); }, [translating]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (reidentifying) setStatus(t("workspace:reidentifying"), "progress"); }, [reidentifying]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (requeuing) setStatus(t("workspace:retranscribing"), "progress"); }, [requeuing]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (actionInfo) setStatus(actionInfo, "success"); }, [actionInfo]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (actionError) setStatus(actionError, "error"); }, [actionError]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -498,12 +500,15 @@ export default function RecordingDetail() {
   async function reidentify() {
     setActionError(null);
     setActionInfo(null);
+    setReidentifying(true);
     try {
       await api.reidentify(id);
       await qc.invalidateQueries({ queryKey: ["recording", id] });
       setActionInfo(t("workspace:reidentified"));
     } catch (e) {
       setActionError(apiErrorMessage(e, t("workspace:errReidentify")));
+    } finally {
+      setReidentifying(false);
     }
   }
 
@@ -854,7 +859,7 @@ export default function RecordingDetail() {
           <ToolbarButton
             label={t("workspace:reidentifyAction")}
             icon={RefreshIcon}
-            disabled={!rec.hasAudio || !hasTranscript}
+            disabled={!rec.hasAudio || !hasTranscript || reidentifying}
             onClick={reidentify}
           />
         </>

@@ -78,6 +78,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.62.1",
+    date: "2026-07-02",
+    pr: 120,
+    headline: "Re-identify speakers now shows its progress",
+    summary:
+      "Re-identifying speakers worked but gave no feedback while it ran. It now shows a **“Re-identifying " +
+      "speakers…”** progress message in the status bar (like the other actions) and disables its button " +
+      "until it finishes.",
+    fixed: [
+      "Re-identify speakers now shows a “Re-identifying speakers…” progress message in the status bar while it runs, and disables the button until it completes.",
+    ],
+  },
+  {
     version: "0.62.0",
     date: "2026-07-02",
     pr: 119,

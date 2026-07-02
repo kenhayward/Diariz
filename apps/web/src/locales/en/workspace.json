@@ -30,6 +30,7 @@
   "emailedTranscript": "Transcript emailed to your account address.",
   "errEmail": "Could not email the transcript.",
   "reidentified": "Re-ran speaker identification against your current voiceprints.",
+  "reidentifying": "Re-identifying speakers…",
   "errReidentify": "Could not re-identify speakers.",
   "errPlayAudio": "Could not play audio.",
   "confirmDelete": "Delete \"{{name}}\"? This cannot be undone.",

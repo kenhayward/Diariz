@@ -30,6 +30,7 @@
   "emailedTranscript": "Transkription an die E-Mail-Adresse deines Kontos gesendet.",
   "errEmail": "Die Transkription konnte nicht per E-Mail gesendet werden.",
   "reidentified": "Sprechererkennung mit deinen aktuellen Stimmprofilen erneut ausgeführt.",
+  "reidentifying": "Sprecher werden neu erkannt…",
   "errReidentify": "Die Sprecher konnten nicht neu identifiziert werden.",
   "errPlayAudio": "Audio konnte nicht abgespielt werden.",
   "confirmDelete": "„{{name}}“ löschen? Dies kann nicht rückgängig gemacht werden.",

@@ -30,6 +30,7 @@
   "emailedTranscript": "Transcripción enviada por correo a la dirección de tu cuenta.",
   "errEmail": "No se pudo enviar la transcripción por correo.",
   "reidentified": "Se volvió a ejecutar la identificación de hablantes con tus huellas de voz actuales.",
+  "reidentifying": "Reidentificando hablantes…",
   "errReidentify": "No se pudieron reidentificar los hablantes.",
   "errPlayAudio": "No se pudo reproducir el audio.",
   "confirmDelete": "¿Eliminar \"{{name}}\"? Esto no se puede deshacer.",
