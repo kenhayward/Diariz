@@ -37,7 +37,8 @@ public class UserProfileController : ControllerBase
         var user = await _users.FindByIdAsync(UserId.ToString());
         if (user is null) return NotFound();
         var s = await _db.UserSettings.FindAsync(UserId);
-        return new UserProfileDto(user.Email ?? "", user.FullName, s?.NativeLanguage, s?.UiLanguage);
+        return new UserProfileDto(user.Email ?? "", user.FullName, s?.NativeLanguage, s?.UiLanguage,
+            GoogleConnected: user.GoogleSubject is not null);
     }
 
     [HttpPut]

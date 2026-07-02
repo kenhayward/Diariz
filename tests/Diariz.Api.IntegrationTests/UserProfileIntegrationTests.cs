@@ -75,6 +75,20 @@ public class UserProfileIntegrationTests(ContainersFixture fx)
     }
 
     [Fact]
+    public async Task Get_ReflectsWhetherGoogleIsLinked()
+    {
+        await using var sp = BuildIdentity();
+        var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
+        var linked = new ApplicationUser { UserName = $"g-{Guid.NewGuid():N}@x.test", Email = $"g-{Guid.NewGuid():N}@x.test", GoogleSubject = $"sub-{Guid.NewGuid():N}" };
+        var plain = new ApplicationUser { UserName = $"p-{Guid.NewGuid():N}@x.test", Email = $"p-{Guid.NewGuid():N}@x.test" };
+        await users.CreateAsync(linked);
+        await users.CreateAsync(plain);
+
+        Assert.True(Assert.IsType<UserProfileDto>((await Build(sp, linked.Id).Get()).Value).GoogleConnected);
+        Assert.False(Assert.IsType<UserProfileDto>((await Build(sp, plain.Id).Get()).Value).GoogleConnected);
+    }
+
+    [Fact]
     public async Task Update_RejectsUnknownLanguage()
     {
         await using var sp = BuildIdentity();

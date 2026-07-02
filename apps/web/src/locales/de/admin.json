@@ -18,6 +18,7 @@
   "colActions": "Aktionen",
   "confirmDeleteUser": "{{email}} löschen? Dadurch werden alle ihre Aufnahmen entfernt.",
   "disabled": "deaktiviert",
+  "google": "Google",
   "quota": "Kontingent",
   "gb": "GB",
   "quotaForAria": "Kontingent für {{email}} (GB)",

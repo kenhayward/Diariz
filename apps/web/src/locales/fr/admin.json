@@ -18,6 +18,7 @@
   "colActions": "Actions",
   "confirmDeleteUser": "Supprimer {{email}} ? Cela supprime tous ses enregistrements.",
   "disabled": "désactivé",
+  "google": "Google",
   "quota": "Quota",
   "gb": "Go",
   "quotaForAria": "Quota pour {{email}} (Go)",

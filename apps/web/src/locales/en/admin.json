@@ -18,6 +18,7 @@
   "colActions": "Actions",
   "confirmDeleteUser": "Delete {{email}}? This removes all their recordings.",
   "disabled": "disabled",
+  "google": "Google",
   "quota": "Quota",
   "gb": "GB",
   "quotaForAria": "Quota for {{email}} (GB)",

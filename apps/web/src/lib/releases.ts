@@ -80,6 +80,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.64.0",
+    date: "2026-07-02",
+    pr: 151,
+    headline: "Show Google-account status",
+    summary:
+      "Preferences now shows whether your account is **connected to Google**, and **Manage Users** shows a " +
+      "**Google** badge for accounts that sign in with Google. Groundwork for the upcoming opt-in Google " +
+      "Calendar / Gmail-draft features.",
+    added: [
+      "Preferences shows your Google connection status.",
+      "Manage Users shows a 'Google' badge for Google-linked accounts.",
+    ],
+  },
+  {
     version: "0.63.4",
     date: "2026-07-02",
     pr: 150,

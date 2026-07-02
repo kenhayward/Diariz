@@ -241,6 +241,11 @@ function UserRow({
       <td className="py-2 pr-2">
         <div className="flex items-center gap-2">
           <span className="truncate font-medium">{u.fullName || u.email}</span>
+          {u.hasGoogle && (
+            <span className="shrink-0 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+              {t("google")}
+            </span>
+          )}
           {!u.isEnabled && (
             <span className="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-[10px] text-red-800 dark:bg-red-900/40 dark:text-red-300">
               {t("disabled")}

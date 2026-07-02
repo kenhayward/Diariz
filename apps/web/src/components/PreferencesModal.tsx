@@ -117,6 +117,20 @@ export default function PreferencesModal({ onClose }: { onClose: () => void }) {
             </select>
             <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("appLanguageHint")}</span>
           </label>
+
+          <div className="border-t pt-3 dark:border-gray-700">
+            <span className="mb-1 block text-sm text-gray-600 dark:text-gray-300">{t("googleAccount")}</span>
+            {profile?.googleConnected ? (
+              <p className="text-sm text-gray-700 dark:text-gray-200">
+                <span className="mr-1.5 inline-block rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300">
+                  {t("googleConnectedBadge")}
+                </span>
+                {t("googleConnectedAs", { email: profile.email })}
+              </p>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400">{t("googleNotConnected")}</p>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t px-5 py-3 dark:border-gray-700">
