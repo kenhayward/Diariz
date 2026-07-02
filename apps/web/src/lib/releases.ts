@@ -20,7 +20,8 @@ diarization. You get speaker-labelled, timestamped segments you can rename, edit
 (per segment, per speaker, or the whole recording), and can re-transcribe at any time. Edits are kept **separately from
 the model's original words**, so a **Show original / Show revised** toggle always gets you back to what the
 model said. You can **merge** consecutive same-speaker rows into single blocks and **email yourself the
-transcript**.
+transcript**. The recording page is organised into **tabs** — Overview, Minutes, Actions, Speakers, Transcript,
+and Attachments — each with its own toolbar.
 
 It can **identify speakers** across recordings: enrol a person from a recording's speaker and Diariz
 recognises that voice in later recordings automatically (using **SpeechBrain ECAPA** voiceprints), with
@@ -75,6 +76,23 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.60.0",
+    date: "2026-07-02",
+    pr: 116,
+    headline: "Recording page redesigned into tabs",
+    summary:
+      "The recording page's stacked panels are now a row of **tabs** — **Overview** (the summary), " +
+      "**Minutes**, **Actions**, **Speakers**, **Transcript**, and **Attachments** — so you see one section at " +
+      "a time. Each tab shows **its own toolbar** directly beneath the tab strip, then its content, and the " +
+      "strip + toolbar stay pinned while the content scrolls. **Attachments** now have a dedicated tab where you " +
+      "add files or links and rename/open/delete them (the old \"Attachments\" button above the panels is gone; " +
+      "drag-and-drop-to-attach still works). The last tab you used is remembered.",
+    changed: [
+      "The recording page is now organised into horizontal tabs (Overview / Minutes / Actions / Speakers / Transcript / Attachments) instead of stacked collapsible panels — each tab has its toolbar directly below the tab strip.",
+      "Attachments have their own tab (add file/URL, rename, open, delete); the separate Attachments button and its pop-up manager above the panels were removed. Drag-and-drop onto the page still attaches files.",
+    ],
+  },
   {
     version: "0.59.0",
     date: "2026-07-02",

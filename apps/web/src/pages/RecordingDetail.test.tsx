@@ -33,7 +33,11 @@ vi.mock("../lib/api", () => ({
     updateAction: vi.fn(),
     deleteAction: vi.fn(),
     listSpeakerProfiles: vi.fn(),
+    getProfile: vi.fn().mockResolvedValue(null),
     listAttachments: vi.fn().mockResolvedValue([]),
+    addFileAttachment: vi.fn(),
+    deleteAttachment: vi.fn(),
+    attachmentContentUrl: (rec: string, aid: string) => `/api/recordings/${rec}/attachments/${aid}/content`,
     assignSpeaker: vi.fn(),
     createSpeakerProfile: vi.fn(),
   },
@@ -92,10 +96,15 @@ function renderPage(rec: RecordingDetailType) {
   );
 }
 
+/// Wait for the page to have loaded (the tab strip appears once the recording resolves).
+const loaded = () => screen.findByRole("tab", { name: /overview/i });
+/// Switch to a tab by its label.
+const openTab = (name: RegExp) => fireEvent.click(screen.getByRole("tab", { name }));
+
 describe("RecordingDetail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    localStorage.clear(); // speakers-panel collapse state persists
+    localStorage.clear(); // the selected tab persists in localStorage — reset between tests
     (api.retranscribe as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.summarize as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.audioUrl as ReturnType<typeof vi.fn>).mockResolvedValue("blob:audio");
@@ -105,19 +114,29 @@ describe("RecordingDetail", () => {
     (api.emailMeetingMinutes as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   });
 
-  it("keeps the meeting minutes collapsed by default; Re-create (header) calls the API", async () => {
-    renderPage({ ...base, meetingMinutes: minutes });
-    const recreate = await screen.findByRole("button", { name: /re-create minutes/i });
-    // Collapsed by default: the rendered Markdown body isn't shown until expanded.
-    expect(screen.queryByText("We met and agreed.")).toBeNull();
+  it("defaults to the Overview tab and shows the summary there", async () => {
+    renderPage({ ...base, summary: { model: "gpt", text: "The key decisions.", createdAt: base.createdAt } });
+    // Overview is the default tab, so the summary text is visible immediately (no expand step).
+    expect(await screen.findByText("The key decisions.")).toBeTruthy();
+    expect((await loaded()).getAttribute("aria-selected")).toBe("true");
+  });
 
-    fireEvent.click(recreate);
+  it("switches to the Minutes tab; Re-create calls the API", async () => {
+    renderPage({ ...base, meetingMinutes: minutes });
+    await loaded();
+    // Minutes content isn't shown until its tab is active.
+    expect(screen.queryByText("We met and agreed.")).toBeNull();
+    openTab(/minutes/i);
+    expect(screen.getByText("We met and agreed.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /re-create minutes/i }));
     await waitFor(() => expect(api.generateMeetingMinutes).toHaveBeenCalledWith("rec-123"));
   });
 
   it("Email minutes with no attachments emails directly", async () => {
     renderPage({ ...base, meetingMinutes: minutes });
-    fireEvent.click(await screen.findByRole("button", { name: /email minutes to me/i }));
+    await loaded();
+    openTab(/minutes/i);
+    fireEvent.click(screen.getByRole("button", { name: /email minutes to me/i }));
     await waitFor(() => expect(api.emailMeetingMinutes).toHaveBeenCalledWith("rec-123", false));
   });
 
@@ -126,30 +145,28 @@ describe("RecordingDetail", () => {
       { id: "a1", kind: "File", name: "doc.pdf", contentType: "application/pdf", sizeBytes: 8, url: null, ordinal: 0 },
     ]);
     renderPage({ ...base, meetingMinutes: minutes });
+    await loaded();
+    openTab(/minutes/i);
 
-    fireEvent.click(await screen.findByRole("button", { name: /email minutes to me/i }));
-    // Directly emailing must NOT have happened — the include-attachments prompt appears first.
+    fireEvent.click(screen.getByRole("button", { name: /email minutes to me/i }));
     expect(api.emailMeetingMinutes).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole("button", { name: /include attachments/i }));
-
     await waitFor(() => expect(api.emailMeetingMinutes).toHaveBeenCalledWith("rec-123", true));
   });
 
-  it("always shows the Meeting Minutes panel (collapsed, empty) when the recording has none", async () => {
+  it("Minutes tab shows an empty state and disables Edit/Email when there are none", async () => {
     renderPage(base); // base.meetingMinutes is null
-    // The panel header + its Re-create button are present; Edit/Email stay disabled until minutes exist.
-    expect(await screen.findByRole("heading", { name: /meeting minutes/i })).toBeTruthy();
+    await loaded();
+    openTab(/minutes/i);
+    expect(screen.getByText(/no meeting minutes yet/i)).toBeTruthy();
     expect((screen.getByRole("button", { name: /re-create minutes/i }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole("button", { name: /edit minutes/i }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: /email minutes to me/i }) as HTMLButtonElement).disabled).toBe(true);
-    // The empty-state hint shows once expanded.
-    fireEvent.click(screen.getByRole("button", { name: /expand meeting minutes section/i }));
-    expect(screen.getByText(/no meeting minutes yet/i)).toBeTruthy();
   });
 
   it("Generate meeting minutes (kebab) calls the API even when the recording has none yet", async () => {
-    renderPage(base); // base.meetingMinutes is null (an existing recording predating minutes)
-    await screen.findByText("Hi");
+    renderPage(base);
+    await loaded();
 
     fireEvent.click(screen.getByRole("button", { name: "Actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /generate meeting minutes/i }));
@@ -160,10 +177,10 @@ describe("RecordingDetail", () => {
   it("re-transcribe (kebab) opens a modal and re-transcribes on confirm", async () => {
     renderPage(base);
     await waitFor(() => expect(api.getRecording).toHaveBeenCalledTimes(1));
+    await loaded();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Actions" }));
+    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /re-transcribe/i }));
-    // Confirm without entering any hints (scope to the dialog — the toolbar also has a Re-transcribe button).
     const dialog = screen.getByRole("dialog", { name: /re-transcribe/i });
     fireEvent.click(within(dialog).getByRole("button", { name: /^re-transcribe$/i }));
 
@@ -175,7 +192,7 @@ describe("RecordingDetail", () => {
 
   it("Summarise (kebab) calls the API and refetches", async () => {
     renderPage(base);
-    await screen.findByText("Hi");
+    await loaded();
 
     fireEvent.click(screen.getByRole("button", { name: "Actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /summarise/i }));
@@ -186,23 +203,12 @@ describe("RecordingDetail", () => {
 
   it("shows the transcription processing time in the subtitle", async () => {
     renderPage(base);
-    // 65,000 ms → 1:05.
+    // 65,000 ms → 1:05. The subtitle sits above the tabs.
     expect(await screen.findByText(/transcribed in 1:05/)).toBeTruthy();
   });
 
-  it("keeps the summary collapsed by default and reveals its text on expand", async () => {
-    renderPage({ ...base, summary: { model: "gpt", text: "The key decisions.", createdAt: base.createdAt } });
-    // Collapsed by default: the header is present but the body text is not rendered yet.
-    const header = await screen.findByRole("button", { name: /summary section/i });
-    expect(screen.queryByText("The key decisions.")).toBeNull();
-    fireEvent.click(header);
-    expect(await screen.findByText("The key decisions.")).toBeTruthy();
-  });
-
-  it("clicking a segment selects it (no auto-play); Play selected then plays it", async () => {
-    const play = vi
-      .spyOn(window.HTMLMediaElement.prototype, "play")
-      .mockResolvedValue(undefined);
+  it("clicking a segment (Transcript tab) selects it; Play selected then plays it", async () => {
+    const play = vi.spyOn(window.HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     renderPage({
       ...base,
       current: {
@@ -210,26 +216,22 @@ describe("RecordingDetail", () => {
         segments: [{ id: "seg-9", speaker: "SPEAKER_00", speakerDisplay: "Alice", startMs: 1000, endMs: 2000, text: "Hello there" }],
       },
     });
+    await loaded();
+    openTab(/transcript/i);
 
-    // Clicking a segment now selects it — it must NOT auto-play.
     fireEvent.click(await screen.findByText("Hello there"));
     expect(api.audioUrl).not.toHaveBeenCalled();
 
-    // Play selected (enabled once a segment is picked) resolves the URL and plays.
     fireEvent.click(screen.getByRole("button", { name: /play selected/i }));
     await waitFor(() => expect(api.audioUrl).toHaveBeenCalledWith("rec-123"));
     await waitFor(() => expect(play).toHaveBeenCalled());
   });
 
-  it("collapses and expands the speakers panel", async () => {
+  it("shows the speaker assign typeahead on the Speakers tab", async () => {
     renderPage(base);
-    await screen.findByText("Hi");
-    expect(screen.getByLabelText(/assign SPEAKER_00 to a person/i)).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: /collapse speakers section/i }));
+    await loaded();
     expect(screen.queryByLabelText(/assign SPEAKER_00 to a person/i)).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: /expand speakers section/i }));
+    openTab(/speakers/i);
     expect(screen.getByLabelText(/assign SPEAKER_00 to a person/i)).toBeTruthy();
   });
 
@@ -237,17 +239,17 @@ describe("RecordingDetail", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     (api.mergeSegments as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     renderPage(base);
-    await screen.findByText("Hi");
+    await loaded();
+    openTab(/transcript/i);
 
     fireEvent.click(screen.getByRole("button", { name: /merge same-speaker rows/i }));
-
     await waitFor(() => expect(api.mergeSegments).toHaveBeenCalledWith("rec-123"));
   });
 
   it("re-transcribes with speaker hints entered in the modal", async () => {
     (api.retranscribe as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     renderPage(base);
-    await screen.findByText("Hi");
+    await loaded();
 
     fireEvent.click(screen.getByRole("button", { name: "Actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /re-transcribe/i }));
@@ -263,7 +265,7 @@ describe("RecordingDetail", () => {
   it("re-identifies speakers via the kebab", async () => {
     (api.reidentify as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     renderPage(base);
-    await screen.findByText("Hi");
+    await loaded();
 
     fireEvent.click(screen.getByRole("button", { name: "Actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /re-identify speakers/i }));
@@ -274,7 +276,7 @@ describe("RecordingDetail", () => {
   it("emails the transcript via the kebab and confirms", async () => {
     (api.emailTranscript as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     renderPage(base);
-    await screen.findByText("Hi");
+    await loaded();
 
     fireEvent.click(screen.getByRole("button", { name: "Actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /email me the transcript/i }));
@@ -283,14 +285,14 @@ describe("RecordingDetail", () => {
     expect(await screen.findByText(/emailed to your account/i)).toBeTruthy();
   });
 
-  it("extracts actions via the Actions panel refresh button and lists them", async () => {
+  it("extracts actions via the Actions tab toolbar and lists them", async () => {
     (api.extractActions as ReturnType<typeof vi.fn>).mockResolvedValue([
       { id: "act-1", text: "Send the report", actor: "Bob", deadline: "Friday", ordinal: 0 },
     ]);
     renderPage(base);
-    await screen.findByText("Hi");
+    await loaded();
+    openTab(/actions/i);
 
-    // After extraction the page refetches; the recording now reports the extracted action.
     (api.getRecording as ReturnType<typeof vi.fn>).mockResolvedValue({
       ...base,
       actionsExtracted: true,
@@ -299,8 +301,7 @@ describe("RecordingDetail", () => {
     fireEvent.click(screen.getByRole("button", { name: /extract action items/i }));
 
     await waitFor(() => expect(api.extractActions).toHaveBeenCalledWith("rec-123"));
-    // The panel is collapsed by default — expand it to see the extracted row.
-    fireEvent.click(await screen.findByRole("button", { name: /expand actions section/i }));
+    // The Actions tab content updates in place (no expand step).
     expect((await screen.findByLabelText("Action 1") as HTMLInputElement).value).toBe("Send the report");
   });
 
@@ -308,12 +309,13 @@ describe("RecordingDetail", () => {
     let resolve!: (v: unknown[]) => void;
     (api.extractActions as ReturnType<typeof vi.fn>).mockReturnValue(new Promise((r) => (resolve = r)));
     renderPage(base);
-    await screen.findByText("Hi");
+    await loaded();
+    openTab(/actions/i);
 
     fireEvent.click(screen.getByRole("button", { name: /extract action items/i }));
     expect(await screen.findByText(/extracting actions from the transcript/i)).toBeTruthy();
 
-    resolve([]); // finish the extraction → banner clears
+    resolve([]);
     await waitFor(() => expect(screen.queryByText(/extracting actions from the transcript/i)).toBeNull());
   });
 
@@ -322,20 +324,7 @@ describe("RecordingDetail", () => {
       { id: "a1", text: "Send report", actor: "Bob", deadline: "Fri", ordinal: 0 },
     ]);
     (api.getRecording as ReturnType<typeof vi.fn>).mockImplementation((rid: string) =>
-      Promise.resolve(
-        rid === "rec-123"
-          ? base
-          : {
-              ...base,
-              id: "rec-999",
-              current: {
-                ...base.current!,
-                segments: [
-                  { id: "seg-2", speaker: "SPEAKER_00", speakerDisplay: "Alice", startMs: 0, endMs: 1000, text: "Different transcript" },
-                ],
-              },
-            },
-      ),
+      Promise.resolve(rid === "rec-123" ? base : { ...base, id: "rec-999" }),
     );
 
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -350,32 +339,32 @@ describe("RecordingDetail", () => {
       </QueryClientProvider>,
     );
 
-    await screen.findByText("Hi");
+    await loaded();
+    openTab(/actions/i);
     fireEvent.click(screen.getByRole("button", { name: /extract action items/i }));
     expect(await screen.findByText(/extracted 1 action/i)).toBeTruthy();
 
     // Navigate to a different recording — the transient banner must not carry over.
     fireEvent.click(screen.getByRole("button", { name: "go" }));
-    await screen.findByText("Different transcript");
-    expect(screen.queryByText(/extracted 1 action/i)).toBeNull();
+    await waitFor(() => expect(api.getRecording).toHaveBeenCalledWith("rec-999"));
+    await waitFor(() => expect(screen.queryByText(/extracted 1 action/i)).toBeNull());
   });
 
-  it("always shows the Actions panel (collapsed) with an extract button, even before extraction", async () => {
+  it("always offers the Actions tab with an extract button and Add action", async () => {
     renderPage(base);
-    await screen.findByText("Hi");
-    // The panel header + its extract button are present; the body (Add action) stays hidden until expanded.
-    expect(screen.getByRole("heading", { name: /^actions$/i })).toBeTruthy();
+    await loaded();
+    openTab(/actions/i);
     expect(screen.getByRole("button", { name: /extract action items/i })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /add action/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /add action/i })).toBeTruthy();
   });
 
   it("selects a segment and edits it from the toolbar, saving the new text", async () => {
     (api.updateSegment as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     renderPage(base);
-    await screen.findByText("Hi");
+    await loaded();
+    openTab(/transcript/i);
 
-    // Pick the segment, then Edit (enabled only when exactly one is selected) → modal → save.
-    fireEvent.click(screen.getByText("Hi"));
+    fireEvent.click(await screen.findByText("Hi"));
     fireEvent.click(screen.getByRole("button", { name: /edit segment/i }));
     const textarea = screen.getByRole("textbox", { name: /segment text/i });
     fireEvent.change(textarea, { target: { value: "Hi, corrected" } });
@@ -388,13 +377,29 @@ describe("RecordingDetail", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     (api.deleteSegments as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     renderPage(base);
-    await screen.findByText("Hi");
+    await loaded();
+    openTab(/transcript/i);
 
-    // Enter Select mode, tick the segment (click the row), then Delete selected.
     fireEvent.click(screen.getByRole("button", { name: /select segments/i }));
-    fireEvent.click(screen.getByText("Hi"));
+    fireEvent.click(await screen.findByText("Hi"));
     fireEvent.click(screen.getByRole("button", { name: /delete selected/i }));
 
     await waitFor(() => expect(api.deleteSegments).toHaveBeenCalledWith("rec-123", ["seg-1"]));
+  });
+
+  it("lists attachments and allows deleting on the Attachments tab", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    (api.deleteAttachment as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (api.listAttachments as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "a1", kind: "File", name: "doc.pdf", contentType: "application/pdf", sizeBytes: 8, url: null, ordinal: 0 },
+    ]);
+    renderPage(base);
+    await loaded();
+    openTab(/attachments/i);
+
+    expect(screen.getByRole("button", { name: /add file/i })).toBeTruthy();
+    expect((await screen.findByDisplayValue("doc.pdf"))).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^remove$/i }));
+    await waitFor(() => expect(api.deleteAttachment).toHaveBeenCalledWith("rec-123", "a1"));
   });
 });
