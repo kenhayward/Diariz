@@ -58,7 +58,11 @@ public sealed class SendEmailTool : IChatTool
         if (string.IsNullOrWhiteSpace(address))
             return "Cannot send the email: the current user has no email address on record.";
 
-        var html = Markdig.Markdown.ToHtml(body);
+        // Render the model's Markdown to HTML with the shared (advanced) pipeline so GitHub-flavoured tables,
+        // lists and bold come through as formatting rather than raw markdown, then wrap it in a simple email
+        // shell (readable font) — the same approach as the meeting-minutes email.
+        var html = $"<div style=\"font-family:Arial,Helvetica,sans-serif;color:#111;line-height:1.5;\">" +
+            $"{MarkdownRenderer.ToHtml(body)}</div>";
         var sent = await _email.SendAsync(address, subject, html, null, ct);
         return sent
             ? $"Email sent to {address}."

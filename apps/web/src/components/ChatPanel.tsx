@@ -15,6 +15,7 @@ import {
   toolCallLineText,
   type ToolCallLineState,
 } from "../lib/toolCallLine";
+import { parseChatCommand, buildToolsOutput, buildHelpOutput, type ChatCommand } from "../lib/chatCommands";
 import type { AttachmentDraft, ChatConversationSummary, ChatTurn, ChatUsage } from "../lib/types";
 import ContextDial from "./ContextDial";
 import PickRecordingModal from "./PickRecordingModal";
@@ -34,6 +35,8 @@ export default function ChatPanel() {
   const pendingDraftRef = useRef<AttachmentDraft | null>(null);
   const [pickerDraft, setPickerDraft] = useState<AttachmentDraft | null>(null);
   const [attachNotice, setAttachNotice] = useState<string | null>(null);
+  // Output of a client-side slash command (/tools, /help) — shown in the thread, never sent to the model.
+  const [commandOutput, setCommandOutput] = useState<string | null>(null);
 
   /// Intercept clicks on the assistant's transcript deep-links so they open in the middle panel (and seek
   /// to the moment) via the SPA router, instead of triggering a full page reload.
@@ -186,11 +189,39 @@ export default function ChatPanel() {
     else setPickerDraft(draft);
   }
 
+  /// Render a client-side slash command's output (Markdown). Never touches the model.
+  function runCommand(cmd: ChatCommand): string {
+    if (cmd === "tools")
+      return buildToolsOutput(settings?.tools ?? [], settings?.toolsEnabled ?? false, {
+        heading: t("cmdToolsHeading"),
+        disabled: t("cmdToolsDisabled"),
+        none: t("cmdToolsNone"),
+      });
+    return buildHelpOutput(
+      [
+        { command: "/tools", description: t("cmdHelpTools") },
+        { command: "/help", description: t("cmdHelpHelp") },
+      ],
+      t("cmdHelpHeading"),
+    );
+  }
+
   function send() {
     const prompt = input.trim();
     if (!prompt || streaming) return;
+
+    // Slash commands are handled entirely client-side — they never reach the model (so "/tools" always
+    // just lists the tools and can't trigger a spurious tool call).
+    const command = parseChatCommand(prompt);
+    if (command) {
+      setCommandOutput(runCommand(command));
+      setInput("");
+      return;
+    }
+
     setError(null);
     setSaveStatus(null);
+    setCommandOutput(null);
 
     const history: ChatTurn[] = [...messages, { role: "user", content: prompt }];
     setMessages([...history, { role: "assistant", content: "" }]);
@@ -405,7 +436,7 @@ export default function ChatPanel() {
 
       {/* Thread */}
       <div ref={threadRef} onClick={onThreadClick} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
-        {messages.length === 0 ? (
+        {messages.length === 0 && !commandOutput ? (
           <p className="px-1 text-xs text-gray-400 dark:text-gray-500">{t("intro")}</p>
         ) : (
           messages.map((m, i) => {
@@ -436,6 +467,27 @@ export default function ChatPanel() {
               </div>
             );
           })
+        )}
+        {commandOutput && (
+          <div className="flex justify-start">
+            <div className="max-w-[90%] rounded-lg border border-dashed bg-gray-50 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-100">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="text-[11px] uppercase tracking-wide text-gray-400">{t("cmdLabel")}</span>
+                <button
+                  type="button"
+                  aria-label={t("cmdDismiss")}
+                  onClick={() => setCommandOutput(null)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                >
+                  ✕
+                </button>
+              </div>
+              <div
+                className="chat-md break-words"
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(commandOutput) }}
+              />
+            </div>
+          </div>
         )}
         {toolCallLineText(toolLine) && (
           <div className="flex justify-start">
