@@ -19,7 +19,7 @@ jobs:
     name: .NET unit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # No global.json, so pin the SDK explicitly. setup-dotnet installs into the hosted
       # runner's tool cache — the self-hosted "can't write to C:\Program Files" hack is gone.
       - uses: actions/setup-dotnet@v5
@@ -32,7 +32,7 @@ jobs:
     name: .NET integration (Testcontainers)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
@@ -45,7 +45,7 @@ jobs:
     name: Web (vitest)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: '20'
@@ -63,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # need history to diff the branch against its base
       - uses: actions/setup-node@v6
@@ -78,7 +78,7 @@ jobs:
     name: Worker (pytest)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
