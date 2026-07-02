@@ -29,4 +29,6 @@ def download(blob_key: str) -> str:
 def upload(blob_key: str, local_path: str, content_type: str) -> None:
     """Upload a local file to the given object key (used for merged/concatenated audio)."""
     extra = {"ContentType": content_type} if content_type else {}
-    _s3.upload_file(config.S3_BUCKET, blob_key, local_path, ExtraArgs=extra)
+    # boto3's client.upload_file takes (Filename, Bucket, Key) — the opposite file/bucket order to
+    # download_file(Bucket, Key, Filename). Getting it wrong sends the bucket name as the local file.
+    _s3.upload_file(local_path, config.S3_BUCKET, blob_key, ExtraArgs=extra)
