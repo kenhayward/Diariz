@@ -64,6 +64,8 @@
   "translating": "Wird übersetzt…",
   "summarising": "Wird zusammengefasst…",
   "queuing": "In Warteschlange…",
+  "transcribing": "Wird transkribiert…",
+  "statusUploading": "{{count}} werden hochgeladen…",
   "merging": "Audio wird zusammengeführt…",
   "extractingActions": "Aktionen werden aus der Transkription extrahiert…",
   "meetingDateLabel": "Besprechungsdatum",

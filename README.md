@@ -35,6 +35,9 @@ just the selection, while **Merge** always acts on the whole transcript.
 - **Tabbed recording page** — Overview (summary), Minutes, Actions, Speakers, Transcript, and Attachments are
 organised into horizontal tabs, each showing its own toolbar directly below the tab strip; the last-used tab is
 remembered.
+- **Status bar** locked to the bottom of the app: left-aligned live progress (transcribing, summarising,
+merging, extracting actions, uploading, errors — in their tone colours) and right-aligned storage usage ·
+transcription usage · total transcripts.
 - **Identify speakers** across recordings: enrol a person from a recording's speaker and Diariz recognises
 that voice automatically in later recordings (SpeechBrain ECAPA voiceprints in pgvector, cosine matching),
 with manual reassignment. A **People** screen renames, prunes training samples, merges duplicates, and
