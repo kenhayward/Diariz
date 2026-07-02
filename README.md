@@ -32,6 +32,9 @@ same-speaker rows, and **email yourself** the formatted transcript. The transcri
 you scroll (its segments then scroll internally) and has a header **icon toolbar** with a play bar (which plays
 the whole recording) and a **Select mode** — tick segments (or click one) to **play, edit, translate, or delete**
 just the selection, while **Merge** always acts on the whole transcript.
+- **Tabbed recording page** — Overview (summary), Minutes, Actions, Speakers, Transcript, and Attachments are
+organised into horizontal tabs, each showing its own toolbar directly below the tab strip; the last-used tab is
+remembered.
 - **Identify speakers** across recordings: enrol a person from a recording's speaker and Diariz recognises
 that voice automatically in later recordings (SpeechBrain ECAPA voiceprints in pgvector, cosine matching),
 with manual reassignment. A **People** screen renames, prunes training samples, merges duplicates, and

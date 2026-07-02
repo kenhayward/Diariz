@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
-import ActionsPanel from "./ActionsPanel";
+import ActionsTable from "./ActionsTable";
 import type { RecordingAction } from "../lib/types";
 
 const action = (over: Partial<RecordingAction> = {}): RecordingAction => ({
@@ -13,17 +13,14 @@ const action = (over: Partial<RecordingAction> = {}): RecordingAction => ({
 });
 
 function build(actions: RecordingAction[]) {
-  const handlers = { onAdd: vi.fn(), onUpdate: vi.fn(), onDelete: vi.fn(), onToggleComplete: vi.fn(), onExtract: vi.fn() };
-  render(<ActionsPanel actions={actions} extractDisabled={false} {...handlers} />);
-  // The panel starts collapsed — expand it so the table / Add button are visible for assertions.
-  fireEvent.click(screen.getByRole("button", { name: /expand actions section/i }));
+  const handlers = { onAdd: vi.fn(), onUpdate: vi.fn(), onDelete: vi.fn(), onToggleComplete: vi.fn() };
+  render(<ActionsTable actions={actions} {...handlers} />);
   return handlers;
 }
 
-describe("ActionsPanel", () => {
-  it("shows the Actions heading and the column headers", () => {
+describe("ActionsTable", () => {
+  it("shows the column headers", () => {
     build([action()]);
-    expect(screen.getByRole("heading", { name: /actions/i })).toBeTruthy();
     expect(screen.getByText("Action")).toBeTruthy();
     expect(screen.getByText("Actor")).toBeTruthy();
     expect(screen.getByText("Deadline")).toBeTruthy();
@@ -50,6 +47,12 @@ describe("ActionsPanel", () => {
     expect(h.onUpdate).not.toHaveBeenCalled();
   });
 
+  it("toggles completion via the Done checkbox", () => {
+    const h = build([action()]);
+    fireEvent.click(screen.getByLabelText(/mark action 1 complete/i));
+    expect(h.onToggleComplete).toHaveBeenCalledWith("a1", true);
+  });
+
   it("deletes a row via its remove button", () => {
     const h = build([action()]);
     fireEvent.click(screen.getByRole("button", { name: /remove action 1/i }));
@@ -62,30 +65,10 @@ describe("ActionsPanel", () => {
     expect(h.onAdd).toHaveBeenCalledTimes(1);
   });
 
-  it("collapses and expands the panel via its toggle", () => {
-    build([action()]);
-    expect(screen.getByLabelText("Action 1")).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: /collapse actions section/i }));
-    expect(screen.queryByLabelText("Action 1")).toBeNull();
-    expect(screen.queryByRole("button", { name: /add action/i })).toBeNull();
-    // The heading stays visible while collapsed.
-    expect(screen.getByRole("heading", { name: /actions/i })).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("button", { name: /expand actions section/i }));
-    expect(screen.getByLabelText("Action 1")).toBeTruthy();
-  });
-
   it("shows an empty state but still offers Add when there are no actions", () => {
     const h = build([]);
     expect(screen.getByText(/no actions identified/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /add action/i }));
     expect(h.onAdd).toHaveBeenCalled();
-  });
-
-  it("runs extraction via the header refresh button", () => {
-    const h = build([action()]);
-    fireEvent.click(screen.getByRole("button", { name: /extract action items/i }));
-    expect(h.onExtract).toHaveBeenCalledTimes(1);
   });
 });

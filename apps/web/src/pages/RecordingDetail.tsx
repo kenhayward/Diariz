@@ -6,16 +6,15 @@ import { api, apiErrorMessage } from "../lib/api";
 import { createHub } from "../lib/signalr";
 import KebabMenu from "../components/KebabMenu";
 import DetailToolbar from "../components/DetailToolbar";
-import ActionsPanel from "../components/ActionsPanel";
-import CollapsibleSection from "../components/CollapsibleSection";
+import ActionsTable from "../components/ActionsTable";
+import DetailTabs, { type DetailTab } from "../components/DetailTabs";
 import MoveToSectionModal from "../components/MoveToSectionModal";
 import DownloadTranscriptModal from "../components/DownloadTranscriptModal";
 import SummaryEditModal from "../components/SummaryEditModal";
 import MeetingMinutesEditModal from "../components/MeetingMinutesEditModal";
 import EmailMinutesModal from "../components/EmailMinutesModal";
 import { renderMarkdown } from "../lib/markdown";
-import AttachmentsModal from "../components/AttachmentsModal";
-import AttachmentsSplitButton from "../components/AttachmentsSplitButton";
+import AttachmentsManager from "../components/AttachmentsManager";
 import PeopleModal from "../components/PeopleModal";
 import SpeakerAssign from "../components/SpeakerAssign";
 import ToolbarButton, { iconProps } from "../components/ToolbarButton";
@@ -26,7 +25,6 @@ import { speakerRanges, selectedRanges, rangeAt, nextRangeStart, type PlayRange 
 import { formatBytes, formatDate, formatDuration } from "../lib/format";
 import { hasRevisions, segmentText } from "../lib/transcriptView";
 import { fetchLanguages } from "../lib/languages";
-import { allSpeakersAssigned } from "../lib/speakers";
 import type { SegmentDto, SpeakerInfo, SpeakerProfile } from "../lib/types";
 
 // Feather-style icons for the panel toolbars and the per-speaker play control.
@@ -52,6 +50,9 @@ const GlobeIcon = <svg {...iconProps}><circle cx="12" cy="12" r="10" /><line x1=
 const EyeIcon = <svg {...iconProps}><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" /><circle cx="12" cy="12" r="3" /></svg>;
 const ChevronLeftIcon = <svg {...iconProps}><polyline points="15 18 9 12 15 6" /></svg>;
 const ChevronRightIcon = <svg {...iconProps}><polyline points="9 18 15 12 9 6" /></svg>;
+
+/// localStorage key for the last-selected detail tab (shared across recordings).
+const DETAIL_TAB_KEY = "diariz.detailTab";
 
 function fmt(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -144,7 +145,13 @@ export default function RecordingDetail() {
   const [editingSummary, setEditingSummary] = useState(false);
   const [editingMinutes, setEditingMinutes] = useState(false);
   const [emailMinutesOpen, setEmailMinutesOpen] = useState(false);
-  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  // Active detail tab, persisted globally (like the left "Meetings" panel) so it survives reloads and
+  // navigating between recordings. Defaults to Overview.
+  const [tab, setTab] = useState<string>(() => localStorage.getItem(DETAIL_TAB_KEY) ?? "overview");
+  const selectTab = (key: string) => {
+    setTab(key);
+    localStorage.setItem(DETAIL_TAB_KEY, key);
+  };
   const [dragging, setDragging] = useState(false);
   const [editingSeg, setEditingSeg] = useState<SegmentDto | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -706,6 +713,280 @@ export default function RecordingDetail() {
     isSummarizing,
   }, t);
 
+  // The recording detail is organised into horizontal tabs; each tab carries its own toolbar (rendered in a
+  // bar directly below the strip) and its content. Everything above <DetailTabs> stays outside the tabs.
+  const detailTabs: DetailTab[] = [
+    {
+      key: "overview",
+      label: t("workspace:detailTabOverview"),
+      toolbar: (
+        <>
+          <ToolbarButton
+            label={t("workspace:editSummaryAction")}
+            icon={PencilIcon}
+            disabled={!hasTranscript}
+            onClick={() => setEditingSummary(true)}
+          />
+          <ToolbarButton
+            label={t("workspace:resummarise")}
+            icon={RefreshIcon}
+            disabled={!hasTranscript || isSummarizing}
+            onClick={summarize}
+          />
+        </>
+      ),
+      content: rec.summary ? (
+        <div className="px-4 pb-4">
+          {rec.summary.isUserEdited && (
+            <p className="mb-1 text-xs italic text-gray-400 dark:text-gray-500">{t("workspace:summaryEditedHint")}</p>
+          )}
+          <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{rec.summary.text}</p>
+        </div>
+      ) : (
+        <p className="px-4 pb-4 text-sm text-gray-500 dark:text-gray-400">{t("workspace:overviewEmpty")}</p>
+      ),
+    },
+    {
+      key: "minutes",
+      label: t("workspace:detailTabMinutes"),
+      toolbar: (
+        <>
+          <ToolbarButton
+            label={t("workspace:editMeetingMinutes")}
+            icon={PencilIcon}
+            disabled={!rec.meetingMinutes}
+            onClick={() => setEditingMinutes(true)}
+          />
+          <ToolbarButton
+            label={t("workspace:emailMinutes")}
+            icon={MailIcon}
+            disabled={!rec.meetingMinutes}
+            onClick={emailMinutes}
+          />
+          <ToolbarButton
+            label={t("workspace:recreateMeetingMinutes")}
+            icon={RefreshIcon}
+            disabled={!hasTranscript || isSummarizing}
+            onClick={recreateMinutes}
+          />
+        </>
+      ),
+      content: rec.meetingMinutes ? (
+        <div className="px-4 pb-4">
+          {rec.meetingMinutes.isUserEdited && (
+            <p className="mb-1 text-xs italic text-gray-400 dark:text-gray-500">{t("workspace:minutesEditedHint")}</p>
+          )}
+          <div
+            className="break-words text-sm text-gray-800 dark:text-gray-200
+              [&_h1]:mb-2 [&_h1]:mt-1 [&_h1]:text-lg [&_h1]:font-bold
+              [&_h2]:mb-1 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold
+              [&_h3]:mb-1 [&_h3]:mt-2 [&_h3]:font-semibold
+              [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-1
+              [&_table]:my-2 [&_table]:border-collapse [&_th]:border [&_th]:px-2 [&_th]:py-1 [&_th]:font-semibold
+              [&_td]:border [&_td]:px-2 [&_td]:py-1 dark:[&_th]:border-gray-700 dark:[&_td]:border-gray-700"
+            dangerouslySetInnerHTML={{ __html: renderMarkdown(rec.meetingMinutes.text) }}
+          />
+        </div>
+      ) : (
+        <p className="px-4 pb-4 text-sm text-gray-500 dark:text-gray-400">{t("workspace:minutesEmpty")}</p>
+      ),
+    },
+    {
+      key: "actions",
+      label: t("workspace:detailTabActions"),
+      toolbar: (
+        <ToolbarButton
+          label={t("workspace:extractActionsAction")}
+          icon={RefreshIcon}
+          onClick={extractActions}
+          disabled={!hasTranscript}
+        />
+      ),
+      content: (
+        <ActionsTable
+          actions={rec.actions}
+          onAdd={addAction}
+          onUpdate={updateAction}
+          onToggleComplete={toggleActionComplete}
+          onDelete={removeAction}
+        />
+      ),
+    },
+    {
+      key: "speakers",
+      label: t("workspace:detailTabSpeakers"),
+      toolbar: (
+        <>
+          <ToolbarButton label={t("workspace:managePeople")} icon={UsersIcon} onClick={() => setPeopleOpen(true)} />
+          <ToolbarButton
+            label={t("workspace:reidentifyAction")}
+            icon={RefreshIcon}
+            disabled={!rec.hasAudio || !hasTranscript}
+            onClick={reidentify}
+          />
+        </>
+      ),
+      content:
+        labels.length > 0 ? (
+          <div className="flex flex-col gap-2 px-4 pb-4">
+            {labels.map((label) => {
+              const info = rec.speakers.find((s) => s.label === label);
+              return (
+                <SpeakerRow
+                  key={label}
+                  label={label}
+                  info={info}
+                  initial={
+                    info?.isMultiSpeaker
+                      ? t("workspace:multipleSpeakers")
+                      : rec.speakerNames[label] ?? info?.displayName ?? label
+                  }
+                  count={speakerCounts.get(label) ?? 0}
+                  durationMs={speakerDurations.get(label) ?? 0}
+                  profiles={profiles}
+                  canPlay={rec.hasAudio}
+                  playing={playingSpeaker === label}
+                  onTogglePlay={() => toggleSpeaker(label)}
+                  onDelete={(name) => deleteSpeaker(label, name)}
+                  onPrev={() => goToSpeakerSegment(label, "prev")}
+                  onNext={() => goToSpeakerSegment(label, "next")}
+                  onAssign={(profileId) => assignSpeaker(label, profileId)}
+                  onCreate={(name) => newPerson(label, name)}
+                  onMulti={() => markMulti(label)}
+                />
+              );
+            })}
+          </div>
+        ) : (
+          <p className="px-4 pb-4 text-sm text-gray-500 dark:text-gray-400">{t("workspace:speakersEmpty")}</p>
+        ),
+    },
+    {
+      key: "transcript",
+      label: t("workspace:detailTabTranscript"),
+      toolbar: rec.current ? (
+        <>
+          {/* Small play progress bar, left of the icon buttons (hidden on very narrow widths). */}
+          {rec.hasAudio && (
+            <div className="mr-1 hidden items-center gap-1 sm:flex">
+              <button
+                type="button"
+                onClick={togglePlayPause}
+                aria-label={audioPaused ? t("workspace:playAll") : t("workspace:pauseAudio")}
+                className="rounded p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+              >
+                {audioPaused ? PlayIcon : PauseIcon}
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={Math.max(1, rec.durationMs / 1000)}
+                step={0.1}
+                value={audioCur}
+                onChange={(e) => {
+                  const el = audioRef.current;
+                  if (el) el.currentTime = Number(e.target.value);
+                }}
+                aria-label={t("workspace:seek")}
+                className="h-1 w-24 cursor-pointer"
+              />
+              <span className="font-mono text-[10px] tabular-nums text-gray-400 dark:text-gray-500">{fmt(audioCur * 1000)}</span>
+            </div>
+          )}
+          <ToolbarButton
+            label={t("workspace:playSelected")}
+            icon={PlayIcon}
+            onClick={playSelected}
+            disabled={!rec.hasAudio || selectedSegIds.size === 0}
+          />
+          <ToolbarButton label={t("workspace:mergeRows")} icon={MergeIcon} onClick={mergeSegments} />
+          <ToolbarButton
+            label={selectMode ? t("workspace:doneSelecting") : t("workspace:selectSegments")}
+            icon={SelectIcon}
+            active={selectMode}
+            onClick={() => setSelectMode((v) => !v)}
+          />
+          <ToolbarButton label={t("workspace:editSegment")} icon={PencilIcon} onClick={editSelected} disabled={selectedSegIds.size !== 1} />
+          {nativeLang && (
+            <ToolbarButton
+              label={t("recordings:translateTo", { language: nativeLang.englishName })}
+              icon={GlobeIcon}
+              onClick={translateSelected}
+              disabled={selectedSegIds.size === 0 || translating}
+            />
+          )}
+          <ToolbarButton label={t("workspace:deleteSelected")} icon={TrashIcon} onClick={deleteSelected} disabled={selectedSegIds.size === 0} />
+          {hasRevisions(rec.current.segments) && (
+            <ToolbarButton label={t("workspace:toggleViewTitle")} icon={EyeIcon} active={showOriginal} onClick={() => setShowOriginal((v) => !v)} />
+          )}
+          {selectedSegIds.size > 0 && (
+            <span className="ml-0.5 text-xs text-blue-700 dark:text-blue-300">{selectedSegIds.size}</span>
+          )}
+        </>
+      ) : undefined,
+      content: rec.current ? (
+        <div className="space-y-3 pb-2">
+          {/* Hidden audio element — the header bar + the Play buttons drive it (no native controls). */}
+          {rec.hasAudio && (
+            <audio
+              ref={audioRef}
+              onTimeUpdate={onTimeUpdate}
+              onPlay={() => setAudioPaused(false)}
+              onPause={() => setAudioPaused(true)}
+              className="hidden"
+            />
+          )}
+          {matchTimes.length > 1 && (
+            <div className="sticky top-0 z-10 mb-2 flex items-center gap-2 rounded-md border bg-blue-50 px-3 py-1.5 text-xs text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
+              <span className="font-medium">
+                {t("workspace:matchNav", { k: Math.max(1, matchIdx + 1), n: matchTimes.length })}
+              </span>
+              <div className="ml-auto flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => goToMatch(matchIdx <= 0 ? matchTimes.length - 1 : matchIdx - 1)}
+                  aria-label={t("workspace:prevMatch")}
+                  className="rounded border px-2 py-0.5 hover:bg-blue-100 dark:border-blue-800 dark:hover:bg-blue-900"
+                >
+                  ◀
+                </button>
+                <button
+                  type="button"
+                  onClick={() => goToMatch(matchIdx < 0 || matchIdx >= matchTimes.length - 1 ? 0 : matchIdx + 1)}
+                  aria-label={t("workspace:nextMatch")}
+                  className="rounded border px-2 py-0.5 hover:bg-blue-100 dark:border-blue-800 dark:hover:bg-blue-900"
+                >
+                  ▶
+                </button>
+              </div>
+            </div>
+          )}
+          <ul className="space-y-2">
+            {rec.current.segments.map((s, i) => (
+              <SegmentRow
+                key={s.id}
+                seg={s}
+                speakerName={multiSpeakerLabels.has(s.speaker) ? t("workspace:multipleSpeakers") : s.speakerDisplay}
+                active={i === activeIdx}
+                selected={selectedSegIds.has(s.id)}
+                selectMode={selectMode}
+                showOriginal={showOriginal}
+                onClick={() => clickSegment(s.id)}
+              />
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="px-4 pb-4 text-sm text-gray-500 dark:text-gray-400">{t("workspace:noTranscriptYet")}</p>
+      ),
+    },
+    {
+      key: "attachments",
+      label: t("workspace:detailTabAttachments"),
+      content: <AttachmentsManager recordingId={id} attachments={attachments} onChange={refreshAttachments} />,
+    },
+  ];
+
   return (
     <div
       className="relative space-y-2.5"
@@ -786,15 +1067,6 @@ export default function RecordingDetail() {
         </p>
       )}
 
-      <div className="flex items-center gap-2">
-        <AttachmentsSplitButton
-          recordingId={id}
-          attachments={attachments}
-          onManage={() => setAttachmentsOpen(true)}
-        />
-        <span className="text-xs text-gray-400 dark:text-gray-500">{t("workspace:dropHint")}</span>
-      </div>
-
       {rec.status === "Failed" && rec.error && (
         <p className="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{rec.error}</p>
       )}
@@ -802,270 +1074,7 @@ export default function RecordingDetail() {
       {isSummarizing && !rec.summary && (
         <p className="rounded bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">{t("workspace:summarising")}</p>
       )}
-      {rec.summary && (
-        <CollapsibleSection
-          title={t("workspace:sectionSummary")}
-          defaultCollapsed
-          headerActions={
-            <>
-              <ToolbarButton
-                label={t("workspace:editSummaryAction")}
-                icon={PencilIcon}
-                disabled={!hasTranscript}
-                onClick={() => setEditingSummary(true)}
-              />
-              {/* Refresh sits last (just before the chevron) so the re-run icon lines up across panels. */}
-              <ToolbarButton
-                label={t("workspace:resummarise")}
-                icon={RefreshIcon}
-                disabled={!hasTranscript || isSummarizing}
-                onClick={summarize}
-              />
-            </>
-          }
-        >
-          {rec.summary.isUserEdited && (
-            <p className="mb-1 text-xs italic text-gray-400 dark:text-gray-500">{t("workspace:summaryEditedHint")}</p>
-          )}
-          <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{rec.summary.text}</p>
-        </CollapsibleSection>
-      )}
-      {/* Always shown (collapsed) so minutes can be generated on any recording. The refresh button in its
-          header (re-)creates them; Edit/Email stay disabled until minutes exist. */}
-      <CollapsibleSection
-        title={t("workspace:sectionMeetingMinutes")}
-        defaultCollapsed
-        headerActions={
-          <>
-            <ToolbarButton
-              label={t("workspace:editMeetingMinutes")}
-              icon={PencilIcon}
-              disabled={!rec.meetingMinutes}
-              onClick={() => setEditingMinutes(true)}
-            />
-            <ToolbarButton
-              label={t("workspace:emailMinutes")}
-              icon={MailIcon}
-              disabled={!rec.meetingMinutes}
-              onClick={emailMinutes}
-            />
-            {/* Refresh sits last (just before the chevron) so the re-run icon lines up across panels. */}
-            <ToolbarButton
-              label={t("workspace:recreateMeetingMinutes")}
-              icon={RefreshIcon}
-              disabled={!hasTranscript || isSummarizing}
-              onClick={recreateMinutes}
-            />
-          </>
-        }
-      >
-        {rec.meetingMinutes ? (
-          <>
-            {rec.meetingMinutes.isUserEdited && (
-              <p className="mb-1 text-xs italic text-gray-400 dark:text-gray-500">{t("workspace:minutesEditedHint")}</p>
-            )}
-            <div
-              className="break-words text-sm text-gray-800 dark:text-gray-200
-                [&_h1]:mb-2 [&_h1]:mt-1 [&_h1]:text-lg [&_h1]:font-bold
-                [&_h2]:mb-1 [&_h2]:mt-3 [&_h2]:text-base [&_h2]:font-semibold
-                [&_h3]:mb-1 [&_h3]:mt-2 [&_h3]:font-semibold
-                [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-1
-                [&_table]:my-2 [&_table]:border-collapse [&_th]:border [&_th]:px-2 [&_th]:py-1 [&_th]:font-semibold
-                [&_td]:border [&_td]:px-2 [&_td]:py-1 dark:[&_th]:border-gray-700 dark:[&_td]:border-gray-700"
-              dangerouslySetInnerHTML={{ __html: renderMarkdown(rec.meetingMinutes.text) }}
-            />
-          </>
-        ) : (
-          <p className="text-sm text-gray-500 dark:text-gray-400">{t("workspace:minutesEmpty")}</p>
-        )}
-      </CollapsibleSection>
-
-      {/* Always shown (collapsed) so actions can be (re)extracted or added on any recording. The refresh
-          button in its header runs extraction. */}
-      <ActionsPanel
-        actions={rec.actions}
-        onExtract={extractActions}
-        extractDisabled={!hasTranscript}
-        onAdd={addAction}
-        onUpdate={updateAction}
-        onToggleComplete={toggleActionComplete}
-        onDelete={removeAction}
-      />
-
-      {labels.length > 0 && (
-        // Default collapsed when every speaker is already assigned (nothing left to label).
-        <CollapsibleSection
-          title={t("workspace:sectionSpeakers")}
-          defaultCollapsed={allSpeakersAssigned(rec.speakers)}
-          headerActions={
-            <>
-              <ToolbarButton
-                label={t("workspace:managePeople")}
-                icon={UsersIcon}
-                onClick={() => setPeopleOpen(true)}
-              />
-              {/* Refresh sits last (just before the chevron) so the re-run icon lines up across panels. */}
-              <ToolbarButton
-                label={t("workspace:reidentifyAction")}
-                icon={RefreshIcon}
-                disabled={!rec.hasAudio || !hasTranscript}
-                onClick={reidentify}
-              />
-            </>
-          }
-        >
-          <div className="flex flex-col gap-2">
-            {labels.map((label) => {
-              const info = rec.speakers.find((s) => s.label === label);
-              return (
-                <SpeakerRow
-                  key={label}
-                  label={label}
-                  info={info}
-                  initial={
-                    info?.isMultiSpeaker
-                      ? t("workspace:multipleSpeakers")
-                      : rec.speakerNames[label] ?? info?.displayName ?? label
-                  }
-                  count={speakerCounts.get(label) ?? 0}
-                  durationMs={speakerDurations.get(label) ?? 0}
-                  profiles={profiles}
-                  canPlay={rec.hasAudio}
-                  playing={playingSpeaker === label}
-                  onTogglePlay={() => toggleSpeaker(label)}
-                  onDelete={(name) => deleteSpeaker(label, name)}
-                  onPrev={() => goToSpeakerSegment(label, "prev")}
-                  onNext={() => goToSpeakerSegment(label, "next")}
-                  onAssign={(profileId) => assignSpeaker(label, profileId)}
-                  onCreate={(name) => newPerson(label, name)}
-                  onMulti={() => markMulti(label)}
-                />
-              );
-            })}
-          </div>
-        </CollapsibleSection>
-      )}
-
-      {rec.current ? (
-        // The body is flush (no horizontal padding) so the segment rows keep the panel's full width.
-        <CollapsibleSection
-          title={t("workspace:sectionTranscript")}
-          bodyClassName="space-y-3 pb-2"
-          stickyFill
-          headerActions={
-            <>
-              {/* Small play progress bar, left of the icon buttons (hidden on very narrow widths). */}
-              {rec.hasAudio && (
-                <div className="mr-1 hidden items-center gap-1 sm:flex">
-                  <button
-                    type="button"
-                    onClick={togglePlayPause}
-                    aria-label={audioPaused ? t("workspace:playAll") : t("workspace:pauseAudio")}
-                    className="rounded p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-                  >
-                    {audioPaused ? PlayIcon : PauseIcon}
-                  </button>
-                  <input
-                    type="range"
-                    min={0}
-                    max={Math.max(1, rec.durationMs / 1000)}
-                    step={0.1}
-                    value={audioCur}
-                    onChange={(e) => {
-                      const el = audioRef.current;
-                      if (el) el.currentTime = Number(e.target.value);
-                    }}
-                    aria-label={t("workspace:seek")}
-                    className="h-1 w-24 cursor-pointer"
-                  />
-                  <span className="font-mono text-[10px] tabular-nums text-gray-400 dark:text-gray-500">{fmt(audioCur * 1000)}</span>
-                </div>
-              )}
-              <ToolbarButton
-                label={t("workspace:playSelected")}
-                icon={PlayIcon}
-                onClick={playSelected}
-                disabled={!rec.hasAudio || selectedSegIds.size === 0}
-              />
-              <ToolbarButton label={t("workspace:mergeRows")} icon={MergeIcon} onClick={mergeSegments} />
-              <ToolbarButton
-                label={selectMode ? t("workspace:doneSelecting") : t("workspace:selectSegments")}
-                icon={SelectIcon}
-                active={selectMode}
-                onClick={() => setSelectMode((v) => !v)}
-              />
-              <ToolbarButton label={t("workspace:editSegment")} icon={PencilIcon} onClick={editSelected} disabled={selectedSegIds.size !== 1} />
-              {nativeLang && (
-                <ToolbarButton
-                  label={t("recordings:translateTo", { language: nativeLang.englishName })}
-                  icon={GlobeIcon}
-                  onClick={translateSelected}
-                  disabled={selectedSegIds.size === 0 || translating}
-                />
-              )}
-              <ToolbarButton label={t("workspace:deleteSelected")} icon={TrashIcon} onClick={deleteSelected} disabled={selectedSegIds.size === 0} />
-              {hasRevisions(rec.current.segments) && (
-                <ToolbarButton label={t("workspace:toggleViewTitle")} icon={EyeIcon} active={showOriginal} onClick={() => setShowOriginal((v) => !v)} />
-              )}
-              {selectedSegIds.size > 0 && (
-                <span className="ml-0.5 text-xs text-blue-700 dark:text-blue-300">{selectedSegIds.size}</span>
-              )}
-            </>
-          }
-        >
-          {/* Hidden audio element — the small header bar + the Play buttons drive it (no native controls). */}
-          {rec.hasAudio && (
-            <audio
-              ref={audioRef}
-              onTimeUpdate={onTimeUpdate}
-              onPlay={() => setAudioPaused(false)}
-              onPause={() => setAudioPaused(true)}
-              className="hidden"
-            />
-          )}
-          {matchTimes.length > 1 && (
-            <div className="sticky top-0 z-10 mb-2 flex items-center gap-2 rounded-md border bg-blue-50 px-3 py-1.5 text-xs text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
-              <span className="font-medium">
-                {t("workspace:matchNav", { k: Math.max(1, matchIdx + 1), n: matchTimes.length })}
-              </span>
-              <div className="ml-auto flex gap-1">
-                <button
-                  type="button"
-                  onClick={() => goToMatch(matchIdx <= 0 ? matchTimes.length - 1 : matchIdx - 1)}
-                  aria-label={t("workspace:prevMatch")}
-                  className="rounded border px-2 py-0.5 hover:bg-blue-100 dark:border-blue-800 dark:hover:bg-blue-900"
-                >
-                  ◀
-                </button>
-                <button
-                  type="button"
-                  onClick={() => goToMatch(matchIdx < 0 || matchIdx >= matchTimes.length - 1 ? 0 : matchIdx + 1)}
-                  aria-label={t("workspace:nextMatch")}
-                  className="rounded border px-2 py-0.5 hover:bg-blue-100 dark:border-blue-800 dark:hover:bg-blue-900"
-                >
-                  ▶
-                </button>
-              </div>
-            </div>
-          )}
-          <ul className="space-y-2">
-            {rec.current.segments.map((s, i) => (
-              <SegmentRow
-                key={s.id}
-                seg={s}
-                speakerName={multiSpeakerLabels.has(s.speaker) ? t("workspace:multipleSpeakers") : s.speakerDisplay}
-                active={i === activeIdx}
-                selected={selectedSegIds.has(s.id)}
-                selectMode={selectMode}
-                showOriginal={showOriginal}
-                onClick={() => clickSegment(s.id)}
-              />
-            ))}
-          </ul>
-        </CollapsibleSection>
-      ) : (
-        <p className="text-sm text-gray-500 dark:text-gray-400">{t("workspace:noTranscriptYet")}</p>
-      )}
+      <DetailTabs tabs={detailTabs} active={tab} onSelect={selectTab} />
 
       {editingSeg && (
         <SegmentEditModal
@@ -1100,15 +1109,6 @@ export default function RecordingDetail() {
           count={attachments.length}
           onCancel={() => setEmailMinutesOpen(false)}
           onChoose={sendMinutesEmail}
-        />
-      )}
-
-      {attachmentsOpen && (
-        <AttachmentsModal
-          recordingId={id}
-          attachments={attachments}
-          onClose={() => setAttachmentsOpen(false)}
-          onChange={refreshAttachments}
         />
       )}
 
