@@ -29,8 +29,8 @@ manual reassignment. A **People** screen manages enrolled voiceprints — rename
 merge duplicates, and erase one or all (GDPR) of the stored biometric voiceprints.
 
 It can **summarise** recordings and generate a full set of **professional meeting minutes** (headings, lists,
-tables — no emojis) that you can edit in a rich editor, re-create, and **email to yourself** (with or without
-the recording's attachments). It **automatically extracts action items** (with actor and deadline) as part of
+tables — no emojis) that you can edit in a rich editor, re-create, **email to yourself** (with or without
+the recording's attachments), or — once you've connected Google — **save as a draft in your own Gmail**. It **automatically extracts action items** (with actor and deadline) as part of
 the pipeline into an editable table, and **tracks them across all your meetings** in a dedicated **Actions** view — filter by person, mark
 items done (with a completion date), and jump from an action back to the transcript it came from. It can
 **translate** a transcript (segments, summary, and actions) into your chosen language, and let you
@@ -79,6 +79,21 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.66.0",
+    date: "2026-07-02",
+    pr: 153,
+    headline: "Save meeting minutes as a Gmail draft",
+    summary:
+      "If you've connected Google and opted in to **Gmail** (Preferences → Google), a recording's **Minutes** " +
+      "tab now has a **Save as Gmail draft** button. It composes the minutes into a draft in your own Gmail " +
+      "(addressed to you) and opens your Gmail drafts so you can review, tweak recipients, and send. Nothing " +
+      "is ever sent on your behalf — it only creates a draft. The button appears only when you've granted " +
+      "Gmail access; if your Google connection has expired, Diariz asks you to reconnect.",
+    added: [
+      "Minutes tab: 'Save as Gmail draft' — creates a draft of the meeting minutes in your connected Gmail account.",
+    ],
+  },
   {
     version: "0.65.0",
     date: "2026-07-02",

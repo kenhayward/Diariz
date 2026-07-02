@@ -260,6 +260,12 @@ export const api = {
     await http.post(`/api/recordings/${id}/meeting-minutes/email`, { includeAttachments });
   },
 
+  /// Save the meeting minutes as a draft in the user's connected Gmail account. Returns the Gmail drafts URL.
+  async saveMinutesAsGmailDraft(id: string): Promise<string> {
+    const { data } = await http.post<{ draftUrl: string }>(`/api/recordings/${id}/meeting-minutes/gmail-draft`);
+    return data.draftUrl;
+  },
+
   // ---- Attachments (supporting documents) ----
   async listAttachments(id: string): Promise<Attachment[]> {
     const { data } = await http.get<Attachment[]>(`/api/recordings/${id}/attachments`);
