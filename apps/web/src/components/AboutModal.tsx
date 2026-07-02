@@ -85,6 +85,11 @@ export default function AboutModal({ onClose }: { onClose: () => void }) {
             Summaries and chat use an OpenAI-compatible LLM endpoint you configure; that provider's terms
             and privacy policy apply to any text you send to it.
           </p>
+          <p className="mt-2">
+            Optional <strong>Sign in with Google</strong> uses Google's OAuth 2.0 sign-in (via the
+            Apache-2.0 <code>Google.Apis.Auth</code> library); Google's terms and privacy policy apply, and
+            it is available only when the operator has configured it.
+          </p>
         </div>
 
         <div className="mt-4 flex items-center justify-between border-t pt-3 dark:border-gray-700">

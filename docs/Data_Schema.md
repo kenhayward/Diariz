@@ -52,6 +52,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddChatToolsSupport` | `UserSettings.ChatToolsEnabled`/`ChatToolOverridesJson`; enables `pg_trgm` + a GIN trigram index `IX_Segments_Text_Trgm` on `coalesce("Revised","Original")` (chat tool fuzzy search) |
 | `AddReasoningToUserSettings` | `UserSettings.ReasoningEnabled` (bool null) + `UserSettings.ReasoningEffort` (text null) — per-user `reasoning_effort` on LLM requests |
 | `AddMeetingMinutes` | `MeetingMinutes` (1:1 with `Transcription`, cascade, unique on `TranscriptionId`) — LLM-generated emailable meeting minutes (Markdown) |
+| `AddGoogleIdentity` | `ApplicationUser.GoogleSubject` (varchar(256) null, **unique index**) + `ApplicationUser.PictureUrl` (varchar(1024) null) — Google sign-in linkage + profile picture |
 
 ### Entity-relationship overview
 
@@ -319,6 +320,8 @@ Standard ASP.NET Identity schema with **Guid** keys: `AspNetUsers`, `AspNetRoles
 | `Status` | int | `UserStatus`: 0 Requested, 1 Invited, 2 Active |
 | `IsEnabled` | bool | admin enable/disable (disabled users can't sign in) |
 | `QuotaBytes` | bigint | audio storage quota; default = platform starter |
+| `GoogleSubject` | varchar(256) null | linked Google account `sub` (**unique index**; nullable → many password-only NULLs allowed) |
+| `PictureUrl` | varchar(1024) null | Google profile picture URL (avatar; falls back to initials) |
 
 Roles: `Standard`, `Administrator`, `PlatformAdministrator` (rows in `AspNetRoles`).
 

@@ -257,6 +257,16 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
 - **Access lifecycle:** a person **requests access** (`UserStatus.Requested`) → an admin **grants** it
   (issues a one-time setup link; emailed via SMTP/MailKit, or shown to the admin as a fallback when SMTP is
   unconfigured) → the user **sets up** their name + password (`Active`). Admins can also add users directly.
+- **Google sign-in (optional):** a server-side **OAuth 2.0 authorization-code + PKCE** flow
+  (`AuthController` `google/start` → `google/callback`; `GoogleAuthService` validates the ID token via
+  `Google.Apis.Auth`; `GoogleSignInHandler` links/creates the account). Enabled only when `GoogleAuth:ClientId`
+  + `ClientSecret` are configured (`GET /api/auth/providers` tells the SPA whether to show the button; the API
+  returns the token to the SPA in the callback URL **fragment**). Requests only `openid email profile` (no
+  Gmail/Calendar yet); stores the Google `sub` on `ApplicationUser.GoogleSubject` (unique) + the profile
+  picture on `PictureUrl` (a `picture` JWT claim → account-menu avatar). New Google users land as `Requested`
+  (same admin-approval gate; an admin granting a Google account activates it directly, no setup link); a
+  verified Google email matching an existing account **auto-links**. Web-only for now — the Electron shell
+  hides the button (Google blocks OAuth in embedded webviews). Later phases add Gmail/Calendar scopes.
 - **Isolation:** every recording/section/chat/voiceprint query filters by `UserId` from the JWT
   `NameIdentifier` claim. **Storage quotas** (audio bytes) are per-user: the Platform Administrator sets the
   starter + maximum (`PlatformSettings`), any admin can raise an individual user up to the max.

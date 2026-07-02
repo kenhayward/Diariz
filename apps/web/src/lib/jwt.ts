@@ -29,6 +29,13 @@ export function fullNameFromToken(token: string | null | undefined): string | nu
   return typeof claim === "string" && claim.trim() ? claim : null;
 }
 
+/// The profile picture URL (the `picture` claim), present when the user linked a Google account. Used for
+/// the account-menu avatar, falling back to initials when absent.
+export function pictureFromToken(token: string | null | undefined): string | null {
+  const claim = decodeJwtPayload(token)?.["picture"];
+  return typeof claim === "string" && claim.trim() ? claim : null;
+}
+
 // The role claim may serialize as "role" (compact) or the .NET schema URI, and as a string or array.
 const ROLE_KEYS = ["role", "roles", "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"];
 

@@ -45,6 +45,19 @@ public class TokenServiceTests
     }
 
     [Fact]
+    public void CreateAccessToken_IncludesPictureClaim_OnlyWhenSet()
+    {
+        var withPic = new ApplicationUser { Id = Guid.NewGuid(), Email = "a@b.test", PictureUrl = "https://pic/1.png" };
+        var noPic = new ApplicationUser { Id = Guid.NewGuid(), Email = "a@b.test" };
+
+        var jwtWith = new JwtSecurityTokenHandler().ReadJwtToken(Create().CreateAccessToken(withPic, []).token);
+        var jwtNo = new JwtSecurityTokenHandler().ReadJwtToken(Create().CreateAccessToken(noPic, []).token);
+
+        Assert.Equal("https://pic/1.png", jwtWith.Claims.First(c => c.Type == "picture").Value);
+        Assert.DoesNotContain(jwtNo.Claims, c => c.Type == "picture");
+    }
+
+    [Fact]
     public void CreateAccessToken_ExpiryHonoursConfiguredMinutes()
     {
         var before = DateTimeOffset.UtcNow;

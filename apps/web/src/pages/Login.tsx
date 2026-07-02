@@ -1,19 +1,45 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth";
-import { apiErrorMessage } from "../lib/api";
+import { api, apiErrorMessage } from "../lib/api";
+import { isElectron } from "../lib/audioSource";
 import AuthShell from "../components/AuthShell";
+import GoogleSignInButton from "../components/GoogleSignInButton";
 
 export default function Login() {
   const { t } = useTranslation("auth");
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Google sign-in is offered only when the server has it configured — and not inside the Electron shell
+  // (Google blocks OAuth in embedded webviews), where password login is used instead.
+  const [googleEnabled, setGoogleEnabled] = useState(false);
+  useEffect(() => {
+    let active = true;
+    api.getAuthProviders().then((p) => active && setGoogleEnabled(p.google)).catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // The Google flow redirects failures back here as ?googleError=<reason>.
+  const googleError = params.get("googleError");
+  const googleErrorMsg = googleError
+    ? t(
+        googleError === "pending"
+          ? "googleAwaitingApproval"
+          : googleError === "disabled"
+            ? "googleAccountDisabled"
+            : "googleSignInFailed",
+      )
+    : null;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -61,7 +87,9 @@ export default function Login() {
           className="w-full rounded border px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           required
         />
-        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+        {(error || googleErrorMsg) && (
+          <p className="text-sm text-red-600 dark:text-red-400">{error ?? googleErrorMsg}</p>
+        )}
         <button
           type="submit"
           disabled={busy}
@@ -69,6 +97,16 @@ export default function Login() {
         >
           {busy ? t("signingIn") : t("signIn")}
         </button>
+        {googleEnabled && !isElectron && (
+          <>
+            <div className="flex items-center gap-2 text-xs text-gray-400">
+              <span className="h-px flex-grow bg-gray-200 dark:bg-gray-700" />
+              {t("or")}
+              <span className="h-px flex-grow bg-gray-200 dark:bg-gray-700" />
+            </div>
+            <GoogleSignInButton label={t("signInWithGoogle")} />
+          </>
+        )}
         <p className="text-center text-sm text-gray-500 dark:text-gray-400">
           {t("needAccount")}{" "}
           <Link to="/request-access" className="text-blue-600 hover:underline dark:text-blue-400">

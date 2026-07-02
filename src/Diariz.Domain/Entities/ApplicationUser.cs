@@ -20,6 +20,14 @@ public class ApplicationUser : IdentityUser<Guid>
     /// platform starter amount; any administrator may raise it up to the platform maximum.</summary>
     public long QuotaBytes { get; set; } = PlatformSettings.DefaultStarterQuotaBytes;
 
+    /// <summary>Google account subject (the stable <c>sub</c> claim) when the user has linked/sign-in with
+    /// Google. Null for password-only accounts. Unique — one Google identity maps to at most one user.</summary>
+    public string? GoogleSubject { get; set; }
+
+    /// <summary>Profile picture URL from the linked Google account (refreshed on each Google sign-in).
+    /// The account-menu avatar renders this when present, falling back to initials.</summary>
+    public string? PictureUrl { get; set; }
+
     public ICollection<Recording> Recordings { get; set; } = new List<Recording>();
     public UserSettings? Settings { get; set; }
     public ICollection<ChatSession> ChatSessions { get; set; } = new List<ChatSession>();

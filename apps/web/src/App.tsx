@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import { useAuth } from "./auth";
 import { useLanguage } from "./language";
 import Login from "./pages/Login";
+import GoogleCallback from "./pages/GoogleCallback";
 import RequestAccess from "./pages/RequestAccess";
 import Setup from "./pages/Setup";
 import ReleaseNotes from "./pages/ReleaseNotes";
@@ -28,6 +29,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/auth/google/callback" element={<GoogleCallback />} />
       <Route path="/request-access" element={<RequestAccess />} />
       <Route path="/setup" element={<Setup />} />
       <Route path="/release-notes" element={<ReleaseNotes />} />

@@ -57,7 +57,7 @@ public class AdminUsersController : ControllerBase
         var dtos = new List<AdminUserDto>(users.Count);
         foreach (var u in users)
             dtos.Add(new AdminUserDto(u.Id, u.Email ?? "", u.FullName, await AccountTypeOf(u), u.Status, u.IsEnabled,
-                u.QuotaBytes, usage.TryGetValue(u.Id, out var used) ? used : 0));
+                u.QuotaBytes, usage.TryGetValue(u.Id, out var used) ? used : 0, u.GoogleSubject is not null));
         return dtos;
     }
 
@@ -109,6 +109,16 @@ public class AdminUsersController : ControllerBase
         if (user is null) return NotFound();
         if (user.Status != UserStatus.Requested)
             return BadRequest("Only a pending access request can be granted.");
+
+        // A Google-linked account already has a credential + a Google-verified email, so there is nothing to
+        // set up — activate it directly (no setup link/email). Password requests still go via Invited→setup.
+        if (user.GoogleSubject is not null)
+        {
+            user.Status = UserStatus.Active;
+            user.EmailConfirmed = true;
+            await _users.UpdateAsync(user);
+            return new GrantResultDto(Emailed: false, SetupUrl: null);
+        }
 
         user.Status = UserStatus.Invited;
         await _users.UpdateAsync(user);

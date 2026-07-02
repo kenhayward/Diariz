@@ -1,10 +1,16 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Services;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Controllers;
 
@@ -15,12 +21,25 @@ public class AuthController : ControllerBase
     private readonly UserManager<ApplicationUser> _users;
     private readonly ITokenService _tokens;
     private readonly IPlatformSettingsService _platform;
+    private readonly IGoogleAuthService _google;
+    private readonly IGoogleSignInHandler _googleSignIn;
+    private readonly GoogleAuthOptions _googleOpts;
+    private readonly AppPublicOptions _appOpts;
+    private readonly ITimeLimitedDataProtector _stateProtector;
 
-    public AuthController(UserManager<ApplicationUser> users, ITokenService tokens, IPlatformSettingsService platform)
+    public AuthController(
+        UserManager<ApplicationUser> users, ITokenService tokens, IPlatformSettingsService platform,
+        IGoogleAuthService google, IGoogleSignInHandler googleSignIn, IOptions<GoogleAuthOptions> googleOpts,
+        IOptions<AppPublicOptions> appOpts, IDataProtectionProvider dataProtection)
     {
         _users = users;
         _tokens = tokens;
         _platform = platform;
+        _google = google;
+        _googleSignIn = googleSignIn;
+        _googleOpts = googleOpts.Value;
+        _appOpts = appOpts.Value;
+        _stateProtector = dataProtection.CreateProtector("Diariz.GoogleOAuthState").ToTimeLimitedDataProtector();
     }
 
     [HttpPost("login")]
@@ -125,4 +144,92 @@ public class AuthController : ControllerBase
         var (token, expires) = _tokens.CreateAccessToken(user, await _users.GetRolesAsync(user));
         return Ok(new AuthResponse(token, expires));
     }
+
+    // ---- Google sign-in (server-side authorization-code + PKCE flow) ----
+
+    private const string StateCookie = "diariz_g_oauth";
+    private record OAuthState(string State, string Verifier);
+
+    /// <summary>Public: which external sign-in providers are enabled (so the login page shows the button).</summary>
+    [HttpGet("providers")]
+    public IActionResult Providers() => Ok(new { google = _google.Enabled });
+
+    /// <summary>Public: begin Google sign-in. Stashes PKCE state in a short-lived signed cookie and
+    /// redirects to Google's consent screen.</summary>
+    [HttpGet("google/start")]
+    public IActionResult GoogleStart()
+    {
+        if (!_google.Enabled) return NotFound();
+
+        var verifier = OAuthPkce.NewCodeVerifier();
+        var state = OAuthPkce.NewState();
+        var protectedState = _stateProtector.Protect(
+            JsonSerializer.Serialize(new OAuthState(state, verifier)), TimeSpan.FromMinutes(10));
+        Response.Cookies.Append(StateCookie, protectedState, StateCookieOptions());
+
+        return Redirect(_google.BuildAuthorizationUrl(CallbackUri(), state, OAuthPkce.Challenge(verifier)));
+    }
+
+    /// <summary>Public: Google redirects here with the authorization code. Verifies state, exchanges the
+    /// code, resolves the account, and bounces to the SPA with a token (or an error) — never returns JSON.</summary>
+    [HttpGet("google/callback")]
+    public async Task<IActionResult> GoogleCallback(
+        [FromQuery] string? code, [FromQuery] string? state, [FromQuery] string? error)
+    {
+        if (!_google.Enabled) return NotFound();
+
+        // The state cookie is one-time: always clear it, whatever the outcome.
+        var cookie = Request.Cookies[StateCookie];
+        Response.Cookies.Delete(StateCookie, StateCookieOptions());
+
+        if (!string.IsNullOrEmpty(error) || string.IsNullOrEmpty(code)
+            || string.IsNullOrEmpty(state) || string.IsNullOrEmpty(cookie))
+            return RedirectToLogin("failed");
+
+        OAuthState? saved;
+        try { saved = JsonSerializer.Deserialize<OAuthState>(_stateProtector.Unprotect(cookie)); }
+        catch { return RedirectToLogin("failed"); }
+        if (saved is null || !FixedTimeEquals(saved.State, state))
+            return RedirectToLogin("failed"); // CSRF / tampered / expired
+
+        GoogleUserInfo info;
+        try { info = await _google.ExchangeCodeAsync(code, saved.Verifier, CallbackUri()); }
+        catch { return RedirectToLogin("failed"); }
+
+        var result = await _googleSignIn.SignInAsync(info);
+        return result.Outcome switch
+        {
+            GoogleSignInOutcome.SignedIn => Redirect(await SuccessRedirectAsync(result.User!)),
+            GoogleSignInOutcome.AwaitingApproval => RedirectToLogin("pending"),
+            GoogleSignInOutcome.Disabled => RedirectToLogin("disabled"),
+            _ => RedirectToLogin("failed"),
+        };
+    }
+
+    private async Task<string> SuccessRedirectAsync(ApplicationUser user)
+    {
+        var (token, _) = _tokens.CreateAccessToken(user, await _users.GetRolesAsync(user));
+        // Token in the fragment (not the query) so it never lands in server logs or a Referer header.
+        return $"{WebBase()}/auth/google/callback#token={Uri.EscapeDataString(token)}";
+    }
+
+    private CookieOptions StateCookieOptions() => new()
+    {
+        HttpOnly = true,
+        Secure = Request.IsHttps,           // dev is plain http://localhost; prod is https
+        SameSite = SameSiteMode.Lax,        // Lax so the top-level GET redirect from Google carries it
+        Path = "/api/auth/google",
+        MaxAge = TimeSpan.FromMinutes(10),
+    };
+
+    private string WebBase() =>
+        !string.IsNullOrWhiteSpace(_appOpts.PublicUrl) ? _appOpts.PublicUrl.TrimEnd('/') : $"{Request.Scheme}://{Request.Host}";
+
+    private string CallbackUri() =>
+        !string.IsNullOrWhiteSpace(_googleOpts.RedirectUri) ? _googleOpts.RedirectUri : $"{WebBase()}/api/auth/google/callback";
+
+    private IActionResult RedirectToLogin(string reason) => Redirect($"{WebBase()}/login?googleError={reason}");
+
+    private static bool FixedTimeEquals(string a, string b) =>
+        CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(a), Encoding.UTF8.GetBytes(b));
 }

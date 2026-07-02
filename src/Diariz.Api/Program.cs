@@ -18,6 +18,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // ---- Options ----
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.Section));
+builder.Services.Configure<GoogleAuthOptions>(builder.Configuration.GetSection(GoogleAuthOptions.Section));
 builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection(StorageOptions.Section));
 builder.Services.Configure<JobQueueOptions>(builder.Configuration.GetSection(JobQueueOptions.Section));
 builder.Services.Configure<WorkerOptions>(builder.Configuration.GetSection(WorkerOptions.Section));
@@ -193,6 +194,10 @@ builder.Services.AddScoped<IChatTool, AddAsAttachmentTool>();
 builder.Services.AddScoped<IChatToolRegistry, ChatToolRegistry>();
 builder.Services.AddScoped<IChatToolSettingsResolver, ChatToolSettingsResolver>();
 builder.Services.AddScoped<IChatToolOrchestrator, ChatToolOrchestrator>();
+
+// ---- Google sign-in (server-side authorization-code flow; inert unless GoogleAuth is configured) ----
+builder.Services.AddHttpClient<IGoogleAuthService, GoogleAuthService>();
+builder.Services.AddScoped<IGoogleSignInHandler, GoogleSignInHandler>();
 
 // ---- App services ----
 builder.Services.AddScoped<ITokenService, TokenService>();

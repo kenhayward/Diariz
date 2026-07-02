@@ -22,6 +22,7 @@ Apache License 2.0 components (their NOTICE terms are acknowledged here):
   - boto3, requests
   - Testcontainers (.NET)
   - xUnit.net
+  - Google.Apis.Auth (Google API .NET client — used to validate Google sign-in ID tokens)
 
 MIT / BSD / other permissive components include (non-exhaustive):
   - React, Vite, Tailwind CSS, axios, @microsoft/signalr, @tanstack/react-query (MIT)
