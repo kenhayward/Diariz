@@ -49,7 +49,9 @@ export function buildToolsOutput(
   if (!masterEnabled) return labels.disabled;
   const on = tools.filter((t) => t.enabled);
   if (on.length === 0) return labels.none;
-  const esc = (s: string) => s.replace(/\|/g, "\\|");
+  // Escape the backslash FIRST (so we don't double-process the escapes we add), then pipes, then
+  // collapse newlines to spaces so a value can't break out of its Markdown table row.
+  const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
   const rows = on.map((t) => `| ${esc(t.title)} | ${esc(t.description)} |`).join("\n");
   return (
     `**${labels.heading}**\n\n` +
