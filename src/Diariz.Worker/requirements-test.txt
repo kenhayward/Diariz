@@ -3,8 +3,8 @@
 # tests/conftest.py) because the segment-shaping/orchestration logic under test
 # does not need the models. The lightweight runtime deps below are installed for
 # real so module imports (callback/worker/storage/config) are exercised as shipped.
-pytest==8.3.4
-requests==2.32.3
+pytest==9.0.3
+requests==2.33.0
 redis==8.0.1
 boto3==1.35.99
 # numpy is a real (non-GPU) dependency of pipeline._speaker_embeddings — installed so the
