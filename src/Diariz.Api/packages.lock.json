@@ -13,11 +13,11 @@
       },
       "DocumentFormat.OpenXml": {
         "type": "Direct",
-        "requested": "[3.1.0, )",
-        "resolved": "3.1.0",
-        "contentHash": "J+GtIzVJpj6Wbhc2sYqmXEqAi2LYgWkU5LdVE/vCtNRr8WHDLHRL0lTbSlvTeLzSI5Ws6AC6TPuJR68/3wsa4A==",
+        "requested": "[3.5.1, )",
+        "resolved": "3.5.1",
+        "contentHash": "zxdOf5VVCe/uNklbRhj8dVBzQGj3DoqkUuqOp9cAZVuN8mNYDjof1lvSQA2OQNr8Ptc9d7pbA7Azq/ReaI3FpA==",
         "dependencies": {
-          "DocumentFormat.OpenXml.Framework": "3.1.0"
+          "DocumentFormat.OpenXml.Framework": "3.5.1"
         }
       },
       "MailKit": {
@@ -156,10 +156,10 @@
       },
       "DocumentFormat.OpenXml.Framework": {
         "type": "Transitive",
-        "resolved": "3.1.0",
-        "contentHash": "yz78IAteV+/jdpmQRlBIfhsmYfDYqgPSyPUsyT7KnfDlTTvqY6Zf5inMjTSwe2bnN8wv9dLD0C2sAkActXIy/A==",
+        "resolved": "3.5.1",
+        "contentHash": "U5txtc3ORno73xQx9Lf2gWzfaSZnZwKHfLkTAslhlew9lxe5XbUiCt0dY1fHeAf8yRqszUAe5i/+xLC9R/Xfsw==",
         "dependencies": {
-          "System.IO.Packaging": "8.0.0"
+          "System.IO.Packaging": "10.0.2"
         }
       },
       "Humanizer.Core": {
