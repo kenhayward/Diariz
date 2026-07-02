@@ -36,6 +36,16 @@ public class AttachmentExtractorTests
         Assert.Equal("Hello, world.".Length, result.Chars);
     }
 
+    [Theory]
+    [InlineData(@"..\..\notes.txt")]
+    [InlineData("../../notes.txt")]
+    public void Extract_StripsSmuggledPath_FromName(string smuggled)
+    {
+        // Must strip on every platform — Path.GetFileName only handles '\' on Windows.
+        var result = Extractor.Extract(smuggled, "text/plain", Encoding.UTF8.GetBytes("x"));
+        Assert.Equal("notes.txt", result.Name);
+    }
+
     [Fact]
     public void Extract_StripsUtf8Bom()
     {

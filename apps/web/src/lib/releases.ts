@@ -93,6 +93,8 @@ export const RELEASES: Release[] = [
     ],
     fixed: [
       "The About box now shows the correct licence (AGPL-3.0) instead of Apache-2.0.",
+      "Updated the transitive Microsoft.OpenApi dependency to 2.7.5 to clear a high-severity advisory (GHSA-v5pm-xwqc-g5wc).",
+      "Attachment-text extraction now strips a smuggled directory path from the file name on every platform (it previously relied on the OS-dependent Path.GetFileName).",
     ],
   },
   {
