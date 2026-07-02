@@ -58,7 +58,8 @@ recordings, transcripts, and chats. Users can also **sign in with Google** (when
 configured it) — Diariz reads their name, email, and profile picture (shown in the account menu), still
 subject to admin approval for new sign-ups. A Google-linked user can opt in (Preferences → Google) to let
 Diariz **read their Google Calendar** (read-only) — so a recording's Overview shows the **meeting it
-overlaps** — a revocable grant they can disconnect any time. Each user has a **storage quota** (audio): the Platform
+overlaps** and the **Calendar tab overlays their meetings** (with a merged day list of meetings and
+recordings) — a revocable grant they can disconnect any time. Each user has a **storage quota** (audio): the Platform
 Administrator sets the starter and maximum, any administrator can raise an individual user, and your
 usage shows in the account menu. The Platform Administrator can also **back up and restore the whole
 platform** (database + stored files) as a single transferable archive from Settings → Maintenance.
@@ -81,6 +82,23 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.68.0",
+    date: "2026-07-02",
+    pr: 156,
+    headline: "Google Calendar events in the Calendar tab",
+    summary:
+      "If you've connected **Google Calendar** (Preferences → Google), the recordings **Calendar** tab now " +
+      "overlays your meetings. Days with recordings stay green; days that only have calendar events show in a " +
+      "**darker green**, and a green day that also has events carries a small dot. **Every day is now " +
+      "clickable**, and the list below the grid shows that day's **meetings and recordings together, in time " +
+      "order** — each meeting links out to Google Calendar. Events load a month at a time (Calendar is read " +
+      "**once per month** you view, with a Refresh link), so it stays light on API calls. Read-only — nothing " +
+      "is written to your calendar. Groundwork for scheduling recordings from a meeting later.",
+    added: [
+      "Calendar tab overlays Google Calendar events: event-only days in a darker green, an events dot on recording days, and a merged day list (meetings + recordings) linking to each event.",
+    ],
+  },
   {
     version: "0.67.1",
     date: "2026-07-02",

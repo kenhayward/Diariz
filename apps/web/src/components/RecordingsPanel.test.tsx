@@ -34,6 +34,8 @@ vi.mock("../lib/api", () => ({
     emailTranscript: vi.fn(),
     listAllActions: vi.fn().mockResolvedValue([]),
     completeActions: vi.fn().mockResolvedValue(undefined),
+    getProfile: vi.fn().mockResolvedValue(null), // Calendar overlay disabled unless googleCalendar is set
+    getCalendarEvents: vi.fn().mockResolvedValue([]),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));

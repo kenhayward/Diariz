@@ -285,6 +285,13 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   padded ±30 min), and returns the **best time-overlapping** event (`GoogleCalendarClient.PickBest`) as
   `{ match }` (or `null`). Read-only (`calendar.readonly`); 400s without the grant. The Overview shows the
   matched meeting with a link to the Google Calendar event.
+- **Calendar-tab event overlay (Phase 2 feature):** with the Calendar grant, the recordings **Calendar tab**
+  overlays the month's meetings. The web app fetches **`GET /api/calendar/events?timeMin&timeMax`**
+  (`CalendarController`, range-capped ≤62 days, reusing `IGoogleCalendarClient.ListEventsAsync`; empty list
+  when not connected) **once per viewed month** (React-Query keyed by month, short `staleTime`, Refresh link).
+  Pure client helpers (`eventDayKeys`/`dayItems` in `lib/calendar.ts`) colour the grid (event-only days a
+  darker green, an events dot on recording days) and build a **merged, time-ordered day list** of meetings +
+  recordings. Read-only; no schema change.
 - **Isolation:** every recording/section/chat/voiceprint query filters by `UserId` from the JWT
   `NameIdentifier` claim. **Storage quotas** (audio bytes) are per-user: the Platform Administrator sets the
   starter + maximum (`PlatformSettings`), any admin can raise an individual user up to the max.
