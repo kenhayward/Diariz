@@ -111,9 +111,9 @@ export const api = {
     }
   },
 
-  /// Begin the incremental Google data-access consent (Calendar read / Gmail drafts) for the signed-in user.
+  /// Begin the incremental Google data-access consent (Calendar read) for the signed-in user.
   /// Returns Google's consent URL; the caller navigates the whole page to it.
-  async connectGoogle(scopes: { calendar: boolean; gmail: boolean }): Promise<string> {
+  async connectGoogle(scopes: { calendar: boolean }): Promise<string> {
     const { data } = await http.post<{ authorizationUrl: string }>("/api/auth/google/connect", scopes);
     return data.authorizationUrl;
   },
@@ -259,12 +259,6 @@ export const api = {
   /// Email just the meeting minutes to the signed-in user, optionally attaching the recording's files.
   async emailMeetingMinutes(id: string, includeAttachments: boolean): Promise<void> {
     await http.post(`/api/recordings/${id}/meeting-minutes/email`, { includeAttachments });
-  },
-
-  /// Save the meeting minutes as a draft in the user's connected Gmail account. Returns the Gmail drafts URL.
-  async saveMinutesAsGmailDraft(id: string): Promise<string> {
-    const { data } = await http.post<{ draftUrl: string }>(`/api/recordings/${id}/meeting-minutes/gmail-draft`);
-    return data.draftUrl;
   },
 
   /// The Google Calendar meeting this recording most likely overlaps (by time), or null if none.

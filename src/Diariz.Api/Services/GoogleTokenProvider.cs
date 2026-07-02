@@ -4,7 +4,7 @@ using Microsoft.Extensions.Caching.Memory;
 
 namespace Diariz.Api.Services;
 
-/// <summary>Hands out a valid Google access token for a user's stored refresh token (Calendar/Gmail calls).
+/// <summary>Hands out a valid Google access token for a user's stored refresh token (Calendar calls).
 /// Access tokens are short-lived and kept only in an in-memory cache — never persisted or returned to the
 /// browser. A revoked/expired refresh token is cleared so the UI can prompt the user to reconnect.</summary>
 public interface IGoogleTokenProvider
@@ -55,7 +55,6 @@ public class GoogleTokenProvider : IGoogleTokenProvider
             {
                 settings.GoogleRefreshTokenEncrypted = null;
                 settings.GoogleCalendarGranted = false;
-                settings.GoogleGmailGranted = false;
                 await _db.SaveChangesAsync(ct);
             }
             return null;

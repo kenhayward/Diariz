@@ -240,7 +240,7 @@ public class AuthController : ControllerBase
             return saved.Mode == "connect" ? RedirectToApp("failed") : RedirectToLogin("failed_exchange");
         }
 
-        // Data-access consent (Calendar/Gmail): store the refresh token for the connecting user.
+        // Data-access consent (Calendar): store the refresh token for the connecting user.
         if (saved.Mode == "connect")
             return await CompleteConnectAsync(saved, tokens);
 
@@ -295,7 +295,6 @@ public class AuthController : ControllerBase
             s.GoogleRefreshTokenEncrypted = _tokenProtector.Protect(tokens.RefreshToken);
         var scope = tokens.Scope ?? "";
         s.GoogleCalendarGranted = scope.Contains(GoogleAuthService.CalendarReadScope);
-        s.GoogleGmailGranted = scope.Contains(GoogleAuthService.GmailComposeScope);
         await _db.SaveChangesAsync();
 
         return RedirectToApp("connected", success: true);
@@ -311,11 +310,10 @@ public class AuthController : ControllerBase
         var user = await _users.FindByIdAsync(CurrentUserId.ToString());
         if (user is null) return Unauthorized();
         if (user.GoogleSubject is null)
-            return BadRequest("Sign in with Google first to connect Calendar or Gmail.");
+            return BadRequest("Sign in with Google first to connect Calendar.");
 
         var scopes = new List<string> { "openid", "email" };
         if (req.Calendar) scopes.Add(GoogleAuthService.CalendarReadScope);
-        if (req.Gmail) scopes.Add(GoogleAuthService.GmailComposeScope);
         if (scopes.Count == 2) return BadRequest("Choose at least one capability to connect.");
 
         var verifier = OAuthPkce.NewCodeVerifier();
@@ -342,7 +340,6 @@ public class AuthController : ControllerBase
             if (refresh is not null) await _google.RevokeAsync(refresh, ct);
             s.GoogleRefreshTokenEncrypted = null;
             s.GoogleCalendarGranted = false;
-            s.GoogleGmailGranted = false;
             await _db.SaveChangesAsync(ct);
         }
         return NoContent();

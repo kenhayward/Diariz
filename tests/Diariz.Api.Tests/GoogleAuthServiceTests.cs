@@ -59,14 +59,13 @@ public class GoogleAuthServiceTests
     [Fact]
     public void BuildAuthorizationUrl_Offline_RequestsRefreshTokenAndIncrementalConsent()
     {
-        var scope = $"openid email {GoogleAuthService.CalendarReadScope} {GoogleAuthService.GmailComposeScope}";
+        var scope = $"openid email {GoogleAuthService.CalendarReadScope}";
         var url = Build().BuildAuthorizationUrl("https://x/callback", "s", "c", scope, offline: true);
 
         Assert.Contains("access_type=offline", url);
         Assert.Contains("prompt=consent", url);
         Assert.Contains("include_granted_scopes=true", url);
         Assert.Contains("calendar.readonly", url);
-        Assert.Contains("gmail.compose", url);
     }
 
     [Fact]

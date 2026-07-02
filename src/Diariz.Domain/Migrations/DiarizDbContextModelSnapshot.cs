@@ -626,11 +626,6 @@ namespace Diariz.Domain.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
-                    b.Property<bool>("GoogleGmailGranted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
                     b.Property<string>("GoogleRefreshTokenEncrypted")
                         .HasColumnType("text");
 

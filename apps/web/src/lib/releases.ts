@@ -29,8 +29,8 @@ manual reassignment. A **People** screen manages enrolled voiceprints — rename
 merge duplicates, and erase one or all (GDPR) of the stored biometric voiceprints.
 
 It can **summarise** recordings and generate a full set of **professional meeting minutes** (headings, lists,
-tables — no emojis) that you can edit in a rich editor, re-create, **email to yourself** (with or without
-the recording's attachments), or — once you've connected Google — **save as a draft in your own Gmail**. It **automatically extracts action items** (with actor and deadline) as part of
+tables — no emojis) that you can edit in a rich editor, re-create, and **email to yourself** (with or without
+the recording's attachments). It **automatically extracts action items** (with actor and deadline) as part of
 the pipeline into an editable table, and **tracks them across all your meetings** in a dedicated **Actions** view — filter by person, mark
 items done (with a completion date), and jump from an action back to the transcript it came from. It can
 **translate** a transcript (segments, summary, and actions) into your chosen language, and let you
@@ -57,8 +57,8 @@ an administrator approves, and each user sets up their own account and keeps the
 recordings, transcripts, and chats. Users can also **sign in with Google** (when an administrator has
 configured it) — Diariz reads their name, email, and profile picture (shown in the account menu), still
 subject to admin approval for new sign-ups. A Google-linked user can opt in (Preferences → Google) to let
-Diariz **read their Google Calendar** — so a recording's Overview shows the **meeting it overlaps** — and
-**save meeting minutes as a Gmail draft**; both are revocable and can be disconnected any time. Each user has a **storage quota** (audio): the Platform
+Diariz **read their Google Calendar** (read-only) — so a recording's Overview shows the **meeting it
+overlaps** — a revocable grant they can disconnect any time. Each user has a **storage quota** (audio): the Platform
 Administrator sets the starter and maximum, any administrator can raise an individual user, and your
 usage shows in the account menu. The Platform Administrator can also **back up and restore the whole
 platform** (database + stored files) as a single transferable archive from Settings → Maintenance.
@@ -81,6 +81,22 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.67.1",
+    date: "2026-07-02",
+    pr: 155,
+    headline: "Drop the Gmail-draft feature (Calendar stays)",
+    summary:
+      "Removed the **Save meeting minutes as a Gmail draft** feature and the Gmail opt-in. Gmail scopes are " +
+      "Google **restricted** scopes, which require an annual third-party security assessment to verify — a cost " +
+      "not worth it for a draft shortcut when you can already **email the minutes to yourself** from the app. " +
+      "The **Google Calendar** connection is unaffected (it's a *sensitive* scope, which needs only standard " +
+      "verification) — you can still connect it to see the meeting a recording overlaps. If you'd connected " +
+      "Gmail, reconnect from Preferences to drop that scope from your grant.",
+    changed: [
+      "Removed 'Save as Gmail draft' on the Minutes tab and the Gmail opt-in in Preferences → Google (email-to-self replaces it).",
+    ],
+  },
   {
     version: "0.67.0",
     date: "2026-07-02",

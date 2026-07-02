@@ -54,6 +54,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddMeetingMinutes` | `MeetingMinutes` (1:1 with `Transcription`, cascade, unique on `TranscriptionId`) — LLM-generated emailable meeting minutes (Markdown) |
 | `AddGoogleIdentity` | `ApplicationUser.GoogleSubject` (varchar(256) null, **unique index**) + `ApplicationUser.PictureUrl` (varchar(1024) null) — Google sign-in linkage + profile picture |
 | `AddGoogleConnection` | `UserSettings.GoogleRefreshTokenEncrypted` (text null, encrypted) + `UserSettings.GoogleCalendarGranted`/`GoogleGmailGranted` (bool, default false) — opt-in Google Calendar/Gmail data access |
+| `RemoveGoogleGmailGranted` | drops `UserSettings.GoogleGmailGranted` — the Gmail-draft feature was removed (Gmail scopes are restricted; not worth the security assessment). Calendar access unchanged |
 
 ### Entity-relationship overview
 
@@ -297,9 +298,8 @@ Per-user preferences (1:1 with the user via a **shared primary key** = `UserId`)
 | `ReasoningEffort` | text null | reasoning level (`low`/`medium`/`high`) when enabled; null → server `Summarization:ReasoningEffort` |
 | `NativeLanguage` | text null | the user's native language (BCP-47); default target when translating transcripts |
 | `UiLanguage` | text null | the language the app UI is shown in (BCP-47); null → follow the browser |
-| `GoogleRefreshTokenEncrypted` | text null | Google OAuth refresh token (offline Calendar/Gmail access), **encrypted at rest** (Data Protection); never returned to clients |
+| `GoogleRefreshTokenEncrypted` | text null | Google OAuth refresh token (offline Calendar access), **encrypted at rest** (Data Protection); never returned to clients |
 | `GoogleCalendarGranted` | bool | user granted Google Calendar read access |
-| `GoogleGmailGranted` | bool | user granted Gmail draft-compose access |
 
 Each field falls back to the server `Summarization`/`Chat` defaults when null. The display name lives on
 `AspNetUsers.FullName` (editable via `PUT /api/user/profile`), not here.

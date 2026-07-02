@@ -197,7 +197,6 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.Property(s => s.SummaryApiBase).HasMaxLength(512);
             e.Property(s => s.SummaryModel).HasMaxLength(256);
             e.Property(s => s.GoogleCalendarGranted).HasDefaultValue(false);
-            e.Property(s => s.GoogleGmailGranted).HasDefaultValue(false);
             if (isNpgsql)
                 e.Property(s => s.ChatToolOverridesJson).HasColumnType("jsonb");
             e.HasOne(s => s.User)

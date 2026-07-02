@@ -51,8 +51,6 @@ public class GoogleAuthService : IGoogleAuthService
     public const string SignInScope = "openid email profile";
     /// <summary>Google Calendar read-only (sensitive scope).</summary>
     public const string CalendarReadScope = "https://www.googleapis.com/auth/calendar.readonly";
-    /// <summary>Gmail draft/compose (sensitive scope).</summary>
-    public const string GmailComposeScope = "https://www.googleapis.com/auth/gmail.compose";
 
     private readonly HttpClient _http;
     private readonly GoogleAuthOptions _opts;
