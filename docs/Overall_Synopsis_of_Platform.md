@@ -260,9 +260,10 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
 - **Google sign-in (optional):** a server-side **OAuth 2.0 authorization-code + PKCE** flow
   (`AuthController` `google/start` → `google/callback`; `GoogleAuthService` validates the ID token via
   `Google.Apis.Auth`; `GoogleSignInHandler` links/creates the account). Enabled only when `GoogleAuth:ClientId`
-  + `ClientSecret` are configured (`GET /api/auth/providers` tells the SPA whether to show the button; the API
-  hands the token to the SPA via a short-lived, same-origin **cookie** — proxy-safe, unlike a URL fragment).
-  Requests only `openid email profile` (no
+  + `ClientSecret` are configured (`GET /api/auth/providers` tells the SPA whether to show the button). On
+  success the API leaves the token in a one-time **HttpOnly** handoff cookie and the SPA swaps it for the
+  token via **`POST /api/auth/google/exchange`** (a JSON body — robust against reverse proxies that strip URL
+  fragments or force HttpOnly on cookies; the token never touches a URL). Requests only `openid email profile` (no
   Gmail/Calendar yet); stores the Google `sub` on `ApplicationUser.GoogleSubject` (unique) + the profile
   picture on `PictureUrl` (a `picture` JWT claim → account-menu avatar). New Google users land as `Requested`
   (same admin-approval gate; an admin granting a Google account activates it directly, no setup link); a

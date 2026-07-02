@@ -398,6 +398,32 @@ public class AuthControllerTests
         Assert.Equal($"{WebBase}/login?googleError=failed_state", redirect.Url);
     }
 
+    [Fact]
+    public void GoogleExchange_WithHandoffCookie_ReturnsTokenAndClearsCookie()
+    {
+        using var host = new IdentityTestHost();
+        var controller = BuildController(host, new FakeGoogleAuthService { Enabled = true });
+        var ctx = Http.Context();
+        ctx.HttpContext.Request.Headers["Cookie"] = "diariz_auth=my.jwt.token";
+        controller.ControllerContext = ctx;
+
+        var ok = Assert.IsType<OkObjectResult>(controller.GoogleExchange());
+
+        Assert.Equal("{ accessToken = my.jwt.token }", ok.Value!.ToString());
+        // The one-time handoff cookie is expired on the way out.
+        Assert.Contains("diariz_auth=", controller.Response.Headers.SetCookie.ToString());
+    }
+
+    [Fact]
+    public void GoogleExchange_WithoutCookie_ReturnsUnauthorized()
+    {
+        using var host = new IdentityTestHost();
+        var controller = BuildController(host, new FakeGoogleAuthService { Enabled = true });
+        controller.ControllerContext = Http.Context();
+
+        Assert.IsType<UnauthorizedResult>(controller.GoogleExchange());
+    }
+
     private static async Task<ApplicationUser> CreateGoogleUser(
         IdentityTestHost host, string email, string sub, UserStatus status)
     {
