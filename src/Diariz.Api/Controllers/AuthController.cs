@@ -1,9 +1,11 @@
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Services;
+using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
@@ -28,11 +30,14 @@ public class AuthController : ControllerBase
     private readonly AppPublicOptions _appOpts;
     private readonly ITimeLimitedDataProtector _stateProtector;
     private readonly ILogger<AuthController> _logger;
+    private readonly DiarizDbContext _db;
+    private readonly IGoogleTokenProtector _tokenProtector;
 
     public AuthController(
         UserManager<ApplicationUser> users, ITokenService tokens, IPlatformSettingsService platform,
         IGoogleAuthService google, IGoogleSignInHandler googleSignIn, IOptions<GoogleAuthOptions> googleOpts,
-        IOptions<AppPublicOptions> appOpts, IDataProtectionProvider dataProtection, ILogger<AuthController> logger)
+        IOptions<AppPublicOptions> appOpts, IDataProtectionProvider dataProtection, ILogger<AuthController> logger,
+        DiarizDbContext db, IGoogleTokenProtector tokenProtector)
     {
         _users = users;
         _tokens = tokens;
@@ -43,7 +48,11 @@ public class AuthController : ControllerBase
         _appOpts = appOpts.Value;
         _stateProtector = dataProtection.CreateProtector("Diariz.GoogleOAuthState").ToTimeLimitedDataProtector();
         _logger = logger;
+        _db = db;
+        _tokenProtector = tokenProtector;
     }
+
+    private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequest req)
@@ -151,7 +160,9 @@ public class AuthController : ControllerBase
     // ---- Google sign-in (server-side authorization-code + PKCE flow) ----
 
     private const string StateCookie = "diariz_g_oauth";
-    private record OAuthState(string State, string Verifier);
+    /// <summary>State stashed in the signed cookie during /start or /connect. <c>Mode</c> = "signin" | "connect";
+    /// <c>UserId</c> identifies the connecting user (set server-side during the authorized /connect).</summary>
+    private record OAuthState(string State, string Verifier, string Mode = "signin", string? UserId = null);
 
     /// <summary>Public: which external sign-in providers are enabled (so the login page shows the button).</summary>
     [HttpGet("providers")]
@@ -170,7 +181,8 @@ public class AuthController : ControllerBase
             JsonSerializer.Serialize(new OAuthState(state, verifier)), TimeSpan.FromMinutes(10));
         Response.Cookies.Append(StateCookie, protectedState, StateCookieOptions());
 
-        return Redirect(_google.BuildAuthorizationUrl(CallbackUri(), state, OAuthPkce.Challenge(verifier)));
+        return Redirect(_google.BuildAuthorizationUrl(
+            CallbackUri(), state, OAuthPkce.Challenge(verifier), GoogleAuthService.SignInScope, offline: false));
     }
 
     /// <summary>Public: Google redirects here with the authorization code. Verifies state, exchanges the
@@ -218,13 +230,26 @@ public class AuthController : ControllerBase
             return RedirectToLogin("failed_state");
         }
 
-        GoogleUserInfo info;
-        try { info = await _google.ExchangeCodeAsync(code, saved.Verifier, CallbackUri()); }
+        GoogleTokens tokens;
+        try { tokens = await _google.ExchangeCodeAsync(code, saved.Verifier, CallbackUri()); }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Google sign-in: token exchange / ID-token validation failed "
-                + "(redirect_uri={RedirectUri}). Common causes: wrong client secret, an unregistered redirect "
-                + "URI, or the server can't reach oauth2.googleapis.com.", CallbackUri());
+            _logger.LogWarning(ex, "Google {Mode}: token exchange failed (redirect_uri={RedirectUri}). Common "
+                + "causes: wrong client secret, an unregistered redirect URI, or the server can't reach "
+                + "oauth2.googleapis.com.", saved.Mode, CallbackUri());
+            return saved.Mode == "connect" ? RedirectToApp("failed") : RedirectToLogin("failed_exchange");
+        }
+
+        // Data-access consent (Calendar/Gmail): store the refresh token for the connecting user.
+        if (saved.Mode == "connect")
+            return await CompleteConnectAsync(saved, tokens);
+
+        // Sign-in: validate the ID token → identity, then link/gate.
+        GoogleUserInfo info;
+        try { info = await _google.ValidateIdTokenAsync(tokens.IdToken ?? ""); }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Google sign-in: ID-token validation failed.");
             return RedirectToLogin("failed_exchange");
         }
 
@@ -240,6 +265,92 @@ public class AuthController : ControllerBase
             _ => RedirectToLogin("failed"),
         };
     }
+
+    /// <summary>Store the granted data scopes + refresh token for the connecting user (from the signed state
+    /// cookie), then bounce back to the app. Verifies the consenting Google account matches the linked one.</summary>
+    private async Task<IActionResult> CompleteConnectAsync(OAuthState saved, GoogleTokens tokens)
+    {
+        if (!Guid.TryParse(saved.UserId, out var userId)) return RedirectToApp("failed");
+        var user = await _users.FindByIdAsync(userId.ToString());
+        if (user is null) return RedirectToApp("failed");
+
+        if (!string.IsNullOrEmpty(tokens.IdToken))
+        {
+            try
+            {
+                var info = await _google.ValidateIdTokenAsync(tokens.IdToken);
+                if (user.GoogleSubject is not null && info.Subject != user.GoogleSubject)
+                {
+                    _logger.LogWarning("Google connect: consented account differs from the linked one.");
+                    return RedirectToApp("mismatch");
+                }
+            }
+            catch { /* if we can't validate identity, still store — the token is scoped to whoever consented */ }
+        }
+
+        var s = await _db.UserSettings.FindAsync(userId);
+        if (s is null) { s = new UserSettings { UserId = userId }; _db.UserSettings.Add(s); }
+        // Google only returns a refresh token on a fresh consent (we force prompt=consent); keep the old one otherwise.
+        if (!string.IsNullOrEmpty(tokens.RefreshToken))
+            s.GoogleRefreshTokenEncrypted = _tokenProtector.Protect(tokens.RefreshToken);
+        var scope = tokens.Scope ?? "";
+        s.GoogleCalendarGranted = scope.Contains(GoogleAuthService.CalendarReadScope);
+        s.GoogleGmailGranted = scope.Contains(GoogleAuthService.GmailComposeScope);
+        await _db.SaveChangesAsync();
+
+        return RedirectToApp("connected", success: true);
+    }
+
+    /// <summary>Public: begin the incremental data-access consent for the signed-in user. Requires a linked
+    /// Google account. Returns the Google consent URL for the SPA to navigate to.</summary>
+    [Authorize]
+    [HttpPost("google/connect")]
+    public async Task<IActionResult> GoogleConnect(ConnectGoogleRequest req)
+    {
+        if (!_google.Enabled) return NotFound();
+        var user = await _users.FindByIdAsync(CurrentUserId.ToString());
+        if (user is null) return Unauthorized();
+        if (user.GoogleSubject is null)
+            return BadRequest("Sign in with Google first to connect Calendar or Gmail.");
+
+        var scopes = new List<string> { "openid", "email" };
+        if (req.Calendar) scopes.Add(GoogleAuthService.CalendarReadScope);
+        if (req.Gmail) scopes.Add(GoogleAuthService.GmailComposeScope);
+        if (scopes.Count == 2) return BadRequest("Choose at least one capability to connect.");
+
+        var verifier = OAuthPkce.NewCodeVerifier();
+        var state = OAuthPkce.NewState();
+        var protectedState = _stateProtector.Protect(
+            JsonSerializer.Serialize(new OAuthState(state, verifier, "connect", CurrentUserId.ToString())),
+            TimeSpan.FromMinutes(10));
+        Response.Cookies.Append(StateCookie, protectedState, StateCookieOptions());
+
+        var url = _google.BuildAuthorizationUrl(
+            CallbackUri(), state, OAuthPkce.Challenge(verifier), string.Join(' ', scopes), offline: true);
+        return Ok(new { authorizationUrl = url });
+    }
+
+    /// <summary>Revoke Google data access for the signed-in user (revokes at Google, clears the stored token).</summary>
+    [Authorize]
+    [HttpPost("google/disconnect")]
+    public async Task<IActionResult> GoogleDisconnect(CancellationToken ct)
+    {
+        var s = await _db.UserSettings.FindAsync([CurrentUserId], ct);
+        if (s?.GoogleRefreshTokenEncrypted is not null)
+        {
+            var refresh = _tokenProtector.Unprotect(s.GoogleRefreshTokenEncrypted);
+            if (refresh is not null) await _google.RevokeAsync(refresh, ct);
+            s.GoogleRefreshTokenEncrypted = null;
+            s.GoogleCalendarGranted = false;
+            s.GoogleGmailGranted = false;
+            await _db.SaveChangesAsync(ct);
+        }
+        return NoContent();
+    }
+
+    /// <summary>Redirect back to the SPA root after a connect flow, with <c>?google=</c>/<c>?googleError=</c>.</summary>
+    private IActionResult RedirectToApp(string reason, bool success = false) =>
+        Redirect($"{WebBase()}/?{(success ? "google" : "googleError")}={reason}");
 
     private const string AuthHandoffCookie = "diariz_auth";
     private const string HandoffCookiePath = "/api/auth/google";

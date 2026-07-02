@@ -206,9 +206,12 @@ builder.Services.AddScoped<IChatToolRegistry, ChatToolRegistry>();
 builder.Services.AddScoped<IChatToolSettingsResolver, ChatToolSettingsResolver>();
 builder.Services.AddScoped<IChatToolOrchestrator, ChatToolOrchestrator>();
 
-// ---- Google sign-in (server-side authorization-code flow; inert unless GoogleAuth is configured) ----
+// ---- Google sign-in + data access (server-side OAuth; inert unless GoogleAuth is configured) ----
 builder.Services.AddHttpClient<IGoogleAuthService, GoogleAuthService>();
 builder.Services.AddScoped<IGoogleSignInHandler, GoogleSignInHandler>();
+builder.Services.AddSingleton<IGoogleTokenProtector, GoogleTokenProtector>();
+builder.Services.AddScoped<IGoogleTokenProvider, GoogleTokenProvider>();
+builder.Services.AddMemoryCache();
 
 // ---- App services ----
 builder.Services.AddScoped<ITokenService, TokenService>();

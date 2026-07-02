@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./auth";
 import { useLanguage } from "./language";
 import Login from "./pages/Login";
@@ -21,10 +22,20 @@ export default function App() {
   // negotiation order. Ignored when there's no catalog for that language.
   const [params] = useSearchParams();
   const { setLanguage } = useLanguage();
+  const qc = useQueryClient();
   const langParam = params.get("lang");
   useEffect(() => {
     if (langParam) setLanguage(langParam);
   }, [langParam, setLanguage]);
+
+  // Returning from the Google data-access consent flow (or its error) — refresh the profile so the new
+  // grants show, then strip the one-shot query param.
+  const googleParam = params.get("google") ?? params.get("googleError");
+  useEffect(() => {
+    if (!googleParam) return;
+    qc.invalidateQueries({ queryKey: ["user-profile"] });
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [googleParam, qc]);
 
   return (
     <Routes>

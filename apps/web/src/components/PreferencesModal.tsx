@@ -20,6 +20,8 @@ export default function PreferencesModal({ onClose }: { onClose: () => void }) {
   const [fullName, setFullName] = useState("");
   const [nativeLanguage, setNativeLanguage] = useState("");
   const [uiLanguage, setUiLanguage] = useState("");
+  const [gCalendar, setGCalendar] = useState(false);
+  const [gGmail, setGGmail] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -28,8 +30,32 @@ export default function PreferencesModal({ onClose }: { onClose: () => void }) {
       setFullName(profile.fullName ?? "");
       setNativeLanguage(profile.nativeLanguage ?? "");
       setUiLanguage(profile.uiLanguage ?? "");
+      setGCalendar(profile.googleCalendar);
+      setGGmail(profile.googleGmail);
     }
   }, [profile]);
+
+  async function connectGoogleData() {
+    setError(null);
+    try {
+      // Full-page navigation to Google's consent screen; it returns to /?google=connected.
+      window.location.assign(await api.connectGoogle({ calendar: gCalendar, gmail: gGmail }));
+    } catch (e) {
+      setError(apiErrorMessage(e, t("googleConnectError")));
+    }
+  }
+
+  async function disconnectGoogleData() {
+    setError(null);
+    try {
+      await api.disconnectGoogle();
+      setGCalendar(false);
+      setGGmail(false);
+      qc.invalidateQueries({ queryKey: ["user-profile"] });
+    } catch (e) {
+      setError(apiErrorMessage(e, t("googleDisconnectError")));
+    }
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -121,12 +147,42 @@ export default function PreferencesModal({ onClose }: { onClose: () => void }) {
           <div className="border-t pt-3 dark:border-gray-700">
             <span className="mb-1 block text-sm text-gray-600 dark:text-gray-300">{t("googleAccount")}</span>
             {profile?.googleConnected ? (
-              <p className="text-sm text-gray-700 dark:text-gray-200">
-                <span className="mr-1.5 inline-block rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300">
-                  {t("googleConnectedBadge")}
-                </span>
-                {t("googleConnectedAs", { email: profile.email })}
-              </p>
+              <div className="space-y-2 text-sm">
+                <p className="text-gray-700 dark:text-gray-200">
+                  <span className="mr-1.5 inline-block rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300">
+                    {t("googleConnectedBadge")}
+                  </span>
+                  {t("googleConnectedAs", { email: profile.email })}
+                </p>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={gCalendar} onChange={(e) => setGCalendar(e.target.checked)} />
+                  <span className="dark:text-gray-200">{t("googleCalendarRead")}</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={gGmail} onChange={(e) => setGGmail(e.target.checked)} />
+                  <span className="dark:text-gray-200">{t("googleGmailDrafts")}</span>
+                </label>
+                <p className="text-xs text-gray-400 dark:text-gray-500">{t("googleDataHint")}</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={connectGoogleData}
+                    disabled={!gCalendar && !gGmail}
+                    className="rounded border px-2 py-1 text-xs hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                  >
+                    {t("googleConnectData")}
+                  </button>
+                  {(profile.googleCalendar || profile.googleGmail) && (
+                    <button
+                      type="button"
+                      onClick={disconnectGoogleData}
+                      className="rounded border px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-gray-700 dark:text-red-400 dark:hover:bg-gray-800"
+                    >
+                      {t("googleDisconnect")}
+                    </button>
+                  )}
+                </div>
+              </div>
             ) : (
               <p className="text-sm text-gray-500 dark:text-gray-400">{t("googleNotConnected")}</p>
             )}

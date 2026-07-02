@@ -13,28 +13,46 @@ namespace Diariz.Api.Services;
 public record GoogleUserInfo(
     string Subject, string Email, bool EmailVerified, string? Name, string? Picture, string? HostedDomain);
 
+/// <summary>The token set returned by an authorization-code exchange. <c>RefreshToken</c> is present only
+/// when offline access was requested with a fresh consent (<c>access_type=offline&amp;prompt=consent</c>).</summary>
+public record GoogleTokens(string? AccessToken, string? RefreshToken, int ExpiresInSeconds, string? Scope, string? IdToken);
+
 public interface IGoogleAuthService
 {
     /// <summary>Whether Google sign-in is configured (a client id + secret are present).</summary>
     bool Enabled { get; }
 
-    /// <summary>Build the Google consent URL for the server-side authorization-code + PKCE flow.</summary>
-    string BuildAuthorizationUrl(string redirectUri, string state, string codeChallenge);
+    /// <summary>Build the Google consent URL. <paramref name="offline"/> requests a refresh token
+    /// (<c>access_type=offline</c> + <c>prompt=consent</c> + <c>include_granted_scopes</c>) for the
+    /// incremental data-access flow; sign-in uses <c>offline=false</c>.</summary>
+    string BuildAuthorizationUrl(string redirectUri, string state, string codeChallenge, string scope, bool offline);
 
-    /// <summary>Exchange an authorization code (with its PKCE verifier) for tokens and return the validated
-    /// ID-token identity. Throws when the exchange fails or the ID token is invalid.</summary>
-    Task<GoogleUserInfo> ExchangeCodeAsync(
-        string code, string codeVerifier, string redirectUri, CancellationToken ct = default);
+    /// <summary>Exchange an authorization code (with its PKCE verifier) for the full token set.</summary>
+    Task<GoogleTokens> ExchangeCodeAsync(string code, string codeVerifier, string redirectUri, CancellationToken ct = default);
+
+    /// <summary>Refresh an access token from a stored refresh token, or throw on failure (e.g. revoked).</summary>
+    Task<GoogleTokens> RefreshAsync(string refreshToken, CancellationToken ct = default);
+
+    /// <summary>Validate a Google ID token (signature via JWKS, audience = our client id) → identity.</summary>
+    Task<GoogleUserInfo> ValidateIdTokenAsync(string idToken);
+
+    /// <summary>Best-effort revoke of a refresh/access token at Google. Never throws.</summary>
+    Task RevokeAsync(string token, CancellationToken ct = default);
 }
 
-/// <summary>Server-side (confidential-client) Google OAuth: the client secret never leaves the API.
-/// The ID token is validated against Google's JWKS with our client id as the audience.</summary>
+/// <summary>Server-side (confidential-client) Google OAuth: the client secret never leaves the API.</summary>
 public class GoogleAuthService : IGoogleAuthService
 {
     private const string AuthEndpoint = "https://accounts.google.com/o/oauth2/v2/auth";
     private const string TokenEndpoint = "https://oauth2.googleapis.com/token";
-    // Login only — non-sensitive scopes (no Google security review). Gmail/Calendar are a later phase.
-    private const string Scope = "openid email profile";
+    private const string RevokeEndpoint = "https://oauth2.googleapis.com/revoke";
+
+    /// <summary>Sign-in scopes (non-sensitive — no Google review).</summary>
+    public const string SignInScope = "openid email profile";
+    /// <summary>Google Calendar read-only (sensitive scope).</summary>
+    public const string CalendarReadScope = "https://www.googleapis.com/auth/calendar.readonly";
+    /// <summary>Gmail draft/compose (sensitive scope).</summary>
+    public const string GmailComposeScope = "https://www.googleapis.com/auth/gmail.compose";
 
     private readonly HttpClient _http;
     private readonly GoogleAuthOptions _opts;
@@ -47,57 +65,83 @@ public class GoogleAuthService : IGoogleAuthService
 
     public bool Enabled => _opts.Enabled;
 
-    public string BuildAuthorizationUrl(string redirectUri, string state, string codeChallenge)
+    public string BuildAuthorizationUrl(string redirectUri, string state, string codeChallenge, string scope, bool offline)
     {
         var query = new Dictionary<string, string?>
         {
             ["client_id"] = _opts.ClientId,
             ["redirect_uri"] = redirectUri,
             ["response_type"] = "code",
-            ["scope"] = Scope,
+            ["scope"] = scope,
             ["state"] = state,
             ["code_challenge"] = codeChallenge,
             ["code_challenge_method"] = "S256",
-            ["access_type"] = "online",
-            ["prompt"] = "select_account",
+            // Offline: force a consent so Google returns a refresh token, and keep prior grants (incremental).
+            ["access_type"] = offline ? "offline" : "online",
+            ["prompt"] = offline ? "consent" : "select_account",
         };
+        if (offline) query["include_granted_scopes"] = "true";
         return QueryHelpers.AddQueryString(AuthEndpoint, query);
     }
 
-    public async Task<GoogleUserInfo> ExchangeCodeAsync(
-        string code, string codeVerifier, string redirectUri, CancellationToken ct = default)
+    public async Task<GoogleTokens> ExchangeCodeAsync(string code, string codeVerifier, string redirectUri, CancellationToken ct = default)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Post, TokenEndpoint)
+        return await PostTokenAsync(new Dictionary<string, string>
         {
-            Content = new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                ["code"] = code,
-                ["client_id"] = _opts.ClientId,
-                ["client_secret"] = _opts.ClientSecret,
-                ["redirect_uri"] = redirectUri,
-                ["grant_type"] = "authorization_code",
-                ["code_verifier"] = codeVerifier,
-            }),
-        };
+            ["code"] = code,
+            ["client_id"] = _opts.ClientId,
+            ["client_secret"] = _opts.ClientSecret,
+            ["redirect_uri"] = redirectUri,
+            ["grant_type"] = "authorization_code",
+            ["code_verifier"] = codeVerifier,
+        }, ct);
+    }
+
+    public async Task<GoogleTokens> RefreshAsync(string refreshToken, CancellationToken ct = default)
+    {
+        return await PostTokenAsync(new Dictionary<string, string>
+        {
+            ["client_id"] = _opts.ClientId,
+            ["client_secret"] = _opts.ClientSecret,
+            ["refresh_token"] = refreshToken,
+            ["grant_type"] = "refresh_token",
+        }, ct);
+    }
+
+    private async Task<GoogleTokens> PostTokenAsync(Dictionary<string, string> form, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, TokenEndpoint) { Content = new FormUrlEncodedContent(form) };
         using var resp = await _http.SendAsync(req, ct);
         var body = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
-            // Include Google's error body (e.g. {"error":"invalid_client"} / "redirect_uri_mismatch") — it is
-            // the actual cause and is logged by the caller. Truncated so a huge body can't flood the log.
-            throw new InvalidOperationException(
-                $"Google token exchange failed ({(int)resp.StatusCode}): {Truncate(body, 500)}");
+            // Include Google's error body (e.g. invalid_client / invalid_grant) — the actual cause, logged by the caller.
+            throw new InvalidOperationException($"Google token request failed ({(int)resp.StatusCode}): {Truncate(body, 500)}");
 
-        var token = JsonSerializer.Deserialize<TokenResponse>(body);
-        if (string.IsNullOrEmpty(token?.IdToken))
-            throw new InvalidOperationException("Google token exchange returned no id_token.");
+        var t = JsonSerializer.Deserialize<TokenResponse>(body)
+            ?? throw new InvalidOperationException("Google token request returned no body.");
+        return new GoogleTokens(t.AccessToken, t.RefreshToken, t.ExpiresIn, t.Scope, t.IdToken);
+    }
 
-        // Validates signature (Google JWKS), issuer, expiry, and that the token was minted for our client.
+    public async Task<GoogleUserInfo> ValidateIdTokenAsync(string idToken)
+    {
         var payload = await GoogleJsonWebSignature.ValidateAsync(
-            token.IdToken, new GoogleJsonWebSignature.ValidationSettings { Audience = [_opts.ClientId] });
-
+            idToken, new GoogleJsonWebSignature.ValidationSettings { Audience = [_opts.ClientId] });
         return new GoogleUserInfo(
             payload.Subject, payload.Email ?? "", payload.EmailVerified,
             payload.Name, payload.Picture, payload.HostedDomain);
+    }
+
+    public async Task RevokeAsync(string token, CancellationToken ct = default)
+    {
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, RevokeEndpoint)
+            {
+                Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["token"] = token }),
+            };
+            using var _ = await _http.SendAsync(req, ct);
+        }
+        catch { /* best-effort — the local token is cleared regardless */ }
     }
 
     private static string Truncate(string s, int max) =>
@@ -105,6 +149,10 @@ public class GoogleAuthService : IGoogleAuthService
 
     private sealed record TokenResponse
     {
+        [JsonPropertyName("access_token")] public string? AccessToken { get; init; }
+        [JsonPropertyName("refresh_token")] public string? RefreshToken { get; init; }
+        [JsonPropertyName("expires_in")] public int ExpiresIn { get; init; }
+        [JsonPropertyName("scope")] public string? Scope { get; init; }
         [JsonPropertyName("id_token")] public string? IdToken { get; init; }
     }
 }

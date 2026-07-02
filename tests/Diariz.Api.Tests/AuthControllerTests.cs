@@ -34,7 +34,9 @@ public class AuthControllerTests
             Options.Create(googleOpts ?? new GoogleAuthOptions()),
             Options.Create(appOpts ?? new AppPublicOptions()),
             new EphemeralDataProtectionProvider(),
-            NullLogger<AuthController>.Instance);
+            NullLogger<AuthController>.Instance,
+            host.Db,
+            new GoogleTokenProtector(new EphemeralDataProtectionProvider()));
     }
 
     private static async Task<ApplicationUser> CreateUser(
@@ -424,6 +426,100 @@ public class AuthControllerTests
         Assert.IsType<UnauthorizedResult>(controller.GoogleExchange());
     }
 
+    // ---- Google data connect / disconnect (Phase 2) ----
+
+    [Fact]
+    public async Task GoogleConnect_RequiresALinkedGoogleAccount()
+    {
+        using var host = new IdentityTestHost();
+        var user = await CreateUser(host, "p@x.test", GoodPassword, UserStatus.Active); // password-only, no GoogleSubject
+        var controller = BuildController(host, new FakeGoogleAuthService { Enabled = true }, PublicOpts);
+        controller.ControllerContext = Http.Context(user.Id);
+
+        Assert.IsType<BadRequestObjectResult>(await controller.GoogleConnect(new ConnectGoogleRequest(Calendar: true, Gmail: false)));
+    }
+
+    [Fact]
+    public async Task GoogleConnect_BuildsOfflineConsentUrl_ForTheTickedScopes()
+    {
+        using var host = new IdentityTestHost();
+        var user = await CreateGoogleUser(host, "g@x.test", "sub-1", UserStatus.Active);
+        var google = new FakeGoogleAuthService { Enabled = true };
+        var controller = BuildController(host, google, PublicOpts);
+        controller.ControllerContext = Http.Context(user.Id);
+
+        var ok = Assert.IsType<OkObjectResult>(await controller.GoogleConnect(new ConnectGoogleRequest(Calendar: true, Gmail: true)));
+
+        Assert.Contains("authorizationUrl", ok.Value!.ToString());
+        Assert.True(google.CapturedOffline);
+        Assert.Contains("calendar.readonly", google.CapturedScope);
+        Assert.Contains("gmail.compose", google.CapturedScope);
+        Assert.Contains("diariz_g_oauth=", controller.Response.Headers.SetCookie.ToString());
+    }
+
+    [Fact]
+    public async Task GoogleConnect_NoScopesTicked_BadRequest()
+    {
+        using var host = new IdentityTestHost();
+        var user = await CreateGoogleUser(host, "g@x.test", "sub-1", UserStatus.Active);
+        var controller = BuildController(host, new FakeGoogleAuthService { Enabled = true }, PublicOpts);
+        controller.ControllerContext = Http.Context(user.Id);
+
+        Assert.IsType<BadRequestObjectResult>(await controller.GoogleConnect(new ConnectGoogleRequest(false, false)));
+    }
+
+    [Fact]
+    public async Task GoogleCallback_ConnectMode_StoresGrantedScopesAndRefreshToken()
+    {
+        using var host = new IdentityTestHost();
+        var user = await CreateGoogleUser(host, "g@x.test", "sub-1", UserStatus.Active);
+        var google = new FakeGoogleAuthService
+        {
+            Enabled = true,
+            Result = new GoogleUserInfo("sub-1", "g@x.test", true, "G", null, null), // matches the linked account
+            Tokens = new GoogleTokens("access", "refresh-new", 3600, $"openid email {GoogleAuthService.CalendarReadScope}", "id-token"),
+        };
+        var controller = BuildController(host, google, PublicOpts);
+
+        // Start the connect (sets the signed state cookie on this controller instance).
+        controller.ControllerContext = Http.Context(user.Id);
+        await controller.GoogleConnect(new ConnectGoogleRequest(Calendar: true, Gmail: false));
+        var cookie = CookieValue(controller.Response.Headers.SetCookie.ToString(), "diariz_g_oauth");
+
+        // Google redirects back to the callback with the captured state + the cookie echoed.
+        var cbCtx = Http.Context();
+        cbCtx.HttpContext.Request.Headers["Cookie"] = $"diariz_g_oauth={cookie}";
+        controller.ControllerContext = cbCtx;
+        var redirect = Assert.IsType<RedirectResult>(await controller.GoogleCallback("auth-code", google.CapturedState, null));
+
+        Assert.Equal($"{WebBase}/?google=connected", redirect.Url);
+        var s = await host.Db.UserSettings.FindAsync(user.Id);
+        Assert.NotNull(s!.GoogleRefreshTokenEncrypted);
+        Assert.True(s.GoogleCalendarGranted);
+        Assert.False(s.GoogleGmailGranted); // only Calendar was in the returned scope
+    }
+
+    [Fact]
+    public async Task GoogleDisconnect_ClearsStoredTokenAndGrantFlags()
+    {
+        using var host = new IdentityTestHost();
+        var user = await CreateGoogleUser(host, "g@x.test", "sub-1", UserStatus.Active);
+        host.Db.UserSettings.Add(new UserSettings
+        {
+            UserId = user.Id, GoogleRefreshTokenEncrypted = "enc", GoogleCalendarGranted = true, GoogleGmailGranted = true,
+        });
+        await host.Db.SaveChangesAsync();
+        var controller = BuildController(host, new FakeGoogleAuthService { Enabled = true });
+        controller.ControllerContext = Http.Context(user.Id);
+
+        Assert.IsType<NoContentResult>(await controller.GoogleDisconnect(default));
+
+        var s = await host.Db.UserSettings.FindAsync(user.Id);
+        Assert.Null(s!.GoogleRefreshTokenEncrypted);
+        Assert.False(s.GoogleCalendarGranted);
+        Assert.False(s.GoogleGmailGranted);
+    }
+
     private static async Task<ApplicationUser> CreateGoogleUser(
         IdentityTestHost host, string email, string sub, UserStatus status)
     {
@@ -448,16 +544,23 @@ public class AuthControllerTests
     {
         public bool Enabled { get; init; }
         public GoogleUserInfo? Result { get; init; }
+        public GoogleTokens Tokens { get; init; } = new(null, "refresh-x", 3600, "openid email", "id-token");
         public string CapturedState { get; private set; } = "";
+        public bool CapturedOffline { get; private set; }
+        public string CapturedScope { get; private set; } = "";
 
-        public string BuildAuthorizationUrl(string redirectUri, string state, string codeChallenge)
+        public string BuildAuthorizationUrl(string redirectUri, string state, string codeChallenge, string scope, bool offline)
         {
             CapturedState = state;
+            CapturedOffline = offline;
+            CapturedScope = scope;
             return $"https://accounts.google.com/o/oauth2/v2/auth?state={state}";
         }
 
-        public Task<GoogleUserInfo> ExchangeCodeAsync(
-            string code, string codeVerifier, string redirectUri, CancellationToken ct = default) =>
-            Task.FromResult(Result!);
+        public Task<GoogleTokens> ExchangeCodeAsync(string code, string codeVerifier, string redirectUri, CancellationToken ct = default) =>
+            Task.FromResult(Tokens);
+        public Task<GoogleTokens> RefreshAsync(string refreshToken, CancellationToken ct = default) => Task.FromResult(Tokens);
+        public Task<GoogleUserInfo> ValidateIdTokenAsync(string idToken) => Task.FromResult(Result!);
+        public Task RevokeAsync(string token, CancellationToken ct = default) => Task.CompletedTask;
     }
 }

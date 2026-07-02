@@ -80,6 +80,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.65.0",
+    date: "2026-07-02",
+    pr: 152,
+    headline: "Connect Google Calendar & Gmail (opt-in)",
+    summary:
+      "If you sign in with Google, **Preferences → Google** now lets you **opt in** to let Diariz read your " +
+      "**Google Calendar** and create **Gmail drafts** in your account. It's a per-user, revocable grant: " +
+      "tick what to allow, complete Google's consent, and disconnect any time. Access is stored as an " +
+      "encrypted refresh token on the server (access tokens live only in memory and never reach the browser). " +
+      "This is the plumbing — the features that use it (save minutes as a Gmail draft; match a recording to " +
+      "its calendar meeting) arrive next. Requires the operator to enable the Calendar/Gmail scopes on the " +
+      "Google OAuth app.",
+    added: [
+      "Preferences → Google: opt in to Google Calendar (read) and Gmail (drafts), with a one-click Disconnect that revokes access at Google.",
+    ],
+  },
+  {
     version: "0.64.0",
     date: "2026-07-02",
     pr: 151,

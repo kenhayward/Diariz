@@ -110,6 +110,18 @@ export const api = {
     }
   },
 
+  /// Begin the incremental Google data-access consent (Calendar read / Gmail drafts) for the signed-in user.
+  /// Returns Google's consent URL; the caller navigates the whole page to it.
+  async connectGoogle(scopes: { calendar: boolean; gmail: boolean }): Promise<string> {
+    const { data } = await http.post<{ authorizationUrl: string }>("/api/auth/google/connect", scopes);
+    return data.authorizationUrl;
+  },
+
+  /// Revoke Google data access and clear the stored connection.
+  async disconnectGoogle(): Promise<void> {
+    await http.post("/api/auth/google/disconnect");
+  },
+
   // ---- Access requests / account setup (public) ----
 
   async requestAccess(email: string, fullName?: string): Promise<void> {

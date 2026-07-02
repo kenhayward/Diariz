@@ -43,4 +43,14 @@ public class UserSettings
     /// <summary>Reasoning effort level when enabled: <c>low</c> | <c>medium</c> | <c>high</c>. Null falls back
     /// to the server default (<c>Summarization:ReasoningEffort</c>).</summary>
     public string? ReasoningEffort { get; set; }
+
+    /// <summary>Google OAuth refresh token (offline access to the user's Calendar/Gmail), encrypted at rest —
+    /// never returned to clients. Null = the user hasn't connected Google data access.</summary>
+    public string? GoogleRefreshTokenEncrypted { get; set; }
+
+    /// <summary>The user granted read access to their Google Calendar.</summary>
+    public bool GoogleCalendarGranted { get; set; }
+
+    /// <summary>The user granted access to create Gmail drafts in their account.</summary>
+    public bool GoogleGmailGranted { get; set; }
 }

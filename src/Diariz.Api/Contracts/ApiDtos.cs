@@ -12,6 +12,9 @@ public record RequestAccessRequest(string Email, string? FullName = null);
 public record SetupValidateResponse(bool Valid, string? Email, string? FullName = null);
 public record SetupRequest(string Email, string Token, string FullName, string Password);
 
+/// <summary>Which Google data scopes the signed-in user wants to grant (incremental consent).</summary>
+public record ConnectGoogleRequest(bool Calendar, bool Gmail);
+
 // ---- Admin user management ----
 public record AdminUserDto(
     Guid Id, string Email, string? FullName, string AccountType, UserStatus Status, bool IsEnabled,
@@ -192,7 +195,8 @@ public record LanguageDto(string Code, string EnglishName, string NativeName, bo
 /// = not set / follow the browser). Email is read-only. <paramref name="GoogleConnected"/> is true when the
 /// account is linked to a Google identity (used by the Preferences "Google account" section).</summary>
 public record UserProfileDto(
-    string Email, string? FullName, string? NativeLanguage, string? UiLanguage, bool GoogleConnected = false);
+    string Email, string? FullName, string? NativeLanguage, string? UiLanguage, bool GoogleConnected = false,
+    bool GoogleCalendar = false, bool GoogleGmail = false);
 
 /// <summary>Self-service profile update. Each field is trimmed; blank clears it. Language codes must be
 /// in the supported set (else 400).</summary>
