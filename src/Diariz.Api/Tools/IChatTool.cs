@@ -41,6 +41,11 @@ public interface IChatTool
     /// <summary>JSON-Schema object for the tool's <c>function.parameters</c>.</summary>
     object ParametersSchema { get; }
 
+    /// <summary>True when the tool only reads/searches and never changes anything (the default). A tool with a
+    /// side effect (e.g. <c>send_email</c>) overrides this to <c>false</c>. Surfaced to MCP clients as the
+    /// <c>readOnlyHint</c> annotation so they can group read-only vs write tools.</summary>
+    bool ReadOnly => true;
+
     /// <summary>Runs the tool and returns the text result that is fed back to the model as a tool message.</summary>
     Task<string> ExecuteAsync(JsonElement args, ChatToolContext ctx, CancellationToken ct);
 }

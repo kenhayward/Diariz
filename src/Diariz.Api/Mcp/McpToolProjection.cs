@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Diariz.Api.Tools;
+using ModelContextProtocol.Protocol;
 
 namespace Diariz.Api.Mcp;
 
@@ -20,4 +21,10 @@ public static class McpToolProjection
     /// <summary>Serialises a tool's parameter schema to the JSON element MCP wants for <c>inputSchema</c>.</summary>
     public static JsonElement InputSchema(IChatTool tool) =>
         JsonSerializer.SerializeToElement(tool.ParametersSchema);
+
+    /// <summary>MCP behaviour hints so clients can group the tools: <c>readOnlyHint</c> from the tool's own
+    /// <see cref="IChatTool.ReadOnly"/> flag (read/search vs a write like <c>send_email</c>), and
+    /// <c>destructiveHint=false</c> since no exposed tool deletes or overwrites data.</summary>
+    public static ToolAnnotations Annotations(IChatTool tool) =>
+        new() { ReadOnlyHint = tool.ReadOnly, DestructiveHint = false };
 }

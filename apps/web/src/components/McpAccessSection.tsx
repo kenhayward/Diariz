@@ -18,13 +18,16 @@ export default function McpAccessSection() {
   const [busy, setBusy] = useState(false);
 
   const mcpUrl = `${window.location.origin}/mcp`;
+  // Claude Desktop's config only accepts stdio servers, so bridge to our HTTP endpoint with mcp-remote.
+  // The header goes in via an env var (referenced as ${AUTH}) so mcp-remote doesn't split it on the space
+  // in "Bearer <token>".
   const configSnippet = JSON.stringify(
     {
       mcpServers: {
         diariz: {
-          type: "http",
-          url: mcpUrl,
-          headers: { Authorization: `Bearer ${created?.token ?? "<your-token>"}` },
+          command: "npx",
+          args: ["-y", "mcp-remote", mcpUrl, "--header", "Authorization:${AUTH}"],
+          env: { AUTH: `Bearer ${created?.token ?? "<your-token>"}` },
         },
       },
     },
@@ -110,6 +113,7 @@ export default function McpAccessSection() {
             <button type="button" onClick={() => copy(configSnippet)} className={`mt-1 ${btn}`}>
               {t("mcpCopyConfig")}
             </button>
+            <p className="mt-1 text-[11px] leading-snug text-gray-400 dark:text-gray-500">{t("mcpDesktopNote")}</p>
           </details>
         </div>
       )}
