@@ -91,6 +91,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.75.1",
+    date: "2026-07-03",
+    pr: 170,
+    headline: "Fix: transcription worker Docker build",
+    summary:
+      "A dependency update had pinned the worker to a version of a plotting library that isn't available for " +
+      "the worker's Python version, so building the transcription worker image failed. Pinned it back to a " +
+      "compatible version - the worker image builds again. No effect on transcription behaviour.",
+    fixed: [
+      "Worker Docker build failed on matplotlib 3.11.0 (needs Python >= 3.11; the worker runs Python 3.10) - pinned to 3.10.9.",
+    ],
+  },
+  {
     version: "0.75.0",
     date: "2026-07-03",
     pr: 169,
