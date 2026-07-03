@@ -56,6 +56,11 @@ public static class OpenIddictSetup
                 // `resource={origin}/mcp` request parameter (it validates requested resources before our
                 // authorize handler runs; an unregistered one is rejected as invalid_target / ID2190).
                 o.RegisterResources(resource);
+                // Don't enforce PER-CLIENT resource permissions. DCR-registered public clients aren't granted an
+                // explicit resource permission, so OpenIddict would otherwise reject them (ID2192). There is a
+                // single MCP resource and DCR is already gated by the redirect-host allowlist + PKCE + consent,
+                // so per-client resource granularity adds no security value here.
+                o.IgnoreResourcePermissions();
 
                 if (!string.IsNullOrWhiteSpace(issuer))
                     o.SetIssuer(new Uri(issuer, UriKind.Absolute));

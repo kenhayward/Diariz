@@ -93,6 +93,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.80.4",
+    date: "2026-07-03",
+    pr: 180,
+    headline: "Fix: Claude web connector blocked from the MCP resource",
+    summary:
+      "Fixes the next step of the claude.ai web connector: sign-in was rejected because the client wasn't " +
+      "explicitly permitted to use the MCP resource. Self-registered connectors don't carry a per-client " +
+      "resource permission, and Diariz has just the one MCP resource (already protected by the redirect " +
+      "allowlist, PKCE, and your consent), so that per-client check is no longer enforced. Deploying it only " +
+      "needs a server redeploy.",
+    fixed: [
+      "Self-registered Claude connectors are no longer rejected from the MCP resource by a per-client permission check.",
+    ],
+  },
+  {
     version: "0.80.3",
     date: "2026-07-03",
     pr: 179,
