@@ -306,6 +306,9 @@ out the `deploy.resources` GPU block and set `WORKER_DEVICE=cpu WORKER_COMPUTE_T
 
 ## Conventions & gotchas
 
+- **No em/en dashes in user-facing text.** Use a plain hyphen `-` (not `—` or `–`) in all UI strings,
+  i18n catalogs (`apps/web/src/locales/**`, `src/Diariz.Api/locales/**`), release notes, and user-visible
+  copy — user feedback on fancy dashes is negative. (Code, comments, and internal docs are unaffected.)
 - **Tests:** harnesses exist for all three stacks — .NET (`tests/Diariz.Api.Tests` + integration),
   web (`vitest`), and the Python worker (`pytest`, see the Worker section). No CI runs them on push yet.
 - **Ports:** API `8080`; web UI (Docker/nginx) `8081`; web dev server `5173`; Postgres `5432`;

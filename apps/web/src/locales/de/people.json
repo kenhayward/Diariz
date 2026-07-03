@@ -1,6 +1,6 @@
 {
   "title": "Personen",
-  "description": "Registrierte Stimmprofile, mit denen Sprecher über Aufnahmen hinweg identifiziert werden. Stimmprofile sind biometrische Daten – registriere Personen nur mit ihrer Einwilligung und lösche sie, wenn nötig.",
+  "description": "Registrierte Stimmprofile, mit denen Sprecher über Aufnahmen hinweg identifiziert werden. Stimmprofile sind biometrische Daten - registriere Personen nur mit ihrer Einwilligung und lösche sie, wenn nötig.",
   "empty": "Noch keine Personen. Registriere jemanden über den Sprecher einer Aufnahme („+ Neue Person…“).",
   "colName": "Name",
   "colSamples": "Beispiele",

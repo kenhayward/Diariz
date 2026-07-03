@@ -21,7 +21,7 @@
   "removeAttachment": "Remove attachment",
   "reading": "Reading…",
   "attachFile": "+ Attach file",
-  "askPlaceholder": "Ask about your transcripts… — type / for the command list",
+  "askPlaceholder": "Ask about your transcripts… - type / for the command list",
   "messageAria": "Chat message",
   "stop": "Stop",
   "send": "Send",
@@ -59,5 +59,24 @@
   "couldNotReadFile": "Could not read the file.",
   "contextUsedAria": "Context {{pct}}% used",
   "modelFallback": "model",
-  "tokens": "tokens"
+  "tokens": "tokens",
+  "toolCallPrefix": "Tool call:",
+  "toolLabels": {
+    "who_said_that": "who said that",
+    "what_did_they_say": "what they said",
+    "list_recordings": "list recordings",
+    "search_transcripts": "search transcripts",
+    "when_was_discussed": "when discussed",
+    "count_mentions": "count mentions",
+    "list_action_items": "action items",
+    "get_recording_summary": "get summary",
+    "who_attended": "who attended",
+    "speaker_talk_time": "talk time",
+    "get_segment_context": "nearby lines",
+    "send_email": "send email",
+    "add_as_attachment": "save note",
+    "get_transcript": "get transcript",
+    "get_meeting_minutes": "get minutes",
+    "get_recording_details": "recording details"
+  }
 }

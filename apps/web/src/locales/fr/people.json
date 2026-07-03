@@ -1,6 +1,6 @@
 {
   "title": "Personnes",
-  "description": "Empreintes vocales enregistrées, utilisées pour identifier les intervenants dans les enregistrements. Les empreintes vocales sont des données biométriques — n'enregistrez des personnes qu'avec leur consentement et effacez-les si nécessaire.",
+  "description": "Empreintes vocales enregistrées, utilisées pour identifier les intervenants dans les enregistrements. Les empreintes vocales sont des données biométriques - n'enregistrez des personnes qu'avec leur consentement et effacez-les si nécessaire.",
   "empty": "Aucune personne pour l'instant. Enregistrez quelqu'un depuis l'intervenant d'un enregistrement (« + Nouvelle personne… »).",
   "colName": "Nom",
   "colSamples": "Échantillons",

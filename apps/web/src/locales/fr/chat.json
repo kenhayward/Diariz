@@ -21,7 +21,7 @@
   "removeAttachment": "Retirer la pièce jointe",
   "reading": "Lecture…",
   "attachFile": "+ Joindre un fichier",
-  "askPlaceholder": "Posez une question sur vos transcriptions… — tapez / pour la liste des commandes",
+  "askPlaceholder": "Posez une question sur vos transcriptions… - tapez / pour la liste des commandes",
   "messageAria": "Message de chat",
   "stop": "Arrêter",
   "send": "Envoyer",
@@ -59,5 +59,24 @@
   "couldNotReadFile": "Impossible de lire le fichier.",
   "contextUsedAria": "Contexte utilisé à {{pct}} %",
   "modelFallback": "modèle",
-  "tokens": "jetons"
+  "tokens": "jetons",
+  "toolCallPrefix": "Appel d'outil :",
+  "toolLabels": {
+    "who_said_that": "qui a dit ça",
+    "what_did_they_say": "ce qu'ils ont dit",
+    "list_recordings": "lister les enregistrements",
+    "search_transcripts": "rechercher les transcriptions",
+    "when_was_discussed": "quand évoqué",
+    "count_mentions": "compter les mentions",
+    "list_action_items": "tâches",
+    "get_recording_summary": "obtenir le résumé",
+    "who_attended": "qui a participé",
+    "speaker_talk_time": "temps de parole",
+    "get_segment_context": "lignes voisines",
+    "send_email": "envoyer un e-mail",
+    "add_as_attachment": "enregistrer une note",
+    "get_transcript": "obtenir la transcription",
+    "get_meeting_minutes": "obtenir le compte rendu",
+    "get_recording_details": "détails de l'enregistrement"
+  }
 }

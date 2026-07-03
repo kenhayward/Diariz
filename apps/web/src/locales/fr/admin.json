@@ -5,7 +5,7 @@
   "newUserEmailAria": "E-mail du nouvel utilisateur",
   "adding": "Ajout…",
   "addUser": "Ajouter un utilisateur",
-  "grantLinkMsg": "L'e-mail n'est pas configuré — partagez ce lien de configuration à usage unique avec l'utilisateur :",
+  "grantLinkMsg": "L'e-mail n'est pas configuré - partagez ce lien de configuration à usage unique avec l'utilisateur :",
   "accessRequests": "Demandes d'accès",
   "grant": "Accorder",
   "deny": "Refuser",

@@ -28,8 +28,15 @@ export function clearToolCallLine(): ToolCallLineState {
   return emptyToolCallLine;
 }
 
-/// The gray line text, or null when nothing is running. Format: "Tool call: a… b…".
-export function toolCallLineText(state: ToolCallLineState): string | null {
+/// The gray line text, or null when nothing is running. Format: "<prefix> a… b…". The prefix and the
+/// per-tool label are supplied by the caller so the indicator can be localized (the tool names come from
+/// the server as stable snake_case ids); both default to English/raw for non-UI callers and tests.
+export function toolCallLineText(
+  state: ToolCallLineState,
+  opts?: { prefix?: string; label?: (name: string) => string },
+): string | null {
   if (state.active.length === 0) return null;
-  return "Tool call: " + state.active.map((n) => `${n}…`).join(" ");
+  const prefix = opts?.prefix ?? "Tool call:";
+  const label = opts?.label ?? ((n) => n);
+  return `${prefix} ` + state.active.map((n) => `${label(n)}…`).join(" ");
 }

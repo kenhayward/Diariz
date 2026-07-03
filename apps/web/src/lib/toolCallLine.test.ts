@@ -37,4 +37,14 @@ describe("toolCallLine", () => {
     s = clearToolCallLine();
     expect(toolCallLineText(s)).toBeNull();
   });
+
+  it("uses a localized prefix + tool label when supplied", () => {
+    let s = toolStarted(emptyToolCallLine, "search_transcripts");
+    s = toolStarted(s, "send_email");
+    const text = toolCallLineText(s, {
+      prefix: "Appel d'outil :",
+      label: (n) => ({ search_transcripts: "rechercher", send_email: "e-mail" })[n] ?? n,
+    });
+    expect(text).toBe("Appel d'outil : rechercher… e-mail…");
+  });
 });
