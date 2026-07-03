@@ -232,6 +232,18 @@ public record UpdateUserSettingsRequest(
     bool? ToolsEnabled = null, IReadOnlyDictionary<string, bool>? ToolOverrides = null,
     bool? ReasoningEnabled = null, string? ReasoningEffort = null);
 
+// ---- MCP access tokens ----
+/// <summary>A stored MCP token, listed in Preferences. The secret is never returned — only a short display
+/// <paramref name="Prefix"/> and usage timestamps.</summary>
+public record McpTokenDto(Guid Id, string Name, string Prefix, DateTimeOffset CreatedAt, DateTimeOffset? LastUsedAt);
+
+/// <summary>The response to generating a token: the plaintext <paramref name="Token"/> is returned exactly
+/// once (never retrievable again) so the user can paste it into Claude's MCP config.</summary>
+public record McpTokenCreatedDto(Guid Id, string Name, string Prefix, string Token);
+
+/// <summary>Request to mint a new MCP token with a user-supplied label.</summary>
+public record CreateMcpTokenRequest(string? Name);
+
 // ---- Chat ----
 public record ChatTurnDto(string Role, string Content);
 

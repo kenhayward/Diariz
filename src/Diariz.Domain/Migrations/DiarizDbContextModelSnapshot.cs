@@ -192,6 +192,46 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("ChatSessions");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.McpAccessToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Prefix")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("McpAccessTokens");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.MeetingMinutes", b =>
                 {
                     b.Property<Guid>("Id")
@@ -802,6 +842,17 @@ namespace Diariz.Domain.Migrations
                 {
                     b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
                         .WithMany("ChatSessions")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.McpAccessToken", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
+                        .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();

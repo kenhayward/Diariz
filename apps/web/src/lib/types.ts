@@ -251,6 +251,23 @@ export interface UserSettings {
   defaultReasoningEffort: string;
 }
 
+/// A stored MCP personal access token (the secret is never returned — only a short display prefix).
+export interface McpToken {
+  id: string;
+  name: string;
+  prefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+/// The response to generating an MCP token: the plaintext token, shown to the user exactly once.
+export interface McpTokenCreated {
+  id: string;
+  name: string;
+  prefix: string;
+  token: string;
+}
+
 /// A built-in chat tool's state for the settings panel.
 export interface ChatToolInfo {
   name: string;

@@ -22,6 +22,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<RecordingAction> RecordingActions => Set<RecordingAction>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
+    public DbSet<McpAccessToken> McpAccessTokens => Set<McpAccessToken>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -219,6 +220,21 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.HasOne(c => c.User)
                 .WithMany(u => u.ChatSessions)
                 .HasForeignKey(c => c.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Per-user MCP personal access tokens. Only the SHA-256 hash is stored (unique, so incoming tokens
+        // can be looked up by hash); deleting a user removes their tokens. Provider-agnostic shape.
+        builder.Entity<McpAccessToken>(e =>
+        {
+            e.HasIndex(t => t.TokenHash).IsUnique();
+            e.HasIndex(t => t.UserId);
+            e.Property(t => t.Name).HasMaxLength(128);
+            e.Property(t => t.TokenHash).HasMaxLength(64);
+            e.Property(t => t.Prefix).HasMaxLength(32);
+            e.HasOne(t => t.User)
+                .WithMany()
+                .HasForeignKey(t => t.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

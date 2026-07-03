@@ -5,6 +5,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth";
 import { useLanguage } from "../language";
 import { fetchLanguages } from "../lib/languages";
+import McpAccessSection from "./McpAccessSection";
 
 /// Personal preferences for any user: display name, native language (the default translation target),
 /// and the language the app UI is shown in. Saving re-issues the access token so the new name shows
@@ -180,6 +181,8 @@ export default function PreferencesModal({ onClose }: { onClose: () => void }) {
               <p className="text-sm text-gray-500 dark:text-gray-400">{t("googleNotConnected")}</p>
             )}
           </div>
+
+          <McpAccessSection />
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t px-5 py-3 dark:border-gray-700">

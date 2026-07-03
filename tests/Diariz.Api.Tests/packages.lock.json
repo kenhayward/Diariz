@@ -167,6 +167,11 @@
           "Microsoft.EntityFrameworkCore": "9.0.17"
         }
       },
+      "Microsoft.Extensions.AI.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.5.2",
+        "contentHash": "Ei+YWV9Ybnps7pR1dgjlG29gelXEwZkhLVAcWmKe6HvXS6LNBYgSdWiY3Hk9OZXYtK34rv/NtLWBQYQGOBQYPQ=="
+      },
       "Microsoft.IdentityModel.Abstractions": {
         "type": "Transitive",
         "resolved": "8.0.1",
@@ -239,6 +244,30 @@
         "dependencies": {
           "BouncyCastle.Cryptography": "2.6.2",
           "System.Security.Cryptography.Pkcs": "10.0.0"
+        }
+      },
+      "ModelContextProtocol": {
+        "type": "Transitive",
+        "resolved": "1.4.0",
+        "contentHash": "CAmnAMQIMax2t9naUgyDAkVBj329EhQCiHcbfirMFNgP6ShQ8hJdJb0OLoaBpeGjkunH3IOjRXLdwXGKKwMlLA==",
+        "dependencies": {
+          "ModelContextProtocol.Core": "1.4.0"
+        }
+      },
+      "ModelContextProtocol.AspNetCore": {
+        "type": "Transitive",
+        "resolved": "1.4.0",
+        "contentHash": "Q/xGhfhbCfZsoeEsEqBeiyzr6AJw2cBUTKN3Giz3QRmWyRzn62ISsgJCTnk2/VPMNj2/Spb2jYpPahnMZWvaPg==",
+        "dependencies": {
+          "ModelContextProtocol": "1.4.0"
+        }
+      },
+      "ModelContextProtocol.Core": {
+        "type": "Transitive",
+        "resolved": "1.4.0",
+        "contentHash": "6ZJFQTgYwdu0IacUUTNExAY2Z+JFuTd10CPeORalQtuGPY4hdUqq0BXxTpNEP0n7ajruNsGXyCKQLP0erIZmog==",
+        "dependencies": {
+          "Microsoft.Extensions.AI.Abstractions": "10.5.2"
         }
       },
       "Newtonsoft.Json": {
@@ -426,6 +455,7 @@
           "Microsoft.AspNetCore.OpenApi": "[10.0.9, )",
           "Microsoft.OpenApi": "[2.7.5, )",
           "MimeKit": "[4.17.0, )",
+          "ModelContextProtocol.AspNetCore": "[1.4.0, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[9.*, )",
           "Pgvector.EntityFrameworkCore": "[0.3.0, )",
           "StackExchange.Redis": "[3.0.0, )",
@@ -436,7 +466,7 @@
       "diariz.api.testsupport": {
         "type": "Project",
         "dependencies": {
-          "Diariz.Api": "[0.62.6, )"
+          "Diariz.Api": "[0.68.0, )"
         }
       },
       "diariz.domain": {
