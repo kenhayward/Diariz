@@ -168,7 +168,12 @@ if (mcpOAuth.Enabled)
     // issued tokens survive a container recreate. With no keys volume (local dev) fall back to ephemeral certs.
     var oidcKeysDir = !string.IsNullOrWhiteSpace(mcpOAuth.KeysPath) ? mcpOAuth.KeysPath : dpKeys;
 
-    builder.Services.AddDiarizMcpOAuth(mcpOAuth, issuer, oidcKeysDir, builder.Environment.IsDevelopment());
+    // The canonical MCP resource identifier (token audience + protected-resource metadata), shared so token
+    // issuance, validation, and the metadata document all agree.
+    var mcpResource = OAuthResource.Resolve(issuer, overrideValue: null);
+    builder.Services.AddSingleton(new McpResourceIdentifier(mcpResource));
+
+    builder.Services.AddDiarizMcpOAuth(mcpOAuth, issuer, oidcKeysDir, builder.Environment.IsDevelopment(), mcpResource);
     // Bridges the SPA JWT consent screen to the browser-redirect /connect/authorize step (encrypted cookie).
     builder.Services.AddSingleton<IOAuthConsentTicketProtector, OAuthConsentTicketProtector>();
 }

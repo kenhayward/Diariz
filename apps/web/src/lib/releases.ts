@@ -91,6 +91,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.79.0",
+    date: "2026-07-03",
+    pr: 175,
+    headline: "Connect Claude on the web (claude.ai) via sign-in",
+    summary:
+      "Completes the OAuth path so you can now add Diariz as a connector on the Claude website - which, unlike " +
+      "Claude Desktop and Code, can only connect by signing in, not by pasting a token. Claude discovers how to " +
+      "connect, you approve it on the Diariz consent screen, and it then works with the same tools as the " +
+      "token-based connection - scoped to your account. The existing personal-token setup for Desktop/Code is " +
+      "unchanged, and the connections can also be used from Desktop/Code without pasting a token. Deploying it " +
+      "needs a server redeploy; if you run your own reverse proxy, it must forward the new /connect and " +
+      "/.well-known paths to the API (like /api and /mcp).",
+    added: [
+      "The /mcp endpoint now accepts an OAuth sign-in token as well as a personal access token.",
+      "OAuth discovery documents (protected-resource + authorization-server metadata) and a self-registration endpoint, so Claude can set up the connection automatically.",
+    ],
+  },
+  {
     version: "0.78.0",
     date: "2026-07-03",
     pr: 174,

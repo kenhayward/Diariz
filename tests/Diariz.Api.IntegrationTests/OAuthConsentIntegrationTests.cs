@@ -33,7 +33,7 @@ public class OAuthConsentIntegrationTests(ContainersFixture fx) : IDisposable
         services.AddIdentityCore<ApplicationUser>().AddRoles<IdentityRole<Guid>>().AddEntityFrameworkStores<DiarizDbContext>();
         services.AddSingleton<IOptions<McpOAuthOptions>>(Options.Create(options));
         services.AddSingleton<IOAuthConsentTicketProtector>(new OAuthConsentTicketProtector(new EphemeralDataProtectionProvider()));
-        services.AddDiarizMcpOAuth(options, issuer: "https://diariz.example.com", keysDir: _keysDir, isDevelopment: true);
+        services.AddDiarizMcpOAuth(options, issuer: "https://diariz.example.com", keysDir: _keysDir, isDevelopment: true, resource: "https://diariz.example.com/mcp");
         return services.BuildServiceProvider();
     }
 

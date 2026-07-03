@@ -29,7 +29,7 @@ public class OAuthRegistrationIntegrationTests(ContainersFixture fx) : IDisposab
         services.AddLogging();
         services.AddDbContext<DiarizDbContext>(o => o.UseNpgsql(fx.PostgresConnectionString, x => x.UseVector()));
         services.AddSingleton<IOptions<McpOAuthOptions>>(Options.Create(options));
-        services.AddDiarizMcpOAuth(options, issuer: "https://diariz.example.com", keysDir: _keysDir, isDevelopment: true);
+        services.AddDiarizMcpOAuth(options, issuer: "https://diariz.example.com", keysDir: _keysDir, isDevelopment: true, resource: "https://diariz.example.com/mcp");
         return services.BuildServiceProvider();
     }
 
@@ -46,6 +46,16 @@ public class OAuthRegistrationIntegrationTests(ContainersFixture fx) : IDisposab
         // The certificates were persisted to the keys directory so they survive a restart.
         Assert.True(File.Exists(Path.Combine(_keysDir, "oidc-signing.pfx")));
         Assert.True(File.Exists(Path.Combine(_keysDir, "oidc-encryption.pfx")));
+    }
+
+    [Fact]
+    public void ValidationConfiguration_RequiresTheMcpResourceAudience()
+    {
+        using var provider = BuildProvider();
+        // The in-process resource server (used by /mcp to accept OAuth tokens) must require the MCP resource as
+        // the audience, so a token minted for a different resource is rejected.
+        var validation = provider.GetRequiredService<IOptionsMonitor<OpenIddict.Validation.OpenIddictValidationOptions>>().CurrentValue;
+        Assert.Contains("https://diariz.example.com/mcp", validation.Audiences);
     }
 
     [Fact]
