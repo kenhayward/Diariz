@@ -116,6 +116,40 @@ public sealed class DiarizMcpHandlers
         };
     }
 
+    public ValueTask<ListPromptsResult> ListPromptsAsync(
+        RequestContext<ListPromptsRequestParams> ctx, CancellationToken ct)
+    {
+        var prompts = McpPrompts.All.Select(p => new Prompt
+        {
+            Name = p.Name,
+            Description = p.Description,
+            Arguments = p.Arguments.Count == 0
+                ? null
+                : p.Arguments
+                    .Select(a => new PromptArgument { Name = a.Name, Description = a.Description, Required = a.Required })
+                    .ToList(),
+        }).ToList();
+        return ValueTask.FromResult(new ListPromptsResult { Prompts = prompts });
+    }
+
+    public ValueTask<GetPromptResult> GetPromptAsync(
+        RequestContext<GetPromptRequestParams> ctx, CancellationToken ct)
+    {
+        var name = ctx.Params?.Name;
+        var text = McpPrompts.Render(name, key => ReadPromptArg(ctx.Params?.Arguments, key))
+            ?? throw new InvalidOperationException($"Unknown prompt: {name}");
+        return ValueTask.FromResult(new GetPromptResult
+        {
+            Description = McpPrompts.Find(name)?.Description,
+            Messages = [new PromptMessage { Role = Role.User, Content = new TextContentBlock { Text = text } }],
+        });
+    }
+
+    private static string? ReadPromptArg(IDictionary<string, JsonElement>? args, string key) =>
+        args is not null && args.TryGetValue(key, out var v) && v.ValueKind == JsonValueKind.String
+            ? v.GetString()
+            : null;
+
     private static CallToolResult Error(string message) =>
         new() { IsError = true, Content = [new TextContentBlock { Text = message }] };
 
