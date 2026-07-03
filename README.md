@@ -53,7 +53,8 @@ server-default) OpenAI-compatible LLM endpoint, with the API key encrypted at re
 - **Chat tools** (opt-in, per-user): the assistant can call **built-in tools** that search your **whole
 transcript library** — *who said a phrase*, *what a person said about a topic*, *search transcripts*, *when a
 topic was discussed*, *count mentions*, *list recordings* (by date / name / speaker / topic), *list action
-items*, *get a recording's summary*, *who attended*, *speaker talk time*, and *the lines around a moment* —
+items*, *get a recording's summary*, *who attended*, *speaker talk time*, *the lines around a moment*, and a
+recording's *full transcript*, *meeting minutes*, or *details* —
 answering as **When · Who · What**. Two **write** tools let it act: **email you** (a *send-email* tool that
 composes a subject + body and always delivers to your **own** registered address — it can never email anyone
 else, and it files a copy of each sent email onto the transcript as a Markdown attachment), and **add its
