@@ -50,8 +50,9 @@ documents** (files or URLs) to a recording, open them from the transcript page, 
 to the chat** (PDFs, text, Office docs, emails/calendar invites are read into text; URLs are fetched).
 You can also **connect Claude to your transcripts over MCP**: generate a personal access token in
 Preferences → Claude / MCP access and paste it into Claude (Desktop or Code) — Claude then uses the same
-built-in tools to search and read *your* meetings (and can email a summary to you), scoped to your account
-and revocable at any time.
+built-in tools to search and read *your* meetings (and can email a summary to you), or **@-mention a specific
+meeting** (its transcript or minutes, exposed as MCP resources) — all scoped to your account and revocable at
+any time.
 Recordings organise into **sections** (with sub-sections) and drag-and-drop ordering, can be **merged**
 into one, and can be browsed as a **list, a calendar, or a cross-meeting Actions list** (the left panel is
 **Meetings**). A **status bar** along the bottom shows live progress (transcribing, summarising, merging,
@@ -87,6 +88,22 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.71.0",
+    date: "2026-07-03",
+    pr: 160,
+    headline: "@-mention your meetings in Claude (MCP resources)",
+    summary:
+      "The MCP connection now exposes your recordings as **resources**, so in Claude you can **@-mention a " +
+      "specific meeting** — its **transcript** or its **meeting minutes** — instead of asking the assistant to " +
+      "go find it. Each recording that has a transcript shows up as a browsable resource (and a second one for " +
+      "its minutes, when generated), delivered as Markdown. Everything stays **per-user and read-only**: you " +
+      "only ever see your own recordings, matched to your access token. Tools + resources are live; canned " +
+      "prompt starters are the next step.",
+    added: [
+      "MCP resources: each recording's transcript (and minutes, when present) is exposed at diariz://recording/{id}/transcript|minutes so Claude can @-mention a specific meeting. Owner-scoped, read-only.",
+    ],
+  },
   {
     version: "0.70.0",
     date: "2026-07-03",
