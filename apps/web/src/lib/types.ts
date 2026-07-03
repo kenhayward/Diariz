@@ -260,6 +260,14 @@ export interface McpToken {
   lastUsedAt: string | null;
 }
 
+/// An active OAuth connection (e.g. the claude.ai web MCP connector) - a client the user granted access to.
+export interface OAuthConnection {
+  id: string;
+  clientName: string;
+  connectedAt: string | null;
+  scopes: string[];
+}
+
 /// The response to generating an MCP token: the plaintext token, shown to the user exactly once.
 export interface McpTokenCreated {
   id: string;

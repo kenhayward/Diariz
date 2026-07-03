@@ -23,6 +23,7 @@ import type {
   Language,
   McpToken,
   McpTokenCreated,
+  OAuthConnection,
   PlatformSettings,
   RecordingAction,
   ActionListItem,
@@ -559,6 +560,17 @@ export const api = {
 
   async revokeMcpToken(id: string): Promise<void> {
     await http.delete(`/api/user/mcp-tokens/${id}`);
+  },
+
+  /// Active OAuth connections (the claude.ai web MCP connector and any other OAuth client the user approved).
+  async listOAuthConnections(): Promise<OAuthConnection[]> {
+    const { data } = await http.get<OAuthConnection[]>("/api/oauth/connections");
+    return data;
+  },
+
+  /// Revoke an OAuth connection - deletes the authorization + its tokens so the client can no longer connect.
+  async revokeOAuthConnection(id: string): Promise<void> {
+    await http.delete(`/api/oauth/connections/${encodeURIComponent(id)}`);
   },
 
   // ---- Storage quotas ----

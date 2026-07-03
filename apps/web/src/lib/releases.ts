@@ -49,12 +49,14 @@ the tools on, and choose which, under Settings → AI - where you
 can also **enable reasoning** (and pick a level) for reasoning-capable models. You can **attach supporting
 documents** (files or URLs) to a recording, open them from the transcript page, and optionally **feed them
 to the chat** (PDFs, text, Office docs, emails/calendar invites are read into text; URLs are fetched).
-You can also **connect Claude to your transcripts over MCP**: generate a personal access token in
-Preferences → Claude / MCP access and paste it into Claude (Desktop or Code) - Claude then uses the same
-built-in tools to search and read *your* meetings (and can email a summary to you), **@-mention a specific
-meeting** (its transcript or minutes, exposed as MCP resources), or run a **prompt starter** (summarise your
-last meeting, list open action items, find where a topic was discussed) - all scoped to your account and
-revocable at any time.
+You can also **connect Claude to your transcripts over MCP**, two ways: **sign in** from the **Claude website**
+(add Diariz as a custom connector and approve it on a consent screen - an OAuth flow, no token to copy), or
+generate a **personal access token** in Preferences → Claude / MCP access and paste it into Claude Desktop or
+Code. Either way Claude uses the same built-in tools to search and read *your* meetings (and can email a summary
+to you), **@-mention a specific meeting** (its transcript or minutes, exposed as MCP resources), or run a
+**prompt starter** (summarise your last meeting, list open action items, find where a topic was discussed) - all
+scoped to your account. You manage both **tokens and web connections** (with one-click **revoke**) in the same
+Preferences section.
 Recordings organise into **sections** (with sub-sections) and drag-and-drop ordering, can be **merged**
 into one, and can be browsed as a **list, a calendar, or a cross-meeting Actions list** (the left panel is
 **Meetings**). A **status bar** along the bottom shows live progress (transcribing, summarising, merging,
@@ -90,6 +92,21 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.80.0",
+    date: "2026-07-03",
+    pr: 176,
+    headline: "Manage your Claude web connections",
+    summary:
+      "Finishes the OAuth-for-MCP work with a place to see and remove your connections. Preferences → Claude / " +
+      "MCP access now lists the apps you signed in to connect (such as the Claude website) alongside your " +
+      "personal access tokens, and a one-click Disconnect revokes a connection - the client can no longer reach " +
+      "your account. That completes the ability to connect Claude on the web by signing in, with full control " +
+      "over what stays connected. Deploying it only needs a server redeploy.",
+    added: [
+      "A Web connections list in Preferences → Claude / MCP access, with one-click Disconnect (revoke).",
+    ],
+  },
   {
     version: "0.79.0",
     date: "2026-07-03",

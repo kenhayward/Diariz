@@ -11,6 +11,7 @@ export default function McpAccessSection() {
   const { t } = useTranslation("account");
   const qc = useQueryClient();
   const { data: tokens } = useQuery({ queryKey: ["mcp-tokens"], queryFn: api.listMcpTokens });
+  const { data: connections } = useQuery({ queryKey: ["oauth-connections"], queryFn: api.listOAuthConnections });
 
   const [name, setName] = useState("");
   const [created, setCreated] = useState<McpTokenCreated | null>(null);
@@ -59,6 +60,16 @@ export default function McpAccessSection() {
     try {
       await api.revokeMcpToken(id);
       qc.invalidateQueries({ queryKey: ["mcp-tokens"] });
+    } catch (e) {
+      setError(apiErrorMessage(e, t("mcpRevokeError")));
+    }
+  }
+
+  async function disconnect(id: string) {
+    setError(null);
+    try {
+      await api.revokeOAuthConnection(id);
+      qc.invalidateQueries({ queryKey: ["oauth-connections"] });
     } catch (e) {
       setError(apiErrorMessage(e, t("mcpRevokeError")));
     }
@@ -139,6 +150,35 @@ export default function McpAccessSection() {
         ))}
         {tokens?.length === 0 && <li className="text-xs text-gray-400 dark:text-gray-500">{t("mcpNoTokens")}</li>}
       </ul>
+
+      {/* OAuth connections: clients (e.g. the claude.ai web connector) the user signed in to grant access. */}
+      <div className="mt-3 border-t pt-2 dark:border-gray-700">
+        <span className="mb-1 block text-sm text-gray-600 dark:text-gray-300">{t("mcpConnections")}</span>
+        <p className="text-xs text-gray-400 dark:text-gray-500">{t("mcpConnectionsIntro")}</p>
+        <ul className="mt-1 space-y-1">
+          {connections?.map((c) => (
+            <li
+              key={c.id}
+              className="flex items-center justify-between gap-2 text-xs text-gray-600 dark:text-gray-300"
+            >
+              <span className="truncate">
+                {c.clientName}
+                {c.connectedAt && ` · ${t("mcpConnectedOn", { date: new Date(c.connectedAt).toLocaleDateString() })}`}
+              </span>
+              <button
+                type="button"
+                onClick={() => disconnect(c.id)}
+                className="shrink-0 text-red-600 hover:underline dark:text-red-400"
+              >
+                {t("mcpDisconnect")}
+              </button>
+            </li>
+          ))}
+          {connections?.length === 0 && (
+            <li className="text-xs text-gray-400 dark:text-gray-500">{t("mcpNoConnections")}</li>
+          )}
+        </ul>
+      </div>
 
       {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
     </div>
