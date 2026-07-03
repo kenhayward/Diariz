@@ -146,6 +146,16 @@ public class AppPublicOptions
     public string PublicUrl { get; set; } = "";
 }
 
+/// <summary>The MCP server (Streamable-HTTP <c>/mcp</c> endpoint that lets Claude connect to the user's own
+/// transcripts). The public web origin used to make transcript deep-links absolute is reused from
+/// <see cref="AppPublicOptions.PublicUrl"/> (falling back to the request origin).</summary>
+public class McpOptions
+{
+    public const string Section = "Mcp";
+    /// <summary>Master switch. When false the <c>/mcp</c> endpoint is not mapped.</summary>
+    public bool Enabled { get; set; } = true;
+}
+
 /// <summary>Limits and codec policy for user-uploaded audio files (the "Upload" button). Recorded clips
 /// from the browser are not gated by these.</summary>
 public class UploadOptions

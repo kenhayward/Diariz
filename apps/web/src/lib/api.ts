@@ -21,6 +21,8 @@ import type {
   ChatUsage,
   GrantResult,
   Language,
+  McpToken,
+  McpTokenCreated,
   PlatformSettings,
   RecordingAction,
   ActionListItem,
@@ -526,6 +528,24 @@ export const api = {
 
   async updateUserSettings(body: UpdateUserSettings): Promise<void> {
     await http.put("/api/user/settings", body);
+  },
+
+  // ---- MCP access tokens (Claude connection) ----
+
+  async listMcpTokens(): Promise<McpToken[]> {
+    const { data } = await http.get<McpToken[]>("/api/user/mcp-tokens");
+    return data;
+  },
+
+  /// Generate a new MCP token. The plaintext token is returned once — the caller must show it to the user
+  /// immediately (it can never be retrieved again).
+  async createMcpToken(name: string): Promise<McpTokenCreated> {
+    const { data } = await http.post<McpTokenCreated>("/api/user/mcp-tokens", { name });
+    return data;
+  },
+
+  async revokeMcpToken(id: string): Promise<void> {
+    await http.delete(`/api/user/mcp-tokens/${id}`);
   },
 
   // ---- Storage quotas ----

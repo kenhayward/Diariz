@@ -32,6 +32,7 @@ builder.Services.Configure<AppPublicOptions>(builder.Configuration.GetSection(Ap
 builder.Services.Configure<IdentificationOptions>(builder.Configuration.GetSection(IdentificationOptions.Section));
 builder.Services.Configure<UploadOptions>(builder.Configuration.GetSection(UploadOptions.Section));
 builder.Services.Configure<AttachmentOptions>(builder.Configuration.GetSection(AttachmentOptions.Section));
+builder.Services.Configure<McpOptions>(builder.Configuration.GetSection(McpOptions.Section));
 
 // Honour X-Forwarded-* from the reverse proxy (nginx/TLS terminator) so Request.Scheme/IsHttps reflect the
 // browser's HTTPS — needed for the OAuth state cookie's Secure flag and any request-derived URLs. The proxy
@@ -102,9 +103,21 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 return Task.CompletedTask;
             }
         };
-    });
+    })
+    // MCP personal-access-token scheme, used only by the /mcp endpoint (a bearer token pasted into Claude's
+    // MCP config). Independent of the JWT session.
+    .AddScheme<Diariz.Api.Auth.McpAuthSchemeOptions, Diariz.Api.Auth.McpBearerAuthenticationHandler>(
+        Diariz.Api.Auth.McpBearerAuthenticationHandler.SchemeName, _ => { });
 builder.Services.AddAuthorization(o =>
-    o.AddPolicy("Admin", p => p.RequireRole(Roles.Administrator, Roles.PlatformAdministrator)));
+{
+    o.AddPolicy("Admin", p => p.RequireRole(Roles.Administrator, Roles.PlatformAdministrator));
+    // The /mcp endpoint authenticates only with the MCP token scheme (not the browser's JWT).
+    o.AddPolicy(Diariz.Api.Auth.McpBearerAuthenticationHandler.SchemeName, p =>
+    {
+        p.AddAuthenticationSchemes(Diariz.Api.Auth.McpBearerAuthenticationHandler.SchemeName);
+        p.RequireAuthenticatedUser();
+    });
+});
 
 // ---- Storage (MinIO / S3) ----
 builder.Services.AddSingleton<IAmazonS3>(_ =>
@@ -214,6 +227,32 @@ builder.Services.AddScoped<IGoogleTokenProvider, GoogleTokenProvider>();
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient<IGoogleCalendarClient, GoogleCalendarClient>();
 
+// ---- MCP server (in-process Streamable-HTTP /mcp endpoint; per-user token auth) ----
+// The token services back both the management controller (JWT) and the /mcp bearer scheme.
+builder.Services.AddSingleton<IMcpTokenService, McpTokenService>();
+builder.Services.AddScoped<IMcpTokenAuthenticator, McpTokenAuthenticator>();
+var mcpOptions = builder.Configuration.GetSection(McpOptions.Section).Get<McpOptions>() ?? new McpOptions();
+if (mcpOptions.Enabled)
+{
+    builder.Services.AddHttpContextAccessor();
+    // The handler reads the current request's user/services via IHttpContextAccessor (its backing store is a
+    // static AsyncLocal, so a plain instance captured here sees the live request). MapMcp runs it in-pipeline.
+    var mcpHandlers = new Diariz.Api.Mcp.DiarizMcpHandlers(new HttpContextAccessor());
+    var mcpVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+    builder.Services.AddMcpServer(o =>
+        {
+            o.ServerInfo = new ModelContextProtocol.Protocol.Implementation { Name = "Diariz", Version = mcpVersion };
+            o.Capabilities = new ModelContextProtocol.Protocol.ServerCapabilities
+            {
+                Tools = new ModelContextProtocol.Protocol.ToolsCapability(),
+            };
+            o.Handlers.ListToolsHandler = mcpHandlers.ListToolsAsync;
+            o.Handlers.CallToolHandler = mcpHandlers.CallToolAsync;
+        })
+        // Stateless: no server-initiated messages, so each POST is self-contained (no session id / SSE stream).
+        .WithHttpTransport(t => t.Stateless = true);
+}
+
 // ---- App services ----
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IPlatformSettingsService, PlatformSettingsService>();
@@ -254,6 +293,9 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<TranscriptionHub>("/hubs/transcription");
+// MCP endpoint (Streamable HTTP), authenticated with the per-user MCP token scheme only.
+if (mcpOptions.Enabled)
+    app.MapMcp("/mcp").RequireAuthorization(Diariz.Api.Auth.McpBearerAuthenticationHandler.SchemeName);
 var appVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
 app.MapGet("/health", () => Results.Ok(new { status = "ok", version = appVersion }));
 

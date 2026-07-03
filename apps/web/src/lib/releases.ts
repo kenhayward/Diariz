@@ -47,6 +47,10 @@ the tools on, and choose which, under Settings → AI — where you
 can also **enable reasoning** (and pick a level) for reasoning-capable models. You can **attach supporting
 documents** (files or URLs) to a recording, open them from the transcript page, and optionally **feed them
 to the chat** (PDFs, text, Office docs, emails/calendar invites are read into text; URLs are fetched).
+You can also **connect Claude to your transcripts over MCP**: generate a personal access token in
+Preferences → Claude / MCP access and paste it into Claude (Desktop or Code) — Claude then uses the same
+built-in tools to search and read *your* meetings (and can email a summary to you), scoped to your account
+and revocable at any time.
 Recordings organise into **sections** (with sub-sections) and drag-and-drop ordering, can be **merged**
 into one, and can be browsed as a **list, a calendar, or a cross-meeting Actions list** (the left panel is
 **Meetings**). A **status bar** along the bottom shows live progress (transcribing, summarising, merging,
@@ -82,6 +86,26 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.69.0",
+    date: "2026-07-03",
+    pr: 158,
+    headline: "Connect Claude to your transcripts (MCP server)",
+    summary:
+      "Diariz now includes a built-in **MCP server**, so you can connect **Claude** (Desktop or Code) " +
+      "directly to your own meeting transcripts. Generate a personal access token under **Preferences → " +
+      "Claude / MCP access**, then paste the URL and token into Claude's MCP config — Claude can then search " +
+      "and read *your* transcripts and answer questions grounded in your meetings, using the same built-in " +
+      "tools the in-app chat uses (search, who-said-what, action items, summaries, attendees, talk time, and " +
+      "more). It can also **email you** a summary or notes (only ever to your own address). Access is " +
+      "**per-user and secure**: each token is shown once and stored only as a hash, works only for your own " +
+      "recordings, and can be **revoked** at any time. Which tools are available follows your per-tool choices " +
+      "in Settings → AI. Read/search only — plus email-to-self; nothing else is written back.",
+    added: [
+      "MCP server at /mcp (Streamable HTTP): connect Claude Desktop/Code with a per-user token to search and read your transcripts.",
+      "Preferences → Claude / MCP access: generate, copy (once), list and revoke personal access tokens, with a ready-to-paste Claude config snippet.",
+    ],
+  },
   {
     version: "0.68.0",
     date: "2026-07-02",

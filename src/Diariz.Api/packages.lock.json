@@ -106,6 +106,15 @@
           "System.Security.Cryptography.Pkcs": "10.0.0"
         }
       },
+      "ModelContextProtocol.AspNetCore": {
+        "type": "Direct",
+        "requested": "[1.4.0, )",
+        "resolved": "1.4.0",
+        "contentHash": "Q/xGhfhbCfZsoeEsEqBeiyzr6AJw2cBUTKN3Giz3QRmWyRzn62ISsgJCTnk2/VPMNj2/Spb2jYpPahnMZWvaPg==",
+        "dependencies": {
+          "ModelContextProtocol": "1.4.0"
+        }
+      },
       "Npgsql.EntityFrameworkCore.PostgreSQL": {
         "type": "Direct",
         "requested": "[9.*, )",
@@ -289,6 +298,11 @@
           "Microsoft.EntityFrameworkCore": "9.0.17"
         }
       },
+      "Microsoft.Extensions.AI.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.5.2",
+        "contentHash": "Ei+YWV9Ybnps7pR1dgjlG29gelXEwZkhLVAcWmKe6HvXS6LNBYgSdWiY3Hk9OZXYtK34rv/NtLWBQYQGOBQYPQ=="
+      },
       "Microsoft.Extensions.DependencyModel": {
         "type": "Transitive",
         "resolved": "9.0.17",
@@ -338,6 +352,22 @@
         "contentHash": "kDimB6Dkd3nkW2oZPDkMkVHfQt3IDqO5gL0oa8WVy3OP4uE8Ij+8TXnqg9TOd9ufjsY3IDiGz7pCUbnfL18tjg==",
         "dependencies": {
           "Microsoft.IdentityModel.Logging": "8.0.1"
+        }
+      },
+      "ModelContextProtocol": {
+        "type": "Transitive",
+        "resolved": "1.4.0",
+        "contentHash": "CAmnAMQIMax2t9naUgyDAkVBj329EhQCiHcbfirMFNgP6ShQ8hJdJb0OLoaBpeGjkunH3IOjRXLdwXGKKwMlLA==",
+        "dependencies": {
+          "ModelContextProtocol.Core": "1.4.0"
+        }
+      },
+      "ModelContextProtocol.Core": {
+        "type": "Transitive",
+        "resolved": "1.4.0",
+        "contentHash": "6ZJFQTgYwdu0IacUUTNExAY2Z+JFuTd10CPeORalQtuGPY4hdUqq0BXxTpNEP0n7ajruNsGXyCKQLP0erIZmog==",
+        "dependencies": {
+          "Microsoft.Extensions.AI.Abstractions": "10.5.2"
         }
       },
       "Mono.TextTemplating": {

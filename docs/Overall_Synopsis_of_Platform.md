@@ -243,6 +243,32 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   transcripts before saying it doesn't know. With tools off, chat is the same single-pass stream as before.
   Tools run inside the API (no worker) — server-redeploy only.
 
+## MCP server (connect Claude to transcripts)
+
+Diariz hosts a **Model Context Protocol server in-process** (the official `ModelContextProtocol.AspNetCore`
+SDK) at **`/mcp`** (Streamable HTTP, **stateless** — no server-initiated messages), so a user can connect
+**Claude** (Desktop or Code) directly to *their own* transcripts. It is **not a new deployable** — it runs in
+the API and ships with a **server redeploy**.
+
+- **Per-user token auth.** The endpoint is guarded by a dedicated auth scheme (`McpBearerAuthenticationHandler`,
+  scheme `"Mcp"`), separate from the browser JWT. A user generates a personal access token in **Preferences →
+  Claude / MCP access** (`McpTokensController`, `/api/user/mcp-tokens` GET/POST/DELETE, JWT-authed). Tokens are
+  `dz_mcp_` + base64url(32 random bytes); **only their SHA-256 hash is stored** (`McpAccessToken`), shown to the
+  user **once** at generation. On each `/mcp` request the presented bearer is hashed and looked up
+  (`McpTokenAuthenticator`), the owner's `NameIdentifier` claim is set (so every query stays owner-scoped like
+  the rest of the API), and `LastUsedAt` is recorded. Multiple named tokens per user; revoke = delete the row.
+- **Tools = the chat tool registry.** Low-level handlers (`DiarizMcpHandlers`) project the same
+  `IChatTool`/`IChatToolRegistry` used by chat onto MCP `tools/list` + `tools/call` — no duplicate logic, and a
+  new `IChatTool` lights up in both chat and MCP. The catalog is the user's **per-tool-enabled** tools
+  (respecting Settings → AI per-tool choices, but **not** the chat *master* switch — the MCP opt-in is holding a
+  token), **minus `add_as_attachment`** (which needs an in-chat selection). `send_email` is included (it can only
+  ever email the user's own address). Tool results' in-app deep-links are rewritten to **absolute** URLs
+  (`McpLinkRewriter`, against `App:PublicUrl` or the request origin) so they're clickable in Claude.
+- **Config.** `Mcp:Enabled` (default true) mounts the endpoint. `IHttpContextAccessor` provides the request's
+  user + scoped services inside the handlers. Claude Code: `claude mcp add --transport http diariz {origin}/mcp
+  --header "Authorization: Bearer dz_mcp_…"` (or the `headers` block in `.mcp.json`); Claude Desktop via its JSON
+  config or `mcp-remote`. Resources + prompts are planned as follow-ups (tools ship first).
+
 ## Auth, multi-tenancy, and roles
 
 - **ASP.NET Core Identity** (Guid keys) issues **JWT** bearer tokens (`TokenService`). Browsers pass the

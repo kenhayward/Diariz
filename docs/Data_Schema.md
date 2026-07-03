@@ -55,6 +55,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddGoogleIdentity` | `ApplicationUser.GoogleSubject` (varchar(256) null, **unique index**) + `ApplicationUser.PictureUrl` (varchar(1024) null) — Google sign-in linkage + profile picture |
 | `AddGoogleConnection` | `UserSettings.GoogleRefreshTokenEncrypted` (text null, encrypted) + `UserSettings.GoogleCalendarGranted`/`GoogleGmailGranted` (bool, default false) — opt-in Google Calendar/Gmail data access |
 | `RemoveGoogleGmailGranted` | drops `UserSettings.GoogleGmailGranted` — the Gmail-draft feature was removed (Gmail scopes are restricted; not worth the security assessment). Calendar access unchanged |
+| `AddMcpAccessTokens` | `McpAccessTokens` (per-user MCP personal access tokens; SHA-256 hash only, **unique** on `TokenHash`, cascade on user delete) — connect Claude to transcripts over `/mcp` |
 
 ### Entity-relationship overview
 
@@ -328,6 +329,22 @@ Standard ASP.NET Identity schema with **Guid** keys: `AspNetUsers`, `AspNetRoles
 | `PictureUrl` | varchar(1024) null | Google profile picture URL (avatar; falls back to initials) |
 
 Roles: `Standard`, `Administrator`, `PlatformAdministrator` (rows in `AspNetRoles`).
+
+#### `McpAccessTokens`
+Per-user MCP personal access tokens (used by Claude to connect to `/mcp`). Only the hash is stored — the
+plaintext is shown to the user once at generation and is never recoverable.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `UserId` | uuid FK → AspNetUsers | owner; **cascade** on user delete |
+| `Name` | varchar(128) | user label (e.g. "Claude Desktop") |
+| `TokenHash` | varchar(64) | lowercase-hex SHA-256 of the full token; **unique index** (incoming tokens are hashed and looked up) |
+| `Prefix` | varchar(32) | short non-secret display prefix (e.g. `dz_mcp_ab12cd`) |
+| `CreatedAt` | timestamptz | |
+| `LastUsedAt` | timestamptz null | last time the token was presented on an MCP request |
+
+Indexes: unique `(TokenHash)`, `(UserId)`.
 
 ### Vector columns summary
 
