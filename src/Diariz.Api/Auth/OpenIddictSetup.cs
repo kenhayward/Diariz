@@ -1,6 +1,7 @@
 using Diariz.Api.Configuration;
 using Diariz.Domain;
 using OpenIddict.Abstractions;
+using OpenIddict.Server;
 
 namespace Diariz.Api.Auth;
 
@@ -17,7 +18,8 @@ public static class OpenIddictSetup
     /// set, pins the token issuer to the public origin. Transport security (HTTPS) is relaxed only when
     /// <paramref name="isDevelopment"/> is true (a plain http://localhost dev run).</summary>
     public static IServiceCollection AddDiarizMcpOAuth(
-        this IServiceCollection services, McpOAuthOptions options, string? issuer, string? keysDir, bool isDevelopment)
+        this IServiceCollection services, McpOAuthOptions options, string? issuer, string? keysDir,
+        bool isDevelopment, string resource)
     {
         services.AddOpenIddict()
             .AddCore(o => o.UseEntityFrameworkCore().UseDbContext<DiarizDbContext>())
@@ -25,6 +27,16 @@ public static class OpenIddictSetup
             {
                 o.SetAuthorizationEndpointUris("connect/authorize")
                  .SetTokenEndpointUris("connect/token");
+                // Serve discovery at both the OIDC and the RFC 8414 OAuth well-known paths (MCP clients probe
+                // either). OpenIddict has no native DCR endpoint, so advertise our hand-rolled one so a client
+                // knows where to register.
+                o.SetConfigurationEndpointUris(".well-known/openid-configuration", ".well-known/oauth-authorization-server");
+                o.AddEventHandler<OpenIddictServerEvents.HandleConfigurationRequestContext>(b => b.UseInlineHandler(ctx =>
+                {
+                    if (ctx.Issuer is not null)
+                        ctx.Metadata["registration_endpoint"] = new Uri(ctx.Issuer, "connect/register").AbsoluteUri;
+                    return default;
+                }));
 
                 o.AllowAuthorizationCodeFlow()
                  .AllowRefreshTokenFlow()
@@ -55,6 +67,15 @@ public static class OpenIddictSetup
                 // http://localhost dev run there is no TLS, so relax OpenIddict's HTTPS requirement there only.
                 if (isDevelopment)
                     aspNet.DisableTransportSecurityRequirement();
+            })
+            // Resource server: validate our own access tokens in-process (imports the server's keys), requiring
+            // the MCP resource as the audience so a token minted for anything else is rejected. Used by the
+            // /mcp bearer handler to accept an OAuth token alongside the static dz_mcp_ token.
+            .AddValidation(o =>
+            {
+                o.UseLocalServer();
+                o.AddAudiences(resource);
+                o.UseAspNetCore();
             });
 
         return services;

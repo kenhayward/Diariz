@@ -30,11 +30,14 @@ public sealed class OAuthAuthorizeController : ControllerBase
 {
     private readonly IOAuthConsentTicketProtector _consent;
     private readonly UserManager<ApplicationUser> _users;
+    private readonly McpResourceIdentifier _resource;
 
-    public OAuthAuthorizeController(IOAuthConsentTicketProtector consent, UserManager<ApplicationUser> users)
+    public OAuthAuthorizeController(
+        IOAuthConsentTicketProtector consent, UserManager<ApplicationUser> users, McpResourceIdentifier resource)
     {
         _consent = consent;
         _users = users;
+        _resource = resource;
     }
 
     [HttpGet("~/connect/authorize")]
@@ -77,7 +80,7 @@ public sealed class OAuthAuthorizeController : ControllerBase
         // Grant only the scopes the client asked for (OpenIddict already checked they're permitted), and bind
         // the MCP resource as the access-token audience so the /mcp resource server accepts it.
         identity.SetScopes(request.GetScopes());
-        identity.SetResources(McpOAuthOptions.Resource);
+        identity.SetResources(_resource.Value);
         identity.SetDestinations(GetDestinations);
 
         return SignIn(new ClaimsPrincipal(identity), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);

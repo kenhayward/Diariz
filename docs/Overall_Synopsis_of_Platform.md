@@ -255,7 +255,11 @@ the API and ships with a **server redeploy**.
 > nginx (`apps/web/nginx.conf`) proxies it with **`proxy_buffering off`** (Streamable HTTP streams responses as
 > `text/event-stream`, so buffering would stall the stream) and a long read timeout. **Any outer reverse proxy
 > in front of the web container must also forward `/mcp` with response buffering disabled** — otherwise the SPA
-> is served for `/mcp` (or a POST returns 405) and clients report "cannot load the MCP server".
+> is served for `/mcp` (or a POST returns 405) and clients report "cannot load the MCP server". The OAuth server
+> adds the same requirement for **`/connect/`** (authorize/token/register) and **`/.well-known/`** (discovery +
+> protected-resource metadata): both nginx and any outer proxy must forward them to the API, or an OAuth client
+> gets the SPA index.html instead of the metadata and the claude.ai connection never starts. (`/oauth/consent`
+> is deliberately a **SPA** route and must NOT be proxied.)
 
 - **Per-user token auth.** The endpoint is guarded by a dedicated auth scheme (`McpBearerAuthenticationHandler`,
   scheme `"Mcp"`), separate from the browser JWT. A user generates a personal access token in **Preferences →
@@ -312,11 +316,17 @@ the API and ships with a **server redeploy**.
   *allow* cookie for that client + an `Active`/`IsEnabled` user → issue the code (`SignIn` with `sub`, the
   requested scopes, and the `diariz-mcp` audience); a *deny* cookie → `access_denied`. The SPA consent screen
   (`OAuthConsent.tsx`, reusing the normal login with a `returnTo`) names the client and its access, and records
-  the decision via `POST /api/oauth/consent` (`OAuthConsentController`, JWT-authed + gated). Still **to come**:
-  the **`/mcp` resource-server validation** (accept an OAuth token *or* the static token) + RFC 9728
-  protected-resource metadata + advertising `registration_endpoint` in discovery (this is what makes claude.ai
-  able to connect end-to-end), and the **connections-management UI**. Config lives under the `McpOAuth` options
-  block; the whole server is gated by `McpOAuth:Enabled` (on by default).
+  the decision via `POST /api/oauth/consent` (`OAuthConsentController`, JWT-authed + gated). The **resource
+  server** is wired: OpenIddict `AddValidation().UseLocalServer()` validates the API's own access tokens
+  in-process, requiring the **canonical MCP resource** (`{issuer}/mcp`, `OAuthResource`) as the audience; the
+  `/mcp` bearer handler (`McpBearerAuthenticationHandler`) now accepts **either** a `dz_mcp_` static token **or**
+  an OAuth token (routing by the `dz_mcp_` prefix, bridging OpenIddict's `sub` claim to `ClaimTypes.NameIdentifier`
+  so owner-scoping is unchanged), and its 401 emits `WWW-Authenticate: Bearer resource_metadata="…"`. Discovery is
+  served: RFC 9728 protected-resource metadata at `/.well-known/oauth-protected-resource` (`WellKnownController`),
+  the AS metadata at both `/.well-known/openid-configuration` and `/.well-known/oauth-authorization-server`, with
+  the hand-rolled `registration_endpoint` advertised via an OpenIddict config event. This is the point at which
+  **claude.ai can connect end-to-end**. Still **to come**: the **connections-management UI** (list + revoke).
+  Config lives under the `McpOAuth` options block; the whole server is gated by `McpOAuth:Enabled` (on by default).
 
 ## Auth, multi-tenancy, and roles
 
