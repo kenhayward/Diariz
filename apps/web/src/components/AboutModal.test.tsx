@@ -26,5 +26,3 @@ describe("AboutModal", () => {
     expect(within(dialog).getByText(/ken hayward/i)).toBeTruthy();
   });
 });
-
-import { within } from "@testing-library/react";

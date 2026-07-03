@@ -91,6 +91,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.74.2",
+    date: "2026-07-03",
+    pr: 165,
+    headline: "Chore: remove a duplicate test import",
+    summary:
+      "Internal tidy-up with no user-facing change. A test file imported the same helper twice; the current " +
+      "build tolerated it, but a stricter build tool rejects it. Removing the stray line keeps the test suite " +
+      "clean and unblocks an upcoming build-tooling update.",
+    changed: [
+      "Removed a duplicate import in AboutModal.test.tsx (no runtime effect).",
+    ],
+  },
+  {
     version: "0.74.1",
     date: "2026-07-03",
     pr: 164,
