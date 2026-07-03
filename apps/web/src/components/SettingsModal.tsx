@@ -27,7 +27,6 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const [apiBase, setApiBase] = useState("");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState<string | null>(null); // null = untouched, "" = clear, value = set
-  const [contextWindow, setContextWindow] = useState("");
   // Chat tool calling: master switch + per-tool on/off map (keyed by tool name).
   const [toolsEnabled, setToolsEnabled] = useState(false);
   const [toolStates, setToolStates] = useState<Record<string, boolean>>({});
@@ -46,7 +45,6 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
     if (data) {
       setApiBase(data.apiBase ?? "");
       setModel(data.model ?? "");
-      setContextWindow(data.contextWindow != null ? String(data.contextWindow) : "");
       setToolsEnabled(data.toolsEnabled);
       setToolStates(Object.fromEntries(data.tools.map((tool) => [tool.name, tool.enabled])));
       setReasoningEnabled(data.reasoningEnabled);
@@ -75,7 +73,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         apiBase: apiBase.trim() || null,
         model: model.trim() || null,
         apiKey, // null leaves it unchanged; "" clears; a value sets it
-        contextWindow: contextWindow.trim() ? Number(contextWindow) : null,
+        contextWindow: null, // no longer user-editable — always use the server default
         toolsEnabled,
         toolOverrides: toolStates,
         reasoningEnabled,
@@ -98,13 +96,13 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
     }
   }
 
+  // The backdrop does NOT close on click (OK/Cancel only) — prevents accidental dismissal. Escape still closes.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div
         role="dialog"
         aria-label="Settings"
-        className="flex max-h-[85vh] w-full max-w-md flex-col rounded-lg border bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900"
-        onClick={(e) => e.stopPropagation()}
+        className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-lg border bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900"
       >
         <div className="border-b px-5 pt-4 dark:border-gray-700">
           <h2 className="mb-3 text-base font-semibold dark:text-gray-100">{t("settingsTitle")}</h2>
@@ -185,60 +183,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
               {apiKey === "" && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">{t("keyWillClear")}</p>
               )}
-              <label className="block text-sm">
-                <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("chatContextWindow")}</span>
-                <input
-                  type="number"
-                  min={1}
-                  name="diariz-chat-context"
-                  autoComplete="off"
-                  value={contextWindow}
-                  onChange={(e) => setContextWindow(e.target.value)}
-                  placeholder={data ? t("defaultValue", { value: data.defaultContextWindow.toLocaleString() }) : "131072"}
-                  className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                />
-                <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("chatContextHint")}</span>
-              </label>
-
-              {/* Chat tools: a master switch plus a per-tool on/off list (disabled when the master is off). */}
-              <div className="border-t pt-3 dark:border-gray-700">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={toolsEnabled}
-                    onChange={(e) => setToolsEnabled(e.target.checked)}
-                  />
-                  <span className="font-medium text-gray-700 dark:text-gray-200">{t("chatToolsEnabled")}</span>
-                </label>
-                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t("chatToolsHint")}</p>
-                {data && data.tools.length > 0 && (
-                  <ul className="mt-2 space-y-1.5">
-                    {data.tools.map((tool) => (
-                      <li key={tool.name}>
-                        <label className="flex items-start gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            className="mt-0.5"
-                            disabled={!toolsEnabled}
-                            checked={toolStates[tool.name] ?? tool.enabled}
-                            onChange={(e) =>
-                              setToolStates((s) => ({ ...s, [tool.name]: e.target.checked }))
-                            }
-                          />
-                          <span className={toolsEnabled ? "" : "opacity-50"}>
-                            <span className="text-gray-700 dark:text-gray-200">{tool.title}</span>
-                            <span className="block text-xs text-gray-400 dark:text-gray-500">
-                              {tool.description}
-                            </span>
-                          </span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              {/* Reasoning: on/off + effort level (only for reasoning-capable models). */}
+              {/* Reasoning: on/off + effort level (only for reasoning-capable models). Kept above the tools list. */}
               <div className="border-t pt-3 dark:border-gray-700">
                 <label className="flex items-center gap-2 text-sm">
                   <input
@@ -263,6 +208,49 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                       <option value="high">{t("reasoningHigh")}</option>
                     </select>
                   </label>
+                )}
+              </div>
+
+              {/* Chat tools: a master switch plus a per-tool table (checkboxes disabled when the master is off). */}
+              <div className="border-t pt-3 dark:border-gray-700">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={toolsEnabled}
+                    onChange={(e) => setToolsEnabled(e.target.checked)}
+                  />
+                  <span className="font-medium text-gray-700 dark:text-gray-200">{t("chatToolsEnabled")}</span>
+                </label>
+                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t("chatToolsHint")}</p>
+                {data && data.tools.length > 0 && (
+                  <div className="mt-2 overflow-x-auto rounded border dark:border-gray-700">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-gray-50 text-xs text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                        <tr>
+                          <th scope="col" className="w-12 px-2 py-1.5 text-center font-medium">{t("toolColEnabled")}</th>
+                          <th scope="col" className="px-2 py-1.5 font-medium">{t("toolColTool")}</th>
+                          <th scope="col" className="px-2 py-1.5 font-medium">{t("toolColDescription")}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y dark:divide-gray-700">
+                        {data.tools.map((tool) => (
+                          <tr key={tool.name} className={toolsEnabled ? "" : "opacity-50"}>
+                            <td className="px-2 py-1.5 text-center align-top">
+                              <input
+                                type="checkbox"
+                                aria-label={tool.title}
+                                disabled={!toolsEnabled}
+                                checked={toolStates[tool.name] ?? tool.enabled}
+                                onChange={(e) => setToolStates((s) => ({ ...s, [tool.name]: e.target.checked }))}
+                              />
+                            </td>
+                            <td className="px-2 py-1.5 align-top text-gray-700 dark:text-gray-200">{tool.title}</td>
+                            <td className="px-2 py-1.5 align-top text-xs text-gray-500 dark:text-gray-400">{tool.description}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             </div>
