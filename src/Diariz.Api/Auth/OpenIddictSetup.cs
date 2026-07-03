@@ -76,9 +76,13 @@ public static class OpenIddictSetup
                     o.AddDevelopmentEncryptionCertificate();
                 }
 
+                // Only the AUTHORIZE endpoint is passed through to our own controller (it renders consent + signs
+                // the user in). The TOKEN endpoint is NOT passed through: OpenIddict issues the tokens itself from
+                // the principal embedded in the authorization code (and refresh token). Enabling token passthrough
+                // without a token controller would leave valid code->token exchanges unhandled, so Claude never
+                // receives a token ("authorization with the MCP server failed").
                 var aspNet = o.UseAspNetCore()
-                    .EnableAuthorizationEndpointPassthrough() // our own controllers handle authorize/token (later PR)
-                    .EnableTokenEndpointPassthrough();
+                    .EnableAuthorizationEndpointPassthrough();
                 // The reverse proxy terminates TLS (X-Forwarded-Proto=https), so production sees https. On a plain
                 // http://localhost dev run there is no TLS, so relax OpenIddict's HTTPS requirement there only.
                 if (isDevelopment)

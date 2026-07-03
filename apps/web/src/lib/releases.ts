@@ -93,6 +93,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.80.5",
+    date: "2026-07-03",
+    pr: 181,
+    headline: "Fix: Claude web connector failed to receive a token",
+    summary:
+      "Fixes the next step of the claude.ai web connector: after you approved the connection, Claude couldn't " +
+      "complete sign-in (\"authorization with the MCP server failed\"). The server's token step was left half " +
+      "-wired - it validated the request but then handed off to code that wasn't there, so no token came back. " +
+      "The OAuth server now issues the token itself. Deploying it only needs a server redeploy.",
+    fixed: [
+      "The OAuth token step now issues tokens correctly, so the Claude web connector can finish signing in after you approve it.",
+    ],
+  },
+  {
     version: "0.80.4",
     date: "2026-07-03",
     pr: 180,
