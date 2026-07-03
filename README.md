@@ -68,11 +68,14 @@ brief grey "Tool call: …" line shows while a tool runs. Chat also has **slash 
 `/clear`, `/context`, `/save`, `/load`, `/copy`, `/retry` — handled in the browser and never sent to the model
 (type `/` for an autocomplete popup).
 - **Connect Claude to your transcripts (MCP server)** — Diariz hosts a **Model Context Protocol** server at
-`/mcp`, so you can connect **Claude** (Desktop or Code) directly to *your own* meetings. Generate a personal
-access token in **Preferences → Claude / MCP access** and paste the URL + token into Claude's MCP config;
-Claude then uses the same built-in tools (search / who-said-what / action items / summaries / attendees / talk
-time / …, plus email-to-self) to answer grounded in your transcripts. Per-user and secure: each token is shown
-once and stored only as a **SHA-256 hash**, works only for your own recordings, and is **revocable** any time.
+`/mcp`, so you can connect **Claude** directly to *your own* meetings, two ways: **sign in from the Claude
+website** (add Diariz as a custom connector and approve it on a consent screen — an **OAuth 2.1** flow, nothing
+to copy), or generate a **personal access token** in **Preferences → Claude / MCP access** and paste the URL +
+token into Claude Desktop or Code. Either way Claude uses the same built-in tools (search / who-said-what /
+action items / summaries / attendees / talk time / …, plus email-to-self) to answer grounded in your
+transcripts. Per-user and secure: tokens are shown once and stored only as a **SHA-256 hash**, work only for
+your own recordings, and both **tokens and web connections are revocable** any time in the same Preferences
+section.
 - **Extract action items** (Action / Actor / Deadline) with that same LLM — **automatically as part of the
 transcription pipeline**, into an editable table in an always-available **Action items** panel (collapsed by
 default, with a refresh button to re-extract). The automatic pass runs once and never overwrites actions
@@ -131,8 +134,10 @@ one. Restore is destructive (replaces all data) and only accepts a backup from t
 
 Summaries and chat use any OpenAI-compatible LLM endpoint you configure (OpenAI, or a local server such
 as Ollama / LM Studio / vLLM) — see the Settings modal and `deploy/.env.example`. The API also hosts an
-in-process **MCP server** at `/mcp` (Streamable HTTP, per-user token auth) so **Claude** can connect to a
-user's own transcripts using the same built-in tools.
+in-process **MCP server** at `/mcp` (Streamable HTTP) so **Claude** can connect to a user's own transcripts
+using the same built-in tools — authenticated with either a personal access token (Desktop/Code) or an
+**OAuth 2.1 sign-in** (the claude.ai web connector; the API is also a spec-compliant OAuth authorization server,
+built on OpenIddict).
 
 **Flow:** client records → uploads to API → audio stored in MinIO, metadata in Postgres →
 job enqueued on a Redis Stream → Python worker transcribes + diarizes + extracts per-speaker voiceprints →

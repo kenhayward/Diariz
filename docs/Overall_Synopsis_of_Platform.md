@@ -325,8 +325,12 @@ the API and ships with a **server redeploy**.
   served: RFC 9728 protected-resource metadata at `/.well-known/oauth-protected-resource` (`WellKnownController`),
   the AS metadata at both `/.well-known/openid-configuration` and `/.well-known/oauth-authorization-server`, with
   the hand-rolled `registration_endpoint` advertised via an OpenIddict config event. This is the point at which
-  **claude.ai can connect end-to-end**. Still **to come**: the **connections-management UI** (list + revoke).
-  Config lives under the `McpOAuth` options block; the whole server is gated by `McpOAuth:Enabled` (on by default).
+  **claude.ai can connect end-to-end**. Users **manage connections** in Preferences → *Claude / MCP access*:
+  `OAuthConnectionsController` (`/api/oauth/connections`, JWT-authed, owner-scoped by subject) lists the granted
+  OpenIddict authorizations (client name + connected date) alongside the personal tokens, and **revoke** deletes
+  the authorization + its tokens so the client can no longer connect (refresh dies immediately; any issued access
+  token lapses at its short lifetime). Config lives under the `McpOAuth` options block; the whole server is gated
+  by `McpOAuth:Enabled` (on by default). **The OAuth-for-MCP arc is complete.**
 
 ## Auth, multi-tenancy, and roles
 
