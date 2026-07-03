@@ -91,6 +91,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.76.0",
+    date: "2026-07-03",
+    pr: 171,
+    headline: "MCP: read-only/write tool labels + clearer Claude Desktop setup",
+    summary:
+      "Two improvements for connecting Claude over MCP. Each tool now tells Claude whether it only reads your " +
+      "data or can act (send an email), so Claude groups them as read-only vs write instead of lumping them all " +
+      "under \"other tools\". And the Preferences setup snippet now shows the config Claude Desktop actually " +
+      "accepts (via mcp-remote), so it connects without the \"not a valid MCP server\" error.",
+    changed: [
+      "MCP tools now carry read-only/write hints - read/search tools are read-only; only send_email is a write tool.",
+      "Preferences → Claude / MCP access shows a Claude Desktop config that uses mcp-remote (needs Node.js).",
+    ],
+  },
+  {
     version: "0.75.1",
     date: "2026-07-03",
     pr: 170,

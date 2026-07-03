@@ -51,6 +51,7 @@ public sealed class DiarizMcpHandlers
                 Title = t.Title,
                 Description = t.Description,
                 InputSchema = McpToolProjection.InputSchema(t),
+                Annotations = McpToolProjection.Annotations(t),
             })
             .ToList();
         return new ListToolsResult { Tools = tools };

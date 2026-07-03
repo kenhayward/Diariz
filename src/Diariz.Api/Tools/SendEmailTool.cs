@@ -26,6 +26,7 @@ public sealed class SendEmailTool : IChatTool
 
     public string Name => "send_email";
     public string Title => "Send email to me";
+    public bool ReadOnly => false; // sends an email (a side effect) — the only non-read-only chat/MCP tool.
     public string Description =>
         "Email the signed-in user their own content (e.g. a summary, action items, or notes you have prepared). " +
         "It is ALWAYS delivered to the current user's own account address — you cannot choose or change the " +

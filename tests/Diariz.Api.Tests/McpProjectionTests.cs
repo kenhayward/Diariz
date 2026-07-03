@@ -65,4 +65,14 @@ public class McpToolProjectionTests
         Assert.Equal(JsonValueKind.Object, schema.ValueKind);
         Assert.Equal("object", schema.GetProperty("type").GetString());
     }
+
+    [Fact]
+    public void Annotations_MarkReadOnlyToolsReadOnly_AndTheWriteToolWritable()
+    {
+        // A search/read tool defaults to ReadOnly => readOnlyHint true; send_email opts out => false.
+        Assert.True(McpToolProjection.Annotations(new StubChatTool("search_transcripts")).ReadOnlyHint);
+        Assert.False(McpToolProjection.Annotations(new SendEmailTool(null!, null!)).ReadOnlyHint);
+        // No exposed tool deletes/overwrites data.
+        Assert.False(McpToolProjection.Annotations(new StubChatTool("x")).DestructiveHint);
+    }
 }

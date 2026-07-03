@@ -269,12 +269,19 @@ the API and ships with a **server redeploy**.
   new `IChatTool` lights up in both chat and MCP. The catalog is the user's **per-tool-enabled** tools
   (respecting Settings → AI per-tool choices, but **not** the chat *master* switch — the MCP opt-in is holding a
   token), **minus `add_as_attachment`** (which needs an in-chat selection). `send_email` is included (it can only
-  ever email the user's own address). Tool results' in-app deep-links are rewritten to **absolute** URLs
-  (`McpLinkRewriter`, against `App:PublicUrl` or the request origin) so they're clickable in Claude.
+  ever email the user's own address). Each tool carries an MCP **`readOnlyHint` annotation** (from
+  `IChatTool.ReadOnly` — true for every read/search tool, **false only for `send_email`**) plus
+  `destructiveHint=false`, so clients can group read-only vs write tools (`McpToolProjection.Annotations`). Tool
+  results' in-app deep-links are rewritten to **absolute** URLs (`McpLinkRewriter`, against `App:PublicUrl` or the
+  request origin) so they're clickable in Claude.
 - **Config.** `Mcp:Enabled` (default true) mounts the endpoint. `IHttpContextAccessor` provides the request's
-  user + scoped services inside the handlers. Claude Code: `claude mcp add --transport http diariz {origin}/mcp
-  --header "Authorization: Bearer dz_mcp_…"` (or the `headers` block in `.mcp.json`); Claude Desktop via its JSON
-  config or `mcp-remote`.
+  user + scoped services inside the handlers. **Claude Code:** `claude mcp add --transport http diariz {origin}/mcp
+  --header "Authorization: Bearer dz_mcp_…"` (or the `headers` block in `.mcp.json`). **Claude Desktop** only
+  accepts stdio servers in `claude_desktop_config.json`, so it connects via the **`mcp-remote`** bridge
+  (`command: npx -y mcp-remote {origin}/mcp --header "Authorization:${AUTH}"`, token in `env.AUTH="Bearer …"` — the
+  env indirection avoids mcp-remote splitting the header on its space). Preferences → *Claude / MCP access* shows
+  this ready-to-paste. (Older/newer Desktop builds may also accept a `type:http` entry, but mcp-remote is the
+  portable path.)
 - **Resources.** `ListResourcesHandler`/`ReadResourceHandler` expose each of the user's recordings as MCP
   resources — `diariz://recording/{id}/transcript` (and `.../minutes` when minutes exist) — so a user can
   **@-mention a specific meeting** in Claude. Backed by `IMcpResourceService` (owner-scoped, current-version
