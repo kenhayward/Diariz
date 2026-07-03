@@ -91,6 +91,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.74.1",
+    date: "2026-07-03",
+    pr: 164,
+    headline: "Fix: Claude can now reach the MCP server",
+    summary:
+      "Connecting Claude to your transcripts over MCP was failing with a 'cannot load' error. The web " +
+      "server's reverse proxy wasn't forwarding the **/mcp** address to the app - it was returning the web " +
+      "page instead - so Claude never reached the MCP server. The proxy now routes /mcp correctly (with " +
+      "streaming responses left unbuffered), so a generated access token connects as intended.",
+    fixed: [
+      "Expose the MCP server through the web reverse proxy - /mcp was returning the app's HTML page (or a 405) instead of reaching the MCP endpoint, so Claude could not connect.",
+    ],
+  },
+  {
     version: "0.74.0",
     date: "2026-07-03",
     pr: 163,

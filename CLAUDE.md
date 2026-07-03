@@ -300,8 +300,10 @@ docker compose up --build # web, api, postgres, redis, minio, GPU worker
 The Compose project is named **`diariz`** (top-level `name:` in `docker-compose.yml`; Docker forces
 lowercase, so it is `diariz` not `Diariz`) rather than defaulting to the `deploy` directory name. The
 **`web`** service builds `apps/web` (`apps/web/Dockerfile`) and serves the static SPA via nginx at
-**http://localhost:8081**, proxying `/api` and `/hubs` to the `api` container (same-origin, so no CORS
-needed — `apps/web/nginx.conf`). The GPU worker needs the NVIDIA Container Toolkit; for CPU comment
+**http://localhost:8081**, proxying `/api`, `/hubs`, and `/mcp` to the `api` container (same-origin, so no CORS
+needed — `apps/web/nginx.conf`). `/mcp` (the MCP server, Streamable HTTP) is proxied with `proxy_buffering off`
+so the SSE stream isn't stalled; any **outer** reverse proxy in front of the web container must forward `/mcp`
+(buffering off) too, or Claude can't connect. The GPU worker needs the NVIDIA Container Toolkit; for CPU comment
 out the `deploy.resources` GPU block and set `WORKER_DEVICE=cpu WORKER_COMPUTE_TYPE=int8`.
 
 ## Conventions & gotchas
