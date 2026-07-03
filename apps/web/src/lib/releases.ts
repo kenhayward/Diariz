@@ -93,6 +93,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.80.2",
+    date: "2026-07-03",
+    pr: 178,
+    headline: "Fix: Claude web connector reported registration unsupported",
+    summary:
+      "Fixes the next step of the claude.ai web connector: after discovery started working, Claude reported " +
+      "that Diariz doesn't support automatic client registration. The sign-in discovery document was missing " +
+      "the pointer to the registration endpoint (an internal ordering bug meant it was silently omitted). The " +
+      "document now includes it, so Claude can register itself and continue. Deploying it only needs a server " +
+      "redeploy.",
+    fixed: [
+      "The OAuth discovery document now advertises the registration endpoint, so the Claude web connector can register automatically.",
+    ],
+  },
+  {
     version: "0.80.1",
     date: "2026-07-03",
     pr: 177,

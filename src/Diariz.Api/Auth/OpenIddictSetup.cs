@@ -31,10 +31,16 @@ public static class OpenIddictSetup
                 // either). OpenIddict has no native DCR endpoint, so advertise our hand-rolled one so a client
                 // knows where to register.
                 o.SetConfigurationEndpointUris(".well-known/openid-configuration", ".well-known/oauth-authorization-server");
+                // Advertise the registration endpoint from the configured issuer (known here), NOT ctx.Issuer -
+                // this inline handler can run before OpenIddict has populated ctx.Issuer, which previously left
+                // the field silently absent (clients then report "automatic client registration isn't supported").
+                var registrationEndpoint = string.IsNullOrWhiteSpace(issuer) ? null : $"{issuer.TrimEnd('/')}/connect/register";
                 o.AddEventHandler<OpenIddictServerEvents.HandleConfigurationRequestContext>(b => b.UseInlineHandler(ctx =>
                 {
-                    if (ctx.Issuer is not null)
-                        ctx.Metadata["registration_endpoint"] = new Uri(ctx.Issuer, "connect/register").AbsoluteUri;
+                    var endpoint = registrationEndpoint
+                        ?? (ctx.Issuer is not null ? new Uri(ctx.Issuer, "connect/register").AbsoluteUri : null);
+                    if (endpoint is not null)
+                        ctx.Metadata["registration_endpoint"] = endpoint;
                     return default;
                 }));
 
