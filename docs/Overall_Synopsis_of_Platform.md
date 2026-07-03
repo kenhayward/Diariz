@@ -259,7 +259,10 @@ the API and ships with a **server redeploy**.
 > adds the same requirement for **`/connect/`** (authorize/token/register) and **`/.well-known/`** (discovery +
 > protected-resource metadata): both nginx and any outer proxy must forward them to the API, or an OAuth client
 > gets the SPA index.html instead of the metadata and the claude.ai connection never starts. (`/oauth/consent`
-> is deliberately a **SPA** route and must NOT be proxied.)
+> is deliberately a **SPA** route and must NOT be proxied.) **The `X-Forwarded-Proto` header must carry `https`**
+> all the way to the API - OpenIddict rejects its own endpoints as non-HTTPS otherwise (`ID2083`). The web
+> nginx forwards the outer proxy's incoming `X-Forwarded-Proto` (falling back to its own `$scheme`) rather than
+> clobbering it, so **the outer proxy must set `X-Forwarded-Proto: https`** (most do by default).
 
 - **Per-user token auth.** The endpoint is guarded by a dedicated auth scheme (`McpBearerAuthenticationHandler`,
   scheme `"Mcp"`), separate from the browser JWT. A user generates a personal access token in **Preferences →

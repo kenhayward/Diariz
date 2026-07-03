@@ -93,6 +93,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.80.1",
+    date: "2026-07-03",
+    pr: 177,
+    headline: "Fix: Claude web connector couldn't register",
+    summary:
+      "Fixes the claude.ai web connector failing at the very first step (\"couldn't register with Diariz's " +
+      "sign-in service\"). Behind a TLS-terminating reverse proxy, the web server was telling the API that " +
+      "requests arrived over plain http, so the OAuth server rejected its own discovery endpoints as " +
+      "non-HTTPS. The web server now passes through the real https scheme. Deploying it only needs a server " +
+      "redeploy. Note: your outer reverse proxy must send an X-Forwarded-Proto: https header (most do by " +
+      "default).",
+    fixed: [
+      "The web server now forwards the real request scheme (https) to the API, so the OAuth discovery endpoints work behind a proxy and the Claude web connector can register.",
+    ],
+  },
+  {
     version: "0.80.0",
     date: "2026-07-03",
     pr: 176,
