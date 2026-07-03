@@ -2,6 +2,7 @@ using System.Text;
 using Amazon.S3;
 using Amazon.Runtime;
 using Microsoft.AspNetCore.DataProtection;
+using Diariz.Api.Auth;
 using Diariz.Api.Configuration;
 using Diariz.Api.Hubs;
 using Diariz.Api.Services;
@@ -33,6 +34,7 @@ builder.Services.Configure<IdentificationOptions>(builder.Configuration.GetSecti
 builder.Services.Configure<UploadOptions>(builder.Configuration.GetSection(UploadOptions.Section));
 builder.Services.Configure<AttachmentOptions>(builder.Configuration.GetSection(AttachmentOptions.Section));
 builder.Services.Configure<McpOptions>(builder.Configuration.GetSection(McpOptions.Section));
+builder.Services.Configure<McpOAuthOptions>(builder.Configuration.GetSection(McpOAuthOptions.Section));
 
 // Honour X-Forwarded-* from the reverse proxy (nginx/TLS terminator) so Request.Scheme/IsHttps reflect the
 // browser's HTTPS — needed for the OAuth state cookie's Secure flag and any request-derived URLs. The proxy
@@ -151,6 +153,23 @@ var dataProtection = builder.Services.AddDataProtection();
 if (!string.IsNullOrWhiteSpace(dpKeys))
     dataProtection.PersistKeysToFileSystem(new DirectoryInfo(dpKeys));
 builder.Services.AddSingleton<IApiKeyProtector, ApiKeyProtector>();
+
+// ---- OAuth 2.1 authorization server for the MCP web connector (OpenIddict) ----
+// Makes the API a spec-compliant OAuth 2.1 AS so claude.ai (and Desktop/Code) can add Diariz as a remote
+// connector via a browser consent handshake, alongside the existing static dz_mcp_ token. This registers only
+// the authorization server + its endpoints/keys; the interactive authorize/consent + token controllers and the
+// /mcp resource-server validation are wired in later PRs.
+var mcpOAuth = builder.Configuration.GetSection(McpOAuthOptions.Section).Get<McpOAuthOptions>() ?? new McpOAuthOptions();
+if (mcpOAuth.Enabled)
+{
+    var appPublic = builder.Configuration.GetSection(AppPublicOptions.Section).Get<AppPublicOptions>() ?? new AppPublicOptions();
+    var issuer = !string.IsNullOrWhiteSpace(mcpOAuth.Issuer) ? mcpOAuth.Issuer : appPublic.PublicUrl;
+    // Persist the token signing/encryption certs next to the Data Protection keyring (same mounted volume), so
+    // issued tokens survive a container recreate. With no keys volume (local dev) fall back to ephemeral certs.
+    var oidcKeysDir = !string.IsNullOrWhiteSpace(mcpOAuth.KeysPath) ? mcpOAuth.KeysPath : dpKeys;
+
+    builder.Services.AddDiarizMcpOAuth(mcpOAuth, issuer, oidcKeysDir, builder.Environment.IsDevelopment());
+}
 
 // ---- Email (account-setup link; no-op fallback when SMTP unconfigured) ----
 builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();

@@ -91,6 +91,28 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.77.0",
+    date: "2026-07-03",
+    pr: 173,
+    headline: "Groundwork for connecting Claude on the web (OAuth sign-in for MCP)",
+    summary:
+      "Lays the foundation for adding Diariz as a connector on the Claude website, which - unlike Claude " +
+      "Desktop and Code - can only connect by signing in, not by pasting a token. This release adds the " +
+      "OAuth 2.1 authorization server that makes that sign-in possible (built on OpenIddict), including the " +
+      "endpoint that lets a client register itself, with a strict allowlist so a client can only ever be " +
+      "registered to redirect back to Claude's own sites (or your machine, for Desktop/Code). Nothing is " +
+      "user-visible yet - the actual sign-in screen and the connection come in the next releases. Existing " +
+      "personal MCP tokens keep working unchanged. Deploying it only needs a server redeploy.",
+    added: [
+      "OAuth 2.1 authorization server for MCP (authorization-code flow with mandatory PKCE and refresh tokens).",
+      "Dynamic client registration, gated to an allowlist of redirect hosts (claude.ai/claude.com and loopback).",
+      "Token signing/encryption keys are persisted to the server's keys volume so connections survive a redeploy.",
+    ],
+    changed: [
+      "New database tables for the OAuth server (applications, authorizations, scopes, tokens).",
+    ],
+  },
+  {
     version: "0.76.1",
     date: "2026-07-03",
     pr: 172,

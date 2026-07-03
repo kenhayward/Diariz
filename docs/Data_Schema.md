@@ -56,6 +56,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddGoogleConnection` | `UserSettings.GoogleRefreshTokenEncrypted` (text null, encrypted) + `UserSettings.GoogleCalendarGranted`/`GoogleGmailGranted` (bool, default false) — opt-in Google Calendar/Gmail data access |
 | `RemoveGoogleGmailGranted` | drops `UserSettings.GoogleGmailGranted` — the Gmail-draft feature was removed (Gmail scopes are restricted; not worth the security assessment). Calendar access unchanged |
 | `AddMcpAccessTokens` | `McpAccessTokens` (per-user MCP personal access tokens; SHA-256 hash only, **unique** on `TokenHash`, cascade on user delete) — connect Claude to transcripts over `/mcp` |
+| `AddOpenIddict` | `OpenIddictApplications`, `OpenIddictAuthorizations`, `OpenIddictScopes`, `OpenIddictTokens` (OpenIddict EF Core stores, string keys) — the OAuth 2.1 authorization server for the MCP web connector. Registered by `ModelBuilder.UseOpenIddict()`; not owned by an entity class |
 
 ### Entity-relationship overview
 
@@ -345,6 +346,15 @@ plaintext is shown to the user once at generation and is never recoverable.
 | `LastUsedAt` | timestamptz null | last time the token was presented on an MCP request |
 
 Indexes: unique `(TokenHash)`, `(UserId)`.
+
+#### `OpenIddict*` (library-managed)
+`OpenIddictApplications`, `OpenIddictAuthorizations`, `OpenIddictScopes`, `OpenIddictTokens` are created by
+`ModelBuilder.UseOpenIddict()` (string primary keys) and back the OAuth 2.1 authorization server for the MCP
+web connector. Their columns are defined by the OpenIddict EF Core stores (not a Diariz entity class), so they
+are not enumerated here - a registered `Application` is a dynamically-registered OAuth client (client id, public
+type, redirect URIs, permitted scopes/grant types, PKCE requirement); an `Authorization` + its `Tokens`
+represent a user's granted, revocable connection. Revoking a connection deletes the authorization and its
+tokens. See `Overall_Synopsis_of_Platform.md` for the auth flow.
 
 ### Vector columns summary
 

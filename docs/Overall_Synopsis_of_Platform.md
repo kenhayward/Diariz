@@ -27,7 +27,7 @@ infrastructure services.
 
 | Component | Stack | Path | Role |
 |---|---|---|---|
-| **API** | ASP.NET Core (**.NET 10**), EF Core, SignalR, AWS S3 SDK, MailKit | `src/Diariz.Api` | Auth, orchestration, persistence, audio storage/streaming, summarisation + chat + action-extraction, SignalR notifications |
+| **API** | ASP.NET Core (**.NET 10**), EF Core, SignalR, AWS S3 SDK, MailKit, OpenIddict (OAuth AS) | `src/Diariz.Api` | Auth, orchestration, persistence, audio storage/streaming, summarisation + chat + action-extraction, SignalR notifications, OAuth 2.1 server for the MCP web connector |
 | **Domain** | EF Core + Npgsql + pgvector | `src/Diariz.Domain` | Entities, `DiarizDbContext`, migrations (compiled into the API) |
 | **Worker** | Python: WhisperX (large-v3), pyannote 3.1, SpeechBrain ECAPA, CUDA | `src/Diariz.Worker` | GPU transcription → alignment → diarization → per-speaker voiceprints |
 | **Web** | React 19 + TypeScript + Vite + Tailwind v4 | `apps/web` | SPA UI (served by nginx in Docker) |
@@ -292,6 +292,23 @@ the API and ships with a **server redeploy**.
   expands into a ready-made user message that instructs the model to answer from the user's meetings via the
   built-in tools (no server LLM call — prompts are just message templates). This completes the MCP surface:
   **tools + resources + prompts** are all live.
+- **OAuth 2.1 sign-in (for the claude.ai web connector) — foundation.** The static `dz_mcp_` token works for
+  Desktop/Code (which can set a bearer header) but **not** for the claude.ai **web** "Custom Connector", which
+  can only connect via an OAuth handshake. So the API is being made a spec-compliant **OAuth 2.1 authorization
+  server** (built on **OpenIddict 7.x**, EF Core stores on `DiarizDbContext` — see `Data_Schema.md`
+  `OpenIddict*` tables). Wired so far (`OpenIddictSetup.AddDiarizMcpOAuth`): authorization + token endpoints,
+  **authorization-code flow with mandatory PKCE (S256)** + refresh tokens, an `mcp` scope bound to the
+  `diariz-mcp` resource/audience, discovery metadata at `/.well-known/openid-configuration`, and **persistent
+  signing/encryption certificates** on the `/keys` volume (`OpenIddictKeys`, so tokens survive a redeploy;
+  ephemeral in dev). **Dynamic Client Registration** (RFC 7591) is hand-rolled at **`POST /connect/register`**
+  (`OAuthRegistrationController`) because OpenIddict 7.x has no native DCR endpoint — a client is registered as a
+  **public, PKCE-only** authorization-code client, gated by `RedirectUriPolicy`: every `redirect_uri` host must
+  be on the `McpOAuth:AllowedRedirectHosts` allowlist (default `claude.ai`/`claude.com` + loopback for
+  Desktop/Code), so a client can never be registered to redirect an authorization code to an attacker's site.
+  The interactive **authorize/consent** screen (reusing the Diariz login + `Active`/`IsEnabled` gating), the
+  **`/mcp` resource-server validation** (accept an OAuth token *or* the static token) + RFC 9728 protected-
+  resource metadata, and the **connections-management UI** are added in the following PRs. Config lives under
+  the `McpOAuth` options block; the whole server is gated by `McpOAuth:Enabled` (on by default).
 
 ## Auth, multi-tenancy, and roles
 
