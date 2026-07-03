@@ -471,6 +471,13 @@ export default function ChatPanel() {
         ? t("ctxSelected", { n: selection.selectedIds.length })
         : t("ctxNone");
 
+  // Localized "Tool call: …" indicator: translate the prefix and each tool's friendly name (falling back to
+  // a humanized form of the snake_case id when a label isn't translated).
+  const toolLineText = toolCallLineText(toolLine, {
+    prefix: t("toolCallPrefix"),
+    label: (n) => t(`toolLabels.${n}`, { defaultValue: n.replace(/_/g, " ") }),
+  });
+
   return (
     <div className="flex h-full flex-col">
       {/* Toolbar */}
@@ -578,9 +585,9 @@ export default function ChatPanel() {
             </div>
           </div>
         )}
-        {toolCallLineText(toolLine) && (
+        {toolLineText && (
           <div className="flex justify-start">
-            <span className="px-1 text-xs italic text-gray-400">{toolCallLineText(toolLine)}</span>
+            <span className="px-1 text-xs italic text-gray-400">{toolLineText}</span>
           </div>
         )}
       </div>

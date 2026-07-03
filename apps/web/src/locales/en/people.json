@@ -1,6 +1,6 @@
 {
   "title": "People",
-  "description": "Enrolled voiceprints used to identify speakers across recordings. Voiceprints are biometric data — only enrol people with their consent, and erase them when required.",
+  "description": "Enrolled voiceprints used to identify speakers across recordings. Voiceprints are biometric data - only enrol people with their consent, and erase them when required.",
   "empty": "No people yet. Enrol someone from a recording's speaker (“+ New person…”).",
   "colName": "Name",
   "colSamples": "Samples",

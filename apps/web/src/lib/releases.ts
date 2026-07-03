@@ -10,50 +10,50 @@ export const LICENSE = "AGPL-3.0";
 /// Short summary of what the app does today, shown in the About box (markdown). Update this whenever
 /// the app's scope changes.
 export const CAPABILITIES = `
-Diariz records audio — from your microphone (**choose a specific input and tune capture**, with a **live
-input-level meter** while recording, and **pause/resume** mid-recording for breaks or sensitive moments —
+Diariz records audio - from your microphone (**choose a specific input and tune capture**, with a **live
+input-level meter** while recording, and **pause/resume** mid-recording for breaks or sensitive moments -
 paused audio is never captured), or Windows
 system/loopback audio via the desktop app
-(which can also **start and stop recording straight from its system-tray menu**) — or you can **upload
+(which can also **start and stop recording straight from its system-tray menu**) - or you can **upload
 an existing audio file** (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A), and it transcribes it server-side with
 **WhisperX** (word-level timestamps) and **pyannote** speaker
 diarization. You get speaker-labelled, timestamped segments you can rename, edit, and play back
 (per segment, per speaker, or the whole recording), and can re-transcribe at any time. Edits are kept **separately from
 the model's original words**, so a **Show original / Show revised** toggle always gets you back to what the
 model said. You can **merge** consecutive same-speaker rows into single blocks and **email yourself the
-transcript**. The recording page is organised into **tabs** — Overview, Minutes, Actions, Speakers, Transcript,
-and Attachments — each with its own toolbar.
+transcript**. The recording page is organised into **tabs** - Overview, Minutes, Actions, Speakers, Transcript,
+and Attachments - each with its own toolbar.
 
 It can **identify speakers** across recordings: enrol a person from a recording's speaker and Diariz
 recognises that voice in later recordings automatically (using **SpeechBrain ECAPA** voiceprints), with
-manual reassignment. A **People** screen manages enrolled voiceprints — rename, prune training samples,
+manual reassignment. A **People** screen manages enrolled voiceprints - rename, prune training samples,
 merge duplicates, and erase one or all (GDPR) of the stored biometric voiceprints.
 
 It can **summarise** recordings and generate a full set of **professional meeting minutes** (headings, lists,
-tables — no emojis) that you can edit in a rich editor, re-create, and **email to yourself** (with or without
+tables - no emojis) that you can edit in a rich editor, re-create, and **email to yourself** (with or without
 the recording's attachments). It **automatically extracts action items** (with actor and deadline) as part of
-the pipeline into an editable table, and **tracks them across all your meetings** in a dedicated **Actions** view — filter by person, mark
+the pipeline into an editable table, and **tracks them across all your meetings** in a dedicated **Actions** view - filter by person, mark
 items done (with a completion date), and jump from an action back to the transcript it came from. It can
 **translate** a transcript (segments, summary, and actions) into your chosen language, and let you
-**chat across one or more transcripts** — with file attachments, a context-usage dial, and saved
-conversations — using an OpenAI-compatible LLM endpoint you configure. The chat can also call **built-in
-tools** that search your **whole transcript library** — who said a phrase, what a person said about a topic,
+**chat across one or more transcripts** - with file attachments, a context-usage dial, and saved
+conversations - using an OpenAI-compatible LLM endpoint you configure. The chat can also call **built-in
+tools** that search your **whole transcript library** - who said a phrase, what a person said about a topic,
 which recordings exist or mention something, action items, summaries, attendees, talk time, the lines
-around a moment, and a recording's **full transcript, meeting minutes, or details** — answering with
+around a moment, and a recording's **full transcript, meeting minutes, or details** - answering with
 **When · Who · What** and **linking back to the transcript** (click a link
-to open it and jump to the exact segment). It can also **email you** (yourself only) a message it composes —
-a summary, action items, or notes — always delivering to your own registered address (and it **files a copy
+to open it and jump to the exact segment). It can also **email you** (yourself only) a message it composes -
+a summary, action items, or notes - always delivering to your own registered address (and it **files a copy
 of that email onto the transcript** as a Markdown attachment), or **save that output
 to a transcript as a Markdown attachment**. Toggle
-the tools on, and choose which, under Settings → AI — where you
+the tools on, and choose which, under Settings → AI - where you
 can also **enable reasoning** (and pick a level) for reasoning-capable models. You can **attach supporting
 documents** (files or URLs) to a recording, open them from the transcript page, and optionally **feed them
 to the chat** (PDFs, text, Office docs, emails/calendar invites are read into text; URLs are fetched).
 You can also **connect Claude to your transcripts over MCP**: generate a personal access token in
-Preferences → Claude / MCP access and paste it into Claude (Desktop or Code) — Claude then uses the same
+Preferences → Claude / MCP access and paste it into Claude (Desktop or Code) - Claude then uses the same
 built-in tools to search and read *your* meetings (and can email a summary to you), **@-mention a specific
 meeting** (its transcript or minutes, exposed as MCP resources), or run a **prompt starter** (summarise your
-last meeting, list open action items, find where a topic was discussed) — all scoped to your account and
+last meeting, list open action items, find where a topic was discussed) - all scoped to your account and
 revocable at any time.
 Recordings organise into **sections** (with sub-sections) and drag-and-drop ordering, can be **merged**
 into one, and can be browsed as a **list, a calendar, or a cross-meeting Actions list** (the left panel is
@@ -63,16 +63,16 @@ extracting, uploading) and your storage usage, transcription usage, and total tr
 Diariz is **multi-user** with role-based access: people request access (or an administrator adds them),
 an administrator approves, and each user sets up their own account and keeps their own private
 recordings, transcripts, and chats. Users can also **sign in with Google** (when an administrator has
-configured it) — Diariz reads their name, email, and profile picture (shown in the account menu), still
+configured it) - Diariz reads their name, email, and profile picture (shown in the account menu), still
 subject to admin approval for new sign-ups. A Google-linked user can opt in (Preferences → Google) to let
-Diariz **read their Google Calendar** (read-only) — so a recording's Overview shows the **meeting it
+Diariz **read their Google Calendar** (read-only) - so a recording's Overview shows the **meeting it
 overlaps** and the **Calendar tab overlays their meetings** (with a merged day list of meetings and
-recordings) — a revocable grant they can disconnect any time. Each user has a **storage quota** (audio): the Platform
+recordings) - a revocable grant they can disconnect any time. Each user has a **storage quota** (audio): the Platform
 Administrator sets the starter and maximum, any administrator can raise an individual user, and your
 usage shows in the account menu. The Platform Administrator can also **back up and restore the whole
 platform** (database + stored files) as a single transferable archive from Settings → Maintenance.
 
-The interface is **localized** — pick your language (English, Spanish, French, German today) at signup or
+The interface is **localized** - pick your language (English, Spanish, French, German today) at signup or
 in Preferences, and downloaded/emailed transcripts use it too. Translations are community-extensible via
 simple JSON files.
 `.trim();
@@ -91,12 +91,29 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.74.0",
+    date: "2026-07-03",
+    pr: 163,
+    headline: "Localized chat tool indicator + plain dashes",
+    summary:
+      "Small polish across the interface. The chat's transient **\"Tool call: ...\"** indicator is now " +
+      "**translated** into your language - both the label and a friendly name for the tool being run - " +
+      "instead of showing a raw internal id in English. And all interface text now uses **plain dashes** " +
+      "instead of the long em/en dashes some found distracting. (The tool *descriptions* the AI reads to pick " +
+      "a tool stay in English by design - consistent wording keeps tool selection reliable, and Claude over " +
+      "MCP has its own language setting.)",
+    changed: [
+      "Chat 'Tool call: ...' indicator is localized (prefix + friendly tool name) in English, Spanish, French, and German.",
+      "Replaced em/en dashes with plain dashes throughout the UI text and release notes.",
+    ],
+  },
+  {
     version: "0.73.0",
     date: "2026-07-03",
     pr: 162,
     headline: "Pause and resume a recording",
     summary:
-      "You can now **pause a recording in progress** and **resume** it later — separate from Stop — for breaks " +
+      "You can now **pause a recording in progress** and **resume** it later - separate from Stop - for breaks " +
       "or moments you'd rather not capture. Paused audio is **never recorded** (the transcript simply continues " +
       "where you resume, with no gap), the microphone is **muted** while paused (the level meter flatlines as a " +
       "clear signal you're not being captured), and the timer counts **recorded time only**, so the saved " +
@@ -111,13 +128,13 @@ export const RELEASES: Release[] = [
     pr: 161,
     headline: "Prompt starters for Claude (MCP prompts)",
     summary:
-      "The MCP connection now offers **prompt starters** — ready-made instructions that appear in Claude " +
+      "The MCP connection now offers **prompt starters** - ready-made instructions that appear in Claude " +
       "(slash-command style) and expand into a task grounded in your meetings: **Summarise my last meeting**, " +
       "**List my open action items**, and **Find where a topic was discussed** (you supply the topic). Pick " +
       "one and Claude runs it against your transcripts using the built-in tools. This completes the MCP " +
-      "surface — **tools, resources, and prompts** are all live; connect from Preferences → Claude / MCP access.",
+      "surface - **tools, resources, and prompts** are all live; connect from Preferences → Claude / MCP access.",
     added: [
-      "MCP prompts: summarise_last_meeting, open_action_items, and find_discussion(topic) — one-tap starters that expand into transcript-grounded instructions.",
+      "MCP prompts: summarise_last_meeting, open_action_items, and find_discussion(topic) - one-tap starters that expand into transcript-grounded instructions.",
     ],
   },
   {
@@ -127,7 +144,7 @@ export const RELEASES: Release[] = [
     headline: "@-mention your meetings in Claude (MCP resources)",
     summary:
       "The MCP connection now exposes your recordings as **resources**, so in Claude you can **@-mention a " +
-      "specific meeting** — its **transcript** or its **meeting minutes** — instead of asking the assistant to " +
+      "specific meeting** - its **transcript** or its **meeting minutes** - instead of asking the assistant to " +
       "go find it. Each recording that has a transcript shows up as a browsable resource (and a second one for " +
       "its minutes, when generated), delivered as Markdown. Everything stays **per-user and read-only**: you " +
       "only ever see your own recordings, matched to your access token. Tools + resources are live; canned " +
@@ -143,14 +160,14 @@ export const RELEASES: Release[] = [
     headline: "New transcript tools: full transcript, minutes, and details",
     summary:
       "Three new built-in tools the assistant (and **Claude over MCP**) can call to work with a single " +
-      "recording: **get the full transcript** (speaker-labelled, timestamped lines — for when snippets aren't " +
+      "recording: **get the full transcript** (speaker-labelled, timestamped lines - for when snippets aren't " +
       "enough; long transcripts are truncated, raise `max_chars` for more), **get the meeting minutes** " +
       "(the generated Markdown), and **get a recording's details** (date, duration, source, status, speakers, " +
       "and whether a summary / minutes / action items exist). Each accepts a recording **name** or an exact " +
-      "**id** (or uses the selection in chat), and — like the other tools — they're on unless you disable them " +
+      "**id** (or uses the selection in chat), and - like the other tools - they're on unless you disable them " +
       "in Settings → AI, so they light up in **both** the in-app chat and your Claude MCP connection.",
     added: [
-      "Tools: get_transcript (full speaker-labelled transcript, size-guarded), get_meeting_minutes, and get_recording_details — usable in chat and over MCP.",
+      "Tools: get_transcript (full speaker-labelled transcript, size-guarded), get_meeting_minutes, and get_recording_details - usable in chat and over MCP.",
     ],
   },
   {
@@ -161,13 +178,13 @@ export const RELEASES: Release[] = [
     summary:
       "Diariz now includes a built-in **MCP server**, so you can connect **Claude** (Desktop or Code) " +
       "directly to your own meeting transcripts. Generate a personal access token under **Preferences → " +
-      "Claude / MCP access**, then paste the URL and token into Claude's MCP config — Claude can then search " +
+      "Claude / MCP access**, then paste the URL and token into Claude's MCP config - Claude can then search " +
       "and read *your* transcripts and answer questions grounded in your meetings, using the same built-in " +
       "tools the in-app chat uses (search, who-said-what, action items, summaries, attendees, talk time, and " +
       "more). It can also **email you** a summary or notes (only ever to your own address). Access is " +
       "**per-user and secure**: each token is shown once and stored only as a hash, works only for your own " +
       "recordings, and can be **revoked** at any time. Which tools are available follows your per-tool choices " +
-      "in Settings → AI. Read/search only — plus email-to-self; nothing else is written back.",
+      "in Settings → AI. Read/search only - plus email-to-self; nothing else is written back.",
     added: [
       "MCP server at /mcp (Streamable HTTP): connect Claude Desktop/Code with a per-user token to search and read your transcripts.",
       "Preferences → Claude / MCP access: generate, copy (once), list and revoke personal access tokens, with a ready-to-paste Claude config snippet.",
@@ -183,8 +200,8 @@ export const RELEASES: Release[] = [
       "overlays your meetings. Days with recordings stay green; days that only have calendar events show in a " +
       "**darker green**, and a green day that also has events carries a small dot. **Every day is now " +
       "clickable**, and the list below the grid shows that day's **meetings and recordings together, in time " +
-      "order** — each meeting links out to Google Calendar. Events load a month at a time (Calendar is read " +
-      "**once per month** you view, with a Refresh link), so it stays light on API calls. Read-only — nothing " +
+      "order** - each meeting links out to Google Calendar. Events load a month at a time (Calendar is read " +
+      "**once per month** you view, with a Refresh link), so it stays light on API calls. Read-only - nothing " +
       "is written to your calendar. Groundwork for scheduling recordings from a meeting later.",
     added: [
       "Calendar tab overlays Google Calendar events: event-only days in a darker green, an events dot on recording days, and a merged day list (meetings + recordings) linking to each event.",
@@ -197,10 +214,10 @@ export const RELEASES: Release[] = [
     headline: "Drop the Gmail-draft feature (Calendar stays)",
     summary:
       "Removed the **Save meeting minutes as a Gmail draft** feature and the Gmail opt-in. Gmail scopes are " +
-      "Google **restricted** scopes, which require an annual third-party security assessment to verify — a cost " +
+      "Google **restricted** scopes, which require an annual third-party security assessment to verify - a cost " +
       "not worth it for a draft shortcut when you can already **email the minutes to yourself** from the app. " +
       "The **Google Calendar** connection is unaffected (it's a *sensitive* scope, which needs only standard " +
-      "verification) — you can still connect it to see the meeting a recording overlaps. If you'd connected " +
+      "verification) - you can still connect it to see the meeting a recording overlaps. If you'd connected " +
       "Gmail, reconnect from Preferences to drop that scope from your grant.",
     changed: [
       "Removed 'Save as Gmail draft' on the Minutes tab and the Gmail opt-in in Preferences → Google (email-to-self replaces it).",
@@ -213,7 +230,7 @@ export const RELEASES: Release[] = [
     headline: "See the calendar meeting a recording came from",
     summary:
       "If you've connected Google and opted in to **Calendar** (Preferences → Google), a recording's **Overview** " +
-      "now shows the **Google Calendar meeting it overlaps** — matched by time — with a link straight to the event. " +
+      "now shows the **Google Calendar meeting it overlaps** - matched by time - with a link straight to the event. " +
       "Handy for confirming which meeting a recording belongs to. Calendar access is **read-only**; nothing is " +
       "written to your calendar. Shown only when you've granted Calendar access.",
     added: [
@@ -229,10 +246,10 @@ export const RELEASES: Release[] = [
       "If you've connected Google and opted in to **Gmail** (Preferences → Google), a recording's **Minutes** " +
       "tab now has a **Save as Gmail draft** button. It composes the minutes into a draft in your own Gmail " +
       "(addressed to you) and opens your Gmail drafts so you can review, tweak recipients, and send. Nothing " +
-      "is ever sent on your behalf — it only creates a draft. The button appears only when you've granted " +
+      "is ever sent on your behalf - it only creates a draft. The button appears only when you've granted " +
       "Gmail access; if your Google connection has expired, Diariz asks you to reconnect.",
     added: [
-      "Minutes tab: 'Save as Gmail draft' — creates a draft of the meeting minutes in your connected Gmail account.",
+      "Minutes tab: 'Save as Gmail draft' - creates a draft of the meeting minutes in your connected Gmail account.",
     ],
   },
   {
@@ -245,7 +262,7 @@ export const RELEASES: Release[] = [
       "**Google Calendar** and create **Gmail drafts** in your account. It's a per-user, revocable grant: " +
       "tick what to allow, complete Google's consent, and disconnect any time. Access is stored as an " +
       "encrypted refresh token on the server (access tokens live only in memory and never reach the browser). " +
-      "This is the plumbing — the features that use it (save minutes as a Gmail draft; match a recording to " +
+      "This is the plumbing - the features that use it (save minutes as a Gmail draft; match a recording to " +
       "its calendar meeting) arrive next. Requires the operator to enable the Calendar/Gmail scopes on the " +
       "Google OAuth app.",
     added: [
@@ -275,9 +292,9 @@ export const RELEASES: Release[] = [
       "The transcription worker crashed on startup when its blocking read from the Redis job queue hit a " +
       "socket timeout (a behaviour change in the pinned redis client), and had no resilience to a Redis " +
       "restart. The worker now uses a socket timeout wider than its poll window and retries transient " +
-      "timeouts/disconnects instead of exiting. Worker-only change — no effect on the API or web.",
+      "timeouts/disconnects instead of exiting. Worker-only change - no effect on the API or web.",
     fixed: [
-      "Transcription worker no longer crashes on a Redis socket-read timeout or a dropped connection — it retries and keeps consuming jobs.",
+      "Transcription worker no longer crashes on a Redis socket-read timeout or a dropped connection - it retries and keeps consuming jobs.",
     ],
   },
   {
@@ -286,8 +303,8 @@ export const RELEASES: Release[] = [
     pr: 149,
     headline: "Google sign-in: hardened token handoff",
     summary:
-      "Some reverse proxies rewrite responses aggressively — stripping the URL fragment from redirects and " +
-      "forcing `HttpOnly` on cookies — which defeated every browser-visible way of handing the signed-in " +
+      "Some reverse proxies rewrite responses aggressively - stripping the URL fragment from redirects and " +
+      "forcing `HttpOnly` on cookies - which defeated every browser-visible way of handing the signed-in " +
       "token to the app. The app now retrieves the token the same way normal login does: after Google " +
       "sign-in it calls a small endpoint that returns the token in a JSON body (from a one-time HttpOnly " +
       "cookie), which no proxy tampers with. The token still never appears in a URL, log, or Referer.",
@@ -303,11 +320,11 @@ export const RELEASES: Release[] = [
     summary:
       "Google sign-in completed on the server but the browser landed back on the login page. The API " +
       "handed the freshly-minted token to the app in the redirect's URL **fragment**, and a reverse proxy " +
-      "in front of the app stripped that fragment — so the app never received the token. The token is now " +
+      "in front of the app stripped that fragment - so the app never received the token. The token is now " +
       "delivered via a short-lived, same-origin **cookie** the app reads and immediately clears, which " +
       "survives any proxy (and still never appears in a URL, log, or Referer).",
     fixed: [
-      "Google sign-in now signs you in behind reverse proxies that strip URL fragments — the token is handed off via a short-lived same-origin cookie instead of the redirect fragment.",
+      "Google sign-in now signs you in behind reverse proxies that strip URL fragments - the token is handed off via a short-lived same-origin cookie instead of the redirect fragment.",
     ],
   },
   {
@@ -334,7 +351,7 @@ export const RELEASES: Release[] = [
     headline: "Sign in with Google",
     summary:
       "You can now **sign in with Google**. Click **Sign in with Google** on the login page to register or " +
-      "sign in with your Google account — Diariz reads your name, email, and profile picture (which replaces " +
+      "sign in with your Google account - Diariz reads your name, email, and profile picture (which replaces " +
       "your initials in the account menu). New Google sign-ups still require an administrator's approval, and " +
       "if your Google email matches an existing account the two are linked automatically. This first phase " +
       "covers login only; reading Gmail/Calendar to line transcripts up with meetings comes later. Google " +
@@ -354,7 +371,7 @@ export const RELEASES: Release[] = [
     headline: "Calmer Dependabot cadence",
     summary:
       "Dependabot now runs **monthly** and produces **one grouped PR per ecosystem** instead of many " +
-      "individual weekly PRs. Maintenance only — no effect on the app.",
+      "individual weekly PRs. Maintenance only - no effect on the app.",
     changed: [
       "Dependabot version updates are monthly and grouped per ecosystem (npm web, npm desktop, nuget, pip, github-actions), cutting update-PR volume; security alerts/updates are unaffected.",
     ],
@@ -381,7 +398,7 @@ export const RELEASES: Release[] = [
     summary:
       "Adds a CodeQL code-scanning workflow covering **C#, JavaScript/TypeScript, Python, and GitHub " +
       "Actions**. The C# leg does a real .NET build so the API is analysed properly (GitHub's default " +
-      "setup can't build C#). Maintenance only — no effect on the app.",
+      "setup can't build C#). Maintenance only - no effect on the app.",
     added: [
       "A CodeQL workflow (.github/workflows/codeql.yml) scanning C# (built), JS/TS, Python, and Actions on push, PR, and weekly.",
     ],
@@ -412,7 +429,7 @@ export const RELEASES: Release[] = [
     pr: 121,
     headline: "CI moved to GitHub-hosted runners",
     summary:
-      "Continuous integration now runs on **GitHub-hosted runners** instead of a self-hosted machine — the " +
+      "Continuous integration now runs on **GitHub-hosted runners** instead of a self-hosted machine - the " +
       ".NET, web, worker, and locale checks run on `ubuntu-latest` and the desktop installer builds on " +
       "`windows-latest`. This is a maintenance change with no effect on the app itself; it's a prerequisite " +
       "for making the source repository public safely.",
@@ -420,7 +437,7 @@ export const RELEASES: Release[] = [
       "CI runs on GitHub-hosted runners (ubuntu-latest for tests, windows-latest for the desktop installer) rather than a self-hosted runner; the .NET SDK and Python are now provisioned by setup actions.",
     ],
     fixed: [
-      "Attachment names now strip a smuggled directory path on every platform. The previous sanitisation relied on Path.GetFileName, which only strips backslashes on Windows — so on the Linux production servers a name like “..\\..\\secret” slipped through unstripped. (Surfaced by running the tests on Linux.)",
+      "Attachment names now strip a smuggled directory path on every platform. The previous sanitisation relied on Path.GetFileName, which only strips backslashes on Windows - so on the Linux production servers a name like “..\\..\\secret” slipped through unstripped. (Surfaced by running the tests on Linux.)",
     ],
   },
   {
@@ -444,8 +461,8 @@ export const RELEASES: Release[] = [
     headline: "A status bar along the bottom of the app",
     summary:
       "A **status bar** now sits locked along the bottom of the page (it never scrolls). On the left it shows " +
-      "**progress messages** in their usual colours — transcribing, summarising, merging, extracting actions, " +
-      "uploading, and errors — for work on any of your recordings. On the right it shows, `|`-delimited, your " +
+      "**progress messages** in their usual colours - transcribing, summarising, merging, extracting actions, " +
+      "uploading, and errors - for work on any of your recordings. On the right it shows, `|`-delimited, your " +
       "**storage usage**, **transcription usage**, and **total number of transcripts** (the same figures as the " +
       "account menu).",
     added: [
@@ -460,7 +477,7 @@ export const RELEASES: Release[] = [
     summary:
       "Merging two or more recordings failed while saving the combined audio (the worker logged a " +
       "`FileNotFoundError: 'recordings'`). The worker was passing the storage bucket name where the local " +
-      "file path belongs — boto3's upload and download take their file/bucket arguments in opposite orders. " +
+      "file path belongs - boto3's upload and download take their file/bucket arguments in opposite orders. " +
       "Fixed, with a regression test that checks the argument wiring directly (the worker's other tests stub " +
       "the upload wholesale, so it went unnoticed).",
     fixed: [
@@ -475,7 +492,7 @@ export const RELEASES: Release[] = [
     summary:
       "The **Overview** tab now opens with **Meeting Date** (long form in your language, e.g. \"23rd March " +
       "2026\"), **Meeting Time** (24-hour hh:mm), and **Duration** (hh:mm), followed by a **Summary** heading and " +
-      "the summary text. And the **Meeting Minutes** no longer let the model write its own action list — the " +
+      "the summary text. And the **Meeting Minutes** no longer let the model write its own action list - the " +
       "minutes' **Action Items** are now compiled **deterministically from the recording's tracked actions** (the " +
       "Actions tab), so the two always match. The minutes prompt is explicitly told not to produce an action-items " +
       "section; the canonical table is appended automatically.",
@@ -483,7 +500,7 @@ export const RELEASES: Release[] = [
       "The Overview tab shows Meeting Date (extended, localized), Meeting Time (24-hour), and Duration (hh:mm) above the summary, under a Summary heading.",
     ],
     changed: [
-      "Meeting minutes' Action Items are now built deterministically from the recording's tracked actions (the Actions tab) instead of being generated by the model — the minutes and the Actions tab always list the same items.",
+      "Meeting minutes' Action Items are now built deterministically from the recording's tracked actions (the Actions tab) instead of being generated by the model - the minutes and the Actions tab always list the same items.",
       "The chat /tools command now shows the enabled tools as a two-column table (Tool / What it does).",
       "The chat input hints \"type / for the command list\" until you start typing.",
     ],
@@ -497,14 +514,14 @@ export const RELEASES: Release[] = [
     pr: 116,
     headline: "Recording page redesigned into tabs",
     summary:
-      "The recording page's stacked panels are now a row of **tabs** — **Overview** (the summary), " +
-      "**Minutes**, **Actions**, **Speakers**, **Transcript**, and **Attachments** — so you see one section at " +
+      "The recording page's stacked panels are now a row of **tabs** - **Overview** (the summary), " +
+      "**Minutes**, **Actions**, **Speakers**, **Transcript**, and **Attachments** - so you see one section at " +
       "a time. Each tab shows **its own toolbar** directly beneath the tab strip, then its content, and the " +
       "strip + toolbar stay pinned while the content scrolls. **Attachments** now have a dedicated tab where you " +
       "add files or links and rename/open/delete them (the old \"Attachments\" button above the panels is gone; " +
       "drag-and-drop-to-attach still works). The last tab you used is remembered.",
     changed: [
-      "The recording page is now organised into horizontal tabs (Overview / Minutes / Actions / Speakers / Transcript / Attachments) instead of stacked collapsible panels — each tab has its toolbar directly below the tab strip.",
+      "The recording page is now organised into horizontal tabs (Overview / Minutes / Actions / Speakers / Transcript / Attachments) instead of stacked collapsible panels - each tab has its toolbar directly below the tab strip.",
       "Attachments have their own tab (add file/URL, rename, open, delete); the separate Attachments button and its pop-up manager above the panels were removed. Drag-and-drop onto the page still attaches files.",
     ],
   },
@@ -518,7 +535,7 @@ export const RELEASES: Release[] = [
       "transcript** as a Markdown attachment, titled **\"Email: <subject>\"** with the email body as its " +
       "content. It uses the same destination flow as **Add as attachment**: with one transcript in the chat's " +
       "context the copy is added there; with several selected, you pick which one. If no transcript is in " +
-      "context the email is still sent — there's just nothing to attach the copy to.",
+      "context the email is still sent - there's just nothing to attach the copy to.",
     added: [
       "The \"Send email to me\" chat tool now files a copy of each sent email onto the transcript as a Markdown attachment (\"Email: <subject>\"), using the same single/pick-one selection as Add as attachment.",
     ],
@@ -533,7 +550,7 @@ export const RELEASES: Release[] = [
       "never sent to the model): **`/clear`** starts a new conversation, **`/context`** shows what the chat " +
       "can currently see (scope, transcript count, model, token usage), **`/save`** and **`/load`** manage " +
       "saved conversations, **`/copy`** copies the assistant's last reply, and **`/retry`** re-asks the last " +
-      "question. Typing **`/`** now opens a small **autocomplete popup** listing the matching commands — click " +
+      "question. Typing **`/`** now opens a small **autocomplete popup** listing the matching commands - click " +
       "one (or press Enter) to run it.",
     added: [
       "Chat commands: /clear (new conversation), /context (show current scope/model/token usage), /save, /load, /copy (last reply), /retry (re-ask last question).",
@@ -548,15 +565,15 @@ export const RELEASES: Release[] = [
     summary:
       "Chat now understands **slash commands**, handled entirely in the browser and **never sent to the " +
       "model**: **`/tools`** lists the chat tools you have enabled, and **`/help`** lists the commands. " +
-      "Because they're client-side, typing `/tools` always just shows the list — it can no longer be " +
+      "Because they're client-side, typing `/tools` always just shows the list - it can no longer be " +
       "misread by the model as a request to run a tool. Fix: notes sent by the **Send email to me** tool now " +
-      "render **properly formatted** — tables, lists and bold come through as formatting instead of raw " +
+      "render **properly formatted** - tables, lists and bold come through as formatting instead of raw " +
       "Markdown (the email previously used a basic renderer that didn't handle GitHub-flavoured Markdown).",
     added: [
       "Chat slash commands handled client-side (never sent to the model): /tools lists your enabled tools, /help lists the commands.",
     ],
     fixed: [
-      "The \"Send email to me\" tool rendered the assistant's Markdown with a basic renderer, so tables/lists could arrive as raw Markdown — it now uses the full renderer and an email-friendly layout.",
+      "The \"Send email to me\" tool rendered the assistant's Markdown with a basic renderer, so tables/lists could arrive as raw Markdown - it now uses the full renderer and an email-friendly layout.",
     ],
   },
   {
@@ -566,15 +583,15 @@ export const RELEASES: Release[] = [
     headline: "New chat tools: email yourself a message, or save the assistant's output to a transcript",
     summary:
       "The chat assistant gains two **write** tools. **Send email to me** composes a subject and body and " +
-      "emails it to you — it can **only ever email you** (your own registered account address, no way to send " +
+      "emails it to you - it can **only ever email you** (your own registered account address, no way to send " +
       "to anyone else). **Add as attachment** saves content it has prepared (a summary, notes, a table…) onto a " +
       "transcript as a Markdown attachment: with one transcript in the chat's context it adds it there; with " +
       "several selected, you pick which one from a short list. Both are **on by default** with the other tools " +
       "(toggle any of them under **Settings → AI**). The chat also now knows **who you are** (your name and " +
       "email are part of its context), so the messages it writes read as being from you.",
     added: [
-      "A \"Send email to me\" chat tool — the assistant composes a subject and body and emails it to your own account address.",
-      "An \"Add as attachment\" chat tool — saves the assistant's output to a transcript as a Markdown attachment (you pick the transcript when several are selected).",
+      "A \"Send email to me\" chat tool - the assistant composes a subject and body and emails it to your own account address.",
+      "An \"Add as attachment\" chat tool - saves the assistant's output to a transcript as a Markdown attachment (you pick the transcript when several are selected).",
     ],
     changed: [
       "The chat context now includes the signed-in user's name and email, so the assistant knows who it is helping and can sign emails as them.",
@@ -584,7 +601,7 @@ export const RELEASES: Release[] = [
     version: "0.55.0",
     date: "2026-07-01",
     pr: 111,
-    headline: "Action items extract automatically — and the minutes now use the same set",
+    headline: "Action items extract automatically - and the minutes now use the same set",
     summary:
       "**Action items now extract automatically** as part of the transcription pipeline (when an LLM endpoint " +
       "is configured), so a recording arrives with its actions already pulled out. The automatic pass runs once " +
@@ -602,7 +619,7 @@ export const RELEASES: Release[] = [
     ],
     changed: [
       "Reworked the action-extraction prompt for completeness (reason-first, capture decisions/follow-ups, higher temperature) so it no longer under-reports.",
-      "Meeting minutes now render the recording's already-extracted action items verbatim — so the minutes' Action Items table matches the Actions panel exactly (the pipeline runs actions, then the minutes).",
+      "Meeting minutes now render the recording's already-extracted action items verbatim - so the minutes' Action Items table matches the Actions panel exactly (the pipeline runs actions, then the minutes).",
       "The Meeting Minutes panel is always shown (collapsed) with a refresh button to generate them, even when the recording has none yet.",
       "Automatic action extraction runs once per recording and never clobbers manually added/edited actions (an explicit re-extract still replaces them).",
     ],
@@ -636,15 +653,15 @@ export const RELEASES: Release[] = [
     summary:
       "A batch of transcript-page refinements. The **Actions** (kebab) menu gains **Generate meeting minutes**, " +
       "so recordings that predate the feature (or never got minutes) can create them without the minutes panel. " +
-      "The **Speakers** panel is cleaner — the redundant second name box is gone, the assignment box is wider " +
-      "(any name fits) and the rows line up — and each speaker now shows their **total talk time** next to the " +
+      "The **Speakers** panel is cleaner - the redundant second name box is gone, the assignment box is wider " +
+      "(any name fits) and the rows line up - and each speaker now shows their **total talk time** next to the " +
       "segment count. The **Action items** panel is now always present (starting collapsed) with its own " +
       "**refresh** button to (re-)extract, so extraction moves off the main toolbar; the **Summary** and " +
       "**Speakers** re-run controls use the same refresh icon. The **Summary** panel now sits **above** Meeting " +
       "Minutes and both start **collapsed**, and every panel's **collapse/expand chevron moved to the end** of " +
       "its header (after the toolbar). The redundant **Play all** button is gone (the player bar already plays " +
       "the whole recording). Bug fix: deleting the open recording from the list no longer leaves its transcript " +
-      "on screen (which made follow-up actions fail) — the page clears on delete from either the list or the " +
+      "on screen (which made follow-up actions fail) - the page clears on delete from either the list or the " +
       "transcript menu.",
     added: [
       "\"Generate meeting minutes\" in the transcript Actions (kebab) menu.",
@@ -654,7 +671,7 @@ export const RELEASES: Release[] = [
       "Speakers panel: removed the duplicate name field, widened the assignment box, and aligned the rows.",
       "The Action items panel is always shown (starting collapsed) with a refresh button to extract/re-extract; the standalone \"Extract actions\" toolbar button is gone.",
       "Re-run controls (Summary, Speakers re-identify, Actions extract) share a consistent refresh icon.",
-      "Removed the redundant \"Play all\" button — the player bar already plays the whole recording.",
+      "Removed the redundant \"Play all\" button - the player bar already plays the whole recording.",
       "Summary panel moved above Meeting Minutes; both start collapsed.",
       "Each panel's collapse/expand chevron is now the last control in the header (after the toolbar).",
     ],
@@ -666,13 +683,13 @@ export const RELEASES: Release[] = [
     version: "0.53.0",
     date: "2026-07-01",
     pr: 108,
-    headline: "Meeting Minutes — a formatted, emailable write-up of every recording",
+    headline: "Meeting Minutes - a formatted, emailable write-up of every recording",
     summary:
-      "Every transcribed recording now gets a set of **professional meeting minutes** — generated as part of " +
+      "Every transcribed recording now gets a set of **professional meeting minutes** - generated as part of " +
       "the pipeline from the transcript, with headings, lists, tables, and bold (and deliberately **no emojis**). " +
       "The new **Meeting Minutes** section on the recording page starts expanded and has a toolbar: **Re-create** " +
       "them, **Edit** them in a rich (WYSIWYG) editor, or **Email them to yourself**. Emailing sends only the " +
-      "minutes, and — when the recording has attachments — asks whether to include them. The minutes also ride " +
+      "minutes, and - when the recording has attachments - asks whether to include them. The minutes also ride " +
       "along in the existing **Email transcript** action and the **Markdown / text / RTF downloads**. Minutes use " +
       "the same LLM endpoint you already configure for summaries.",
     added: [
@@ -682,7 +699,7 @@ export const RELEASES: Release[] = [
     ],
     changed: [
       "Minutes are generated automatically alongside the summary when an LLM endpoint is configured.",
-      "The summarise, action-extraction, and meeting-minutes instruction prompts each live in an editable server file (prompts/*.md) — administrators can tweak the wording without a rebuild.",
+      "The summarise, action-extraction, and meeting-minutes instruction prompts each live in an editable server file (prompts/*.md) - administrators can tweak the wording without a rebuild.",
     ],
   },
   {
@@ -694,7 +711,7 @@ export const RELEASES: Release[] = [
       "The transcript's **Speakers** panel is now one compact line per speaker, showing the segment **count** " +
       "and a small **toolbar**: play/pause that speaker, **jump to their previous / next segment**, and a " +
       "**delete** that removes all of that speaker's segments (with confirmation). Deleting a speaker's segments " +
-      "removes them from the list — and now also clears their stored voiceprint for the recording, so the data " +
+      "removes them from the list - and now also clears their stored voiceprint for the recording, so the data " +
       "matches what you see. The **Summary** section also starts **collapsed** by default, so the transcript is " +
       "right there when you open a recording.",
     added: [
@@ -712,11 +729,11 @@ export const RELEASES: Release[] = [
     pr: 106,
     headline: "Denser recordings list and scrollable user/people tables",
     summary:
-      "The **recordings list** is now much more compact — section headers and rows are roughly half the height, " +
+      "The **recordings list** is now much more compact - section headers and rows are roughly half the height, " +
       "so more meetings fit on screen. Each recording is a single line (name + duration); the source and date " +
       "moved into the **hover tooltip**. In the account menu, **Manage Users** and **People** are now proper " +
       "tables with a **sticky header** and a scrollable body, so the title, Add-User form, and column headings " +
-      "stay put while long lists scroll — much better with many users or enrolled voiceprints. People keeps its " +
+      "stay put while long lists scroll - much better with many users or enrolled voiceprints. People keeps its " +
       "expandable per-person training-sample detail (play / remove).",
     changed: [
       "Recordings list is denser: single-line rows (source · date shown on hover) and shorter section headers.",
@@ -730,11 +747,11 @@ export const RELEASES: Release[] = [
     pr: 105,
     headline: "See your microphone level while recording",
     summary:
-      "While a recording is in progress the toolbar now shows a **live input-level meter** — a small bar next " +
+      "While a recording is in progress the toolbar now shows a **live input-level meter** - a small bar next " +
       "to the timer that fills green→amber→red with the sound coming in, so you can see at a glance that your " +
       "microphone is actually being picked up. It reads the same audio that's being recorded (nothing is echoed " +
       "to your speakers). If the input stays silent for about 15 seconds a **subtle grey hint** appears in case " +
-      "the mic is muted — it's deliberately patient so normal pauses in a meeting don't trigger it, and it " +
+      "the mic is muted - it's deliberately patient so normal pauses in a meeting don't trigger it, and it " +
       "vanishes the moment sound returns.",
     added: [
       "A live input-level meter next to the recording timer, so you can confirm your microphone is being received.",
@@ -747,13 +764,13 @@ export const RELEASES: Release[] = [
     pr: 104,
     headline: "Tidier, simpler microphone picker",
     summary:
-      "Cleanups to the microphone dropdown. It no longer lists the same physical mic three times — " +
+      "Cleanups to the microphone dropdown. It no longer lists the same physical mic three times - " +
       "Windows/Chromium expose synthetic **“Default - …”** and **“Communications - …”** entries that are just " +
       "aliases of a real device, so those are dropped (the **Microphone (default)** entry at the top already " +
       "covers the OS default), and the trailing USB hardware code (e.g. **(046d:0ab1)**) is stripped for " +
-      "readability — a Blue Yeti now shows once as “Microphone (Yeti Nano)”. The awkward **“Allow microphone to " +
+      "readability - a Blue Yeti now shows once as “Microphone (Yeti Nano)”. The awkward **“Allow microphone to " +
       "list devices…”** link is also gone: opening the picker now triggers the browser's normal microphone " +
-      "prompt, and if no mic is available you get a plain **“No microphone detected — check your browser and " +
+      "prompt, and if no mic is available you get a plain **“No microphone detected - check your browser and " +
       "system microphone permissions”** hint instead of a click-then-error.",
     fixed: [
       "Microphone dropdown no longer duplicates each physical mic as Default/Communications aliases, and drops the (vendor:product) hardware code from device names.",
@@ -767,7 +784,7 @@ export const RELEASES: Release[] = [
     headline: "Microphone picker fixes: connected mics now list, and the settings popover closes",
     summary:
       "Two fixes to the new microphone controls. Your **connected microphones now appear in the dropdown** " +
-      "whenever the browser already has mic access (e.g. after you've recorded once) — the previous build " +
+      "whenever the browser already has mic access (e.g. after you've recorded once) - the previous build " +
       "gated the device list on a `navigator.permissions` query that is unreliable (it reports “prompt” in the " +
       "desktop app and some browsers even when access is granted), so specific mics could stay hidden. " +
       "Enumerating devices never triggers a permission pop-up, so it now always runs. Separately, the " +
@@ -785,7 +802,7 @@ export const RELEASES: Release[] = [
     headline: "Choose a specific microphone and tune capture",
     summary:
       "The recorder's source dropdown now lists **Microphone (default)**, then each **specific microphone** " +
-      "connected to your machine, with **System audio** at the bottom — so you can capture from a particular " +
+      "connected to your machine, with **System audio** at the bottom - so you can capture from a particular " +
       "headset or interface instead of just the OS default. Your choice is **remembered** between sessions, and " +
       "the list refreshes live when you plug or unplug a device. A new **⚙ audio-settings** popover next to the " +
       "dropdown lets you tune microphone capture: **echo cancellation**, **noise suppression**, **auto gain**, and " +
@@ -804,8 +821,8 @@ export const RELEASES: Release[] = [
     headline: "Reasoning controls for the LLM, plus a batch of settings & action tweaks",
     summary:
       "Settings → AI gains a **reasoning** toggle and **level** (Low / Medium / High). Turn it on and Diariz " +
-      "sends an OpenAI-style `reasoning_effort` on every LLM request — summaries, action extraction, " +
-      "translation and chat — so reasoning-capable models think before answering (leave it off for models " +
+      "sends an OpenAI-style `reasoning_effort` on every LLM request - summaries, action extraction, " +
+      "translation and chat - so reasoning-capable models think before answering (leave it off for models " +
       "that don't support it; it falls back to the server default). Alongside it, a handful of smaller fixes: " +
       "the **edit-action** text box now grows to fit its contents, the actions toolbar's **Select** tooltip " +
       "reads “Select actions” and leaving Select mode clears the selection (so the count badge disappears), and " +
@@ -828,11 +845,11 @@ export const RELEASES: Release[] = [
     summary:
       "The transcript panel is reworked. As you scroll down it now **pins to the top** and the segments scroll " +
       "**inside** it (scroll back up and the page takes over again), so the controls stay in reach on long " +
-      "transcripts. Those controls move into a compact **icon toolbar** in the panel header — with a small play " +
-      "progress bar — and gain a **Select mode**: tick segments (or just click one) and act on the selection. " +
+      "transcripts. Those controls move into a compact **icon toolbar** in the panel header - with a small play " +
+      "progress bar - and gain a **Select mode**: tick segments (or just click one) and act on the selection. " +
       "**Play selected** plays only those segments gaplessly, **Edit** opens a single segment, **Translate** and " +
       "**Delete** act on the selection (Delete confirms the count), while **Play all** and **Merge** always work " +
-      "on the whole transcript. Clicking a segment no longer auto-plays — it just selects/highlights it.",
+      "on the whole transcript. Clicking a segment no longer auto-plays - it just selects/highlights it.",
     added: [
       "The transcript panel pins to the top once reached and scrolls its segments internally.",
       "Header icon toolbar: Play all · Play selected · Merge · Select · Edit · Translate · Delete, plus a small play progress bar.",
@@ -860,17 +877,17 @@ export const RELEASES: Release[] = [
     version: "0.46.0",
     date: "2026-06-30",
     pr: 98,
-    headline: "Action management — a cross-meeting Actions view with completion tracking",
+    headline: "Action management - a cross-meeting Actions view with completion tracking",
     summary:
       "The left panel is now **Meetings** and gains an **Actions** tab listing every action item across all " +
       "your transcripts in one place. Filter by person, click an action's title to jump to the transcript it " +
-      "came from, and mark actions **done** (with a completion date) — individually or in bulk via a Select " +
+      "came from, and mark actions **done** (with a completion date) - individually or in bulk via a Select " +
       "mode like the recordings list. A **Hide completed** toggle clears finished items out of the way. The " +
       "per-transcript actions table gains the same **Done** checkbox and **Completed** date column. Completion " +
       "is reversible.",
     added: [
       "Actions tab in the left panel: all action items across every meeting, filterable by person.",
-      "Mark actions complete/incomplete (with a completion date) — inline on a transcript, or in bulk from the Actions tab.",
+      "Mark actions complete/incomplete (with a completion date) - inline on a transcript, or in bulk from the Actions tab.",
       "Each action links back to the transcript it was raised in; edit an action from the Actions tab.",
       "Hide completed toggle to focus on outstanding work.",
     ],
@@ -888,7 +905,7 @@ export const RELEASES: Release[] = [
       "`/dev/kfd`, which **WSL2 / Docker Desktop on Windows does not expose**, so it fails to start there with " +
       "*“no such file or directory”* for `/dev/kfd`. The worker README and `docker-compose.rocm.yml` now spell " +
       "this out and point Windows/WSL2 users at the CPU-only fallback (standard compose, `WORKER_DEVICE=cpu`). " +
-      "Docs only — no behaviour change.",
+      "Docs only - no behaviour change.",
     changed: [
       "Worker README + docker-compose.rocm.yml note the AMD ROCm worker requires native Linux (not WSL2) and link the CPU-only fallback.",
     ],
@@ -905,7 +922,7 @@ export const RELEASES: Release[] = [
       "`setuptools` to a version that still provides `pkg_resources`, so the image builds again. AMD-only; the " +
       "NVIDIA worker, API, and web are unaffected.",
     fixed: [
-      "AMD ROCm worker image (docker-compose.rocm.yml) builds again — pin setuptools<81 for the openai-whisper wheel build.",
+      "AMD ROCm worker image (docker-compose.rocm.yml) builds again - pin setuptools<81 for the openai-whisper wheel build.",
     ],
   },
   {
@@ -916,8 +933,8 @@ export const RELEASES: Release[] = [
     summary:
       "Reordering a recording or section by drag-and-drop was awkward across a long list: if the drop target " +
       "sat off-screen, the list didn't scroll to reveal it, so you couldn't reach it. Now, dragging near the " +
-      "top or bottom edge of the list (or the calendar day's list) scrolls it automatically — faster the closer " +
-      "you are to the edge — so you can drop anywhere in a large structure.",
+      "top or bottom edge of the list (or the calendar day's list) scrolls it automatically - faster the closer " +
+      "you are to the edge - so you can drop anywhere in a large structure.",
     fixed: [
       "The recordings list auto-scrolls when you drag a recording or section near its top/bottom edge, so off-screen drop targets are reachable.",
     ],
@@ -929,7 +946,7 @@ export const RELEASES: Release[] = [
     headline: "Deploy: one .env works for both the NVIDIA and AMD stacks",
     summary:
       "Tidies the two Docker Compose stacks so a single `.env` is safe for either. The Whisper ASR backend " +
-      "is no longer an env var — it's intrinsic to the compose file you run (the AMD `docker-compose.rocm.yml` " +
+      "is no longer an env var - it's intrinsic to the compose file you run (the AMD `docker-compose.rocm.yml` " +
       "hardcodes openai-whisper; the NVIDIA stack uses faster-whisper), so a shared `.env` carried between " +
       "machines can't accidentally force the wrong backend and break the AMD worker. No app behaviour change.",
     changed: [
@@ -945,7 +962,7 @@ export const RELEASES: Release[] = [
       "The 0.45.0 backup download failed straight away (the browser showed a tiny, broken `.zip`). The server " +
       "was streaming the archive directly to the HTTP response, but the zip writer needs synchronous writes " +
       "that the web server disallows on the network stream, so it aborted the moment the archive finished. The " +
-      "backup is now assembled to a temp file and streamed back — downloads work, and a failed database dump " +
+      "backup is now assembled to a temp file and streamed back - downloads work, and a failed database dump " +
       "now returns a clear error instead of a truncated file.",
     fixed: [
       "Platform backup (Settings → Maintenance) now downloads correctly instead of failing with a broken zip.",
@@ -959,10 +976,10 @@ export const RELEASES: Release[] = [
     summary:
       "A new **Maintenance** tab in Settings (Platform Administrator only) backs up and restores the **whole " +
       "platform**. **Back up** downloads one archive containing a full Postgres dump and every stored file " +
-      "(audio + attachments) — keep it safe or move it to another machine. **Restore** uploads such an archive " +
+      "(audio + attachments) - keep it safe or move it to another machine. **Restore** uploads such an archive " +
       "and replaces everything with it. Restore is **destructive** (it replaces ALL data, briefly takes the app " +
       "offline, and signs you out) and only accepts a backup from the same app version. The backup contains all " +
-      "platform data (password hashes, every recording) so it's a sensitive file — and it deliberately omits the " +
+      "platform data (password hashes, every recording) so it's a sensitive file - and it deliberately omits the " +
       "encryption keyring, so after restoring on a fresh instance users re-enter their LLM API keys.",
     added: [
       "Maintenance tab: download a full platform backup (Postgres + all object-store files) as one archive.",
@@ -983,7 +1000,7 @@ export const RELEASES: Release[] = [
       "AMD uses **openai-whisper** (pure PyTorch) because CTranslate2 has no AMD GPU support. Alignment, " +
       "speaker diarization and voiceprints already run on ROCm unchanged. Ships a separate ROCm image " +
       "(`Dockerfile.rocm`) and a standalone stack (`deploy/docker-compose.rocm.yml`), initially targeting " +
-      "AMD Strix Halo (gfx1151). No app/UI change — only the worker differs; the LLM endpoint is unaffected. " +
+      "AMD Strix Halo (gfx1151). No app/UI change - only the worker differs; the LLM endpoint is unaffected. " +
       "**Note:** the ROCm path is unit-validated and the NVIDIA path is unchanged, but end-to-end AMD GPU " +
       "inference still needs confirming on real AMD hardware.",
     added: [
@@ -1001,7 +1018,7 @@ export const RELEASES: Release[] = [
       "Follow-up to the calendar work in 0.43.0. The month grid was still stretching to match the " +
       "longest recording name in the selected day's list, so picking a day with long titles widened the " +
       "calendar (and pushed Sat/Sun off the edge). Long recording names now truncate instead of forcing the " +
-      "column wider, so the calendar stays a fixed width as you click between days — while still resizing " +
+      "column wider, so the calendar stays a fixed width as you click between days - while still resizing " +
       "when you drag the panel divider. Verified in-browser against real data (identical grid width across days).",
     fixed: [
       "Calendar grid no longer changes width when selecting different days; long recording names truncate in the list.",
@@ -1014,7 +1031,7 @@ export const RELEASES: Release[] = [
     headline: "Faster speaker labelling, per-speaker playback, and panel quick-actions",
     summary:
       "Recording-detail refinements. The **Summary** and **Speakers** panels gain small toolbars next to " +
-      "their collapse arrow — re-summarise / edit on Summary, and re-identify / manage people on Speakers. " +
+      "their collapse arrow - re-summarise / edit on Summary, and re-identify / manage people on Speakers. " +
       "The speaker assignment control is now a **typeahead**: start typing to find an enrolled person (handy " +
       "once you have many), or create a new one from what you typed. Each speaker has a **play button** that " +
       "auditions just that person's segments. Plus two fixes: renaming a recording updates the list " +
@@ -1023,7 +1040,7 @@ export const RELEASES: Release[] = [
       "Summary panel toolbar: Re-summarise and Edit, beside the collapse control.",
       "Speakers panel toolbar: Re-identify speakers and Manage people.",
       "Per-speaker play/pause that plays only that speaker's segments, skipping everyone else.",
-      "Typeahead for assigning a speaker to a person — filter as you type, or create a new person inline.",
+      "Typeahead for assigning a speaker to a person - filter as you type, or create a new person inline.",
     ],
     changed: [
       "The calendar's selected-day highlight sits inside the cell and no longer resizes the calendar; empty days use a darker, more legible grey.",
@@ -1039,7 +1056,7 @@ export const RELEASES: Release[] = [
     headline: "Fix: deleting or merging recordings no longer leaks attachment files",
     summary:
       "Closed a storage leak where a recording's **uploaded attachment files** were left behind in object " +
-      "storage when the recording was **deleted** or **merged** into another — the database rows went away but " +
+      "storage when the recording was **deleted** or **merged** into another - the database rows went away but " +
       "the underlying files didn't. Now deleting a recording also frees its attachment files, and **merging keeps " +
       "the attachments**: they move onto the surviving recording (so you don't lose documents you attached to a " +
       "merged-away recording) rather than being discarded.",
@@ -1060,7 +1077,7 @@ export const RELEASES: Release[] = [
       "Fixed the bug where leaving the app untouched during a long recording (e.g. a 45-minute meeting) could " +
       "drop you to the sign-in screen on Stop and lose the recording. Two changes: your **session now refreshes " +
       "itself silently** before it expires, so it stays alive through a long meeting; and every recording is " +
-      "**saved to your browser the moment you press Stop**, before it uploads — so even if an upload fails, the " +
+      "**saved to your browser the moment you press Stop**, before it uploads - so even if an upload fails, the " +
       "audio is safe and you're offered to **upload it when you return**.",
     added: [
       "Silent sliding-session token refresh (a new /api/auth/refresh endpoint) keeps long sessions alive.",
@@ -1090,7 +1107,7 @@ export const RELEASES: Release[] = [
     headline: "Chat recognises transcript questions, links reliably, and jumps between matches",
     summary:
       "Three chat improvements. **(1) Better recognition:** the assistant now treats your questions as being " +
-      "about your own meetings by default — asking \"what do we know about {customer}\" makes it search your " +
+      "about your own meetings by default - asking \"what do we know about {customer}\" makes it search your " +
       "transcripts instead of replying that it doesn't know, without you having to say \"based on the " +
       "transcripts\". **(2) Reliable links:** when the model mentions a recording by name but forgets to keep " +
       "the link, the app now **links it for you** (from the recordings the tools actually used). **(3) Jump " +
@@ -1114,7 +1131,7 @@ export const RELEASES: Release[] = [
       "answers. New tools: **search transcripts** (general topic retrieval), **when was it discussed** " +
       "(first/last mention), **count mentions** (by speaker), **list action items**, **get recording " +
       "summary**, **who attended**, **speaker talk time**, and **get segment context** (the lines around a " +
-      "moment). When the assistant cites a recording or a specific moment, it includes a **link** — click it " +
+      "moment). When the assistant cites a recording or a specific moment, it includes a **link** - click it " +
       "to open that transcript in the middle panel and **jump to the exact segment** (highlighted). All " +
       "eleven tools appear in **Settings → AI** with individual on/off switches.",
     added: [
@@ -1129,7 +1146,7 @@ export const RELEASES: Release[] = [
     headline: "Chat tools: the assistant can search your whole transcript library",
     summary:
       "Chat can now **call built-in tools** to answer questions that go beyond the transcripts loaded into " +
-      "the conversation — it searches your **entire library** when it needs to. Three tools ship: " +
+      "the conversation - it searches your **entire library** when it needs to. Three tools ship: " +
       "**Who said that** (find who said a phrase), **What did they say** (what a named person said about a " +
       "topic), and **List recordings** (filter by date, name, speaker, or a *contains* topic that finds " +
       "recordings whose transcript is about something). Findings come back as **When · Who · What**. While a " +
@@ -1153,10 +1170,10 @@ export const RELEASES: Release[] = [
     pr: 82,
     headline: "Merge recordings even after their audio is gone; indented list",
     summary:
-      "You can now **merge recordings whose audio has been deleted** — that restriction is lifted. " +
+      "You can now **merge recordings whose audio has been deleted** - that restriction is lifted. " +
       "Recordings that still have audio are stitched together exactly as before; ones without audio " +
       "contribute their **transcript and action items** only (the action items from every recording are " +
-      "now folded into the survivor). The **summary isn't merged** — re-generate it on the combined " +
+      "now folded into the survivor). The **summary isn't merged** - re-generate it on the combined " +
       "transcript. Separately, the recordings list now **indents recordings under their section heading** " +
       "(and a little more under a sub-section).",
     added: [
@@ -1192,7 +1209,7 @@ export const RELEASES: Release[] = [
       "attachments are fetched** (behind safety guards that block private/internal addresses, cap the " +
       "size, and strip HTML to text). Unsupported or unreachable attachments are simply skipped.",
     added: [
-      "“Include attachments” toggle in chat — adds the selected recordings' files & links to the LLM context.",
+      "“Include attachments” toggle in chat - adds the selected recordings' files & links to the LLM context.",
       "Attachment text extraction for Office (.docx/.xlsx/.pptx) and email/calendar (.eml/.ics), plus URL fetching with SSRF guards.",
     ],
   },
@@ -1204,7 +1221,7 @@ export const RELEASES: Release[] = [
     summary:
       "Keep the **supporting material** for a meeting alongside its transcript. On the detail page, an " +
       "**Attachments (N)** split button opens a manager where you can **add files** (PDFs, Office docs, " +
-      "emails, calendar invites, images — anything), **add a URL**, **rename**, **open**, and **remove** " +
+      "emails, calendar invites, images - anything), **add a URL**, **rename**, **open**, and **remove** " +
       "them; the dropdown opens any attachment directly with your browser. You can also **drag files onto " +
       "the page** to attach them. Files are stored in object storage and count toward your storage quota; " +
       "URLs don't. (Using attachments as chat context comes next.)",
@@ -1239,9 +1256,9 @@ export const RELEASES: Release[] = [
     summary:
       "Two ways to work with a transcript more directly. **Copy link** (a toolbar button and a ⋮-menu " +
       "item on both the detail page and the recordings list) puts a **persistent link** to the transcript " +
-      "on your clipboard as **rich text** — pasting into an email or meeting notes shows the recording’s " +
+      "on your clipboard as **rich text** - pasting into an email or meeting notes shows the recording’s " +
       "**name** as the clickable link. (It’s a personal deep-link: opening it still requires signing in as " +
-      "you.) And you can now **edit the summary by hand** (⋮ → Edit summary) — write one even when no AI " +
+      "you.) And you can now **edit the summary by hand** (⋮ → Edit summary) - write one even when no AI " +
       "endpoint is configured. A hand-edited summary is **protected**: the automatic summariser won’t " +
       "overwrite it, and re-summarising warns you first.",
     added: [
@@ -1259,14 +1276,14 @@ export const RELEASES: Release[] = [
     headline: "Tidy transcripts: delete segments, mark overlapping speech",
     summary:
       "Two transcript-editing tools. You can now **delete a single segment** from the transcript " +
-      "(via the row’s ⋮ menu) — handy for dropping a meaningless or misfired row; the remaining rows " +
+      "(via the row’s ⋮ menu) - handy for dropping a meaningless or misfired row; the remaining rows " +
       "renumber automatically, and re-transcribing always regenerates the full set. And a speaker can be " +
       "marked **“Multiple Speakers”** from the speaker dropdown, for stretches of overlapping or " +
       "simultaneous speech. Because that audio is a mix of voices, a “Multiple Speakers” slot is **never " +
       "used to recognise or train a voiceprint**.",
     added: [
       "Delete an individual transcript segment from its ⋮ menu (permanent for that version; re-transcribe to restore).",
-      "Mark a speaker as “Multiple Speakers” for overlapping speech — excluded from automatic identification and voiceprint enrolment.",
+      "Mark a speaker as “Multiple Speakers” for overlapping speech - excluded from automatic identification and voiceprint enrolment.",
     ],
   },
   {
@@ -1283,7 +1300,7 @@ export const RELEASES: Release[] = [
       "to match the recording rows; and you can **drop a section onto a top-level section to nest it** as a " +
       "sub-section.",
     changed: [
-      "Recording rows are dragged by the whole row now (the separate drag-handle icon is gone) — the row already highlights on hover.",
+      "Recording rows are dragged by the whole row now (the separate drag-handle icon is gone) - the row already highlights on hover.",
     ],
     fixed: [
       "Account-menu storage usage refreshes after delete-audio / merge / delete.",
@@ -1301,8 +1318,8 @@ export const RELEASES: Release[] = [
     summary:
       "The recordings panel now has **List** and **Calendar** tabs (down the left side). The calendar shows " +
       "the month focused on today; days that have recordings are **green** (and the only selectable ones), " +
-      "days without are grey. Click a day to see that day's recordings below — in the same format as the " +
-      "list — with the calendar pinned and only the day's list scrolling. Navigate months with the arrows.",
+      "days without are grey. Click a day to see that day's recordings below - in the same format as the " +
+      "list - with the calendar pinned and only the day's list scrolling. Navigate months with the arrows.",
     added: [
       "A Calendar view of recordings: month grid with green days-with-recordings, click a day to list that day's recordings.",
       "List / Calendar tabs on the recordings panel (your choice is remembered).",
@@ -1318,7 +1335,7 @@ export const RELEASES: Release[] = [
       "one. Their transcripts are laid end-to-end (timestamps offset so they run in sequence) into a new " +
       "transcript on the survivor, and their **audio is concatenated** into a single file by the worker " +
       "(ffmpeg) so nothing is lost. The other recordings are then removed. Useful when a meeting was captured " +
-      "in several parts. Speakers are kept distinct per source — re-identify or rename them afterward.",
+      "in several parts. Speakers are kept distinct per source - re-identify or rename them afterward.",
     added: [
       "Merge transcripts: a Select-mode toolbar action (2+ recordings) that combines transcripts + audio into the earliest recording and deletes the rest, with a confirmation.",
     ],
@@ -1332,7 +1349,7 @@ export const RELEASES: Release[] = [
     pr: 72,
     headline: "Organise recordings into sub-sections",
     summary:
-      "Sections can now be **nested one level deep** — e.g. a *Customers* section with an *Acme Corp* " +
+      "Sections can now be **nested one level deep** - e.g. a *Customers* section with an *Acme Corp* " +
       "sub-section inside it. Create a sub-section from a section's menu, drag a recording into any section " +
       "or sub-section, and **drag section headers** to reorder them or move a sub-section to a different " +
       "parent (or back out to the top level). Recordings can live at either level, and recording rows still " +
@@ -1356,11 +1373,11 @@ export const RELEASES: Release[] = [
       "You can now **delete the audio** of a recording (from its kebab menu, or in bulk via the " +
       "recordings-list toolbar in Select mode) while keeping the transcript and everything derived from it. " +
       "Deleting the audio **frees that recording's storage** against your quota. The recordings list shows a " +
-      "**microphone icon** at the start of each row — green when the audio is available, grey once it's been " +
-      "deleted — and a **Refresh** button picks up changes made on another machine or browser. Audio-only " +
+      "**microphone icon** at the start of each row - green when the audio is available, grey once it's been " +
+      "deleted - and a **Refresh** button picks up changes made on another machine or browser. Audio-only " +
       "actions (play, download audio, re-transcribe, re-identify) hide once the audio is gone.",
     added: [
-      "Delete audio (single, via the kebab) and bulk Delete audio (Select mode) — keeps the transcript, frees the quota.",
+      "Delete audio (single, via the kebab) and bulk Delete audio (Select mode) - keeps the transcript, frees the quota.",
       "A green/grey microphone indicator showing audio presence on each recordings-list row.",
       "A Refresh button on the recordings-list toolbar.",
     ],
@@ -1389,13 +1406,13 @@ export const RELEASES: Release[] = [
       "Localization now covers the last English-only corners of the app: the **chat panel** (context " +
       "picker, attachments, the context-usage dial, saved conversations), the admin **Manage Users** screen, " +
       "the **People** voiceprint manager, the **guided tour**, the audio **recorder** controls, the " +
-      "collapsible workspace **panel headers**, the **About** box chrome, and the **Release Notes** page — all " +
+      "collapsible workspace **panel headers**, the **About** box chrome, and the **Release Notes** page - all " +
       "appear in your chosen language (English, Spanish, French, or German). The new strings live in four new " +
       "JSON catalogs (`chat`, `admin`, `people`, `tour`) plus additions to the existing ones, so contributors " +
       "can translate them without touching code.",
     added: [
       "Translation of the chat panel, Manage Users, People, the onboarding tour, the recorder, the workspace panel headers, and the About / Release Notes chrome.",
-      "Four new translation namespaces — `chat`, `admin`, `people`, `tour` (en + es/fr/de).",
+      "Four new translation namespaces - `chat`, `admin`, `people`, `tour` (en + es/fr/de).",
     ],
     changed: [
       "The locale completeness gate now validates nested catalog values (e.g. the per-step tour copy), not just top-level keys.",
@@ -1410,7 +1427,7 @@ export const RELEASES: Release[] = [
       "Localization now reaches the main workspace: the **recording detail view** (its toolbar, section " +
       "headings, status banners, confirmation prompts, the re-transcribe / edit-segment / rename dialogs, " +
       "and the speaker-labelling controls), the **recordings list** (sections, multi-select, the upload " +
-      "tray and drop zone), and the **empty landing screen** all appear in your chosen language — English, " +
+      "tray and drop zone), and the **empty landing screen** all appear in your chosen language - English, " +
       "Spanish, French, or German. Like the rest of the UI, the new strings live in a `workspace` JSON " +
       "catalog that contributors can translate without code changes.",
     added: [
@@ -1424,8 +1441,8 @@ export const RELEASES: Release[] = [
     pr: 67,
     headline: "Downloaded and emailed transcripts speak your language",
     summary:
-      "The headings in **downloaded transcripts** (.txt / .md / .rtf) and the **emailed transcript** — " +
-      "things like *Summary*, *Transcript*, *Actions*, the table columns, the email subject and footer — now " +
+      "The headings in **downloaded transcripts** (.txt / .md / .rtf) and the **emailed transcript** - " +
+      "things like *Summary*, *Transcript*, *Actions*, the table columns, the email subject and footer - now " +
       "appear in your **app language** (English, Spanish, French, or German). Like the rest of the " +
       "localization, these labels live in simple JSON files on the server, so they're community-extensible " +
       "with a data-only PR. (The transcript content itself was already in whatever language you translated " +
@@ -1441,15 +1458,15 @@ export const RELEASES: Release[] = [
     pr: 66,
     headline: "The app speaks your language",
     summary:
-      "Diariz's interface is now **localized** — choose your language at signup or in **Preferences**, or " +
+      "Diariz's interface is now **localized** - choose your language at signup or in **Preferences**, or " +
       "force it with `?lang=es` in the URL. **English, Spanish, French, and German** ship today; the account " +
       "menu, the recording menus and toolbar, the sign-in / request-access / setup screens, and the Settings " +
       "and Preferences dialogs all translate, with dates shown in your locale and right-to-left support built " +
       "in. Translations live in simple JSON files, so **anyone can add or improve a language with a data-only " +
-      "PR** — no code changes. (This localizes the interface chrome; some deeper screens still follow in later " +
+      "PR** - no code changes. (This localizes the interface chrome; some deeper screens still follow in later " +
       "releases.)",
     added: [
-      "A localized UI via react-i18next — English, Spanish, French and German, picked at signup or in Preferences (or via ?lang=).",
+      "A localized UI via react-i18next - English, Spanish, French and German, picked at signup or in Preferences (or via ?lang=).",
       "Contributor-friendly translation catalogs (apps/web/src/locales) with a guide and CI checks that keep every language complete.",
       "Right-to-left layout support and locale-aware date formatting.",
     ],
@@ -1465,12 +1482,12 @@ export const RELEASES: Release[] = [
     summary:
       "**Translate to {your language}** now appears on a recording's menu (and on each segment's menu) once " +
       "you've set a native language in Preferences. It uses your configured OpenAI-compatible LLM to translate " +
-      "the whole transcript — every segment, plus the summary and action items — into your language, keeping " +
+      "the whole transcript - every segment, plus the summary and action items - into your language, keeping " +
       "speakers' names intact. Translations land in the **revised** layer, so the model's original words are " +
       "preserved: the ✎ marks translated rows and the **Show original / Show revised** toggle flips back to " +
       "the source at any time. You can also translate a single segment from its menu.",
     added: [
-      "“Translate to {language}” on the recording menu/toolbar and on each segment — translates into your native language via the LLM.",
+      "“Translate to {language}” on the recording menu/toolbar and on each segment - translates into your native language via the LLM.",
       "Whole-transcript translation covers the segments, the summary, and the action items in one go.",
     ],
     changed: [
@@ -1484,15 +1501,15 @@ export const RELEASES: Release[] = [
     headline: "Set your own name and language in Preferences",
     summary:
       "A new **Preferences** item in the account menu (for every user) lets you change your **display name** " +
-      "and choose your **native language** and **app language** — and you can pick a language right on the " +
+      "and choose your **native language** and **app language** - and you can pick a language right on the " +
       "signup screen. This is the groundwork for the localization & translation feature: the languages come " +
       "from a shared supported-language list (`GET /api/languages`, ~50 languages with right-to-left flags) " +
       "and your native language will be the default target when translating transcripts. The app interface " +
-      "itself isn't translated yet — that lands in a later release.",
+      "itself isn't translated yet - that lands in a later release.",
     added: [
-      "A Preferences modal (account menu) to edit your display name and native/app language — available to all users.",
+      "A Preferences modal (account menu) to edit your display name and native/app language - available to all users.",
       "A language selector on the account-setup screen.",
-      "GET /api/languages — the supported-language reference list, used by the pickers.",
+      "GET /api/languages - the supported-language reference list, used by the pickers.",
     ],
     changed: [
       "You can now rename yourself; the new name shows immediately (the app re-issues your session token).",
@@ -1505,11 +1522,11 @@ export const RELEASES: Release[] = [
     headline: "Edit transcripts without losing the model's original words",
     summary:
       "Each transcript segment now keeps two layers: the model's **original** words (never overwritten) and " +
-      "your **revised** version (an edit — and, in a coming release, a translation). Editing a segment saves " +
+      "your **revised** version (an edit - and, in a coming release, a translation). Editing a segment saves " +
       "to the revision and leaves the original intact, a small ✎ marks revised rows, and a **Show original / " +
       "Show revised** toggle flips the whole transcript between the two. You can **reset** any segment back to " +
       "the model's original from the edit box. This is the data foundation for the upcoming localization & " +
-      "translation feature. (Re-transcribing still produces a fresh transcript from the model — a heads-up now " +
+      "translation feature. (Re-transcribing still produces a fresh transcript from the model - a heads-up now " +
       "warns when that would set aside your edits.)",
     added: [
       "Each segment stores the model's original text and your revision separately; exports, email, chat and summaries use your revised text when present.",
@@ -1527,7 +1544,7 @@ export const RELEASES: Release[] = [
     pr: 60,
     headline: "Saved chat appears in the list right away",
     summary: `
-After you **Save** a chat conversation, it now shows up in the saved-conversations dropdown immediately —
+After you **Save** a chat conversation, it now shows up in the saved-conversations dropdown immediately -
 previously the dropdown could keep showing a stale list (missing the one you'd just saved) until it was
 closed and reopened.
 `.trim(),
@@ -1543,7 +1560,7 @@ closed and reopened.
     headline: "Toolbar layout fixups",
     summary: `
 The recordings list's toolbar (New section / Select) now stays pinned at the top while the list scrolls
-beneath it — matching the chat panel. Also finishes the chat-toolbar alignment: the context-usage dial, the
+beneath it - matching the chat panel. Also finishes the chat-toolbar alignment: the context-usage dial, the
 "Attach file" button, and the saved-conversations icon now line up exactly with their neighbours (their
 wrapper elements were nudging them off-centre).
 `.trim(),
@@ -1559,19 +1576,19 @@ wrapper elements were nudging them off-centre).
     headline: "Collapsible detail panels + recording-list polish",
     summary: `
 The recording detail page's **Summary**, **Speakers**, **Actions**, and the new **Transcript** panel are now
-**collapsible** — click anywhere along the shaded header strip (title to chevron) to fold a section away. The
+**collapsible** - click anywhere along the shaded header strip (title to chevron) to fold a section away. The
 whole transcript (player + segments) lives in its own "Transcript" panel, and the detail subtitle now shows the
 **local date** and the **clip duration** (h:mm:ss).
 
 The recordings list shows each clip's **duration** as a tidy **m:ss / h:mm:ss** value, right-aligned so the
-times line up, and its ⋮ menu gains the detail-only actions — **Extract actions** (with a replace-confirm when
+times line up, and its ⋮ menu gains the detail-only actions - **Extract actions** (with a replace-confirm when
 actions already exist), **Re-identify speakers**, and **Email me the transcript**.
 
 Plus small layout fixes: the chat context dial and "Attach file" button line up with their neighbours, and the
 recordings/chat panel toolbars share the same height and bottom-border colour.
 `.trim(),
     added: [
-      "The Summary, Speakers, Actions, and a new Transcript panel on the detail page are collapsible — click anywhere on the header strip to fold them.",
+      "The Summary, Speakers, Actions, and a new Transcript panel on the detail page are collapsible - click anywhere on the header strip to fold them.",
       "The recordings list ⋮ menu now offers Extract actions (with a replace-confirm), Re-identify speakers, and Email me the transcript (parity with the detail page).",
     ],
     changed: [
@@ -1592,7 +1609,7 @@ recordings/chat panel toolbars share the same height and bottom-border colour.
     summary: `
 Extracted **action items** now travel with the transcript. When a recording has actions, an **Actions**
 section (with the same Action / Actor / Deadline layout) is inserted right after the summary in every
-**downloaded transcript** (Plain Text, Markdown, RTF) and in the **emailed transcript** — and the actions are
+**downloaded transcript** (Plain Text, Markdown, RTF) and in the **emailed transcript** - and the actions are
 included in the **chat context** for the current and selected transcripts, so you can ask the assistant about
 them. The section is omitted entirely when a recording has no actions.
 
@@ -1627,9 +1644,9 @@ re-transcribe one) instead of a small label, so it's obvious the model is workin
     headline: "Extract action items from a transcript",
     summary: `
 A new **Extract actions** button on the recording page asks your summarisation model to pull **action
-items** out of the transcript — each with an action, an actor, and a deadline (any of which may be blank).
+items** out of the transcript - each with an action, an actor, and a deadline (any of which may be blank).
 The results appear in an editable **Actions** table below the summary, which you can add to, edit inline,
-and prune. It's shown **by exception** — only once you've run it — so meetings without actions (webinars,
+and prune. It's shown **by exception** - only once you've run it - so meetings without actions (webinars,
 town halls) stay uncluttered.
 
 The recordings list also gets a tidy-up: the **New section** and **Select** controls are now icon buttons
@@ -1669,7 +1686,7 @@ menu as before.
     summary: `
 The Markdown transcript no longer appends a separate \`{: col-widths }\` attribute line after the table
 (which some editors rendered as a stray paragraph). The 13/16/71 column widths are now carried by the
-separator row's dash counts — how pandoc and MultiMarkdown size columns — so the file stays a clean table.
+separator row's dash counts - how pandoc and MultiMarkdown size columns - so the file stays a clean table.
 `.trim(),
     fixed: [
       "Markdown transcript: removed the trailing column-width attribute line that some editors showed as an extra paragraph; column widths are now encoded in the separator-row dashes.",
@@ -1698,13 +1715,13 @@ summary.
     pr: 50,
     headline: "Choose a transcript download format",
     summary: `
-"Download transcript" now opens a **"Download as …"** chooser with three formats — **Plain Text**,
-**Markdown**, and **Rich Text Format** — plus OK/Cancel. Every format is structured like the emailed
-transcript: a name heading, the summary, then the transcript itself — as readable paragraphs in plain text,
+"Download transcript" now opens a **"Download as …"** chooser with three formats - **Plain Text**,
+**Markdown**, and **Rich Text Format** - plus OK/Cancel. Every format is structured like the emailed
+transcript: a name heading, the summary, then the transcript itself - as readable paragraphs in plain text,
 and as a Time / Speaker / Text **table** in Markdown and RTF.
 `.trim(),
     changed: [
-      "Download transcript now offers Plain Text, Markdown, or Rich Text Format, each laid out like the emailed transcript (name, summary, then the transcript — paragraphs for text, a table for Markdown/RTF).",
+      "Download transcript now offers Plain Text, Markdown, or Rich Text Format, each laid out like the emailed transcript (name, summary, then the transcript - paragraphs for text, a table for Markdown/RTF).",
     ],
   },
   {
@@ -1714,7 +1731,7 @@ and as a Time / Speaker / Text **table** in Markdown and RTF.
     headline: "Welcome screen + guided tour for new users",
     summary: `
 First-time users no longer land on a blank "select a recording" screen. The empty detail page now shows
-the Diariz backdrop with a friendly welcome — "press Record or Upload to add your first recording" — and a
+the Diariz backdrop with a friendly welcome - "press Record or Upload to add your first recording" - and a
 **guided tour** kicks off on first sign-in, walking through each area one at a time (capture, recordings,
 transcript, chat, account) with a quick explanation. You can skip it (and turn it off) at any point, and
 replay it whenever from **Show guided tour** in the account menu. Once you have recordings, the empty page
@@ -1733,12 +1750,12 @@ just prompts you to pick one or record/upload another.
     summary: `
 Uploading is now a batch affair. You can **drag audio files straight onto the recordings list** (it
 highlights as you drag over it), and the **Upload** button accepts **several files at once**. A small status
-list shows each file as **queued → uploading → done/failed**, and it's tolerant of partial failures — an
+list shows each file as **queued → uploading → done/failed**, and it's tolerant of partial failures - an
 unsupported or oversized file is skipped with a reason while the rest carry on. Uploaded recordings now also
 show an **"Uploaded"** source label.
 `.trim(),
     added: [
-      "Drag-and-drop audio files onto the recordings panel, and pick multiple files from the Upload button — with a per-file queued/uploading/done/failed status list.",
+      "Drag-and-drop audio files onto the recordings panel, and pick multiple files from the Upload button - with a per-file queued/uploading/done/failed status list.",
     ],
   },
   {
@@ -1747,7 +1764,7 @@ show an **"Uploaded"** source label.
     pr: 45,
     headline: "Upload an audio file to transcribe",
     summary: `
-A new **Upload** button next to Record lets you transcribe an **existing audio file** instead of recording —
+A new **Upload** button next to Record lets you transcribe an **existing audio file** instead of recording -
 **WAV, MP3, FLAC, Ogg/Opus, WebM, and M4A** are accepted. The file runs through the same pipeline as a
 recording (transcription, diarization, speaker identification, summarise), and its duration is filled in once
 the worker has processed it.
@@ -1769,7 +1786,7 @@ disabled while a live recording is in progress.
     headline: "Correct the licence disclaimer + scrub default seed email",
     summary: `
 Housekeeping ahead of open-sourcing. The About box wrongly stated the **pyannote** diarization models were
-"non-commercial (CC-BY-NC)" — they are in fact **MIT-licensed** (just *gated*: you must accept the terms on
+"non-commercial (CC-BY-NC)" - they are in fact **MIT-licensed** (just *gated*: you must accept the terms on
 Hugging Face and supply an \`HF_TOKEN\`). The genuine non-commercial caveat belongs to **VoxCeleb**, the data
 behind the SpeechBrain ECAPA voiceprints, so the disclaimer now says that instead. The default seed-admin
 email also changes from a personal address to \`admin@example.com\`.
@@ -1787,7 +1804,7 @@ email also changes from a personal address to \`admin@example.com\`.
     summary: `
 Two refinements to the recording view. The **Speakers** panel now starts **collapsed** when every speaker
 has already been named or identified (so there's nothing left to label) and stays expanded when speakers
-still need assigning — you can still toggle it either way.
+still need assigning - you can still toggle it either way.
 
 And **merging consecutive same-speaker segments** now follows the *assigned* speaker, not just the raw
 diarization label: if two stretches were diarized as different speakers but you reassigned them to the same
@@ -1809,7 +1826,7 @@ person, they now merge into one block too.
 The desktop release build packaged the app but then failed to publish: electron-builder couldn't determine
 the GitHub repository (it only looks for \`.git/config\` in \`apps/desktop\`, not the monorepo root). The
 release config now takes the owner/repo from the CI environment (\`GITHUB_REPOSITORY\`), which also keeps the
-repo fork-friendly — a fork's CI publishes to its own Releases without editing the config.
+repo fork-friendly - a fork's CI publishes to its own Releases without editing the config.
 `.trim(),
     fixed: [
       "Desktop release: set the GitHub publish owner/repo from $GITHUB_REPOSITORY (electron-builder can't detect it from a monorepo subdirectory).",
@@ -1834,16 +1851,16 @@ electron-builder's tool cache to a writable directory so the self-hosted runner 
     version: "0.12.0",
     date: "2026-06-28",
     pr: 37,
-    headline: "Desktop auto-update + launch-at-startup — phase 3",
+    headline: "Desktop auto-update + launch-at-startup - phase 3",
     summary: `
 The Windows desktop app now **keeps itself up to date**. It checks for new releases in the background (on
 launch and every few hours, plus a manual **Check for Updates…** in the tray), downloads them quietly, and
-when one is ready raises a notification and a tray item — **Restart to update (x.y.z)** — so you apply it
+when one is ready raises a notification and a tray item - **Restart to update (x.y.z)** - so you apply it
 when it suits you (it also installs on the next normal quit). Updates come from the same feed the installer
 publishes to (GitHub Releases by default, or a fork's self-hosted feed).
 
 A new **Start with Windows** checkbox in the tray menu lets the app launch automatically at login (off by
-default). Builds are still unsigned for now, so Windows SmartScreen may warn on first install — code signing
+default). Builds are still unsigned for now, so Windows SmartScreen may warn on first install - code signing
 is a later addition.
 `.trim(),
     added: [
@@ -1862,7 +1879,7 @@ title bar remains), and the recording **notifications are now titled "Diariz"** 
 app now sets its Windows AppUserModelID).
 `.trim(),
     fixed: [
-      "Hide the desktop app's menu bar — it's a tray shell and didn't need one.",
+      "Hide the desktop app's menu bar - it's a tray shell and didn't need one.",
       "Desktop notifications are titled \"Diariz\" rather than \"Electron\" (sets the Windows AppUserModelID).",
     ],
   },
@@ -1870,13 +1887,13 @@ app now sets its Windows AppUserModelID).
     version: "0.11.0",
     date: "2026-06-27",
     pr: 35,
-    headline: "Record from the desktop tray menu — phase 2",
+    headline: "Record from the desktop tray menu - phase 2",
     summary: `
 The Windows desktop app can now **start and stop recording from its system-tray menu**, without opening
 the window. The tray shows **Record Microphone** and **Record System Audio**; while recording they collapse
 to a single **Stop Recording (mm:ss)** item with a live timer, and the tray tooltip reflects the state.
 
-Recording runs in the **background** — Windows notifications confirm when it starts and when the finished
+Recording runs in the **background** - Windows notifications confirm when it starts and when the finished
 clip has uploaded, so you can capture a meeting without leaving the tray. The same recorder powers the
 on-screen button, so there's only ever one recording at a time. (The record items are disabled until the
 app is loaded and signed in.)
@@ -1890,9 +1907,9 @@ app is loaded and signed in.)
     version: "0.10.0",
     date: "2026-06-27",
     pr: 34,
-    headline: "Windows desktop app (system tray) — phase 1",
+    headline: "Windows desktop app (system tray) - phase 1",
     summary: `
-A new **Windows desktop app** — a system-tray shell that loads your Diariz server in a native window and
+A new **Windows desktop app** - a system-tray shell that loads your Diariz server in a native window and
 adds microphone + Windows **system/loopback** audio capture (which a browser can't do).
 
 On first run it asks for your **server address** (validated against \`/health\`) and remembers it; the app
@@ -1917,7 +1934,7 @@ phases.
     summary: `
 The always-visible **Expected speakers** panel is gone from the recording page. Instead, choosing
 **Re-transcribe** from the kebab menu now opens a small dialog that asks for the optional min/max speaker
-hints (pre-filled from the recording) before re-transcribing — keeping that exception-case control out of
+hints (pre-filled from the recording) before re-transcribing - keeping that exception-case control out of
 the way for the normal case.
 `.trim(),
     changed: [
@@ -1932,14 +1949,14 @@ the way for the normal case.
     summary: `
 Playing a recording and downloading its audio previously used a presigned MinIO URL pointing at
 \`localhost\`, so they failed when the app was accessed from another machine over a domain. The API now
-**streams the audio itself, same-origin** (with HTTP range support for seeking) — so playback and download
+**streams the audio itself, same-origin** (with HTTP range support for seeking) - so playback and download
 work behind any reverse proxy / TLS, and MinIO no longer needs to be reachable from the browser.
 
 The \`STORAGE_PUBLIC_ENDPOINT\` setting is no longer needed and has been removed. (Transcript download was
 already same-origin and unaffected.)
 `.trim(),
     fixed: [
-      "Audio playback and “Download audio” work when the app is accessed over a domain/reverse proxy, not only on localhost — the API streams audio same-origin instead of via presigned MinIO URLs.",
+      "Audio playback and “Download audio” work when the app is accessed over a domain/reverse proxy, not only on localhost - the API streams audio same-origin instead of via presigned MinIO URLs.",
     ],
     changed: [
       "Removed the STORAGE_PUBLIC_ENDPOINT / Storage:PublicEndpoint setting (no longer required).",
@@ -1952,7 +1969,7 @@ already same-origin and unaffected.)
     headline: "Tell the diarizer how many speakers to expect",
     summary: `
 When the diarizer **lumps two people into a single speaker**, you can now give it a hint. The recording
-page has an **Expected speakers** control — set a **minimum** (e.g. 2) and/or **maximum**, then
+page has an **Expected speakers** control - set a **minimum** (e.g. 2) and/or **maximum**, then
 re-transcribe, and pyannote is forced to split (or cap) accordingly.
 
 The hints are saved on the recording and re-applied on every re-transcription until you change them; leave
@@ -1972,16 +1989,16 @@ speaker label".
     summary: `
 Two improvements for curating speaker identification.
 
-- **Re-identify speakers** — a new action on a recording (kebab menu) re-runs identification against your
+- **Re-identify speakers** - a new action on a recording (kebab menu) re-runs identification against your
   **current** voiceprints using the speakers' already-computed embeddings, **without a full
   re-transcription**. After you add/curate training samples, run it to relabel a recording instantly.
   Manually-named speakers are never overwritten.
-- **Listen to training samples** — in the **People** screen, each training contribution now has a **▶ Play**
+- **Listen to training samples** - in the **People** screen, each training contribution now has a **▶ Play**
   button that plays that recording from the start of the contributed speaker, so you can tell by ear who a
   sample actually is before keeping or removing it.
 `.trim(),
     added: [
-      "“Re-identify speakers” action — re-applies voiceprint matching to a recording without re-transcribing.",
+      "“Re-identify speakers” action - re-applies voiceprint matching to a recording without re-transcribing.",
       "Play button on each training contribution in People, to hear the sample.",
     ],
   },
@@ -1993,12 +2010,12 @@ Two improvements for curating speaker identification.
     summary: `
 A batch of interface refinements.
 
-- **Collapsible recording groups** — click a section header to collapse or expand it; your choices are
+- **Collapsible recording groups** - click a section header to collapse or expand it; your choices are
   remembered.
-- **Resizable recordings list** — drag its right edge to widen or narrow the left panel.
-- **Settings in tabs** — **AI Settings** and (for the Platform Administrator) **Storage Quotas** are now
+- **Resizable recordings list** - drag its right edge to widen or narrow the left panel.
+- **Settings in tabs** - **AI Settings** and (for the Platform Administrator) **Storage Quotas** are now
   separate tabs with a single **OK / Cancel** at the bottom that saves everything at once.
-- **Release Notes** — the list now shows each release's title, and you can drag to resize it.
+- **Release Notes** - the list now shows each release's title, and you can drag to resize it.
 - **About** box is wider, so the capabilities and disclaimers read more comfortably.
 `.trim(),
     changed: [
@@ -2018,17 +2035,17 @@ A batch of interface refinements.
 Two additions to the transcript page.
 
 **Merge same-speaker rows** collapses consecutive segments from the same speaker into single, larger
-blocks — run it once you've finished correcting speaker assignments to get a cleaner, easier-to-read
+blocks - run it once you've finished correcting speaker assignments to get a cleaner, easier-to-read
 transcript. Each block grows to fit its text. It's permanent for that transcript version; re-transcribe
 to regenerate the original granular segments.
 
 **Email me the transcript** sends the current transcript to your account's email address, formatted with
-bold headings (name, summary, transcript) and a table of timestamp, speaker, and text — handy for
+bold headings (name, summary, transcript) and a table of timestamp, speaker, and text - handy for
 sharing or keeping a copy. Requires the server's email (SMTP) to be configured.
 `.trim(),
     added: [
-      "“Merge same-speaker rows” on the transcript page — collapses consecutive same-speaker segments into single blocks (permanent; re-transcribe to undo).",
-      "“Email me the transcript” — emails the formatted transcript (headings + timestamp/speaker/text table) to your account address.",
+      "“Merge same-speaker rows” on the transcript page - collapses consecutive same-speaker segments into single blocks (permanent; re-transcribe to undo).",
+      "“Email me the transcript” - emails the formatted transcript (headings + timestamp/speaker/text table) to your account address.",
     ],
   },
   {
@@ -2039,12 +2056,12 @@ sharing or keeping a copy. Requires the server's email (SMTP) to be configured.
     summary: `
 Each user now has a **storage quota** for their recorded audio, with usage visible throughout.
 
-The **account menu** shows your storage under your name — e.g. *Storage 1.2 GB / 5 GB (24%)* — and each
+The **account menu** shows your storage under your name - e.g. *Storage 1.2 GB / 5 GB (24%)* - and each
 recording's size appears on its transcript page. New users are granted a **starter quota** at account
 creation; the **Platform Administrator** sets the starter amount and an overall **maximum** in Settings,
 and **any administrator** can raise an individual user's quota (up to that maximum) from Manage Users,
 where each user's used/quota is shown. Uploads that would exceed your quota are rejected with a clear
-message (delete recordings or ask an admin for more). Quota counts audio bytes only — transcripts,
+message (delete recordings or ask an admin for more). Quota counts audio bytes only - transcripts,
 summaries, and other database data don't count against it.
 
 The account menu now shows your **name** instead of your email, and the **sign-up** and **add-user**
@@ -2064,8 +2081,8 @@ forms collect a name up front (pre-filled into account setup).
     pr: 26,
     headline: "Photographic backdrop on the sign-in pages",
     summary: `
-A visual polish release. The unauthenticated pages — **Sign in**, **Request access**, and **Account
-setup** — now share a photographic backdrop behind their cards, via a small shared \`AuthShell\` wrapper.
+A visual polish release. The unauthenticated pages - **Sign in**, **Request access**, and **Account
+setup** - now share a photographic backdrop behind their cards, via a small shared \`AuthShell\` wrapper.
 The README was also brought up to date with the current feature set (speaker identification, the People
 screen, chat, sections, and multi-user roles).
 `.trim(),
@@ -2075,39 +2092,39 @@ screen, chat, sections, and multi-user roles).
     version: "0.4.0",
     date: "2026-06-27",
     pr: 25,
-    headline: "Manage enrolled people — rename, merge, prune, and erase voiceprints",
+    headline: "Manage enrolled people - rename, merge, prune, and erase voiceprints",
     summary: `
 Builds on speaker identification with a **People** screen (account menu → **People**) for managing your
 enrolled voiceprints in one place.
 
 For each person you can **rename** them (linked speakers update to match), expand to see the **training
-contributions** that feed their voiceprint — which recording and speaker each came from — and **remove**
+contributions** that feed their voiceprint - which recording and speaker each came from - and **remove**
 any sample, which recomputes the voiceprint from what remains. You can **merge** two people (e.g. a
 duplicate enrolled under a slightly different name): the source's training samples and labelled speakers
 move to the target, the voiceprint is recomputed, and the duplicate is removed.
 
 Erasure is now complete: delete a single person, or **erase all your voiceprints** at once. Either way the
 stored biometric data and training samples are deleted, past recordings are unlinked, and only the
-**auto-applied** labels revert to the anonymous speaker — names you typed by hand are kept.
+**auto-applied** labels revert to the anonymous speaker - names you typed by hand are kept.
 `.trim(),
     added: [
       "People management screen (account menu → People): list enrolled voiceprints with their sample counts.",
       "Per-person rename (linked speakers follow), view/remove individual training contributions (recomputes the voiceprint), and merge two people.",
-      "Erase a single voiceprint or all of them at once (GDPR) — auto-labels revert, hand-typed names kept.",
+      "Erase a single voiceprint or all of them at once (GDPR) - auto-labels revert, hand-typed names kept.",
     ],
   },
   {
     version: "0.3.0",
     date: "2026-06-27",
     pr: 24,
-    headline: "Speaker identification — recognise enrolled people across recordings",
+    headline: "Speaker identification - recognise enrolled people across recordings",
     summary: `
 Diariz now **identifies speakers**, not just diarizes them. Diarization groups a recording into
 anonymous, recording-local speakers (\`SPEAKER_00\`…); identification recognises a **known person** across
 recordings by their voice.
 
-The transcription worker now computes a per-speaker **voiceprint** — a **SpeechBrain ECAPA-TDNN**
-embedding (192-dimensional, Apache-2.0) — stored in pgvector alongside each speaker. Tag a recording's
+The transcription worker now computes a per-speaker **voiceprint** - a **SpeechBrain ECAPA-TDNN**
+embedding (192-dimensional, Apache-2.0) - stored in pgvector alongside each speaker. Tag a recording's
 speaker as a person ("Alice") to **enrol** their voiceprint; in later recordings, a matching speaker is
 **labelled automatically** (shown with an *auto* badge) when the cosine similarity clears a configurable
 threshold, and stays anonymous otherwise. You can **reassign** any speaker to a different enrolled person
@@ -2115,7 +2132,7 @@ or unassign them, and a free-text rename always detaches the voiceprint.
 
 Voiceprints are biometric data, so **erasure is first-class**: deleting a person removes their voiceprint
 and all training data, unlinks them from past recordings, and reverts only the **auto-applied** labels to
-the anonymous speaker — names you typed by hand are kept. Identification is per-user (your voiceprints
+the anonymous speaker - names you typed by hand are kept. Identification is per-user (your voiceprints
 only ever match your own recordings) and can be turned off via \`ENABLE_SPEAKER_EMBEDDINGS\` /
 \`Identification__Enabled\`.
 `.trim(),
@@ -2133,7 +2150,7 @@ only ever match your own recordings) and can be turned off via \`ENABLE_SPEAKER_
     summary: `
 A documentation-only release. Adds a research note,
 \`docs/Speaker_Identification_and_Verification.md\`, surveying open-source options for **speaker
-identification and verification by embedding comparison** — recognising an enrolled person ("is this Alice?")
+identification and verification by embedding comparison** - recognising an enrolled person ("is this Alice?")
 across recordings, beyond anonymous diarization.
 
 It covers how embedding-based recognition works (enrol → cosine-match → threshold, with open-set "unknown"),
@@ -2156,12 +2173,12 @@ that person to request access. Adding a user creates the account and runs the sa
 approved request: a **one-time setup link** is emailed to them (or shown to the admin to share when SMTP
 isn't configured), and they finish by setting their full name and password.
 
-Each user's **onboarding status** is now surfaced as a pill in the modal — *Requested* (awaiting an
-admin's grant), *Awaiting setup* (invited, link sent, not yet completed), or *Active* — so it's clear at
+Each user's **onboarding status** is now surfaced as a pill in the modal - *Requested* (awaiting an
+admin's grant), *Awaiting setup* (invited, link sent, not yet completed), or *Active* - so it's clear at
 a glance where everyone is in the process.
 `.trim(),
     added: [
-      "“Add user” by email in the Manage Users modal — creates the account and sends the setup link (with the no-SMTP fallback link shown to the admin).",
+      "“Add user” by email in the Manage Users modal - creates the account and sends the setup link (with the no-SMTP fallback link shown to the admin).",
       "Onboarding status pill per user (Requested / Awaiting setup / Active).",
     ],
   },
@@ -2169,7 +2186,7 @@ a glance where everyone is in the process.
     version: "0.1.0",
     date: "2026-06-27",
     pr: 21,
-    headline: "First tagged release — versioning, release notes, and an About box",
+    headline: "First tagged release - versioning, release notes, and an About box",
     summary: `
 The first versioned release of Diariz. It introduces a **Major.Minor.Build** scheme, this **Release
 Notes** page, and an **About** box in the account menu (with the app version, build, a capabilities
@@ -2185,8 +2202,8 @@ This entry also serves as the baseline summary of everything Diariz does today:
   status over SignalR.
 - **Review** speaker-labelled, timestamped segments: rename speakers (preserved across re-transcribes),
   edit segment text, and play back per-segment or the whole recording. Re-transcribe with a chosen model.
-- **Summarise** recordings (with automatic naming) and **chat across one or more transcripts** —
-  streaming replies, a context-usage dial, PDF/text attachments, and saved/reloadable conversations —
+- **Summarise** recordings (with automatic naming) and **chat across one or more transcripts** -
+  streaming replies, a context-usage dial, PDF/text attachments, and saved/reloadable conversations -
   via a per-user (or server-default) OpenAI-compatible LLM endpoint, with the API key encrypted at rest.
 - **Organise** recordings into sections with drag-and-drop ordering and cross-group moves.
 - **Multi-user RBAC**: Standard / Administrator / Platform Administrator roles, an access-request →

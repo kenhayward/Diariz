@@ -21,7 +21,7 @@
   "removeAttachment": "Quitar adjunto",
   "reading": "Leyendo…",
   "attachFile": "+ Adjuntar archivo",
-  "askPlaceholder": "Pregunta sobre tus transcripciones… — escribe / para ver los comandos",
+  "askPlaceholder": "Pregunta sobre tus transcripciones… - escribe / para ver los comandos",
   "messageAria": "Mensaje de chat",
   "stop": "Detener",
   "send": "Enviar",
@@ -59,5 +59,24 @@
   "couldNotReadFile": "No se pudo leer el archivo.",
   "contextUsedAria": "Contexto {{pct}} % usado",
   "modelFallback": "modelo",
-  "tokens": "tokens"
+  "tokens": "tokens",
+  "toolCallPrefix": "Llamada de herramienta:",
+  "toolLabels": {
+    "who_said_that": "quién lo dijo",
+    "what_did_they_say": "qué dijeron",
+    "list_recordings": "listar grabaciones",
+    "search_transcripts": "buscar transcripciones",
+    "when_was_discussed": "cuándo se habló",
+    "count_mentions": "contar menciones",
+    "list_action_items": "tareas",
+    "get_recording_summary": "obtener resumen",
+    "who_attended": "quién asistió",
+    "speaker_talk_time": "tiempo de habla",
+    "get_segment_context": "líneas cercanas",
+    "send_email": "enviar correo",
+    "add_as_attachment": "guardar nota",
+    "get_transcript": "obtener transcripción",
+    "get_meeting_minutes": "obtener acta",
+    "get_recording_details": "detalles de la grabación"
+  }
 }
