@@ -91,6 +91,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.74.4",
+    date: "2026-07-03",
+    pr: 167,
+    headline: "Security: harden the Google sign-in flow",
+    summary:
+      "Defence-in-depth for the Sign in with Google flow, with no visible change. Values that come from the " +
+      "sign-in request are now sanitised before they are written to the server log (so a crafted value can't " +
+      "forge fake log lines), and the post-sign-in redirects are validated against the app's own origin (so a " +
+      "spoofed request can't turn them into an open redirect to another site).",
+    changed: [
+      "Sanitize request-derived values before logging in the Google callback (prevents log-forging).",
+      "Validate post-sign-in redirects against an allowlist of the app's own host (prevents open redirects).",
+    ],
+  },
+  {
     version: "0.74.3",
     date: "2026-07-03",
     pr: 166,
