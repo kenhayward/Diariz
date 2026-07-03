@@ -52,6 +52,11 @@ public static class OpenIddictSetup
                 o.RegisterScopes(McpOAuthOptions.Scope,
                     OpenIddictConstants.Scopes.OpenId, OpenIddictConstants.Scopes.OfflineAccess, OpenIddictConstants.Scopes.Email);
 
+                // Register the MCP resource as a known target so OpenIddict accepts the client's RFC 8707
+                // `resource={origin}/mcp` request parameter (it validates requested resources before our
+                // authorize handler runs; an unregistered one is rejected as invalid_target / ID2190).
+                o.RegisterResources(resource);
+
                 if (!string.IsNullOrWhiteSpace(issuer))
                     o.SetIssuer(new Uri(issuer, UriKind.Absolute));
 

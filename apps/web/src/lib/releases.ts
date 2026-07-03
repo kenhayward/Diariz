@@ -93,6 +93,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.80.3",
+    date: "2026-07-03",
+    pr: 179,
+    headline: "Fix: Claude web connector rejected at sign-in (invalid target)",
+    summary:
+      "Fixes the next step of the claude.ai web connector: after it registered and reached sign-in, the " +
+      "request was rejected with an \"invalid target\" error. Claude tells Diariz which resource it wants a " +
+      "token for (the MCP endpoint), and the OAuth server wasn't recognising that resource as one of its own. " +
+      "It now does, so sign-in proceeds. Deploying it only needs a server redeploy.",
+    fixed: [
+      "The OAuth server now recognises the MCP endpoint as a valid token target, so the Claude web connector's sign-in isn't rejected as an invalid target.",
+    ],
+  },
+  {
     version: "0.80.2",
     date: "2026-07-03",
     pr: 178,
