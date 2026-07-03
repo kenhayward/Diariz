@@ -251,11 +251,14 @@ if (mcpOptions.Enabled)
             {
                 Tools = new ModelContextProtocol.Protocol.ToolsCapability(),
                 Resources = new ModelContextProtocol.Protocol.ResourcesCapability(),
+                Prompts = new ModelContextProtocol.Protocol.PromptsCapability(),
             };
             o.Handlers.ListToolsHandler = mcpHandlers.ListToolsAsync;
             o.Handlers.CallToolHandler = mcpHandlers.CallToolAsync;
             o.Handlers.ListResourcesHandler = mcpHandlers.ListResourcesAsync;
             o.Handlers.ReadResourceHandler = mcpHandlers.ReadResourceAsync;
+            o.Handlers.ListPromptsHandler = mcpHandlers.ListPromptsAsync;
+            o.Handlers.GetPromptHandler = mcpHandlers.GetPromptAsync;
         })
         // Stateless: no server-initiated messages, so each POST is self-contained (no session id / SSE stream).
         .WithHttpTransport(t => t.Stateless = true);

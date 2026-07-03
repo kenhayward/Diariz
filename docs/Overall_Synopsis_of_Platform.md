@@ -273,7 +273,12 @@ the API and ships with a **server redeploy**.
   resources — `diariz://recording/{id}/transcript` (and `.../minutes` when minutes exist) — so a user can
   **@-mention a specific meeting** in Claude. Backed by `IMcpResourceService` (owner-scoped, current-version
   only, newest-first capped list); transcripts render as plain Markdown via `McpResources.TranscriptText`, minutes
-  are the stored Markdown. Prompts (canned starters) are the remaining planned follow-up.
+  are the stored Markdown.
+- **Prompts.** `ListPromptsHandler`/`GetPromptHandler` expose slash-command-style starters (the pure
+  `McpPrompts` catalog): `summarise_last_meeting`, `open_action_items`, and `find_discussion(topic)`. Each
+  expands into a ready-made user message that instructs the model to answer from the user's meetings via the
+  built-in tools (no server LLM call — prompts are just message templates). This completes the MCP surface:
+  **tools + resources + prompts** are all live.
 
 ## Auth, multi-tenancy, and roles
 

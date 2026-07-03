@@ -50,9 +50,10 @@ documents** (files or URLs) to a recording, open them from the transcript page, 
 to the chat** (PDFs, text, Office docs, emails/calendar invites are read into text; URLs are fetched).
 You can also **connect Claude to your transcripts over MCP**: generate a personal access token in
 Preferences → Claude / MCP access and paste it into Claude (Desktop or Code) — Claude then uses the same
-built-in tools to search and read *your* meetings (and can email a summary to you), or **@-mention a specific
-meeting** (its transcript or minutes, exposed as MCP resources) — all scoped to your account and revocable at
-any time.
+built-in tools to search and read *your* meetings (and can email a summary to you), **@-mention a specific
+meeting** (its transcript or minutes, exposed as MCP resources), or run a **prompt starter** (summarise your
+last meeting, list open action items, find where a topic was discussed) — all scoped to your account and
+revocable at any time.
 Recordings organise into **sections** (with sub-sections) and drag-and-drop ordering, can be **merged**
 into one, and can be browsed as a **list, a calendar, or a cross-meeting Actions list** (the left panel is
 **Meetings**). A **status bar** along the bottom shows live progress (transcribing, summarising, merging,
@@ -88,6 +89,21 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.72.0",
+    date: "2026-07-03",
+    pr: 161,
+    headline: "Prompt starters for Claude (MCP prompts)",
+    summary:
+      "The MCP connection now offers **prompt starters** — ready-made instructions that appear in Claude " +
+      "(slash-command style) and expand into a task grounded in your meetings: **Summarise my last meeting**, " +
+      "**List my open action items**, and **Find where a topic was discussed** (you supply the topic). Pick " +
+      "one and Claude runs it against your transcripts using the built-in tools. This completes the MCP " +
+      "surface — **tools, resources, and prompts** are all live; connect from Preferences → Claude / MCP access.",
+    added: [
+      "MCP prompts: summarise_last_meeting, open_action_items, and find_discussion(topic) — one-tap starters that expand into transcript-grounded instructions.",
+    ],
+  },
   {
     version: "0.71.0",
     date: "2026-07-03",
