@@ -201,7 +201,7 @@ public class AuthController : ControllerBase
         // and carry a distinct ?googleError= code so the cause is visible from the URL too.
         if (!string.IsNullOrEmpty(error))
         {
-            _logger.LogWarning("Google sign-in: provider returned error '{Error}'.", error);
+            _logger.LogWarning("Google sign-in: provider returned error '{Error}'.", LogSanitizer.Clean(error));
             return RedirectToLogin("failed");
         }
         if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state))
@@ -236,7 +236,7 @@ public class AuthController : ControllerBase
         {
             _logger.LogWarning(ex, "Google {Mode}: token exchange failed (redirect_uri={RedirectUri}). Common "
                 + "causes: wrong client secret, an unregistered redirect URI, or the server can't reach "
-                + "oauth2.googleapis.com.", saved.Mode, CallbackUri());
+                + "oauth2.googleapis.com.", LogSanitizer.Clean(saved.Mode), CallbackUri());
             return saved.Mode == "connect" ? RedirectToApp("failed") : RedirectToLogin("failed_exchange");
         }
 
@@ -255,7 +255,8 @@ public class AuthController : ControllerBase
 
         var result = await _googleSignIn.SignInAsync(info);
         if (result.Outcome == GoogleSignInOutcome.Rejected)
-            _logger.LogWarning("Google sign-in rejected for {Email}: {Reason}", info.Email, result.Reason);
+            _logger.LogWarning("Google sign-in rejected for {Email}: {Reason}",
+                LogSanitizer.Clean(info.Email), LogSanitizer.Clean(result.Reason));
 
         return result.Outcome switch
         {
@@ -347,7 +348,7 @@ public class AuthController : ControllerBase
 
     /// <summary>Redirect back to the SPA root after a connect flow, with <c>?google=</c>/<c>?googleError=</c>.</summary>
     private IActionResult RedirectToApp(string reason, bool success = false) =>
-        Redirect($"{WebBase()}/?{(success ? "google" : "googleError")}={reason}");
+        Redirect(SafeRedirect.Within($"{WebBase()}/?{(success ? "google" : "googleError")}={reason}", AllowedRedirectHosts()));
 
     private const string AuthHandoffCookie = "diariz_auth";
     private const string HandoffCookiePath = "/api/auth/google";
@@ -362,7 +363,7 @@ public class AuthController : ControllerBase
     {
         var (token, _) = _tokens.CreateAccessToken(user, await _users.GetRolesAsync(user));
         Response.Cookies.Append(AuthHandoffCookie, token, HandoffCookieOptions());
-        return Redirect($"{WebBase()}{SpaCallbackPath}");
+        return Redirect(SafeRedirect.Within($"{WebBase()}{SpaCallbackPath}", AllowedRedirectHosts()));
     }
 
     private CookieOptions HandoffCookieOptions() => new()
@@ -398,10 +399,23 @@ public class AuthController : ControllerBase
     private string WebBase() =>
         !string.IsNullOrWhiteSpace(_appOpts.PublicUrl) ? _appOpts.PublicUrl.TrimEnd('/') : $"{Request.Scheme}://{Request.Host}";
 
+    /// <summary>Hosts a post-auth redirect may legitimately target: the configured public origin (preferred),
+    /// else the trusted request host in dev. Passed to <see cref="SafeRedirect"/> so a spoofed <c>Host</c>
+    /// header can't turn our redirects into an open redirect.</summary>
+    private IReadOnlyCollection<string> AllowedRedirectHosts()
+    {
+        if (!string.IsNullOrWhiteSpace(_appOpts.PublicUrl) &&
+            Uri.TryCreate(_appOpts.PublicUrl, UriKind.Absolute, out var pub))
+            return [pub.Host];
+        var host = ControllerContext?.HttpContext?.Request?.Host.Host;
+        return string.IsNullOrEmpty(host) ? [] : [host];
+    }
+
     private string CallbackUri() =>
         !string.IsNullOrWhiteSpace(_googleOpts.RedirectUri) ? _googleOpts.RedirectUri : $"{WebBase()}/api/auth/google/callback";
 
-    private IActionResult RedirectToLogin(string reason) => Redirect($"{WebBase()}/login?googleError={reason}");
+    private IActionResult RedirectToLogin(string reason) =>
+        Redirect(SafeRedirect.Within($"{WebBase()}/login?googleError={reason}", AllowedRedirectHosts()));
 
     private static bool FixedTimeEquals(string a, string b) =>
         CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(a), Encoding.UTF8.GetBytes(b));
