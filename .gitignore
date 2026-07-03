@@ -434,5 +434,6 @@ FodyWeavers.xsd
 
 # Diariz
 apps/*/dist/
+apps/*/tsconfig.tsbuildinfo
 deploy/.env
 *.pyc

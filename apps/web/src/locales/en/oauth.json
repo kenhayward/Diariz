@@ -1,0 +1,13 @@
+{
+  "title": "Connect to Diariz",
+  "intro": "{{client}} wants to connect to your Diariz account. If you allow it, it will be able to:",
+  "anApp": "An application",
+  "permRead": "Search and read your meetings, transcripts, minutes, and action items.",
+  "permEmail": "Email content to your own account address (it can never email anyone else).",
+  "revokeNote": "You can revoke this connection at any time in Preferences.",
+  "allow": "Allow",
+  "deny": "Deny",
+  "unknownClient": "This connection request is not valid. Try connecting again from the app.",
+  "consentFailed": "Something went wrong. Please try again.",
+  "missingRequest": "This page was opened without a connection request."
+}

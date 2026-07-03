@@ -87,6 +87,19 @@ export const api = {
     return data;
   },
 
+  /// OAuth consent (MCP web connector): the display name of the client requesting access, shown on the
+  /// consent screen. Rejects (404) if the client id is unknown.
+  async oauthConsentInfo(clientId: string): Promise<{ clientName: string }> {
+    const { data } = await http.get<{ clientName: string }>("/api/oauth/consent-info", { params: { clientId } });
+    return data;
+  },
+
+  /// Record the signed-in user's allow/deny decision for an OAuth client into the server-side consent cookie.
+  /// The caller then navigates the browser to /connect/authorize to complete the flow.
+  async oauthConsent(clientId: string, allow: boolean): Promise<void> {
+    await http.post("/api/oauth/consent", { clientId, allow });
+  },
+
   /// Re-issue the access token (sliding session). Skips the global 401 redirect so an expired-token
   /// refresh fails quietly — the next real request handles auth.
   async refresh(): Promise<AuthResponse> {

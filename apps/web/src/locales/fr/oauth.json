@@ -1,0 +1,13 @@
+{
+  "title": "Se connecter a Diariz",
+  "intro": "{{client}} souhaite se connecter a votre compte Diariz. Si vous l'autorisez, il pourra :",
+  "anApp": "Une application",
+  "permRead": "Rechercher et lire vos reunions, transcriptions, comptes rendus et taches.",
+  "permEmail": "Envoyer du contenu par e-mail a l'adresse de votre propre compte (jamais a quelqu'un d'autre).",
+  "revokeNote": "Vous pouvez revoquer cette connexion a tout moment dans les Preferences.",
+  "allow": "Autoriser",
+  "deny": "Refuser",
+  "unknownClient": "Cette demande de connexion n'est pas valide. Reessayez de vous connecter depuis l'application.",
+  "consentFailed": "Une erreur s'est produite. Veuillez reessayer.",
+  "missingRequest": "Cette page a ete ouverte sans demande de connexion."
+}

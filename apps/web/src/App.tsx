@@ -5,6 +5,7 @@ import { useAuth } from "./auth";
 import { useLanguage } from "./language";
 import Login from "./pages/Login";
 import GoogleCallback from "./pages/GoogleCallback";
+import OAuthConsent from "./pages/OAuthConsent";
 import RequestAccess from "./pages/RequestAccess";
 import Setup from "./pages/Setup";
 import ReleaseNotes from "./pages/ReleaseNotes";
@@ -41,6 +42,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/auth/google/callback" element={<GoogleCallback />} />
+      <Route path="/oauth/consent" element={<OAuthConsent />} />
       <Route path="/request-access" element={<RequestAccess />} />
       <Route path="/setup" element={<Setup />} />
       <Route path="/release-notes" element={<ReleaseNotes />} />

@@ -47,7 +47,11 @@ export default function Login() {
     setError(null);
     try {
       await login(email, password);
-      navigate("/");
+      // Honour an internal ?returnTo= (e.g. the OAuth consent screen sends the user here first). Only
+      // same-app absolute paths are allowed, never an external URL.
+      const returnTo = params.get("returnTo");
+      const dest = returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "/";
+      navigate(dest);
     } catch (err) {
       // 401 from the API has no body and genuinely means bad credentials;
       // anything else (500, network) shows the real reason.
