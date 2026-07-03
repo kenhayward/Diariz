@@ -37,8 +37,9 @@ items done (with a completion date), and jump from an action back to the transcr
 **chat across one or more transcripts** — with file attachments, a context-usage dial, and saved
 conversations — using an OpenAI-compatible LLM endpoint you configure. The chat can also call **built-in
 tools** that search your **whole transcript library** — who said a phrase, what a person said about a topic,
-which recordings exist or mention something, action items, summaries, attendees, talk time, and the lines
-around a moment — answering with **When · Who · What** and **linking back to the transcript** (click a link
+which recordings exist or mention something, action items, summaries, attendees, talk time, the lines
+around a moment, and a recording's **full transcript, meeting minutes, or details** — answering with
+**When · Who · What** and **linking back to the transcript** (click a link
 to open it and jump to the exact segment). It can also **email you** (yourself only) a message it composes —
 a summary, action items, or notes — always delivering to your own registered address (and it **files a copy
 of that email onto the transcript** as a Markdown attachment), or **save that output
@@ -86,6 +87,23 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.70.0",
+    date: "2026-07-03",
+    pr: 159,
+    headline: "New transcript tools: full transcript, minutes, and details",
+    summary:
+      "Three new built-in tools the assistant (and **Claude over MCP**) can call to work with a single " +
+      "recording: **get the full transcript** (speaker-labelled, timestamped lines — for when snippets aren't " +
+      "enough; long transcripts are truncated, raise `max_chars` for more), **get the meeting minutes** " +
+      "(the generated Markdown), and **get a recording's details** (date, duration, source, status, speakers, " +
+      "and whether a summary / minutes / action items exist). Each accepts a recording **name** or an exact " +
+      "**id** (or uses the selection in chat), and — like the other tools — they're on unless you disable them " +
+      "in Settings → AI, so they light up in **both** the in-app chat and your Claude MCP connection.",
+    added: [
+      "Tools: get_transcript (full speaker-labelled transcript, size-guarded), get_meeting_minutes, and get_recording_details — usable in chat and over MCP.",
+    ],
+  },
   {
     version: "0.69.0",
     date: "2026-07-03",

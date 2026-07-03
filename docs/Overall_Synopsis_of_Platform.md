@@ -219,7 +219,8 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   `count_mentions`, plus `list_recordings`) query **`TranscriptSearch`**, a Postgres **`pg_trgm`** GIN-trigram
   fuzzy search over the user's own current-version transcripts (a `scope` arg lets the model search the whole
   library or just the selected recordings). The EF-based ones (`list_action_items`, `get_recording_summary`,
-  `who_attended`, `speaker_talk_time`, `get_segment_context`) read existing relational data directly. Two
+  `who_attended`, `speaker_talk_time`, `get_segment_context`, and the single-recording read tools
+  `get_transcript` / `get_meeting_minutes` / `get_recording_details`) read existing relational data directly. Two
   **write** tools act rather than read: `send_email` (`SendEmailTool`) emails the user a composed subject+body —
   it **always** sends to the owner's registered `ApplicationUser.Email` (no recipient parameter; any address in
   the args is ignored) via `IEmailSender`, and on a successful send it also **files a copy of the email onto the

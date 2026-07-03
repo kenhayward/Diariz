@@ -210,6 +210,10 @@ builder.Services.AddScoped<IChatTool, GetRecordingSummaryTool>();
 builder.Services.AddScoped<IChatTool, WhoAttendedTool>();
 builder.Services.AddScoped<IChatTool, SpeakerTalkTimeTool>();
 builder.Services.AddScoped<IChatTool, GetSegmentContextTool>();
+// Single-recording read tools (also exposed over MCP): full transcript, minutes, and metadata.
+builder.Services.AddScoped<IChatTool, GetTranscriptTool>();
+builder.Services.AddScoped<IChatTool, GetMeetingMinutesTool>();
+builder.Services.AddScoped<IChatTool, GetRecordingDetailsTool>();
 // A write tool (emails the signed-in user their own address). On by default like the others; a user or
 // operator can turn it off in Settings / Chat:DisabledTools.
 builder.Services.AddScoped<IChatTool, SendEmailTool>();
