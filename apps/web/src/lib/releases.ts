@@ -91,6 +91,26 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.75.0",
+    date: "2026-07-03",
+    pr: 169,
+    headline: "Settings modal: clearer AI tab + safer to use",
+    summary:
+      "A tidy-up of the Settings modal's AI tab. It no longer closes when you click outside it (use OK or " +
+      "Cancel - or Escape), so you can't dismiss it by accident. The endpoint/model/key fields are relabelled " +
+      "**Model endpoint / Model / API key** (they're used for summaries, minutes, chat, and more - not just " +
+      "summaries). Reasoning controls now sit above the chat-tools list, which is a proper **table** with " +
+      "checkboxes (enabled only when Enable chat tools is on) in a wider panel so it's actually readable. The " +
+      "separate chat context-window field is gone - the server value is always used.",
+    changed: [
+      "Settings modal no longer closes on an outside click (OK/Cancel/Escape only).",
+      "Relabelled the AI fields: Model endpoint, Model, API key.",
+      "Moved the reasoning controls above the chat-tools list.",
+      "Chat tools are now a checkbox table in a wider panel; checkboxes enable only when chat tools are on.",
+      "Removed the per-user chat context-window field - the server default is always used.",
+    ],
+  },
+  {
     version: "0.74.4",
     date: "2026-07-03",
     pr: 167,

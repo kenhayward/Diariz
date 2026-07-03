@@ -134,17 +134,35 @@ describe("SettingsModal", () => {
     );
   });
 
-  it("shows the server context-window default as a placeholder and saves an override", async () => {
+  it("no longer offers a chat context-window field and always sends null (server default)", async () => {
     renderModal();
-    const field = await screen.findByPlaceholderText(/Default: 131,072/);
-    expect((field as HTMLInputElement).value).toBe(""); // no per-user override set
-
-    fireEvent.change(field, { target: { value: "8000" } });
+    await screen.findByDisplayValue("https://existing/v1");
+    expect(screen.queryByText(/context window/i)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^ok$/i }));
-
     await waitFor(() =>
-      expect(api.updateUserSettings).toHaveBeenCalledWith(expect.objectContaining({ contextWindow: 8000 })),
+      expect(api.updateUserSettings).toHaveBeenCalledWith(expect.objectContaining({ contextWindow: null })),
     );
+  });
+
+  it("does not close when the backdrop is clicked (OK/Cancel only)", async () => {
+    const onClose = vi.fn();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { container } = render(
+      <QueryClientProvider client={qc}>
+        <SettingsModal onClose={onClose} />
+      </QueryClientProvider>,
+    );
+    await screen.findByDisplayValue("https://existing/v1");
+    fireEvent.click(container.firstChild as Element); // the backdrop overlay
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("places the reasoning controls above the chat-tools list", async () => {
+    renderModal();
+    const reasoning = await screen.findByLabelText(/enable reasoning/i);
+    const tools = screen.getByLabelText(/enable chat tools/i);
+    // reasoning appears before the tools master switch in document order
+    expect(reasoning.compareDocumentPosition(tools) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("clears the stored key", async () => {
@@ -212,10 +230,14 @@ describe("SettingsModal", () => {
     });
 
     renderModal();
-    await screen.findByText("Who said that"); // tools list rendered once settings loaded
+    await screen.findByText("Who said that"); // tools table rendered once settings loaded
     const master = screen.getByLabelText(/enable chat tools/i);
 
+    // Tool checkboxes are disabled until the master switch is on.
+    expect((screen.getByRole("checkbox", { name: /who said that/i }) as HTMLInputElement).disabled).toBe(true);
+
     fireEvent.click(master); // turn tools on
+    expect((screen.getByRole("checkbox", { name: /who said that/i }) as HTMLInputElement).disabled).toBe(false);
     // Turn one tool off (target by name so other checkboxes — e.g. reasoning — don't shift the index).
     fireEvent.click(screen.getByRole("checkbox", { name: /list recordings/i }));
     fireEvent.click(screen.getByRole("button", { name: /^ok$/i }));
