@@ -92,6 +92,30 @@ public sealed class DiarizMcpHandlers
         return new CallToolResult { Content = [new TextContentBlock { Text = result }] };
     }
 
+    public async ValueTask<ListResourcesResult> ListResourcesAsync(
+        RequestContext<ListResourcesRequestParams> ctx, CancellationToken ct)
+    {
+        var (userId, _, sp) = Resolve();
+        var infos = await sp.GetRequiredService<IMcpResourceService>().ListAsync(userId, ct);
+        var resources = infos
+            .Select(i => new Resource { Uri = i.Uri, Name = i.Name, Description = i.Description, MimeType = i.MimeType })
+            .ToList();
+        return new ListResourcesResult { Resources = resources };
+    }
+
+    public async ValueTask<ReadResourceResult> ReadResourceAsync(
+        RequestContext<ReadResourceRequestParams> ctx, CancellationToken ct)
+    {
+        var (userId, _, sp) = Resolve();
+        var uri = ctx.Params?.Uri ?? "";
+        var content = await sp.GetRequiredService<IMcpResourceService>().ReadAsync(userId, uri, ct)
+            ?? throw new InvalidOperationException($"Resource not found: {uri}");
+        return new ReadResourceResult
+        {
+            Contents = [new TextResourceContents { Uri = content.Uri, MimeType = content.MimeType, Text = content.Text }],
+        };
+    }
+
     private static CallToolResult Error(string message) =>
         new() { IsError = true, Content = [new TextContentBlock { Text = message }] };
 

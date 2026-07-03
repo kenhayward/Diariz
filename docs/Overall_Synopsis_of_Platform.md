@@ -268,7 +268,12 @@ the API and ships with a **server redeploy**.
 - **Config.** `Mcp:Enabled` (default true) mounts the endpoint. `IHttpContextAccessor` provides the request's
   user + scoped services inside the handlers. Claude Code: `claude mcp add --transport http diariz {origin}/mcp
   --header "Authorization: Bearer dz_mcp_…"` (or the `headers` block in `.mcp.json`); Claude Desktop via its JSON
-  config or `mcp-remote`. Resources + prompts are planned as follow-ups (tools ship first).
+  config or `mcp-remote`.
+- **Resources.** `ListResourcesHandler`/`ReadResourceHandler` expose each of the user's recordings as MCP
+  resources — `diariz://recording/{id}/transcript` (and `.../minutes` when minutes exist) — so a user can
+  **@-mention a specific meeting** in Claude. Backed by `IMcpResourceService` (owner-scoped, current-version
+  only, newest-first capped list); transcripts render as plain Markdown via `McpResources.TranscriptText`, minutes
+  are the stored Markdown. Prompts (canned starters) are the remaining planned follow-up.
 
 ## Auth, multi-tenancy, and roles
 

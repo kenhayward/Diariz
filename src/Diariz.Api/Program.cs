@@ -235,6 +235,7 @@ builder.Services.AddHttpClient<IGoogleCalendarClient, GoogleCalendarClient>();
 // The token services back both the management controller (JWT) and the /mcp bearer scheme.
 builder.Services.AddSingleton<IMcpTokenService, McpTokenService>();
 builder.Services.AddScoped<IMcpTokenAuthenticator, McpTokenAuthenticator>();
+builder.Services.AddScoped<IMcpResourceService, McpResourceService>();
 var mcpOptions = builder.Configuration.GetSection(McpOptions.Section).Get<McpOptions>() ?? new McpOptions();
 if (mcpOptions.Enabled)
 {
@@ -249,9 +250,12 @@ if (mcpOptions.Enabled)
             o.Capabilities = new ModelContextProtocol.Protocol.ServerCapabilities
             {
                 Tools = new ModelContextProtocol.Protocol.ToolsCapability(),
+                Resources = new ModelContextProtocol.Protocol.ResourcesCapability(),
             };
             o.Handlers.ListToolsHandler = mcpHandlers.ListToolsAsync;
             o.Handlers.CallToolHandler = mcpHandlers.CallToolAsync;
+            o.Handlers.ListResourcesHandler = mcpHandlers.ListResourcesAsync;
+            o.Handlers.ReadResourceHandler = mcpHandlers.ReadResourceAsync;
         })
         // Stateless: no server-initiated messages, so each POST is self-contained (no session id / SSE stream).
         .WithHttpTransport(t => t.Stateless = true);
