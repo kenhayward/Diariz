@@ -17,7 +17,9 @@ the in-app **Release Notes** page (`/release-notes`), reachable from **About** i
 - **Capture** audio from the browser microphone — **choose a specific input device** (the choice is
 remembered, and the list refreshes on hot-plug), **tune capture** (echo cancellation, noise suppression,
 auto gain, mono) from a ⚙ popover, and watch a **live input-level meter** while recording (with a subtle
-silence hint) — or Windows system/loopback audio via the Electron desktop
+silence hint). **Pause and resume** a recording in progress (separate from Stop) for breaks or sensitive
+moments — paused audio is never captured and never counts toward the recording's duration. Or capture Windows
+system/loopback audio via the Electron desktop
 shell — which can also **start/stop recording from its system-tray menu** (in the background, with
 notifications). Or **upload existing audio files** to transcribe (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A) —
 via the Upload button or by **dragging several onto the recordings list**, with per-file status.

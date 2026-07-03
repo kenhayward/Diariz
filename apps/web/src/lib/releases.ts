@@ -11,7 +11,8 @@ export const LICENSE = "AGPL-3.0";
 /// the app's scope changes.
 export const CAPABILITIES = `
 Diariz records audio — from your microphone (**choose a specific input and tune capture**, with a **live
-input-level meter** while recording), or Windows
+input-level meter** while recording, and **pause/resume** mid-recording for breaks or sensitive moments —
+paused audio is never captured), or Windows
 system/loopback audio via the desktop app
 (which can also **start and stop recording straight from its system-tray menu**) — or you can **upload
 an existing audio file** (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A), and it transcribes it server-side with
@@ -89,6 +90,21 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.73.0",
+    date: "2026-07-03",
+    pr: 162,
+    headline: "Pause and resume a recording",
+    summary:
+      "You can now **pause a recording in progress** and **resume** it later — separate from Stop — for breaks " +
+      "or moments you'd rather not capture. Paused audio is **never recorded** (the transcript simply continues " +
+      "where you resume, with no gap), the microphone is **muted** while paused (the level meter flatlines as a " +
+      "clear signal you're not being captured), and the timer counts **recorded time only**, so the saved " +
+      "recording's duration never includes the pause. Stop still ends and uploads as before.",
+    added: [
+      "Pause / Resume button while recording (web): suspends capture for breaks or sensitive moments; paused time is excluded from the recording and its duration.",
+    ],
+  },
   {
     version: "0.72.0",
     date: "2026-07-03",
