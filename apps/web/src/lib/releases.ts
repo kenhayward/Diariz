@@ -97,11 +97,11 @@ export const RELEASES: Release[] = [
     headline: "Chore: update the web build/test tooling",
     summary:
       "Internal maintenance with no user-facing change. Updated the web app's build and test tooling to " +
-      "current major versions (Vite, Vitest, TypeScript, jsdom) - this clears several security advisories in " +
-      "those developer-only tools (they are never part of the shipped app) and keeps the toolchain current. " +
+      "current major versions (Vite, Vitest, jsdom) - this clears several security advisories in those " +
+      "developer-only tools (they are never part of the shipped app) and keeps the toolchain current. " +
       "The full build and test suite pass unchanged.",
     changed: [
-      "Upgraded dev tooling: Vite 6 to 8, Vitest 2 to 4, TypeScript 5 to 6, jsdom 25 to 29, @vitejs/plugin-react 4 to 6.",
+      "Upgraded dev tooling: Vite 6 to 8, Vitest 2 to 4, jsdom 25 to 29, @vitejs/plugin-react 4 to 6.",
     ],
   },
   {
