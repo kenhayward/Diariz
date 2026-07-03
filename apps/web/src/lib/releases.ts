@@ -91,6 +91,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.76.1",
+    date: "2026-07-03",
+    pr: 172,
+    headline: "Internal: upgrade the data layer to Entity Framework Core 10",
+    summary:
+      "A maintenance update that moves the server's database layer from Entity Framework Core 9 to 10 (the " +
+      "release that matches .NET 10). No behaviour changes - all existing data, migrations, and speaker " +
+      "voiceprints are unaffected - but it clears the way for upcoming work. Deploying it only needs a server " +
+      "redeploy.",
+    changed: [
+      "Server database packages (Npgsql, EF Core, ASP.NET Identity) upgraded from version 9 to version 10.",
+    ],
+  },
+  {
     version: "0.76.0",
     date: "2026-07-03",
     pr: 171,

@@ -16,7 +16,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <!-- In-memory EF provider for fast, Docker-free DB tests. -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.*" />
   </ItemGroup>
 
   <!-- Binary fixtures (e.g. a tiny PDF) copied next to the test assembly. -->
