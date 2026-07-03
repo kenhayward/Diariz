@@ -305,10 +305,18 @@ the API and ships with a **server redeploy**.
   **public, PKCE-only** authorization-code client, gated by `RedirectUriPolicy`: every `redirect_uri` host must
   be on the `McpOAuth:AllowedRedirectHosts` allowlist (default `claude.ai`/`claude.com` + loopback for
   Desktop/Code), so a client can never be registered to redirect an authorization code to an attacker's site.
-  The interactive **authorize/consent** screen (reusing the Diariz login + `Active`/`IsEnabled` gating), the
-  **`/mcp` resource-server validation** (accept an OAuth token *or* the static token) + RFC 9728 protected-
-  resource metadata, and the **connections-management UI** are added in the following PRs. Config lives under
-  the `McpOAuth` options block; the whole server is gated by `McpOAuth:Enabled` (on by default).
+  The interactive **authorize + consent** flow is built: `GET/POST /connect/authorize`
+  (`OAuthAuthorizeController`, passthrough) reads a short-lived, Data-Protection-encrypted **consent cookie**
+  (`OAuthConsentTicketProtector`) that bridges the SPA's JWT session to the cookie-less browser redirect - no
+  cookie yet → redirect to the SPA **`/oauth/consent`** route (carrying the original authorize query); an
+  *allow* cookie for that client + an `Active`/`IsEnabled` user → issue the code (`SignIn` with `sub`, the
+  requested scopes, and the `diariz-mcp` audience); a *deny* cookie → `access_denied`. The SPA consent screen
+  (`OAuthConsent.tsx`, reusing the normal login with a `returnTo`) names the client and its access, and records
+  the decision via `POST /api/oauth/consent` (`OAuthConsentController`, JWT-authed + gated). Still **to come**:
+  the **`/mcp` resource-server validation** (accept an OAuth token *or* the static token) + RFC 9728
+  protected-resource metadata + advertising `registration_endpoint` in discovery (this is what makes claude.ai
+  able to connect end-to-end), and the **connections-management UI**. Config lives under the `McpOAuth` options
+  block; the whole server is gated by `McpOAuth:Enabled` (on by default).
 
 ## Auth, multi-tenancy, and roles
 

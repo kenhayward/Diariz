@@ -169,6 +169,8 @@ if (mcpOAuth.Enabled)
     var oidcKeysDir = !string.IsNullOrWhiteSpace(mcpOAuth.KeysPath) ? mcpOAuth.KeysPath : dpKeys;
 
     builder.Services.AddDiarizMcpOAuth(mcpOAuth, issuer, oidcKeysDir, builder.Environment.IsDevelopment());
+    // Bridges the SPA JWT consent screen to the browser-redirect /connect/authorize step (encrypted cookie).
+    builder.Services.AddSingleton<IOAuthConsentTicketProtector, OAuthConsentTicketProtector>();
 }
 
 // ---- Email (account-setup link; no-op fallback when SMTP unconfigured) ----

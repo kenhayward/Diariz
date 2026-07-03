@@ -1,0 +1,13 @@
+{
+  "title": "Conectar con Diariz",
+  "intro": "{{client}} quiere conectarse a tu cuenta de Diariz. Si lo permites, podra:",
+  "anApp": "Una aplicacion",
+  "permRead": "Buscar y leer tus reuniones, transcripciones, actas y tareas.",
+  "permEmail": "Enviar contenido por correo a la direccion de tu propia cuenta (nunca a otra persona).",
+  "revokeNote": "Puedes revocar esta conexion en cualquier momento en Preferencias.",
+  "allow": "Permitir",
+  "deny": "Denegar",
+  "unknownClient": "Esta solicitud de conexion no es valida. Intenta conectarte de nuevo desde la aplicacion.",
+  "consentFailed": "Algo salio mal. Intentalo de nuevo.",
+  "missingRequest": "Esta pagina se abrio sin una solicitud de conexion."
+}

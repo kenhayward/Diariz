@@ -91,6 +91,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.78.0",
+    date: "2026-07-03",
+    pr: 174,
+    headline: "OAuth sign-in for MCP: the approval screen",
+    summary:
+      "Builds on the previous release's OAuth groundwork by adding the screen where you approve (or deny) a " +
+      "connection request. When a client like Claude asks to connect, you are taken to a Diariz consent page - " +
+      "signing in first if needed - that names what is being connected and what it can do (search and read " +
+      "your meetings, and email your own account), and you choose Allow or Deny. Approving issues the " +
+      "connection; denying returns cleanly with no access granted. It is still not reachable end-to-end from " +
+      "claude.ai until the next release wires up discovery. Deploying it only needs a server redeploy.",
+    added: [
+      "OAuth authorize endpoint that issues the authorization code after your approval (or returns access-denied on deny).",
+      "A consent screen (translated) that names the requesting app and the access it is asking for, reusing your existing sign-in.",
+    ],
+  },
+  {
     version: "0.77.0",
     date: "2026-07-03",
     pr: 173,

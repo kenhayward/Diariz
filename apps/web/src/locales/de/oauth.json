@@ -1,0 +1,13 @@
+{
+  "title": "Mit Diariz verbinden",
+  "intro": "{{client}} mochte sich mit deinem Diariz-Konto verbinden. Wenn du es erlaubst, kann es:",
+  "anApp": "Eine Anwendung",
+  "permRead": "Deine Meetings, Transkripte, Protokolle und Aufgaben durchsuchen und lesen.",
+  "permEmail": "Inhalte an die Adresse deines eigenen Kontos senden (niemals an jemand anderen).",
+  "revokeNote": "Du kannst diese Verbindung jederzeit in den Einstellungen widerrufen.",
+  "allow": "Erlauben",
+  "deny": "Ablehnen",
+  "unknownClient": "Diese Verbindungsanfrage ist ungultig. Versuche erneut, dich uber die App zu verbinden.",
+  "consentFailed": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
+  "missingRequest": "Diese Seite wurde ohne Verbindungsanfrage geoffnet."
+}
