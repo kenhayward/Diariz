@@ -87,6 +87,11 @@ services:
       Seed__Password: ${SEED_PASSWORD}
       Seed__FullName: ${SEED_FULL_NAME:-Platform Administrator}
       App__PublicUrl: ${APP_PUBLIC_URL:-http://localhost:8081}
+      # OAuth 2.1 sign-in for the claude.ai web MCP connector. On by default; the token issuer is App__PublicUrl
+      # (must be the public HTTPS origin in production) and the signing/encryption keys persist to the /keys
+      # volume above. A client may only register a redirect_uri on this host allowlist (defaults cover
+      # claude.ai/claude.com + loopback). Set McpOAuth__Enabled=false to turn the OAuth server off entirely.
+      McpOAuth__Enabled: ${MCP_OAUTH_ENABLED:-true}
       # Google sign-in (optional). Leave the client id/secret empty to disable it (the login page then hides
       # the Google button). RedirectUri is derived from App__PublicUrl when left blank.
       GoogleAuth__ClientId: ${GOOGLE_CLIENT_ID:-}

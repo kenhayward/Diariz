@@ -28,6 +28,11 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     {
         base.OnModelCreating(builder);
 
+        // OAuth 2.1 authorization-server tables (applications/authorizations/scopes/tokens) for the MCP web
+        // connector. Provider-agnostic (plain relational columns, no vector) so it stays outside the Npgsql
+        // guard below and loads under the in-memory test provider too.
+        builder.UseOpenIddict();
+
         // The vector column and pgvector extension only exist on Postgres. Under other
         // providers (e.g. the EF in-memory provider used by unit tests) the embedding is
         // unmapped — it is unused before Milestone 3 anyway.

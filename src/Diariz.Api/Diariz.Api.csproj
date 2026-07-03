@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- App version — keep in sync with /version.json (see CLAUDE.md versioning rule). -->
-    <Version>0.76.1</Version>
+    <Version>0.77.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -32,6 +32,11 @@
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.*" />
     <PackageReference Include="Pgvector.EntityFrameworkCore" Version="0.3.0" />
+    <!-- OpenIddict OAuth 2.1 / OpenID Connect server + validation + ASP.NET Core host: makes the API an
+         authorization server + resource server for the MCP web connector (claude.ai). EntityFrameworkCore
+         supplies the store wiring for AddCore().UseEntityFrameworkCore(). Pinned exactly (security-critical). -->
+    <PackageReference Include="OpenIddict.AspNetCore" Version="7.5.0" />
+    <PackageReference Include="OpenIddict.EntityFrameworkCore" Version="7.5.0" />
     <PackageReference Include="StackExchange.Redis" Version="3.0.0" />
     <PackageReference Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
   </ItemGroup>

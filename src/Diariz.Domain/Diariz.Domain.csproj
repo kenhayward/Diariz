@@ -11,6 +11,10 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.*" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.*" />
     <PackageReference Include="Pgvector.EntityFrameworkCore" Version="0.3.0" />
+    <!-- OpenIddict EF Core stores + the ModelBuilder.UseOpenIddict() entity registration used by
+         DiarizDbContext (OAuth 2.1 authorization-server tables for the MCP web connector). Pinned to an
+         exact version - it is a security-critical dependency, so avoid silent minor rolls. -->
+    <PackageReference Include="OpenIddict.EntityFrameworkCore" Version="7.5.0" />
   </ItemGroup>
 
 </Project>

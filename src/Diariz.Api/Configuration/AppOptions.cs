@@ -156,6 +156,40 @@ public class McpOptions
     public bool Enabled { get; set; } = true;
 }
 
+/// <summary>OAuth 2.1 authorization server for the MCP web connector (claude.ai) - lets a user add Diariz as
+/// a remote connector without pasting a token (the browser runs a consent handshake). Built on OpenIddict; the
+/// issuer origin is <see cref="AppPublicOptions.PublicUrl"/> (falling back to the request origin). The static
+/// <c>dz_mcp_</c> personal token stays available alongside this for Desktop/Code/CI.</summary>
+public class McpOAuthOptions
+{
+    public const string Section = "McpOAuth";
+
+    /// <summary>The OAuth scope an MCP client requests, and the resource/audience bound to issued access
+    /// tokens. Access tokens whose audience is not <see cref="Resource"/> are rejected by the <c>/mcp</c>
+    /// resource server. These are wire constants, not user-configurable.</summary>
+    public const string Scope = "mcp";
+    public const string Resource = "diariz-mcp";
+
+    /// <summary>Master switch. When false the OAuth endpoints and resource-server validation are not
+    /// registered (the static personal-token path is unaffected).</summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>Explicit issuer URL (must be the public HTTPS origin clients reach). Empty = derive from
+    /// <see cref="AppPublicOptions.PublicUrl"/>, else the request origin. OpenIddict requires HTTPS in
+    /// production; on http/localhost dev the transport requirement is relaxed automatically.</summary>
+    public string Issuer { get; set; } = "";
+
+    /// <summary>Where to persist the OpenIddict signing/encryption certificates so tokens survive a container
+    /// recreate. Empty = reuse the Data Protection keyring volume (<c>DataProtection:KeysPath</c>); if that is
+    /// also unset (local dev), ephemeral development certificates are used instead.</summary>
+    public string KeysPath { get; set; } = "";
+
+    /// <summary>Hosts allowed to register a client via Dynamic Client Registration (the client's
+    /// <c>redirect_uri</c> host must be one of these). Defaults cover the claude.ai/claude.com web connector
+    /// plus loopback for Desktop/Code's local OAuth callback. Comma/space tolerant via config binding.</summary>
+    public string[] AllowedRedirectHosts { get; set; } = ["claude.ai", "claude.com", "localhost", "127.0.0.1"];
+}
+
 /// <summary>Limits and codec policy for user-uploaded audio files (the "Upload" button). Recorded clips
 /// from the browser are not gated by these.</summary>
 public class UploadOptions
