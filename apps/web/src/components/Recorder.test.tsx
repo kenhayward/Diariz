@@ -41,6 +41,12 @@ class FakeMediaRecorder {
   start() {
     this.state = "recording";
   }
+  pause() {
+    this.state = "paused";
+  }
+  resume() {
+    this.state = "recording";
+  }
   stop() {
     this.state = "inactive";
     this.onstop?.();
@@ -257,5 +263,38 @@ describe("Recorder source selection", () => {
     render(<Recorder onUploaded={() => {}} />);
     await screen.findByRole("combobox");
     expect(screen.queryByRole("button", { name: /allow microphone/i })).toBeNull();
+  });
+});
+
+describe("Recorder pause/resume", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
+    (getStream as Mock).mockResolvedValue(fakeStream);
+  });
+
+  it("toggles Pause↔Resume while recording and shows a Paused indicator", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+
+    // Recording: a Pause button appears (and Stop). No Resume, no "Paused" yet.
+    const pauseBtn = await screen.findByRole("button", { name: /^pause$/i });
+    expect(screen.getByRole("button", { name: /^stop$/i })).toBeTruthy();
+    expect(screen.queryByText(/paused/i)).toBeNull();
+
+    fireEvent.click(pauseBtn);
+
+    // Paused: the button flips to Resume and a "Paused" indicator shows.
+    expect(await screen.findByRole("button", { name: /^resume$/i })).toBeTruthy();
+    expect(screen.getByText(/paused/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^pause$/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /^resume$/i }));
+
+    // Resumed: back to Pause, no "Paused" indicator.
+    expect(await screen.findByRole("button", { name: /^pause$/i })).toBeTruthy();
+    expect(screen.queryByText(/paused/i)).toBeNull();
   });
 });

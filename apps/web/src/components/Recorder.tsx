@@ -31,6 +31,8 @@ import {
   clearPendingRecording,
   type PendingRecording,
 } from "../lib/pendingRecording";
+import * as timing from "../lib/recorderTiming";
+import type { Timing } from "../lib/recorderTiming";
 
 const SOURCE_KEY = "diariz.recorder.source";
 const CONSTRAINTS_KEY = "diariz.recorder.audioConstraints";
@@ -72,6 +74,8 @@ export default function Recorder({
   // Used to show the "no microphone detected" hint only after an attempt that came back empty.
   const [labelsTried, setLabelsTried] = useState(false);
   const [recording, setRecording] = useState(false);
+  // Paused mid-recording: capture is suspended (nothing recorded, mic muted) but the recorder is still live.
+  const [paused, setPaused] = useState(false);
   // True once the input has been near-silent for a sustained period while recording (see InputLevelMeter).
   const [silent, setSilent] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -99,7 +103,8 @@ export default function Recorder({
   // The live recording stream, exposed to the level meter while recording (nulled in recorder.onstop).
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const startRef = useRef(0);
+  // Tracks *recorded* time (excludes paused stretches) so the timer + uploaded duration stay honest.
+  const timingRef = useRef<Timing>({ accumulatedMs: 0, runningSince: null });
   const timerRef = useRef<number | null>(null);
   // The coarse source actually being recorded (mic vs system); the tray only speaks in these terms,
   // and the upload title/enum needs it, so we can't rely on `selection` state having flushed.
@@ -213,6 +218,27 @@ export default function Recorder({
     }
   }
 
+  function startTicker() {
+    if (timerRef.current) window.clearInterval(timerRef.current);
+    timerRef.current = window.setInterval(
+      () => setElapsed(timing.elapsedMs(timingRef.current, Date.now())),
+      250,
+    );
+  }
+
+  function stopTicker() {
+    if (timerRef.current) window.clearInterval(timerRef.current);
+    timerRef.current = null;
+  }
+
+  // Mute/unmute the live capture tracks. While paused we disable them so nothing is captured *and* the
+  // level meter visibly flatlines — a clear "you're not being recorded" signal for sensitive moments.
+  function setCaptureEnabled(on: boolean) {
+    streamRef.current?.getAudioTracks?.().forEach((tr) => {
+      tr.enabled = on;
+    });
+  }
+
   // `trayKind` is set only when the Electron tray drives us (it speaks coarse mic/system); the on-screen
   // button passes nothing and records the current `selection`. A tray "mic" maps to the current specific
   // mic (or default), "system" to loopback.
@@ -238,13 +264,11 @@ export default function Recorder({
       recorder.start();
       recorderRef.current = recorder;
       activeSourceRef.current = coarse;
-      startRef.current = Date.now();
+      timingRef.current = timing.start(Date.now());
       setElapsed(0);
-      timerRef.current = window.setInterval(
-        () => setElapsed(Date.now() - startRef.current),
-        250,
-      );
+      startTicker();
       setRecording(true);
+      setPaused(false);
       reportRef.current({ phase: "recording", source: coarse });
       // A mic grant unlocks device labels — re-enumerate so specifics appear next time.
       if (coarse === "mic") void refreshDevices();
@@ -257,9 +281,36 @@ export default function Recorder({
     }
   }
 
+  // Suspend capture without ending the recording: paused audio is never captured (the model never sees
+  // it), the mic is muted, and the recorded-time clock stops so the duration stays honest.
+  function pause() {
+    const rec = recorderRef.current;
+    if (!rec || rec.state !== "recording") return;
+    rec.pause();
+    timingRef.current = timing.pause(timingRef.current, Date.now());
+    stopTicker();
+    setElapsed(timing.elapsedMs(timingRef.current, Date.now()));
+    setCaptureEnabled(false);
+    setSilent(false);
+    setPaused(true);
+  }
+
+  function resume() {
+    const rec = recorderRef.current;
+    if (!rec || rec.state !== "paused") return;
+    setCaptureEnabled(true);
+    rec.resume();
+    timingRef.current = timing.resume(timingRef.current, Date.now());
+    startTicker();
+    setPaused(false);
+  }
+
   function stop() {
-    if (timerRef.current) window.clearInterval(timerRef.current);
+    stopTicker();
+    // Fold any running segment so the uploaded duration is final and paused-free.
+    timingRef.current = timing.pause(timingRef.current, Date.now());
     setRecording(false);
+    setPaused(false);
     setSilent(false);
     recorderRef.current?.stop();
   }
@@ -268,7 +319,8 @@ export default function Recorder({
     setBusy(true);
     reportRef.current({ phase: "uploading" });
     const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-    const durationMs = Date.now() - startRef.current;
+    // Recorded time only (pauses excluded); stop() has already folded the final running segment.
+    const durationMs = timing.elapsedMs(timingRef.current, Date.now());
     const source: "Microphone" | "System" = activeSourceRef.current === "system" ? "System" : "Microphone";
     const prefix = source === "System" ? t("recTitlePrefixSystem") : t("recTitlePrefixMic");
     const title = `${prefix} ${new Date().toLocaleString()}`;
@@ -425,9 +477,18 @@ export default function Recorder({
         </div>
 
         {recording ? (
-          <button onClick={stop} className="rounded bg-red-600 px-3 py-1.5 text-sm text-white">
-            {t("recStop")}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={paused ? resume : pause}
+              className="rounded border px-3 py-1.5 text-sm dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
+            >
+              {paused ? t("recResume") : t("recPause")}
+            </button>
+            <button onClick={stop} className="rounded bg-red-600 px-3 py-1.5 text-sm text-white">
+              {t("recStop")}
+            </button>
+          </>
         ) : (
           <button
             onClick={() => start()}
@@ -459,8 +520,15 @@ export default function Recorder({
 
         {recording && (
           <>
-            <span className="font-mono text-sm text-red-600">● {mmss}</span>
-            <InputLevelMeter stream={streamRef.current} onSilentChange={setSilent} />
+            {paused ? (
+              <span role="status" className="font-mono text-sm text-amber-600">
+                ❚❚ {mmss} · {t("recPaused")}
+              </span>
+            ) : (
+              <span className="font-mono text-sm text-red-600">● {mmss}</span>
+            )}
+            {/* Meter (and its silence detection) only runs while actively capturing. */}
+            {!paused && <InputLevelMeter stream={streamRef.current} onSilentChange={setSilent} />}
           </>
         )}
         {error && compact && <span className="text-xs text-red-600">{error}</span>}
@@ -492,7 +560,7 @@ export default function Recorder({
       {labelsTried && !hasLabels && !recording && !error && (
         <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{t("noMicHint")}</p>
       )}
-      {recording && silent && (
+      {recording && !paused && silent && (
         <p role="status" aria-live="polite" className="mt-2 text-xs text-gray-500 dark:text-gray-400">
           {t("noSoundHint")}
         </p>
