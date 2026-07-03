@@ -42,6 +42,9 @@ public class OAuthRegistrationIntegrationTests(ContainersFixture fx) : IDisposab
         var server = provider.GetRequiredService<IOptionsMonitor<OpenIddictServerOptions>>().CurrentValue;
         Assert.NotEmpty(server.SigningCredentials);
         Assert.NotEmpty(server.EncryptionCredentials);
+        // The MCP resource is registered as a known target, so the client's `resource={origin}/mcp` request
+        // parameter (RFC 8707) is accepted instead of rejected as invalid_target.
+        Assert.Contains(new Uri("https://diariz.example.com/mcp"), server.Resources);
 
         // The certificates were persisted to the keys directory so they survive a restart.
         Assert.True(File.Exists(Path.Combine(_keysDir, "oidc-signing.pfx")));
