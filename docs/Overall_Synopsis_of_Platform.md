@@ -44,7 +44,7 @@ Infrastructure (via Docker Compose, project name **`diariz`**):
 | Service | In-container | Host (Docker) | Dev |
 |---|---|---|---|
 | API | 8080 | 8080 | 8080 |
-| Web (nginx, proxies `/api` + `/hubs`) | 80 | **8081** | Vite dev server **5173** (proxies to 8080) |
+| Web (nginx, proxies `/api` + `/hubs` + `/mcp`) | 80 | **8081** | Vite dev server **5173** (proxies to 8080) |
 | Postgres | 5432 | 5432 | 5432 |
 | Redis | 6379 | 6379 | 6379 |
 | MinIO S3 API | 9000 | **9002** | — |
@@ -250,6 +250,12 @@ Diariz hosts a **Model Context Protocol server in-process** (the official `Model
 SDK) at **`/mcp`** (Streamable HTTP, **stateless** — no server-initiated messages), so a user can connect
 **Claude** (Desktop or Code) directly to *their own* transcripts. It is **not a new deployable** — it runs in
 the API and ships with a **server redeploy**.
+
+> **Reverse-proxy requirement.** `/mcp` must be forwarded to the API like `/api` and `/hubs`. The web image's
+> nginx (`apps/web/nginx.conf`) proxies it with **`proxy_buffering off`** (Streamable HTTP streams responses as
+> `text/event-stream`, so buffering would stall the stream) and a long read timeout. **Any outer reverse proxy
+> in front of the web container must also forward `/mcp` with response buffering disabled** — otherwise the SPA
+> is served for `/mcp` (or a POST returns 405) and clients report "cannot load the MCP server".
 
 - **Per-user token auth.** The endpoint is guarded by a dedicated auth scheme (`McpBearerAuthenticationHandler`,
   scheme `"Mcp"`), separate from the browser JWT. A user generates a personal access token in **Preferences →
