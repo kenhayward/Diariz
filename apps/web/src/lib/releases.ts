@@ -97,6 +97,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.83.2",
+    date: "2026-07-04",
+    pr: 187,
+    headline: "Fix: docker compose parse error from the embedding prefixes",
+    summary:
+      "Fixes a `docker compose` YAML parse error introduced with the nomic embedding prefixes in the last " +
+      "release - the default value contains a colon-space, which unquoted YAML misreads as a nested mapping. " +
+      "The two prefix values are now quoted. Compose config only; no application change.",
+    fixed: [
+      "docker compose no longer fails to parse the embedding task-prefix defaults (Embedding__QueryPrefix / DocumentPrefix are now quoted).",
+    ],
+  },
+  {
     version: "0.83.1",
     date: "2026-07-04",
     pr: 186,
