@@ -78,8 +78,9 @@ services:
       Embedding__Model: ${EMBED_MODEL:-nomic-embed-text}
       Embedding__Dimension: ${EMBED_DIMENSION:-768}
       # nomic task prefixes (improve retrieval); set both empty for models that don't use them (e.g. OpenAI).
-      Embedding__QueryPrefix: ${EMBED_QUERY_PREFIX:-search_query: }
-      Embedding__DocumentPrefix: ${EMBED_DOCUMENT_PREFIX:-search_document: }
+      # Quoted because the default contains a colon-space, which unquoted YAML reads as a nested mapping.
+      Embedding__QueryPrefix: "${EMBED_QUERY_PREFIX:-search_query: }"
+      Embedding__DocumentPrefix: "${EMBED_DOCUMENT_PREFIX:-search_document: }"
       # Speaker identification (voiceprints). Threshold is the max cosine distance for an
       # auto-match — conservative by default; tune per your audio (lower = stricter).
       Identification__Enabled: ${IDENTIFICATION_ENABLED:-true}
