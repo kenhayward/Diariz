@@ -100,12 +100,16 @@ export const RELEASES: Release[] = [
     version: "0.84.1",
     date: "2026-07-04",
     pr: 189,
-    headline: "Fix: recording menu no longer hides behind the tab bar",
+    headline: "Fixes: recording menu layering + no duplicate progress banners",
     summary:
-      "Fixes the kebab (⋮) menu on the recording page rendering behind the sticky tab strip, which clipped " +
-      "its top items (Rename / Copy link). The menu now layers above the sticky header. Web-only.",
+      "Two small recording-page fixes. The kebab (⋮) menu no longer renders behind the sticky tab strip " +
+      "(which clipped its top items, Rename / Copy link). And pipeline progress (summarising, extracting " +
+      "actions, re-identifying speakers, translating, etc.) now shows only in the bottom status bar - the " +
+      "duplicate banner at the top of the recording page has been removed. The recordings list status is " +
+      "unchanged. Web-only.",
     fixed: [
       "The recording detail's ⋮ menu now appears above the sticky tab bar instead of behind it.",
+      "Removed the duplicate in-page progress banner on the recording page; summarising / extracting / re-identifying / translating status shows only in the bottom status bar.",
     ],
   },
   {

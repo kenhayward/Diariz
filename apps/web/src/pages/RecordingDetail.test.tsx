@@ -3,6 +3,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route, useNavigate } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { RecordingDetail as RecordingDetailType } from "../lib/types";
+import { StatusProvider, useStatus } from "../lib/status";
+
+/// Renders the current global status message, so a test can observe what the page pushed to the status bar
+/// (pipeline progress like "Extracting actions..." is shown only there, not in an in-page banner).
+function StatusProbe() {
+  const { status } = useStatus();
+  return <div data-testid="status">{status?.text ?? ""}</div>;
+}
 
 vi.mock("../lib/signalr", () => ({
   createHub: () => ({ start: () => Promise.resolve(), stop: () => Promise.resolve(), on: () => {} }),
@@ -369,16 +377,31 @@ describe("RecordingDetail", () => {
     expect((await screen.findByLabelText("Action 1") as HTMLInputElement).value).toBe("Send the report");
   });
 
-  it("shows a banner while extraction is in flight", async () => {
+  it("shows extraction progress in the status bar (not an in-page banner)", async () => {
     let resolve!: (v: unknown[]) => void;
     (api.extractActions as ReturnType<typeof vi.fn>).mockReturnValue(new Promise((r) => (resolve = r)));
-    renderPage(base);
+    (api.getRecording as ReturnType<typeof vi.fn>).mockResolvedValue(base);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <StatusProvider>
+          <MemoryRouter initialEntries={["/recordings/rec-123"]}>
+            <Routes>
+              <Route path="/recordings/:id" element={<RecordingDetail />} />
+            </Routes>
+          </MemoryRouter>
+          <StatusProbe />
+        </StatusProvider>
+      </QueryClientProvider>,
+    );
     await loaded();
     openTab(/actions/i);
 
     fireEvent.click(screen.getByRole("button", { name: /extract action items/i }));
+    // Progress is pushed to the global status bar, and there is no in-page banner duplicating it.
     expect(await screen.findByText(/extracting actions from the transcript/i)).toBeTruthy();
 
+    // When extraction finishes the progress is replaced by the result message (not the "extracting" text).
     resolve([]);
     await waitFor(() => expect(screen.queryByText(/extracting actions from the transcript/i)).toBeNull());
   });
