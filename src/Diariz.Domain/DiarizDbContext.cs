@@ -11,6 +11,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<Recording> Recordings => Set<Recording>();
     public DbSet<Transcription> Transcriptions => Set<Transcription>();
     public DbSet<Segment> Segments => Set<Segment>();
+    public DbSet<TranscriptChunk> TranscriptChunks => Set<TranscriptChunk>();
     public DbSet<Speaker> Speakers => Set<Speaker>();
     public DbSet<Summary> Summaries => Set<Summary>();
     public DbSet<MeetingMinutes> MeetingMinutes => Set<MeetingMinutes>();
@@ -144,6 +145,24 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 e.Property(s => s.Embedding).HasColumnType("vector(768)");
             else
                 e.Ignore(s => s.Embedding);
+        });
+
+        // Windowed retrieval chunks (Milestone 3 RAG). Provider-agnostic except the vector column, which is
+        // Postgres-only (ignored under the in-memory test provider, like Segment.Embedding). The (UserId,
+        // RecordingId) index backs the owner-scoped pre-filter; chunks cascade-delete with their transcription.
+        builder.Entity<TranscriptChunk>(e =>
+        {
+            e.HasIndex(c => new { c.UserId, c.RecordingId });
+            e.HasIndex(c => c.TranscriptionId);
+            e.Property(c => c.SpeakerLabels).HasMaxLength(1024);
+            e.HasOne(c => c.Transcription)
+                .WithMany()
+                .HasForeignKey(c => c.TranscriptionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            if (isNpgsql)
+                e.Property(c => c.Embedding).HasColumnType("vector(768)");
+            else
+                e.Ignore(c => c.Embedding);
         });
 
         builder.Entity<Speaker>(e =>

@@ -27,6 +27,7 @@ builder.Services.Configure<WorkerOptions>(builder.Configuration.GetSection(Worke
 builder.Services.Configure<SummarizationOptions>(builder.Configuration.GetSection(SummarizationOptions.Section));
 builder.Services.Configure<MeetingMinutesOptions>(builder.Configuration.GetSection(MeetingMinutesOptions.Section));
 builder.Services.Configure<ActionsOptions>(builder.Configuration.GetSection(ActionsOptions.Section));
+builder.Services.Configure<EmbeddingOptions>(builder.Configuration.GetSection(EmbeddingOptions.Section));
 builder.Services.Configure<ChatOptions>(builder.Configuration.GetSection(ChatOptions.Section));
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.Section));
 builder.Services.Configure<AppPublicOptions>(builder.Configuration.GetSection(AppPublicOptions.Section));
@@ -196,6 +197,13 @@ builder.Services.AddHttpClient<IMeetingMinutesClient, MeetingMinutesClient>();
 builder.Services.AddHostedService<MeetingMinutesWorker>();
 // Action extraction also runs in the pipeline (its own stream/worker), reusing IActionsClient (registered above).
 builder.Services.AddHostedService<ActionsWorker>();
+
+// ---- Semantic-search (RAG, M3) embeddings: its own endpoint/model config, stream + consumer, and a
+// one-time startup backfill that indexes the existing library once an embeddings endpoint is configured. ----
+builder.Services.AddHttpClient<IEmbeddingClient, EmbeddingClient>();
+builder.Services.AddScoped<IEmbeddingSettingsResolver, EmbeddingSettingsResolver>();
+builder.Services.AddHostedService<EmbeddingWorker>();
+builder.Services.AddHostedService<EmbeddingBackfillService>();
 
 // ---- Editable LLM prompt templates (summarise / extract-actions / meeting-minutes) ----
 // Prefer the content root's prompts/ (dev + published output), else the app base dir. Read per use so edits

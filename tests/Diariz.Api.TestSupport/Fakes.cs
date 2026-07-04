@@ -30,6 +30,24 @@ public sealed class FakeHttpMessageHandler : HttpMessageHandler
     }
 }
 
+/// <summary>Canned <see cref="HttpMessageHandler"/> that dequeues one response body per request (the last
+/// repeats once drained) and records every outgoing request body, so tests can assert batched calls.</summary>
+public sealed class QueuedHttpMessageHandler : HttpMessageHandler
+{
+    private readonly Queue<string> _responses;
+    private string _last = "{}";
+    public List<string> Requests { get; } = new();
+
+    public QueuedHttpMessageHandler(Queue<string> responses) => _responses = responses;
+
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+    {
+        Requests.Add(request.Content is null ? "" : await request.Content.ReadAsStringAsync(ct));
+        if (_responses.Count > 0) _last = _responses.Dequeue();
+        return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(_last) };
+    }
+}
+
 /// <summary>Returns a fixed summarisation config and records the resolved user id.</summary>
 public sealed class FakeSummarizationSettingsResolver : ISummarizationSettingsResolver
 {
@@ -148,6 +166,43 @@ public sealed class FakeTranslationClient : ITranslationClient
             .Select(t => string.IsNullOrWhiteSpace(t) ? t : Map.TryGetValue(t, out var m) ? m : $"[{targetLanguage}] {t}")
             .ToList();
         return Task.FromResult<IReadOnlyList<string>>(result);
+    }
+}
+
+/// <summary>Returns a fixed embedding config and records the resolved user id.</summary>
+public sealed class FakeEmbeddingSettingsResolver : IEmbeddingSettingsResolver
+{
+    public EmbeddingRequestConfig Config { get; set; } =
+        new("https://emb.test/v1", "sk-emb", "nomic-embed-text", 768, 60, 32);
+    public Guid? LastUserId { get; private set; }
+
+    public Task<EmbeddingRequestConfig> ResolveAsync(Guid userId, CancellationToken ct = default)
+    {
+        LastUserId = userId;
+        return Task.FromResult(Config);
+    }
+}
+
+/// <summary>Stub <see cref="IEmbeddingClient"/> — returns a deterministic unit vector per input (unless
+/// <see cref="Vectors"/> overrides) and records the inputs it was asked to embed.</summary>
+public sealed class FakeEmbeddingClient : IEmbeddingClient
+{
+    /// <summary>Optional exact outputs (one per input). When null, a fixed 3-d vector is returned per input.</summary>
+    public IReadOnlyList<float[]>? Vectors { get; set; }
+    public Exception? ThrowOnCall { get; set; }
+    public int Calls { get; private set; }
+    public EmbeddingRequestConfig? LastConfig { get; private set; }
+    public IReadOnlyList<string>? LastInputs { get; private set; }
+
+    public Task<IReadOnlyList<float[]>> EmbedAsync(
+        EmbeddingRequestConfig config, IReadOnlyList<string> inputs, CancellationToken ct = default)
+    {
+        Calls++;
+        LastConfig = config;
+        LastInputs = inputs.ToList();
+        if (ThrowOnCall is not null) throw ThrowOnCall;
+        var result = Vectors ?? inputs.Select((_, i) => new[] { 1f, 0f, (float)i }).ToList();
+        return Task.FromResult(result);
     }
 }
 
@@ -301,6 +356,7 @@ public sealed class FakeJobQueue : IJobQueue
     public List<MeetingMinutesJob> MeetingMinutesEnqueued { get; } = new();
     public List<ActionsJob> ActionsEnqueued { get; } = new();
     public List<AudioMergeJob> AudioMergeEnqueued { get; } = new();
+    public List<EmbeddingJob> EmbeddingEnqueued { get; } = new();
 
     public Task EnqueueAsync(TranscriptionJob job, CancellationToken ct = default)
     {
@@ -329,6 +385,12 @@ public sealed class FakeJobQueue : IJobQueue
     public Task EnqueueAudioMergeAsync(AudioMergeJob job, CancellationToken ct = default)
     {
         AudioMergeEnqueued.Add(job);
+        return Task.CompletedTask;
+    }
+
+    public Task EnqueueEmbeddingAsync(EmbeddingJob job, CancellationToken ct = default)
+    {
+        EmbeddingEnqueued.Add(job);
         return Task.CompletedTask;
     }
 }

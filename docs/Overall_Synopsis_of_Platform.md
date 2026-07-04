@@ -181,6 +181,19 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   calls the LLM inline and **replaces** the recording's **`RecordingAction`** rows. Actions also travel into
   transcript downloads, the emailed transcript, and the chat context. Its instruction prompt is the **editable**
   `prompts/extract-actions.md` (`{calendar_date}` substituted).
+- **Semantic search index (RAG, M3 - backend).** A **fifth Redis stream `embedding-jobs`** (group `embedders`)
+  with its own `EmbeddingWorker` (singleton `BackgroundService`) builds the semantic-search index. Per job,
+  `EmbeddingProcessor` windows the transcription's segments into overlapping passages (`TranscriptChunker`,
+  ~1200 chars, 1-segment overlap), embeds them via `IEmbeddingClient` (OpenAI-compatible `/embeddings`, batched),
+  and **replaces** the recording's `TranscriptChunk` rows (`vector(768)`) - so a re-transcribe never leaves stale
+  chunks and retrieval needs no version filtering. Enqueued from the worker callback right after segments are
+  saved (independent of summarisation), and an `EmbeddingBackfillService` indexes the existing library once on
+  startup. Unlike the free per-user chat/summary endpoint, the embedding **model + dimension are server-pinned**
+  (every chunk and query must match the `vector(768)` column); the **endpoint/key** are resolved per recording
+  owner by `EmbeddingSettingsResolver` - a dedicated `Embedding` config block, else the owner's summarisation
+  endpoint, else the server summarisation default. **Ships inert:** with no embeddings endpoint configured,
+  nothing is enqueued and search stays lexical (`pg_trgm`). The hybrid (vector + trigram) retrieval and the
+  "All meetings" chat mode that consume this index arrive in the following M3 releases.
 - **Editable prompt templates.** The summarise, action-extraction, and meeting-minutes instruction prompts each
   live as a Markdown file under `prompts/` (`summarise.md` / `extract-actions.md` / `meeting-minutes.md`), read
   via a single `IPromptTemplateProvider` (`prompts/<name>.md`) **on each use** so edits (or a volume mount) apply
@@ -434,10 +447,11 @@ Voiceprints are **per-user** (a user's voiceprints only match their own recordin
 
 ## Cross-boundary contracts (the non-obvious glue)
 
-- **Redis Streams, five of them.** `transcription-jobs`/`workers` and `audio-merge-jobs` (both API → Python
+- **Redis Streams, six of them.** `transcription-jobs`/`workers` and `audio-merge-jobs` (both API → Python
   worker, sharing the `workers` group — the worker `XREADGROUP`s both streams and dispatches by stream key) and
-  three API-internal streams with their own in-process consumers: `summarization-jobs`/`summarizers`,
-  `meeting-minutes-jobs`/`minute-takers`, and `actions-jobs`/`actions-extractors`. Job payloads are **PascalCase JSON**
+  four API-internal streams with their own in-process consumers: `summarization-jobs`/`summarizers`,
+  `meeting-minutes-jobs`/`minute-takers`, `actions-jobs`/`actions-extractors`, and `embedding-jobs`/`embedders`
+  (the RAG index). Job payloads are **PascalCase JSON**
   so .NET produces and Python/.NET consume without renaming. Keep `TranscriptionJob` / `TranscriptionResult` /
   `AudioMergeJob` / `Segment` shapes in sync across both languages.
 - **Merge recordings.** `POST /api/recordings/merge` folds 2+ recordings into the earliest one: it builds a new

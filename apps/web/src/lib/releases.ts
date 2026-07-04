@@ -93,6 +93,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.81.0",
+    date: "2026-07-04",
+    pr: 183,
+    headline: "Groundwork for semantic search across your meetings",
+    summary:
+      "First step of Milestone 3 (RAG): Diariz can now build a semantic index of your transcripts so that " +
+      "later releases can answer conceptual questions across your whole library - finding the right moments " +
+      "even when they don't share the exact words you searched for. This release is the backend pipeline only: " +
+      "when an embeddings endpoint is configured, each recording's transcript is split into overlapping " +
+      "passages and embedded in the background (re-built automatically whenever a recording is re-transcribed), " +
+      "and an existing library is indexed once on startup. It ships inert - with no embeddings endpoint " +
+      "configured, nothing changes and search stays exactly as it is today. The smarter search and the " +
+      "'All meetings' chat mode that use this index arrive in the next releases. Server redeploy only.",
+    added: [
+      "Background embedding pipeline that indexes transcripts for semantic search (opt-in: set an embeddings endpoint, or reuse your summarisation one).",
+    ],
+  },
+  {
     version: "0.80.6",
     date: "2026-07-04",
     pr: 182,

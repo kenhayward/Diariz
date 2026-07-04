@@ -24,17 +24,20 @@ public class WorkerCallbackController : ControllerBase
     private readonly IHubContext<TranscriptionHub> _hub;
     private readonly IJobQueue _queue;
     private readonly ISummarizationSettingsResolver _summarization;
+    private readonly IEmbeddingSettingsResolver _embedding;
     private readonly ISpeakerIdentifier _identifier;
     private readonly WorkerOptions _opts;
 
     public WorkerCallbackController(
         DiarizDbContext db, IHubContext<TranscriptionHub> hub, IJobQueue queue,
-        ISummarizationSettingsResolver summarization, ISpeakerIdentifier identifier, IOptions<WorkerOptions> opts)
+        ISummarizationSettingsResolver summarization, IEmbeddingSettingsResolver embedding,
+        ISpeakerIdentifier identifier, IOptions<WorkerOptions> opts)
     {
         _db = db;
         _hub = hub;
         _queue = queue;
         _summarization = summarization;
+        _embedding = embedding;
         _identifier = identifier;
         _opts = opts.Value;
     }
@@ -116,6 +119,13 @@ public class WorkerCallbackController : ControllerBase
             // chains the meeting-minutes job — so the minutes render the same canonical action set.
             await _queue.EnqueueActionsAsync(new ActionsJob(transcription.RecordingId, transcription.Id));
         }
+
+        // Build/refresh the RAG index for this recording's latest transcription (status-neutral, independent of
+        // summarisation — RAG can be on via a dedicated embeddings endpoint even when summarisation is off). The
+        // processor no-ops if the owner has no endpoint, so only enqueue when embedding is actually configured.
+        var embedCfg = await _embedding.ResolveAsync(transcription.Recording.UserId);
+        if (embedCfg.Enabled)
+            await _queue.EnqueueEmbeddingAsync(new EmbeddingJob(transcription.RecordingId, transcription.Id));
 
         await _hub.NotifyStatusAsync(transcription.Recording.UserId, transcription.RecordingId,
             transcription.Recording.Status.ToString());

@@ -26,6 +26,13 @@ public record ActionsJob(
     Guid RecordingId,
     Guid TranscriptionId);
 
+/// <summary>Job payload for async transcript-chunk embedding (RAG index), consumed by the API's
+/// EmbeddingWorker. The worker windows the transcription's segments, embeds them, and replaces the
+/// recording's existing chunks. No-ops when the owner has no embedding endpoint.</summary>
+public record EmbeddingJob(
+    Guid RecordingId,
+    Guid TranscriptionId);
+
 /// <summary>One diarized, timestamped segment returned by the worker.</summary>
 public record SegmentResult(
     string Speaker,

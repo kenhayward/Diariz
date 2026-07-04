@@ -57,6 +57,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `RemoveGoogleGmailGranted` | drops `UserSettings.GoogleGmailGranted` — the Gmail-draft feature was removed (Gmail scopes are restricted; not worth the security assessment). Calendar access unchanged |
 | `AddMcpAccessTokens` | `McpAccessTokens` (per-user MCP personal access tokens; SHA-256 hash only, **unique** on `TokenHash`, cascade on user delete) — connect Claude to transcripts over `/mcp` |
 | `AddOpenIddict` | `OpenIddictApplications`, `OpenIddictAuthorizations`, `OpenIddictScopes`, `OpenIddictTokens` (OpenIddict EF Core stores, string keys) — the OAuth 2.1 authorization server for the MCP web connector. Registered by `ModelBuilder.UseOpenIddict()`; not owned by an entity class |
+| `AddTranscriptChunks` | `TranscriptChunks` (windowed retrieval chunks for RAG/M3; `vector(768)`, denormalized `RecordingId`/`UserId`, cascade on `Transcription`, index `(UserId, RecordingId)`) — semantic-search index; supersedes the unused `Segment.Embedding` |
 
 ### Entity-relationship overview
 
@@ -68,7 +69,8 @@ ApplicationUser (AspNetUsers)
  ├─1:n─ SpeakerProfile          (cascade)
  └─1:n─ Recording               (FK UserId)
          ├─1:n─ Transcription   (cascade)         (RecordingId, Version) unique
-         │       ├─1:n─ Segment (cascade)         Embedding vector(768)?
+         │       ├─1:n─ Segment (cascade)         Embedding vector(768)? (unused; superseded by TranscriptChunk)
+         │       ├─1:n─ TranscriptChunk (cascade)  Embedding vector(768)?, denormalized RecordingId/UserId
          │       ├─1:1─ Summary (cascade)
          │       └─1:1─ MeetingMinutes (cascade)
          ├─1:n─ Speaker         (cascade)         Embedding vector(192)?, (RecordingId, Label) unique
@@ -141,10 +143,33 @@ A contiguous, single-speaker span of transcribed speech.
 | `Original` | text | the model's verbatim output for this span — never overwritten after the worker writes it |
 | `Revised` | text null | a user edit (later: a translation) of `Original`; null = unchanged. The effective text = `Revised ?? Original` |
 | `Ordinal` | int | order within the transcription |
-| `Embedding` | **vector(768)** null | for RAG retrieval (M3, sized for `nomic-embed-text`); unused/null today; Postgres-only |
+| `Embedding` | **vector(768)** null | legacy per-segment RAG slot - **unused/null**, superseded by `TranscriptChunks` (a segment is too small a retrieval unit); kept to avoid a drop migration; Postgres-only |
 
 Indexes: `(TranscriptionId, Ordinal)`; GIN trigram index `IX_Segments_Text_Trgm` on
 `coalesce("Revised","Original")` (Postgres `pg_trgm`) backing the chat tools' fuzzy transcript search.
+
+#### `TranscriptChunks`
+Windowed retrieval chunks for semantic search (RAG / M3). Each row is a window of consecutive segments
+(`TranscriptChunker`, ~1200 chars with a 1-segment overlap), embedded as a single vector. Built/replaced
+wholesale by the `EmbeddingWorker` on each (re)transcription; a no-op when no embeddings endpoint is
+configured.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `TranscriptionId` | uuid FK → Transcriptions | cascade (chunks die with the transcription) |
+| `RecordingId` | uuid | denormalized owning recording (citation deep-links + fast scoping; no FK) |
+| `UserId` | uuid | denormalized owner, for the owner-scoped vector pre-filter (no FK) |
+| `Ordinal` | int | chunk order within the transcription |
+| `StartMs` / `EndMs` | bigint | span of the covered segments (min start / max end) |
+| `SpeakerLabels` | varchar(1024) | comma-separated distinct speaker display names in the chunk |
+| `Text` | text | the flattened "Speaker: Text" body that was embedded |
+| `Embedding` | **vector(768)** null | chunk embedding (dimension-pinned to the server embed model; `nomic-embed-text` = 768); Postgres-only |
+| `CreatedAt` | timestamptz | |
+
+Indexes: `(UserId, RecordingId)` (owner-scoped pre-filter) and `TranscriptionId`. No ANN index yet - a flat
+scan is fine per-user; HNSW is a later optimization. Chunks are always the latest transcription's (replaced on
+re-transcribe), so retrieval needs no version filtering.
 
 #### `Summaries`
 LLM summary of a specific transcription version (1:1 with `Transcription`).
@@ -363,7 +388,8 @@ tokens. See `Overall_Synopsis_of_Platform.md` for the auth flow.
 | `Speakers.Embedding` | 192 | SpeechBrain ECAPA (`spkrec-ecapa-voxceleb`) | per-recording speaker voiceprint |
 | `SpeakerProfiles.Embedding` | 192 | (centroid of ECAPA) | enrolled person's voiceprint |
 | `ProfileContributions.Embedding` | 192 | ECAPA snapshot | recompute centroids without the worker |
-| `Segments.Embedding` | 768 | `nomic-embed-text` (planned) | RAG over transcript text (M3, unused today) |
+| `TranscriptChunks.Embedding` | 768 | `nomic-embed-text` (server-pinned) | RAG semantic search over windowed transcript passages (M3) |
+| `Segments.Embedding` | 768 | - | legacy, **unused** (superseded by `TranscriptChunks`) |
 
 Changing an embedding model means a migration to resize the column **and** re-enrolment/re-embedding.
 

@@ -13,6 +13,7 @@ public interface IJobQueue
     Task EnqueueMeetingMinutesAsync(MeetingMinutesJob job, CancellationToken ct = default);
     Task EnqueueActionsAsync(ActionsJob job, CancellationToken ct = default);
     Task EnqueueAudioMergeAsync(AudioMergeJob job, CancellationToken ct = default);
+    Task EnqueueEmbeddingAsync(EmbeddingJob job, CancellationToken ct = default);
 }
 
 /// <summary>Producer side of the transcription + summarisation queues, backed by Redis Streams.</summary>
@@ -23,16 +24,18 @@ public class RedisJobQueue : IJobQueue
     private readonly SummarizationOptions _summaryOpts;
     private readonly MeetingMinutesOptions _minutesOpts;
     private readonly ActionsOptions _actionsOpts;
+    private readonly EmbeddingOptions _embeddingOpts;
 
     public RedisJobQueue(IConnectionMultiplexer redis, IOptions<JobQueueOptions> opts,
         IOptions<SummarizationOptions> summaryOpts, IOptions<MeetingMinutesOptions> minutesOpts,
-        IOptions<ActionsOptions> actionsOpts)
+        IOptions<ActionsOptions> actionsOpts, IOptions<EmbeddingOptions> embeddingOpts)
     {
         _redis = redis;
         _opts = opts.Value;
         _summaryOpts = summaryOpts.Value;
         _minutesOpts = minutesOpts.Value;
         _actionsOpts = actionsOpts.Value;
+        _embeddingOpts = embeddingOpts.Value;
     }
 
     public async Task EnqueueAsync(TranscriptionJob job, CancellationToken ct = default)
@@ -68,5 +71,12 @@ public class RedisJobQueue : IJobQueue
         var db = _redis.GetDatabase();
         var payload = JsonSerializer.Serialize(job);
         await db.StreamAddAsync(_opts.MergeStreamKey, "job", payload);
+    }
+
+    public async Task EnqueueEmbeddingAsync(EmbeddingJob job, CancellationToken ct = default)
+    {
+        var db = _redis.GetDatabase();
+        var payload = JsonSerializer.Serialize(job);
+        await db.StreamAddAsync(_embeddingOpts.StreamKey, "job", payload);
     }
 }
