@@ -1112,17 +1112,9 @@ export default function RecordingDetail() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {(isSummarizing || requeuing || translating || rec.status === "Merging") && (
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              {rec.status === "Merging"
-                ? t("workspace:merging")
-                : translating
-                  ? t("workspace:translating")
-                  : isSummarizing
-                    ? t("workspace:summarising")
-                    : t("workspace:queuing")}
-            </span>
-          )}
+          {/* Pipeline progress (summarising / extracting / translating / re-identifying / merging / etc.) is
+              shown only in the global status bar - see the useStatus() effects above - so it isn't duplicated
+              here or in a banner over the tabs. */}
           <DetailToolbar
             onRename={() => setRenaming(true)}
             onCopyLink={copyLink}
@@ -1145,19 +1137,10 @@ export default function RecordingDetail() {
         <p className="rounded bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/30 dark:text-green-300">{actionInfo}</p>
       )}
 
-      {extracting && (
-        <p className="rounded bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-          {t("workspace:extractingActions")}
-        </p>
-      )}
-
       {rec.status === "Failed" && rec.error && (
         <p className="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{rec.error}</p>
       )}
 
-      {isSummarizing && !rec.summary && (
-        <p className="rounded bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">{t("workspace:summarising")}</p>
-      )}
       <DetailTabs tabs={detailTabs} active={tab} onSelect={selectTab} />
 
       {editingSeg && (
