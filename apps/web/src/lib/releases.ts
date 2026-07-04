@@ -93,6 +93,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.80.6",
+    date: "2026-07-04",
+    pr: 182,
+    headline: "Fix: more reliable summaries with local models",
+    summary:
+      "Fixes summaries failing or coming out garbled with some models (often self-hosted ones). The summary " +
+      "prompt was demanding a strict JSON response for what is really just a paragraph, and many models don't " +
+      "hold that format cleanly. It now asks for the summary as plain text (with the auto-generated title on " +
+      "its own line), which models handle far more reliably; responses that still arrive as JSON are accepted " +
+      "too. Deploying it only needs a server redeploy.",
+    fixed: [
+      "The summary prompt no longer demands strict JSON, so summaries (and auto-generated recording names) are more reliable across models.",
+    ],
+  },
+  {
     version: "0.80.5",
     date: "2026-07-03",
     pr: 181,

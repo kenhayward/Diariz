@@ -13,7 +13,7 @@ Tone: professional, concise, third person, past tense. Use neutral business
 language; do not reproduce candid asides or opinions about people or
 organisations.
 
-Respond with ONLY strict minified JSON of the form {output_shape}. Do not wrap it in code fences.
+Respond in plain text, not JSON. {output_shape}
 
 
 
