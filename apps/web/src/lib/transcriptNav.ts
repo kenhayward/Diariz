@@ -46,28 +46,6 @@ export function parseMatchTimes(raw: string | null): number[] {
   return [...new Set(nums)].sort((a, b) => a - b);
 }
 
-/// Index of the next segment spoken by `label` after `fromIdx` (exclusive), or null if there isn't one.
-/// Used by the per-speaker "next segment" button; pass the currently-highlighted index (or -1) as `fromIdx`.
-export function nextSpeakerSegment(
-  segs: ReadonlyArray<{ speaker: string }>,
-  label: string,
-  fromIdx: number,
-): number | null {
-  for (let i = fromIdx + 1; i < segs.length; i++) if (segs[i].speaker === label) return i;
-  return null;
-}
-
-/// Index of the previous segment spoken by `label` before `fromIdx` (exclusive), or null if there isn't one.
-/// Pass the currently-highlighted index (or `segs.length`) as `fromIdx`.
-export function prevSpeakerSegment(
-  segs: ReadonlyArray<{ speaker: string }>,
-  label: string,
-  fromIdx: number,
-): number | null {
-  for (let i = fromIdx - 1; i >= 0; i--) if (segs[i].speaker === label) return i;
-  return null;
-}
-
 /// The index of the segment that contains `ms` (start ≤ ms < end), else the nearest by start time, else -1.
 export function segmentIndexAtMs(segs: ReadonlyArray<{ startMs: number; endMs: number }>, ms: number): number {
   const exact = segs.findIndex((s) => ms >= s.startMs && ms < s.endMs);

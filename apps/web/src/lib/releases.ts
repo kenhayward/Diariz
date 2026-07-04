@@ -97,6 +97,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.84.0",
+    date: "2026-07-04",
+    pr: 188,
+    headline: "Speakers tab: click a speaker to see their segments",
+    summary:
+      "On a recording's Speakers tab, each speaker row is now selectable - click it to show all of that " +
+      "speaker's segments in a table right below the list, in the same format as the Transcript tab " +
+      "(time, speaker, text). Click a segment to play from that point; click the row again to collapse it. " +
+      "This replaces the old per-speaker Previous/Next buttons, which are removed. Web-only - a server " +
+      "redeploy picks it up.",
+    changed: [
+      "Speakers tab rows are now clickable and reveal that speaker's segments in transcript format (click a segment to play from there).",
+      "Removed the per-speaker Previous/Next segment buttons on the Speakers tab (superseded by the click-to-view segment list).",
+    ],
+  },
+  {
     version: "0.83.2",
     date: "2026-07-04",
     pr: 187,
