@@ -71,6 +71,12 @@ services:
       # Reasoning models: send reasoning_effort on LLM requests. Off by default; per-user overridable in Settings.
       Summarization__ReasoningEnabled: ${SUMMARY_REASONING_ENABLED:-false}
       Summarization__ReasoningEffort: ${SUMMARY_REASONING_EFFORT:-medium}
+      # Semantic search (RAG) embeddings. Empty ApiBase reuses the owner's summarisation endpoint; empty
+      # everywhere keeps search lexical. Model + dimension are server-pinned (must match the vector(768) column).
+      Embedding__ApiBase: ${EMBED_API_BASE:-}
+      Embedding__ApiKey: ${EMBED_API_KEY:-}
+      Embedding__Model: ${EMBED_MODEL:-nomic-embed-text}
+      Embedding__Dimension: ${EMBED_DIMENSION:-768}
       # Speaker identification (voiceprints). Threshold is the max cosine distance for an
       # auto-match — conservative by default; tune per your audio (lower = stricter).
       Identification__Enabled: ${IDENTIFICATION_ENABLED:-true}

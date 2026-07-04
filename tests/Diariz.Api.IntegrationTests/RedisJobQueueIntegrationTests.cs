@@ -17,7 +17,7 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
         using var mux = await ConnectionMultiplexer.ConnectAsync(fx.RedisConnectionString);
         var opts = Options.Create(new JobQueueOptions { StreamKey = $"jobs-{Guid.NewGuid()}" });
         var queue = new RedisJobQueue(mux, opts, Options.Create(new SummarizationOptions()),
-            Options.Create(new MeetingMinutesOptions()), Options.Create(new ActionsOptions()));
+            Options.Create(new MeetingMinutesOptions()), Options.Create(new ActionsOptions()), Options.Create(new EmbeddingOptions()));
 
         var job = new TranscriptionJob(Guid.NewGuid(), Guid.NewGuid(), "user/blob.webm", "whisperx-large-v3");
         await queue.EnqueueAsync(job);
@@ -45,7 +45,7 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
         var streamKey = $"sum-{Guid.NewGuid()}";
         var queue = new RedisJobQueue(mux, Options.Create(new JobQueueOptions()),
             Options.Create(new SummarizationOptions { StreamKey = streamKey }),
-            Options.Create(new MeetingMinutesOptions()), Options.Create(new ActionsOptions()));
+            Options.Create(new MeetingMinutesOptions()), Options.Create(new ActionsOptions()), Options.Create(new EmbeddingOptions()));
 
         var job = new SummarizationJob(Guid.NewGuid(), Guid.NewGuid());
         await queue.EnqueueSummarizationAsync(job);
@@ -64,7 +64,7 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
         var streamKey = $"minutes-{Guid.NewGuid()}";
         var queue = new RedisJobQueue(mux, Options.Create(new JobQueueOptions()),
             Options.Create(new SummarizationOptions()),
-            Options.Create(new MeetingMinutesOptions { StreamKey = streamKey }), Options.Create(new ActionsOptions()));
+            Options.Create(new MeetingMinutesOptions { StreamKey = streamKey }), Options.Create(new ActionsOptions()), Options.Create(new EmbeddingOptions()));
 
         var job = new MeetingMinutesJob(Guid.NewGuid(), Guid.NewGuid());
         await queue.EnqueueMeetingMinutesAsync(job);
@@ -83,7 +83,7 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
         var streamKey = $"actions-{Guid.NewGuid()}";
         var queue = new RedisJobQueue(mux, Options.Create(new JobQueueOptions()),
             Options.Create(new SummarizationOptions()), Options.Create(new MeetingMinutesOptions()),
-            Options.Create(new ActionsOptions { StreamKey = streamKey }));
+            Options.Create(new ActionsOptions { StreamKey = streamKey }), Options.Create(new EmbeddingOptions()));
 
         var job = new ActionsJob(Guid.NewGuid(), Guid.NewGuid());
         await queue.EnqueueActionsAsync(job);
@@ -91,6 +91,25 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
         var entries = await mux.GetDatabase().StreamRangeAsync(streamKey, "-", "+");
         var json = Assert.Single(entries).Values.Single(v => v.Name == "job").Value.ToString();
         var roundTripped = JsonSerializer.Deserialize<ActionsJob>(json);
+        Assert.Equal(job.RecordingId, roundTripped!.RecordingId);
+        Assert.Equal(job.TranscriptionId, roundTripped.TranscriptionId);
+    }
+
+    [Fact]
+    public async Task EnqueueEmbeddingAsync_AddsJsonJobToEmbeddingStream()
+    {
+        using var mux = await ConnectionMultiplexer.ConnectAsync(fx.RedisConnectionString);
+        var streamKey = $"embed-{Guid.NewGuid()}";
+        var queue = new RedisJobQueue(mux, Options.Create(new JobQueueOptions()),
+            Options.Create(new SummarizationOptions()), Options.Create(new MeetingMinutesOptions()),
+            Options.Create(new ActionsOptions()), Options.Create(new EmbeddingOptions { StreamKey = streamKey }));
+
+        var job = new EmbeddingJob(Guid.NewGuid(), Guid.NewGuid());
+        await queue.EnqueueEmbeddingAsync(job);
+
+        var entries = await mux.GetDatabase().StreamRangeAsync(streamKey, "-", "+");
+        var json = Assert.Single(entries).Values.Single(v => v.Name == "job").Value.ToString();
+        var roundTripped = JsonSerializer.Deserialize<EmbeddingJob>(json);
         Assert.Equal(job.RecordingId, roundTripped!.RecordingId);
         Assert.Equal(job.TranscriptionId, roundTripped.TranscriptionId);
     }

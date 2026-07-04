@@ -105,6 +105,38 @@ public class ActionsOptions
     public string ConsumerName { get; set; } = "api-1";
 }
 
+/// <summary>Semantic-search (RAG, Milestone 3) embeddings. Unlike the chat/summarisation endpoint (free
+/// per-user), the vector index requires every chunk and every query to use the <b>same model and dimension</b>,
+/// so the model is a server-level, dimension-pinned setting. The endpoint/key fall back to the recording
+/// owner's summarisation endpoint (self-hosters usually run one server, e.g. Ollama, serving both) - see
+/// <c>EmbeddingSettingsResolver</c>. Empty everywhere disables RAG: search stays lexical (unchanged) and
+/// nothing breaks.</summary>
+public class EmbeddingOptions
+{
+    public const string Section = "Embedding";
+
+    /// <summary>Base URL of the OpenAI-compatible embeddings API. Empty = fall back to the owner's
+    /// summarisation endpoint; empty there too disables embedding.</summary>
+    public string ApiBase { get; set; } = "";
+    public string ApiKey { get; set; } = "";
+
+    /// <summary>The embedding model. Its output dimension MUST equal <see cref="Dimension"/> and the
+    /// <c>vector(N)</c> column; changing it means re-embedding + a migration.</summary>
+    public string Model { get; set; } = "nomic-embed-text";
+
+    /// <summary>Embedding dimension - pinned to the <c>TranscriptChunk.Embedding vector(768)</c> column.</summary>
+    public int Dimension { get; set; } = 768;
+
+    public int TimeoutSeconds { get; set; } = 120;
+
+    /// <summary>Max inputs per /embeddings request (chunks are embedded in batches).</summary>
+    public int BatchSize { get; set; } = 32;
+
+    public string StreamKey { get; set; } = "embedding-jobs";
+    public string ConsumerGroup { get; set; } = "embedders";
+    public string ConsumerName { get; set; } = "api-1";
+}
+
 /// <summary>Chat-specific settings. The LLM endpoint/model/key are shared with summarisation
 /// (per-user, via <c>UserSettings</c>); only the context-window size is chat-specific.</summary>
 public class ChatOptions

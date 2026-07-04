@@ -614,6 +614,54 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("Summaries");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.TranscriptChunk", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Vector>("Embedding")
+                        .HasColumnType("vector(768)");
+
+                    b.Property<long>("EndMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("RecordingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SpeakerLabels")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<long>("StartMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TranscriptionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TranscriptionId");
+
+                    b.HasIndex("UserId", "RecordingId");
+
+                    b.ToTable("TranscriptChunks");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.Transcription", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1190,6 +1238,17 @@ namespace Diariz.Domain.Migrations
                     b.HasOne("Diariz.Domain.Entities.Transcription", "Transcription")
                         .WithOne("Summary")
                         .HasForeignKey("Diariz.Domain.Entities.Summary", "TranscriptionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Transcription");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.TranscriptChunk", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.Transcription", "Transcription")
+                        .WithMany()
+                        .HasForeignKey("TranscriptionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
