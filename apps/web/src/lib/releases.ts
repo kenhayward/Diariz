@@ -100,13 +100,17 @@ export const RELEASES: Release[] = [
     version: "0.84.1",
     date: "2026-07-04",
     pr: 189,
-    headline: "Fixes: recording menu layering + no duplicate progress banners",
+    headline: "Recording-page polish + a described Claude connector",
     summary:
-      "Two small recording-page fixes. The kebab (⋮) menu no longer renders behind the sticky tab strip " +
-      "(which clipped its top items, Rename / Copy link). And pipeline progress (summarising, extracting " +
-      "actions, re-identifying speakers, translating, etc.) now shows only in the bottom status bar - the " +
-      "duplicate banner at the top of the recording page has been removed. The recordings list status is " +
-      "unchanged. Web-only.",
+      "A few small fixes. The kebab (⋮) menu no longer renders behind the sticky tab strip (which clipped its " +
+      "top items, Rename / Copy link). Pipeline progress (summarising, extracting actions, re-identifying " +
+      "speakers, translating, etc.) now shows only in the bottom status bar - the duplicate banner at the top " +
+      "of the recording page has been removed (the recordings list status is unchanged). And the Diariz MCP " +
+      "server now advertises a name, description, and usage instructions, so the Claude connector shows what " +
+      "Diariz does instead of just its URL. Server redeploy.",
+    added: [
+      "The Claude / MCP connector now shows a title, description, and usage instructions for Diariz (via the MCP server info + instructions), not just the website address.",
+    ],
     fixed: [
       "The recording detail's ⋮ menu now appears above the sticky tab bar instead of behind it.",
       "Removed the duplicate in-page progress banner on the recording page; summarising / extracting / re-identifying / translating status shows only in the bottom status bar.",

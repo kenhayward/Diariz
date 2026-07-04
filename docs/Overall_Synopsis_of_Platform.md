@@ -276,7 +276,9 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
 Diariz hosts a **Model Context Protocol server in-process** (the official `ModelContextProtocol.AspNetCore`
 SDK) at **`/mcp`** (Streamable HTTP, **stateless** — no server-initiated messages), so a user can connect
 **Claude** (Desktop or Code) directly to *their own* transcripts. It is **not a new deployable** — it runs in
-the API and ships with a **server redeploy**.
+the API and ships with a **server redeploy**. The server advertises its identity in the `initialize` handshake
+(`ServerInfo.Name`/`Title`/`Description` + `ServerInstructions`), so connector clients show what Diariz does
+and the model gets usage guidance — not just the URL.
 
 > **Reverse-proxy requirement.** `/mcp` must be forwarded to the API like `/api` and `/hubs`. The web image's
 > nginx (`apps/web/nginx.conf`) proxies it with **`proxy_buffering off`** (Streamable HTTP streams responses as

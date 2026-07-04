@@ -278,9 +278,31 @@ if (mcpOptions.Enabled)
     // static AsyncLocal, so a plain instance captured here sees the live request). MapMcp runs it in-pipeline.
     var mcpHandlers = new Diariz.Api.Mcp.DiarizMcpHandlers(new HttpContextAccessor());
     var mcpVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+    // Shown to the user by MCP clients (the connector card / description banner) and to the model. Plain text,
+    // no fancy dashes.
+    const string mcpDescription =
+        "Search and read your own Diariz meeting transcripts. Find who said what, when a topic came up, and how "
+        + "long each person spoke; get a recording's summary, meeting minutes, action items, and attendees; and "
+        + "email yourself a summary. Everything is scoped to your account.";
+    const string mcpInstructions =
+        "This server connects to the signed-in user's private Diariz meeting-transcription account. Use its "
+        + "tools to answer questions about the user's OWN recordings: search transcripts, find who said a phrase "
+        + "or when a topic was discussed, count mentions, list recordings, and read a recording's full "
+        + "transcript, summary, meeting minutes, action items, attendees, or per-speaker talk time. Tool results "
+        + "include markdown links back to the exact moment in a transcript - keep them so the user can click "
+        + "through. The server can also email the user a message it composes, but only ever to their own "
+        + "registered address. All access is scoped to the signed-in user; there is no access to other users' "
+        + "data. Prefer these tools over guessing whenever the user asks about their meetings.";
     builder.Services.AddMcpServer(o =>
         {
-            o.ServerInfo = new ModelContextProtocol.Protocol.Implementation { Name = "Diariz", Version = mcpVersion };
+            o.ServerInfo = new ModelContextProtocol.Protocol.Implementation
+            {
+                Name = "Diariz",
+                Title = "Diariz - Meeting Transcripts",
+                Version = mcpVersion,
+                Description = mcpDescription,
+            };
+            o.ServerInstructions = mcpInstructions;
             o.Capabilities = new ModelContextProtocol.Protocol.ServerCapabilities
             {
                 Tools = new ModelContextProtocol.Protocol.ToolsCapability(),
