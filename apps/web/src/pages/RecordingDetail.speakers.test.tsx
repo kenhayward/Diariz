@@ -16,8 +16,8 @@ function row(
     onMulti: () => void;
     onTogglePlay: () => void;
     onDelete: (name: string) => void;
-    onPrev: () => void;
-    onNext: () => void;
+    onSelect: () => void;
+    selected: boolean;
     count: number;
     durationMs: number;
     canPlay: boolean;
@@ -34,15 +34,20 @@ function row(
       profiles={profiles}
       canPlay={handlers.canPlay ?? true}
       playing={handlers.playing ?? false}
+      selected={handlers.selected ?? false}
+      onSelect={handlers.onSelect ?? (() => {})}
       onTogglePlay={handlers.onTogglePlay ?? (() => {})}
       onDelete={handlers.onDelete ?? (() => {})}
-      onPrev={handlers.onPrev ?? (() => {})}
-      onNext={handlers.onNext ?? (() => {})}
       onAssign={handlers.onAssign ?? (() => {})}
       onCreate={handlers.onCreate ?? (() => {})}
       onMulti={handlers.onMulti ?? (() => {})}
     />,
   );
+}
+
+/// The whole row is a button (aria-label "Show <name>'s segments") that toggles the speaker's segment table.
+function speakerRowButton() {
+  return screen.getByRole("button", { name: /show .*'s segments/i });
 }
 
 const speaker = (over: Partial<SpeakerInfo> = {}): SpeakerInfo => ({
@@ -144,13 +149,41 @@ describe("SpeakerRow", () => {
     expect(onDelete).toHaveBeenCalledWith("Alice");
   });
 
-  it("Prev / Next trigger the speaker-segment navigation handlers", () => {
-    const onPrev = vi.fn();
-    const onNext = vi.fn();
-    row(speaker({ displayName: "Alice" }), { onPrev, onNext });
-    fireEvent.click(screen.getByRole("button", { name: /previous segment for alice/i }));
-    fireEvent.click(screen.getByRole("button", { name: /next segment for alice/i }));
-    expect(onPrev).toHaveBeenCalledOnce();
-    expect(onNext).toHaveBeenCalledOnce();
+  it("clicking the row toggles selection of the speaker", () => {
+    const onSelect = vi.fn();
+    row(speaker({ displayName: "Alice" }), { onSelect });
+    fireEvent.click(speakerRowButton());
+    expect(onSelect).toHaveBeenCalledOnce();
+  });
+
+  it("marks the row as pressed when selected", () => {
+    row(speaker({ displayName: "Alice" }), { selected: true });
+    expect(speakerRowButton().getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("clicking the assign typeahead does not toggle selection", () => {
+    const onSelect = vi.fn();
+    row(speaker({ displayName: "Alice" }), { onSelect });
+    openAssign();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("clicking play does not toggle selection", () => {
+    const onSelect = vi.fn();
+    const onTogglePlay = vi.fn();
+    row(speaker({ displayName: "Alice" }), { onSelect, onTogglePlay });
+    fireEvent.click(screen.getByRole("button", { name: /play alice's segments/i }));
+    expect(onTogglePlay).toHaveBeenCalledOnce();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("clicking delete does not toggle selection", () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const onSelect = vi.fn();
+    const onDelete = vi.fn();
+    row(speaker({ displayName: "Alice" }), { onSelect, onDelete });
+    fireEvent.click(screen.getByRole("button", { name: /delete alice's segments/i }));
+    expect(onDelete).toHaveBeenCalledWith("Alice");
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });
