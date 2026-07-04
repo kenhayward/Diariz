@@ -54,7 +54,9 @@ export default function KebabMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-10 mt-1 w-44 overflow-hidden rounded-lg border bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-900"
+          // z-30 keeps the menu above sticky headers (the recording detail tab strip is z-10), which would
+          // otherwise paint over the menu's top items.
+          className="absolute right-0 z-30 mt-1 w-44 overflow-hidden rounded-lg border bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-900"
         >
           {actions.map((a) => (
             <button

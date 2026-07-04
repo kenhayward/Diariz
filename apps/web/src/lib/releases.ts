@@ -97,6 +97,18 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.84.1",
+    date: "2026-07-04",
+    pr: 189,
+    headline: "Fix: recording menu no longer hides behind the tab bar",
+    summary:
+      "Fixes the kebab (⋮) menu on the recording page rendering behind the sticky tab strip, which clipped " +
+      "its top items (Rename / Copy link). The menu now layers above the sticky header. Web-only.",
+    fixed: [
+      "The recording detail's ⋮ menu now appears above the sticky tab bar instead of behind it.",
+    ],
+  },
+  {
     version: "0.84.0",
     date: "2026-07-04",
     pr: 188,
