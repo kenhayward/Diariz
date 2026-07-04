@@ -12,6 +12,14 @@ public record EmbeddingRequestConfig(
     string ApiBase, string ApiKey, string Model, int Dimension, int TimeoutSeconds, int BatchSize)
 {
     public bool Enabled => !string.IsNullOrWhiteSpace(ApiBase);
+
+    /// <summary>Prefix prepended to a query before embedding (nomic task prefix); empty for models that don't
+    /// use them. Applied by the search's semantic arm, not the client.</summary>
+    public string QueryPrefix { get; init; } = "";
+
+    /// <summary>Prefix prepended to each chunk before embedding (nomic task prefix); empty for models that don't
+    /// use them. Applied by the embedding processor, not the client.</summary>
+    public string DocumentPrefix { get; init; } = "";
 }
 
 public interface IEmbeddingSettingsResolver
@@ -61,7 +69,11 @@ public class EmbeddingSettingsResolver : IEmbeddingSettingsResolver
             Model: _emb.Model,
             Dimension: _emb.Dimension,
             TimeoutSeconds: _emb.TimeoutSeconds,
-            BatchSize: Math.Max(1, _emb.BatchSize));
+            BatchSize: Math.Max(1, _emb.BatchSize))
+        {
+            QueryPrefix = _emb.QueryPrefix ?? "",
+            DocumentPrefix = _emb.DocumentPrefix ?? "",
+        };
     }
 
     private static string Coalesce(string? user, string server) =>

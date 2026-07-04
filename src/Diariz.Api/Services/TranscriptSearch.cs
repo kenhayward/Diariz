@@ -138,7 +138,9 @@ public sealed class TranscriptSearch : ITranscriptSearch
         string queryLiteral;
         try
         {
-            var vectors = await _embeddings.EmbedAsync(cfg, [phrase], ct);
+            // Prefix the query with the model's query task instruction (nomic: "search_query: "); empty for
+            // models that don't use prefixes. Must pair with the document prefix used when embedding chunks.
+            var vectors = await _embeddings.EmbedAsync(cfg, [cfg.QueryPrefix + phrase], ct);
             if (vectors.Count == 0 || vectors[0] is not { Length: > 0 } vec) return [];
             queryLiteral = "[" + string.Join(",", vec.Select(f => f.ToString(CultureInfo.InvariantCulture))) + "]";
         }

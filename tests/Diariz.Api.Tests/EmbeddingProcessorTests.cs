@@ -53,6 +53,23 @@ public class EmbeddingProcessorTests
     }
 
     [Fact]
+    public async Task Process_PrefixesChunks_WithDocumentTaskInstruction_ButStoresCleanText()
+    {
+        using var db = TestDb.Create();
+        var (rec, tr) = await Seed(db, Guid.NewGuid());
+        var client = new FakeEmbeddingClient();
+
+        await EmbeddingProcessor.ProcessAsync(db, client, new FakeEmbeddingSettingsResolver(),
+            new EmbeddingJob(rec.Id, tr.Id), NullLogger.Instance);
+
+        // The embedding inputs carry the nomic document prefix...
+        Assert.All(client.LastInputs!, i => Assert.StartsWith("search_document: ", i));
+        // ...but the persisted chunk text does not (prefix is only for the model).
+        var chunks = await db.TranscriptChunks.Where(c => c.RecordingId == rec.Id).ToListAsync();
+        Assert.All(chunks, c => Assert.DoesNotContain("search_document:", c.Text));
+    }
+
+    [Fact]
     public async Task Process_ReplacesExistingChunks_OnReRun()
     {
         using var db = TestDb.Create();

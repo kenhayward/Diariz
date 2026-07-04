@@ -97,6 +97,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.83.1",
+    date: "2026-07-04",
+    pr: 186,
+    headline: "Sharper semantic search (nomic task prefixes)",
+    summary:
+      "Tunes the semantic search from the last releases. The nomic embedding models (the default) were " +
+      "trained with 'search_query:' / 'search_document:' task prefixes and retrieve noticeably better when " +
+      "those are used, so queries and chunks now carry the matching prefix. The stored transcript text is " +
+      "unchanged - the prefix only rides along on the embedding input. For models that don't use prefixes " +
+      "(e.g. OpenAI text-embedding-3-*), set them empty in config. If you already built a semantic index, " +
+      "re-index (re-transcribe or let the startup backfill run) so chunks and queries use the same convention. " +
+      "Server redeploy only.",
+    fixed: [
+      "Semantic search now applies the nomic query/document task prefixes (configurable; empty for non-nomic models) for better retrieval quality.",
+    ],
+  },
+  {
     version: "0.83.0",
     date: "2026-07-04",
     pr: 185,

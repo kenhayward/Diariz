@@ -82,6 +82,20 @@ public class HybridSearchIntegrationTests(ContainersFixture fx)
     }
 
     [Fact]
+    public async Task Search_SemanticArm_PrefixesQuery_WithNomicTaskInstruction()
+    {
+        var (userId, _, _) = await SeedRecording();
+        var client = new FakeEmbeddingClient { Vectors = [Axis(1)] };
+        var resolver = new FakeEmbeddingSettingsResolver(); // default config carries the nomic prefixes
+
+        await using var db = fx.CreateDbContext();
+        await new TranscriptSearch(db, client, resolver).SearchAsync(userId, "budget worries", null, null, 20);
+
+        var input = Assert.Single(client.LastInputs!);
+        Assert.Equal("search_query: budget worries", input); // nomic query prefix applied
+    }
+
+    [Fact]
     public async Task Search_SemanticArm_IsOwnerScoped()
     {
         var (owner, recId, trId) = await SeedRecording();
