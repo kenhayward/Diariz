@@ -173,7 +173,11 @@ public sealed class FakeTranslationClient : ITranslationClient
 public sealed class FakeEmbeddingSettingsResolver : IEmbeddingSettingsResolver
 {
     public EmbeddingRequestConfig Config { get; set; } =
-        new("https://emb.test/v1", "sk-emb", "nomic-embed-text", 768, 60, 32);
+        new("https://emb.test/v1", "sk-emb", "nomic-embed-text", 768, 60, 32)
+        {
+            QueryPrefix = "search_query: ",
+            DocumentPrefix = "search_document: ",
+        };
     public Guid? LastUserId { get; private set; }
 
     public Task<EmbeddingRequestConfig> ResolveAsync(Guid userId, CancellationToken ct = default)

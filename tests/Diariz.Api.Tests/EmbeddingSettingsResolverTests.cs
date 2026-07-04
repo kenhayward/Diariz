@@ -62,6 +62,33 @@ public class EmbeddingSettingsResolverTests
     }
 
     [Fact]
+    public async Task Resolve_CarriesTaskPrefixes_FromOptions()
+    {
+        using var db = TestDb.Create();
+        var emb = new EmbeddingOptions
+        {
+            ApiBase = "http://emb.test/v1", QueryPrefix = "search_query: ", DocumentPrefix = "search_document: ",
+        };
+
+        var cfg = await Build(db, emb, new SummarizationOptions()).ResolveAsync(Guid.NewGuid());
+
+        Assert.Equal("search_query: ", cfg.QueryPrefix);
+        Assert.Equal("search_document: ", cfg.DocumentPrefix);
+    }
+
+    [Fact]
+    public async Task Resolve_AllowsEmptyPrefixes_ForNonNomicModels()
+    {
+        using var db = TestDb.Create();
+        var emb = new EmbeddingOptions { ApiBase = "http://emb.test/v1", QueryPrefix = "", DocumentPrefix = "" };
+
+        var cfg = await Build(db, emb, new SummarizationOptions()).ResolveAsync(Guid.NewGuid());
+
+        Assert.Equal("", cfg.QueryPrefix);
+        Assert.Equal("", cfg.DocumentPrefix);
+    }
+
+    [Fact]
     public async Task Resolve_Disabled_WhenNoEndpointAnywhere()
     {
         using var db = TestDb.Create();

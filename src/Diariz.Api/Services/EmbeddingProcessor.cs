@@ -51,7 +51,10 @@ public static class EmbeddingProcessor
             return;
         }
 
-        var vectors = await client.EmbedAsync(cfg, drafts.Select(d => d.Text).ToList(), ct);
+        // Prefix each chunk with the model's document task instruction (nomic: "search_document: "); empty for
+        // models that don't use prefixes. The stored chunk text stays unprefixed - only the embedding input carries it.
+        var inputs = drafts.Select(d => cfg.DocumentPrefix + d.Text).ToList();
+        var vectors = await client.EmbedAsync(cfg, inputs, ct);
 
         var now = DateTimeOffset.UtcNow;
         var fresh = new List<TranscriptChunk>(drafts.Count);

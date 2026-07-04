@@ -191,8 +191,10 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   startup. Unlike the free per-user chat/summary endpoint, the embedding **model + dimension are server-pinned**
   (every chunk and query must match the `vector(768)` column); the **endpoint/key** are resolved per recording
   owner by `EmbeddingSettingsResolver` - a dedicated `Embedding` config block, else the owner's summarisation
-  endpoint, else the server summarisation default. **Ships inert:** with no embeddings endpoint configured,
-  nothing is enqueued and retrieval stays lexical (`pg_trgm`).
+  endpoint, else the server summarisation default. Chunks and queries carry the model's **task prefixes**
+  (`search_document: ` / `search_query: `, config-driven; the nomic default retrieves better with them, and
+  they're empty-able for models like OpenAI that don't use them). **Ships inert:** with no embeddings endpoint
+  configured, nothing is enqueued and retrieval stays lexical (`pg_trgm`).
 - **Hybrid retrieval (RAG, M3).** `TranscriptSearch.SearchAsync` runs two arms and fuses them: the **lexical**
   arm (pg_trgm word-similarity over segments, as before) and a **semantic** arm that embeds the query
   (`IEmbeddingClient`) and runs a pgvector cosine KNN (`<=>`) over the owner's `TranscriptChunk` embeddings,

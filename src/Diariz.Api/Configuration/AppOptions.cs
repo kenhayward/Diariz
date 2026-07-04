@@ -132,6 +132,15 @@ public class EmbeddingOptions
     /// <summary>Max inputs per /embeddings request (chunks are embedded in batches).</summary>
     public int BatchSize { get; set; } = 32;
 
+    /// <summary>Task-instruction prefix prepended to a <b>search query</b> before embedding. The nomic models
+    /// (the default) were trained with <c>search_query:</c> / <c>search_document:</c> prefixes and retrieve
+    /// noticeably better with them. Set both prefixes empty for models that don't use them (e.g. OpenAI
+    /// <c>text-embedding-3-*</c>). Query and document sides must be paired consistently.</summary>
+    public string QueryPrefix { get; set; } = "search_query: ";
+
+    /// <summary>Task-instruction prefix prepended to each <b>chunk</b> before embedding (see <see cref="QueryPrefix"/>).</summary>
+    public string DocumentPrefix { get; set; } = "search_document: ";
+
     public string StreamKey { get; set; } = "embedding-jobs";
     public string ConsumerGroup { get; set; } = "embedders";
     public string ConsumerName { get; set; } = "api-1";
