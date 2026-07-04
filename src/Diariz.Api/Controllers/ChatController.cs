@@ -33,9 +33,13 @@ public class ChatController : ControllerBase
     /// tools to look beyond the supplied context and to report findings in the standard format.</summary>
     private const string ToolSystemInstruction =
         "You have tools that search the user's full transcript library, which usually contains far more than " +
-        "the context above. Default to using them: whenever the user asks about a person, company, customer, " +
-        "project, or topic — including open-ended questions like \"what do we know about X\" — call " +
-        "search_transcripts (or a more specific tool) to look across their transcripts BEFORE answering. " +
+        "the context above. Search finds passages by meaning as well as exact words, so it can surface a " +
+        "relevant moment even when the user's wording doesn't appear verbatim. When the user scopes their " +
+        "question (a date or period, a person, or a folder/section), narrow the search accordingly - resolve " +
+        "relative dates against today's date given above. Default to using the tools: whenever the user asks " +
+        "about a person, company, customer, project, or topic — including open-ended questions like \"what do " +
+        "we know about X\" — call search_transcripts (or a more specific tool) to look across their transcripts " +
+        "BEFORE answering. " +
         "Never reply that you don't know about something until you have searched and found nothing. Also use a " +
         "tool for questions about who said something, action items, summaries, attendees, or talk time. " +
         "When you report transcript findings, use the format: When (date/time) · Who (speaker) · What (what was " +
@@ -99,7 +103,7 @@ public class ChatController : ControllerBase
             .Select(u => new { u.FullName, u.Email }).FirstOrDefaultAsync(ct);
         var system = ChatContextBuilder.BuildSystemPrompt(
             contexts, req.AttachmentName, req.AttachmentText, documents,
-            ChatContextBuilder.DefaultCharBudget, me?.FullName, me?.Email);
+            ChatContextBuilder.DefaultCharBudget, me?.FullName, me?.Email, DateTimeOffset.UtcNow);
         if (toolCfg.ActiveTools.Count > 0) system += "\n\n" + ToolSystemInstruction;
         var history = (req.Messages ?? []).Select(m => new ChatMessage(m.Role, m.Content)).ToList();
         var messages = ChatContextBuilder.BuildMessages(system, history);

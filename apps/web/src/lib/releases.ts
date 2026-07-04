@@ -93,6 +93,27 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.82.0",
+    date: "2026-07-04",
+    pr: 184,
+    headline: "Semantic search: chat finds meetings by meaning, not just keywords",
+    summary:
+      "Second step of Milestone 3 (RAG). The transcript search behind chat (and the Claude/MCP connector) is " +
+      "now hybrid: it combines the existing keyword search with a semantic search over the embedding index " +
+      "from the last release, fused by Reciprocal Rank Fusion. So asking \"where did we worry about the " +
+      "budget\" can surface a meeting that said \"we can't afford this quarter\" - a match by meaning, with no " +
+      "shared words. Every search tool gets this automatically (nothing new to enable), and chat is told " +
+      "today's date so it can resolve \"last quarter\"/\"yesterday\" when you scope a question. It stays " +
+      "graceful: with no embeddings endpoint configured (or if it's unreachable), search falls back to the " +
+      "keyword-only behaviour, unchanged. Server redeploy only.",
+    added: [
+      "Hybrid transcript search (keyword + semantic vector search fused with Reciprocal Rank Fusion) - powers chat and the Claude/MCP tools when an embeddings endpoint is configured.",
+    ],
+    changed: [
+      "The chat assistant is now given today's date, so it can resolve relative dates (\"last quarter\", \"yesterday\") when filtering your meetings.",
+    ],
+  },
+  {
     version: "0.81.0",
     date: "2026-07-04",
     pr: 183,

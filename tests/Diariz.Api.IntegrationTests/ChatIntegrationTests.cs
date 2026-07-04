@@ -173,7 +173,9 @@ public class ChatIntegrationTests(ContainersFixture fx)
                 [new ChatStreamDelta("Alice mentioned the budget.", null, null)],
             ],
         };
-        var tool = new Diariz.Api.Tools.WhoSaidThatTool(new TranscriptSearch(db));
+        var search = new TranscriptSearch(db, new FakeEmbeddingClient(),
+            new FakeEmbeddingSettingsResolver { Config = new EmbeddingRequestConfig("", "", "m", 768, 60, 32) });
+        var tool = new Diariz.Api.Tools.WhoSaidThatTool(search);
         var controller = BuildController(db, user.Id, chat, activeTools: [tool]);
         var body = new MemoryStream();
         controller.ControllerContext.HttpContext.Response.Body = body;

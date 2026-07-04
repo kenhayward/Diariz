@@ -192,8 +192,17 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   (every chunk and query must match the `vector(768)` column); the **endpoint/key** are resolved per recording
   owner by `EmbeddingSettingsResolver` - a dedicated `Embedding` config block, else the owner's summarisation
   endpoint, else the server summarisation default. **Ships inert:** with no embeddings endpoint configured,
-  nothing is enqueued and search stays lexical (`pg_trgm`). The hybrid (vector + trigram) retrieval and the
-  "All meetings" chat mode that consume this index arrive in the following M3 releases.
+  nothing is enqueued and retrieval stays lexical (`pg_trgm`).
+- **Hybrid retrieval (RAG, M3).** `TranscriptSearch.SearchAsync` runs two arms and fuses them: the **lexical**
+  arm (pg_trgm word-similarity over segments, as before) and a **semantic** arm that embeds the query
+  (`IEmbeddingClient`) and runs a pgvector cosine KNN (`<=>`) over the owner's `TranscriptChunk` embeddings,
+  owner-scoped and optionally restricted to a recording scope. The two ranked lists are merged in C# by
+  **Reciprocal Rank Fusion** (`SearchFusion`, keyed by `(RecordingId, StartMs)`) - so a passage matched by
+  meaning but not by keywords still surfaces. Every existing search tool (and the MCP projection) gets this
+  transparently. **Graceful-off:** no embeddings endpoint (or a speaker filter, or a failed query embedding) →
+  the semantic arm is skipped → identical to the pre-M3 lexical behaviour. The chat system prompt is also given
+  **today's date** so the model can resolve relative-date scoping ("last quarter"). The explicit **"All
+  meetings" chat mode** that pairs with this arrives in the next M3 release.
 - **Editable prompt templates.** The summarise, action-extraction, and meeting-minutes instruction prompts each
   live as a Markdown file under `prompts/` (`summarise.md` / `extract-actions.md` / `meeting-minutes.md`), read
   via a single `IPromptTemplateProvider` (`prompts/<name>.md`) **on each use** so edits (or a volume mount) apply

@@ -46,6 +46,23 @@ public class ChatContextBuilderTests
     }
 
     [Fact]
+    public void BuildSystemPrompt_IncludesTodaysDate_WhenProvided()
+    {
+        var prompt = ChatContextBuilder.BuildSystemPrompt(
+            [Standup], null, null, null, ChatContextBuilder.DefaultCharBudget, null, null,
+            new DateTimeOffset(2026, 7, 4, 12, 0, 0, TimeSpan.Zero));
+
+        Assert.Contains("Today's date is 2026-07-04.", prompt);
+    }
+
+    [Fact]
+    public void BuildSystemPrompt_OmitsTodaysDate_WhenNotProvided()
+    {
+        var prompt = ChatContextBuilder.BuildSystemPrompt([Standup], null, null);
+        Assert.DoesNotContain("Today's date is", prompt);
+    }
+
+    [Fact]
     public void BuildSystemPrompt_IncludesAttachment_WhenPresent()
     {
         var prompt = ChatContextBuilder.BuildSystemPrompt([Standup], "spec.pdf", "The widget must be blue.");
