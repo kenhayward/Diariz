@@ -109,7 +109,7 @@ export const RELEASES: Release[] = [
       "server now advertises a name, description, and usage instructions, so the Claude connector shows what " +
       "Diariz does instead of just its URL. Server redeploy.",
     added: [
-      "The Claude / MCP connector now shows a title, description, and usage instructions for Diariz (via the MCP server info + instructions), not just the website address.",
+      "The Claude / MCP connector now shows Diariz's logo, title, description, a website link, and usage instructions (via the MCP server info + instructions), not just the URL.",
     ],
     fixed: [
       "The recording detail's ⋮ menu now appears above the sticky tab bar instead of behind it.",

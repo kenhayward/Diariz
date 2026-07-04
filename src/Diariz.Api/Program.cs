@@ -293,6 +293,12 @@ if (mcpOptions.Enabled)
         + "through. The server can also email the user a message it composes, but only ever to their own "
         + "registered address. All access is scoped to the signed-in user; there is no access to other users' "
         + "data. Prefer these tools over guessing whenever the user asks about their meetings.";
+    // The connector card icon points at the web app's logo (served at {PublicUrl}/logo.png). Only advertise it
+    // when the public origin resolves to a reachable absolute URL; otherwise omit it (the client shows no icon).
+    var mcpPublicUrl = (builder.Configuration.GetSection(AppPublicOptions.Section).Get<AppPublicOptions>()?.PublicUrl ?? "").TrimEnd('/');
+    var mcpIcons = Uri.TryCreate($"{mcpPublicUrl}/logo.png", UriKind.Absolute, out var logoUri) && logoUri.Scheme is "http" or "https"
+        ? new List<ModelContextProtocol.Protocol.Icon> { new() { Source = logoUri.ToString(), MimeType = "image/png", Sizes = ["616x616"] } }
+        : null;
     builder.Services.AddMcpServer(o =>
         {
             o.ServerInfo = new ModelContextProtocol.Protocol.Implementation
@@ -301,6 +307,9 @@ if (mcpOptions.Enabled)
                 Title = "Diariz - Meeting Transcripts",
                 Version = mcpVersion,
                 Description = mcpDescription,
+                // TODO: swap to the marketing site once it exists; GitHub for now.
+                WebsiteUrl = "https://github.com/kenhayward/Diariz",
+                Icons = mcpIcons,
             };
             o.ServerInstructions = mcpInstructions;
             o.Capabilities = new ModelContextProtocol.Protocol.ServerCapabilities
