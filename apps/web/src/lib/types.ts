@@ -357,6 +357,8 @@ export interface SavedChatContext {
   attachmentText: string | null;
   /// Pull the selected recordings' attachments (files + URLs) into the chat context.
   includeAttachments?: boolean;
+  /// "All meetings" mode: no transcripts pre-loaded; the assistant searches the whole library on demand.
+  searchAllMeetings?: boolean;
 }
 
 export interface ChatConversationSummary {

@@ -47,6 +47,13 @@ public class ChatController : ControllerBase
         "reference a recording or a specific moment, include that markdown link inline so the user can open the " +
         "transcript there. Keep the links exactly as given.";
 
+    /// <summary>Appended in "All meetings" mode: no transcript is pre-loaded, so the model must answer by
+    /// searching the whole library rather than assuming a specific meeting is in context.</summary>
+    private const string AllMeetingsInstruction =
+        "The user has NOT opened or pinned any specific meeting to this conversation - they are asking across " +
+        "their ENTIRE library. Do not assume a particular recording is in context: use the search tools to find " +
+        "the relevant meetings and moments before answering, and cite the recordings you draw from.";
+
     private readonly DiarizDbContext _db;
     private readonly IChatStreamClient _chat;
     private readonly ISummarizationSettingsResolver _settings;
@@ -104,7 +111,11 @@ public class ChatController : ControllerBase
         var system = ChatContextBuilder.BuildSystemPrompt(
             contexts, req.AttachmentName, req.AttachmentText, documents,
             ChatContextBuilder.DefaultCharBudget, me?.FullName, me?.Email, DateTimeOffset.UtcNow);
-        if (toolCfg.ActiveTools.Count > 0) system += "\n\n" + ToolSystemInstruction;
+        if (toolCfg.ActiveTools.Count > 0)
+        {
+            system += "\n\n" + ToolSystemInstruction;
+            if (req.SearchAllMeetings) system += "\n\n" + AllMeetingsInstruction;
+        }
         var history = (req.Messages ?? []).Select(m => new ChatMessage(m.Role, m.Content)).ToList();
         var messages = ChatContextBuilder.BuildMessages(system, history);
         var contextTotal = await _contextResolver.ResolveContextWindowAsync(UserId, ct);

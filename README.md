@@ -49,9 +49,14 @@ erases voiceprints (GDPR — biometric data).
 re-create them, or **email them to yourself** (optionally with the recording's attachments). The minutes also
 travel with the emailed transcript and the Markdown/text/RTF downloads. The Meeting Minutes panel is always
 available (collapsed) with a refresh button to generate them on any recording.
-- **Chat across one or more transcripts** — streaming
+- **Chat across one or more transcripts — or all your meetings at once** (an "All meetings" mode that
+searches your whole library on demand instead of pre-loading transcripts) — streaming
 replies, a context-usage dial, PDF/text attachments, and saved conversations — via a per-user (or
 server-default) OpenAI-compatible LLM endpoint, with the API key encrypted at rest.
+- **Semantic (RAG) search** (opt-in): configure an embeddings endpoint and transcripts are embedded into a
+pgvector index; chat and the tools then search by **meaning as well as keywords** (hybrid vector + trigram,
+fused with Reciprocal Rank Fusion), so a conceptual question finds the right moment even when the words don't
+match. Without an embeddings endpoint, search stays keyword-only.
 - **Chat tools** (opt-in, per-user): the assistant can call **built-in tools** that search your **whole
 transcript library** — *who said a phrase*, *what a person said about a topic*, *search transcripts*, *when a
 topic was discussed*, *count mentions*, *list recordings* (by date / name / speaker / topic), *list action
@@ -199,7 +204,9 @@ The headings in
 
 - **M1 — done:** capture → transcribe (timestamps + diarization) → view.
 - **M2 — done:** multi-user auth + RBAC, LLM summaries, transcript export, re-transcribe with model choice.
-- **M3 — done:** chat across transcripts; speaker identification via enrolled voiceprints (pgvector).
+- **M3 — done:** chat across transcripts, including **semantic (RAG) search** over an embedded transcript
+  index (pgvector) fused with keyword search, and an **"All meetings"** chat mode that answers across your whole
+  library; speaker identification via enrolled voiceprints (pgvector).
 - **M4 — in progress:** windows desktop app, macOS/mobile,  packaging, live streaming.
 
 > **Keep this README current.** When a PR changes what the app does (a new feature, a stack change, or a

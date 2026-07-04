@@ -247,10 +247,12 @@ public record CreateMcpTokenRequest(string? Name);
 // ---- Chat ----
 public record ChatTurnDto(string Role, string Content);
 
-/// <summary>The context a chat turn (or a saved conversation) runs against.</summary>
+/// <summary>The context a chat turn (or a saved conversation) runs against. <paramref name="SearchAllMeetings"/>
+/// is the "All meetings" mode: no transcripts are pre-loaded and the assistant is told to answer by searching
+/// the user's whole library on demand.</summary>
 public record SavedChatContextDto(
     IReadOnlyList<Guid> RecordingIds, string? AttachmentName, string? AttachmentText,
-    bool IncludeAttachments = false);
+    bool IncludeAttachments = false, bool SearchAllMeetings = false);
 
 /// <summary>A streaming chat request: the selected context + the full conversation so far.</summary>
 public record ChatStreamRequest(
@@ -258,7 +260,8 @@ public record ChatStreamRequest(
     string? AttachmentName,
     string? AttachmentText,
     IReadOnlyList<ChatTurnDto> Messages,
-    bool IncludeAttachments = false);
+    bool IncludeAttachments = false,
+    bool SearchAllMeetings = false);
 
 /// <summary>Extracted attachment text returned to the client (held and resent with each turn).</summary>
 public record ChatAttachmentDto(string Name, int Chars, string Text);

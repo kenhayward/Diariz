@@ -16,6 +16,8 @@
   "pickSelected_other": "Transcripciones seleccionadas",
   "pickSelectedHint": "Marcadas con el botón Seleccionar de la lista ({{n}})",
   "pickNoneHint": "Sin contexto de transcripción",
+  "ctxAll": "Todas las reuniones",
+  "pickAllHint": "Buscar en todas tus reuniones",
   "includeAttachments": "Incluir adjuntos",
   "includeAttachmentsHint": "Añade los archivos y enlaces de las grabaciones seleccionadas al contexto",
   "removeAttachment": "Quitar adjunto",

@@ -602,6 +602,7 @@ export const api = {
       attachmentText?: string | null;
       messages: ChatTurn[];
       includeAttachments?: boolean;
+      searchAllMeetings?: boolean;
     },
     handlers: {
       onToken: (token: string) => void;

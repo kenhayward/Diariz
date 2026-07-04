@@ -16,7 +16,8 @@ namespace Diariz.Api.Tests;
 public class ChatControllerTests
 {
     private static (ChatController controller, DiarizDbContext db, FakeChatStreamClient chat) Build(
-        Guid userId, bool llmEnabled = true, FakeAudioStorage? storage = null, FakeUrlFetcher? urlFetcher = null)
+        Guid userId, bool llmEnabled = true, FakeAudioStorage? storage = null, FakeUrlFetcher? urlFetcher = null,
+        FakeChatToolSettingsResolver? toolSettings = null)
     {
         var db = TestDb.Create();
         var chat = new FakeChatStreamClient();
@@ -27,15 +28,23 @@ public class ChatControllerTests
                 : new SummarizationRequestConfig("", "", "test-model", 60),
         };
         var ctxResolver = new ChatContextResolver(db, Options.Create(new ChatOptions { ContextLength = 40000 }));
-        var toolSettings = new FakeChatToolSettingsResolver();
         var orchestrator = new ChatToolOrchestrator(chat);
         var controller = new ChatController(db, chat, settings, ctxResolver, new AttachmentExtractor(),
-            storage ?? new FakeAudioStorage(), urlFetcher ?? new FakeUrlFetcher(), toolSettings, orchestrator)
+            storage ?? new FakeAudioStorage(), urlFetcher ?? new FakeUrlFetcher(),
+            toolSettings ?? new FakeChatToolSettingsResolver(), orchestrator)
         {
             ControllerContext = Http.Context(userId),
         };
         return (controller, db, chat);
     }
+
+    /// <summary>A tool resolver with one active tool, so the tool-usage instructions are appended.</summary>
+    private static FakeChatToolSettingsResolver WithTools() =>
+        new()
+        {
+            MasterEnabled = true,
+            ActiveTools = [new Diariz.Api.Tools.WhoSaidThatTool(new FakeTranscriptSearch())],
+        };
 
     private static async Task<Guid> SeedTranscribedRecording(DiarizDbContext db, Guid userId)
     {
@@ -328,6 +337,36 @@ public class ChatControllerTests
         Assert.Contains("Ship in Q3.", system);
         Assert.Contains("Roadmap", system);
         Assert.Contains("spec.txt", system);
+    }
+
+    [Fact]
+    public async Task Stream_AllMeetings_AddsSearchLibraryInstruction_WhenToolsActive()
+    {
+        var me = Guid.NewGuid();
+        var (controller, _, chat) = Build(me, toolSettings: WithTools());
+        controller.ControllerContext.HttpContext.Response.Body = new MemoryStream();
+
+        await controller.Stream(
+            new ChatStreamRequest([], null, null, [new ChatTurnDto("user", "What did we decide about pricing?")],
+                SearchAllMeetings: true),
+            default);
+
+        var system = chat.LastMessages![0].Content;
+        Assert.Contains("ENTIRE library", system);      // the all-meetings instruction
+    }
+
+    [Fact]
+    public async Task Stream_NotAllMeetings_OmitsSearchLibraryInstruction()
+    {
+        var me = Guid.NewGuid();
+        var (controller, _, chat) = Build(me, toolSettings: WithTools());
+        controller.ControllerContext.HttpContext.Response.Body = new MemoryStream();
+
+        await controller.Stream(
+            new ChatStreamRequest([], null, null, [new ChatTurnDto("user", "Hi")]), default);
+
+        var system = chat.LastMessages![0].Content;
+        Assert.DoesNotContain("ENTIRE library", system); // tool instruction present, but not the all-meetings one
     }
 
     [Fact]

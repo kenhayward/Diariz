@@ -35,9 +35,13 @@ the recording's attachments). It **automatically extracts action items** (with a
 the pipeline into an editable table, and **tracks them across all your meetings** in a dedicated **Actions** view - filter by person, mark
 items done (with a completion date), and jump from an action back to the transcript it came from. It can
 **translate** a transcript (segments, summary, and actions) into your chosen language, and let you
-**chat across one or more transcripts** - with file attachments, a context-usage dial, and saved
+**chat across one or more transcripts - or all your meetings at once** (an "All meetings" mode) - with file
+attachments, a context-usage dial, and saved
 conversations - using an OpenAI-compatible LLM endpoint you configure. The chat can also call **built-in
-tools** that search your **whole transcript library** - who said a phrase, what a person said about a topic,
+tools** that search your **whole transcript library** - and, when an embeddings endpoint is configured, that
+search is **semantic**, finding the right moments by **meaning as well as keywords** (so "worried about the
+budget" can surface a meeting that said "we can't afford this quarter"). The tools answer who said a phrase,
+what a person said about a topic,
 which recordings exist or mention something, action items, summaries, attendees, talk time, the lines
 around a moment, and a recording's **full transcript, meeting minutes, or details** - answering with
 **When · Who · What** and **linking back to the transcript** (click a link
@@ -92,6 +96,24 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.83.0",
+    date: "2026-07-04",
+    pr: 185,
+    headline: "Chat across all your meetings at once",
+    summary:
+      "Final step of Milestone 3 (RAG). Chat gains an 'All meetings' context mode alongside Current, " +
+      "Selected, and None: pick it and the assistant answers by searching your entire library on demand " +
+      "(nothing is pre-loaded, so it's a cheap way to ask cross-meeting questions like \"what did we decide " +
+      "about pricing last quarter?\"). Combined with the semantic search from the previous releases, it finds " +
+      "the right moments across many recordings by meaning - then cites and links back to them. To narrow a " +
+      "search just say so in plain language (a date or period, a person, a folder); there are no filter " +
+      "widgets to fiddle with. Works best with an embeddings endpoint configured (for semantic search) and " +
+      "chat tools enabled; without them it stays keyword-based. Server redeploy only.",
+    added: [
+      "An 'All meetings' chat context mode - ask questions across your whole library without pre-loading any transcript; the assistant searches and cites the relevant meetings.",
+    ],
+  },
   {
     version: "0.82.0",
     date: "2026-07-04",
