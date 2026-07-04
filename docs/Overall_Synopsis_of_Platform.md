@@ -201,8 +201,11 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   meaning but not by keywords still surfaces. Every existing search tool (and the MCP projection) gets this
   transparently. **Graceful-off:** no embeddings endpoint (or a speaker filter, or a failed query embedding) →
   the semantic arm is skipped → identical to the pre-M3 lexical behaviour. The chat system prompt is also given
-  **today's date** so the model can resolve relative-date scoping ("last quarter"). The explicit **"All
-  meetings" chat mode** that pairs with this arrives in the next M3 release.
+  **today's date** so the model can resolve relative-date scoping ("last quarter"). Chat exposes this as an
+  **"All meetings" context mode** (alongside Current / Selected / None): the request sets `SearchAllMeetings`,
+  no transcripts are pre-loaded, and the system prompt tells the model to answer by searching the whole library
+  and citing the meetings it draws from. Finer filters (dates, people, folders) are typed in plain language and
+  resolved by the model - there are no filter widgets. **Milestone 3 (RAG) is shipped.**
 - **Editable prompt templates.** The summarise, action-extraction, and meeting-minutes instruction prompts each
   live as a Markdown file under `prompts/` (`summarise.md` / `extract-actions.md` / `meeting-minutes.md`), read
   via a single `IPromptTemplateProvider` (`prompts/<name>.md`) **on each use** so edits (or a volume mount) apply

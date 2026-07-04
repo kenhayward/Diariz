@@ -16,6 +16,8 @@
   "pickSelected_other": "Transcriptions sélectionnées",
   "pickSelectedHint": "Cochées via le bouton Sélectionner de la liste ({{n}})",
   "pickNoneHint": "Aucun contexte de transcription",
+  "ctxAll": "Toutes les réunions",
+  "pickAllHint": "Rechercher dans toutes vos réunions",
   "includeAttachments": "Inclure les pièces jointes",
   "includeAttachmentsHint": "Ajoute au contexte les fichiers et liens des enregistrements sélectionnés",
   "removeAttachment": "Retirer la pièce jointe",

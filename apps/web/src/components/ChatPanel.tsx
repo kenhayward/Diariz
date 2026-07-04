@@ -28,7 +28,7 @@ import type { AttachmentDraft, ChatConversationSummary, ChatTurn, ChatUsage } fr
 import ContextDial from "./ContextDial";
 import PickRecordingModal from "./PickRecordingModal";
 
-type ContextMode = "current" | "selected" | "none";
+type ContextMode = "current" | "selected" | "all" | "none";
 
 /// Right-panel chat: ask questions over one or more transcripts, attach a PDF/text file as extra
 /// context, watch the reply stream in, and save / reload / delete conversations.
@@ -310,6 +310,7 @@ export default function ChatPanel() {
           attachmentText: attachment?.text ?? null,
           messages: history,
           includeAttachments: includeAttachments && recordingIds.length > 0,
+          searchAllMeetings: contextMode === "all",
         },
         {
           onToken: (tok) => {
@@ -405,7 +406,9 @@ export default function ChatPanel() {
       setMessages(c.messages);
       // Restore the conversation's transcripts as the shared selection and switch to that mode.
       const ids = c.context.recordingIds ?? [];
-      if (ids.length > 0) {
+      if (c.context.searchAllMeetings) {
+        setContextMode("all");
+      } else if (ids.length > 0) {
         selection.set(ids);
         setContextMode("selected");
       } else {
@@ -436,6 +439,7 @@ export default function ChatPanel() {
         attachmentName: attachment?.name ?? null,
         attachmentText: attachment?.text ?? null,
         includeAttachments,
+        searchAllMeetings: contextMode === "all",
       },
     };
     try {
@@ -469,7 +473,9 @@ export default function ChatPanel() {
       ? t("ctxCurrent")
       : contextMode === "selected"
         ? t("ctxSelected", { n: selection.selectedIds.length })
-        : t("ctxNone");
+        : contextMode === "all"
+          ? t("ctxAll")
+          : t("ctxNone");
 
   // Localized "Tool call: …" indicator: translate the prefix and each tool's friendly name (falling back to
   // a humanized form of the snake_case id when a label isn't translated).
@@ -617,6 +623,7 @@ export default function ChatPanel() {
                   [
                     { mode: "current", label: t("ctxCurrent"), hint: t("pickCurrentHint") },
                     { mode: "selected", label: t("pickSelected", { count: selection.selectedIds.length }), hint: t("pickSelectedHint", { n: selection.selectedIds.length }) },
+                    { mode: "all", label: t("ctxAll"), hint: t("pickAllHint") },
                     { mode: "none", label: t("ctxNone"), hint: t("pickNoneHint") },
                   ] as { mode: ContextMode; label: string; hint: string }[]
                 ).map((o) => (
@@ -644,7 +651,7 @@ export default function ChatPanel() {
                   <input
                     type="checkbox"
                     checked={includeAttachments}
-                    disabled={contextMode === "none"}
+                    disabled={contextMode === "none" || contextMode === "all"}
                     onChange={(e) => setIncludeAttachments(e.target.checked)}
                     className="mt-0.5"
                   />

@@ -16,6 +16,8 @@
   "pickSelected_other": "Ausgewählte Transkriptionen",
   "pickSelectedHint": "Über die Schaltfläche „Auswählen“ der Liste markiert ({{n}})",
   "pickNoneHint": "Kein Transkriptionskontext",
+  "ctxAll": "Alle Besprechungen",
+  "pickAllHint": "In allen Besprechungen suchen",
   "includeAttachments": "Anhänge einbeziehen",
   "includeAttachmentsHint": "Dateien und Links der ausgewählten Aufnahmen zum Kontext hinzufügen",
   "removeAttachment": "Anhang entfernen",
