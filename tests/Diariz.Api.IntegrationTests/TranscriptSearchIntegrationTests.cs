@@ -1,16 +1,25 @@
 using Diariz.Api.IntegrationTests.Infrastructure;
 using Diariz.Api.Services;
+using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Diariz.Api.IntegrationTests;
 
-/// <summary>The pg_trgm-backed transcript search: ownership, current-version filtering, fuzzy phrase
-/// matching, speaker filter, and the recording-level <c>contains</c> topic filter.</summary>
+/// <summary>The pg_trgm-backed lexical arm of transcript search: ownership, current-version filtering, fuzzy
+/// phrase matching, speaker filter, and the recording-level <c>contains</c> topic filter. Built with embeddings
+/// disabled so the semantic arm is skipped (hybrid ranking is covered in HybridSearchIntegrationTests).</summary>
 [Collection(IntegrationCollection.Name)]
 public class TranscriptSearchIntegrationTests(ContainersFixture fx)
 {
+    /// <summary>A lexical-only search service (no embeddings endpoint → semantic arm skipped).</summary>
+    private static TranscriptSearch MakeSearch(DiarizDbContext db) =>
+        new(db, new FakeEmbeddingClient(), new FakeEmbeddingSettingsResolver
+        {
+            Config = new EmbeddingRequestConfig("", "", "nomic-embed-text", 768, 60, 32),
+        });
+
     private static readonly DateTimeOffset June1 = new(2026, 6, 1, 9, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset June10 = new(2026, 6, 10, 9, 0, 0, TimeSpan.Zero);
 
@@ -63,7 +72,7 @@ public class TranscriptSearchIntegrationTests(ContainersFixture fx)
             ("SPEAKER_01", "Bob", "I agree with reducing spend."));
 
         await using var db = fx.CreateDbContext();
-        var hits = await new TranscriptSearch(db).SearchAsync(user, "budget", null, null, 20);
+        var hits = await MakeSearch(db).SearchAsync(user, "budget", null, null, 20);
 
         var hit = Assert.Single(hits);
         Assert.Equal("Alice", hit.SpeakerName);
@@ -81,7 +90,7 @@ public class TranscriptSearchIntegrationTests(ContainersFixture fx)
             ("SPEAKER_01", "Bob", "We must cut the budget too."));
 
         await using var db = fx.CreateDbContext();
-        var hits = await new TranscriptSearch(db).SearchAsync(user, "cut the budget", "Bob", null, 20);
+        var hits = await MakeSearch(db).SearchAsync(user, "cut the budget", "Bob", null, 20);
 
         var hit = Assert.Single(hits);
         Assert.Equal("Bob", hit.SpeakerName);
@@ -95,7 +104,7 @@ public class TranscriptSearchIntegrationTests(ContainersFixture fx)
         await SeedRecording(owner, "Secret", June1, ("SPEAKER_00", "Alice", "The password is hunter2."));
 
         await using var db = fx.CreateDbContext();
-        Assert.Empty(await new TranscriptSearch(db).SearchAsync(other, "password", null, null, 20));
+        Assert.Empty(await MakeSearch(db).SearchAsync(other, "password", null, null, 20));
     }
 
     [Fact]
@@ -119,7 +128,7 @@ public class TranscriptSearchIntegrationTests(ContainersFixture fx)
         }
 
         await using var verify = fx.CreateDbContext();
-        Assert.Empty(await new TranscriptSearch(verify).SearchAsync(user, "pomegranate", null, null, 20));
+        Assert.Empty(await MakeSearch(verify).SearchAsync(user, "pomegranate", null, null, 20));
     }
 
     [Fact]
@@ -132,7 +141,7 @@ public class TranscriptSearchIntegrationTests(ContainersFixture fx)
             ("SPEAKER_00", "Carol", "Let's talk about the sprint board."));
 
         await using var db = fx.CreateDbContext();
-        var recs = await new TranscriptSearch(db)
+        var recs = await MakeSearch(db)
             .ListRecordingsAsync(user, null, null, null, null, "budget", 20);
 
         var rec = Assert.Single(recs);
@@ -149,7 +158,7 @@ public class TranscriptSearchIntegrationTests(ContainersFixture fx)
         await SeedRecording(user, "Standup", June10, ("SPEAKER_00", "Carol", "sprint board"));
 
         await using var db = fx.CreateDbContext();
-        var search = new TranscriptSearch(db);
+        var search = MakeSearch(db);
 
         var bySpeaker = await search.ListRecordingsAsync(user, null, null, null, "Carol", null, 20);
         Assert.Equal("Standup", Assert.Single(bySpeaker).RecordingName);

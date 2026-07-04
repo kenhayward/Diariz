@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Diariz.Api.Services;
 
-/// <summary>A single transcript-segment match: the standard When / Who / What plus a relevance score.</summary>
+/// <summary>A single transcript match: the standard When / Who / What plus a relevance score.</summary>
 public sealed record TranscriptHit(
     Guid RecordingId, string RecordingName, DateTimeOffset RecordingCreatedAt,
     long StartMs, string SpeakerName, string Text, double Similarity);
@@ -19,13 +19,17 @@ public sealed record RecordingHit(
     Guid RecordingId, string RecordingName, DateTimeOffset RecordingCreatedAt,
     string Source, long DurationMs, IReadOnlyList<string> Speakers, string? BestSnippet);
 
-/// <summary>Fuzzy transcript search over the user's recordings, backed by the Postgres pg_trgm GIN index on
-/// <c>coalesce("Revised","Original")</c>. Always scoped to the owning user and the current (highest-version)
-/// transcription. Postgres-only (raw SQL) — verified by integration tests; faked in unit tests.</summary>
+/// <summary>Hybrid transcript search over the user's recordings: a lexical arm (Postgres pg_trgm word-similarity
+/// over segments) fused with a semantic arm (pgvector cosine KNN over <c>TranscriptChunk</c> embeddings) via
+/// Reciprocal Rank Fusion. Always scoped to the owning user and the current (highest-version) transcription. When
+/// no embeddings endpoint is configured (or the query embedding fails, or a speaker filter is set), the semantic
+/// arm is skipped and results are pure lexical - identical to the pre-M3 behaviour. Postgres-only (raw SQL) -
+/// verified by integration tests; faked in unit tests.</summary>
 public interface ITranscriptSearch
 {
-    /// <summary>Segments whose effective text fuzzy-matches <paramref name="phrase"/>, ranked by similarity.
-    /// Optionally restricted to <paramref name="recordingScope"/> and a <paramref name="speakerName"/>.</summary>
+    /// <summary>Segments/passages whose text matches <paramref name="phrase"/> lexically and/or semantically,
+    /// ranked by fused relevance. Optionally restricted to <paramref name="recordingScope"/> and a
+    /// <paramref name="speakerName"/> (a speaker filter forces the lexical-only path).</summary>
     Task<IReadOnlyList<TranscriptHit>> SearchAsync(
         Guid userId, string phrase, string? speakerName,
         IReadOnlyList<Guid>? recordingScope, int limit, CancellationToken ct = default);
@@ -52,8 +56,16 @@ public sealed class TranscriptSearch : ITranscriptSearch
         "t.\"Version\" = (SELECT MAX(t2.\"Version\") FROM \"Transcriptions\" t2 WHERE t2.\"RecordingId\" = r.\"Id\")";
 
     private readonly DiarizDbContext _db;
+    private readonly IEmbeddingClient _embeddings;
+    private readonly IEmbeddingSettingsResolver _embeddingSettings;
 
-    public TranscriptSearch(DiarizDbContext db) => _db = db;
+    public TranscriptSearch(
+        DiarizDbContext db, IEmbeddingClient embeddings, IEmbeddingSettingsResolver embeddingSettings)
+    {
+        _db = db;
+        _embeddings = embeddings;
+        _embeddingSettings = embeddingSettings;
+    }
 
     public async Task<IReadOnlyList<TranscriptHit>> SearchAsync(
         Guid userId, string phrase, string? speakerName,
@@ -65,6 +77,20 @@ public sealed class TranscriptSearch : ITranscriptSearch
         var scope = recordingScope is { Count: > 0 } ? recordingScope.Distinct().ToArray() : null;
         var hasSpeaker = !string.IsNullOrWhiteSpace(speakerName);
 
+        var lexical = await LexicalSearchAsync(userId, phrase, speakerName, scope, limit, hasSpeaker, ct);
+
+        // Semantic arm: only when embeddings are on and no speaker filter (a chunk spans multiple speakers, so
+        // speaker-scoped queries stay lexical). Any failure degrades gracefully to lexical-only.
+        var semantic = hasSpeaker ? [] : await SemanticSearchAsync(userId, phrase, scope, limit, ct);
+
+        // Off / no semantic hits → return today's exact lexical result (unchanged scores + order).
+        return semantic.Count == 0 ? lexical : SearchFusion.Fuse(lexical, semantic, limit);
+    }
+
+    private async Task<IReadOnlyList<TranscriptHit>> LexicalSearchAsync(
+        Guid userId, string phrase, string? speakerName, Guid[]? scope, int limit, bool hasSpeaker,
+        CancellationToken ct)
+    {
         var sql = new StringBuilder();
         sql.Append(
             "SELECT r.\"Id\", COALESCE(r.\"Name\", r.\"Title\"), r.\"CreatedAt\", s.\"StartMs\", " +
@@ -96,6 +122,57 @@ public sealed class TranscriptSearch : ITranscriptSearch
                     reader.GetGuid(0), reader.GetString(1), reader.GetFieldValue<DateTimeOffset>(2),
                     reader.GetInt64(3), reader.GetString(4), reader.GetString(5),
                     reader.GetFieldValue<float>(6)));
+            return (IReadOnlyList<TranscriptHit>)hits;
+        });
+    }
+
+    /// <summary>Vector arm: embeds the query and finds the nearest transcript chunks by pgvector cosine distance
+    /// (<c>&lt;=&gt;</c>), owner-scoped and optionally restricted to <paramref name="scope"/>. Returns [] (and the
+    /// caller falls back to lexical-only) when embeddings are unconfigured or the query embedding fails.</summary>
+    private async Task<IReadOnlyList<TranscriptHit>> SemanticSearchAsync(
+        Guid userId, string phrase, Guid[]? scope, int limit, CancellationToken ct)
+    {
+        var cfg = await _embeddingSettings.ResolveAsync(userId, ct);
+        if (!cfg.Enabled) return [];
+
+        string queryLiteral;
+        try
+        {
+            var vectors = await _embeddings.EmbedAsync(cfg, [phrase], ct);
+            if (vectors.Count == 0 || vectors[0] is not { Length: > 0 } vec) return [];
+            queryLiteral = "[" + string.Join(",", vec.Select(f => f.ToString(CultureInfo.InvariantCulture))) + "]";
+        }
+        catch
+        {
+            // Embedding endpoint down/misconfigured → degrade to lexical-only rather than failing the search.
+            return [];
+        }
+
+        var sql = new StringBuilder();
+        sql.Append(
+            "SELECT c.\"RecordingId\", COALESCE(r.\"Name\", r.\"Title\"), r.\"CreatedAt\", c.\"StartMs\", " +
+            "c.\"SpeakerLabels\", c.\"Text\", 1 - (c.\"Embedding\" <=> @qvec::vector) AS sim " +
+            "FROM \"TranscriptChunks\" c " +
+            "JOIN \"Recordings\" r ON r.\"Id\" = c.\"RecordingId\" " +
+            "WHERE c.\"UserId\" = @userId AND c.\"Embedding\" IS NOT NULL");
+        if (scope is not null) sql.Append(" AND c.\"RecordingId\" = ANY(@scope)");
+        sql.Append(" ORDER BY c.\"Embedding\" <=> @qvec::vector LIMIT @limit");
+
+        return await RunAsync(ct, async cmd =>
+        {
+            cmd.CommandText = sql.ToString();
+            Add(cmd, "userId", userId);
+            Add(cmd, "qvec", queryLiteral);
+            Add(cmd, "limit", limit);
+            if (scope is not null) Add(cmd, "scope", scope);
+
+            var hits = new List<TranscriptHit>();
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                hits.Add(new TranscriptHit(
+                    reader.GetGuid(0), reader.GetString(1), reader.GetFieldValue<DateTimeOffset>(2),
+                    reader.GetInt64(3), reader.GetString(4), reader.GetString(5),
+                    reader.GetFieldValue<double>(6)));
             return (IReadOnlyList<TranscriptHit>)hits;
         });
     }
@@ -177,7 +254,7 @@ public sealed class TranscriptSearch : ITranscriptSearch
 
     /// <summary>Opens a connection + transaction, applies the trigram threshold for this query, and runs the
     /// supplied reader. The threshold is set transaction-locally so the <c>%&gt;</c> operator can use the GIN
-    /// index while matching our chosen sensitivity.</summary>
+    /// index while matching our chosen sensitivity. (Harmless for the vector query, which ignores it.)</summary>
     private async Task<T> RunAsync<T>(CancellationToken ct, Func<DbCommand, Task<T>> run)
     {
         var conn = _db.Database.GetDbConnection();
