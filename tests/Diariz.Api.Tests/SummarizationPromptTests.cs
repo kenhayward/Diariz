@@ -32,10 +32,22 @@ public class SummarizationPromptTests
     }
 
     [Fact]
-    public void BuildMessages_AsksForName_OnlyWhenNeeded()
+    public void BuildMessages_RequestsPlainText_NotJson()
     {
-        Assert.Contains("\"name\"", SummarizationPrompt.BuildMessages(SummarizationPrompt.DefaultTemplate, Segments, needName: true)[0].Content);
-        Assert.DoesNotContain("\"name\"", SummarizationPrompt.BuildMessages(SummarizationPrompt.DefaultTemplate, Segments, needName: false)[0].Content);
+        // The prompt must not demand strict/structured JSON (local models mangle it).
+        var system = SummarizationPrompt.BuildMessages(SummarizationPrompt.DefaultTemplate, Segments, needName: false)[0].Content;
+        Assert.Contains("plain text", system, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("{output_shape}", system); // placeholder was substituted
+        Assert.DoesNotContain("minified JSON", system, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BuildMessages_AsksForTitle_OnlyWhenNeeded()
+    {
+        var withName = SummarizationPrompt.BuildMessages(SummarizationPrompt.DefaultTemplate, Segments, needName: true)[0].Content;
+        var noName = SummarizationPrompt.BuildMessages(SummarizationPrompt.DefaultTemplate, Segments, needName: false)[0].Content;
+        Assert.Contains("title", withName, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("title", noName, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -46,8 +58,78 @@ public class SummarizationPromptTests
         Assert.True(user.Length <= "Transcript:\n".Length + 10);
     }
 
+    // ---- Plain-text responses (the expected path) ----
+
     [Fact]
-    public void ParseResponse_ExtractsSummaryAndName()
+    public void ParseResponse_PlainText_IsTheSummary_WhenNoNameNeeded()
+    {
+        var json = ChatResponse("The team agreed to ship on Friday and Bob will write the tests.");
+
+        var result = SummarizationPrompt.ParseResponse(json, needName: false);
+
+        Assert.Equal("The team agreed to ship on Friday and Bob will write the tests.", result.Summary);
+        Assert.Null(result.Name);
+    }
+
+    [Fact]
+    public void ParseResponse_TitleFirstLine_ThenSummary_WhenNameNeeded()
+    {
+        var json = ChatResponse("Ship Friday\nThe team agreed to ship on Friday.");
+
+        var result = SummarizationPrompt.ParseResponse(json, needName: true);
+
+        Assert.Equal("Ship Friday", result.Name);
+        Assert.Equal("The team agreed to ship on Friday.", result.Summary);
+    }
+
+    [Fact]
+    public void ParseResponse_CleansTitleLine_LabelsAndQuotes()
+    {
+        var json = ChatResponse("Title: \"Ship Friday\"\n\nThe team agreed to ship on Friday.");
+
+        var result = SummarizationPrompt.ParseResponse(json, needName: true);
+
+        Assert.Equal("Ship Friday", result.Name);
+        Assert.Equal("The team agreed to ship on Friday.", result.Summary);
+    }
+
+    [Fact]
+    public void ParseResponse_SingleLine_IsSummaryNotTitle_WhenNameNeeded()
+    {
+        // Only one line: treat it as the summary (the model skipped the title), not as a bare title.
+        var json = ChatResponse("The team agreed to ship on Friday.");
+
+        var result = SummarizationPrompt.ParseResponse(json, needName: true);
+
+        Assert.Equal("The team agreed to ship on Friday.", result.Summary);
+        Assert.Null(result.Name);
+    }
+
+    [Fact]
+    public void ParseResponse_StripsCodeFence_PlainText()
+    {
+        var json = ChatResponse("```\nAll good.\n```");
+
+        var result = SummarizationPrompt.ParseResponse(json, needName: false);
+
+        Assert.Equal("All good.", result.Summary);
+    }
+
+    [Fact]
+    public void ParseResponse_StripsModelTokens_InPlainText()
+    {
+        var json = ChatResponse("<|channel|>final<|message|>Just prose, no JSON here.");
+
+        var result = SummarizationPrompt.ParseResponse(json, needName: true);
+
+        Assert.DoesNotContain("<|", result.Summary);
+        Assert.Contains("Just prose", result.Summary);
+    }
+
+    // ---- Defensive: still parse a JSON object if a model emits one despite the plain-text ask ----
+
+    [Fact]
+    public void ParseResponse_StillExtractsJson_WhenModelEmitsIt()
     {
         var json = ChatResponse("{\"summary\":\"All good.\",\"name\":\"Ship Friday\"}");
 
@@ -58,7 +140,7 @@ public class SummarizationPromptTests
     }
 
     [Fact]
-    public void ParseResponse_IgnoresName_WhenNotNeeded()
+    public void ParseResponse_IgnoresJsonName_WhenNotNeeded()
     {
         var json = ChatResponse("{\"summary\":\"All good.\",\"name\":\"Ship Friday\"}");
 
@@ -66,16 +148,6 @@ public class SummarizationPromptTests
 
         Assert.Equal("All good.", result.Summary);
         Assert.Null(result.Name);
-    }
-
-    [Fact]
-    public void ParseResponse_StripsCodeFence()
-    {
-        var json = ChatResponse("```json\n{\"summary\":\"Fenced.\"}\n```");
-
-        var result = SummarizationPrompt.ParseResponse(json, needName: false);
-
-        Assert.Equal("Fenced.", result.Summary);
     }
 
     [Fact]
@@ -88,38 +160,5 @@ public class SummarizationPromptTests
 
         Assert.Equal("All good.", result.Summary);
         Assert.Equal("Sync", result.Name);
-    }
-
-    [Fact]
-    public void ParseResponse_ExtractsJson_WrappedInProse()
-    {
-        var json = ChatResponse("Sure! Here is the summary:\n{\"summary\":\"Done.\"}\nHope that helps.");
-
-        var result = SummarizationPrompt.ParseResponse(json, needName: false);
-
-        Assert.Equal("Done.", result.Summary);
-    }
-
-    [Fact]
-    public void ParseResponse_StripsModelTokens_InPlainTextFallback()
-    {
-        var json = ChatResponse("<|channel|>final<|message|>Just prose, no JSON here.");
-
-        var result = SummarizationPrompt.ParseResponse(json, needName: true);
-
-        Assert.DoesNotContain("<|", result.Summary);
-        Assert.Contains("Just prose", result.Summary);
-        Assert.Null(result.Name);
-    }
-
-    [Fact]
-    public void ParseResponse_FallsBackToRawContent_OnMalformedJson()
-    {
-        var json = ChatResponse("Just a plain sentence, not JSON.");
-
-        var result = SummarizationPrompt.ParseResponse(json, needName: true);
-
-        Assert.Equal("Just a plain sentence, not JSON.", result.Summary);
-        Assert.Null(result.Name);
     }
 }
