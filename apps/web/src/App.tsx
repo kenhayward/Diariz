@@ -10,6 +10,7 @@ import RequestAccess from "./pages/RequestAccess";
 import Setup from "./pages/Setup";
 import ReleaseNotes from "./pages/ReleaseNotes";
 import RecordingDetail from "./pages/RecordingDetail";
+import CalendarEventDetail from "./pages/CalendarEventDetail";
 import WorkspaceLayout from "./components/WorkspaceLayout";
 import EmptyDetail from "./components/EmptyDetail";
 
@@ -56,6 +57,7 @@ export default function App() {
       >
         <Route index element={<EmptyDetail />} />
         <Route path="recordings/:id" element={<RecordingDetail />} />
+        <Route path="calendar-event/:eventId" element={<CalendarEventDetail />} />
       </Route>
     </Routes>
   );
