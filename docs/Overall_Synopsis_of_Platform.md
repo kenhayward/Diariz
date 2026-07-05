@@ -444,6 +444,16 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   `pages/CalendarEventDetail`): a single Overview tab reusing `CalendarEventDetails`, plus **Link a recording**
   (`LinkRecordingModal`) - the inverse link that attaches an existing recording to the meeting and navigates to
   it. Read-only against the calendar; the only write is the calendar-link `PUT` above.
+- **External `.ics` calendar feeds (Phase 3 foundation):** users will be able to subscribe to external iCalendar
+  feeds (public team/shared calendars, or any ICS URL not reachable through Google) so their events show up
+  alongside the Google calendars, tinted with a per-feed colour. This release lands the **backend groundwork**
+  only: a per-user **`IcsCalendarSource`** entity/table (name, https URL, colour, enabled flag, last-fetch
+  status; cascade with the user) and two pure, unit-tested helpers - **`IcsCalendar`** (parse+map an ICS
+  document into `CalendarEvent`s via **Ical.Net**, expanding recurrences within a window and tagging each event
+  `ics:{sourceId}`) and **`IcsUrlGuard`** (SSRF gate: https-only, and blocks loopback/private/link-local/CGNAT/
+  multicast literals now, with a resolved-IP re-check to come at fetch time). Nothing is wired to an endpoint or
+  the calendar reads yet (that arrives in the following PRs); events will always be fetched **live** and never
+  stored. **Ical.Net** (MIT) is a new API dependency.
 - **Isolation:** every recording/section/chat/voiceprint query filters by `UserId` from the JWT
   `NameIdentifier` claim. **Storage quotas** (audio bytes) are per-user: the Platform Administrator sets the
   starter + maximum (`PlatformSettings`), any admin can raise an individual user up to the max.

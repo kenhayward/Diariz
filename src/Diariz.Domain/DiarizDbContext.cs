@@ -23,6 +23,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<RecordingAction> RecordingActions => Set<RecordingAction>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<RecordingCalendarLink> RecordingCalendarLinks => Set<RecordingCalendarLink>();
+    public DbSet<IcsCalendarSource> IcsCalendarSources => Set<IcsCalendarSource>();
     public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
     public DbSet<McpAccessToken> McpAccessTokens => Set<McpAccessToken>();
 
@@ -260,6 +261,21 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.HasOne(c => c.User)
                 .WithMany(u => u.ChatSessions)
                 .HasForeignKey(c => c.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Per-user external .ics calendar feeds. Events are fetched live and never stored; deleting a user
+        // removes their feeds. Provider-agnostic shape.
+        builder.Entity<IcsCalendarSource>(e =>
+        {
+            e.HasKey(s => s.Id);
+            e.HasIndex(s => s.UserId);
+            e.Property(s => s.Name).HasMaxLength(128);
+            e.Property(s => s.Url).HasMaxLength(2048);
+            e.Property(s => s.Color).HasMaxLength(32);
+            e.HasOne(s => s.User)
+                .WithMany()
+                .HasForeignKey(s => s.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
