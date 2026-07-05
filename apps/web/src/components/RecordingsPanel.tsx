@@ -664,6 +664,32 @@ function MicIcon({ on, title }: { on: boolean; title: string }) {
   );
 }
 
+/// A small calendar glyph marking that a recording is linked to a Google Calendar event. Sits next to the
+/// mic icon (green to match); absent when the recording isn't linked to a meeting.
+function CalendarIcon({ title }: { title: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      width={14}
+      height={14}
+      role="img"
+      aria-label={title}
+      className="shrink-0 text-green-600 dark:text-green-400"
+    >
+      <title>{title}</title>
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  );
+}
+
 /// Per-file status for the current upload batch (queued/uploading/done/failed). Tolerant of partial
 /// failures — a rejected file shows its reason and the rest still upload.
 function UploadStatusList({ items, onClear }: { items: UploadItem[]; onClear: () => void }) {
@@ -1062,6 +1088,8 @@ function RecordingRow({
           on={r.hasAudio}
           title={r.hasAudio ? t("workspace:hasAudioTitle") : t("workspace:audioDeletedTitle")}
         />
+        {/* Calendar link: shown alongside the mic icon when the recording is linked to a meeting. */}
+        {r.calendarEventId && <CalendarIcon title={t("workspace:hasCalendarTitle")} />}
         {renaming ? (
           <RenameForm initial={r.name ?? ""} onSave={saveName} onCancel={() => setRenaming(false)} />
         ) : (

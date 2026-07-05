@@ -90,12 +90,19 @@ export type DayItem =
 
 /// The selected day's recordings and calendar events, merged and ordered by time of day. An event that
 /// began on an earlier day (a multi-day span) sorts to the top of this day (time 0).
+///
+/// A linked event is **deduped**: if any recording is linked to it (`recording.calendarEventId === event.id`),
+/// the standalone event row is dropped - the recording row (which shows both the mic and calendar icons)
+/// represents the pair. Dedup is global (across all recordings, not just this day) so a manual link whose
+/// meeting and recording fall on different days doesn't leave a stray event row behind.
 export function dayItems(recordings: RecordingSummary[], events: CalendarEvent[], key: string): DayItem[] {
+  const linkedEventIds = new Set(recordings.map((r) => r.calendarEventId).filter((id): id is string => id != null));
   const items: DayItem[] = [];
   for (const r of recordings) {
     if (isoToDayKey(r.createdAt) === key) items.push({ type: "recording", time: new Date(r.createdAt).getTime(), recording: r });
   }
   for (const e of events) {
+    if (linkedEventIds.has(e.id)) continue; // represented by its recording row (both icons)
     if (!eventDayKeys([e]).has(key)) continue;
     // Starts this day → sort by its start; started earlier (spilled in) → sort at the top.
     const startsToday = isoToDayKey(e.start) === key;
