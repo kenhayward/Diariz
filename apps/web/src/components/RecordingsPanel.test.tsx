@@ -55,6 +55,7 @@ const rec: RecordingSummary = {
   sectionName: null,
   hasActions: false,
   hasAudio: true,
+  calendarEventId: null,
 };
 
 function renderList() {
@@ -138,6 +139,17 @@ describe("RecordingsPanel", () => {
     await screen.findByText("Has audio");
     expect(screen.getByLabelText("Audio available")).toBeTruthy();
     expect(screen.getByLabelText("Audio deleted")).toBeTruthy();
+  });
+
+  it("shows a calendar icon on a row linked to a meeting, and none when unlinked", async () => {
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...rec, id: "a", name: "Linked", calendarEventId: "evt1" },
+      { ...rec, id: "b", name: "Unlinked", calendarEventId: null },
+    ]);
+    renderList();
+    await screen.findByText("Linked");
+    // Exactly one calendar icon - on the linked row.
+    expect(screen.getAllByLabelText("Linked to a calendar event")).toHaveLength(1);
   });
 
   it("Delete audio (kebab) confirms then calls the API", async () => {

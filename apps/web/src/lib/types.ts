@@ -26,6 +26,9 @@ export interface RecordingSummary {
   hasActions: boolean;
   /// Whether the original audio is still present (false once the audio has been deleted).
   hasAudio: boolean;
+  /// The linked Google Calendar event id, or null when unlinked. Drives the list's calendar icon and lets
+  /// the Calendar tab dedupe a recording against its own event.
+  calendarEventId: string | null;
 }
 
 export interface SectionDto {

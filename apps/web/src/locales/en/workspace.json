@@ -38,6 +38,7 @@
   "confirmDeleteAudioBulk_one": "Delete the audio for {{count}} recording? Their transcripts are kept and storage is freed; this can't be undone.",
   "confirmDeleteAudioBulk_other": "Delete the audio for {{count}} recordings? Their transcripts are kept and storage is freed; this can't be undone.",
   "hasAudioTitle": "Audio available",
+  "hasCalendarTitle": "Linked to a calendar event",
   "audioDeletedTitle": "Audio deleted",
   "refresh": "Refresh",
   "tabList": "List",

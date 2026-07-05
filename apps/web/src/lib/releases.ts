@@ -97,6 +97,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.85.1",
+    date: "2026-07-05",
+    pr: 191,
+    headline: "Calendar-linked recordings show a calendar icon",
+    summary:
+      "When a recording is linked to a Google Calendar meeting, its row now shows a small calendar icon next " +
+      "to the microphone icon - in both the recordings list and the Calendar tab - so you can see at a glance " +
+      "which recordings belong to a meeting. In the Calendar tab, a linked recording and its meeting are shown " +
+      "as a single row (the recording, carrying both icons) instead of appearing twice. Web-only; a server " +
+      "redeploy picks it up.",
+    added: [
+      "A calendar icon on recordings that are linked to a Google Calendar meeting (recordings list + Calendar tab).",
+    ],
+    changed: [
+      "The Calendar tab now shows a linked recording and its meeting as one row (both icons) rather than as two separate entries.",
+    ],
+  },
+  {
     version: "0.85.0",
     date: "2026-07-05",
     pr: 190,

@@ -38,6 +38,7 @@
   "confirmDeleteAudioBulk_one": "Das Audio von {{count}} Aufnahme löschen? Die Transkriptionen bleiben erhalten und Speicher wird freigegeben; dies kann nicht rückgängig gemacht werden.",
   "confirmDeleteAudioBulk_other": "Das Audio von {{count}} Aufnahmen löschen? Die Transkriptionen bleiben erhalten und Speicher wird freigegeben; dies kann nicht rückgängig gemacht werden.",
   "hasAudioTitle": "Audio verfügbar",
+  "hasCalendarTitle": "Mit einem Kalendereintrag verknüpft",
   "audioDeletedTitle": "Audio gelöscht",
   "refresh": "Aktualisieren",
   "tabList": "Liste",

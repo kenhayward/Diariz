@@ -5,9 +5,9 @@ import {
 } from "./calendar";
 import type { CalendarEvent, RecordingSummary } from "./types";
 
-const rec = (id: string, createdAt: string): RecordingSummary => ({
+const rec = (id: string, createdAt: string, calendarEventId: string | null = null): RecordingSummary => ({
   id, title: id, name: null, source: "Microphone", durationMs: 0, status: "Transcribed",
-  createdAt, sectionId: null, sectionName: null, hasActions: false, hasAudio: true,
+  createdAt, sectionId: null, sectionName: null, hasActions: false, hasAudio: true, calendarEventId,
 });
 
 /// Build an event from local Date parts so the ISO round-trips back to the same local day regardless of
@@ -60,6 +60,26 @@ describe("dayItems", () => {
     const items = dayItems(recordings, events, "2026-07-02");
     expect(items).toHaveLength(1);
     expect(items[0].type === "event" && items[0].event.id).toBe("span");
+  });
+
+  it("dedupes a linked event: the recording row represents it, the standalone event is dropped", () => {
+    // r-linked is linked to event e9 → only the recording appears (it carries both icons), not e9 again.
+    const recordings = [rec("r-linked", new Date(2026, 6, 2, 10, 0).toISOString(), "e9")];
+    const events = [
+      ev("e9", new Date(2026, 6, 2, 9, 0), new Date(2026, 6, 2, 9, 30)), // linked → suppressed
+      ev("e-other", new Date(2026, 6, 2, 14, 0), new Date(2026, 6, 2, 15, 0)), // unlinked → kept
+    ];
+    const items = dayItems(recordings, events, "2026-07-02");
+    expect(items.map((i) => (i.type === "event" ? `ev:${i.event.id}` : `rec:${i.recording.id}`)))
+      .toEqual(["rec:r-linked", "ev:e-other"]);
+  });
+
+  it("dedupes across days: a linked event on another day is still suppressed by its recording", () => {
+    // Manual link where the meeting and recording fall on different days: the event must not show as a
+    // standalone row anywhere (the recording carries it, on the recording's day).
+    const recordings = [rec("r", new Date(2026, 6, 5, 10, 0).toISOString(), "late")];
+    const events = [ev("late", new Date(2026, 6, 2, 9, 0), new Date(2026, 6, 2, 9, 30))];
+    expect(dayItems(recordings, events, "2026-07-02")).toHaveLength(0); // event suppressed on its own day
   });
 });
 

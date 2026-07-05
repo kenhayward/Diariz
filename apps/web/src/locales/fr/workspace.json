@@ -38,6 +38,7 @@
   "confirmDeleteAudioBulk_one": "Supprimer l'audio de {{count}} enregistrement ? Les transcriptions sont conservées et le stockage est libéré ; cette action est irréversible.",
   "confirmDeleteAudioBulk_other": "Supprimer l'audio de {{count}} enregistrements ? Les transcriptions sont conservées et le stockage est libéré ; cette action est irréversible.",
   "hasAudioTitle": "Audio disponible",
+  "hasCalendarTitle": "Lié à un événement d'agenda",
   "audioDeletedTitle": "Audio supprimé",
   "refresh": "Actualiser",
   "tabList": "Liste",
