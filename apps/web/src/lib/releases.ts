@@ -102,6 +102,18 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.93.1",
+    date: "2026-07-05",
+    pr: 202,
+    headline: "Fix: API reports the correct version",
+    summary:
+      "Corrects a version-mirror slip: the API's assembly version had lagged a release behind version.json, so " +
+      "GET /health reported the wrong number. All version mirrors are realigned. No functional change. Server redeploy.",
+    fixed: [
+      "The API now reports the current app version at /health (its <Version> had lagged behind version.json).",
+    ],
+  },
+  {
     version: "0.93.0",
     date: "2026-07-05",
     pr: 201,
