@@ -113,9 +113,11 @@ unconfigured), and admin user management. Each user's data is isolated to them. 
 picture (shown in the account menu). New Google sign-ups still require admin approval, and a Google email
 matching an existing account links to it automatically. Enabled when the operator configures a Google
 OAuth client; web-only for now (the desktop app keeps password login). A Google-linked user can opt in
-(Preferences → Google) to let Diariz **read their Google Calendar** (read-only) so a recording's Overview
-shows the **matching meeting** and the **Calendar tab overlays their meetings** (event days highlighted, plus
-a merged day list of meetings and recordings) — a revocable grant.
+(Preferences → Google) to let Diariz **read their Google Calendar** (read-only) so a recording is **linked to
+the meeting it belongs to** (auto-saved on open, or picked by hand when the times don't line up), its Overview
+shows the meeting's **full details** (time, location, organiser, attendees, description), and the **Calendar
+tab overlays their meetings** (a linked recording and its meeting show as one row; a meeting with no recording
+opens a preview you can link a recording to) — a revocable grant.
 - **Preferences**: every user can change their own **display name** and pick their **native** and **app**
 language (chosen at signup or later from the account menu) — groundwork for upcoming UI localization and
 transcript translation.

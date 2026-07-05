@@ -427,7 +427,11 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   when not connected) **once per viewed month** (React-Query keyed by month, short `staleTime`, Refresh link).
   Pure client helpers (`eventDayKeys`/`dayItems` in `lib/calendar.ts`) colour the grid (event-only days a
   darker green, an events dot on recording days) and build a **merged, time-ordered day list** of meetings +
-  recordings. Read-only; no schema change.
+  recordings - **deduped**, so a linked recording and its meeting show as one row (both icons). Clicking a
+  meeting **that has no recording** opens an **event preview** (route `calendar-event/:eventId`,
+  `pages/CalendarEventDetail`): a single Overview tab reusing `CalendarEventDetails`, plus **Link a recording**
+  (`LinkRecordingModal`) - the inverse link that attaches an existing recording to the meeting and navigates to
+  it. Read-only against the calendar; the only write is the calendar-link `PUT` above.
 - **Isolation:** every recording/section/chat/voiceprint query filters by `UserId` from the JWT
   `NameIdentifier` claim. **Storage quotas** (audio bytes) are per-user: the Platform Administrator sets the
   starter + maximum (`PlatformSettings`), any admin can raise an individual user up to the max.

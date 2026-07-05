@@ -944,36 +944,38 @@ function SectionRenameForm({
   );
 }
 
-/// A Google Calendar event row in the Calendar tab's merged day list — time range + title, linking out to
-/// the event in Google Calendar. (Read-only for now; the future home of a "schedule recording" action.)
+/// A Google Calendar event row in the Calendar tab's merged day list — time range + title. Clicking the row
+/// opens the event preview (a meeting with no recording); the calendar glyph still links out to Google.
+/// Only unlinked events reach this row (a linked event is shown by its recording row, deduped in `dayItems`).
 function EventRow({ event, locale, t }: { event: CalendarEvent; locale: string; t: TFunction }) {
   const fmt = new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" });
   const title = event.summary || t("calUntitledEvent");
   const range = `${fmt.format(new Date(event.start))} – ${fmt.format(new Date(event.end))}`;
   return (
-    <li className="flex items-start gap-2 py-1.5 pl-3 pr-2 text-sm">
-      <svg
-        {...iconProps}
-        className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-600 dark:text-green-400"
-        aria-label={t("calEventLabel")}
+    <li>
+      <NavLink
+        to={`/calendar-event/${encodeURIComponent(event.id)}`}
+        className={({ isActive }) =>
+          `flex items-start gap-2 py-1.5 pl-3 pr-2 text-sm ${
+            isActive ? "bg-blue-50 dark:bg-blue-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-800"
+          }`
+        }
       >
-        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-        <line x1="16" y1="2" x2="16" y2="6" />
-        <line x1="8" y1="2" x2="8" y2="6" />
-        <line x1="3" y1="10" x2="21" y2="10" />
-      </svg>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-gray-800 dark:text-gray-200">
-          {event.htmlLink ? (
-            <a href={event.htmlLink} target="_blank" rel="noopener noreferrer" className="hover:underline">
-              {title}
-            </a>
-          ) : (
-            title
-          )}
+        <svg
+          {...iconProps}
+          className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-600 dark:text-green-400"
+          aria-label={t("calEventLabel")}
+        >
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+          <line x1="16" y1="2" x2="16" y2="6" />
+          <line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-gray-800 dark:text-gray-200">{title}</div>
+          <div className="text-xs tabular-nums text-gray-500 dark:text-gray-400">{range}</div>
         </div>
-        <div className="text-xs tabular-nums text-gray-500 dark:text-gray-400">{range}</div>
-      </div>
+      </NavLink>
     </li>
   );
 }

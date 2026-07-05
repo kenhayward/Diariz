@@ -71,9 +71,12 @@ an administrator approves, and each user sets up their own account and keeps the
 recordings, transcripts, and chats. Users can also **sign in with Google** (when an administrator has
 configured it) - Diariz reads their name, email, and profile picture (shown in the account menu), still
 subject to admin approval for new sign-ups. A Google-linked user can opt in (Preferences → Google) to let
-Diariz **read their Google Calendar** (read-only) - so a recording's Overview shows the **meeting it
-overlaps** and the **Calendar tab overlays their meetings** (with a merged day list of meetings and
-recordings) - a revocable grant they can disconnect any time. Each user has a **storage quota** (audio): the Platform
+Diariz **read their Google Calendar** (read-only) - so a recording is **linked to the meeting it
+belongs to** (auto-saved on open, or picked by hand even when the times don't line up), its Overview shows
+the meeting's **full invite details** (time, location, organiser, attendees, description), and the
+**Calendar tab overlays their meetings** (a merged day list; a linked recording and its meeting show as one
+row, and a meeting with no recording opens a preview you can link a recording to) - a revocable grant they can
+disconnect any time. Each user has a **storage quota** (audio): the Platform
 Administrator sets the starter and maximum, any administrator can raise an individual user, and your
 usage shows in the account menu. The Platform Administrator can also **back up and restore the whole
 platform** (database + stored files) as a single transferable archive from Settings → Maintenance.
@@ -96,6 +99,23 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.87.0",
+    date: "2026-07-05",
+    pr: 193,
+    headline: "Preview a meeting that has no recording, and link one to it",
+    summary:
+      "In the Calendar tab, clicking a meeting that has no recording now opens a preview - a single tab with " +
+      "the meeting's full details (date and time, location, organiser, attendees, description) so you can " +
+      "check it without leaving Diariz or opening Google Calendar. From there, Link a recording attaches an " +
+      "existing recording to that meeting (browse your recordings, filter by title, pick one) and takes you " +
+      "to it. This completes the calendar-linking feature. Requires Google Calendar connected in Preferences. " +
+      "Web-only; a server redeploy picks it up.",
+    added: [
+      "Clicking a calendar meeting with no recording opens a preview showing its full details (a single Overview tab).",
+      "Link a recording to a meeting from that preview - the inverse of linking from a recording.",
+    ],
+  },
   {
     version: "0.86.0",
     date: "2026-07-05",
