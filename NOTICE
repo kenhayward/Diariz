@@ -27,7 +27,7 @@ Apache License 2.0 components (their NOTICE terms are acknowledged here):
 MIT / BSD / other permissive components include (non-exhaustive):
   - React, Vite, Tailwind CSS, axios, @microsoft/signalr, @tanstack/react-query (MIT)
   - Electron, electron-builder, electron-updater (MIT)
-  - Npgsql, StackExchange.Redis, MailKit/MimeKit, PdfPig (MIT / BSD / Apache-2.0)
+  - Npgsql, StackExchange.Redis, MailKit/MimeKit, PdfPig, Ical.Net (MIT / BSD / Apache-2.0)
   - WhisperX (MIT), CTranslate2 (MIT), OpenAI Whisper large-v3 weights (MIT)
   - pyannote.audio models speaker-diarization-3.1 / segmentation-3.0 (MIT, gated)
   - PyTorch, torchaudio, NumPy (BSD)

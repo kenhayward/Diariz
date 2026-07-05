@@ -60,6 +60,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddTranscriptChunks` | `TranscriptChunks` (windowed retrieval chunks for RAG/M3; `vector(768)`, denormalized `RecordingId`/`UserId`, cascade on `Transcription`, index `(UserId, RecordingId)`) — semantic-search index; supersedes the unused `Segment.Embedding` |
 | `AddRecordingCalendarLink` | `RecordingCalendarLinks` (1:1 with `Recording`, shared PK, cascade) — persisted link from a recording to its Google Calendar event (lightweight snapshot; rich invite details fetched live) |
 | `AddCalendarLinkCalendarIdAndColor` | `RecordingCalendarLinks.CalendarId` (varchar(1024), NOT NULL, existing rows backfilled to `primary`) + `RecordingCalendarLinks.Color` (varchar(32) null) — which calendar the linked event is on + its Google colour |
+| `AddIcsCalendarSource` | `IcsCalendarSources` (per-user external `.ics` feed subscriptions; indexed on `UserId`, cascade on user delete) — events fetched live and merged into the Calendar views |
 
 ### Entity-relationship overview
 
@@ -252,6 +253,23 @@ organiser) are fetched live from Google by `EventId`, never stored.
 | `HtmlLink` | varchar(2048) null | Google Calendar deep link |
 | `LinkedManually` | bool | user picked it by hand (vs. auto-saved best time-overlap match) |
 | `SyncedAt` | timestamptz | when the snapshot was last written |
+
+#### `IcsCalendarSources`
+Per-user external iCalendar (`.ics`) feed subscriptions - public team/shared calendars or any ICS URL not
+reachable through the user's Google account. Events are fetched **live** at read time (SSRF-guarded, https-only)
+and merged into the Calendar views tagged `ics:{Id}`; nothing from the feed is stored.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `UserId` | uuid FK → AspNetUsers | indexed; **cascade** delete with the user |
+| `Name` | varchar(128) | user label shown in the Calendar views |
+| `Url` | varchar(2048) | feed URL (validated https only; re-checked against private IPs on every fetch) |
+| `Color` | varchar(32) null | hex colour used to tint this feed's events |
+| `Enabled` | bool | off = kept but excluded from reads |
+| `CreatedAt` | timestamptz | |
+| `LastFetchedAt` | timestamptz null | last successful fetch; null until first read |
+| `LastError` | text null | last fetch error (unreachable, non-200, too large, parse failure); null when healthy |
 
 #### `Speakers`
 Per-recording diarization label → display name, plus its voiceprint and any identification.

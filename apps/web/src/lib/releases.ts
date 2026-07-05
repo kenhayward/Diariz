@@ -100,6 +100,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.91.0",
+    date: "2026-07-05",
+    pr: 199,
+    headline: "Groundwork for subscribing to external calendar feeds",
+    summary:
+      "Backend foundation for a coming feature: subscribing to external iCalendar (.ics) feeds - public team " +
+      "or shared calendars that aren't reachable through your Google account - so their meetings will appear " +
+      "alongside your Google calendars. This release adds the storage and a safety-checked parser only; there's " +
+      "no user-facing change yet (that arrives in the next couple of releases). Feed URLs are strictly validated " +
+      "(https only, and blocked from pointing at private/internal addresses). Runs a quick database migration. " +
+      "Server redeploy.",
+    added: [
+      "Storage for per-user external .ics calendar feeds and a safe, recurrence-aware parser for them (no user-facing change yet).",
+    ],
+  },
+  {
     version: "0.90.0",
     date: "2026-07-05",
     pr: 198,
