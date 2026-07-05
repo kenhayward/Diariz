@@ -435,6 +435,41 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("RecordingActions");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.RecordingCalendarLink", b =>
+                {
+                    b.Property<Guid>("RecordingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("EndsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("HtmlLink")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<bool>("LinkedManually")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("StartsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Summary")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<DateTimeOffset>("SyncedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("RecordingId");
+
+                    b.ToTable("RecordingCalendarLinks");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.Section", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1175,6 +1210,17 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("Recording");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.RecordingCalendarLink", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.Recording", "Recording")
+                        .WithOne("CalendarLink")
+                        .HasForeignKey("Diariz.Domain.Entities.RecordingCalendarLink", "RecordingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Recording");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.Section", b =>
                 {
                     b.HasOne("Diariz.Domain.Entities.Section", "Parent")
@@ -1366,6 +1412,8 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("Actions");
 
                     b.Navigation("Attachments");
+
+                    b.Navigation("CalendarLink");
 
                     b.Navigation("Speakers");
 

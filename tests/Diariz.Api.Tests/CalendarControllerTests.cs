@@ -10,6 +10,8 @@ public class CalendarControllerTests
     private sealed class FakeCalendarClient : IGoogleCalendarClient
     {
         public IReadOnlyList<CalendarEvent>? Events { get; set; } = new List<CalendarEvent>();
+        public CalendarEvent? Event { get; set; }
+        public string? RequestedEventId { get; private set; }
         public DateTimeOffset? TimeMin { get; private set; }
         public DateTimeOffset? TimeMax { get; private set; }
 
@@ -18,6 +20,12 @@ public class CalendarControllerTests
         {
             TimeMin = timeMin; TimeMax = timeMax;
             return Task.FromResult(Events);
+        }
+
+        public Task<CalendarEvent?> GetEventAsync(Guid userId, string eventId, CancellationToken ct = default)
+        {
+            RequestedEventId = eventId;
+            return Task.FromResult(Event);
         }
     }
 
@@ -79,5 +87,29 @@ public class CalendarControllerTests
         var tooWide = Min.AddDays(90);
         Assert.IsType<BadRequestObjectResult>((await controller.Events(Min, tooWide, default)).Result);
         Assert.Null(cal.TimeMin);
+    }
+
+    [Fact]
+    public async Task Event_ReturnsTheEvent_ById()
+    {
+        var cal = new FakeCalendarClient
+        {
+            Event = new("evt1", "Planning", Min.AddHours(9), Min.AddHours(10), "https://cal/evt1",
+                Description: "Agenda", Location: "Room 4"),
+        };
+        var controller = Build(cal, Guid.NewGuid());
+
+        var ok = Assert.IsType<OkObjectResult>((await controller.Event("evt1", default)).Result);
+        Assert.Equal("evt1", Assert.IsType<CalendarEvent>(ok.Value).Id);
+        Assert.Equal("evt1", cal.RequestedEventId);
+    }
+
+    [Fact]
+    public async Task Event_WhenMissingOrNotConnected_ReturnsNotFound()
+    {
+        var cal = new FakeCalendarClient { Event = null };
+        var controller = Build(cal, Guid.NewGuid());
+
+        Assert.IsType<NotFoundResult>((await controller.Event("nope", default)).Result);
     }
 }

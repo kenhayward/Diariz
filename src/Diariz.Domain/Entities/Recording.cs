@@ -60,6 +60,9 @@ public class Recording
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
+    /// <summary>Optional link to the Google Calendar event this recording belongs to (1:1). Null = unlinked.</summary>
+    public RecordingCalendarLink? CalendarLink { get; set; }
+
     public ICollection<Transcription> Transcriptions { get; set; } = new List<Transcription>();
     public ICollection<Speaker> Speakers { get; set; } = new List<Speaker>();
     public ICollection<RecordingAction> Actions { get; set; } = new List<RecordingAction>();

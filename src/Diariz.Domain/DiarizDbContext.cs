@@ -22,6 +22,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<ProfileContribution> ProfileContributions => Set<ProfileContribution>();
     public DbSet<RecordingAction> RecordingActions => Set<RecordingAction>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
+    public DbSet<RecordingCalendarLink> RecordingCalendarLinks => Set<RecordingCalendarLink>();
     public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
     public DbSet<McpAccessToken> McpAccessTokens => Set<McpAccessToken>();
 
@@ -71,6 +72,19 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 .WithMany(s => s.Recordings)
                 .HasForeignKey(r => r.SectionId)
                 .OnDelete(DeleteBehavior.SetNull);
+            // 1:1 calendar link, shared primary key; cascade-deleted with the recording.
+            e.HasOne(r => r.CalendarLink)
+                .WithOne(l => l.Recording!)
+                .HasForeignKey<RecordingCalendarLink>(l => l.RecordingId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<RecordingCalendarLink>(e =>
+        {
+            e.HasKey(l => l.RecordingId);
+            e.Property(l => l.EventId).HasMaxLength(1024);
+            e.Property(l => l.Summary).HasMaxLength(1024);
+            e.Property(l => l.HtmlLink).HasMaxLength(2048);
         });
 
         builder.Entity<Section>(e =>

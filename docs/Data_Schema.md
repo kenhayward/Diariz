@@ -58,6 +58,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddMcpAccessTokens` | `McpAccessTokens` (per-user MCP personal access tokens; SHA-256 hash only, **unique** on `TokenHash`, cascade on user delete) — connect Claude to transcripts over `/mcp` |
 | `AddOpenIddict` | `OpenIddictApplications`, `OpenIddictAuthorizations`, `OpenIddictScopes`, `OpenIddictTokens` (OpenIddict EF Core stores, string keys) — the OAuth 2.1 authorization server for the MCP web connector. Registered by `ModelBuilder.UseOpenIddict()`; not owned by an entity class |
 | `AddTranscriptChunks` | `TranscriptChunks` (windowed retrieval chunks for RAG/M3; `vector(768)`, denormalized `RecordingId`/`UserId`, cascade on `Transcription`, index `(UserId, RecordingId)`) — semantic-search index; supersedes the unused `Segment.Embedding` |
+| `AddRecordingCalendarLink` | `RecordingCalendarLinks` (1:1 with `Recording`, shared PK, cascade) — persisted link from a recording to its Google Calendar event (lightweight snapshot; rich invite details fetched live) |
 
 ### Entity-relationship overview
 
@@ -233,6 +234,21 @@ Supporting documents on a recording — an uploaded file (blob) or a URL.
 | `CreatedAt` | timestamptz | |
 
 Index: `(RecordingId, Ordinal)`. Attachment blobs live under MinIO key `{userId}/attachments/{attachmentId}{ext}`.
+
+#### `RecordingCalendarLinks`
+The Google Calendar event a recording belongs to (1:1 with `Recording`, shared primary key). A lightweight
+**snapshot** for cheap list/Calendar-tab rendering; the rich invite details (attendees, description, location,
+organiser) are fetched live from Google by `EventId`, never stored.
+
+| Column | Type | Notes |
+|---|---|---|
+| `RecordingId` | uuid PK / FK → Recordings | shared PK; **cascade** delete with the recording |
+| `EventId` | varchar(1024) | Google Calendar event id (primary calendar) |
+| `Summary` | varchar(1024) null | event title snapshot |
+| `StartsAt` / `EndsAt` | timestamptz | event span snapshot |
+| `HtmlLink` | varchar(2048) null | Google Calendar deep link |
+| `LinkedManually` | bool | user picked it by hand (vs. auto-saved best time-overlap match) |
+| `SyncedAt` | timestamptz | when the snapshot was last written |
 
 #### `Speakers`
 Per-recording diarization label → display name, plus its voiceprint and any identification.

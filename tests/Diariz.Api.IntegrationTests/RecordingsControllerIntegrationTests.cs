@@ -217,4 +217,58 @@ public class RecordingsControllerIntegrationTests(ContainersFixture fx)
         await using var verify2 = fx.CreateDbContext();
         Assert.Null((await verify2.Segments.FindAsync(segId))!.Revised);
     }
+
+    [Fact]
+    public async Task Delete_CascadesCalendarLink()
+    {
+        Guid userId, recId;
+        await using (var db = fx.CreateDbContext())
+        {
+            var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = "u@x.test" };
+            var rec = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = "k" };
+            db.AddRange(user, rec, new RecordingCalendarLink
+            {
+                RecordingId = rec.Id, EventId = "evt1", Summary = "Planning",
+                StartsAt = DateTimeOffset.UtcNow, EndsAt = DateTimeOffset.UtcNow.AddHours(1), LinkedManually = true,
+            });
+            await db.SaveChangesAsync();
+            (userId, recId) = (user.Id, rec.Id);
+        }
+
+        await using (var db = fx.CreateDbContext())
+            Assert.IsType<NoContentResult>(await Build(db, userId).Delete(recId));
+
+        await using var verify = fx.CreateDbContext();
+        Assert.False(await verify.RecordingCalendarLinks.AnyAsync(l => l.RecordingId == recId)); // cascaded with the recording
+    }
+
+    [Fact]
+    public async Task ListAndGet_SurfaceTheCalendarLink_OnRealPostgres()
+    {
+        // Proves the LEFT JOIN projection (r.CalendarLink != null ? ... : null) and the detail Include
+        // translate against real Postgres, not just the in-memory provider.
+        Guid userId, recId;
+        await using (var db = fx.CreateDbContext())
+        {
+            var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = "u@x.test" };
+            var rec = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = "k", Name = "Demo" };
+            db.AddRange(user, rec, new RecordingCalendarLink
+            {
+                RecordingId = rec.Id, EventId = "evt42", Summary = "Planning",
+                StartsAt = DateTimeOffset.Parse("2026-07-02T09:00:00Z"), EndsAt = DateTimeOffset.Parse("2026-07-02T10:00:00Z"),
+                HtmlLink = "https://cal/evt42", LinkedManually = true,
+            });
+            await db.SaveChangesAsync();
+            (userId, recId) = (user.Id, rec.Id);
+        }
+
+        await using var db2 = fx.CreateDbContext();
+        var list = await Build(db2, userId).List();
+        Assert.Equal("evt42", list.Single(r => r.Id == recId).CalendarEventId);
+
+        var dto = Assert.IsType<RecordingDetailDto>((await Build(db2, userId).Get(recId)).Value);
+        Assert.Equal("evt42", dto.CalendarLink!.EventId);
+        Assert.True(dto.CalendarLink.LinkedManually);
+        Assert.Equal("https://cal/evt42", dto.CalendarLink.HtmlLink);
+    }
 }

@@ -1,11 +1,21 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.AspNetCore.WebUtilities;
 
 namespace Diariz.Api.Services;
 
-/// <summary>A calendar event as Diariz needs it (a slim projection of a Google Calendar event).</summary>
-public record CalendarEvent(string Id, string? Summary, DateTimeOffset Start, DateTimeOffset End, string? HtmlLink);
+/// <summary>One person on a calendar event (organizer or attendee).</summary>
+public record CalendarAttendee(string? Email, string? DisplayName, string? ResponseStatus, bool Organizer = false, bool Self = false);
+
+/// <summary>A calendar event as Diariz needs it (a projection of a Google Calendar event). The rich fields
+/// (<see cref="Description"/>/<see cref="Location"/>/<see cref="Organizer"/>/<see cref="Attendees"/>) are
+/// populated by <see cref="GoogleCalendarClient.GetEventAsync"/> and the events list, and are what the
+/// Overview + event-preview surfaces show so the user needn't open Google Calendar.</summary>
+public record CalendarEvent(
+    string Id, string? Summary, DateTimeOffset Start, DateTimeOffset End, string? HtmlLink,
+    string? Description = null, string? Location = null,
+    CalendarAttendee? Organizer = null, IReadOnlyList<CalendarAttendee>? Attendees = null);
 
 /// <summary>Reads the signed-in user's primary Google Calendar (via their connected Google token) so a
 /// recording can be matched to the meeting it was captured during. Read-only.</summary>
@@ -15,6 +25,10 @@ public interface IGoogleCalendarClient
     /// or null if the user hasn't connected Calendar (token unavailable). Throws on a Calendar API error.</summary>
     Task<IReadOnlyList<CalendarEvent>?> ListEventsAsync(
         Guid userId, DateTimeOffset timeMin, DateTimeOffset timeMax, CancellationToken ct = default);
+
+    /// <summary>A single event by id (with rich fields), or null if the user hasn't connected Calendar or the
+    /// event no longer exists (404/410). Throws on any other Calendar API error.</summary>
+    Task<CalendarEvent?> GetEventAsync(Guid userId, string eventId, CancellationToken ct = default);
 }
 
 public class GoogleCalendarClient : IGoogleCalendarClient
@@ -58,6 +72,28 @@ public class GoogleCalendarClient : IGoogleCalendarClient
         return ParseEvents(await resp.Content.ReadAsStringAsync(ct));
     }
 
+    public async Task<CalendarEvent?> GetEventAsync(Guid userId, string eventId, CancellationToken ct = default)
+    {
+        var access = await _tokens.GetAccessTokenAsync(userId, ct);
+        if (access is null) return null; // not connected / refresh failed
+
+        var url = $"{EventsEndpoint}/{Uri.EscapeDataString(eventId)}";
+        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", access);
+
+        using var resp = await _http.SendAsync(req, ct);
+        // The event was deleted/cancelled since we linked it — treat as "no longer available", not an error.
+        if (resp.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Gone) return null;
+        if (!resp.IsSuccessStatusCode)
+        {
+            var body = await resp.Content.ReadAsStringAsync(ct);
+            throw new InvalidOperationException($"Calendar get failed ({(int)resp.StatusCode}): {Truncate(body, 500)}");
+        }
+
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+        return ParseEvent(doc.RootElement);
+    }
+
     /// <summary>Project Google's events list into <see cref="CalendarEvent"/>s. Skips events without a
     /// parseable start/end. Handles both timed (<c>dateTime</c>) and all-day (<c>date</c>) events.</summary>
     public static List<CalendarEvent> ParseEvents(string json)
@@ -68,17 +104,43 @@ public class GoogleCalendarClient : IGoogleCalendarClient
             return events;
 
         foreach (var item in items.EnumerateArray())
-        {
-            var id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
-            if (id is null) continue;
-            if (!TryReadTime(item, "start", out var start) || !TryReadTime(item, "end", out var end)) continue;
-
-            var summary = item.TryGetProperty("summary", out var s) ? s.GetString() : null;
-            var htmlLink = item.TryGetProperty("htmlLink", out var h) ? h.GetString() : null;
-            events.Add(new CalendarEvent(id, summary, start, end, htmlLink));
-        }
+            if (ParseEvent(item) is { } e)
+                events.Add(e);
         return events;
     }
+
+    /// <summary>Project a single Google event object into a <see cref="CalendarEvent"/> (rich fields included),
+    /// or null when it has no parseable start/end. Pure so it's unit-testable without the Calendar API.</summary>
+    public static CalendarEvent? ParseEvent(JsonElement item)
+    {
+        var id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+        if (id is null) return null;
+        if (!TryReadTime(item, "start", out var start) || !TryReadTime(item, "end", out var end)) return null;
+
+        var summary = item.TryGetProperty("summary", out var s) ? s.GetString() : null;
+        var htmlLink = item.TryGetProperty("htmlLink", out var h) ? h.GetString() : null;
+        var description = item.TryGetProperty("description", out var d) ? d.GetString() : null;
+        var location = item.TryGetProperty("location", out var l) ? l.GetString() : null;
+
+        var organizer = item.TryGetProperty("organizer", out var org) && org.ValueKind == JsonValueKind.Object
+            ? ReadAttendee(org)
+            : null;
+
+        var attendees = new List<CalendarAttendee>();
+        if (item.TryGetProperty("attendees", out var att) && att.ValueKind == JsonValueKind.Array)
+            foreach (var a in att.EnumerateArray())
+                if (a.ValueKind == JsonValueKind.Object)
+                    attendees.Add(ReadAttendee(a));
+
+        return new CalendarEvent(id, summary, start, end, htmlLink, description, location, organizer, attendees);
+    }
+
+    private static CalendarAttendee ReadAttendee(JsonElement a) => new(
+        a.TryGetProperty("email", out var em) ? em.GetString() : null,
+        a.TryGetProperty("displayName", out var dn) ? dn.GetString() : null,
+        a.TryGetProperty("responseStatus", out var rs) ? rs.GetString() : null,
+        a.TryGetProperty("organizer", out var o) && o.ValueKind == JsonValueKind.True,
+        a.TryGetProperty("self", out var se) && se.ValueKind == JsonValueKind.True);
 
     /// <summary>The event that overlaps the recording's time span the most, or null when none overlap.
     /// Pure so it can be unit-tested without the Calendar API.</summary>

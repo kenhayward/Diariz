@@ -60,7 +60,19 @@ public record RecordingSummaryDto(
     Guid? SectionId,
     string? SectionName,
     bool HasActions,
-    bool HasAudio);
+    bool HasAudio,
+    /// <summary>The linked Google Calendar event id, or null when unlinked. Presence drives the list's
+    /// calendar icon; the value lets the Calendar tab dedupe a recording against its own event.</summary>
+    string? CalendarEventId = null);
+
+/// <summary>A recording's persisted link to a Google Calendar event (the stored snapshot). The rich invite
+/// details are fetched live via <c>GET /api/calendar/events/{eventId}</c>.</summary>
+public record CalendarLinkDto(
+    string EventId, string? Summary, DateTimeOffset Start, DateTimeOffset End, string? HtmlLink, bool LinkedManually);
+
+/// <summary>Link a recording to a calendar event. <paramref name="Manual"/> = the user picked it by hand
+/// (vs. the auto-saved best time-overlap match).</summary>
+public record LinkCalendarRequest(string EventId, bool Manual = false);
 
 /// <summary>Bulk delete the audio blobs of the listed recordings (keeps their transcripts/metadata).</summary>
 public record DeleteAudioRequest(IReadOnlyList<Guid> Ids);
@@ -120,7 +132,9 @@ public record RecordingDetailDto(
     MeetingMinutesDto? MeetingMinutes,
     IReadOnlyList<RecordingActionDto> Actions,
     bool ActionsExtracted,
-    bool HasAudio);
+    bool HasAudio,
+    /// <summary>The persisted Google Calendar link (snapshot), or null when unlinked.</summary>
+    CalendarLinkDto? CalendarLink = null);
 
 public record RenameSpeakerRequest(string Label, string DisplayName);
 

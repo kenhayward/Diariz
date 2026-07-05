@@ -295,6 +295,20 @@ if (mcpOptions.Enabled)
         + "data. Prefer these tools over guessing whenever the user asks about their meetings.";
     // The connector card icon points at the web app's logo (served at {PublicUrl}/logo.png). Only advertise it
     // when the public origin resolves to a reachable absolute URL; otherwise omit it (the client shows no icon).
+    //
+    // NOTE (claude.ai, verified Jul 2026): claude.ai's *custom* connector card does NOT render serverInfo.Icons
+    // or serverInfo.Description at all - it shows a generic globe + the connector URL (see anthropics/claude-ai-mcp
+    // #152, still open, and anthropics/claude-code #44675, closed-not-planned). First-party/directory connectors get
+    // their icon+description from Anthropic's curated directory, not from this handshake. The one field that DOES
+    // take effect is ServerInstructions below (it steers Claude's tool use even though it's never shown in the UI).
+    //
+    // We keep Icons/Description anyway: they're spec-correct (MCP 2025-11-25 / SEP-973) and light up automatically
+    // if claude.ai ever honors them. The *only* thing that brands a custom connector today is a favicon trick:
+    // claude.ai fetches https://www.google.com/s2/favicons?domain=<eTLD+1 of the connector URL>, so the icon is the
+    // REGISTRABLE domain's apex favicon (shared across all its subdomains), not serverInfo.Icons and not a subdomain
+    // favicon. On this deployment the connector lives under stocks-hayward.com, whose apex serves no favicon, so we
+    // get the globe. When Diariz moves to its own domain (e.g. diariz.app), serve the Diariz logo as that domain's
+    // APEX favicon and host /mcp under it - then the mark appears on the next (fresh-hostname) connector add.
     var mcpPublicUrl = (builder.Configuration.GetSection(AppPublicOptions.Section).Get<AppPublicOptions>()?.PublicUrl ?? "").TrimEnd('/');
     var mcpIcons = Uri.TryCreate($"{mcpPublicUrl}/logo.png", UriKind.Absolute, out var logoUri) && logoUri.Scheme is "http" or "https"
         ? new List<ModelContextProtocol.Protocol.Icon> { new() { Source = logoUri.ToString(), MimeType = "image/png", Sizes = ["616x616"] } }
