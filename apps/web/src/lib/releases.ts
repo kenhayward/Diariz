@@ -102,6 +102,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.94.1",
+    date: "2026-07-05",
+    pr: 204,
+    headline: "Tidy up a linked meeting's details on the Overview tab",
+    summary:
+      "On a recording's Overview tab, the linked meeting's title now sits inside the calendar-details panel " +
+      "(as the link out to Google Calendar) instead of on a separate 'Meeting' row above it, and the redundant " +
+      "'Open in Google Calendar' line has been removed. Purely cosmetic. Server redeploy.",
+    changed: [
+      "A linked meeting's title now appears (and links to Google Calendar) inside the calendar-details panel on the Overview tab; the separate 'Meeting' row and 'Open in Google Calendar' line are gone.",
+    ],
+  },
+  {
     version: "0.94.0",
     date: "2026-07-05",
     pr: 203,

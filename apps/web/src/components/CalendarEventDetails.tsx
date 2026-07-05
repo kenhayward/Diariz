@@ -17,14 +17,37 @@ function attendeeName(a: CalendarAttendee): string {
 /// Shows a Google Calendar event's full invite details - when, where, organiser, attendees (with their
 /// response), description, and a link out to Google Calendar - so the user needn't leave Diariz to check.
 /// Shared by the recording Overview (a linked meeting) and the recording-less event preview.
-export default function CalendarEventDetails({ event }: { event: CalendarEvent }) {
+/// When <c>showTitle</c> is set (the recording Overview), the event title is shown at the top as the link out
+/// to Google Calendar (so no separate "Open in Google Calendar" line is needed); the event-preview page passes
+/// it off because that page already shows the title as its own heading.
+export default function CalendarEventDetails({
+  event,
+  showTitle = false,
+}: {
+  event: CalendarEvent;
+  showTitle?: boolean;
+}) {
   const { t, i18n } = useTranslation(["workspace"]);
   const when = `${formatLongDate(event.start, i18n.language)} · ${formatTimeHm(event.start)} - ${formatTimeHm(event.end)}`;
   const organizer = event.organizer ? attendeeName(event.organizer) : "";
   const attendees = event.attendees ?? [];
+  const title = event.summary || t("workspace:meetingUntitled");
 
   return (
     <div className="space-y-3 text-sm">
+      {showTitle &&
+        (event.htmlLink ? (
+          <a
+            href={event.htmlLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+          >
+            {title}
+          </a>
+        ) : (
+          <div className="font-medium text-gray-900 dark:text-gray-100">{title}</div>
+        ))}
       {event.calendarName && (
         <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
           <span
@@ -86,7 +109,8 @@ export default function CalendarEventDetails({ event }: { event: CalendarEvent }
         </div>
       )}
 
-      {event.htmlLink && (
+      {/* When the title is shown (Overview) it already links out to Google, so skip the redundant line. */}
+      {!showTitle && event.htmlLink && (
         <a
           href={event.htmlLink}
           target="_blank"

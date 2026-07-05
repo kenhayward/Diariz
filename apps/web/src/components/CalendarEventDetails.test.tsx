@@ -49,4 +49,14 @@ describe("CalendarEventDetails", () => {
     expect(screen.queryByText("Description")).toBeNull();
     expect(screen.queryByRole("link", { name: "Open in Google Calendar" })).toBeNull();
   });
+
+  it("with showTitle, shows the title as the Google link and drops the separate line", () => {
+    render(<CalendarEventDetails event={fullEvent} showTitle />);
+
+    // The title itself is the link out to Google Calendar...
+    const title = screen.getByRole("link", { name: "Quarterly Planning" });
+    expect(title.getAttribute("href")).toBe("https://cal/e1");
+    // ...so the separate "Open in Google Calendar" line is gone.
+    expect(screen.queryByRole("link", { name: "Open in Google Calendar" })).toBeNull();
+  });
 });
