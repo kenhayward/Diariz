@@ -444,16 +444,24 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   `pages/CalendarEventDetail`): a single Overview tab reusing `CalendarEventDetails`, plus **Link a recording**
   (`LinkRecordingModal`) - the inverse link that attaches an existing recording to the meeting and navigates to
   it. Read-only against the calendar; the only write is the calendar-link `PUT` above.
-- **External `.ics` calendar feeds (Phase 3 foundation):** users will be able to subscribe to external iCalendar
-  feeds (public team/shared calendars, or any ICS URL not reachable through Google) so their events show up
-  alongside the Google calendars, tinted with a per-feed colour. This release lands the **backend groundwork**
-  only: a per-user **`IcsCalendarSource`** entity/table (name, https URL, colour, enabled flag, last-fetch
-  status; cascade with the user) and two pure, unit-tested helpers - **`IcsCalendar`** (parse+map an ICS
-  document into `CalendarEvent`s via **Ical.Net**, expanding recurrences within a window and tagging each event
-  `ics:{sourceId}`) and **`IcsUrlGuard`** (SSRF gate: https-only, and blocks loopback/private/link-local/CGNAT/
-  multicast literals now, with a resolved-IP re-check to come at fetch time). Nothing is wired to an endpoint or
-  the calendar reads yet (that arrives in the following PRs); events will always be fetched **live** and never
-  stored. **Ical.Net** (MIT) is a new API dependency.
+- **External `.ics` calendar feeds (Phase 3 feature):** users can subscribe to external iCalendar feeds (public
+  team/shared calendars, or any ICS URL not reachable through Google) so their events show up alongside the
+  Google calendars, tinted with a per-feed colour. Storage is a per-user **`IcsCalendarSource`** entity/table
+  (name, https URL, colour, enabled flag, last-fetch status; cascade with the user). Two pure, unit-tested
+  helpers do the work: **`IcsCalendar`** parses+maps an ICS document into `CalendarEvent`s via **Ical.Net**,
+  expanding recurrences within the window and tagging each event `ics:{sourceId}`; **`IcsUrlGuard`** is the SSRF
+  gate (https-only; blocks loopback/private/link-local/CGNAT/multicast literals). **`IcsCalendarClient`**
+  (`IIcsCalendarClient`) fetches each of a user's **enabled** feeds behind that guard - a named http client with
+  auto-redirect **off** so every hop is re-checked against the **resolved IPs**, plus size (5 MB) and time (12 s)
+  caps - parses them, and merges the events (ids prefixed `ics:{sourceId}:` so they stay unique across feeds),
+  recording each feed's `LastFetchedAt`/`LastError`. A single broken/unsafe feed is skipped, never fatal. The
+  **`CalendarController.Events`** read now returns **Google events merged with ICS-feed events** (either source
+  may be empty - a user with only `.ics` feeds and no Google still gets a populated tab). Feeds are managed via
+  **`CalendarFeedsController`** (`/api/calendar/feeds`, JWT, owner-scoped): `GET` list, `POST`/`PUT`
+  (name/url/colour/enabled - the URL is validated and **test-fetched** via `ProbeAsync` before it's stored, so a
+  broken/unsafe URL is rejected up front; ≤20 feeds/user), `DELETE`. Events are always fetched **live** and never
+  stored. **Ical.Net** (MIT) is a new API dependency. Recording↔meeting **linking stays Google-only** (ICS
+  events are display-only in the Calendar tab). The feed-manager UI arrives in the following PR.
 - **Isolation:** every recording/section/chat/voiceprint query filters by `UserId` from the JWT
   `NameIdentifier` claim. **Storage quotas** (audio bytes) are per-user: the Platform Administrator sets the
   starter + maximum (`PlatformSettings`), any admin can raise an individual user up to the max.
