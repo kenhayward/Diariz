@@ -100,6 +100,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.87.2",
+    date: "2026-07-05",
+    pr: 195,
+    headline: "Cleaner production build (no behaviour change)",
+    summary:
+      "Build-tooling tidy-up only - no change to the app. The production web build no longer prints two " +
+      "benign warnings (a stray pure-annotation comment inside the third-party SignalR package, and the " +
+      "bundle-size notice), so a failed build now stands out clearly. Server redeploy.",
+    changed: [
+      "Silenced two harmless production-build warnings (a third-party SignalR annotation and the chunk-size notice); no runtime change.",
+    ],
+  },
+  {
     version: "0.87.1",
     date: "2026-07-05",
     pr: 194,
