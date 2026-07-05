@@ -38,6 +38,26 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(version),
     __BUILD_COMMIT__: JSON.stringify(buildCommit()),
   },
+  build: {
+    // The whole SPA is one bundle loaded once (and cached by the desktop shell); ~1.7 MB is expected, so
+    // don't warn on it. Revisit with code-splitting if it grows a lot.
+    chunkSizeWarningLimit: 1800,
+    rollupOptions: {
+      // Silence a benign warning from a dependency we don't control: @microsoft/signalr ships a
+      // `/*#__PURE__*/` comment in a position Rolldown can't interpret. It's third-party (node_modules),
+      // not our code, and harmless — drop just that log, pass everything else through.
+      onwarn(warning, warn) {
+        if (
+          warning.code === "INVALID_ANNOTATION" &&
+          typeof warning.message === "string" &&
+          warning.message.includes("@microsoft/signalr")
+        ) {
+          return;
+        }
+        warn(warning);
+      },
+    },
+  },
   server: {
     port: 5173,
     // Proxy API + SignalR to the .NET backend during development.
