@@ -100,6 +100,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.92.0",
+    date: "2026-07-05",
+    pr: 200,
+    headline: "Backend: external calendar feeds now fetch and merge into the calendar",
+    summary:
+      "The API can now fetch a user's external iCalendar (.ics) feeds and merge their events into the Calendar " +
+      "tab alongside Google calendars - and manage the feed subscriptions (add / rename / recolour / enable / " +
+      "remove). Feeds work even without a Google connection. Every feed is fetched behind an SSRF guard (https " +
+      "only, private/internal addresses blocked, redirects re-checked each hop, size and time capped), and a " +
+      "feed URL is test-fetched before it's saved so broken or unsafe URLs are rejected up front. The manager " +
+      "UI arrives in the next release; this is the API + merge. Server redeploy.",
+    added: [
+      "External .ics feeds are fetched (SSRF-guarded) and their events merged into the Calendar tab, coloured per feed - working with or without Google connected.",
+      "Endpoints to add, edit, and remove external calendar feeds, with the feed URL validated and test-fetched before it's stored.",
+    ],
+  },
+  {
     version: "0.91.0",
     date: "2026-07-05",
     pr: 199,

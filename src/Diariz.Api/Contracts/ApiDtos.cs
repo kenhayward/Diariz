@@ -80,6 +80,15 @@ public record CalendarLinkDto(
 /// server finds which calendar the event is on.</summary>
 public record LinkCalendarRequest(string EventId, bool Manual = false, string? CalendarId = null);
 
+/// <summary>An external iCalendar (<c>.ics</c>) feed the user has subscribed to. <see cref="LastError"/> is the
+/// last fetch failure (null when healthy) so the UI can flag a broken feed.</summary>
+public record IcsFeedDto(
+    Guid Id, string Name, string Url, string? Color, bool Enabled,
+    DateTimeOffset? LastFetchedAt, string? LastError);
+
+/// <summary>Create or update an external <c>.ics</c> feed. <paramref name="Enabled"/> defaults to on.</summary>
+public record IcsFeedRequest(string Name, string Url, string? Color = null, bool Enabled = true);
+
 /// <summary>Bulk delete the audio blobs of the listed recordings (keeps their transcripts/metadata).</summary>
 public record DeleteAudioRequest(IReadOnlyList<Guid> Ids);
 
