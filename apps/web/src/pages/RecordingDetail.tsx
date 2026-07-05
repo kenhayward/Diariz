@@ -813,31 +813,13 @@ export default function RecordingDetail() {
             <dd className="text-gray-800 dark:text-gray-200">{formatTimeHm(rec.createdAt)}</dd>
             <dt className="text-gray-500 dark:text-gray-400">{t("workspace:durationLabel")}</dt>
             <dd className="text-gray-800 dark:text-gray-200">{formatDurationHm(rec.durationMs)}</dd>
-            {rec.calendarLink && (
-              <>
-                <dt className="text-gray-500 dark:text-gray-400">{t("workspace:meetingLabel")}</dt>
-                <dd className="text-gray-800 dark:text-gray-200">
-                  {rec.calendarLink.htmlLink ? (
-                    <a
-                      href={rec.calendarLink.htmlLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-indigo-600 hover:underline dark:text-indigo-400"
-                    >
-                      {rec.calendarLink.summary || t("workspace:meetingUntitled")}
-                    </a>
-                  ) : (
-                    rec.calendarLink.summary || t("workspace:meetingUntitled")
-                  )}
-                </dd>
-              </>
-            )}
           </dl>
 
           {/* Linked meeting: full invite details (live, falling back to the stored snapshot) + manage actions. */}
           {rec.calendarLink && (
             <div className="mb-4 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
               <CalendarEventDetails
+                showTitle
                 event={
                   linkedEvent ?? {
                     id: rec.calendarLink.eventId,
