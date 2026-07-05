@@ -948,39 +948,53 @@ function SectionRenameForm({
 /// A Google Calendar event row in the Calendar tab's merged day list — time range + title. Clicking the row
 /// opens the event preview (a meeting with no recording); the calendar glyph still links out to Google.
 /// Only unlinked events reach this row (a linked event is shown by its recording row, deduped in `dayItems`).
+/// Events from an external .ics feed (`calendarId` starting `ics:`) are display-only - they have no Google
+/// event to preview or link a recording to - so their row is a static (non-clickable) block, still coloured.
 function EventRow({ event, locale, t }: { event: CalendarEvent; locale: string; t: TFunction }) {
   const fmt = new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" });
   const title = event.summary || t("calUntitledEvent");
   const range = `${fmt.format(new Date(event.start))} – ${fmt.format(new Date(event.end))}`;
+  const isFeed = event.calendarId?.startsWith("ics:") ?? false;
+
+  const inner = (
+    <>
+      <svg
+        {...iconProps}
+        style={event.color ? { color: event.color } : undefined}
+        className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${event.color ? "" : "text-green-600 dark:text-green-400"}`}
+        aria-label={t("calEventLabel")}
+      >
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+        <line x1="16" y1="2" x2="16" y2="6" />
+        <line x1="8" y1="2" x2="8" y2="6" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+      </svg>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-gray-800 dark:text-gray-200">{title}</div>
+        <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+          <span className="tabular-nums">{range}</span>
+          {event.calendarName && <span className="truncate">· {event.calendarName}</span>}
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <li>
-      <NavLink
-        to={`/calendar-event/${encodeURIComponent(event.id)}`}
-        className={({ isActive }) =>
-          `flex items-start gap-2 py-1.5 pl-3 pr-2 text-sm ${
-            isActive ? "bg-blue-50 dark:bg-blue-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-800"
-          }`
-        }
-      >
-        <svg
-          {...iconProps}
-          style={event.color ? { color: event.color } : undefined}
-          className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${event.color ? "" : "text-green-600 dark:text-green-400"}`}
-          aria-label={t("calEventLabel")}
+      {isFeed ? (
+        <div className="flex items-start gap-2 py-1.5 pl-3 pr-2 text-sm">{inner}</div>
+      ) : (
+        <NavLink
+          to={`/calendar-event/${encodeURIComponent(event.id)}`}
+          className={({ isActive }) =>
+            `flex items-start gap-2 py-1.5 pl-3 pr-2 text-sm ${
+              isActive ? "bg-blue-50 dark:bg-blue-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-800"
+            }`
+          }
         >
-          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-          <line x1="16" y1="2" x2="16" y2="6" />
-          <line x1="8" y1="2" x2="8" y2="6" />
-          <line x1="3" y1="10" x2="21" y2="10" />
-        </svg>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-gray-800 dark:text-gray-200">{title}</div>
-          <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-            <span className="tabular-nums">{range}</span>
-            {event.calendarName && <span className="truncate">· {event.calendarName}</span>}
-          </div>
-        </div>
-      </NavLink>
+          {inner}
+        </NavLink>
+      )}
     </li>
   );
 }

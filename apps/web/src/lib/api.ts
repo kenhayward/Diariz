@@ -15,6 +15,8 @@ import type {
   CalendarEvent,
   CalendarMatch,
   CalendarLink,
+  IcsFeed,
+  IcsFeedInput,
   ChatAttachment,
   ChatConversation,
   ChatConversationSummary,
@@ -310,6 +312,24 @@ export const api = {
   /// Remove a recording's calendar link (idempotent).
   async deleteCalendarLink(id: string): Promise<void> {
     await http.delete(`/api/recordings/${id}/calendar-link`);
+  },
+
+  // ---- External .ics calendar feeds ----
+  async listCalendarFeeds(): Promise<IcsFeed[]> {
+    const { data } = await http.get<IcsFeed[]>("/api/calendar/feeds");
+    return data;
+  },
+  /// Add a feed. The server validates + test-fetches the URL, so this rejects (400) an unreachable/unsafe URL.
+  async createCalendarFeed(input: IcsFeedInput): Promise<IcsFeed> {
+    const { data } = await http.post<IcsFeed>("/api/calendar/feeds", input);
+    return data;
+  },
+  async updateCalendarFeed(id: string, input: IcsFeedInput): Promise<IcsFeed> {
+    const { data } = await http.put<IcsFeed>(`/api/calendar/feeds/${id}`, input);
+    return data;
+  },
+  async deleteCalendarFeed(id: string): Promise<void> {
+    await http.delete(`/api/calendar/feeds/${id}`);
   },
 
   // ---- Attachments (supporting documents) ----

@@ -118,6 +118,9 @@ the meeting it belongs to** (auto-saved on open, or picked by hand when the time
 shows the meeting's **full details** (time, location, organiser, attendees, description), and the **Calendar
 tab overlays their meetings** (a linked recording and its meeting show as one row; a meeting with no recording
 opens a preview you can link a recording to) — a revocable grant.
+- **Subscribe to external calendar feeds**: add any public iCalendar (`.ics`) URL — a team or shared
+calendar — in **Preferences → Calendar feeds**, give it a name and colour, and its meetings appear on the
+Calendar tab in that colour (fetched behind an SSRF guard, no Google connection required).
 - **Preferences**: every user can change their own **display name** and pick their **native** and **app**
 language (chosen at signup or later from the account menu) — groundwork for upcoming UI localization and
 transcript translation.
