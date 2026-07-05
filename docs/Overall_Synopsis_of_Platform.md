@@ -401,12 +401,19 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   app; unverified apps work for the owner + test users). *Gmail draft creation was removed in 0.67.1 — Gmail
   scopes are **restricted** and would require a recurring third-party security assessment to verify; the
   minutes-email-to-self feature covers that need.*
+- **Multiple calendars (Phase 2 feature):** `IGoogleCalendarClient` reads **all the user's selected calendars**,
+  not just primary. `ListCalendarsAsync` (private) fetches **`users/me/calendarList`** and keeps the entries the
+  user has ticked visible (`selected`) plus their `primary`; `ListEventsAsync` then fetches each calendar's events
+  **in parallel** (a single flaky/shared calendar is skipped, not fatal), tagging every event with its
+  **`CalendarId`/`CalendarName`/`Color`** (the calendar's Google background hex). `GetEventAsync` searches the
+  selected calendars (primary first) for an event by id. Still `calendar.readonly` - the existing grant already
+  covers team/shared/subscribed calendars, so no new scope.
 - **Match a recording to its calendar meeting (Phase 2 feature):** with the Calendar grant, the recording's
-  Overview calls **`GET /api/recordings/{id}/calendar-match`**, which asks **`IGoogleCalendarClient.ListEventsAsync`**
-  for the user's primary-calendar events around the recording's wall-clock span (`CreatedAt` .. `+DurationMs`,
-  padded ±30 min), and returns the **best time-overlapping** event (`GoogleCalendarClient.PickBest`) as
-  `{ match }` (or `null`). Read-only (`calendar.readonly`); 400s without the grant. The Overview shows the
-  matched meeting with a link to the Google Calendar event.
+  Overview calls **`GET /api/recordings/{id}/calendar-match`**, which asks `ListEventsAsync` for events across the
+  user's selected calendars around the recording's wall-clock span (`CreatedAt` .. `+DurationMs`, padded ±30 min),
+  and returns the **best time-overlapping** event (`GoogleCalendarClient.PickBest`) as `{ match }` (or `null`).
+  Read-only (`calendar.readonly`); 400s without the grant. The Overview shows the matched meeting with a link to
+  the Google Calendar event.
 - **Persisted calendar links (Phase 2 feature):** the match above is a *suggestion* - a recording can also be
   **persistently linked** to an event via **`PUT /api/recordings/{id}/calendar-link`** `{ eventId, manual }`
   (owner-scoped, requires the grant), stored as a 1:1 **`RecordingCalendarLink`** (shared PK, cascade) holding a

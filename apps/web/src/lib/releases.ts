@@ -100,6 +100,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.88.0",
+    date: "2026-07-05",
+    pr: 196,
+    headline: "Calendar tab now shows all your calendars, not just your personal one",
+    summary:
+      "The Calendar tab now overlays events from every Google calendar you have visible - team and shared " +
+      "calendars, and calendars you've subscribed to (including ICS ones added in Google Calendar) - instead " +
+      "of only your primary calendar. It follows the calendars you've ticked visible in Google. This is the " +
+      "backend groundwork; the next release colours each event by its Google calendar colour and lets you " +
+      "link a recording to an event on any of these calendars. No new Google permission is needed. Server redeploy.",
+    added: [
+      "The Calendar tab and recording meeting-matching now read across all your selected Google calendars (team, shared, subscribed), not just your primary one.",
+    ],
+  },
+  {
     version: "0.87.2",
     date: "2026-07-05",
     pr: 195,
