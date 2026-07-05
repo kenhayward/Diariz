@@ -407,6 +407,16 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   padded ±30 min), and returns the **best time-overlapping** event (`GoogleCalendarClient.PickBest`) as
   `{ match }` (or `null`). Read-only (`calendar.readonly`); 400s without the grant. The Overview shows the
   matched meeting with a link to the Google Calendar event.
+- **Persisted calendar links (Phase 2 feature):** the match above is a *suggestion* - a recording can also be
+  **persistently linked** to an event via **`PUT /api/recordings/{id}/calendar-link`** `{ eventId, manual }`
+  (owner-scoped, requires the grant), stored as a 1:1 **`RecordingCalendarLink`** (shared PK, cascade) holding a
+  lightweight snapshot (event id, title, start/end, link, manual flag). **`DELETE`** unlinks. The link's presence
+  flows onto the recording's **detail** (`CalendarLink`) and **list** (`CalendarEventId`) projections, so the UI can
+  show a calendar icon and dedupe the Calendar tab. The **rich invite details** (attendees, description, location,
+  organiser) are fetched **live by id** via **`GET /api/calendar/events/{eventId}`** (`GoogleCalendarClient.GetEventAsync`;
+  404 when the event is gone or Calendar isn't connected) - never stored, so they can't go stale. Linking works in
+  both directions (recording → event, and event → recording) and regardless of time overlap (a manual link handles
+  meetings that ran late/over).
 - **Calendar-tab event overlay (Phase 2 feature):** with the Calendar grant, the recordings **Calendar tab**
   overlays the month's meetings. The web app fetches **`GET /api/calendar/events?timeMin&timeMax`**
   (`CalendarController`, range-capped ≤62 days, reusing `IGoogleCalendarClient.ListEventsAsync`; empty list

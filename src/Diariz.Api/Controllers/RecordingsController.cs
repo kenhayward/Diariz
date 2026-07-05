@@ -68,7 +68,8 @@ public class RecordingsController : ControllerBase
             .OrderBy(r => r.Position)
             .ThenByDescending(r => r.CreatedAt)
             .Select(r => new RecordingSummaryDto(r.Id, r.Title, r.Name, r.Source, r.DurationMs, r.Status, r.CreatedAt,
-                r.SectionId, r.Section != null ? r.Section.Name : null, r.Actions.Any(), r.AudioDeletedAt == null))
+                r.SectionId, r.Section != null ? r.Section.Name : null, r.Actions.Any(), r.AudioDeletedAt == null,
+                r.CalendarLink != null ? r.CalendarLink.EventId : null))
             .ToListAsync();
 
     /// <summary>Drag-and-drop: set the section and 0-based position of each listed recording in one
@@ -105,6 +106,7 @@ public class RecordingsController : ControllerBase
         var rec = await _db.Recordings
             .Include(r => r.Speakers)
             .Include(r => r.Actions)
+            .Include(r => r.CalendarLink)
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal))
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
@@ -141,8 +143,12 @@ public class RecordingsController : ControllerBase
 
         return new RecordingDetailDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.SizeBytes,
             rec.Status, rec.Error, rec.CreatedAt, rec.MinSpeakers, rec.MaxSpeakers, names, speakers, tDto, sDto,
-            mDto, actions, rec.ActionsExtractedAt != null, rec.HasAudio);
+            mDto, actions, rec.ActionsExtractedAt != null, rec.HasAudio, ToLinkDto(rec.CalendarLink));
     }
+
+    private static CalendarLinkDto? ToLinkDto(RecordingCalendarLink? link) => link is null
+        ? null
+        : new CalendarLinkDto(link.EventId, link.Summary, link.StartsAt, link.EndsAt, link.HtmlLink, link.LinkedManually);
 
     /// <summary>Upload an audio file and kick off transcription.</summary>
     [HttpPost]
@@ -525,6 +531,63 @@ public class RecordingsController : ControllerBase
                 ? null
                 : new { best.Id, best.Summary, Start = best.Start, End = best.End, best.HtmlLink },
         });
+    }
+
+    /// <summary>Persist a link from this recording to a Google Calendar event (used both to accept the
+    /// auto-suggested match and to pick one by hand, even when the times don't line up). Stores a lightweight
+    /// snapshot; the rich invite details are fetched live. <c>Manual</c> links are never overwritten by the
+    /// auto-match.</summary>
+    [HttpPut("{id:guid}/calendar-link")]
+    public async Task<IActionResult> LinkCalendar(Guid id, LinkCalendarRequest req, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(req.EventId)) return BadRequest("An event id is required.");
+
+        var settings = await _db.UserSettings.FindAsync([UserId], ct);
+        if (settings?.GoogleCalendarGranted != true)
+            return BadRequest("Connect Google Calendar in Preferences to link meetings.");
+
+        var rec = await _db.Recordings
+            .Include(r => r.CalendarLink)
+            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId, ct);
+        if (rec is null) return NotFound();
+
+        var ev = await _calendar!.GetEventAsync(UserId, req.EventId, ct);
+        if (ev is null)
+            return BadRequest("That calendar event could not be found - it may have been deleted, or your Google connection needs reauthorising.");
+
+        var link = rec.CalendarLink;
+        if (link is null)
+        {
+            link = new RecordingCalendarLink { RecordingId = rec.Id };
+            _db.RecordingCalendarLinks.Add(link);
+        }
+        link.EventId = ev.Id;
+        link.Summary = ev.Summary;
+        link.StartsAt = ev.Start;
+        link.EndsAt = ev.End;
+        link.HtmlLink = ev.HtmlLink;
+        link.LinkedManually = req.Manual;
+        link.SyncedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        return Ok(ToLinkDto(link));
+    }
+
+    /// <summary>Remove this recording's calendar link (idempotent).</summary>
+    [HttpDelete("{id:guid}/calendar-link")]
+    public async Task<IActionResult> UnlinkCalendar(Guid id, CancellationToken ct)
+    {
+        var rec = await _db.Recordings
+            .Include(r => r.CalendarLink)
+            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId, ct);
+        if (rec is null) return NotFound();
+
+        if (rec.CalendarLink is not null)
+        {
+            _db.RecordingCalendarLinks.Remove(rec.CalendarLink);
+            await _db.SaveChangesAsync(ct);
+        }
+        return NoContent();
     }
 
     [HttpPut("{id:guid}/segments/{segmentId:guid}")]

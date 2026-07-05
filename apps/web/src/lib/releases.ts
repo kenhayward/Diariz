@@ -97,6 +97,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.85.0",
+    date: "2026-07-05",
+    pr: 190,
+    headline: "Calendar links are now saved (groundwork)",
+    summary:
+      "Backend groundwork for richer Google Calendar support. A recording can now be persistently linked to " +
+      "a calendar event (stored on the server), and the API can fetch an event's full invite details - " +
+      "location, organiser, attendees with their response, and description - by id. This is the foundation " +
+      "for the upcoming UI: showing all the meeting details on a recording, one deduped row with both the " +
+      "microphone and calendar icons, linking a recording to a meeting by hand even when the times don't line " +
+      "up, and previewing a meeting that has no recording yet. Nothing changes in the UI in this release. " +
+      "Server redeploy - it runs a database migration on start.",
+    added: [
+      "Recordings can be persistently linked to a Google Calendar event (PUT/DELETE /api/recordings/{id}/calendar-link); the link is carried on the recording's detail and list responses.",
+      "The API can fetch a single calendar event's full details (attendees, description, location, organiser) by id (GET /api/calendar/events/{eventId}).",
+    ],
+  },
+  {
     version: "0.84.1",
     date: "2026-07-04",
     pr: 189,

@@ -40,6 +40,8 @@ public class RecordingsControllerTests
     private sealed class FakeCalendarClient : IGoogleCalendarClient
     {
         public IReadOnlyList<CalendarEvent>? Events { get; set; } = new List<CalendarEvent>();
+        public CalendarEvent? Event { get; set; }
+        public string? RequestedEventId { get; private set; }
         public DateTimeOffset? TimeMin { get; private set; }
         public DateTimeOffset? TimeMax { get; private set; }
 
@@ -48,6 +50,12 @@ public class RecordingsControllerTests
         {
             TimeMin = timeMin; TimeMax = timeMax;
             return Task.FromResult(Events);
+        }
+
+        public Task<CalendarEvent?> GetEventAsync(Guid userId, string eventId, CancellationToken ct = default)
+        {
+            RequestedEventId = eventId;
+            return Task.FromResult(Event);
         }
     }
 
@@ -1581,6 +1589,122 @@ public class RecordingsControllerTests
         var controller = Build(db, userId, new FakeJobQueue(), calendar: cal);
 
         Assert.IsType<BadRequestObjectResult>(await controller.CalendarMatch(rec.Id, default));
+    }
+
+    // ---- Calendar link (persisted) ----
+
+    private static CalendarEvent SampleEvent(string id = "evt1") => new(
+        id, "Planning", DateTimeOffset.Parse("2026-07-02T09:00:00Z"), DateTimeOffset.Parse("2026-07-02T10:00:00Z"),
+        "https://cal/evt1");
+
+    [Fact]
+    public async Task LinkCalendar_WhenNotGranted_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var rec = await SeedRecordingAt(db, userId, DateTimeOffset.Parse("2026-07-02T09:00:00Z"), 600_000);
+        var cal = new FakeCalendarClient { Event = SampleEvent() };
+        var controller = Build(db, userId, new FakeJobQueue(), calendar: cal);
+
+        Assert.IsType<BadRequestObjectResult>(await controller.LinkCalendar(rec.Id, new("evt1", true), default));
+        Assert.Null(cal.RequestedEventId); // never reached the Calendar client
+    }
+
+    [Fact]
+    public async Task LinkCalendar_WhenRecordingNotOwned_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        GrantCalendar(db, userId);
+        await db.SaveChangesAsync();
+        var cal = new FakeCalendarClient { Event = SampleEvent() };
+        var controller = Build(db, userId, new FakeJobQueue(), calendar: cal);
+
+        Assert.IsType<NotFoundResult>(await controller.LinkCalendar(Guid.NewGuid(), new("evt1", true), default));
+    }
+
+    [Fact]
+    public async Task LinkCalendar_WhenEventNotFound_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var rec = await SeedRecordingAt(db, userId, DateTimeOffset.Parse("2026-07-02T09:00:00Z"), 600_000);
+        GrantCalendar(db, userId);
+        await db.SaveChangesAsync();
+        var cal = new FakeCalendarClient { Event = null }; // event deleted / not reachable
+        var controller = Build(db, userId, new FakeJobQueue(), calendar: cal);
+
+        Assert.IsType<BadRequestObjectResult>(await controller.LinkCalendar(rec.Id, new("evt1", true), default));
+    }
+
+    [Fact]
+    public async Task LinkCalendar_StoresSnapshot_AndDetailAndListCarryIt()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var rec = await SeedRecordingAt(db, userId, DateTimeOffset.Parse("2026-07-02T09:00:00Z"), 600_000);
+        GrantCalendar(db, userId);
+        await db.SaveChangesAsync();
+        var cal = new FakeCalendarClient { Event = SampleEvent() };
+        var controller = Build(db, userId, new FakeJobQueue(), calendar: cal);
+
+        var ok = Assert.IsType<OkObjectResult>(await controller.LinkCalendar(rec.Id, new("evt1", true), default));
+        var dto = Assert.IsType<CalendarLinkDto>(ok.Value);
+        Assert.Equal("evt1", dto.EventId);
+        Assert.Equal("Planning", dto.Summary);
+        Assert.True(dto.LinkedManually);
+        Assert.Equal("evt1", cal.RequestedEventId);
+
+        var detail = (await controller.Get(rec.Id)).Value!;
+        Assert.Equal("evt1", detail.CalendarLink!.EventId);
+
+        var list = await controller.List();
+        Assert.Equal("evt1", Assert.Single(list).CalendarEventId);
+    }
+
+    [Fact]
+    public async Task LinkCalendar_Relinking_OverwritesTheExistingSnapshot()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var rec = await SeedRecordingAt(db, userId, DateTimeOffset.Parse("2026-07-02T09:00:00Z"), 600_000);
+        GrantCalendar(db, userId);
+        await db.SaveChangesAsync();
+        var cal = new FakeCalendarClient { Event = SampleEvent() };
+        var controller = Build(db, userId, new FakeJobQueue(), calendar: cal);
+        await controller.LinkCalendar(rec.Id, new("evt1", false), default);
+
+        cal.Event = new("evt2", "Retro", DateTimeOffset.Parse("2026-07-03T09:00:00Z"),
+            DateTimeOffset.Parse("2026-07-03T10:00:00Z"), "https://cal/evt2");
+        var ok = Assert.IsType<OkObjectResult>(await controller.LinkCalendar(rec.Id, new("evt2", true), default));
+        var dto = Assert.IsType<CalendarLinkDto>(ok.Value);
+        Assert.Equal("evt2", dto.EventId);
+        Assert.True(dto.LinkedManually);
+        Assert.Single(db.RecordingCalendarLinks); // still exactly one link row
+    }
+
+    [Fact]
+    public async Task UnlinkCalendar_RemovesTheLink()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var rec = await SeedRecordingAt(db, userId, DateTimeOffset.Parse("2026-07-02T09:00:00Z"), 600_000);
+        GrantCalendar(db, userId);
+        await db.SaveChangesAsync();
+        var cal = new FakeCalendarClient { Event = SampleEvent() };
+        var controller = Build(db, userId, new FakeJobQueue(), calendar: cal);
+        await controller.LinkCalendar(rec.Id, new("evt1", true), default);
+
+        Assert.IsType<NoContentResult>(await controller.UnlinkCalendar(rec.Id, default));
+        Assert.Empty(db.RecordingCalendarLinks);
+        var detail = (await controller.Get(rec.Id)).Value!;
+        Assert.Null(detail.CalendarLink);
     }
 
     [Fact]

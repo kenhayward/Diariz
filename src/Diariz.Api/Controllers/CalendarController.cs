@@ -34,4 +34,15 @@ public class CalendarController : ControllerBase
         var events = await _calendar.ListEventsAsync(UserId, timeMin, timeMax, ct);
         return Ok(events ?? []);
     }
+
+    /// <summary>A single event by id, with the full invite details (attendees, description, location,
+    /// organizer). Powers the recording Overview's meeting details and the recording-less event preview.
+    /// 404 when the event is missing or Calendar isn't connected.</summary>
+    [HttpGet("events/{eventId}")]
+    public async Task<ActionResult<CalendarEvent>> Event(string eventId, CancellationToken ct)
+    {
+        var ev = await _calendar.GetEventAsync(UserId, eventId, ct);
+        if (ev is null) return NotFound();
+        return Ok(ev);
+    }
 }

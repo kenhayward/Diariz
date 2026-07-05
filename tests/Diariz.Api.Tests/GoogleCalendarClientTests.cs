@@ -56,6 +56,74 @@ public class GoogleCalendarClientTests
         Assert.Empty(GoogleCalendarClient.ParseEvents("{ \"items\": [] }"));
     }
 
+    [Fact]
+    public void ParseEvents_ReadsRichFields_DescriptionLocationOrganizerAttendees()
+    {
+        const string json = """
+        { "items": [
+          { "id": "e1", "summary": "Planning", "location": "Room 4 / meet.google.com/abc",
+            "description": "Quarterly planning agenda.",
+            "start": { "dateTime": "2026-07-02T09:00:00Z" }, "end": { "dateTime": "2026-07-02T10:00:00Z" },
+            "organizer": { "email": "boss@x.test", "displayName": "The Boss" },
+            "attendees": [
+              { "email": "boss@x.test", "displayName": "The Boss", "responseStatus": "accepted", "organizer": true },
+              { "email": "me@x.test", "responseStatus": "needsAction", "self": true }
+            ] }
+        ] }
+        """;
+
+        var e = Assert.Single(GoogleCalendarClient.ParseEvents(json));
+        Assert.Equal("Quarterly planning agenda.", e.Description);
+        Assert.Equal("Room 4 / meet.google.com/abc", e.Location);
+        Assert.Equal("boss@x.test", e.Organizer!.Email);
+        Assert.Equal("The Boss", e.Organizer.DisplayName);
+        Assert.Equal(2, e.Attendees!.Count);
+        Assert.True(e.Attendees[0].Organizer);
+        Assert.Equal("accepted", e.Attendees[0].ResponseStatus);
+        Assert.True(e.Attendees[1].Self);
+        Assert.Equal("needsAction", e.Attendees[1].ResponseStatus);
+    }
+
+    // ---- GetEventAsync ----
+
+    [Fact]
+    public async Task GetEventAsync_ReturnsNull_WhenNoAccessToken()
+    {
+        var handler = new FakeHttpMessageHandler("{}");
+        var client = new GoogleCalendarClient(new HttpClient(handler), new StubTokenProvider(null));
+
+        Assert.Null(await client.GetEventAsync(Guid.NewGuid(), "evt1"));
+        Assert.Null(handler.LastRequest); // never called Calendar
+    }
+
+    [Fact]
+    public async Task GetEventAsync_FetchesById_AndParsesTheSingleEvent()
+    {
+        const string json = """
+        { "id": "evt1", "summary": "1:1", "htmlLink": "https://cal/evt1",
+          "start": { "dateTime": "2026-07-02T09:00:00Z" }, "end": { "dateTime": "2026-07-02T09:30:00Z" } }
+        """;
+        var handler = new FakeHttpMessageHandler(json);
+        var client = new GoogleCalendarClient(new HttpClient(handler), new StubTokenProvider("cal-tok"));
+
+        var e = await client.GetEventAsync(Guid.NewGuid(), "evt1");
+
+        Assert.Equal("evt1", e!.Id);
+        Assert.Equal("1:1", e.Summary);
+        var url = handler.LastRequest!.RequestUri!.ToString();
+        Assert.Contains("calendar/v3/calendars/primary/events/evt1", url);
+        Assert.Equal("cal-tok", handler.LastRequest.Headers.Authorization!.Parameter);
+    }
+
+    [Fact]
+    public async Task GetEventAsync_ReturnsNull_WhenEventNotFound()
+    {
+        var handler = new FakeHttpMessageHandler("{\"error\":\"notFound\"}", HttpStatusCode.NotFound);
+        var client = new GoogleCalendarClient(new HttpClient(handler), new StubTokenProvider("tok"));
+
+        Assert.Null(await client.GetEventAsync(Guid.NewGuid(), "gone"));
+    }
+
     // ---- PickBest ----
 
     [Fact]
