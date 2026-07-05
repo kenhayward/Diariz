@@ -15,7 +15,7 @@ namespace Diariz.Api.IntegrationTests;
 [Collection(IntegrationCollection.Name)]
 public class RecordingsControllerIntegrationTests(ContainersFixture fx)
 {
-    private static RecordingsController Build(Diariz.Domain.DiarizDbContext db, Guid userId)
+    private static RecordingsController Build(Diariz.Domain.DiarizDbContext db, Guid userId, IGoogleCalendarClient? calendar = null)
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" })
@@ -23,10 +23,19 @@ public class RecordingsControllerIntegrationTests(ContainersFixture fx)
         var resolver = new SummarizationSettingsResolver(
             db, Options.Create(new SummarizationOptions { ApiBase = "http://llm.test/v1" }), new FakeApiKeyProtector());
         return new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
-            resolver, new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()))
+            resolver, new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()), null, calendar)
         {
             ControllerContext = Http.Context(userId)
         };
+    }
+
+    /// <summary>Returns a canned event for both list + get (enough for the calendar-link path).</summary>
+    private sealed class StubCalendar(CalendarEvent ev) : IGoogleCalendarClient
+    {
+        public Task<IReadOnlyList<CalendarEvent>?> ListEventsAsync(Guid u, DateTimeOffset a, DateTimeOffset b, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<CalendarEvent>?>(new List<CalendarEvent> { ev });
+        public Task<CalendarEvent?> GetEventAsync(Guid u, string id, CancellationToken ct = default) =>
+            Task.FromResult<CalendarEvent?>(ev);
     }
 
     private async Task<(Guid userId, Guid recId)> SeedRecording()
@@ -240,6 +249,41 @@ public class RecordingsControllerIntegrationTests(ContainersFixture fx)
 
         await using var verify = fx.CreateDbContext();
         Assert.False(await verify.RecordingCalendarLinks.AnyAsync(l => l.RecordingId == recId)); // cascaded with the recording
+    }
+
+    [Fact]
+    public async Task LinkCalendar_StoresEventWithNonUtcOffset_OnRealPostgres()
+    {
+        // Google returns event times with the meeting's local UTC offset (e.g. 09:00+01:00 BST). Npgsql rejects
+        // a DateTimeOffset with a non-zero offset for a `timestamptz` column, so the link must be stored in UTC.
+        Guid userId, recId;
+        await using (var db = fx.CreateDbContext())
+        {
+            var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = "u@x.test" };
+            var rec = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = "k" };
+            db.AddRange(user, rec, new Domain.Entities.UserSettings { UserId = user.Id, GoogleCalendarGranted = true });
+            await db.SaveChangesAsync();
+            (userId, recId) = (user.Id, rec.Id);
+        }
+
+        var ev = new CalendarEvent("evt1", "AMBU Workshop",
+            DateTimeOffset.Parse("2026-07-03T09:00:00+01:00"), DateTimeOffset.Parse("2026-07-03T12:00:00+01:00"),
+            "https://cal/evt1");
+
+        await using (var db = fx.CreateDbContext())
+        {
+            var result = await Build(db, userId, new StubCalendar(ev))
+                .LinkCalendar(recId, new LinkCalendarRequest("evt1", true), default);
+            Assert.IsType<OkObjectResult>(result); // was throwing (500) before the UTC conversion
+        }
+
+        await using var verify = fx.CreateDbContext();
+        var link = await verify.RecordingCalendarLinks.FindAsync(recId);
+        Assert.NotNull(link);
+        Assert.Equal("evt1", link!.EventId);
+        // 09:00+01:00 == 08:00Z; stored normalized to UTC.
+        Assert.Equal(DateTimeOffset.Parse("2026-07-03T08:00:00Z"), link.StartsAt);
+        Assert.Equal(DateTimeOffset.Parse("2026-07-03T11:00:00Z"), link.EndsAt);
     }
 
     [Fact]
