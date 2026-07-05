@@ -147,15 +147,16 @@ describe("RecordingDetail", () => {
   it("auto-saves the suggested meeting when Calendar is connected and the recording is unlinked", async () => {
     (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true });
     (api.getCalendarMatch as ReturnType<typeof vi.fn>).mockResolvedValue({
-      id: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt, htmlLink: "https://cal/evt1",
+      id: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt, htmlLink: "https://cal/evt1", calendarId: "team@g",
     });
     (api.putCalendarLink as ReturnType<typeof vi.fn>).mockResolvedValue({
-      eventId: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt,
+      eventId: "evt1", calendarId: "team@g", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt,
       htmlLink: "https://cal/evt1", linkedManually: false,
     });
     renderPage(base); // base.calendarLink is null
     await loaded();
-    await waitFor(() => expect(api.putCalendarLink).toHaveBeenCalledWith("rec-123", "evt1", false));
+    // Auto-save carries the match's calendarId so the link targets the right calendar.
+    await waitFor(() => expect(api.putCalendarLink).toHaveBeenCalledWith("rec-123", "evt1", false, "team@g"));
   });
 
   it("shows the linked meeting's full details and manage actions on the Overview", async () => {
@@ -168,7 +169,7 @@ describe("RecordingDetail", () => {
     });
     renderPage({
       ...base,
-      calendarLink: { eventId: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt, htmlLink: "https://cal/evt1", linkedManually: false },
+      calendarLink: { eventId: "evt1", calendarId: "primary", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt, htmlLink: "https://cal/evt1", linkedManually: false },
     });
     await loaded();
 
@@ -190,7 +191,7 @@ describe("RecordingDetail", () => {
     (api.deleteCalendarLink as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     renderPage({
       ...base,
-      calendarLink: { eventId: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt, htmlLink: null, linkedManually: true },
+      calendarLink: { eventId: "evt1", calendarId: "primary", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt, htmlLink: null, linkedManually: true },
     });
     await loaded();
     fireEvent.click(await screen.findByRole("button", { name: /unlink meeting/i }));

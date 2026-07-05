@@ -61,7 +61,7 @@ export default function CalendarLinkModal({
     setBusy(true);
     setError(null);
     try {
-      const l = await api.putCalendarLink(recordingId, ev.id, true);
+      const l = await api.putCalendarLink(recordingId, ev.id, true, ev.calendarId);
       qc.invalidateQueries({ queryKey: ["recording", recordingId] });
       qc.invalidateQueries({ queryKey: ["recordings"] });
       onLinked?.(l);

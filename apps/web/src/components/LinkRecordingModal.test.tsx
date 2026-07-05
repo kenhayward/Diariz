@@ -21,7 +21,7 @@ function renderModal(onLinked = vi.fn(), onClose = vi.fn()) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={qc}>
-      <LinkRecordingModal eventId="evt1" onClose={onClose} onLinked={onLinked} />
+      <LinkRecordingModal eventId="evt1" calendarId="team@g" onClose={onClose} onLinked={onLinked} />
     </QueryClientProvider>,
   );
   return { onLinked, onClose };
@@ -50,7 +50,7 @@ describe("LinkRecordingModal", () => {
     const { onLinked } = renderModal();
     fireEvent.click(await screen.findByText("Retro"));
 
-    await waitFor(() => expect(api.putCalendarLink).toHaveBeenCalledWith("b", "evt1", true));
+    await waitFor(() => expect(api.putCalendarLink).toHaveBeenCalledWith("b", "evt1", true, "team@g"));
     expect(onLinked).toHaveBeenCalledWith("b");
   });
 });

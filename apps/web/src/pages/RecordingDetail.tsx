@@ -111,7 +111,7 @@ export default function RecordingDetail() {
     if (rec.calendarLink || !calendarMatch || autoLinkedRef.current) return;
     autoLinkedRef.current = true;
     api
-      .putCalendarLink(id, calendarMatch.id, false)
+      .putCalendarLink(id, calendarMatch.id, false, calendarMatch.calendarId)
       .then(() => qc.invalidateQueries({ queryKey: ["recording", id] }))
       .then(() => qc.invalidateQueries({ queryKey: ["recordings"] }))
       .catch(() => {
@@ -134,7 +134,7 @@ export default function RecordingDetail() {
   async function acceptSuggestion() {
     if (!id || !calendarMatch) return;
     try {
-      await api.putCalendarLink(id, calendarMatch.id, false);
+      await api.putCalendarLink(id, calendarMatch.id, false, calendarMatch.calendarId);
       await qc.invalidateQueries({ queryKey: ["recording", id] });
       await qc.invalidateQueries({ queryKey: ["recordings"] });
     } catch (e) {

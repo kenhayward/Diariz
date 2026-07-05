@@ -141,15 +141,16 @@ describe("RecordingsPanel", () => {
     expect(screen.getByLabelText("Audio deleted")).toBeTruthy();
   });
 
-  it("shows a calendar icon on a row linked to a meeting, and none when unlinked", async () => {
+  it("shows a calendar icon on a row linked to a meeting (tinted its calendar colour), and none when unlinked", async () => {
     (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { ...rec, id: "a", name: "Linked", calendarEventId: "evt1" },
+      { ...rec, id: "a", name: "Linked", calendarEventId: "evt1", calendarColor: "#0B8043" },
       { ...rec, id: "b", name: "Unlinked", calendarEventId: null },
     ]);
     renderList();
     await screen.findByText("Linked");
-    // Exactly one calendar icon - on the linked row.
-    expect(screen.getAllByLabelText("Linked to a calendar event")).toHaveLength(1);
+    // Exactly one calendar icon - on the linked row - tinted the calendar's colour (#0B8043 → rgb).
+    const icon = screen.getByLabelText("Linked to a calendar event");
+    expect(icon.style.color).toBe("rgb(11, 128, 67)");
   });
 
   it("Delete audio (kebab) confirms then calls the API", async () => {
