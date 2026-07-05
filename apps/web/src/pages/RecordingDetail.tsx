@@ -16,6 +16,8 @@ import MeetingMinutesEditModal from "../components/MeetingMinutesEditModal";
 import EmailMinutesModal from "../components/EmailMinutesModal";
 import { renderMarkdown } from "../lib/markdown";
 import AttachmentsManager from "../components/AttachmentsManager";
+import CalendarEventDetails from "../components/CalendarEventDetails";
+import CalendarLinkModal from "../components/CalendarLinkModal";
 import PeopleModal from "../components/PeopleModal";
 import SpeakerAssign from "../components/SpeakerAssign";
 import ToolbarButton, { iconProps } from "../components/ToolbarButton";
@@ -82,13 +84,63 @@ export default function RecordingDetail() {
   const { data: profile } = useQuery({ queryKey: ["user-profile"], queryFn: api.getProfile });
   const { data: languages = [] } = useQuery({ queryKey: ["languages"], queryFn: fetchLanguages });
   const nativeLang = languages.find((l) => l.code === profile?.nativeLanguage) ?? null;
-  // If the user has connected Google Calendar, find the meeting this recording overlaps (shown on Overview).
+  // If the user has connected Google Calendar, find the meeting this recording overlaps (the suggestion
+  // that seeds the auto-saved link and the "Suggested meeting" prompt).
   const { data: calendarMatch } = useQuery({
     queryKey: ["calendar-match", id],
     queryFn: () => api.getCalendarMatch(id),
     enabled: Boolean(id) && profile?.googleCalendar === true,
     retry: false,
   });
+  // The full, live details of the linked event (attendees/description/location) for the Overview. Falls
+  // back to the stored snapshot if Google is unreachable / the event was deleted.
+  const linkedEventId = rec?.calendarLink?.eventId ?? null;
+  const { data: linkedEvent } = useQuery({
+    queryKey: ["calendar-event", linkedEventId],
+    queryFn: () => api.getCalendarEvent(linkedEventId!),
+    enabled: Boolean(linkedEventId),
+    retry: false,
+  });
+  const [linkModalOpen, setLinkModalOpen] = useState(false);
+
+  // Auto-save the best time-overlap match the first time an unlinked recording is opened, so the calendar
+  // icon + Overview details appear with no clicks. Manual links and existing links are never touched.
+  const autoLinkedRef = useRef(false);
+  useEffect(() => {
+    if (!id || !rec || profile?.googleCalendar !== true) return;
+    if (rec.calendarLink || !calendarMatch || autoLinkedRef.current) return;
+    autoLinkedRef.current = true;
+    api
+      .putCalendarLink(id, calendarMatch.id, false)
+      .then(() => qc.invalidateQueries({ queryKey: ["recording", id] }))
+      .then(() => qc.invalidateQueries({ queryKey: ["recordings"] }))
+      .catch(() => {
+        autoLinkedRef.current = false; // let a later render retry (e.g. the event became reachable)
+      });
+  }, [id, rec, profile, calendarMatch, qc]);
+
+  async function unlinkMeeting() {
+    if (!id) return;
+    try {
+      await api.deleteCalendarLink(id);
+      autoLinkedRef.current = true; // don't immediately re-auto-link what the user just removed
+      await qc.invalidateQueries({ queryKey: ["recording", id] });
+      await qc.invalidateQueries({ queryKey: ["recordings"] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e));
+    }
+  }
+
+  async function acceptSuggestion() {
+    if (!id || !calendarMatch) return;
+    try {
+      await api.putCalendarLink(id, calendarMatch.id, false);
+      await qc.invalidateQueries({ queryKey: ["recording", id] });
+      await qc.invalidateQueries({ queryKey: ["recordings"] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e));
+    }
+  }
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
@@ -761,26 +813,88 @@ export default function RecordingDetail() {
             <dd className="text-gray-800 dark:text-gray-200">{formatTimeHm(rec.createdAt)}</dd>
             <dt className="text-gray-500 dark:text-gray-400">{t("workspace:durationLabel")}</dt>
             <dd className="text-gray-800 dark:text-gray-200">{formatDurationHm(rec.durationMs)}</dd>
-            {calendarMatch && (
+            {rec.calendarLink && (
               <>
                 <dt className="text-gray-500 dark:text-gray-400">{t("workspace:meetingLabel")}</dt>
                 <dd className="text-gray-800 dark:text-gray-200">
-                  {calendarMatch.htmlLink ? (
+                  {rec.calendarLink.htmlLink ? (
                     <a
-                      href={calendarMatch.htmlLink}
+                      href={rec.calendarLink.htmlLink}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-indigo-600 hover:underline dark:text-indigo-400"
                     >
-                      {calendarMatch.summary || t("workspace:meetingUntitled")}
+                      {rec.calendarLink.summary || t("workspace:meetingUntitled")}
                     </a>
                   ) : (
-                    calendarMatch.summary || t("workspace:meetingUntitled")
+                    rec.calendarLink.summary || t("workspace:meetingUntitled")
                   )}
                 </dd>
               </>
             )}
           </dl>
+
+          {/* Linked meeting: full invite details (live, falling back to the stored snapshot) + manage actions. */}
+          {rec.calendarLink && (
+            <div className="mb-4 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+              <CalendarEventDetails
+                event={
+                  linkedEvent ?? {
+                    id: rec.calendarLink.eventId,
+                    summary: rec.calendarLink.summary,
+                    start: rec.calendarLink.start,
+                    end: rec.calendarLink.end,
+                    htmlLink: rec.calendarLink.htmlLink,
+                  }
+                }
+              />
+              <div className="mt-3 flex gap-2 border-t border-gray-200 pt-2 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setLinkModalOpen(true)}
+                  className="rounded border px-2 py-1 text-xs hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                >
+                  {t("workspace:calChangeMeeting")}
+                </button>
+                <button
+                  type="button"
+                  onClick={unlinkMeeting}
+                  className="rounded border px-2 py-1 text-xs hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                >
+                  {t("workspace:calUnlinkMeeting")}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Unlinked but Calendar connected: accept the suggestion (if any) or browse to link one by hand. */}
+          {!rec.calendarLink && profile?.googleCalendar === true && (
+            <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+              {calendarMatch && (
+                <>
+                  <span className="text-gray-500 dark:text-gray-400">{t("workspace:calSuggestedMeeting")}:</span>
+                  <span className="text-gray-800 dark:text-gray-200">
+                    {calendarMatch.summary || t("workspace:meetingUntitled")}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={acceptSuggestion}
+                    className="rounded border px-2 py-0.5 text-xs hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                  >
+                    {t("workspace:calAcceptSuggestion")}
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => setLinkModalOpen(true)}
+                className="rounded border px-2 py-0.5 text-xs hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+              >
+                {t("workspace:calLinkModalTitle")}
+              </button>
+            </div>
+          )}
+
           <h3 className="mb-1 text-base font-semibold text-gray-800 dark:text-gray-100">{t("workspace:sectionSummary")}</h3>
           {rec.summary ? (
             <>
@@ -1182,6 +1296,9 @@ export default function RecordingDetail() {
       {moving && <MoveToSectionModal recordingId={id} onClose={() => setMoving(false)} />}
       {downloading && <DownloadTranscriptModal recordingId={id} onClose={() => setDownloading(false)} />}
       {peopleOpen && <PeopleModal onClose={() => setPeopleOpen(false)} />}
+      {linkModalOpen && (
+        <CalendarLinkModal recordingId={id} aroundDate={rec.createdAt} onClose={() => setLinkModalOpen(false)} />
+      )}
 
       {retranscribeOpen && (
         <RetranscribeModal

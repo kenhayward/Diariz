@@ -185,6 +185,8 @@ export interface RecordingDetail {
   actionsExtracted: boolean;
   /// Whether the original audio is still present (false once the audio has been deleted).
   hasAudio: boolean;
+  /// The persisted Google Calendar link (snapshot), or null when unlinked.
+  calendarLink: CalendarLink | null;
 }
 
 export interface AuthResponse {
@@ -306,17 +308,42 @@ export interface UserProfile {
   googleCalendar: boolean; // user granted Google Calendar read access
 }
 
-/// A Google Calendar event (used both for the per-recording match and the Calendar-tab month list).
+/// One person on a calendar event (organizer or attendee).
+export interface CalendarAttendee {
+  email: string | null;
+  displayName: string | null;
+  responseStatus: string | null; // accepted | declined | tentative | needsAction
+  organizer: boolean;
+  self: boolean;
+}
+
+/// A Google Calendar event. The list/match endpoints return the slim fields; a single-event fetch
+/// (`getCalendarEvent`) also populates the rich fields (description/location/organizer/attendees).
 export interface CalendarEvent {
   id: string;
   summary: string | null;
   start: string; // ISO
   end: string; // ISO
   htmlLink: string | null;
+  description?: string | null;
+  location?: string | null;
+  organizer?: CalendarAttendee | null;
+  attendees?: CalendarAttendee[];
 }
 
 /// A Google Calendar meeting matched to a recording by time overlap (same shape as an event).
 export type CalendarMatch = CalendarEvent;
+
+/// A recording's persisted link to a calendar event (the stored snapshot). Rich details are fetched
+/// live via `getCalendarEvent(eventId)`.
+export interface CalendarLink {
+  eventId: string;
+  summary: string | null;
+  start: string; // ISO
+  end: string; // ISO
+  htmlLink: string | null;
+  linkedManually: boolean;
+}
 
 export interface UpdateUserProfile {
   fullName: string | null;

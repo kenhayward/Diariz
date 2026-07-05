@@ -97,6 +97,27 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.86.0",
+    date: "2026-07-05",
+    pr: 192,
+    headline: "See a meeting's full details on the recording, and link one by hand",
+    summary:
+      "The recording's Overview now shows the full details of its linked Google Calendar meeting - date and " +
+      "time, location, organiser, attendees with their response, and the description - so you don't have to " +
+      "open Google Calendar just to check. When you open a recording that overlaps a meeting, Diariz now saves " +
+      "that link automatically (so the calendar icon and details appear without any clicks); you can Change it " +
+      "to a different meeting or Unlink it. Use Change meeting (or Link a meeting) to browse your calendar and " +
+      "pick the right meeting by hand - handy when the meeting ran late or over and the times don't line up. " +
+      "Requires Google Calendar connected in Preferences. Web-only; a server redeploy picks it up.",
+    added: [
+      "The recording Overview shows the linked meeting's full invite details: location, organiser, attendees (with their response), and description.",
+      "Link a recording to a meeting by hand from the Overview - browse your calendar by date range, filter by title, and pick one even when the times don't line up.",
+    ],
+    changed: [
+      "When you open a recording that overlaps a meeting, the best match is now saved automatically (the calendar link persists); you can Change or Unlink it any time.",
+    ],
+  },
+  {
     version: "0.85.1",
     date: "2026-07-05",
     pr: 191,

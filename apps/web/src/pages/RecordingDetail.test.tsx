@@ -28,6 +28,9 @@ vi.mock("../lib/api", () => ({
     updateMeetingMinutes: vi.fn(),
     emailMeetingMinutes: vi.fn(),
     getCalendarMatch: vi.fn().mockResolvedValue(null),
+    getCalendarEvent: vi.fn(),
+    putCalendarLink: vi.fn(),
+    deleteCalendarLink: vi.fn(),
     audioUrl: vi.fn(),
     downloadTranscript: vi.fn(),
     downloadAudio: vi.fn(),
@@ -87,6 +90,7 @@ const base: RecordingDetailType = {
   actions: [],
   actionsExtracted: false,
   hasAudio: true,
+  calendarLink: null,
 } as unknown as RecordingDetailType;
 
 const minutes = { model: "gpt", text: "## Overview\n\nWe met and agreed.", createdAt: base.createdAt, isUserEdited: false };
@@ -140,16 +144,57 @@ describe("RecordingDetail", () => {
     expect(screen.getByRole("heading", { name: "Summary" })).toBeTruthy();
   });
 
-  it("shows the matching Google Calendar meeting on the Overview when Calendar is connected", async () => {
+  it("auto-saves the suggested meeting when Calendar is connected and the recording is unlinked", async () => {
     (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true });
     (api.getCalendarMatch as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt, htmlLink: "https://cal/evt1",
     });
-    renderPage(base);
+    (api.putCalendarLink as ReturnType<typeof vi.fn>).mockResolvedValue({
+      eventId: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt,
+      htmlLink: "https://cal/evt1", linkedManually: false,
+    });
+    renderPage(base); // base.calendarLink is null
     await loaded();
+    await waitFor(() => expect(api.putCalendarLink).toHaveBeenCalledWith("rec-123", "evt1", false));
+  });
+
+  it("shows the linked meeting's full details and manage actions on the Overview", async () => {
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true });
+    (api.getCalendarEvent as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt,
+      htmlLink: "https://cal/evt1", location: "Room 4", description: "Agenda",
+      organizer: { email: "boss@x.test", displayName: "The Boss", responseStatus: null, organizer: true, self: false },
+      attendees: [],
+    });
+    renderPage({
+      ...base,
+      calendarLink: { eventId: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt, htmlLink: "https://cal/evt1", linkedManually: false },
+    });
+    await loaded();
+
     const link = await screen.findByRole("link", { name: "Quarterly Planning" });
     expect(link.getAttribute("href")).toBe("https://cal/evt1");
-    expect(screen.getByText("Meeting")).toBeTruthy();
+    expect(await screen.findByText("Room 4")).toBeTruthy(); // live details rendered
+    expect(api.getCalendarEvent).toHaveBeenCalledWith("evt1");
+    expect(screen.getByRole("button", { name: /change meeting/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /unlink meeting/i })).toBeTruthy();
+    // Already linked → the auto-save must not fire.
+    expect(api.putCalendarLink).not.toHaveBeenCalled();
+  });
+
+  it("unlinks the meeting when Unlink is clicked", async () => {
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true });
+    (api.getCalendarEvent as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt, htmlLink: null,
+    });
+    (api.deleteCalendarLink as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    renderPage({
+      ...base,
+      calendarLink: { eventId: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt, htmlLink: null, linkedManually: true },
+    });
+    await loaded();
+    fireEvent.click(await screen.findByRole("button", { name: /unlink meeting/i }));
+    await waitFor(() => expect(api.deleteCalendarLink).toHaveBeenCalledWith("rec-123"));
   });
 
   it("does not query the calendar when Calendar isn't connected", async () => {
@@ -157,6 +202,7 @@ describe("RecordingDetail", () => {
     renderPage(base);
     await loaded();
     expect(api.getCalendarMatch).not.toHaveBeenCalled();
+    expect(api.putCalendarLink).not.toHaveBeenCalled();
     expect(screen.queryByText("Meeting")).toBeNull();
   });
 

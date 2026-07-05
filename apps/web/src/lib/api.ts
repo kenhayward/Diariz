@@ -14,6 +14,7 @@ import type {
   AuthResponse,
   CalendarEvent,
   CalendarMatch,
+  CalendarLink,
   ChatAttachment,
   ChatConversation,
   ChatConversationSummary,
@@ -290,6 +291,24 @@ export const api = {
   async getCalendarEvents(timeMin: string, timeMax: string): Promise<CalendarEvent[]> {
     const { data } = await http.get<CalendarEvent[]>("/api/calendar/events", { params: { timeMin, timeMax } });
     return data;
+  },
+
+  /// A single calendar event by id, with the full invite details (attendees, description, location,
+  /// organiser). Throws 404 when the event is gone or Calendar isn't connected.
+  async getCalendarEvent(eventId: string): Promise<CalendarEvent> {
+    const { data } = await http.get<CalendarEvent>(`/api/calendar/events/${encodeURIComponent(eventId)}`);
+    return data;
+  },
+
+  /// Persistently link a recording to a calendar event (manual = the user picked it by hand).
+  async putCalendarLink(id: string, eventId: string, manual: boolean): Promise<CalendarLink> {
+    const { data } = await http.put<CalendarLink>(`/api/recordings/${id}/calendar-link`, { eventId, manual });
+    return data;
+  },
+
+  /// Remove a recording's calendar link (idempotent).
+  async deleteCalendarLink(id: string): Promise<void> {
+    await http.delete(`/api/recordings/${id}/calendar-link`);
   },
 
   // ---- Attachments (supporting documents) ----
