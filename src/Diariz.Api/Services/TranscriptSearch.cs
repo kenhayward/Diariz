@@ -19,6 +19,12 @@ public sealed record RecordingHit(
     Guid RecordingId, string RecordingName, DateTimeOffset RecordingCreatedAt,
     string Source, long DurationMs, IReadOnlyList<string> Speakers, string? BestSnippet);
 
+/// <summary>An exact per-speaker mention count (used by <c>count_mentions</c>).</summary>
+public sealed record SpeakerCount(string Speaker, int Count);
+
+/// <summary>An exact per-speaker talking duration in milliseconds (used by <c>speaker_talk_time</c>).</summary>
+public sealed record SpeakerDuration(string Speaker, long Ms);
+
 /// <summary>Hybrid transcript search over the user's recordings: a lexical arm (Postgres pg_trgm word-similarity
 /// over segments) fused with a semantic arm (pgvector cosine KNN over <c>TranscriptChunk</c> embeddings) via
 /// Reciprocal Rank Fusion. Always scoped to the owning user and the current (highest-version) transcription. When
@@ -40,12 +46,26 @@ public interface ITranscriptSearch
     Task<IReadOnlyList<RecordingHit>> ListRecordingsAsync(
         Guid userId, DateTimeOffset? from, DateTimeOffset? to, string? name, string? speaker,
         string? contains, int limit, CancellationToken ct = default);
+
+    /// <summary>The <b>exact</b> number of segments mentioning <paramref name="phrase"/> (same fuzzy trigram
+    /// match as <see cref="SearchAsync"/>), grouped by speaker - <b>no cap</b>, so counts are truthful.
+    /// Optionally restricted to <paramref name="speakerName"/> and <paramref name="recordingScope"/>.</summary>
+    Task<IReadOnlyList<SpeakerCount>> CountMentionsAsync(
+        Guid userId, string phrase, string? speakerName,
+        IReadOnlyList<Guid>? recordingScope, CancellationToken ct = default);
+
+    /// <summary>Total talking time per speaker (summed segment durations of the current transcription),
+    /// owner-scoped and optionally restricted to <paramref name="recordingScope"/>. Aggregated in SQL over
+    /// <b>all</b> in-scope recordings - <b>no cap</b> - so totals and percentages are correct.</summary>
+    Task<IReadOnlyList<SpeakerDuration>> SpeakerTalkTimeAsync(
+        Guid userId, IReadOnlyList<Guid>? recordingScope, CancellationToken ct = default);
 }
 
 public sealed class TranscriptSearch : ITranscriptSearch
 {
-    /// <summary>Hard cap on rows a single tool call returns (protects the chat context budget).</summary>
-    public const int MaxLimit = 20;
+    /// <summary>Hard cap on rows a single passage-retrieval tool call returns (protects the chat context
+    /// budget). Counting/aggregation tools (count_mentions, speaker_talk_time) are exact and ignore this.</summary>
+    public const int MaxLimit = 50;
 
     /// <summary>word_similarity threshold (0..1): the minimum trigram word-similarity for a match. Lower is
     /// fuzzier. 0.3 is lenient enough to survive typos/partial phrases without flooding with noise.</summary>
@@ -252,6 +272,79 @@ public sealed class TranscriptSearch : ITranscriptSearch
             ((RecordingSource)r.Source).ToString(), r.Dur,
             byRecording.TryGetValue(r.Id, out var sp) ? sp : [],
             r.Snippet)).ToList();
+    }
+
+    public async Task<IReadOnlyList<SpeakerCount>> CountMentionsAsync(
+        Guid userId, string phrase, string? speakerName,
+        IReadOnlyList<Guid>? recordingScope, CancellationToken ct = default)
+    {
+        phrase = (phrase ?? "").Trim();
+        if (phrase.Length == 0) return [];
+        var scope = recordingScope is { Count: > 0 } ? recordingScope.Distinct().ToArray() : null;
+        var hasSpeaker = !string.IsNullOrWhiteSpace(speakerName);
+
+        // Same lexical match as SearchAsync (the %> trigram operator) - so "mention" stays consistent with
+        // search - but COUNT(*) grouped by speaker with NO LIMIT: an exact, truthful count.
+        var sql = new StringBuilder();
+        sql.Append(
+            "SELECT COALESCE(sp.\"DisplayName\", s.\"SpeakerLabel\") AS who, COUNT(*) AS n " +
+            "FROM \"Segments\" s " +
+            "JOIN \"Transcriptions\" t ON t.\"Id\" = s.\"TranscriptionId\" " +
+            "JOIN \"Recordings\" r ON r.\"Id\" = t.\"RecordingId\" " +
+            "LEFT JOIN \"Speakers\" sp ON sp.\"RecordingId\" = r.\"Id\" AND sp.\"Label\" = s.\"SpeakerLabel\" " +
+            "WHERE r.\"UserId\" = @userId AND " + CurrentVersion +
+            " AND COALESCE(s.\"Revised\", s.\"Original\") %> @phrase");
+        if (scope is not null) sql.Append(" AND r.\"Id\" = ANY(@scope)");
+        if (hasSpeaker) sql.Append(" AND sp.\"DisplayName\" %> @speaker");
+        sql.Append(" GROUP BY who ORDER BY n DESC");
+
+        return await RunAsync(ct, async cmd =>
+        {
+            cmd.CommandText = sql.ToString();
+            Add(cmd, "userId", userId);
+            Add(cmd, "phrase", phrase);
+            if (scope is not null) Add(cmd, "scope", scope);
+            if (hasSpeaker) Add(cmd, "speaker", speakerName!.Trim());
+
+            var rows = new List<SpeakerCount>();
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                rows.Add(new SpeakerCount(reader.GetString(0), checked((int)reader.GetInt64(1))));
+            return (IReadOnlyList<SpeakerCount>)rows;
+        });
+    }
+
+    public async Task<IReadOnlyList<SpeakerDuration>> SpeakerTalkTimeAsync(
+        Guid userId, IReadOnlyList<Guid>? recordingScope, CancellationToken ct = default)
+    {
+        var scope = recordingScope is { Count: > 0 } ? recordingScope.Distinct().ToArray() : null;
+
+        // Sum segment durations of the current transcription per speaker over ALL in-scope recordings - no cap,
+        // so the totals and percentages the tool computes are correct regardless of library size.
+        var sql = new StringBuilder();
+        sql.Append(
+            "SELECT COALESCE(sp.\"DisplayName\", s.\"SpeakerLabel\") AS who, " +
+            "SUM(GREATEST(s.\"EndMs\" - s.\"StartMs\", 0)) AS ms " +
+            "FROM \"Segments\" s " +
+            "JOIN \"Transcriptions\" t ON t.\"Id\" = s.\"TranscriptionId\" " +
+            "JOIN \"Recordings\" r ON r.\"Id\" = t.\"RecordingId\" " +
+            "LEFT JOIN \"Speakers\" sp ON sp.\"RecordingId\" = r.\"Id\" AND sp.\"Label\" = s.\"SpeakerLabel\" " +
+            "WHERE r.\"UserId\" = @userId AND " + CurrentVersion);
+        if (scope is not null) sql.Append(" AND r.\"Id\" = ANY(@scope)");
+        sql.Append(" GROUP BY who ORDER BY ms DESC");
+
+        return await RunAsync(ct, async cmd =>
+        {
+            cmd.CommandText = sql.ToString();
+            Add(cmd, "userId", userId);
+            if (scope is not null) Add(cmd, "scope", scope);
+
+            var rows = new List<SpeakerDuration>();
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+                rows.Add(new SpeakerDuration(reader.GetString(0), reader.GetInt64(1)));
+            return (IReadOnlyList<SpeakerDuration>)rows;
+        });
     }
 
     /// <summary>Opens a connection + transaction, applies the trigram threshold for this query, and runs the

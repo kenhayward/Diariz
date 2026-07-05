@@ -61,6 +61,30 @@ public static class ToolFormat
             : null;
     }
 
+    /// <summary>Reads an integer <c>limit</c> argument, clamped to <c>[1, max]</c>; returns
+    /// <paramref name="fallback"/> when absent or not a valid number. Lets the model ask for fewer/more
+    /// results (up to the tool's ceiling) instead of always getting the maximum.</summary>
+    public static int ReadLimit(JsonElement args, int fallback, int max)
+    {
+        if (args.ValueKind == JsonValueKind.Object
+            && args.TryGetProperty("limit", out var v)
+            && v.ValueKind == JsonValueKind.Number
+            && v.TryGetInt32(out var n))
+            return Math.Clamp(n, 1, max);
+        return Math.Clamp(fallback, 1, max);
+    }
+
+    /// <summary>The shared <c>limit</c> JSON-Schema property for retrieval tools (how many results to return,
+    /// up to <paramref name="max"/>).</summary>
+    public static object LimitProperty(int max) => new
+    {
+        type = "integer",
+        minimum = 1,
+        maximum = max,
+        description = $"Maximum number of results to return (1-{max}). Defaults to {max}. Ask for more when a " +
+            "broad query likely has many relevant matches.",
+    };
+
     /// <summary>The shared <c>scope</c> JSON-Schema property (all vs current selection).</summary>
     public static object ScopeProperty() => new
     {

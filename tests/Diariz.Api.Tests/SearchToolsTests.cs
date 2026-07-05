@@ -55,22 +55,24 @@ public class SearchToolsTests
     }
 
     [Fact]
-    public async Task CountMentions_GroupsBySpeaker()
+    public async Task CountMentions_ReportsExactTotal_GroupedBySpeaker()
     {
-        var search = new FakeTranscriptSearch
-        {
-            Hits =
-            [
-                new(Guid.NewGuid(), "R", June1, 1000, "Alice", "budget", 0.9),
-                new(Guid.NewGuid(), "R", June1, 2000, "Alice", "budget again", 0.9),
-                new(Guid.NewGuid(), "R", June1, 3000, "Bob", "budget too", 0.9),
-            ],
-        };
+        // The exact grouped count comes straight from CountMentionsAsync - no cap, no "at least".
+        var search = new FakeTranscriptSearch { Counts = [new("Alice", 90), new("Bob", 47)] };
         var result = await new CountMentionsTool(search).ExecuteAsync(Args("{\"term\":\"budget\"}"), Ctx, default);
 
-        Assert.Contains("3 mention(s)", result);
-        Assert.Contains("Alice: 2", result);
-        Assert.Contains("Bob: 1", result);
+        Assert.Contains("137 mention(s)", result); // 90 + 47, well past the old cap
+        Assert.DoesNotContain("At least", result);
+        Assert.Contains("Alice: 90", result);
+        Assert.Contains("Bob: 47", result);
+    }
+
+    [Fact]
+    public async Task CountMentions_NoMatches()
+    {
+        var result = await new CountMentionsTool(new FakeTranscriptSearch())
+            .ExecuteAsync(Args("{\"term\":\"unicorns\"}"), Ctx, default);
+        Assert.Contains("No mentions", result);
     }
 
     [Fact]
@@ -78,6 +80,30 @@ public class SearchToolsTests
     {
         var search = new FakeTranscriptSearch();
         await new CountMentionsTool(search).ExecuteAsync(Args("{\"term\":\"x\",\"speaker\":\"Alice\"}"), Ctx, default);
-        Assert.Equal("Alice", search.LastSearch!.Value.Speaker);
+        Assert.Equal("Alice", search.LastCount!.Value.Speaker);
+    }
+
+    [Fact]
+    public async Task SpeakerTalkTime_ComputesPercentagesFromExactTotals()
+    {
+        var search = new FakeTranscriptSearch { TalkTime = [new("Alice", 9000), new("Bob", 3000)] };
+        var result = await new SpeakerTalkTimeTool(search)
+            .ExecuteAsync(Args("{\"scope\":\"current\"}"), new ChatToolContext(Guid.NewGuid(), [Guid.NewGuid()]), default);
+
+        Assert.Contains("Alice: 00:09 (75%)", result);
+        Assert.Contains("Bob: 00:03 (25%)", result);
+        Assert.NotNull(search.LastTalkTime!.Value.Scope); // scope 'current' forwarded a recording filter
+    }
+
+    [Theory]
+    [InlineData("{\"query\":\"x\"}", 50)]        // default = the raised cap
+    [InlineData("{\"query\":\"x\",\"limit\":5}", 5)]
+    [InlineData("{\"query\":\"x\",\"limit\":999}", 50)] // clamped to the ceiling
+    [InlineData("{\"query\":\"x\",\"limit\":0}", 1)]    // clamped up to 1
+    public async Task SearchTranscripts_HonoursLimit(string json, int expected)
+    {
+        var search = new FakeTranscriptSearch();
+        await new SearchTranscriptsTool(search).ExecuteAsync(Args(json), Ctx, default);
+        Assert.Equal(expected, search.LastSearch!.Value.Limit);
     }
 }

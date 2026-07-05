@@ -24,6 +24,7 @@ public sealed class WhoSaidThatTool : IChatTool
         {
             phrase = new { type = "string", description = "The phrase or wording to search for." },
             scope = ToolFormat.ScopeProperty(),
+            limit = ToolFormat.LimitProperty(TranscriptSearch.MaxLimit),
         },
         required = new[] { "phrase" },
     };
@@ -33,7 +34,8 @@ public sealed class WhoSaidThatTool : IChatTool
         var phrase = ToolFormat.ReadString(args, "phrase");
         if (phrase is null) return "Provide a 'phrase' to search for.";
         var scope = ToolFormat.ResolveScope(args, ctx);
-        var hits = await _search.SearchAsync(ctx.UserId, phrase, null, scope, TranscriptSearch.MaxLimit, ct);
+        var limit = ToolFormat.ReadLimit(args, TranscriptSearch.MaxLimit, TranscriptSearch.MaxLimit);
+        var hits = await _search.SearchAsync(ctx.UserId, phrase, null, scope, limit, ct);
         return ToolFormat.FormatHits(hits);
     }
 }

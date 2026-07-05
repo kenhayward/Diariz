@@ -32,6 +32,7 @@ public sealed class ListRecordingsTool : IChatTool
                 type = "string",
                 description = "Only recordings whose transcript is about this topic; results are ranked by match.",
             },
+            limit = ToolFormat.LimitProperty(TranscriptSearch.MaxLimit),
         },
     };
 
@@ -42,8 +43,9 @@ public sealed class ListRecordingsTool : IChatTool
         var name = ToolFormat.ReadString(args, "name");
         var speaker = ToolFormat.ReadString(args, "speaker");
         var contains = ToolFormat.ReadString(args, "contains");
+        var limit = ToolFormat.ReadLimit(args, TranscriptSearch.MaxLimit, TranscriptSearch.MaxLimit);
         var recs = await _search.ListRecordingsAsync(
-            ctx.UserId, from, to, name, speaker, contains, TranscriptSearch.MaxLimit, ct);
+            ctx.UserId, from, to, name, speaker, contains, limit, ct);
         return ToolFormat.FormatRecordings(recs);
     }
 }

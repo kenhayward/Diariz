@@ -42,16 +42,25 @@ public sealed class WhoAttendedTool : IChatTool
         if (to is not null) q = q.Where(r => r.CreatedAt <= to);
         if (name is not null) q = q.Where(r => (r.Name ?? r.Title).ToLower().Contains(name.ToLower()));
 
+        // The matching recording ids (materialised so the distinct-people set below covers ALL of them, not
+        // just the ones we list). The per-recording breakdown is capped for output length, but the distinct
+        // set - the actual "who attended" answer - is always complete.
+        var matchingIds = await q.Select(r => r.Id).ToListAsync(ct);
+        if (matchingIds.Count == 0) return "No matching recordings were found.";
+
+        var everyone = await _db.Speakers
+            .Where(s => matchingIds.Contains(s.RecordingId) && !s.IsMultiSpeaker)
+            .Select(s => s.DisplayName)
+            .Distinct()
+            .ToListAsync(ct);
+
         var recs = await q
             .OrderByDescending(r => r.CreatedAt)
             .Take(TranscriptSearch.MaxLimit)
             .Include(r => r.Speakers)
             .ToListAsync(ct);
 
-        if (recs.Count == 0) return "No matching recordings were found.";
-
         var sb = new StringBuilder();
-        var everyone = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var r in recs)
         {
             var people = r.Speakers
@@ -59,11 +68,13 @@ public sealed class WhoAttendedTool : IChatTool
                 .Select(s => s.DisplayName)
                 .Distinct()
                 .ToList();
-            foreach (var p in people) everyone.Add(p);
             sb.Append(ToolFormat.RecordingLink(r.Id, r.Name ?? r.Title)).Append(": ")
               .Append(people.Count > 0 ? string.Join(", ", people) : "(no speakers)").Append('\n');
         }
-        sb.Append("Distinct people across these recordings: ").Append(string.Join(", ", everyone.OrderBy(x => x)));
+        if (matchingIds.Count > recs.Count)
+            sb.Append($"(showing {recs.Count} of {matchingIds.Count} recordings; the distinct set below is complete)\n");
+        sb.Append("Distinct people across these recordings: ")
+          .Append(string.Join(", ", everyone.OrderBy(x => x, StringComparer.OrdinalIgnoreCase)));
         return sb.ToString();
     }
 }

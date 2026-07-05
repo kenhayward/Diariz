@@ -331,9 +331,13 @@ public sealed class FakeTranscriptSearch : ITranscriptSearch
 {
     public List<TranscriptHit> Hits { get; set; } = new();
     public List<RecordingHit> Recordings { get; set; } = new();
+    public List<SpeakerCount> Counts { get; set; } = new();
+    public List<SpeakerDuration> TalkTime { get; set; } = new();
 
     public (Guid UserId, string Phrase, string? Speaker, IReadOnlyList<Guid>? Scope, int Limit)? LastSearch { get; private set; }
     public (Guid UserId, DateTimeOffset? From, DateTimeOffset? To, string? Name, string? Speaker, string? Contains, int Limit)? LastList { get; private set; }
+    public (Guid UserId, string Phrase, string? Speaker, IReadOnlyList<Guid>? Scope)? LastCount { get; private set; }
+    public (Guid UserId, IReadOnlyList<Guid>? Scope)? LastTalkTime { get; private set; }
 
     public Task<IReadOnlyList<TranscriptHit>> SearchAsync(
         Guid userId, string phrase, string? speakerName,
@@ -349,6 +353,21 @@ public sealed class FakeTranscriptSearch : ITranscriptSearch
     {
         LastList = (userId, from, to, name, speaker, contains, limit);
         return Task.FromResult<IReadOnlyList<RecordingHit>>(Recordings);
+    }
+
+    public Task<IReadOnlyList<SpeakerCount>> CountMentionsAsync(
+        Guid userId, string phrase, string? speakerName,
+        IReadOnlyList<Guid>? recordingScope, CancellationToken ct = default)
+    {
+        LastCount = (userId, phrase, speakerName, recordingScope);
+        return Task.FromResult<IReadOnlyList<SpeakerCount>>(Counts);
+    }
+
+    public Task<IReadOnlyList<SpeakerDuration>> SpeakerTalkTimeAsync(
+        Guid userId, IReadOnlyList<Guid>? recordingScope, CancellationToken ct = default)
+    {
+        LastTalkTime = (userId, recordingScope);
+        return Task.FromResult<IReadOnlyList<SpeakerDuration>>(TalkTime);
     }
 }
 

@@ -1,18 +1,17 @@
 using System.Text;
 using System.Text.Json;
 using Diariz.Api.Services;
-using Diariz.Domain;
-using Microsoft.EntityFrameworkCore;
 
 namespace Diariz.Api.Tools;
 
 /// <summary>Tool: per-speaker talking time for the selected recording(s) (or the whole library), computed
-/// from the current transcription's segment durations.</summary>
+/// from the current transcription's segment durations. Aggregated in SQL over <b>all</b> in-scope
+/// recordings (no cap), so the totals and percentages are correct regardless of library size.</summary>
 public sealed class SpeakerTalkTimeTool : IChatTool
 {
-    private readonly DiarizDbContext _db;
+    private readonly ITranscriptSearch _search;
 
-    public SpeakerTalkTimeTool(DiarizDbContext db) => _db = db;
+    public SpeakerTalkTimeTool(ITranscriptSearch search) => _search = search;
 
     public string Name => "speaker_talk_time";
     public string Title => "Speaker talk time";
@@ -28,39 +27,18 @@ public sealed class SpeakerTalkTimeTool : IChatTool
 
     public async Task<string> ExecuteAsync(JsonElement args, ChatToolContext ctx, CancellationToken ct)
     {
-        var current = ToolFormat.ResolveScope(args, ctx) is not null;
+        var scope = ToolFormat.ResolveScope(args, ctx);
+        var totals = await _search.SpeakerTalkTimeAsync(ctx.UserId, scope, ct);
 
-        var q = _db.Recordings.Where(r => r.UserId == ctx.UserId);
-        if (current) q = q.Where(r => ctx.SelectedRecordingIds.Contains(r.Id));
-
-        var recs = await q
-            .OrderByDescending(r => r.CreatedAt)
-            .Take(TranscriptSearch.MaxLimit)
-            .Include(r => r.Speakers)
-            .Include(r => r.Transcriptions).ThenInclude(t => t.Segments)
-            .ToListAsync(ct);
-
-        var totals = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-        foreach (var r in recs)
-        {
-            var names = r.Speakers.ToDictionary(s => s.Label, s => s.DisplayName);
-            var currentTr = r.Transcriptions.OrderByDescending(t => t.Version).FirstOrDefault();
-            foreach (var seg in currentTr?.Segments ?? [])
-            {
-                var who = names.TryGetValue(seg.SpeakerLabel, out var dn) ? dn : seg.SpeakerLabel;
-                totals[who] = totals.GetValueOrDefault(who) + Math.Max(0, seg.EndMs - seg.StartMs);
-            }
-        }
-
-        var grand = totals.Values.Sum();
+        var grand = totals.Sum(t => t.Ms);
         if (grand == 0) return "No transcript segments were found to measure talk time.";
 
         var sb = new StringBuilder();
         sb.Append("Talk time:\n");
-        foreach (var kv in totals.OrderByDescending(kv => kv.Value))
+        foreach (var t in totals.OrderByDescending(t => t.Ms))
         {
-            var pct = (int)Math.Round(100.0 * kv.Value / grand);
-            sb.Append("- ").Append(kv.Key).Append(": ").Append(ToolFormat.Offset(kv.Value))
+            var pct = (int)Math.Round(100.0 * t.Ms / grand);
+            sb.Append("- ").Append(t.Speaker).Append(": ").Append(ToolFormat.Offset(t.Ms))
               .Append(" (").Append(pct).Append("%)\n");
         }
         return sb.ToString().TrimEnd();

@@ -25,6 +25,7 @@ public sealed class WhatDidTheySayTool : IChatTool
             speaker = new { type = "string", description = "The speaker's name (as labelled in the transcripts)." },
             topic = new { type = "string", description = "The subject or wording to look for in their speech." },
             scope = ToolFormat.ScopeProperty(),
+            limit = ToolFormat.LimitProperty(TranscriptSearch.MaxLimit),
         },
         required = new[] { "speaker", "topic" },
     };
@@ -36,7 +37,8 @@ public sealed class WhatDidTheySayTool : IChatTool
         if (speaker is null) return "Provide a 'speaker' name.";
         if (topic is null) return "Provide a 'topic' to look for.";
         var scope = ToolFormat.ResolveScope(args, ctx);
-        var hits = await _search.SearchAsync(ctx.UserId, topic, speaker, scope, TranscriptSearch.MaxLimit, ct);
+        var limit = ToolFormat.ReadLimit(args, TranscriptSearch.MaxLimit, TranscriptSearch.MaxLimit);
+        var hits = await _search.SearchAsync(ctx.UserId, topic, speaker, scope, limit, ct);
         return ToolFormat.FormatHits(hits);
     }
 }
