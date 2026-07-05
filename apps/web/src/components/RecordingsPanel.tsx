@@ -664,9 +664,9 @@ function MicIcon({ on, title }: { on: boolean; title: string }) {
   );
 }
 
-/// A small calendar glyph marking that a recording is linked to a Google Calendar event. Sits next to the
-/// mic icon (green to match); absent when the recording isn't linked to a meeting.
-function CalendarIcon({ title }: { title: string }) {
+/// A small calendar glyph marking that a recording is linked to a Google Calendar event. Tinted the linked
+/// calendar's Google colour when known (else green); absent when the recording isn't linked to a meeting.
+function CalendarIcon({ title, color }: { title: string; color?: string | null }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -679,7 +679,8 @@ function CalendarIcon({ title }: { title: string }) {
       height={14}
       role="img"
       aria-label={title}
-      className="shrink-0 text-green-600 dark:text-green-400"
+      style={color ? { color } : undefined}
+      className={`shrink-0 ${color ? "" : "text-green-600 dark:text-green-400"}`}
     >
       <title>{title}</title>
       <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
@@ -963,7 +964,8 @@ function EventRow({ event, locale, t }: { event: CalendarEvent; locale: string; 
       >
         <svg
           {...iconProps}
-          className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-600 dark:text-green-400"
+          style={event.color ? { color: event.color } : undefined}
+          className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${event.color ? "" : "text-green-600 dark:text-green-400"}`}
           aria-label={t("calEventLabel")}
         >
           <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
@@ -973,7 +975,10 @@ function EventRow({ event, locale, t }: { event: CalendarEvent; locale: string; 
         </svg>
         <div className="min-w-0 flex-1">
           <div className="truncate text-gray-800 dark:text-gray-200">{title}</div>
-          <div className="text-xs tabular-nums text-gray-500 dark:text-gray-400">{range}</div>
+          <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <span className="tabular-nums">{range}</span>
+            {event.calendarName && <span className="truncate">· {event.calendarName}</span>}
+          </div>
         </div>
       </NavLink>
     </li>
@@ -1090,8 +1095,9 @@ function RecordingRow({
           on={r.hasAudio}
           title={r.hasAudio ? t("workspace:hasAudioTitle") : t("workspace:audioDeletedTitle")}
         />
-        {/* Calendar link: shown alongside the mic icon when the recording is linked to a meeting. */}
-        {r.calendarEventId && <CalendarIcon title={t("workspace:hasCalendarTitle")} />}
+        {/* Calendar link: shown alongside the mic icon when the recording is linked to a meeting, tinted the
+            linked calendar's Google colour. */}
+        {r.calendarEventId && <CalendarIcon title={t("workspace:hasCalendarTitle")} color={r.calendarColor} />}
         {renaming ? (
           <RenameForm initial={r.name ?? ""} onSave={saveName} onCancel={() => setRenaming(false)} />
         ) : (

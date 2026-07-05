@@ -436,7 +436,10 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   when not connected) **once per viewed month** (React-Query keyed by month, short `staleTime`, Refresh link).
   Pure client helpers (`eventDayKeys`/`dayItems` in `lib/calendar.ts`) colour the grid (event-only days a
   darker green, an events dot on recording days) and build a **merged, time-ordered day list** of meetings +
-  recordings - **deduped**, so a linked recording and its meeting show as one row (both icons). Clicking a
+  recordings - **deduped**, so a linked recording and its meeting show as one row (both icons). Each event is
+  **tinted its Google calendar colour** with the calendar's name shown, and a linked recording's calendar icon
+  (list + tab) is tinted the same; the web threads `calendarId` through the link calls so linking targets the
+  exact calendar. Clicking a
   meeting **that has no recording** opens an **event preview** (route `calendar-event/:eventId`,
   `pages/CalendarEventDetail`): a single Overview tab reusing `CalendarEventDetails`, plus **Link a recording**
   (`LinkRecordingModal`) - the inverse link that attaches an existing recording to the meeting and navigates to

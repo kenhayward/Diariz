@@ -25,6 +25,16 @@ export default function CalendarEventDetails({ event }: { event: CalendarEvent }
 
   return (
     <div className="space-y-3 text-sm">
+      {event.calendarName && (
+        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+          <span
+            className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: event.color ?? "#0B8043" }}
+            aria-hidden
+          />
+          <span className="truncate">{event.calendarName}</span>
+        </div>
+      )}
       <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1">
         <dt className="text-gray-500 dark:text-gray-400">{t("workspace:calWhen")}</dt>
         <dd className="text-gray-800 dark:text-gray-200">{when}</dd>

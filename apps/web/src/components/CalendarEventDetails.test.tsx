@@ -16,12 +16,14 @@ const fullEvent: CalendarEvent = {
     { email: "boss@x.test", displayName: "The Boss", responseStatus: "accepted", organizer: true, self: false },
     { email: "me@x.test", displayName: null, responseStatus: "needsAction", organizer: false, self: true },
   ],
+  calendarName: "Team", color: "#0B8043",
 };
 
 describe("CalendarEventDetails", () => {
   it("renders location, organiser, attendees with response, and description", () => {
     render(<CalendarEventDetails event={fullEvent} />);
 
+    expect(screen.getByText("Team")).toBeTruthy(); // the calendar name (with a colour swatch)
     expect(screen.getByText("Room 4")).toBeTruthy();
     // "The Boss" appears twice: as the organiser row and as an attendee (organiser is also an attendee).
     expect(screen.getAllByText("The Boss")).toHaveLength(2);

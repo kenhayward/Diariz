@@ -29,6 +29,8 @@ export interface RecordingSummary {
   /// The linked Google Calendar event id, or null when unlinked. Drives the list's calendar icon and lets
   /// the Calendar tab dedupe a recording against its own event.
   calendarEventId: string | null;
+  /// The linked calendar's Google colour (hex) for tinting the list's calendar icon. Null when unlinked.
+  calendarColor?: string | null;
 }
 
 export interface SectionDto {
@@ -329,6 +331,11 @@ export interface CalendarEvent {
   location?: string | null;
   organizer?: CalendarAttendee | null;
   attendees?: CalendarAttendee[];
+  /// Which of the user's calendars the event is on, its name, and its Google background colour (hex) - for
+  /// colouring events per calendar. Null on older/slim payloads.
+  calendarId?: string | null;
+  calendarName?: string | null;
+  color?: string | null;
 }
 
 /// A Google Calendar meeting matched to a recording by time overlap (same shape as an event).
@@ -338,11 +345,15 @@ export type CalendarMatch = CalendarEvent;
 /// live via `getCalendarEvent(eventId)`.
 export interface CalendarLink {
   eventId: string;
+  /// Which calendar the event is on (primary or a secondary/shared/subscribed id).
+  calendarId: string;
   summary: string | null;
   start: string; // ISO
   end: string; // ISO
   htmlLink: string | null;
   linkedManually: boolean;
+  /// The linked calendar's Google colour (hex), for tinting the linked icon. Null when unknown.
+  color?: string | null;
 }
 
 export interface UpdateUserProfile {

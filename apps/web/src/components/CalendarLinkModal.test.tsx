@@ -12,7 +12,7 @@ import { api } from "../lib/api";
 import CalendarLinkModal from "./CalendarLinkModal";
 
 const ev = (id: string, summary: string, start: string): CalendarEvent => ({
-  id, summary, start, end: start, htmlLink: null,
+  id, summary, start, end: start, htmlLink: null, calendarId: `cal-${id}`,
 });
 
 function renderModal(onClose = vi.fn(), onLinked = vi.fn()) {
@@ -59,7 +59,7 @@ describe("CalendarLinkModal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /link "retro"/i }));
 
-    await waitFor(() => expect(api.putCalendarLink).toHaveBeenCalledWith("rec-1", "e2", true));
+    await waitFor(() => expect(api.putCalendarLink).toHaveBeenCalledWith("rec-1", "e2", true, "cal-e2"));
     expect(onLinked).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
   });

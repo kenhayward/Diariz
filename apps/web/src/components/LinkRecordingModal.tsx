@@ -8,10 +8,12 @@ import { formatDate } from "../lib/format";
 /// Used from the recording-less event preview. On success calls `onLinked(recordingId)`.
 export default function LinkRecordingModal({
   eventId,
+  calendarId,
   onClose,
   onLinked,
 }: {
   eventId: string;
+  calendarId?: string | null;
   onClose: () => void;
   onLinked: (recordingId: string) => void;
 }) {
@@ -38,7 +40,7 @@ export default function LinkRecordingModal({
     setBusy(true);
     setError(null);
     try {
-      await api.putCalendarLink(recordingId, eventId, true);
+      await api.putCalendarLink(recordingId, eventId, true, calendarId);
       qc.invalidateQueries({ queryKey: ["recordings"] });
       qc.invalidateQueries({ queryKey: ["recording", recordingId] });
       onLinked(recordingId);

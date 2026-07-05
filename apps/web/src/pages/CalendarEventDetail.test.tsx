@@ -15,6 +15,7 @@ import CalendarEventDetail from "./CalendarEventDetail";
 const event: CalendarEvent = {
   id: "evt1", summary: "Quarterly Planning", start: "2026-07-02T09:00:00Z", end: "2026-07-02T10:00:00Z",
   htmlLink: "https://cal/evt1", location: "Room 4", description: "Agenda", attendees: [],
+  calendarId: "team@g", calendarName: "Team", color: "#0B8043",
 };
 
 function renderPage() {
@@ -59,7 +60,7 @@ describe("CalendarEventDetail", () => {
     fireEvent.click(screen.getByRole("button", { name: /link a recording/i }));
     fireEvent.click(await screen.findByText("Weekly Standup"));
 
-    await waitFor(() => expect(api.putCalendarLink).toHaveBeenCalledWith("r1", "evt1", true));
+    await waitFor(() => expect(api.putCalendarLink).toHaveBeenCalledWith("r1", "evt1", true, "team@g"));
     expect(await screen.findByText("RECORDING PAGE")).toBeTruthy(); // navigated to the recording
   });
 

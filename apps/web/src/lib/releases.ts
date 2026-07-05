@@ -100,6 +100,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.90.0",
+    date: "2026-07-05",
+    pr: 198,
+    headline: "Calendar events show in their Google calendar colours",
+    summary:
+      "The Calendar tab now colours each meeting with its Google calendar colour and shows which calendar it's " +
+      "on, so team, shared, and subscribed calendars are easy to tell apart at a glance. A linked recording's " +
+      "calendar icon (in the list and Calendar tab) is tinted the same colour, and a linked meeting's details " +
+      "show its calendar name with a matching swatch. Linking now targets the exact calendar an event is on. " +
+      "Web-only; a server redeploy picks it up.",
+    added: [
+      "Calendar events are coloured by their Google calendar colour, with the calendar's name shown next to each event and on a linked recording's meeting details.",
+      "A linked recording's calendar icon is tinted its calendar's colour in the list and Calendar tab.",
+    ],
+  },
+  {
     version: "0.89.0",
     date: "2026-07-05",
     pr: 197,

@@ -66,6 +66,7 @@ export default function CalendarEventDetail() {
       {pickOpen && (
         <LinkRecordingModal
           eventId={event.id}
+          calendarId={event.calendarId}
           onClose={() => setPickOpen(false)}
           onLinked={(recId) => {
             setPickOpen(false);

@@ -300,9 +300,10 @@ export const api = {
     return data;
   },
 
-  /// Persistently link a recording to a calendar event (manual = the user picked it by hand).
-  async putCalendarLink(id: string, eventId: string, manual: boolean): Promise<CalendarLink> {
-    const { data } = await http.put<CalendarLink>(`/api/recordings/${id}/calendar-link`, { eventId, manual });
+  /// Persistently link a recording to a calendar event (manual = the user picked it by hand). Pass the
+  /// event's calendarId when known so the server targets the right calendar without searching.
+  async putCalendarLink(id: string, eventId: string, manual: boolean, calendarId?: string | null): Promise<CalendarLink> {
+    const { data } = await http.put<CalendarLink>(`/api/recordings/${id}/calendar-link`, { eventId, manual, calendarId });
     return data;
   },
 
