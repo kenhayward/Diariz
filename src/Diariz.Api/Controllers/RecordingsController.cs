@@ -563,8 +563,10 @@ public class RecordingsController : ControllerBase
         }
         link.EventId = ev.Id;
         link.Summary = ev.Summary;
-        link.StartsAt = ev.Start;
-        link.EndsAt = ev.End;
+        // Google returns the event's local UTC offset (e.g. 09:00+01:00); Npgsql rejects a non-zero-offset
+        // DateTimeOffset for a `timestamptz` column, so normalise to UTC before storing.
+        link.StartsAt = ev.Start.ToUniversalTime();
+        link.EndsAt = ev.End.ToUniversalTime();
         link.HtmlLink = ev.HtmlLink;
         link.LinkedManually = req.Manual;
         link.SyncedAt = DateTimeOffset.UtcNow;

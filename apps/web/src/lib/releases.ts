@@ -100,6 +100,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.87.1",
+    date: "2026-07-05",
+    pr: 194,
+    headline: "Fix: linking a meeting failed with a server error",
+    summary:
+      "Linking a recording to a Google Calendar meeting (or auto-saving the match on open) could fail with a " +
+      "server error when the meeting's times carried a non-UTC timezone offset - which is the normal case for " +
+      "a timed meeting (e.g. a 09:00 BST meeting). The stored meeting time is now normalised to UTC, so " +
+      "linking works for meetings in any timezone. Server redeploy.",
+    fixed: [
+      "Linking a recording to a calendar meeting no longer errors when the meeting's start/end times have a non-UTC offset (the stored time is normalised to UTC).",
+    ],
+  },
+  {
     version: "0.87.0",
     date: "2026-07-05",
     pr: 193,
