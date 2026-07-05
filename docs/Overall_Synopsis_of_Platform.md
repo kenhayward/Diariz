@@ -416,7 +416,11 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   organiser) are fetched **live by id** via **`GET /api/calendar/events/{eventId}`** (`GoogleCalendarClient.GetEventAsync`;
   404 when the event is gone or Calendar isn't connected) - never stored, so they can't go stale. Linking works in
   both directions (recording → event, and event → recording) and regardless of time overlap (a manual link handles
-  meetings that ran late/over).
+  meetings that ran late/over). **Web behaviour:** opening an unlinked recording that has a good time-overlap match
+  **auto-saves** the link once (client-driven `PUT` with `manual:false`, so GETs stay pure and the icon/details
+  appear with no clicks); the recording Overview renders the meeting's full details (`CalendarEventDetails`, fetched
+  live, falling back to the snapshot) with **Change meeting** (a browse-events modal - date-range + title filter,
+  `CalendarLinkModal`) and **Unlink** actions. A manually-linked event is never overwritten by the auto-match.
 - **Calendar-tab event overlay (Phase 2 feature):** with the Calendar grant, the recordings **Calendar tab**
   overlays the month's meetings. The web app fetches **`GET /api/calendar/events?timeMin&timeMax`**
   (`CalendarController`, range-capped ≤62 days, reusing `IGoogleCalendarClient.ListEventsAsync`; empty list
