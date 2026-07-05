@@ -6,6 +6,7 @@ import { useAuth } from "../auth";
 import { useLanguage } from "../language";
 import { fetchLanguages } from "../lib/languages";
 import McpAccessSection from "./McpAccessSection";
+import CalendarFeedsSection from "./CalendarFeedsSection";
 
 /// Personal preferences for any user: display name, native language (the default translation target),
 /// and the language the app UI is shown in. Saving re-issues the access token so the new name shows
@@ -181,6 +182,8 @@ export default function PreferencesModal({ onClose }: { onClose: () => void }) {
               <p className="text-sm text-gray-500 dark:text-gray-400">{t("googleNotConnected")}</p>
             )}
           </div>
+
+          <CalendarFeedsSection />
 
           <McpAccessSection />
         </div>

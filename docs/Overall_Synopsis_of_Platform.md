@@ -461,7 +461,9 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   (name/url/colour/enabled - the URL is validated and **test-fetched** via `ProbeAsync` before it's stored, so a
   broken/unsafe URL is rejected up front; ≤20 feeds/user), `DELETE`. Events are always fetched **live** and never
   stored. **Ical.Net** (MIT) is a new API dependency. Recording↔meeting **linking stays Google-only** (ICS
-  events are display-only in the Calendar tab). The feed-manager UI arrives in the following PR.
+  events are display-only in the Calendar tab). Users manage their feeds in **Preferences → Calendar feeds**
+  (`CalendarFeedsSection`: add/rename/recolour/enable/remove, with the last-fetch error surfaced per feed); the
+  Calendar tab renders feed events **coloured but non-clickable** (a row whose `calendarId` starts `ics:`).
 - **Isolation:** every recording/section/chat/voiceprint query filters by `UserId` from the JWT
   `NameIdentifier` claim. **Storage quotas** (audio bytes) are per-user: the Platform Administrator sets the
   starter + maximum (`PlatformSettings`), any admin can raise an individual user up to the max.

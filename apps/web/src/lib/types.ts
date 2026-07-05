@@ -356,6 +356,26 @@ export interface CalendarLink {
   color?: string | null;
 }
 
+/// An external iCalendar (.ics) feed the user subscribes to. `lastError` is the last fetch failure (null when
+/// healthy) so the manager can flag a broken feed.
+export interface IcsFeed {
+  id: string;
+  name: string;
+  url: string;
+  color: string | null;
+  enabled: boolean;
+  lastFetchedAt: string | null;
+  lastError: string | null;
+}
+
+/// Create/update payload for an external .ics feed.
+export interface IcsFeedInput {
+  name: string;
+  url: string;
+  color?: string | null;
+  enabled?: boolean;
+}
+
 export interface UpdateUserProfile {
   fullName: string | null;
   nativeLanguage: string | null;

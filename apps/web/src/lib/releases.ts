@@ -76,7 +76,9 @@ belongs to** (auto-saved on open, or picked by hand even when the times don't li
 the meeting's **full invite details** (time, location, organiser, attendees, description), and the
 **Calendar tab overlays their meetings** (a merged day list; a linked recording and its meeting show as one
 row, and a meeting with no recording opens a preview you can link a recording to) - a revocable grant they can
-disconnect any time. Each user has a **storage quota** (audio): the Platform
+disconnect any time. Beyond Google, anyone can **subscribe to external iCalendar (.ics) feeds** (public team
+or shared calendars) in **Preferences → Calendar feeds**, each with its own name and colour, and those meetings
+appear on the Calendar tab too - no Google connection required. Each user has a **storage quota** (audio): the Platform
 Administrator sets the starter and maximum, any administrator can raise an individual user, and your
 usage shows in the account menu. The Platform Administrator can also **back up and restore the whole
 platform** (database + stored files) as a single transferable archive from Settings → Maintenance.
@@ -99,6 +101,22 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.93.0",
+    date: "2026-07-05",
+    pr: 201,
+    headline: "Subscribe to external calendar feeds",
+    summary:
+      "You can now add external iCalendar (.ics) feeds - public team or shared calendars, or any .ics URL not " +
+      "reachable through your Google account - in Preferences under 'Calendar feeds'. Give each feed a name and " +
+      "a colour, and its meetings appear on the Calendar tab in that colour, alongside your Google calendars. " +
+      "Feeds work with or without a Google connection; a broken or unsafe URL is caught the moment you add it. " +
+      "This completes the calendar-feeds feature. Server redeploy.",
+    added: [
+      "A 'Calendar feeds' manager in Preferences to add, recolour, enable/disable, and remove external .ics calendar subscriptions.",
+      "External-feed meetings show on the Calendar tab in each feed's colour (they're view-only - external events can't be linked to a recording).",
+    ],
+  },
   {
     version: "0.92.0",
     date: "2026-07-05",
