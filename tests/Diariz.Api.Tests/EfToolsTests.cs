@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Api.Tools;
 using Diariz.Domain;
@@ -81,22 +82,26 @@ public class EfToolsTests
     }
 
     [Fact]
-    public async Task SpeakerTalkTime_ComputesPercentages()
+    public async Task WhoAttended_DistinctSetCoversAllMatches_BeyondTheListingCap()
     {
         using var db = TestDb.Create();
         var me = Guid.NewGuid();
-        var (rec, tr) = SeedRecording(db, me, "Chat");
-        db.Speakers.Add(new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Alice" });
-        db.Speakers.Add(new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_01", DisplayName = "Bob" });
-        // Alice 9s, Bob 3s → 75% / 25%.
-        db.Segments.Add(new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 9000, Original = "a", Ordinal = 0 });
-        db.Segments.Add(new Segment { Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_01", StartMs = 9000, EndMs = 12000, Original = "b", Ordinal = 1 });
+        // More recordings than the listing cap; the oldest (listed last, so beyond the cap) has a unique speaker.
+        var count = TranscriptSearch.MaxLimit + 1;
+        for (var i = 0; i < count; i++)
+        {
+            var (rec, _) = SeedRecording(db, me, $"Meeting {i}", new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero).AddDays(i));
+            // Newest recordings share "Common"; the single OLDEST (i==0) has the unique "Zoe".
+            db.Speakers.Add(new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = i == 0 ? "Zoe" : "Common" });
+        }
         await db.SaveChangesAsync();
 
-        var result = await new SpeakerTalkTimeTool(db).ExecuteAsync(
-            Args("{\"scope\":\"current\"}"), new ChatToolContext(me, [rec.Id]), default);
-        Assert.Contains("Alice: 00:09 (75%)", result);
-        Assert.Contains("Bob: 00:03 (25%)", result);
+        var result = await new WhoAttendedTool(db).ExecuteAsync(Args("{}"), new ChatToolContext(me, []), default);
+
+        // Zoe's recording falls outside the listed (newest-first) window, but she must still appear in the
+        // complete distinct set - the old .Take(cap) truncation would have dropped her.
+        Assert.Contains("Distinct people across these recordings: Common, Zoe", result);
+        Assert.Contains($"showing {TranscriptSearch.MaxLimit} of {count} recordings", result);
     }
 
     [Fact]

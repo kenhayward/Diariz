@@ -245,8 +245,15 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   search-based ones (`who_said_that`, `what_did_they_say`, `search_transcripts`, `when_was_discussed`,
   `count_mentions`, plus `list_recordings`) query **`TranscriptSearch`**, a Postgres **`pg_trgm`** GIN-trigram
   fuzzy search over the user's own current-version transcripts (a `scope` arg lets the model search the whole
-  library or just the selected recordings). The EF-based ones (`list_action_items`, `get_recording_summary`,
-  `who_attended`, `speaker_talk_time`, `get_segment_context`, and the single-recording read tools
+  library or just the selected recordings). **Passage-retrieval** tools cap results at `TranscriptSearch.MaxLimit`
+  (**50**) and accept an optional `limit` arg (`ToolFormat.ReadLimit`/`LimitProperty`) so the model can ask for
+  fewer/more up to the ceiling. **Counting/aggregation** tools are **exact and uncapped**: `count_mentions` uses
+  `TranscriptSearch.CountMentionsAsync` (a grouped `COUNT(*)` over the same fuzzy match - a true total, not a
+  capped "at least N"), and `speaker_talk_time` uses `SpeakerTalkTimeAsync` (a grouped `SUM` of segment durations
+  over **all** in-scope recordings). `who_attended` likewise computes its distinct-people set over **all** matching
+  recordings (the per-recording listing stays capped, with an honest "showing N of M" note) - previously these
+  three silently used only the 20 most-recent recordings, skewing the answer. The EF-based ones (`list_action_items`,
+  `get_recording_summary`, `who_attended`, `speaker_talk_time`, `get_segment_context`, and the single-recording read tools
   `get_transcript` / `get_meeting_minutes` / `get_recording_details`) read existing relational data directly. Two
   **write** tools act rather than read: `send_email` (`SendEmailTool`) emails the user a composed subject+body —
   it **always** sends to the owner's registered `ApplicationUser.Email` (no recipient parameter; any address in

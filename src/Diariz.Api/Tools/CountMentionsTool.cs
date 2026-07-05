@@ -4,8 +4,8 @@ using Diariz.Api.Services;
 
 namespace Diariz.Api.Tools;
 
-/// <summary>Tool: how often a term was mentioned, broken down by speaker. (Counts the matching segments
-/// found; capped at the search limit.)</summary>
+/// <summary>Tool: how often a term was mentioned, broken down by speaker. Returns an <b>exact</b> count
+/// (a grouped COUNT with no cap), so the totals are truthful even for very common terms.</summary>
 public sealed class CountMentionsTool : IChatTool
 {
     private readonly ITranscriptSearch _search;
@@ -36,19 +36,18 @@ public sealed class CountMentionsTool : IChatTool
         if (term is null) return "Provide a 'term' to count.";
         var speaker = ToolFormat.ReadString(args, "speaker");
         var scope = ToolFormat.ResolveScope(args, ctx);
-        var hits = await _search.SearchAsync(ctx.UserId, term, speaker, scope, TranscriptSearch.MaxLimit, ct);
+        var counts = await _search.CountMentionsAsync(ctx.UserId, term, speaker, scope, ct);
 
-        if (hits.Count == 0) return $"No mentions of \"{term}\" were found.";
+        var total = counts.Sum(c => c.Count);
+        if (total == 0) return $"No mentions of \"{term}\" were found.";
 
-        var atLeast = hits.Count >= TranscriptSearch.MaxLimit;
         var sb = new StringBuilder();
-        sb.Append(atLeast ? "At least " : "").Append(hits.Count)
-          .Append(" mention(s) of \"").Append(term).Append("\"");
+        sb.Append(total).Append(" mention(s) of \"").Append(term).Append('"');
         if (speaker is not null) sb.Append(" by ").Append(speaker);
         sb.Append('.');
 
-        foreach (var g in hits.GroupBy(h => h.SpeakerName).OrderByDescending(g => g.Count()))
-            sb.Append('\n').Append("- ").Append(g.Key).Append(": ").Append(g.Count());
+        foreach (var c in counts.OrderByDescending(c => c.Count))
+            sb.Append('\n').Append("- ").Append(c.Speaker).Append(": ").Append(c.Count);
         return sb.ToString();
     }
 }

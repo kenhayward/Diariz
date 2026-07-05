@@ -166,4 +166,39 @@ public class TranscriptSearchIntegrationTests(ContainersFixture fx)
         var byDate = await search.ListRecordingsAsync(user, June1.AddDays(2), null, null, null, null, 20);
         Assert.Equal("Standup", Assert.Single(byDate).RecordingName);
     }
+
+    [Fact]
+    public async Task CountMentionsAsync_ReturnsExactGroupedCount_PastTheOldCap()
+    {
+        var user = Guid.NewGuid();
+        // 25 Alice + 5 Bob mentions of "budget" = 30, well over the previous 20-row cap.
+        var segments = Enumerable.Range(0, 25).Select(_ => ("SPEAKER_00", "Alice", "the budget again"))
+            .Concat(Enumerable.Range(0, 5).Select(_ => ("SPEAKER_01", "Bob", "the budget too")))
+            .ToArray();
+        await SeedRecording(user, "Budget Review", June1, segments);
+
+        await using var db = fx.CreateDbContext();
+        var counts = await MakeSearch(db).CountMentionsAsync(user, "budget", null, null);
+
+        Assert.Equal(30, counts.Sum(c => c.Count)); // exact - not capped at 20
+        Assert.Equal(25, counts.Single(c => c.Speaker == "Alice").Count);
+        Assert.Equal(5, counts.Single(c => c.Speaker == "Bob").Count);
+    }
+
+    [Fact]
+    public async Task SpeakerTalkTimeAsync_SumsAcrossAllRecordings()
+    {
+        var user = Guid.NewGuid();
+        // Each seeded segment is 900ms. Alice: 2 + 1 across two recordings = 2700ms; Bob: 1 = 900ms.
+        await SeedRecording(user, "M1", June1,
+            ("SPEAKER_00", "Alice", "one"), ("SPEAKER_00", "Alice", "two"), ("SPEAKER_01", "Bob", "hi"));
+        await SeedRecording(user, "M2", June10, ("SPEAKER_00", "Alice", "three"));
+
+        await using var db = fx.CreateDbContext();
+        var totals = await MakeSearch(db).SpeakerTalkTimeAsync(user, null);
+
+        Assert.Equal(2700, totals.Single(t => t.Speaker == "Alice").Ms); // summed over BOTH recordings
+        Assert.Equal(900, totals.Single(t => t.Speaker == "Bob").Ms);
+        Assert.Equal("Alice", totals[0].Speaker); // ordered by duration desc
+    }
 }

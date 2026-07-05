@@ -25,6 +25,7 @@ public sealed class WhenWasDiscussedTool : IChatTool
         {
             topic = new { type = "string", description = "The topic or phrase to locate in time." },
             scope = ToolFormat.ScopeProperty(),
+            limit = ToolFormat.LimitProperty(TranscriptSearch.MaxLimit),
         },
         required = new[] { "topic" },
     };
@@ -34,7 +35,8 @@ public sealed class WhenWasDiscussedTool : IChatTool
         var topic = ToolFormat.ReadString(args, "topic");
         if (topic is null) return "Provide a 'topic' to locate.";
         var scope = ToolFormat.ResolveScope(args, ctx);
-        var hits = await _search.SearchAsync(ctx.UserId, topic, null, scope, TranscriptSearch.MaxLimit, ct);
+        var limit = ToolFormat.ReadLimit(args, TranscriptSearch.MaxLimit, TranscriptSearch.MaxLimit);
+        var hits = await _search.SearchAsync(ctx.UserId, topic, null, scope, limit, ct);
         if (hits.Count == 0) return $"No mentions of \"{topic}\" were found.";
 
         // Order the matches chronologically (recording date, then offset within it).
@@ -44,7 +46,7 @@ public sealed class WhenWasDiscussedTool : IChatTool
 
         var sb = new StringBuilder();
         sb.Append($"\"{topic}\" — {hits.Count} match(es) found");
-        if (hits.Count >= TranscriptSearch.MaxLimit) sb.Append(" (showing the most relevant)");
+        if (hits.Count >= limit) sb.Append(" (showing the most relevant)");
         sb.Append('\n');
         sb.Append("Earliest: ").Append(Line(first)).Append('\n');
         if (last != first) sb.Append("Latest: ").Append(Line(last));

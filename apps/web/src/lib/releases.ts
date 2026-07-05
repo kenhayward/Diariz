@@ -102,6 +102,26 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.94.0",
+    date: "2026-07-05",
+    pr: 203,
+    headline: "Chat tools: exact counts, correct talk-time, and bigger search results",
+    summary:
+      "Fixes some chat/MCP tools that could give wrong answers on large libraries, and lets searches return " +
+      "more. 'Count mentions' now returns the true total (a real database count) instead of stopping at 20 and " +
+      "saying 'at least 20'. 'Speaker talk time' and 'Who attended' now aggregate over every matching " +
+      "recording, so totals, percentages, and the who's-who list are correct no matter how many recordings " +
+      "there are. The passage-search tools now return up to 50 results (was 20) and take an optional 'limit' so " +
+      "Claude can ask for exactly as many as a question needs. Server redeploy.",
+    fixed: [
+      "'Count mentions' now reports the exact total (and per-speaker breakdown), not a capped 'at least 20'.",
+      "'Speaker talk time' and 'Who attended' aggregate over all matching recordings - previously they silently used only the 20 most recent, skewing totals and the attendee list.",
+    ],
+    changed: [
+      "Transcript searches return up to 50 results (was 20) and accept an optional 'limit' so the assistant can request more or fewer.",
+    ],
+  },
+  {
     version: "0.93.1",
     date: "2026-07-05",
     pr: 202,

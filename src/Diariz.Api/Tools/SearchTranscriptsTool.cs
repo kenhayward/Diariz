@@ -25,6 +25,7 @@ public sealed class SearchTranscriptsTool : IChatTool
         {
             query = new { type = "string", description = "The topic, phrase, or keywords to search for." },
             scope = ToolFormat.ScopeProperty(),
+            limit = ToolFormat.LimitProperty(TranscriptSearch.MaxLimit),
         },
         required = new[] { "query" },
     };
@@ -34,7 +35,8 @@ public sealed class SearchTranscriptsTool : IChatTool
         var query = ToolFormat.ReadString(args, "query");
         if (query is null) return "Provide a 'query' to search for.";
         var scope = ToolFormat.ResolveScope(args, ctx);
-        var hits = await _search.SearchAsync(ctx.UserId, query, null, scope, TranscriptSearch.MaxLimit, ct);
+        var limit = ToolFormat.ReadLimit(args, TranscriptSearch.MaxLimit, TranscriptSearch.MaxLimit);
+        var hits = await _search.SearchAsync(ctx.UserId, query, null, scope, limit, ct);
         return ToolFormat.FormatHits(hits);
     }
 }
