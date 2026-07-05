@@ -10,30 +10,40 @@ public record CalendarAttendee(string? Email, string? DisplayName, string? Respo
 
 /// <summary>A calendar event as Diariz needs it (a projection of a Google Calendar event). The rich fields
 /// (<see cref="Description"/>/<see cref="Location"/>/<see cref="Organizer"/>/<see cref="Attendees"/>) are
-/// populated by <see cref="GoogleCalendarClient.GetEventAsync"/> and the events list, and are what the
-/// Overview + event-preview surfaces show so the user needn't open Google Calendar.</summary>
+/// populated by <see cref="GoogleCalendarClient.GetEventAsync"/> and the events list. <see cref="CalendarId"/>/
+/// <see cref="CalendarName"/>/<see cref="Color"/> identify which of the user's calendars the event is on (the
+/// colour is that calendar's Google background hex) so the UI can show and colour events from every calendar.</summary>
 public record CalendarEvent(
     string Id, string? Summary, DateTimeOffset Start, DateTimeOffset End, string? HtmlLink,
     string? Description = null, string? Location = null,
-    CalendarAttendee? Organizer = null, IReadOnlyList<CalendarAttendee>? Attendees = null);
+    CalendarAttendee? Organizer = null, IReadOnlyList<CalendarAttendee>? Attendees = null,
+    string? CalendarId = null, string? CalendarName = null, string? Color = null);
 
-/// <summary>Reads the signed-in user's primary Google Calendar (via their connected Google token) so a
-/// recording can be matched to the meeting it was captured during. Read-only.</summary>
+/// <summary>One of the user's calendars from their calendarList (primary, secondary, shared/team, or a
+/// subscribed feed). <see cref="BackgroundColor"/>/<see cref="ForegroundColor"/> are Google's hex colours.</summary>
+public record CalendarListEntry(
+    string Id, string? Summary, string? BackgroundColor, string? ForegroundColor, bool Selected, bool Primary);
+
+/// <summary>Reads the signed-in user's Google Calendars (via their connected Google token) so recordings can
+/// be matched to meetings and the Calendar tab can overlay them. Read-only; spans every calendar the user has
+/// ticked visible (plus their primary), not just the primary.</summary>
 public interface IGoogleCalendarClient
 {
-    /// <summary>Events on the user's primary calendar overlapping <paramref name="timeMin"/>..<paramref name="timeMax"/>,
-    /// or null if the user hasn't connected Calendar (token unavailable). Throws on a Calendar API error.</summary>
+    /// <summary>Events across the user's selected calendars overlapping <paramref name="timeMin"/>..<paramref name="timeMax"/>,
+    /// each tagged with its calendar id/name/colour, merged and ordered by start. Null if the user hasn't
+    /// connected Calendar (token unavailable). Throws if the calendar list itself can't be read.</summary>
     Task<IReadOnlyList<CalendarEvent>?> ListEventsAsync(
         Guid userId, DateTimeOffset timeMin, DateTimeOffset timeMax, CancellationToken ct = default);
 
-    /// <summary>A single event by id (with rich fields), or null if the user hasn't connected Calendar or the
-    /// event no longer exists (404/410). Throws on any other Calendar API error.</summary>
+    /// <summary>A single event by id (with rich fields), searched across the user's selected calendars, or null
+    /// if the user hasn't connected Calendar or the event isn't found. Throws if the calendar list can't be read.</summary>
     Task<CalendarEvent?> GetEventAsync(Guid userId, string eventId, CancellationToken ct = default);
 }
 
 public class GoogleCalendarClient : IGoogleCalendarClient
 {
-    private const string EventsEndpoint = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+    private const string CalendarListEndpoint = "https://www.googleapis.com/calendar/v3/users/me/calendarList";
+    private const string CalendarsBase = "https://www.googleapis.com/calendar/v3/calendars";
 
     private readonly HttpClient _http;
     private readonly IGoogleTokenProvider _tokens;
@@ -50,16 +60,50 @@ public class GoogleCalendarClient : IGoogleCalendarClient
         var access = await _tokens.GetAccessTokenAsync(userId, ct);
         if (access is null) return null; // not connected / refresh failed — caller prompts to reconnect
 
-        // singleEvents expands recurring series into instances; RFC-3339 bounds keep the window tight.
-        var url = QueryHelpers.AddQueryString(EventsEndpoint, new Dictionary<string, string?>
-        {
-            ["singleEvents"] = "true",
-            ["orderBy"] = "startTime",
-            ["maxResults"] = "50",
-            ["timeMin"] = timeMin.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
-            ["timeMax"] = timeMax.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
-        });
+        var calendars = await ListCalendarsAsync(access, ct);
 
+        // Fetch each calendar's events in parallel and tag them with that calendar's id/name/colour. A single
+        // flaky calendar (e.g. a shared one that 403s) is skipped, not fatal — the rest still show.
+        var perCalendar = await Task.WhenAll(calendars.Select(async cal =>
+        {
+            try
+            {
+                var events = await ListRawEventsAsync(access, cal.Id, timeMin, timeMax, ct);
+                return events.Select(e => e with { CalendarId = cal.Id, CalendarName = cal.Summary, Color = cal.BackgroundColor });
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                return Enumerable.Empty<CalendarEvent>();
+            }
+        }));
+
+        return perCalendar.SelectMany(e => e).OrderBy(e => e.Start).ToList();
+    }
+
+    public async Task<CalendarEvent?> GetEventAsync(Guid userId, string eventId, CancellationToken ct = default)
+    {
+        var access = await _tokens.GetAccessTokenAsync(userId, ct);
+        if (access is null) return null; // not connected / refresh failed
+
+        // Try the primary first (the common case), then the other selected calendars until the event is found.
+        var calendars = (await ListCalendarsAsync(access, ct)).OrderByDescending(c => c.Primary);
+        foreach (var cal in calendars)
+        {
+            var ev = await GetEventFromCalendarAsync(access, cal.Id, eventId, ct);
+            if (ev is not null)
+                return ev with { CalendarId = cal.Id, CalendarName = cal.Summary, Color = cal.BackgroundColor };
+        }
+        return null;
+    }
+
+    /// <summary>The user's calendars worth showing: those they've ticked visible plus their primary (always).</summary>
+    private async Task<IReadOnlyList<CalendarListEntry>> ListCalendarsAsync(string access, CancellationToken ct)
+    {
+        var url = QueryHelpers.AddQueryString(CalendarListEndpoint, new Dictionary<string, string?>
+        {
+            ["minAccessRole"] = "reader",
+            ["showHidden"] = "false",
+        });
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", access);
 
@@ -69,27 +113,69 @@ public class GoogleCalendarClient : IGoogleCalendarClient
             var body = await resp.Content.ReadAsStringAsync(ct);
             throw new InvalidOperationException($"Calendar list failed ({(int)resp.StatusCode}): {Truncate(body, 500)}");
         }
-        return ParseEvents(await resp.Content.ReadAsStringAsync(ct));
+        return ParseCalendarList(await resp.Content.ReadAsStringAsync(ct))
+            .Where(c => c.Selected || c.Primary)
+            .ToList();
     }
 
-    public async Task<CalendarEvent?> GetEventAsync(Guid userId, string eventId, CancellationToken ct = default)
+    /// <summary>Project a Google calendarList response into <see cref="CalendarListEntry"/>s. Pure so it's
+    /// unit-testable without the Calendar API.</summary>
+    public static List<CalendarListEntry> ParseCalendarList(string json)
     {
-        var access = await _tokens.GetAccessTokenAsync(userId, ct);
-        if (access is null) return null; // not connected / refresh failed
+        var list = new List<CalendarListEntry>();
+        using var doc = JsonDocument.Parse(json);
+        if (!doc.RootElement.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
+            return list;
 
-        var url = $"{EventsEndpoint}/{Uri.EscapeDataString(eventId)}";
+        foreach (var item in items.EnumerateArray())
+        {
+            var id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+            if (id is null) continue;
+            list.Add(new CalendarListEntry(
+                id,
+                item.TryGetProperty("summary", out var s) ? s.GetString() : null,
+                item.TryGetProperty("backgroundColor", out var bg) ? bg.GetString() : null,
+                item.TryGetProperty("foregroundColor", out var fg) ? fg.GetString() : null,
+                item.TryGetProperty("selected", out var sel) && sel.ValueKind == JsonValueKind.True,
+                item.TryGetProperty("primary", out var pr) && pr.ValueKind == JsonValueKind.True));
+        }
+        return list;
+    }
+
+    private async Task<List<CalendarEvent>> ListRawEventsAsync(
+        string access, string calendarId, DateTimeOffset timeMin, DateTimeOffset timeMax, CancellationToken ct)
+    {
+        // singleEvents expands recurring series into instances; RFC-3339 bounds keep the window tight.
+        var url = QueryHelpers.AddQueryString($"{CalendarsBase}/{Uri.EscapeDataString(calendarId)}/events", new Dictionary<string, string?>
+        {
+            ["singleEvents"] = "true",
+            ["orderBy"] = "startTime",
+            ["maxResults"] = "50",
+            ["timeMin"] = timeMin.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            ["timeMax"] = timeMax.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+        });
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", access);
 
         using var resp = await _http.SendAsync(req, ct);
-        // The event was deleted/cancelled since we linked it — treat as "no longer available", not an error.
-        if (resp.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Gone) return null;
         if (!resp.IsSuccessStatusCode)
         {
             var body = await resp.Content.ReadAsStringAsync(ct);
-            throw new InvalidOperationException($"Calendar get failed ({(int)resp.StatusCode}): {Truncate(body, 500)}");
+            throw new InvalidOperationException($"Calendar events failed ({(int)resp.StatusCode}): {Truncate(body, 500)}");
         }
+        return ParseEvents(await resp.Content.ReadAsStringAsync(ct));
+    }
 
+    /// <summary>GET one event from a specific calendar, or null if it isn't there (404/410) or that calendar
+    /// errors (so <see cref="GetEventAsync"/> keeps searching the others).</summary>
+    private async Task<CalendarEvent?> GetEventFromCalendarAsync(string access, string calendarId, string eventId, CancellationToken ct)
+    {
+        var url = $"{CalendarsBase}/{Uri.EscapeDataString(calendarId)}/events/{Uri.EscapeDataString(eventId)}";
+        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", access);
+
+        using var resp = await _http.SendAsync(req, ct);
+        if (!resp.IsSuccessStatusCode) return null; // not on this calendar (404/410) or unreadable — try the next
         using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
         return ParseEvent(doc.RootElement);
     }

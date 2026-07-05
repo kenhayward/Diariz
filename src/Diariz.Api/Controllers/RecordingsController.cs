@@ -529,7 +529,7 @@ public class RecordingsController : ControllerBase
         {
             match = best is null
                 ? null
-                : new { best.Id, best.Summary, Start = best.Start, End = best.End, best.HtmlLink },
+                : new { best.Id, best.Summary, Start = best.Start, End = best.End, best.HtmlLink, best.CalendarId, best.Color },
         });
     }
 
