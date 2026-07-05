@@ -100,6 +100,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.89.0",
+    date: "2026-07-05",
+    pr: 197,
+    headline: "Link a recording to a meeting on any of your calendars",
+    summary:
+      "A recording's calendar link now remembers which calendar the meeting is on, so you can link (and " +
+      "auto-match) to meetings on your team, shared, and subscribed calendars - not just your primary one - " +
+      "and the link's colour is stored too. Backend groundwork; the next release colours the calendar icons " +
+      "and event dots to match Google. Runs a quick database migration (existing links are treated as primary). " +
+      "Server redeploy.",
+    added: [
+      "Calendar links now record the meeting's calendar id and colour, so linking and auto-matching work across all your calendars.",
+    ],
+  },
+  {
     version: "0.88.0",
     date: "2026-07-05",
     pr: 196,

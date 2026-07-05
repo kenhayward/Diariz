@@ -1595,7 +1595,7 @@ public class RecordingsControllerTests
 
     private static CalendarEvent SampleEvent(string id = "evt1") => new(
         id, "Planning", DateTimeOffset.Parse("2026-07-02T09:00:00Z"), DateTimeOffset.Parse("2026-07-02T10:00:00Z"),
-        "https://cal/evt1");
+        "https://cal/evt1", CalendarId: "team@group.calendar.google.com", Color: "#0B8043");
 
     [Fact]
     public async Task LinkCalendar_WhenNotGranted_ReturnsBadRequest()
@@ -1657,13 +1657,18 @@ public class RecordingsControllerTests
         Assert.Equal("evt1", dto.EventId);
         Assert.Equal("Planning", dto.Summary);
         Assert.True(dto.LinkedManually);
+        Assert.Equal("team@group.calendar.google.com", dto.CalendarId); // stored the event's calendar
+        Assert.Equal("#0B8043", dto.Color);
         Assert.Equal("evt1", cal.RequestedEventId);
 
         var detail = (await controller.Get(rec.Id)).Value!;
         Assert.Equal("evt1", detail.CalendarLink!.EventId);
+        Assert.Equal("team@group.calendar.google.com", detail.CalendarLink.CalendarId);
 
         var list = await controller.List();
-        Assert.Equal("evt1", Assert.Single(list).CalendarEventId);
+        var summary = Assert.Single(list);
+        Assert.Equal("evt1", summary.CalendarEventId);
+        Assert.Equal("#0B8043", summary.CalendarColor);
     }
 
     [Fact]

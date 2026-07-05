@@ -11,8 +11,17 @@ public class RecordingCalendarLink
     public Guid RecordingId { get; set; }
     public Recording? Recording { get; set; }
 
-    /// <summary>The Google Calendar event id (on the user's primary calendar).</summary>
+    /// <summary>The Google Calendar event id.</summary>
     public string EventId { get; set; } = string.Empty;
+
+    /// <summary>The id of the calendar the event lives on - "primary", or a secondary/shared/subscribed
+    /// calendar id. Lets the live re-fetch and preview target the right calendar. Existing rows backfill to
+    /// "primary".</summary>
+    public string CalendarId { get; set; } = "primary";
+
+    /// <summary>The calendar's Google background colour (hex), snapshotted so the linked icon can be coloured
+    /// without a live call. Null = unknown.</summary>
+    public string? Color { get; set; }
 
     /// <summary>Snapshot of the event title at link time (may be stale; the UI refreshes from a live fetch).</summary>
     public string? Summary { get; set; }

@@ -63,16 +63,22 @@ public record RecordingSummaryDto(
     bool HasAudio,
     /// <summary>The linked Google Calendar event id, or null when unlinked. Presence drives the list's
     /// calendar icon; the value lets the Calendar tab dedupe a recording against its own event.</summary>
-    string? CalendarEventId = null);
+    string? CalendarEventId = null,
+    /// <summary>The linked calendar's Google colour (hex), for tinting the list's calendar icon. Null when
+    /// unlinked or unknown.</summary>
+    string? CalendarColor = null);
 
 /// <summary>A recording's persisted link to a Google Calendar event (the stored snapshot). The rich invite
-/// details are fetched live via <c>GET /api/calendar/events/{eventId}</c>.</summary>
+/// details are fetched live via <c>GET /api/calendar/events/{eventId}</c>. <see cref="CalendarId"/> targets
+/// the calendar the event lives on (primary or a secondary/shared/subscribed one).</summary>
 public record CalendarLinkDto(
-    string EventId, string? Summary, DateTimeOffset Start, DateTimeOffset End, string? HtmlLink, bool LinkedManually);
+    string EventId, string CalendarId, string? Summary, DateTimeOffset Start, DateTimeOffset End,
+    string? HtmlLink, bool LinkedManually, string? Color = null);
 
 /// <summary>Link a recording to a calendar event. <paramref name="Manual"/> = the user picked it by hand
-/// (vs. the auto-saved best time-overlap match).</summary>
-public record LinkCalendarRequest(string EventId, bool Manual = false);
+/// (vs. the auto-saved best time-overlap match). <paramref name="CalendarId"/> is optional - when omitted the
+/// server finds which calendar the event is on.</summary>
+public record LinkCalendarRequest(string EventId, bool Manual = false, string? CalendarId = null);
 
 /// <summary>Bulk delete the audio blobs of the listed recordings (keeps their transcripts/metadata).</summary>
 public record DeleteAudioRequest(IReadOnlyList<Guid> Ids);
