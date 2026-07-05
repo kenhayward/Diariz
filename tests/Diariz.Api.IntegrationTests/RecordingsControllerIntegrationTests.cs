@@ -266,9 +266,10 @@ public class RecordingsControllerIntegrationTests(ContainersFixture fx)
             (userId, recId) = (user.Id, rec.Id);
         }
 
+        // An event on a non-primary (team) calendar, with the meeting's local UTC offset and the calendar colour.
         var ev = new CalendarEvent("evt1", "AMBU Workshop",
             DateTimeOffset.Parse("2026-07-03T09:00:00+01:00"), DateTimeOffset.Parse("2026-07-03T12:00:00+01:00"),
-            "https://cal/evt1");
+            "https://cal/evt1", CalendarId: "team@group.calendar.google.com", Color: "#0B8043");
 
         await using (var db = fx.CreateDbContext())
         {
@@ -281,6 +282,8 @@ public class RecordingsControllerIntegrationTests(ContainersFixture fx)
         var link = await verify.RecordingCalendarLinks.FindAsync(recId);
         Assert.NotNull(link);
         Assert.Equal("evt1", link!.EventId);
+        Assert.Equal("team@group.calendar.google.com", link.CalendarId); // stored the event's calendar
+        Assert.Equal("#0B8043", link.Color);
         // 09:00+01:00 == 08:00Z; stored normalized to UTC.
         Assert.Equal(DateTimeOffset.Parse("2026-07-03T08:00:00Z"), link.StartsAt);
         Assert.Equal(DateTimeOffset.Parse("2026-07-03T11:00:00Z"), link.EndsAt);

@@ -59,6 +59,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddOpenIddict` | `OpenIddictApplications`, `OpenIddictAuthorizations`, `OpenIddictScopes`, `OpenIddictTokens` (OpenIddict EF Core stores, string keys) — the OAuth 2.1 authorization server for the MCP web connector. Registered by `ModelBuilder.UseOpenIddict()`; not owned by an entity class |
 | `AddTranscriptChunks` | `TranscriptChunks` (windowed retrieval chunks for RAG/M3; `vector(768)`, denormalized `RecordingId`/`UserId`, cascade on `Transcription`, index `(UserId, RecordingId)`) — semantic-search index; supersedes the unused `Segment.Embedding` |
 | `AddRecordingCalendarLink` | `RecordingCalendarLinks` (1:1 with `Recording`, shared PK, cascade) — persisted link from a recording to its Google Calendar event (lightweight snapshot; rich invite details fetched live) |
+| `AddCalendarLinkCalendarIdAndColor` | `RecordingCalendarLinks.CalendarId` (varchar(1024), NOT NULL, existing rows backfilled to `primary`) + `RecordingCalendarLinks.Color` (varchar(32) null) — which calendar the linked event is on + its Google colour |
 
 ### Entity-relationship overview
 
@@ -243,7 +244,9 @@ organiser) are fetched live from Google by `EventId`, never stored.
 | Column | Type | Notes |
 |---|---|---|
 | `RecordingId` | uuid PK / FK → Recordings | shared PK; **cascade** delete with the recording |
-| `EventId` | varchar(1024) | Google Calendar event id (primary calendar) |
+| `EventId` | varchar(1024) | Google Calendar event id |
+| `CalendarId` | varchar(1024) | which calendar the event is on (`primary` or a secondary/shared/subscribed id); existing rows backfilled to `primary` |
+| `Color` | varchar(32) null | the calendar's Google background colour (hex) snapshot, for tinting the linked icon |
 | `Summary` | varchar(1024) null | event title snapshot |
 | `StartsAt` / `EndsAt` | timestamptz | event span snapshot |
 | `HtmlLink` | varchar(2048) null | Google Calendar deep link |

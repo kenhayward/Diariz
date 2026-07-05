@@ -69,7 +69,8 @@ public class RecordingsController : ControllerBase
             .ThenByDescending(r => r.CreatedAt)
             .Select(r => new RecordingSummaryDto(r.Id, r.Title, r.Name, r.Source, r.DurationMs, r.Status, r.CreatedAt,
                 r.SectionId, r.Section != null ? r.Section.Name : null, r.Actions.Any(), r.AudioDeletedAt == null,
-                r.CalendarLink != null ? r.CalendarLink.EventId : null))
+                r.CalendarLink != null ? r.CalendarLink.EventId : null,
+                r.CalendarLink != null ? r.CalendarLink.Color : null))
             .ToListAsync();
 
     /// <summary>Drag-and-drop: set the section and 0-based position of each listed recording in one
@@ -148,7 +149,7 @@ public class RecordingsController : ControllerBase
 
     private static CalendarLinkDto? ToLinkDto(RecordingCalendarLink? link) => link is null
         ? null
-        : new CalendarLinkDto(link.EventId, link.Summary, link.StartsAt, link.EndsAt, link.HtmlLink, link.LinkedManually);
+        : new CalendarLinkDto(link.EventId, link.CalendarId, link.Summary, link.StartsAt, link.EndsAt, link.HtmlLink, link.LinkedManually, link.Color);
 
     /// <summary>Upload an audio file and kick off transcription.</summary>
     [HttpPost]
@@ -562,6 +563,10 @@ public class RecordingsController : ControllerBase
             _db.RecordingCalendarLinks.Add(link);
         }
         link.EventId = ev.Id;
+        // Which calendar the event is on - taken from the found event (authoritative), else the request's hint,
+        // else primary. Lets the live re-fetch/preview target the right calendar.
+        link.CalendarId = ev.CalendarId ?? req.CalendarId ?? "primary";
+        link.Color = ev.Color;
         link.Summary = ev.Summary;
         // Google returns the event's local UTC offset (e.g. 09:00+01:00); Npgsql rejects a non-zero-offset
         // DateTimeOffset for a `timestamptz` column, so normalise to UTC before storing.

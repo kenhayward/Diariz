@@ -417,9 +417,11 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
 - **Persisted calendar links (Phase 2 feature):** the match above is a *suggestion* - a recording can also be
   **persistently linked** to an event via **`PUT /api/recordings/{id}/calendar-link`** `{ eventId, manual }`
   (owner-scoped, requires the grant), stored as a 1:1 **`RecordingCalendarLink`** (shared PK, cascade) holding a
-  lightweight snapshot (event id, title, start/end, link, manual flag). **`DELETE`** unlinks. The link's presence
-  flows onto the recording's **detail** (`CalendarLink`) and **list** (`CalendarEventId`) projections, so the UI can
-  show a calendar icon and dedupe the Calendar tab. The **rich invite details** (attendees, description, location,
+  lightweight snapshot (event id, **calendar id**, title, start/end, link, **colour**, manual flag) - the calendar
+  id lets a link target an event on **any** of the user's calendars (team/shared/subscribed), not just primary.
+  **`DELETE`** unlinks. The link's presence flows onto the recording's **detail** (`CalendarLink`, incl. `calendarId`/
+  `color`) and **list** (`CalendarEventId` + `CalendarColor`) projections, so the UI can show a calendar icon
+  (tinted the calendar's colour) and dedupe the Calendar tab. The **rich invite details** (attendees, description, location,
   organiser) are fetched **live by id** via **`GET /api/calendar/events/{eventId}`** (`GoogleCalendarClient.GetEventAsync`;
   404 when the event is gone or Calendar isn't connected) - never stored, so they can't go stale. Linking works in
   both directions (recording → event, and event → recording) and regardless of time overlap (a manual link handles

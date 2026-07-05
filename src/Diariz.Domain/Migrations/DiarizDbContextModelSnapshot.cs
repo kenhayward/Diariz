@@ -440,6 +440,15 @@ namespace Diariz.Domain.Migrations
                     b.Property<Guid>("RecordingId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CalendarId")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.Property<string>("Color")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<DateTimeOffset>("EndsAt")
                         .HasColumnType("timestamp with time zone");
 
