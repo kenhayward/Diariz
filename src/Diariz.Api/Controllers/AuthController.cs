@@ -407,6 +407,24 @@ public class AuthController : ControllerBase
         return Ok(new { accessToken = token }); // the SPA reads the token's expiry from the JWT itself
     }
 
+    /// <summary>Public: the desktop app swaps its one-time diariz:// code for an access token, proving it
+    /// holds the PKCE verifier whose S256 challenge was bound to the code. Any failure -> generic 401.</summary>
+    [HttpPost("desktop/exchange")]
+    public async Task<IActionResult> DesktopExchange(DesktopExchangeRequest req)
+    {
+        if (string.IsNullOrEmpty(req.Code) || string.IsNullOrEmpty(req.Verifier)) return Unauthorized();
+
+        var ticket = await _desktopCodes.RedeemAsync(req.Code);
+        if (ticket is null || !FixedTimeEquals(ticket.Challenge, OAuthPkce.Challenge(req.Verifier)))
+            return Unauthorized();
+
+        var user = await _users.FindByIdAsync(ticket.UserId.ToString());
+        if (user is null || !user.IsEnabled) return Unauthorized();
+
+        var (token, _) = _tokens.CreateAccessToken(user, await _users.GetRolesAsync(user));
+        return Ok(new { accessToken = token });
+    }
+
     private CookieOptions StateCookieOptions() => new()
     {
         HttpOnly = true,

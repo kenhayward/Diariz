@@ -548,6 +548,61 @@ public class AuthControllerTests
         Assert.False(s.GoogleCalendarGranted);
     }
 
+    // ---- Desktop code exchange ----
+
+    [Fact]
+    public async Task DesktopExchange_ValidCodeAndVerifier_ReturnsAccessToken()
+    {
+        using var host = new IdentityTestHost();
+        var user = await CreateGoogleUser(host, "g@x.test", "google-sub", UserStatus.Active);
+        var codes = new FakeDesktopAuthCodeStore();
+        const string verifier = "test-verifier-value";
+        var code = await codes.MintAsync(user.Id, OAuthPkce.Challenge(verifier), TimeSpan.FromMinutes(2));
+        var controller = BuildController(host, new FakeGoogleAuthService { Enabled = true }, PublicOpts, desktopCodes: codes);
+        controller.ControllerContext = Http.Context();
+
+        var ok = Assert.IsType<OkObjectResult>(await controller.DesktopExchange(new DesktopExchangeRequest(code, verifier)));
+        Assert.NotNull(ok.Value!.GetType().GetProperty("accessToken")!.GetValue(ok.Value));
+    }
+
+    [Fact]
+    public async Task DesktopExchange_WrongVerifier_ReturnsUnauthorized()
+    {
+        using var host = new IdentityTestHost();
+        var user = await CreateGoogleUser(host, "g@x.test", "google-sub", UserStatus.Active);
+        var codes = new FakeDesktopAuthCodeStore();
+        var code = await codes.MintAsync(user.Id, OAuthPkce.Challenge("right-verifier"), TimeSpan.FromMinutes(2));
+        var controller = BuildController(host, new FakeGoogleAuthService { Enabled = true }, PublicOpts, desktopCodes: codes);
+        controller.ControllerContext = Http.Context();
+
+        Assert.IsType<UnauthorizedResult>(await controller.DesktopExchange(new DesktopExchangeRequest(code, "wrong-verifier")));
+    }
+
+    [Fact]
+    public async Task DesktopExchange_UnknownCode_ReturnsUnauthorized()
+    {
+        using var host = new IdentityTestHost();
+        var controller = BuildController(host, new FakeGoogleAuthService { Enabled = true }, PublicOpts, desktopCodes: new FakeDesktopAuthCodeStore());
+        controller.ControllerContext = Http.Context();
+
+        Assert.IsType<UnauthorizedResult>(await controller.DesktopExchange(new DesktopExchangeRequest("code-does-not-exist", "v")));
+    }
+
+    [Fact]
+    public async Task DesktopExchange_CodeIsSingleUse_SecondCallUnauthorized()
+    {
+        using var host = new IdentityTestHost();
+        var user = await CreateGoogleUser(host, "g@x.test", "google-sub", UserStatus.Active);
+        var codes = new FakeDesktopAuthCodeStore();
+        const string verifier = "test-verifier-value";
+        var code = await codes.MintAsync(user.Id, OAuthPkce.Challenge(verifier), TimeSpan.FromMinutes(2));
+        var controller = BuildController(host, new FakeGoogleAuthService { Enabled = true }, PublicOpts, desktopCodes: codes);
+        controller.ControllerContext = Http.Context();
+
+        Assert.IsType<OkObjectResult>(await controller.DesktopExchange(new DesktopExchangeRequest(code, verifier)));
+        Assert.IsType<UnauthorizedResult>(await controller.DesktopExchange(new DesktopExchangeRequest(code, verifier)));
+    }
+
     private static async Task<ApplicationUser> CreateGoogleUser(
         IdentityTestHost host, string email, string sub, UserStatus status)
     {
