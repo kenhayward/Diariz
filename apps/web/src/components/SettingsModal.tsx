@@ -7,10 +7,12 @@ import { useAuth } from "../auth";
 import { bytesToGb, gbToBytes } from "../lib/format";
 import MaintenancePanel from "./MaintenancePanel";
 
-type Tab = "ai" | "quotas" | "maintenance";
+type Tab = "ai" | "tools" | "quotas" | "maintenance";
 
-/// Settings modal with two tabs — AI (per-user summarisation/chat config) and, for the Platform
-/// Administrator, Storage Quotas — saved together by a single OK/Cancel footer.
+/// Settings modal. Every user gets Model Settings (per-user summarisation/model config) and Chat Tools
+/// (the chat tool-calling switch + per-tool table); the Platform Administrator also gets Storage Quotas
+/// and Maintenance. All tabs are saved together by a single OK/Cancel footer. The dialog is held at a
+/// fixed height so it doesn't resize as the user flips between tabs.
 export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation("account");
   const qc = useQueryClient();
@@ -110,23 +112,28 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       <div
         role="dialog"
         aria-label="Settings"
-        className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-lg border bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900"
+        className="flex h-[85vh] w-full max-w-3xl flex-col rounded-lg border bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900"
       >
         <div className="border-b px-5 pt-4 dark:border-gray-700">
           <h2 className="mb-3 text-base font-semibold dark:text-gray-100">{t("settingsTitle")}</h2>
-          {isPlatformAdmin && (
-            <div className="flex gap-1" role="tablist" aria-label={t("settingsTitle")}>
-              <TabButton active={tab === "ai"} onClick={() => setTab("ai")}>
-                {t("aiSettings")}
-              </TabButton>
-              <TabButton active={tab === "quotas"} onClick={() => setTab("quotas")}>
-                {t("storageQuotas")}
-              </TabButton>
-              <TabButton active={tab === "maintenance"} onClick={() => setTab("maintenance")}>
-                {t("maintenanceTab")}
-              </TabButton>
-            </div>
-          )}
+          <div className="flex gap-1" role="tablist" aria-label={t("settingsTitle")}>
+            <TabButton active={tab === "ai"} onClick={() => setTab("ai")}>
+              {t("aiSettings")}
+            </TabButton>
+            <TabButton active={tab === "tools"} onClick={() => setTab("tools")}>
+              {t("chatToolsTab")}
+            </TabButton>
+            {isPlatformAdmin && (
+              <>
+                <TabButton active={tab === "quotas"} onClick={() => setTab("quotas")}>
+                  {t("storageQuotas")}
+                </TabButton>
+                <TabButton active={tab === "maintenance"} onClick={() => setTab("maintenance")}>
+                  {t("maintenanceTab")}
+                </TabButton>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Non-login field names + per-field autoComplete="off" stop password managers autofilling these. */}
@@ -237,49 +244,49 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                   <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t("minutesModeHint")}</p>
                 </div>
               )}
-
-              {/* Chat tools: a master switch plus a per-tool table (checkboxes disabled when the master is off). */}
-              <div className="border-t pt-3 dark:border-gray-700">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={toolsEnabled}
-                    onChange={(e) => setToolsEnabled(e.target.checked)}
-                  />
-                  <span className="font-medium text-gray-700 dark:text-gray-200">{t("chatToolsEnabled")}</span>
-                </label>
-                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t("chatToolsHint")}</p>
-                {data && data.tools.length > 0 && (
-                  <div className="mt-2 overflow-x-auto rounded border dark:border-gray-700">
-                    <table className="w-full text-left text-sm">
-                      <thead className="bg-gray-50 text-xs text-gray-500 dark:bg-gray-800 dark:text-gray-400">
-                        <tr>
-                          <th scope="col" className="w-12 px-2 py-1.5 text-center font-medium">{t("toolColEnabled")}</th>
-                          <th scope="col" className="px-2 py-1.5 font-medium">{t("toolColTool")}</th>
-                          <th scope="col" className="px-2 py-1.5 font-medium">{t("toolColDescription")}</th>
+            </div>
+          ) : tab === "tools" ? (
+            /* Chat tools: a master switch plus a per-tool table (checkboxes disabled when the master is off). */
+            <div className="space-y-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={toolsEnabled}
+                  onChange={(e) => setToolsEnabled(e.target.checked)}
+                />
+                <span className="font-medium text-gray-700 dark:text-gray-200">{t("chatToolsEnabled")}</span>
+              </label>
+              <p className="text-xs text-gray-400 dark:text-gray-500">{t("chatToolsHint")}</p>
+              {data && data.tools.length > 0 && (
+                <div className="overflow-x-auto rounded border dark:border-gray-700">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-gray-50 text-xs text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                      <tr>
+                        <th scope="col" className="w-12 px-2 py-1.5 text-center font-medium">{t("toolColEnabled")}</th>
+                        <th scope="col" className="px-2 py-1.5 font-medium">{t("toolColTool")}</th>
+                        <th scope="col" className="px-2 py-1.5 font-medium">{t("toolColDescription")}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y dark:divide-gray-700">
+                      {data.tools.map((tool) => (
+                        <tr key={tool.name} className={toolsEnabled ? "" : "opacity-50"}>
+                          <td className="px-2 py-1.5 text-center align-top">
+                            <input
+                              type="checkbox"
+                              aria-label={tool.title}
+                              disabled={!toolsEnabled}
+                              checked={toolStates[tool.name] ?? tool.enabled}
+                              onChange={(e) => setToolStates((s) => ({ ...s, [tool.name]: e.target.checked }))}
+                            />
+                          </td>
+                          <td className="px-2 py-1.5 align-top text-gray-700 dark:text-gray-200">{tool.title}</td>
+                          <td className="px-2 py-1.5 align-top text-xs text-gray-500 dark:text-gray-400">{tool.description}</td>
                         </tr>
-                      </thead>
-                      <tbody className="divide-y dark:divide-gray-700">
-                        {data.tools.map((tool) => (
-                          <tr key={tool.name} className={toolsEnabled ? "" : "opacity-50"}>
-                            <td className="px-2 py-1.5 text-center align-top">
-                              <input
-                                type="checkbox"
-                                aria-label={tool.title}
-                                disabled={!toolsEnabled}
-                                checked={toolStates[tool.name] ?? tool.enabled}
-                                onChange={(e) => setToolStates((s) => ({ ...s, [tool.name]: e.target.checked }))}
-                              />
-                            </td>
-                            <td className="px-2 py-1.5 align-top text-gray-700 dark:text-gray-200">{tool.title}</td>
-                            <td className="px-2 py-1.5 align-top text-xs text-gray-500 dark:text-gray-400">{tool.description}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           ) : tab === "quotas" ? (
             <div className="space-y-3">

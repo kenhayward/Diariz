@@ -53,7 +53,7 @@ to open it and jump to the exact segment). It can also **email you** (yourself o
 a summary, action items, or notes - always delivering to your own registered address (and it **files a copy
 of that email onto the transcript** as a Markdown attachment), or **save that output
 to a transcript as a Markdown attachment**. Toggle
-the tools on, and choose which, under Settings → AI - where you
+the tools on, and choose which, under Settings → Chat Tools; under Settings → Model Settings you
 can also **enable reasoning** (and pick a level) for reasoning-capable models. You can **attach supporting
 documents** (files or URLs) to a recording, open them from the transcript page, and optionally **feed them
 to the chat** (PDFs, text, Office docs, emails/calendar invites are read into text; URLs are fetched).
@@ -105,6 +105,23 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.97.8",
+    date: "2026-07-06",
+    pr: 217,
+    headline: "Settings: a dedicated Chat Tools tab + a clearer Model Settings tab",
+    summary:
+      "Reorganises the Settings modal so it's easier to navigate. The old \"AI Settings\" tab is renamed " +
+      "\"Model Settings\" (your model endpoint, model, API key, and reasoning controls), and the chat " +
+      "tool-calling switch and per-tool table move out to their own new \"Chat Tools\" tab - so every user " +
+      "now sees these two tabs, not just administrators. The modal also holds a fixed height, so it no longer " +
+      "resizes as you switch between tabs. No settings or behaviour change - only where the controls live.",
+    changed: [
+      "Renamed the \"AI Settings\" tab to \"Model Settings\".",
+      "Moved \"Enable chat tools\" and the per-tool table to a new \"Chat Tools\" tab.",
+      "The Settings modal now keeps a constant height across tabs instead of resizing.",
+    ],
+  },
   {
     version: "0.97.7",
     date: "2026-07-06",

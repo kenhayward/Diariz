@@ -161,12 +161,31 @@ describe("SettingsModal", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("places the reasoning controls above the chat-tools list", async () => {
+  it("renames the AI tab to Model Settings and shows it to non-admins", async () => {
     renderModal();
-    const reasoning = await screen.findByLabelText(/enable reasoning/i);
-    const tools = screen.getByLabelText(/enable chat tools/i);
-    // reasoning appears before the tools master switch in document order
-    expect(reasoning.compareDocumentPosition(tools) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await screen.findByDisplayValue("https://existing/v1");
+    expect(screen.getByRole("tab", { name: /model settings/i })).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: /^ai settings$/i })).toBeNull();
+  });
+
+  it("keeps reasoning on Model Settings and moves chat tools to their own tab", async () => {
+    renderModal();
+    // Reasoning lives on the Model Settings tab; the chat-tools switch is not there.
+    await screen.findByLabelText(/enable reasoning/i);
+    expect(screen.queryByLabelText(/enable chat tools/i)).toBeNull();
+
+    // Switch to the Chat Tools tab: the master switch appears, reasoning goes away.
+    fireEvent.click(screen.getByRole("tab", { name: /chat tools/i }));
+    expect(screen.getByLabelText(/enable chat tools/i)).toBeTruthy();
+    expect(screen.queryByLabelText(/enable reasoning/i)).toBeNull();
+  });
+
+  it("holds the modal at a fixed height so it doesn't resize between tabs", async () => {
+    renderModal();
+    await screen.findByDisplayValue("https://existing/v1");
+    const dialog = screen.getByRole("dialog", { name: /settings/i });
+    expect(dialog.className).toContain("h-[85vh]");
+    expect(dialog.className).not.toContain("max-h-[85vh]");
   });
 
   it("clears the stored key", async () => {
@@ -234,6 +253,8 @@ describe("SettingsModal", () => {
     });
 
     renderModal();
+    // The chat-tools switch + table live on their own tab now.
+    fireEvent.click(await screen.findByRole("tab", { name: /chat tools/i }));
     await screen.findByText("Who said that"); // tools table rendered once settings loaded
     const master = screen.getByLabelText(/enable chat tools/i);
 
