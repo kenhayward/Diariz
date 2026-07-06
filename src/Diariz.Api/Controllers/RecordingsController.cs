@@ -70,7 +70,8 @@ public class RecordingsController : ControllerBase
             .Select(r => new RecordingSummaryDto(r.Id, r.Title, r.Name, r.Source, r.DurationMs, r.Status, r.CreatedAt,
                 r.SectionId, r.Section != null ? r.Section.Name : null, r.Actions.Any(), r.AudioDeletedAt == null,
                 r.CalendarLink != null ? r.CalendarLink.EventId : null,
-                r.CalendarLink != null ? r.CalendarLink.Color : null))
+                r.CalendarLink != null ? r.CalendarLink.Color : null,
+                r.MeetingTypeId))
             .ToListAsync();
 
     /// <summary>Drag-and-drop: set the section and 0-based position of each listed recording in one
@@ -144,7 +145,8 @@ public class RecordingsController : ControllerBase
 
         return new RecordingDetailDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.SizeBytes,
             rec.Status, rec.Error, rec.CreatedAt, rec.MinSpeakers, rec.MaxSpeakers, names, speakers, tDto, sDto,
-            mDto, actions, rec.ActionsExtractedAt != null, rec.HasAudio, ToLinkDto(rec.CalendarLink));
+            mDto, actions, rec.ActionsExtractedAt != null, rec.HasAudio, ToLinkDto(rec.CalendarLink),
+            rec.MeetingTypeId);
     }
 
     private static CalendarLinkDto? ToLinkDto(RecordingCalendarLink? link) => link is null

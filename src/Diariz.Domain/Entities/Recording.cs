@@ -50,6 +50,11 @@ public class Recording
     public Guid? SectionId { get; set; }
     public Section? Section { get; set; }
 
+    /// <summary>Optional meeting type driving the minutes template. Null = the seeded "General Meeting"
+    /// default (current behaviour). Persists across re-transcribes. Set to null (SetNull) if the type is deleted.</summary>
+    public Guid? MeetingTypeId { get; set; }
+    public MeetingType? MeetingType { get; set; }
+
     /// <summary>Manual sort order within its group (lower = higher in the list). Recordings with the
     /// same position fall back to newest-first by <see cref="CreatedAt"/>.</summary>
     public int Position { get; set; }

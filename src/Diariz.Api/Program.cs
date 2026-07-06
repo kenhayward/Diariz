@@ -376,6 +376,7 @@ await using (var scope = app.Services.CreateAsyncScope())
     await sp.GetRequiredService<IAudioStorage>().EnsureBucketAsync();
     await Seeder.SeedRolesAsync(sp);
     await Seeder.SeedDefaultUserAsync(sp, app.Configuration);
+    await MeetingTypeSeeder.SeedAsync(db);
 }
 
 // Must run before auth/cookie handling so the pipeline sees the real client scheme.
