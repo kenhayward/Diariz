@@ -437,3 +437,6 @@ apps/*/dist/
 apps/*/tsconfig.tsbuildinfo
 deploy/.env
 *.pyc
+
+# Local-only working notes / scratch (never committed)
+untracked/

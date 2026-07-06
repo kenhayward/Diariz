@@ -106,6 +106,18 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.97.7",
+    date: "2026-07-06",
+    pr: 216,
+    headline: "Chore: git-ignore the local-only untracked/ scratch folder",
+    summary:
+      "Repository hygiene only. Adds untracked/ to .gitignore so local working notes and scratch files kept " +
+      "there are never accidentally committed. No code or behaviour change.",
+    changed: [
+      "Added untracked/ to .gitignore.",
+    ],
+  },
+  {
     version: "0.97.6",
     date: "2026-07-06",
     pr: 215,
