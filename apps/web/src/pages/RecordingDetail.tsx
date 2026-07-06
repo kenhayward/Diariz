@@ -225,9 +225,10 @@ export default function RecordingDetail() {
   const [editingSummary, setEditingSummary] = useState(false);
   const [editingMinutes, setEditingMinutes] = useState(false);
   const [emailMinutesOpen, setEmailMinutesOpen] = useState(false);
-  // While a template run is in flight the picker is disabled; cleared when fresh minutes arrive (SignalR refetch).
-  const [applyingType, setApplyingType] = useState(false);
-  const applyBaselineRef = useRef<string | null>(null);
+  // While a minutes run (recreate or a template apply) is in flight the picker is disabled and the status bar
+  // shows progress; both clear when fresh minutes arrive (SignalR refetch).
+  const [minutesRunning, setMinutesRunning] = useState(false);
+  const minutesBaselineRef = useRef<string | null>(null);
   const [managingTypes, setManagingTypes] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [editingSeg, setEditingSeg] = useState<SegmentDto | null>(null);
@@ -247,6 +248,7 @@ export default function RecordingDetail() {
   useEffect(() => { if (translating) setStatus(t("workspace:translating"), "progress"); }, [translating]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (reidentifying) setStatus(t("workspace:reidentifying"), "progress"); }, [reidentifying]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (requeuing) setStatus(t("workspace:retranscribing"), "progress"); }, [requeuing]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (minutesRunning) setStatus(t("workspace:generatingMinutes"), "progress"); }, [minutesRunning]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (actionInfo) setStatus(actionInfo, "success"); }, [actionInfo]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (actionError) setStatus(actionError, "error"); }, [actionError]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -394,11 +396,14 @@ export default function RecordingDetail() {
     if (rec?.meetingMinutes?.isUserEdited && !window.confirm(t("workspace:confirmRecreateMinutes"))) return;
     setActionError(null);
     setActionInfo(null);
+    // Progress shows in the status bar only (not a banner); cleared when the fresh minutes arrive.
+    minutesBaselineRef.current = rec?.meetingMinutes?.createdAt ?? null;
+    setMinutesRunning(true);
     try {
       await api.generateMeetingMinutes(id);
-      setActionInfo(t("workspace:generatingMinutes"));
       await qc.invalidateQueries({ queryKey: ["recording", id] });
     } catch (e) {
+      setMinutesRunning(false);
       setActionError(apiErrorMessage(e, t("workspace:errMinutes")));
     }
   }
@@ -408,24 +413,24 @@ export default function RecordingDetail() {
     if (rec?.meetingMinutes?.isUserEdited && !window.confirm(t("workspace:confirmRecreateMinutes"))) return;
     setActionError(null);
     setActionInfo(null);
-    applyBaselineRef.current = rec?.meetingMinutes?.createdAt ?? null;
-    setApplyingType(true);
+    minutesBaselineRef.current = rec?.meetingMinutes?.createdAt ?? null;
+    setMinutesRunning(true);
     try {
       await api.applyMeetingType(id, typeId);
-      setActionInfo(t("workspace:generatingMinutes"));
       await qc.invalidateQueries({ queryKey: ["recording", id] });
     } catch (e) {
-      setApplyingType(false);
+      setMinutesRunning(false);
       setActionError(apiErrorMessage(e, t("workspace:errMinutes")));
     }
   }
 
-  // Clear the picker's busy state once fresh minutes have been generated (their timestamp changed).
+  // Clear the picker's busy state + the status-bar progress once fresh minutes have arrived (timestamp changed).
   useEffect(() => {
-    if (applyingType && rec?.meetingMinutes && rec.meetingMinutes.createdAt !== applyBaselineRef.current) {
-      setApplyingType(false);
+    if (minutesRunning && rec?.meetingMinutes && rec.meetingMinutes.createdAt !== minutesBaselineRef.current) {
+      setMinutesRunning(false);
+      setStatus(null);
     }
-  }, [applyingType, rec?.meetingMinutes?.createdAt]);
+  }, [minutesRunning, rec?.meetingMinutes?.createdAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Save hand-edited meeting minutes (Markdown; flagged user-edited so the auto-generator won't clobber them).
   async function saveMinutes(markdown: string) {
@@ -929,7 +934,7 @@ export default function RecordingDetail() {
         <>
           <MeetingTypeMenu
             currentTypeId={rec.meetingTypeId ?? null}
-            busy={applyingType || isSummarizing}
+            busy={minutesRunning || isSummarizing}
             onApply={applyMeetingType}
           />
           <ToolbarButton
