@@ -267,8 +267,9 @@ export interface UserStorage {
 }
 
 /// Platform-wide storage-quota defaults (bytes), edited by the Platform Administrator.
-/// How template-driven minutes generate (platform-wide, admin-only). 0 = SingleCall, 1 = PerSection.
-export type MinutesGenerationMode = 0 | 1;
+/// How template-driven minutes generate (platform-wide, admin-only). The API serialises enums by name
+/// (JsonStringEnumConverter), so this is the string name on the wire - not a number.
+export type MinutesGenerationMode = "SingleCall" | "PerSection";
 export interface PlatformSettings {
   starterQuotaBytes: number;
   maxQuotaBytes: number;

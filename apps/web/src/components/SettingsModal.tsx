@@ -38,8 +38,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   // Storage quotas (GB inputs).
   const [starterGb, setStarterGb] = useState("");
   const [maxGb, setMaxGb] = useState("");
-  // Platform-wide minutes generation mode (0 = single call, 1 = per section); Platform-Admin only.
-  const [minutesMode, setMinutesMode] = useState<MinutesGenerationMode>(0);
+  // Platform-wide minutes generation mode; Platform-Admin only. String enum name on the wire.
+  const [minutesMode, setMinutesMode] = useState<MinutesGenerationMode>("SingleCall");
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -226,12 +226,12 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                     <span className="mb-1 block font-medium text-gray-700 dark:text-gray-200">{t("minutesModeLabel")}</span>
                     <select
                       value={minutesMode}
-                      onChange={(e) => setMinutesMode(Number(e.target.value) as MinutesGenerationMode)}
+                      onChange={(e) => setMinutesMode(e.target.value as MinutesGenerationMode)}
                       aria-label={t("minutesModeLabel")}
                       className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                     >
-                      <option value={0}>{t("minutesModeSingle")}</option>
-                      <option value={1}>{t("minutesModePerSection")}</option>
+                      <option value="SingleCall">{t("minutesModeSingle")}</option>
+                      <option value="PerSection">{t("minutesModePerSection")}</option>
                     </select>
                   </label>
                   <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t("minutesModeHint")}</p>
