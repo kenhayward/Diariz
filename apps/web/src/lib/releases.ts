@@ -31,7 +31,11 @@ merge duplicates, and erase one or all (GDPR) of the stored biometric voiceprint
 
 It can **summarise** recordings and generate a full set of **professional meeting minutes** (headings, lists,
 tables - no emojis) that you can edit in a rich editor, re-create, and **email to yourself** (with or without
-the recording's attachments). It **automatically extracts action items** (with actor and deadline) as part of
+the recording's attachments). Minutes are driven by a **meeting type** - a reusable template of sections,
+boilerplate, substituted values, and model prompts (Customer, Cadence Call, 1:1, Interview, Town Hall, Webinar,
+and more ship as standard). Pick a type from the Minutes toolbar to re-run the minutes in that structure, and
+build your own or edit the shared ones in a **Manage Meeting Types** editor; a Platform Administrator can also
+choose whether minutes generate with one call per section or a single call. It **automatically extracts action items** (with actor and deadline) as part of
 the pipeline into an editable table, and **tracks them across all your meetings** in a dedicated **Actions** view - filter by person, mark
 items done (with a completion date), and jump from an action back to the transcript it came from. It can
 **translate** a transcript (segments, summary, and actions) into your chosen language, and let you
@@ -101,6 +105,22 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.97.0",
+    date: "2026-07-06",
+    pr: 209,
+    headline: "Build and manage your own meeting-type templates",
+    summary:
+      "Completes the Meeting Types feature: a 'Manage templates' button on the Minutes toolbar opens a new " +
+      "Manage Meeting Types editor. Pick a template on the left; edit its title, group, icon and colour, the " +
+      "meeting overview, and its content on the right - sections (H1/H2) whose blocks are boilerplate text, a " +
+      "substituted recording value, or a model prompt, reorderable by drag handle or the block menu. Save is " +
+      "atomic and Cancel reverts. You manage your own Personal templates; a Platform Administrator also manages " +
+      "the shared Platform templates (including the standards) and can mark a template shared. Server redeploy.",
+    added: [
+      "A Manage Meeting Types editor (master-detail) to create, edit, reorder, and delete minutes templates, with the Personal/Platform rules enforced.",
+    ],
+  },
   {
     version: "0.96.1",
     date: "2026-07-06",

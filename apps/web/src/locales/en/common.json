@@ -6,5 +6,6 @@
   "close": "Close",
   "loading": "Loading…",
   "create": "Create",
-  "remove": "Remove"
+  "remove": "Remove",
+  "delete": "Delete"
 }
