@@ -26,6 +26,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<IcsCalendarSource> IcsCalendarSources => Set<IcsCalendarSource>();
     public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
     public DbSet<McpAccessToken> McpAccessTokens => Set<McpAccessToken>();
+    public DbSet<MeetingType> MeetingTypes => Set<MeetingType>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -78,6 +79,11 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 .WithOne(l => l.Recording!)
                 .HasForeignKey<RecordingCalendarLink>(l => l.RecordingId)
                 .OnDelete(DeleteBehavior.Cascade);
+            // Chosen meeting type; deleting the type drops recordings back to the General default (SetNull).
+            e.HasOne(r => r.MeetingType)
+                .WithMany()
+                .HasForeignKey(r => r.MeetingTypeId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<RecordingCalendarLink>(e =>
@@ -276,6 +282,26 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.HasOne(s => s.User)
                 .WithMany()
                 .HasForeignKey(s => s.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Meeting types (minutes templates). UserId null = a shared Platform type; non-null = a user's Personal
+        // type (cascade-deleted with the user). Key is a stable slug for the seeded standards (unique; multiple
+        // NULLs coexist for user-created types under the Postgres unique index). ContentJson is jsonb on Postgres.
+        builder.Entity<MeetingType>(e =>
+        {
+            e.HasIndex(m => m.UserId);
+            e.HasIndex(m => m.Key).IsUnique();
+            e.Property(m => m.Key).HasMaxLength(64);
+            e.Property(m => m.GroupName).HasMaxLength(128);
+            e.Property(m => m.Title).HasMaxLength(256);
+            e.Property(m => m.Icon).HasMaxLength(64);
+            e.Property(m => m.Color).HasMaxLength(32);
+            if (isNpgsql)
+                e.Property(m => m.ContentJson).HasColumnType("jsonb");
+            e.HasOne(m => m.User)
+                .WithMany()
+                .HasForeignKey(m => m.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

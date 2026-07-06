@@ -61,6 +61,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddRecordingCalendarLink` | `RecordingCalendarLinks` (1:1 with `Recording`, shared PK, cascade) — persisted link from a recording to its Google Calendar event (lightweight snapshot; rich invite details fetched live) |
 | `AddCalendarLinkCalendarIdAndColor` | `RecordingCalendarLinks.CalendarId` (varchar(1024), NOT NULL, existing rows backfilled to `primary`) + `RecordingCalendarLinks.Color` (varchar(32) null) — which calendar the linked event is on + its Google colour |
 | `AddIcsCalendarSource` | `IcsCalendarSources` (per-user external `.ics` feed subscriptions; indexed on `UserId`, cascade on user delete) — events fetched live and merged into the Calendar views |
+| `AddMeetingType` | `MeetingTypes` (minutes templates; nullable `UserId` — null = shared Platform type, non-null = a user's Personal type; unique `Key` for seeded standards; `ContentJson` **jsonb**; cascade on user delete) + `Recordings.MeetingTypeId` (FK, `ON DELETE SET NULL`) — the chosen template driving a recording's minutes |
 
 ### Entity-relationship overview
 
@@ -270,6 +271,29 @@ and merged into the Calendar views tagged `ics:{Id}`; nothing from the feed is s
 | `CreatedAt` | timestamptz | |
 | `LastFetchedAt` | timestamptz null | last successful fetch; null until first read |
 | `LastError` | text null | last fetch error (unreachable, non-200, too large, parse failure); null when healthy |
+
+#### `MeetingTypes`
+Reusable minutes templates. A **Platform** type (`UserId` null) is created by a Platform Administrator and is
+shared read-only to everyone (the app seeds a standard set on startup, insert-if-missing by `Key`); a **Personal**
+type (`UserId` set) is a user's own, with full CRUD. `ContentJson` holds the structured template (an ordered list
+of H1/H2 sections whose blocks are boilerplate text, substituted recording values, or model prompts).
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `UserId` | uuid FK → AspNetUsers null | **null = Platform** (shared); non-null = a Personal type. Indexed; **cascade** delete with the user |
+| `Key` | varchar(64) null | stable slug for the seeded standards (**unique**; multiple NULLs for user-created types); null for user types |
+| `GroupName` | varchar(128) | grouping label in the picker |
+| `Title` | varchar(256) | |
+| `Overview` | text | context prepended to model prompts |
+| `Icon` | varchar(64) | icon key from the app's fixed set |
+| `Color` | varchar(32) | icon background colour (hex) |
+| `ContentJson` | **jsonb** | the structured template (sections/blocks); Postgres jsonb, plain text under the in-memory provider |
+| `CreatedAt` | timestamptz | |
+| `UpdatedAt` | timestamptz null | |
+
+`Recordings.MeetingTypeId` (uuid FK → MeetingTypes, null) points at the chosen type; **`ON DELETE SET NULL`** so
+deleting a type drops its recordings back to the General default. Null = the seeded General Meeting default.
 
 #### `Speakers`
 Per-recording diarization label → display name, plus its voiceprint and any identification.

@@ -102,6 +102,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.95.0",
+    date: "2026-07-06",
+    pr: 205,
+    headline: "Meeting types: groundwork for configurable minutes templates",
+    summary:
+      "First step of a larger feature: minutes will become driven by reusable 'meeting types' (Customer, " +
+      "Cadence Call, 1:1, Interview, Town Hall, Webinar, and more), each a structured template of sections, " +
+      "boilerplate, substituted values, and model prompts. This release lays the backend foundation - the data " +
+      "model, a set of standard templates seeded on startup (including a 'General Meeting' default that " +
+      "reproduces today's minutes), and a read API - with no visible change yet. The picker and editor follow " +
+      "in later releases. Server redeploy; a migration runs automatically on start.",
+    added: [
+      "A new meeting-type data model and a set of standard templates the server seeds on startup (Platform types, shared read-only to everyone), including a 'General Meeting' default used when a recording has no type chosen.",
+    ],
+  },
+  {
     version: "0.94.1",
     date: "2026-07-05",
     pr: 204,

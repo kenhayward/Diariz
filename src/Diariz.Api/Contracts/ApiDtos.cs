@@ -66,7 +66,9 @@ public record RecordingSummaryDto(
     string? CalendarEventId = null,
     /// <summary>The linked calendar's Google colour (hex), for tinting the list's calendar icon. Null when
     /// unlinked or unknown.</summary>
-    string? CalendarColor = null);
+    string? CalendarColor = null,
+    /// <summary>The chosen meeting type driving the minutes template, or null for the General default.</summary>
+    Guid? MeetingTypeId = null);
 
 /// <summary>A recording's persisted link to a Google Calendar event (the stored snapshot). The rich invite
 /// details are fetched live via <c>GET /api/calendar/events/{eventId}</c>. <see cref="CalendarId"/> targets
@@ -149,7 +151,26 @@ public record RecordingDetailDto(
     bool ActionsExtracted,
     bool HasAudio,
     /// <summary>The persisted Google Calendar link (snapshot), or null when unlinked.</summary>
-    CalendarLinkDto? CalendarLink = null);
+    CalendarLinkDto? CalendarLink = null,
+    /// <summary>The chosen meeting type driving the minutes template, or null for the General default.</summary>
+    Guid? MeetingTypeId = null);
+
+// ---- Meeting types (minutes templates) ----
+/// <summary>A meeting type (minutes template). <see cref="IsPlatform"/> = a shared, admin-owned type;
+/// <see cref="CanEdit"/> = the caller may edit/delete it (owns a Personal type, or is a Platform Admin for a
+/// Platform type). <see cref="Content"/> is the structured template (H1/H2 sections of blocks).</summary>
+public record MeetingTypeDto(
+    Guid Id, bool IsPlatform, bool CanEdit, string GroupName, string Title, string Overview,
+    string Icon, string Color, Diariz.Api.Services.MeetingTypeContent Content);
+
+/// <summary>Create or update a meeting type. <paramref name="IsPlatform"/> requests a shared Platform type
+/// (honoured only for Platform Administrators; normal users always get a Personal type).</summary>
+public record MeetingTypeRequest(
+    string GroupName, string Title, string Overview, string Icon, string Color,
+    Diariz.Api.Services.MeetingTypeContent Content, bool IsPlatform = false);
+
+/// <summary>Apply a meeting type to a recording (re-runs the minutes). Null = the General default.</summary>
+public record ApplyMeetingTypeRequest(Guid? MeetingTypeId);
 
 public record RenameSpeakerRequest(string Label, string DisplayName);
 
