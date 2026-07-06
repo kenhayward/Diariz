@@ -345,9 +345,14 @@ export default function RecordingDetail() {
     setRequeuing(true);
     try {
       await api.retranscribe(id, { speakers: { min, max } });
-      await qc.invalidateQueries({ queryKey: ["recording", id] });
       setRetranscribeOpen(false);
-      setActionInfo(t("workspace:retranscribing"));
+      // Progress shows in the status bar only (not a banner). The transient "retranscribing" push (the requeuing
+      // effect) hands off to the recordings-list pipeline (Queued -> Transcribing) once the requeue is accepted.
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["recording", id] }),
+        qc.invalidateQueries({ queryKey: ["recordings"] }),
+      ]);
+      setStatus(null);
     } catch (e) {
       setActionError(apiErrorMessage(e, t("workspace:errRetranscribe")));
     } finally {
