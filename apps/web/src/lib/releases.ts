@@ -106,6 +106,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.97.2",
+    date: "2026-07-06",
+    pr: 211,
+    headline: "Fix: the meeting-type dropdown opened off-screen",
+    summary:
+      "The meeting-type picker on the Minutes toolbar anchored its menu to the button's right edge, so it " +
+      "extended leftward and ran off-screen under the sidebar. It now opens rightward from the button's left " +
+      "edge, into the available space. Server redeploy.",
+    fixed: [
+      "The Minutes-toolbar meeting-type dropdown no longer opens off the left of the screen.",
+    ],
+  },
+  {
     version: "0.97.1",
     date: "2026-07-06",
     pr: 210,

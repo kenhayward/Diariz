@@ -69,7 +69,7 @@ export default function MeetingTypeMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-30 mt-1 max-h-96 w-64 overflow-auto rounded-lg border bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-900"
+          className="absolute left-0 z-30 mt-1 max-h-96 w-64 overflow-auto rounded-lg border bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-900"
         >
           {groups.map(([groupName, list]) => (
             <div key={groupName}>
