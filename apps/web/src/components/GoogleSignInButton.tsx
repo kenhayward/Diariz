@@ -1,11 +1,22 @@
-/// "Sign in with Google" button. It is a plain link (full-page navigation) to the API's server-side
-/// OAuth start endpoint, so the state cookie and redirect to Google work without any XHR/CORS.
-export default function GoogleSignInButton({ label }: { label: string }) {
+/// "Sign in with Google" button. Default (web) is a plain link (full-page navigation) to the API's
+/// server-side OAuth start endpoint, so the state cookie and redirect to Google work without any
+/// XHR/CORS. When `onClick` is given (desktop shell) it renders a button instead - the desktop flow
+/// opens the system browser via IPC, since an in-window navigation to Google would be ejected by the
+/// shell and lose the flow.
+const CLASS =
+  "flex w-full items-center justify-center gap-2 rounded border py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800";
+
+export default function GoogleSignInButton({ label, onClick }: { label: string; onClick?: () => void }) {
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={CLASS}>
+        <GoogleLogo />
+        {label}
+      </button>
+    );
+  }
   return (
-    <a
-      href="/api/auth/google/start"
-      className="flex w-full items-center justify-center gap-2 rounded border py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
-    >
+    <a href="/api/auth/google/start" className={CLASS}>
       <GoogleLogo />
       {label}
     </a>
