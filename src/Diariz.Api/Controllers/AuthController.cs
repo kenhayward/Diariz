@@ -266,7 +266,9 @@ public class AuthController : ControllerBase
 
         return result.Outcome switch
         {
-            GoogleSignInOutcome.SignedIn => await SignedInRedirectAsync(result.User!),
+            GoogleSignInOutcome.SignedIn => saved.DesktopChallenge is { } challenge
+                ? await DesktopSignedInRedirectAsync(result.User!, challenge)
+                : await SignedInRedirectAsync(result.User!),
             GoogleSignInOutcome.AwaitingApproval => RedirectToLogin("pending"),
             GoogleSignInOutcome.Disabled => RedirectToLogin("disabled"),
             _ => RedirectToLogin("failed"),
@@ -359,6 +361,7 @@ public class AuthController : ControllerBase
     private const string AuthHandoffCookie = "diariz_auth";
     private const string HandoffCookiePath = "/api/auth/google";
     private const string SpaCallbackPath = "/auth/google/callback";
+    private const string DesktopCallbackUri = "diariz://auth/callback";
 
     /// <summary>Hand the freshly-minted JWT to the SPA without ever putting it in a URL. The token rides in a
     /// short-lived, <b>HttpOnly</b> cookie scoped to the Google auth path; the SPA then trades it for the
@@ -370,6 +373,17 @@ public class AuthController : ControllerBase
         var (token, _) = _tokens.CreateAccessToken(user, await _users.GetRolesAsync(user));
         Response.Cookies.Append(AuthHandoffCookie, token, HandoffCookieOptions());
         return Redirect(SafeRedirect.Within($"{WebBase()}{SpaCallbackPath}", AllowedRedirectHosts()));
+    }
+
+    /// <summary>Desktop sign-in handoff: mint a single-use code bound to the app's PKCE challenge and
+    /// redirect the system browser to the diariz:// deep link. The JWT never rides in the URL - the app
+    /// redeems the code at <c>POST desktop/exchange</c> by proving it holds the verifier. Deliberately a
+    /// raw <see cref="ControllerBase.Redirect(string)"/> (not <see cref="SafeRedirect"/>): the custom
+    /// scheme is fixed and only reachable from an encrypted-state desktop flow.</summary>
+    private async Task<IActionResult> DesktopSignedInRedirectAsync(ApplicationUser user, string challenge)
+    {
+        var code = await _desktopCodes.MintAsync(user.Id, challenge, TimeSpan.FromMinutes(2));
+        return Redirect($"{DesktopCallbackUri}?code={Uri.EscapeDataString(code)}");
     }
 
     private CookieOptions HandoffCookieOptions() => new()

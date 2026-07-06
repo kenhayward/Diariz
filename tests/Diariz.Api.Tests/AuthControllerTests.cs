@@ -356,6 +356,36 @@ public class AuthControllerTests
     }
 
     [Fact]
+    public async Task GoogleCallback_DesktopFlow_RedirectsToDeepLinkWithMintedCode()
+    {
+        using var host = new IdentityTestHost();
+        await CreateGoogleUser(host, "g@x.test", "google-sub", UserStatus.Active);
+        var google = new FakeGoogleAuthService
+        {
+            Enabled = true,
+            Result = new GoogleUserInfo("google-sub", "g@x.test", true, "Grace", "https://pic/g.png", null),
+        };
+        var codes = new FakeDesktopAuthCodeStore();
+        var controller = BuildController(host, google, PublicOpts, desktopCodes: codes);
+
+        // Start WITH a desktop challenge sets a desktop-marked state cookie.
+        controller.ControllerContext = Http.Context();
+        controller.GoogleStart(desktopChallenge: "CHAL");
+        var cookie = CookieValue(controller.Response.Headers.SetCookie.ToString(), "diariz_g_oauth");
+
+        var cbCtx = Http.Context();
+        cbCtx.HttpContext.Request.Headers["Cookie"] = $"diariz_g_oauth={cookie}";
+        controller.ControllerContext = cbCtx;
+        var redirect = Assert.IsType<RedirectResult>(
+            await controller.GoogleCallback("auth-code", google.CapturedState, null));
+
+        // Hands back via the custom scheme, carrying a one-time code (not a token).
+        Assert.StartsWith("diariz://auth/callback?code=", redirect.Url);
+        // No SPA handoff cookie on the desktop path.
+        Assert.DoesNotContain("diariz_auth=", controller.Response.Headers.SetCookie.ToString());
+    }
+
+    [Fact]
     public async Task GoogleCallback_PendingUser_RedirectsToLoginPending()
     {
         using var host = new IdentityTestHost();
