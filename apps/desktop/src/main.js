@@ -340,6 +340,14 @@ if (!app.requestSingleInstanceLock()) {
   // without it, notifications are titled "Electron". Match the installer's appId.
   app.setAppUserModelId("com.diariz.desktop");
 
+  // Own the diariz:// scheme so Google sign-in deep links come back to this app. In dev (unpackaged)
+  // Windows needs the explicit exec path + script arg; packaged builds register it via the installer.
+  if (process.defaultApp && process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient("diariz", process.execPath, [path.resolve(process.argv[1])]);
+  } else {
+    app.setAsDefaultProtocolClient("diariz");
+  }
+
   app.on("second-instance", () => showMainWindow());
 
   app.whenReady().then(() => {
