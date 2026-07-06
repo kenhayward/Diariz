@@ -106,6 +106,18 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.97.1",
+    date: "2026-07-06",
+    pr: 210,
+    headline: "Docs: record the recording's meeting-type link in the schema doc",
+    summary:
+      "Internal docs only. The Data Schema reference now lists Recordings.MeetingTypeId in the Recordings column " +
+      "table (it was previously only described under the MeetingTypes section). No code or behaviour change.",
+    fixed: [
+      "Data Schema doc: added the Recordings.MeetingTypeId FK row for completeness.",
+    ],
+  },
+  {
     version: "0.97.0",
     date: "2026-07-06",
     pr: 209,

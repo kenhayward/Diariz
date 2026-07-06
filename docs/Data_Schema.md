@@ -115,6 +115,7 @@ The owned audio recording.
 | `Error` | text null | last failure message |
 | `MinSpeakers` / `MaxSpeakers` | int null | diarization hints (null = automatic) |
 | `SectionId` | uuid FK → Sections null | null = "Ungrouped"; **SetNull** on section delete |
+| `MeetingTypeId` | uuid FK → MeetingTypes null | chosen minutes template; null = the seeded General default; **SetNull** on type delete |
 | `Position` | int | manual sort order within its group |
 | `ActionsExtractedAt` | timestamptz null | non-null once action extraction has run (drives the by-exception Actions panel) |
 | `CreatedAt` | timestamptz | |
