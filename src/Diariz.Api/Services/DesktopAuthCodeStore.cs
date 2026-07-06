@@ -22,6 +22,8 @@ public sealed class RedisDesktopAuthCodeStore(IConnectionMultiplexer redis) : ID
     public async Task<string> MintAsync(Guid userId, string challenge, TimeSpan ttl)
     {
         var code = OAuthPkce.NewState(); // 43-char base64url, URL-safe for the deep link
+        // challenge is base64url (OAuthPkce.Challenge) and userId:N is fixed-width hex - neither contains
+        // ':', so RedeemAsync's Split(':', 2) round-trips the payload safely.
         var payload = $"{userId:N}:{challenge}";
         await redis.GetDatabase().StringSetAsync(Prefix + code, payload, ttl);
         return code;
