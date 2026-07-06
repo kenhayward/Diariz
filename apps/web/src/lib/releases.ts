@@ -108,7 +108,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.97.8",
     date: "2026-07-06",
-    pr: 217,
+    pr: 218,
     headline: "Settings: a dedicated Chat Tools tab + a clearer Model Settings tab",
     summary:
       "Reorganises the Settings modal so it's easier to navigate. The old \"AI Settings\" tab is renamed " +
