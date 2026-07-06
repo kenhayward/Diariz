@@ -9,6 +9,7 @@ using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Pgvector;
 
 namespace Diariz.Api.IntegrationTests;
 
@@ -128,6 +129,43 @@ public class RecordingsControllerIntegrationTests(ContainersFixture fx)
         var moved = await verify.Attachments.FindAsync(attId);
         Assert.NotNull(moved);                                    // survived the source deletion (not cascaded)
         Assert.Equal(survivorId, moved!.RecordingId);             // reassigned onto the survivor
+    }
+
+    [Fact]
+    public async Task Merge_PreservesSpeakerProfileAssignments_OnTheSurvivor()
+    {
+        // Regression: the merge namespaced speaker labels (S1-/S2-) but dropped each speaker's ProfileId, so the
+        // merged speakers showed as "Unassigned" on the Speakers tab even though their segments stayed named.
+        Guid userId, survivorId, sourceId, profAId, profBId;
+        await using (var db = fx.CreateDbContext())
+        {
+            var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = "u@x.test" };
+            var profA = new SpeakerProfile { Id = Guid.NewGuid(), UserId = user.Id, Name = "Alice", Embedding = new Vector(new float[192]), SampleCount = 1 };
+            var profB = new SpeakerProfile { Id = Guid.NewGuid(), UserId = user.Id, Name = "Bob", Embedding = new Vector(new float[192]), SampleCount = 1 };
+            // No audio on either → the merge settles synchronously (persists the survivor's merged speakers now).
+            var early = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = "k1", CreatedAt = DateTimeOffset.UtcNow.AddMinutes(-5), AudioDeletedAt = DateTimeOffset.UtcNow, SizeBytes = 0, DurationMs = 1000, Status = RecordingStatus.Transcribed };
+            var later = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = "k2", CreatedAt = DateTimeOffset.UtcNow, AudioDeletedAt = DateTimeOffset.UtcNow, SizeBytes = 0, DurationMs = 2000, Status = RecordingStatus.Transcribed };
+            var trE = new Transcription { Id = Guid.NewGuid(), RecordingId = early.Id, Model = "m", Version = 1 };
+            var trL = new Transcription { Id = Guid.NewGuid(), RecordingId = later.Id, Model = "m", Version = 1 };
+            db.AddRange(user, profA, profB, early, later, trE, trL,
+                new Segment { Id = Guid.NewGuid(), TranscriptionId = trE.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 1000, Original = "Hello", Ordinal = 0 },
+                new Segment { Id = Guid.NewGuid(), TranscriptionId = trL.Id, SpeakerLabel = "SPEAKER_00", StartMs = 0, EndMs = 2000, Original = "World", Ordinal = 0 },
+                new Speaker { Id = Guid.NewGuid(), RecordingId = early.Id, Label = "SPEAKER_00", DisplayName = "Alice", ProfileId = profA.Id, IdentifiedAuto = true },
+                new Speaker { Id = Guid.NewGuid(), RecordingId = later.Id, Label = "SPEAKER_00", DisplayName = "Bob", ProfileId = profB.Id });
+            await db.SaveChangesAsync();
+            (userId, survivorId, sourceId, profAId, profBId) = (user.Id, early.Id, later.Id, profA.Id, profB.Id);
+        }
+
+        await using (var db = fx.CreateDbContext())
+            await Build(db, userId).Merge(new MergeRecordingsRequest([sourceId, survivorId]));
+
+        await using var verify = fx.CreateDbContext();
+        var speakers = await verify.Speakers.Where(s => s.RecordingId == survivorId).ToListAsync();
+        var s1 = speakers.Single(s => s.Label == "S1-SPEAKER_00");   // survivor's own speaker, namespaced
+        var s2 = speakers.Single(s => s.Label == "S2-SPEAKER_00");   // folded-in source's speaker
+        Assert.Equal(profAId, s1.ProfileId);                          // profile assignment preserved
+        Assert.True(s1.IdentifiedAuto);                               // and its auto-identification flag
+        Assert.Equal(profBId, s2.ProfileId);
     }
 
     [Fact]

@@ -962,13 +962,20 @@ public class RecordingsController : ControllerBase
         var sources = ordered.Select((rec, idx) =>
         {
             var current = rec.Transcriptions.OrderByDescending(t => t.Version).FirstOrDefault();
-            var display = rec.Speakers.ToDictionary(s => s.Label, s => s.DisplayName);
+            var speakerByLabel = rec.Speakers.ToDictionary(s => s.Label);
             var segs = (current?.Segments ?? new List<Segment>())
                 .OrderBy(s => s.Ordinal)
-                .Select(s => new MergeSegmentInput(
-                    s.SpeakerLabel,
-                    display.TryGetValue(s.SpeakerLabel, out var d) ? d : s.SpeakerLabel,
-                    s.StartMs, s.EndMs, s.EffectiveText))
+                .Select(s =>
+                {
+                    // Carry the source speaker's full identity (name + profile + auto/multi flags) so the
+                    // merged speaker stays assigned - not just named - on the Speakers tab.
+                    speakerByLabel.TryGetValue(s.SpeakerLabel, out var sp);
+                    return new MergeSegmentInput(
+                        s.SpeakerLabel,
+                        sp?.DisplayName ?? s.SpeakerLabel,
+                        s.StartMs, s.EndMs, s.EffectiveText,
+                        sp?.ProfileId, sp?.IdentifiedAuto ?? false, sp?.IsMultiSpeaker ?? false);
+                })
                 .ToList();
             return new MergeSourceInput(idx, rec.DurationMs, segs);
         }).ToList();
@@ -1004,6 +1011,7 @@ public class RecordingsController : ControllerBase
             _db.Speakers.Add(new Speaker
             {
                 Id = Guid.NewGuid(), RecordingId = survivor.Id, Label = sp.Label, DisplayName = sp.DisplayName,
+                ProfileId = sp.ProfileId, IdentifiedAuto = sp.IdentifiedAuto, IsMultiSpeaker = sp.IsMultiSpeaker,
             });
 
         survivor.Error = null;

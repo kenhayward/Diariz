@@ -4,8 +4,9 @@ namespace Diariz.Api.Tests;
 
 public class TranscriptMergerTests
 {
-    private static MergeSegmentInput Seg(string label, long start, long end, string text, string? display = null) =>
-        new(label, display ?? label, start, end, text);
+    private static MergeSegmentInput Seg(string label, long start, long end, string text, string? display = null,
+        Guid? profileId = null, bool identifiedAuto = false, bool isMulti = false) =>
+        new(label, display ?? label, start, end, text, profileId, identifiedAuto, isMulti);
 
     [Fact]
     public void Merge_LaysSourcesEndToEnd_OffsettingTimestampsByCumulativeDuration()
@@ -54,5 +55,27 @@ public class TranscriptMergerTests
 
         var sp = Assert.Single(result.Speakers);
         Assert.Equal(("S1-SPEAKER_00", "Alice"), (sp.Label, sp.DisplayName));
+    }
+
+    [Fact]
+    public void Merge_CarriesSpeakerIdentity_ProfileAndFlags_SoAssignmentsSurvive()
+    {
+        var profile = Guid.NewGuid();
+        var sources = new List<MergeSourceInput>
+        {
+            new(0, 1000, [Seg("SPEAKER_00", 0, 500, "a", display: "Alice", profileId: profile, identifiedAuto: true)]),
+            new(1, 1000, [Seg("SPEAKER_01", 0, 500, "b", display: "Multiple Speakers", isMulti: true)]),
+        };
+
+        var result = TranscriptMerger.Merge(sources);
+
+        var alice = result.Speakers.Single(s => s.Label == "S1-SPEAKER_00");
+        Assert.Equal(profile, alice.ProfileId);
+        Assert.True(alice.IdentifiedAuto);
+        Assert.False(alice.IsMultiSpeaker);
+
+        var multi = result.Speakers.Single(s => s.Label == "S2-SPEAKER_01");
+        Assert.Null(multi.ProfileId);
+        Assert.True(multi.IsMultiSpeaker);
     }
 }

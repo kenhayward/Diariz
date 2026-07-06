@@ -106,6 +106,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.97.5",
+    date: "2026-07-06",
+    pr: 214,
+    headline: "Fix: merged transcripts kept speaker names but showed them as Unassigned",
+    summary:
+      "After merging recordings, the Speakers tab showed each speaker as 'Unassigned' even though their " +
+      "segments were still correctly named. The merge carried the speaker's display name but dropped its " +
+      "identity - the enrolled-person assignment (and the auto-identified / Multiple-Speakers flags) - so the " +
+      "assignment dropdown had nothing to show. The merge now preserves the full speaker identity onto the " +
+      "combined transcript. Existing already-merged recordings can be re-assigned by hand. Server redeploy.",
+    fixed: [
+      "Merging recordings now preserves each speaker's person assignment (and its auto-identified / Multiple-Speakers state), so merged speakers no longer show as Unassigned.",
+    ],
+  },
+  {
     version: "0.97.4",
     date: "2026-07-06",
     pr: 213,
