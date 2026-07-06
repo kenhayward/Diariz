@@ -4,8 +4,10 @@
 
 **Smart Meeting Transcription.** Personal, multi-user voice/meeting transcription platform: record audio
 (mic or system loopback), transcribe it server-side with **speaker diarization** and word-level timestamps,
-**identify known speakers** across recordings, **summarize**, and **chat across transcripts**. See
-[docs/Overall_Synopsis_of_Platform.md](docs/Overall_Synopsis_of_Platform.md) for the original brief and the
+**identify known speakers** across recordings, **summarize**, and **chat across transcripts**. 
+See [diariz.app](https://www.diariz.app) for more details, videos and screenshots.
+
+[docs/Overall_Synopsis_of_Platform.md](docs/Overall_Synopsis_of_Platform.md) has the original brief and the
 architecture plan for the full design.
 
 Versioned per the rule in [CLAUDE.md](CLAUDE.md); the current version and per-release notes live in
