@@ -109,7 +109,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.98.0",
     date: "2026-07-06",
-    pr: 0, // set to the real PR number when opened
+    pr: 221,
     headline: "Sign in with Google from the desktop app",
     summary:
       "The desktop app now offers Sign in with Google. It opens Google in your system browser (Google " +
