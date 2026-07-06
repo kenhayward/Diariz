@@ -108,7 +108,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.97.9",
     date: "2026-07-06",
-    pr: 0, // set to the real PR number when opened
+    pr: 219,
     headline: "Groundwork for Google sign-in on the desktop app",
     summary:
       "Backend groundwork (no user-visible change yet). Adds a server-side handoff so the desktop app " +
