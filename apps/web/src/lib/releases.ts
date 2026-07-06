@@ -106,6 +106,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.97.4",
+    date: "2026-07-06",
+    pr: 213,
+    headline: "Fix: the minutes-generation setting appeared to revert after saving",
+    summary:
+      "The platform-wide 'Minutes generation' setting (Single call / Per section) looked like it reverted to " +
+      "'Single call' each time the Settings dialog was reopened. The value was in fact saved correctly; the " +
+      "dropdown just couldn't display it, because the server sends the choice as a name ('PerSection') while the " +
+      "web control was matching numeric values. The control now uses the name, so it shows the saved choice. " +
+      "Server redeploy.",
+    fixed: [
+      "The 'Minutes generation' setting now shows the saved value when the Settings dialog is reopened (it was a display-only bug; the value was always persisted).",
+    ],
+  },
+  {
     version: "0.97.3",
     date: "2026-07-06",
     pr: 212,

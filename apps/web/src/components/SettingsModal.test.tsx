@@ -50,6 +50,10 @@ describe("SettingsModal", () => {
       defaultReasoningEffort: "medium",
     });
     (api.updateUserSettings as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      starterQuotaBytes: 5 * 1024 ** 3,
+      maxQuotaBytes: 50 * 1024 ** 3,
+    });
   });
 
   it("loads existing endpoint/model and indicates a key is set", async () => {
@@ -269,6 +273,20 @@ describe("SettingsModal", () => {
         expect.objectContaining({ reasoningEnabled: true, reasoningEffort: "high" }),
       ),
     );
+  });
+
+  it("reflects the persisted minutes-generation mode (enum arrives as a string name)", async () => {
+    authState.isPlatformAdmin = true;
+    // The API serialises enums by name (JsonStringEnumConverter), so this arrives as "PerSection", not 1.
+    (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      starterQuotaBytes: 5 * 1024 ** 3,
+      maxQuotaBytes: 50 * 1024 ** 3,
+      minutesGenerationMode: "PerSection",
+    });
+    renderModal();
+
+    const select = (await screen.findByLabelText(/minutes generation/i)) as HTMLSelectElement;
+    await waitFor(() => expect(select.value).toBe("PerSection"));
   });
 
   it("lets a Platform Administrator edit the quota defaults (GB → bytes) and saves on OK", async () => {
