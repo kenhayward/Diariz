@@ -319,7 +319,7 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
 - **Tools = the chat tool registry.** Low-level handlers (`DiarizMcpHandlers`) project the same
   `IChatTool`/`IChatToolRegistry` used by chat onto MCP `tools/list` + `tools/call` — no duplicate logic, and a
   new `IChatTool` lights up in both chat and MCP. The catalog is the user's **per-tool-enabled** tools
-  (respecting Settings → AI per-tool choices, but **not** the chat *master* switch — the MCP opt-in is holding a
+  (respecting Settings → Chat Tools per-tool choices, but **not** the chat *master* switch — the MCP opt-in is holding a
   token), **minus `add_as_attachment`** (which needs an in-chat selection). `send_email` is included (it can only
   ever email the user's own address). Each tool carries an MCP **`readOnlyHint` annotation** (from
   `IChatTool.ReadOnly` — true for every read/search tool, **false only for `send_email`**) plus
