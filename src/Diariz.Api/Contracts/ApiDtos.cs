@@ -15,6 +15,10 @@ public record SetupRequest(string Email, string Token, string FullName, string P
 /// <summary>Which Google data scopes the signed-in user wants to grant (incremental consent).</summary>
 public record ConnectGoogleRequest(bool Calendar);
 
+/// <summary>Desktop app -> API: swap a one-time diariz:// code for an access token, proving the app
+/// holds the PKCE verifier whose S256 challenge was bound to the code.</summary>
+public record DesktopExchangeRequest(string Code, string Verifier);
+
 // ---- Admin user management ----
 public record AdminUserDto(
     Guid Id, string Email, string? FullName, string AccountType, UserStatus Status, bool IsEnabled,

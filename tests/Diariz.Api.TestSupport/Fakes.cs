@@ -541,6 +541,28 @@ public sealed class FakeUrlFetcher : IUrlFetcher
     }
 }
 
+/// <summary>In-memory <see cref="IDesktopAuthCodeStore"/> for unit tests: deterministic codes
+/// (code-1, code-2, …) and one-shot redemption, mirroring the Redis GETDEL contract.</summary>
+public sealed class FakeDesktopAuthCodeStore : IDesktopAuthCodeStore
+{
+    private readonly Dictionary<string, DesktopAuthTicket> _codes = new();
+    private int _seq;
+
+    public Task<string> MintAsync(Guid userId, string challenge, TimeSpan ttl)
+    {
+        var code = $"code-{++_seq}";
+        _codes[code] = new DesktopAuthTicket(userId, challenge);
+        return Task.FromResult(code);
+    }
+
+    public Task<DesktopAuthTicket?> RedeemAsync(string code)
+    {
+        if (code is not null && _codes.Remove(code, out var ticket))
+            return Task.FromResult<DesktopAuthTicket?>(ticket);
+        return Task.FromResult<DesktopAuthTicket?>(null);
+    }
+}
+
 /// <summary>
 /// No-op <see cref="IHubContext{THub}"/> that records every message sent so tests can assert
 /// which SignalR notifications a controller pushed, without a real hub connection.
