@@ -24,4 +24,15 @@ contextBridge.exposeInMainWorld("diariz", {
   /// Report the recorder phase to the main process so the tray can update.
   /// state: { phase: "idle"|"recording"|"uploading"|"error", source?, error? }.
   reportRecorderState: (state) => ipcRenderer.send("recorder:state", state),
+
+  /// Start Google sign-in (opens the system browser; the result returns via onAuthToken).
+  startGoogleSignIn: () => ipcRenderer.invoke("auth:start-google"),
+
+  /// Subscribe to a signed-in access token delivered after a diariz:// sign-in deep link.
+  /// Returns an unsubscribe function.
+  onAuthToken: (cb) => {
+    const listener = (_event, token) => cb(token);
+    ipcRenderer.on("auth:token", listener);
+    return () => ipcRenderer.removeListener("auth:token", listener);
+  },
 });

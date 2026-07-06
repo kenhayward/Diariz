@@ -1,11 +1,13 @@
 "use strict";
 
 const path = require("node:path");
+const crypto = require("node:crypto");
 const { app, BrowserWindow, Tray, Menu, Notification, desktopCapturer, ipcMain, shell, nativeImage } = require("electron");
 const Store = require("electron-store");
 const { normalizeServerUrl } = require("./url");
 const { trayRecorderItems, trayTooltip, notificationFor } = require("./recorderState");
 const { updateRestartItem, notificationForUpdate } = require("./updateState");
+const { buildStartUrl, codeFromArgv } = require("./desktopAuth");
 
 // In dev we load the Vite dev server directly and skip first-run setup.
 const DEV_URL = process.env.DIARIZ_DEV ? "http://localhost:5173" : null;
@@ -28,6 +30,8 @@ let recordingTicker = null;
 let autoUpdater = null;
 let update = { ready: false, version: null };
 let pendingManualCheck = false;
+
+let pendingVerifier = null;
 
 /// The origin the web app is loaded from (dev server, or the configured server).
 function targetUrl() {
@@ -218,6 +222,58 @@ function setRecorderReady(ready) {
   refreshTray();
 }
 
+// ---- Desktop Google sign-in (system browser + diariz:// deep link) ----
+
+// base64url(sha256(verifier)) - matches the API's OAuthPkce.Challenge (ASCII verifier, no padding).
+function s256(verifier) {
+  return crypto.createHash("sha256").update(verifier, "ascii").digest("base64url");
+}
+
+// Renderer asked to start Google sign-in: generate PKCE, open the server's start URL in the SYSTEM
+// browser (Google refuses embedded webviews), and keep the verifier to redeem the code later.
+function startGoogleSignIn() {
+  const server = targetUrl();
+  if (!server) return;
+  const verifier = crypto.randomBytes(32).toString("base64url");
+  pendingVerifier = verifier;
+  const origin = new URL(server).origin;
+  shell.openExternal(buildStartUrl(origin, s256(verifier)));
+}
+
+// A diariz:// deep link arrived (argv on cold start, or the second-instance event). Redeem the code
+// for a token and hand it to the renderer; then surface the window.
+async function handleAuthDeepLink(argv) {
+  const code = codeFromArgv(argv);
+  if (!code || !pendingVerifier) return;
+  const verifier = pendingVerifier;
+  pendingVerifier = null;
+  const server = targetUrl();
+  if (!server) return;
+  try {
+    const res = await fetch(`${new URL(server).origin}/api/auth/desktop/exchange`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, verifier }),
+    });
+    if (!res.ok) return;
+    const { accessToken } = await res.json();
+    if (accessToken) deliverAuthToken(accessToken);
+  } catch {
+    // network/other error: leave the user on the login screen to retry
+  }
+}
+
+// Send the token to the renderer, waiting for the page to finish loading on a cold start.
+function deliverAuthToken(token) {
+  showMainWindow();
+  if (!mainWindow) return;
+  const wc = mainWindow.webContents;
+  if (wc.isLoading()) wc.once("did-finish-load", () => wc.send("auth:token", token));
+  else wc.send("auth:token", token);
+  mainWindow.show();
+  mainWindow.focus();
+}
+
 // ---- Auto-update (packaged builds only) ----
 
 function notifyUpdate(kind, opts) {
@@ -330,6 +386,8 @@ ipcMain.on("recorder:state", (_event, state) => {
   if (state && typeof state.phase === "string") applyRecorderState(state);
 });
 
+ipcMain.handle("auth:start-google", () => startGoogleSignIn());
+
 // ---- App lifecycle ----
 
 // Single-instance: a second launch focuses the running app instead of starting another.
@@ -340,7 +398,23 @@ if (!app.requestSingleInstanceLock()) {
   // without it, notifications are titled "Electron". Match the installer's appId.
   app.setAppUserModelId("com.diariz.desktop");
 
-  app.on("second-instance", () => showMainWindow());
+  // Own the diariz:// scheme so Google sign-in deep links come back to this app. In dev (unpackaged)
+  // Windows needs the explicit exec path + script arg; packaged builds register it via the installer.
+  if (process.defaultApp && process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient("diariz", process.execPath, [path.resolve(process.argv[1])]);
+  } else {
+    app.setAsDefaultProtocolClient("diariz");
+  }
+
+  app.on("second-instance", (_e, argv) => {
+    showMainWindow();
+    void handleAuthDeepLink(argv);
+  });
+
+  app.on("open-url", (e, url) => {
+    e.preventDefault();
+    void handleAuthDeepLink([url]);
+  });
 
   app.whenReady().then(() => {
     // No app menu — this is a tray-resident shell; keep just the window's title bar.
@@ -350,6 +424,7 @@ if (!app.requestSingleInstanceLock()) {
     else showSetupWindow();
 
     setupAutoUpdater();
+    void handleAuthDeepLink(process.argv); // cold start launched by a deep link
     app.on("activate", () => showMainWindow());
   });
 

@@ -15,6 +15,7 @@ const [ghOwner, ghRepo] = (process.env.GITHUB_REPOSITORY || "").split("/");
 module.exports = {
   appId: "com.diariz.desktop",
   productName: "Diariz",
+  protocols: [{ name: "Diariz", schemes: ["diariz"] }],
   directories: { output: "release", buildResources: "build" },
   // Loads the web app from the configured server, so the SPA itself isn't bundled.
   files: ["src/**/*", "!src/**/*.test.js", "build/icon.png", "package.json"],
