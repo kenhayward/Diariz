@@ -106,6 +106,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.97.3",
+    date: "2026-07-06",
+    pr: 212,
+    headline: "Fix: minutes and re-transcribe progress no longer show as a banner over the tabs",
+    summary:
+      "Re-creating meeting minutes (or applying a meeting type), and re-transcribing, showed a green progress " +
+      "banner above the transcript tabs. Pipeline progress belongs in the bottom status bar - like transcribing, " +
+      "summarising, and extracting actions - so it now appears there only (as amber progress), not as a banner. " +
+      "Minutes progress clears when the fresh minutes arrive; re-transcribe hands off to the status bar's " +
+      "queuing/transcribing pipeline. Server redeploy.",
+    fixed: [
+      "The 'Generating meeting minutes...' progress shows in the status bar only, not as a banner over the tabs.",
+      "Re-transcribing shows its progress in the status bar only, not as a banner over the tabs.",
+    ],
+  },
+  {
     version: "0.97.2",
     date: "2026-07-06",
     pr: 211,
