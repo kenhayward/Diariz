@@ -117,5 +117,9 @@
   "aboutAria": "À propos de Diariz",
   "aboutVersion": "Version {{version}}",
   "releaseNotesLink": "Notes de version →",
-  "githubLink": "GitHub →"
+  "githubLink": "GitHub →",
+  "minutesModeLabel": "Génération du compte rendu",
+  "minutesModeSingle": "Un seul appel (moins de jetons)",
+  "minutesModePerSection": "Par section (meilleure structure)",
+  "minutesModeHint": "À l’échelle de la plateforme : comment le compte rendu est généré à partir d’un modèle. S’applique dès la prochaine exécution."
 }

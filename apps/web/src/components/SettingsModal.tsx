@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
+import type { MinutesGenerationMode } from "../lib/types";
 import { useAuth } from "../auth";
 import { bytesToGb, gbToBytes } from "../lib/format";
 import MaintenancePanel from "./MaintenancePanel";
@@ -37,6 +38,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   // Storage quotas (GB inputs).
   const [starterGb, setStarterGb] = useState("");
   const [maxGb, setMaxGb] = useState("");
+  // Platform-wide minutes generation mode (0 = single call, 1 = per section); Platform-Admin only.
+  const [minutesMode, setMinutesMode] = useState<MinutesGenerationMode>(0);
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -56,6 +59,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
     if (platform) {
       setStarterGb(String(bytesToGb(platform.starterQuotaBytes)));
       setMaxGb(String(bytesToGb(platform.maxQuotaBytes)));
+      setMinutesMode(platform.minutesGenerationMode);
     }
   }, [platform]);
 
@@ -86,7 +90,11 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         const max = gbToBytes(Number(maxGb));
         if (!(starter > 0) || !(max > 0)) throw new Error("Quota values must be greater than zero.");
         if (starter > max) throw new Error("The starter quota can't exceed the maximum quota.");
-        await api.updatePlatformSettings({ starterQuotaBytes: starter, maxQuotaBytes: max });
+        await api.updatePlatformSettings({
+          starterQuotaBytes: starter,
+          maxQuotaBytes: max,
+          minutesGenerationMode: minutesMode,
+        });
         qc.invalidateQueries({ queryKey: ["platform-settings"] });
       }
       onClose();
@@ -210,6 +218,25 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                   </label>
                 )}
               </div>
+
+              {/* Minutes generation mode - platform-wide, Platform-Admin only. Applies from the next run. */}
+              {isPlatformAdmin && (
+                <div className="border-t pt-3 dark:border-gray-700">
+                  <label className="block text-sm">
+                    <span className="mb-1 block font-medium text-gray-700 dark:text-gray-200">{t("minutesModeLabel")}</span>
+                    <select
+                      value={minutesMode}
+                      onChange={(e) => setMinutesMode(Number(e.target.value) as MinutesGenerationMode)}
+                      aria-label={t("minutesModeLabel")}
+                      className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                    >
+                      <option value={0}>{t("minutesModeSingle")}</option>
+                      <option value={1}>{t("minutesModePerSection")}</option>
+                    </select>
+                  </label>
+                  <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t("minutesModeHint")}</p>
+                </div>
+              )}
 
               {/* Chat tools: a master switch plus a per-tool table (checkboxes disabled when the master is off). */}
               <div className="border-t pt-3 dark:border-gray-700">

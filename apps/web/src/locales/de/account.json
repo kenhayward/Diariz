@@ -117,5 +117,9 @@
   "aboutAria": "Über Diariz",
   "aboutVersion": "Version {{version}}",
   "releaseNotesLink": "Versionshinweise →",
-  "githubLink": "GitHub →"
+  "githubLink": "GitHub →",
+  "minutesModeLabel": "Protokollerstellung",
+  "minutesModeSingle": "Einzelaufruf (weniger Tokens)",
+  "minutesModePerSection": "Pro Abschnitt (beste Struktur)",
+  "minutesModeHint": "Plattformweit: wie das Protokoll aus einer Vorlage erzeugt wird. Gilt ab dem nächsten Lauf."
 }

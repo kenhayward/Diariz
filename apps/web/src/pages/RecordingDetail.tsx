@@ -14,6 +14,7 @@ import DownloadTranscriptModal from "../components/DownloadTranscriptModal";
 import SummaryEditModal from "../components/SummaryEditModal";
 import MeetingMinutesEditModal from "../components/MeetingMinutesEditModal";
 import EmailMinutesModal from "../components/EmailMinutesModal";
+import MeetingTypeMenu from "../components/MeetingTypeMenu";
 import { renderMarkdown } from "../lib/markdown";
 import AttachmentsManager from "../components/AttachmentsManager";
 import CalendarEventDetails from "../components/CalendarEventDetails";
@@ -222,6 +223,9 @@ export default function RecordingDetail() {
   const [editingSummary, setEditingSummary] = useState(false);
   const [editingMinutes, setEditingMinutes] = useState(false);
   const [emailMinutesOpen, setEmailMinutesOpen] = useState(false);
+  // While a template run is in flight the picker is disabled; cleared when fresh minutes arrive (SignalR refetch).
+  const [applyingType, setApplyingType] = useState(false);
+  const applyBaselineRef = useRef<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [editingSeg, setEditingSeg] = useState<SegmentDto | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -395,6 +399,30 @@ export default function RecordingDetail() {
       setActionError(apiErrorMessage(e, t("workspace:errMinutes")));
     }
   }
+
+  // Apply a meeting type and re-run the minutes. Disable the picker until the new minutes arrive.
+  async function applyMeetingType(typeId: string) {
+    if (rec?.meetingMinutes?.isUserEdited && !window.confirm(t("workspace:confirmRecreateMinutes"))) return;
+    setActionError(null);
+    setActionInfo(null);
+    applyBaselineRef.current = rec?.meetingMinutes?.createdAt ?? null;
+    setApplyingType(true);
+    try {
+      await api.applyMeetingType(id, typeId);
+      setActionInfo(t("workspace:generatingMinutes"));
+      await qc.invalidateQueries({ queryKey: ["recording", id] });
+    } catch (e) {
+      setApplyingType(false);
+      setActionError(apiErrorMessage(e, t("workspace:errMinutes")));
+    }
+  }
+
+  // Clear the picker's busy state once fresh minutes have been generated (their timestamp changed).
+  useEffect(() => {
+    if (applyingType && rec?.meetingMinutes && rec.meetingMinutes.createdAt !== applyBaselineRef.current) {
+      setApplyingType(false);
+    }
+  }, [applyingType, rec?.meetingMinutes?.createdAt]);
 
   // Save hand-edited meeting minutes (Markdown; flagged user-edited so the auto-generator won't clobber them).
   async function saveMinutes(markdown: string) {
@@ -896,6 +924,11 @@ export default function RecordingDetail() {
       label: t("workspace:detailTabMinutes"),
       toolbar: (
         <>
+          <MeetingTypeMenu
+            currentTypeId={rec.meetingTypeId ?? null}
+            busy={applyingType || isSummarizing}
+            onApply={applyMeetingType}
+          />
           <ToolbarButton
             label={t("workspace:editMeetingMinutes")}
             icon={PencilIcon}

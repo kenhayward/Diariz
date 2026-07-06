@@ -26,6 +26,7 @@ import type {
   Language,
   McpToken,
   McpTokenCreated,
+  MeetingType,
   OAuthConnection,
   PlatformSettings,
   RecordingAction,
@@ -269,6 +270,17 @@ export const api = {
   /// Re-create the meeting minutes via the LLM (overwrites a hand-edited copy; the UI warns first).
   async generateMeetingMinutes(id: string): Promise<void> {
     await http.post(`/api/recordings/${id}/meeting-minutes/generate`);
+  },
+
+  /// The meeting types (minutes templates) available to the user - Platform types plus their own.
+  async listMeetingTypes(): Promise<MeetingType[]> {
+    const { data } = await http.get<MeetingType[]>("/api/meeting-types");
+    return data;
+  },
+
+  /// Choose the meeting type driving a recording's minutes (null = the General default) and re-run them.
+  async applyMeetingType(id: string, meetingTypeId: string | null): Promise<void> {
+    await http.post(`/api/recordings/${id}/meeting-type`, { meetingTypeId });
   },
 
   /// Manually edit the meeting minutes (Markdown; flags them user-edited; works without an LLM).
