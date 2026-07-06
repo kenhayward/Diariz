@@ -34,3 +34,7 @@ test("codeFromArgv returns null for junk / no code / wrong host", () => {
   assert.equal(codeFromArgv(["diariz://other/path?code=x"]), null);
   assert.equal(codeFromArgv([]), null);
 });
+
+test("codeFromArgv rejects a look-alike path that only starts with the callback prefix", () => {
+  assert.equal(codeFromArgv(["diariz://auth/callback-evil?code=x"]), null);
+});

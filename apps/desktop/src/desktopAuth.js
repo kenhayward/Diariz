@@ -16,11 +16,12 @@ function buildStartUrl(serverOrigin, challenge) {
 /// Extract the one-time code from a diariz://auth/callback?code=… deep link found anywhere in an
 /// argv array (Windows delivers the URL as a process argument). Returns null if absent/malformed.
 function codeFromArgv(argv) {
+  // Require the exact callback path followed by a query, so a look-alike host/path
+  // (e.g. diariz://auth/callback-evil?code=x) is not accepted.
+  const prefix = DEEP_LINK_PREFIX + "?";
   for (const arg of argv || []) {
-    if (typeof arg !== "string" || !arg.startsWith(DEEP_LINK_PREFIX)) continue;
-    const q = arg.indexOf("?");
-    if (q === -1) continue;
-    const code = new URLSearchParams(arg.slice(q + 1)).get("code");
+    if (typeof arg !== "string" || !arg.startsWith(prefix)) continue;
+    const code = new URLSearchParams(arg.slice(prefix.length)).get("code");
     if (code) return code;
   }
   return null;
