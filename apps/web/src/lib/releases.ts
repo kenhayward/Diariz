@@ -108,7 +108,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.97.10",
     date: "2026-07-06",
-    pr: 0, // set to the real PR number when opened
+    pr: 220,
     headline: "Desktop shell support for Google sign-in",
     summary:
       "Desktop app update (new installer). Registers the diariz:// link so the desktop client can finish " +
