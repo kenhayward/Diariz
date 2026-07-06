@@ -32,12 +32,13 @@ public class AuthController : ControllerBase
     private readonly ILogger<AuthController> _logger;
     private readonly DiarizDbContext _db;
     private readonly IGoogleTokenProtector _tokenProtector;
+    private readonly IDesktopAuthCodeStore _desktopCodes;
 
     public AuthController(
         UserManager<ApplicationUser> users, ITokenService tokens, IPlatformSettingsService platform,
         IGoogleAuthService google, IGoogleSignInHandler googleSignIn, IOptions<GoogleAuthOptions> googleOpts,
         IOptions<AppPublicOptions> appOpts, IDataProtectionProvider dataProtection, ILogger<AuthController> logger,
-        DiarizDbContext db, IGoogleTokenProtector tokenProtector)
+        DiarizDbContext db, IGoogleTokenProtector tokenProtector, IDesktopAuthCodeStore desktopCodes)
     {
         _users = users;
         _tokens = tokens;
@@ -50,6 +51,7 @@ public class AuthController : ControllerBase
         _logger = logger;
         _db = db;
         _tokenProtector = tokenProtector;
+        _desktopCodes = desktopCodes;
     }
 
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -161,24 +163,28 @@ public class AuthController : ControllerBase
 
     private const string StateCookie = "diariz_g_oauth";
     /// <summary>State stashed in the signed cookie during /start or /connect. <c>Mode</c> = "signin" | "connect";
-    /// <c>UserId</c> identifies the connecting user (set server-side during the authorized /connect).</summary>
-    private record OAuthState(string State, string Verifier, string Mode = "signin", string? UserId = null);
+    /// <c>UserId</c> identifies the connecting user (set server-side during the authorized /connect);
+    /// <c>DesktopChallenge</c> (non-null) marks a desktop sign-in and carries the app's S256 PKCE challenge.</summary>
+    private record OAuthState(string State, string Verifier, string Mode = "signin", string? UserId = null,
+        string? DesktopChallenge = null);
 
     /// <summary>Public: which external sign-in providers are enabled (so the login page shows the button).</summary>
     [HttpGet("providers")]
     public IActionResult Providers() => Ok(new { google = _google.Enabled });
 
     /// <summary>Public: begin Google sign-in. Stashes PKCE state in a short-lived signed cookie and
-    /// redirects to Google's consent screen.</summary>
+    /// redirects to Google's consent screen. <paramref name="desktopChallenge"/> (from the desktop shell)
+    /// marks this as a desktop flow so the callback hands back a diariz:// code instead of the SPA cookie.</summary>
     [HttpGet("google/start")]
-    public IActionResult GoogleStart()
+    public IActionResult GoogleStart([FromQuery] string? desktopChallenge = null)
     {
         if (!_google.Enabled) return NotFound();
 
         var verifier = OAuthPkce.NewCodeVerifier();
         var state = OAuthPkce.NewState();
         var protectedState = _stateProtector.Protect(
-            JsonSerializer.Serialize(new OAuthState(state, verifier)), TimeSpan.FromMinutes(10));
+            JsonSerializer.Serialize(new OAuthState(state, verifier, DesktopChallenge: desktopChallenge)),
+            TimeSpan.FromMinutes(10));
         Response.Cookies.Append(StateCookie, protectedState, StateCookieOptions());
 
         return Redirect(_google.BuildAuthorizationUrl(

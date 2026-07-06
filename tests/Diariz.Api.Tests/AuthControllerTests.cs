@@ -19,7 +19,7 @@ public class AuthControllerTests
 
     private static AuthController BuildController(
         IdentityTestHost host, IGoogleAuthService? google = null, AppPublicOptions? appOpts = null,
-        GoogleAuthOptions? googleOpts = null)
+        GoogleAuthOptions? googleOpts = null, IDesktopAuthCodeStore? desktopCodes = null)
     {
         var tokens = new TokenService(Options.Create(new JwtOptions
         {
@@ -36,7 +36,8 @@ public class AuthControllerTests
             new EphemeralDataProtectionProvider(),
             NullLogger<AuthController>.Instance,
             host.Db,
-            new GoogleTokenProtector(new EphemeralDataProtectionProvider()));
+            new GoogleTokenProtector(new EphemeralDataProtectionProvider()),
+            desktopCodes ?? new FakeDesktopAuthCodeStore());
     }
 
     private static async Task<ApplicationUser> CreateUser(
