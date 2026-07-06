@@ -106,6 +106,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.97.10",
+    date: "2026-07-06",
+    pr: 0, // set to the real PR number when opened
+    headline: "Desktop shell support for Google sign-in",
+    summary:
+      "Desktop app update (new installer). Registers the diariz:// link so the desktop client can finish " +
+      "Google sign-in through your system browser and return you to the app. The sign-in button appears in " +
+      "the next update. Requires installing the new desktop build.",
+    added: [
+      "Desktop app registers the diariz:// protocol and handles the Google sign-in return link.",
+    ],
+  },
+  {
     version: "0.97.9",
     date: "2026-07-06",
     pr: 219,
