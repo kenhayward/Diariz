@@ -221,6 +221,9 @@ The headings in
   library; speaker identification via enrolled voiceprints (pgvector).
 - **M4 — in progress:** windows desktop app, macOS/mobile,  packaging, live streaming.
 
+For the next major arc - note enhancement, workflows/automations, collaborative shared spaces, and
+optional ambient capture - see the [long-term roadmap](docs/long_term_roadmap.md).
+
 > **Keep this README current.** When a PR changes what the app does (a new feature, a stack change, or a
 > shipped roadmap item), update the **Features**, **Architecture**, and **Roadmap** sections in the same PR —
 > alongside the [`releases.ts`](apps/web/src/lib/releases.ts) entry required by [CLAUDE.md](CLAUDE.md). (The
