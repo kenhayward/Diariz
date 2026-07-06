@@ -15,6 +15,7 @@ import SummaryEditModal from "../components/SummaryEditModal";
 import MeetingMinutesEditModal from "../components/MeetingMinutesEditModal";
 import EmailMinutesModal from "../components/EmailMinutesModal";
 import MeetingTypeMenu from "../components/MeetingTypeMenu";
+import ManageMeetingTypesModal from "../components/ManageMeetingTypesModal";
 import { renderMarkdown } from "../lib/markdown";
 import AttachmentsManager from "../components/AttachmentsManager";
 import CalendarEventDetails from "../components/CalendarEventDetails";
@@ -44,6 +45,7 @@ const MailIcon = (
 const UsersIcon = (
   <svg {...iconProps}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
 );
+const SlidersIcon = <svg {...iconProps}><line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" /><line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" /><line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" /><line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" /></svg>;
 const PlayIcon = <svg {...iconProps}><polygon points="5 3 19 12 5 21 5 3" /></svg>;
 const PauseIcon = <svg {...iconProps}><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>;
 // Play-all = a "from the start" glyph (skip-to-start bar + triangle).
@@ -226,6 +228,7 @@ export default function RecordingDetail() {
   // While a template run is in flight the picker is disabled; cleared when fresh minutes arrive (SignalR refetch).
   const [applyingType, setApplyingType] = useState(false);
   const applyBaselineRef = useRef<string | null>(null);
+  const [managingTypes, setManagingTypes] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [editingSeg, setEditingSeg] = useState<SegmentDto | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -930,6 +933,11 @@ export default function RecordingDetail() {
             onApply={applyMeetingType}
           />
           <ToolbarButton
+            label={t("workspace:mtManage")}
+            icon={SlidersIcon}
+            onClick={() => setManagingTypes(true)}
+          />
+          <ToolbarButton
             label={t("workspace:editMeetingMinutes")}
             icon={PencilIcon}
             disabled={!rec.meetingMinutes}
@@ -1291,6 +1299,8 @@ export default function RecordingDetail() {
           onSave={saveSummary}
         />
       )}
+
+      {managingTypes && <ManageMeetingTypesModal onClose={() => setManagingTypes(false)} />}
 
       {editingMinutes && (
         <MeetingMinutesEditModal

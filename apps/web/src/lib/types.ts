@@ -68,6 +68,17 @@ export interface MeetingType {
   isDefault: boolean;
 }
 
+/// Create/update payload for a meeting type. `isPlatform` is honoured only for Platform Administrators.
+export interface MeetingTypeInput {
+  groupName: string;
+  title: string;
+  overview: string;
+  icon: string;
+  color: string;
+  content: MeetingTypeContent;
+  isPlatform: boolean;
+}
+
 export interface SectionDto {
   id: string;
   name: string;

@@ -49,6 +49,13 @@ erases voiceprints (GDPR — biometric data).
 re-create them, or **email them to yourself** (optionally with the recording's attachments). The minutes also
 travel with the emailed transcript and the Markdown/text/RTF downloads. The Meeting Minutes panel is always
 available (collapsed) with a refresh button to generate them on any recording.
+- **Meeting types (minutes templates).** Minutes are driven by a **meeting type** — a reusable template of
+H1/H2 sections whose blocks are **boilerplate text**, **substituted recording values** (date, attendees, the
+action-items table, …), or **model prompts**. A standard set ships (General, Customer, Cadence Call, 1:1,
+Interview, Town Hall, Webinar); pick one from the Minutes toolbar to re-run the minutes in that structure. A
+**Manage Meeting Types** editor creates/edits templates — **Personal** (a user's own) or **Platform**
+(admin-owned, shared read-only). A Platform Administrator can also pick how minutes generate: **one LLM call per
+section** (best structure) or a **single call** (fewer tokens).
 - **Chat across one or more transcripts — or all your meetings at once** (an "All meetings" mode that
 searches your whole library on demand instead of pre-loading transcripts) — streaming
 replies, a context-usage dial, PDF/text attachments, and saved conversations — via a per-user (or
