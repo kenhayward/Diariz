@@ -121,7 +121,8 @@ unconfigured), and admin user management. Each user's data is isolated to them. 
 - **Sign in with Google** (optional): OAuth 2.0 sign-in that reads the user's name, email, and profile
 picture (shown in the account menu). New Google sign-ups still require admin approval, and a Google email
 matching an existing account links to it automatically. Enabled when the operator configures a Google
-OAuth client; web-only for now (the desktop app keeps password login). A Google-linked user can opt in
+OAuth client. It works in the web app and in the **desktop app** (the desktop client runs consent in your
+system browser and returns you to the app, since Google blocks sign-in inside embedded windows). A Google-linked user can opt in
 (Preferences → Google) to let Diariz **read their Google Calendar** (read-only) so a recording is **linked to
 the meeting it belongs to** (auto-saved on open, or picked by hand when the times don't line up), its Overview
 shows the meeting's **full details** (time, location, organiser, attendees, description), and the **Calendar

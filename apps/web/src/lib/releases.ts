@@ -74,7 +74,8 @@ Diariz is **multi-user** with role-based access: people request access (or an ad
 an administrator approves, and each user sets up their own account and keeps their own private
 recordings, transcripts, and chats. Users can also **sign in with Google** (when an administrator has
 configured it) - Diariz reads their name, email, and profile picture (shown in the account menu), still
-subject to admin approval for new sign-ups. A Google-linked user can opt in (Preferences → Google) to let
+subject to admin approval for new sign-ups. Google sign-in works in the web app **and the desktop app**
+(the desktop client runs consent in your system browser and returns you to the app). A Google-linked user can opt in (Preferences → Google) to let
 Diariz **read their Google Calendar** (read-only) - so a recording is **linked to the meeting it
 belongs to** (auto-saved on open, or picked by hand even when the times don't line up), its Overview shows
 the meeting's **full invite details** (time, location, organiser, attendees, description), and the
@@ -105,6 +106,20 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.98.0",
+    date: "2026-07-06",
+    pr: 0, // set to the real PR number when opened
+    headline: "Sign in with Google from the desktop app",
+    summary:
+      "The desktop app now offers Sign in with Google. It opens Google in your system browser (Google " +
+      "does not allow sign-in inside app windows) and brings you straight back into Diariz. This unblocks " +
+      "Google-only accounts, which previously could not use the desktop app at all. Requires the desktop " +
+      "build from the previous update (which registers the return link).",
+    added: [
+      "Sign in with Google in the desktop client (system-browser flow, returns via a secure one-time link).",
+    ],
+  },
   {
     version: "0.97.10",
     date: "2026-07-06",

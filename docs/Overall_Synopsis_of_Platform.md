@@ -412,8 +412,12 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   (`IDesktopAuthCodeStore`, GETDEL) and **302s to `diariz://auth/callback?code=…`** (a raw redirect, reached
   only from the encrypted-state desktop flow — never an open redirect). The desktop app redeems the code at
   **`POST /api/auth/desktop/exchange`** by sending its `verifier`; the server checks `S256(verifier)` against the
-  bound challenge (constant-time) and returns the JWT. The token never travels in a URL. *(Server contract; the
-  desktop shell button + token intake are wired in a later change.)*
+  bound challenge (constant-time) and returns the JWT. The token never travels in a URL. The Electron shell owns the
+  `diariz://` scheme (`electron-builder` `protocols` + `setAsDefaultProtocolClient`), opens the start URL with
+  `shell.openExternal`, receives the deep link (cold-start argv / `second-instance` / macOS `open-url`), redeems it,
+  and pushes the token to the renderer over an `auth:token` IPC channel; the web `AuthProvider` adopts it via
+  `window.diariz.onAuthToken` through the same path as a password login. The login page shows the Google button in
+  the shell too (it calls `window.diariz.startGoogleSignIn()` instead of a full-page redirect).
 - **Google data access (opt-in, Phase 2):** a Google-linked user can grant **Calendar (read)** from
   Preferences via an **incremental-consent, offline** flow (`AuthController`
   `POST google/connect` → the shared `google/callback` branches on a `mode` in the state cookie →
