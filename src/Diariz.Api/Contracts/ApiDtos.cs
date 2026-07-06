@@ -29,8 +29,11 @@ public record GrantResultDto(bool Emailed, string? SetupUrl);
 
 // ---- Platform settings & storage quotas ----
 /// <summary>Platform-wide storage-quota defaults (bytes), edited by the Platform Administrator.</summary>
-public record PlatformSettingsDto(long StarterQuotaBytes, long MaxQuotaBytes);
-public record UpdatePlatformSettingsRequest(long StarterQuotaBytes, long MaxQuotaBytes);
+public record PlatformSettingsDto(
+    long StarterQuotaBytes, long MaxQuotaBytes, Diariz.Domain.Entities.MinutesGenerationMode MinutesGenerationMode);
+public record UpdatePlatformSettingsRequest(
+    long StarterQuotaBytes, long MaxQuotaBytes,
+    Diariz.Domain.Entities.MinutesGenerationMode MinutesGenerationMode = Diariz.Domain.Entities.MinutesGenerationMode.SingleCall);
 /// <summary>The signed-in user's storage usage vs their quota (bytes), plus the total wall-clock time
 /// spent transcribing all their recordings (ms, summed across every transcription version).</summary>
 public record StorageUsageDto(long UsedBytes, long QuotaBytes, long TotalTranscriptionMs = 0);

@@ -102,6 +102,26 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.96.0",
+    date: "2026-07-06",
+    pr: 207,
+    headline: "Meeting minutes are now driven by meeting-type templates",
+    summary:
+      "Meeting minutes are now generated from the recording's meeting type - a structured template of sections, " +
+      "boilerplate, substituted values (date, attendees, and the action-items table), and model prompts - instead " +
+      "of one fixed prompt. A recording with no type chosen uses the seeded 'General Meeting' template, so existing " +
+      "minutes look the same. A Platform Administrator can choose, in Settings, how minutes generate: one LLM call " +
+      "per section (best structure) or a single call (fewer tokens) - it applies from the next run. Re-generate a " +
+      "recording's minutes under a chosen type via the API; the picker and template editor arrive in the next " +
+      "releases. Server redeploy; a migration runs automatically on start.",
+    added: [
+      "Template-driven minutes generation with two modes (per-section vs single-call), switchable by a Platform Administrator; the action-items table is now a template field.",
+    ],
+    changed: [
+      "A recording's minutes are produced from its meeting type (or the seeded General default) rather than the single built-in prompt.",
+    ],
+  },
+  {
     version: "0.95.1",
     date: "2026-07-06",
     pr: 206,

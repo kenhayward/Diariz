@@ -35,6 +35,12 @@ public record MeetingTypeContent(IReadOnlyList<TemplateSection> Sections)
 
     public string Serialize() => JsonSerializer.Serialize(this, JsonOpts);
 
+    /// <summary>The prompt blocks in document order, each paired with its owning section (for context). The order
+    /// matches the composer's walk, so a per-block resolver can be fed outputs positionally.</summary>
+    public IEnumerable<(TemplateSection Section, TemplateBlock Block)> PromptBlocks() =>
+        (Sections ?? []).SelectMany(s =>
+            (s.Blocks ?? []).Where(b => b.Kind == TemplateBlock.Prompt).Select(b => (s, b)));
+
     /// <summary>Validate the template shape: heading levels 1-2, non-empty section titles, known block kinds, a
     /// known substitution field, and non-empty text on boilerplate/prompt blocks. Returns the first problem found.</summary>
     public (bool Ok, string? Error) Validate()

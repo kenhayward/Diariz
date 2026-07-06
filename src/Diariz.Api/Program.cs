@@ -194,6 +194,10 @@ builder.Services.AddHostedService<SummarizationWorker>();
 
 // ---- Meeting minutes (shares the per-user summarisation config; its own stream + consumer) ----
 builder.Services.AddHttpClient<IMeetingMinutesClient, MeetingMinutesClient>();
+// Template-driven generation: two strategies (per-section vs single-call), chosen per run by the platform mode.
+builder.Services.AddScoped<IMeetingTypeMinutesStrategy, PerSectionMinutesStrategy>();
+builder.Services.AddScoped<IMeetingTypeMinutesStrategy, SingleCallMinutesStrategy>();
+builder.Services.AddScoped<IMeetingTypeMinutesGenerator, MeetingTypeMinutesGenerator>();
 builder.Services.AddHostedService<MeetingMinutesWorker>();
 // Action extraction also runs in the pipeline (its own stream/worker), reusing IActionsClient (registered above).
 builder.Services.AddHostedService<ActionsWorker>();

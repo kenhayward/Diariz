@@ -55,4 +55,24 @@ public class PlatformSettingsControllerTests
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
+
+    [Fact]
+    public async Task Update_RoundTrips_MinutesGenerationMode()
+    {
+        using var db = TestDb.Create();
+        var gb = 5L * 1024 * 1024 * 1024;
+
+        var result = await Build(db).Update(
+            new UpdatePlatformSettingsRequest(gb, gb, MinutesGenerationMode.PerSection));
+
+        Assert.Equal(MinutesGenerationMode.PerSection, Assert.IsType<PlatformSettingsDto>(result.Value).MinutesGenerationMode);
+        Assert.Equal(MinutesGenerationMode.PerSection, (await db.PlatformSettings.SingleAsync()).MinutesGenerationMode);
+    }
+
+    [Fact]
+    public async Task Get_DefaultsTo_SingleCall()
+    {
+        using var db = TestDb.Create();
+        Assert.Equal(MinutesGenerationMode.SingleCall, (await Build(db).Get()).MinutesGenerationMode);
+    }
 }

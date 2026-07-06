@@ -19,8 +19,8 @@ namespace Diariz.Api.Services;
 public static class MeetingMinutesProcessor
 {
     public static async Task ProcessAsync(
-        DiarizDbContext db, IMeetingMinutesClient client, ISummarizationSettingsResolver resolver,
-        IHubContext<TranscriptionHub> hub, MeetingMinutesJob job, string template, int charBudget, ILogger logger,
+        DiarizDbContext db, IMeetingTypeMinutesGenerator generator, ISummarizationSettingsResolver resolver,
+        IHubContext<TranscriptionHub> hub, MeetingMinutesJob job, int charBudget, ILogger logger,
         CancellationToken ct = default)
     {
         var rec = await db.Recordings.FirstOrDefaultAsync(r => r.Id == job.RecordingId, ct);
@@ -58,18 +58,19 @@ public static class MeetingMinutesProcessor
 
             var attendees = segs.Select(s => s.SpeakerDisplay).Distinct().ToList();
             var context = new MeetingMinutesContext(rec.CreatedAt, rec.Name ?? rec.Title, attendees, rec.DurationMs);
-            var messages = MeetingMinutesPrompt.BuildMessages(template, context, segs, charBudget);
-            var markdown = await client.GenerateAsync(cfg, messages, ct);
 
-            // Append the recording's canonical actions deterministically — the prompt forbids the model from
-            // producing its own, so the minutes' Action Items table always matches the Actions panel exactly
-            // (the actions worker runs before the minutes job).
+            // The recording's canonical actions feed the template's `action_items` field (rendered deterministically
+            // by the generator), so the minutes' Action Items table always matches the Actions panel exactly.
             var actions = await db.RecordingActions
                 .Where(a => a.RecordingId == rec.Id)
                 .OrderBy(a => a.Ordinal)
                 .Select(a => new ExtractedAction(a.Text, a.Actor, a.Deadline))
                 .ToListAsync(ct);
-            markdown = MeetingMinutesPrompt.WithActionItems(markdown, actions);
+
+            // Generate from the recording's chosen meeting type (or the General default), honouring the
+            // platform-wide generation mode.
+            var markdown = await generator.GenerateAsync(
+                rec.UserId, rec.MeetingTypeId, context, segs, actions, cfg, charBudget, ct);
 
             var minutes = transcription.MeetingMinutes;
             if (minutes is null)

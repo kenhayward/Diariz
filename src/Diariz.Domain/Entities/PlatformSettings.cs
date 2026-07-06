@@ -17,4 +17,8 @@ public class PlatformSettings
 
     /// <summary>Ceiling (bytes) any administrator may raise a user's quota to.</summary>
     public long MaxQuotaBytes { get; set; } = DefaultMaxQuotaBytes;
+
+    /// <summary>How template-driven meeting minutes are generated (per-section calls vs a single call). Applies
+    /// from the next template run.</summary>
+    public MinutesGenerationMode MinutesGenerationMode { get; set; } = MinutesGenerationMode.SingleCall;
 }

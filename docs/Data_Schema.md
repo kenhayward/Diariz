@@ -62,6 +62,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddCalendarLinkCalendarIdAndColor` | `RecordingCalendarLinks.CalendarId` (varchar(1024), NOT NULL, existing rows backfilled to `primary`) + `RecordingCalendarLinks.Color` (varchar(32) null) — which calendar the linked event is on + its Google colour |
 | `AddIcsCalendarSource` | `IcsCalendarSources` (per-user external `.ics` feed subscriptions; indexed on `UserId`, cascade on user delete) — events fetched live and merged into the Calendar views |
 | `AddMeetingType` | `MeetingTypes` (minutes templates; nullable `UserId` — null = shared Platform type, non-null = a user's Personal type; unique `Key` for seeded standards; `ContentJson` **jsonb**; cascade on user delete) + `Recordings.MeetingTypeId` (FK, `ON DELETE SET NULL`) — the chosen template driving a recording's minutes |
+| `AddMinutesGenerationMode` | `PlatformSettings.MinutesGenerationMode` (int, NOT NULL, default 0 = SingleCall) — platform-wide switch for how template-driven minutes generate (per-section calls vs one call) |
 
 ### Entity-relationship overview
 
@@ -400,6 +401,7 @@ Single seeded row (`Id = 1`), edited by the Platform Administrator.
 | `Id` | int PK | always 1 |
 | `StarterQuotaBytes` | bigint | quota granted to new users (default 5 GiB) |
 | `MaxQuotaBytes` | bigint | ceiling any admin may raise a user to (default 50 GiB) |
+| `MinutesGenerationMode` | int | how template-driven minutes generate: `0` = SingleCall (default), `1` = PerSection. Append-only enum |
 
 #### Identity tables (`AspNet*`)
 Standard ASP.NET Identity schema with **Guid** keys: `AspNetUsers`, `AspNetRoles`, `AspNetUserRoles`,
