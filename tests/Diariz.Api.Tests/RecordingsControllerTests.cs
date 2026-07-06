@@ -2267,4 +2267,93 @@ public class RecordingsControllerTests
         Assert.Equal([later.Id], job.DeleteRecordingIds);           // only the non-survivors
         Assert.StartsWith($"{userId}/{early.Id}-merged-", job.OutputKey);
     }
+
+    // ---- apply meeting type ----
+
+    private static async Task<(Guid recId, Guid trId)> SeedRecWithTranscription(DiarizDbContext db, Guid userId)
+    {
+        var rec = new Recording { Id = Guid.NewGuid(), UserId = userId, BlobKey = "k", Status = RecordingStatus.Summarized };
+        var tr = new Transcription { Id = Guid.NewGuid(), RecordingId = rec.Id, Model = "w", Version = 1 };
+        db.AddRange(rec, tr);
+        await db.SaveChangesAsync();
+        return (rec.Id, tr.Id);
+    }
+
+    private static Guid AddPlatformType(DiarizDbContext db)
+    {
+        var t = new MeetingType
+        {
+            Id = Guid.NewGuid(), UserId = null, GroupName = "Standard", Title = "Cadence",
+            Icon = "refresh", Color = "#F09300", ContentJson = new MeetingTypeContent([]).Serialize(),
+        };
+        db.MeetingTypes.Add(t);
+        db.SaveChanges();
+        return t.Id;
+    }
+
+    [Fact]
+    public async Task ApplyMeetingType_SetsType_AndEnqueuesMinutes()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (recId, trId) = await SeedRecWithTranscription(db, userId);
+        var typeId = AddPlatformType(db);
+        var queue = new FakeJobQueue();
+
+        var result = await Build(db, userId, queue).ApplyMeetingType(recId, new ApplyMeetingTypeRequest(typeId));
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Equal(typeId, (await db.Recordings.FindAsync(recId))!.MeetingTypeId);
+        Assert.Equal(trId, Assert.Single(queue.MeetingMinutesEnqueued).TranscriptionId);
+    }
+
+    [Fact]
+    public async Task ApplyMeetingType_Null_ResetsToDefault_AndEnqueues()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (recId, _) = await SeedRecWithTranscription(db, userId);
+        (await db.Recordings.FindAsync(recId))!.MeetingTypeId = AddPlatformType(db);
+        await db.SaveChangesAsync();
+        var queue = new FakeJobQueue();
+
+        var result = await Build(db, userId, queue).ApplyMeetingType(recId, new ApplyMeetingTypeRequest(null));
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Null((await db.Recordings.FindAsync(recId))!.MeetingTypeId);
+        Assert.Single(queue.MeetingMinutesEnqueued);
+    }
+
+    [Fact]
+    public async Task ApplyMeetingType_UnusableType_ReturnsNotFound_AndDoesNotEnqueue()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (recId, _) = await SeedRecWithTranscription(db, userId);
+        // A Personal type owned by someone else.
+        var other = new MeetingType
+        {
+            Id = Guid.NewGuid(), UserId = Guid.NewGuid(), GroupName = "G", Title = "T",
+            Icon = "document", Color = "#5C6BC0", ContentJson = new MeetingTypeContent([]).Serialize(),
+        };
+        db.MeetingTypes.Add(other);
+        await db.SaveChangesAsync();
+        var queue = new FakeJobQueue();
+
+        var result = await Build(db, userId, queue).ApplyMeetingType(recId, new ApplyMeetingTypeRequest(other.Id));
+
+        Assert.IsType<NotFoundResult>(result);
+        Assert.Empty(queue.MeetingMinutesEnqueued);
+        Assert.Null((await db.Recordings.FindAsync(recId))!.MeetingTypeId);
+    }
+
+    [Fact]
+    public async Task ApplyMeetingType_NotOwnedRecording_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var (recId, _) = await SeedRecWithTranscription(db, Guid.NewGuid()); // owned by someone else
+        var result = await Build(db, Guid.NewGuid(), new FakeJobQueue())
+            .ApplyMeetingType(recId, new ApplyMeetingTypeRequest(null));
+        Assert.IsType<NotFoundResult>(result);
+    }
 }

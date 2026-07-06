@@ -776,6 +776,38 @@ public class RecordingsController : ControllerBase
         return Accepted();
     }
 
+    /// <summary>Choose the meeting type driving this recording's minutes and re-generate. Null = the General
+    /// default. The type must be usable by the owner (a Platform type or one they own). Clears the protected-edit
+    /// flag so the run overwrites hand-edited minutes.</summary>
+    [HttpPost("{id:guid}/meeting-type")]
+    public async Task<IActionResult> ApplyMeetingType(Guid id, ApplyMeetingTypeRequest req)
+    {
+        var rec = await _db.Recordings
+            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                .ThenInclude(t => t.MeetingMinutes)
+            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+
+        var current = rec.Transcriptions.FirstOrDefault();
+        if (current is null) return NotFound();
+
+        // A non-null type must exist and be usable by this user (Platform, or their own Personal type).
+        if (req.MeetingTypeId is { } typeId &&
+            !await _db.MeetingTypes.AnyAsync(t => t.Id == typeId && (t.UserId == null || t.UserId == UserId)))
+            return NotFound();
+
+        var cfg = await _summarization.ResolveAsync(UserId);
+        if (!cfg.Enabled)
+            return BadRequest("Summarisation is not configured. Set an LLM endpoint in Settings.");
+
+        rec.MeetingTypeId = req.MeetingTypeId;
+        if (current.MeetingMinutes is { IsUserEdited: true } m) m.IsUserEdited = false;
+
+        await _queue.EnqueueMeetingMinutesAsync(new MeetingMinutesJob(rec.Id, current.Id));
+        await _db.SaveChangesAsync();
+        return Accepted();
+    }
+
     /// <summary>Manually create or edit the current transcription's meeting minutes (Markdown). Works even
     /// with no LLM configured, and marks the minutes user-edited so the automatic generator won't overwrite
     /// them.</summary>

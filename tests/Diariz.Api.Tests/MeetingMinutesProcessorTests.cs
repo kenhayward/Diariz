@@ -8,16 +8,18 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Diariz.Api.Tests;
 
+/// <summary>The processor orchestrates one meeting-minutes job: load + guards, then delegate generation to the
+/// (template-driven) generator and persist. Generation itself is covered by the composer/strategy/generator tests.</summary>
 public class MeetingMinutesProcessorTests
 {
-    private static readonly string Template = MeetingMinutesPrompt.DefaultTemplate;
-
     private static async Task<(Recording rec, Transcription tr)> Seed(
-        DiarizDbContext db, Guid userId, bool withSegments = true, RecordingStatus status = RecordingStatus.Summarized)
+        DiarizDbContext db, Guid userId, bool withSegments = true, Guid? meetingTypeId = null,
+        RecordingStatus status = RecordingStatus.Summarized)
     {
         var rec = new Recording
         {
             Id = Guid.NewGuid(), UserId = userId, Name = "Named", Status = status, BlobKey = "k",
+            MeetingTypeId = meetingTypeId,
             CreatedAt = new DateTimeOffset(2026, 3, 4, 9, 0, 0, TimeSpan.Zero),
         };
         var tr = new Transcription { Id = Guid.NewGuid(), RecordingId = rec.Id, Model = "whisperx", Version = 1 };
@@ -36,62 +38,40 @@ public class MeetingMinutesProcessorTests
     private static MeetingMinutesJob Job(Recording rec, Transcription tr) => new(rec.Id, tr.Id);
 
     [Fact]
-    public async Task ProcessAsync_PersistsMinutes_ReusesConfig_SubstitutesMetadata_NotifiesWithoutChangingStatus()
+    public async Task ProcessAsync_PersistsGeneratorOutput_ReusesConfig_PassesTypeAndActions_NotifiesWithoutChangingStatus()
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        var (rec, tr) = await Seed(db, userId);
-        var client = new FakeMeetingMinutesClient { Result = "# Weekly Sync\n\nMinutes." };
+        var typeId = Guid.NewGuid();
+        var (rec, tr) = await Seed(db, userId, meetingTypeId: typeId);
+        db.RecordingActions.Add(new RecordingAction
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Send report", Actor = "Bob", Deadline = "", Ordinal = 0,
+        });
+        await db.SaveChangesAsync();
+
+        var generator = new FakeMeetingTypeMinutesGenerator { Result = "# Cadence Call\n\nMinutes." };
         var resolver = new FakeSummarizationSettingsResolver();
         var hub = new FakeHubContext();
 
         await MeetingMinutesProcessor.ProcessAsync(
-            db, client, resolver, hub, Job(rec, tr), Template, charBudget: 16000, NullLogger.Instance);
+            db, generator, resolver, hub, Job(rec, tr), charBudget: 16000, NullLogger.Instance);
 
         var minutes = await db.MeetingMinutes.SingleAsync(m => m.TranscriptionId == tr.Id);
-        Assert.Equal("# Weekly Sync\n\nMinutes.", minutes.Text);
-        Assert.Equal("test-model", minutes.Model);                     // from the resolved config
-        Assert.Equal(userId, resolver.LastUserId);                     // resolved for the owner
-        Assert.Equal(resolver.Config, client.LastConfig);              // passed straight to the client
-
-        // The rendered template (system turn) carries the recording's metadata.
-        var system = client.LastMessages![0].Content;
-        Assert.Contains("Title: Named", system);
-        Assert.Contains("Meeting Date: 2026-03-04", system);
+        Assert.Equal("# Cadence Call\n\nMinutes.", minutes.Text);
+        Assert.Equal("test-model", minutes.Model);                 // from the resolved config
+        Assert.Equal(userId, resolver.LastUserId);                 // resolved for the owner
+        Assert.Equal(userId, generator.LastOwnerId);               // and passed to the generator
+        Assert.Equal(typeId, generator.LastMeetingTypeId);         // the recording's chosen type
+        Assert.Equal(resolver.Config, generator.LastConfig);       // the resolved config, straight through
+        Assert.Equal("Send report", Assert.Single(generator.LastActions!).Text); // canonical actions handed over
 
         var reloaded = await db.Recordings.FindAsync(rec.Id);
-        Assert.Equal(RecordingStatus.Summarized, reloaded!.Status);    // status untouched (no race with summary)
+        Assert.Equal(RecordingStatus.Summarized, reloaded!.Status); // status untouched (no race with summary)
 
         var msg = Assert.Single(hub.Sent);
         Assert.Equal(userId.ToString(), msg.Group);
         Assert.Equal("RecordingStatusChanged", msg.Method);
-    }
-
-    [Fact]
-    public async Task ProcessAsync_AppendsTheRecordingsCanonicalActions_Deterministically()
-    {
-        using var db = TestDb.Create();
-        var (rec, tr) = await Seed(db, Guid.NewGuid());
-        db.RecordingActions.Add(new RecordingAction
-        {
-            Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Send the Q3 report", Actor = "Bob",
-            Deadline = "2026-03-06", Ordinal = 0,
-        });
-        await db.SaveChangesAsync();
-        // The model deliberately returns NO action items — they must still appear, sourced from the panel.
-        var client = new FakeMeetingMinutesClient { Result = "# Minutes\n\nDiscussion happened." };
-
-        await MeetingMinutesProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
-            Job(rec, tr), Template, 16000, NullLogger.Instance);
-
-        var minutes = await db.MeetingMinutes.SingleAsync(m => m.TranscriptionId == tr.Id);
-        Assert.StartsWith("# Minutes", minutes.Text);                       // the model's narrative is kept
-        Assert.Contains("## Action Items", minutes.Text);                   // the section is appended by us
-        Assert.Contains("| Send the Q3 report | Bob | 2026-03-06 |", minutes.Text);
-
-        // The actions are NOT injected into the prompt — the model isn't asked to produce them.
-        Assert.DoesNotContain("Send the Q3 report", client.LastMessages![0].Content);
     }
 
     [Fact]
@@ -104,14 +84,12 @@ public class MeetingMinutesProcessorTests
             Id = Guid.NewGuid(), TranscriptionId = tr.Id, Model = "old", Text = "stale",
         });
         await db.SaveChangesAsync();
-        var client = new FakeMeetingMinutesClient { Result = "# Fresh" };
 
         await MeetingMinutesProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
-            Job(rec, tr), Template, 16000, NullLogger.Instance);
+            db, new FakeMeetingTypeMinutesGenerator { Result = "# Fresh" }, new FakeSummarizationSettingsResolver(),
+            new FakeHubContext(), Job(rec, tr), 16000, NullLogger.Instance);
 
-        var minutes = await db.MeetingMinutes.SingleAsync(m => m.TranscriptionId == tr.Id);
-        Assert.Equal("# Fresh", minutes.Text);
+        Assert.Equal("# Fresh", (await db.MeetingMinutes.SingleAsync(m => m.TranscriptionId == tr.Id)).Text);
     }
 
     [Fact]
@@ -124,31 +102,29 @@ public class MeetingMinutesProcessorTests
             Id = Guid.NewGuid(), TranscriptionId = tr.Id, Model = "user", Text = "my edit", IsUserEdited = true,
         });
         await db.SaveChangesAsync();
-        var client = new FakeMeetingMinutesClient { Result = "# LLM" };
+        var generator = new FakeMeetingTypeMinutesGenerator { Result = "# LLM" };
 
         await MeetingMinutesProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
-            Job(rec, tr), Template, 16000, NullLogger.Instance);
+            db, generator, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
+            Job(rec, tr), 16000, NullLogger.Instance);
 
-        var minutes = await db.MeetingMinutes.SingleAsync(m => m.TranscriptionId == tr.Id);
-        Assert.Equal("my edit", minutes.Text);  // hand edit preserved
-        Assert.Equal(0, client.Calls);          // LLM never called
+        Assert.Equal("my edit", (await db.MeetingMinutes.SingleAsync(m => m.TranscriptionId == tr.Id)).Text);
+        Assert.Equal(0, generator.Calls); // generator never called
     }
 
     [Fact]
-    public async Task ProcessAsync_OnClientError_DoesNotThrow_LeavesStatusAndNoMinutes()
+    public async Task ProcessAsync_OnGeneratorError_DoesNotThrow_LeavesStatusAndNoMinutes()
     {
         using var db = TestDb.Create();
         var (rec, tr) = await Seed(db, Guid.NewGuid());
-        var client = new FakeMeetingMinutesClient { ThrowOnCall = new InvalidOperationException("LLM down") };
+        var generator = new FakeMeetingTypeMinutesGenerator { ThrowOnCall = new InvalidOperationException("LLM down") };
 
         await MeetingMinutesProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
-            Job(rec, tr), Template, 16000, NullLogger.Instance);
+            db, generator, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
+            Job(rec, tr), 16000, NullLogger.Instance);
 
         Assert.Empty(await db.MeetingMinutes.ToListAsync());
-        var reloaded = await db.Recordings.FindAsync(rec.Id);
-        Assert.Equal(RecordingStatus.Summarized, reloaded!.Status); // not marked Failed — summary/transcript still valid
+        Assert.Equal(RecordingStatus.Summarized, (await db.Recordings.FindAsync(rec.Id))!.Status);
     }
 
     [Fact]
@@ -156,13 +132,13 @@ public class MeetingMinutesProcessorTests
     {
         using var db = TestDb.Create();
         var (rec, tr) = await Seed(db, Guid.NewGuid(), withSegments: false);
-        var client = new FakeMeetingMinutesClient();
+        var generator = new FakeMeetingTypeMinutesGenerator();
 
         await MeetingMinutesProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
-            Job(rec, tr), Template, 16000, NullLogger.Instance);
+            db, generator, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
+            Job(rec, tr), 16000, NullLogger.Instance);
 
-        Assert.Equal(0, client.Calls);
+        Assert.Equal(0, generator.Calls);
         Assert.Empty(await db.MeetingMinutes.ToListAsync());
     }
 }

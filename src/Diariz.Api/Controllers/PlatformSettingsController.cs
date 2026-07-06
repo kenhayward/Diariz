@@ -27,7 +27,7 @@ public class PlatformSettingsController : ControllerBase
     public async Task<PlatformSettingsDto> Get()
     {
         var s = await _settings.GetAsync();
-        return new PlatformSettingsDto(s.StarterQuotaBytes, s.MaxQuotaBytes);
+        return new PlatformSettingsDto(s.StarterQuotaBytes, s.MaxQuotaBytes, s.MinutesGenerationMode);
     }
 
     [HttpPut]
@@ -38,11 +38,14 @@ public class PlatformSettingsController : ControllerBase
             return BadRequest("Quota values must be greater than zero.");
         if (req.StarterQuotaBytes > req.MaxQuotaBytes)
             return BadRequest("The starter quota can't exceed the maximum quota.");
+        if (!Enum.IsDefined(req.MinutesGenerationMode))
+            return BadRequest("Unknown minutes generation mode.");
 
         var s = await _settings.GetAsync();
         s.StarterQuotaBytes = req.StarterQuotaBytes;
         s.MaxQuotaBytes = req.MaxQuotaBytes;
+        s.MinutesGenerationMode = req.MinutesGenerationMode;
         await _db.SaveChangesAsync();
-        return new PlatformSettingsDto(s.StarterQuotaBytes, s.MaxQuotaBytes);
+        return new PlatformSettingsDto(s.StarterQuotaBytes, s.MaxQuotaBytes, s.MinutesGenerationMode);
     }
 }

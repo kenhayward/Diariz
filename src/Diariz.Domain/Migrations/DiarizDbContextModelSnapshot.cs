@@ -376,6 +376,11 @@ namespace Diariz.Domain.Migrations
                     b.Property<long>("MaxQuotaBytes")
                         .HasColumnType("bigint");
 
+                    b.Property<int>("MinutesGenerationMode")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<long>("StarterQuotaBytes")
                         .HasColumnType("bigint");
 
@@ -388,6 +393,7 @@ namespace Diariz.Domain.Migrations
                         {
                             Id = 1,
                             MaxQuotaBytes = 53687091200L,
+                            MinutesGenerationMode = 0,
                             StarterQuotaBytes = 5368709120L
                         });
                 });

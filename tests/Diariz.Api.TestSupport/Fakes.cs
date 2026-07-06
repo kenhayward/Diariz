@@ -107,12 +107,47 @@ public sealed class FakeMeetingMinutesClient : IMeetingMinutesClient
     public SummarizationRequestConfig? LastConfig { get; private set; }
     public IReadOnlyList<ChatMessage>? LastMessages { get; private set; }
 
+    /// <summary>Every call's messages, in call order (useful when a strategy makes several calls).</summary>
+    public List<IReadOnlyList<ChatMessage>> AllMessages { get; } = new();
+
+    /// <summary>Optional per-call response; when null, every call returns <see cref="Result"/>. Lets a test give
+    /// each prompt block a distinct answer (to assert ordering/assembly).</summary>
+    public Func<IReadOnlyList<ChatMessage>, string>? Responder { get; set; }
+
     public Task<string> GenerateAsync(
         SummarizationRequestConfig config, IReadOnlyList<ChatMessage> messages, CancellationToken ct = default)
     {
         Calls++;
         LastConfig = config;
         LastMessages = messages;
+        AllMessages.Add(messages);
+        if (ThrowOnCall is not null) throw ThrowOnCall;
+        return Task.FromResult(Responder?.Invoke(messages) ?? Result);
+    }
+}
+
+/// <summary>Stub <see cref="IMeetingTypeMinutesGenerator"/> - returns canned Markdown (or throws) and records the
+/// meeting-type + actions it was handed, so the processor can be tested without the real generator/strategies.</summary>
+public sealed class FakeMeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerator
+{
+    public string Result { get; set; } = "# Minutes\n\nBody.";
+    public Exception? ThrowOnCall { get; set; }
+    public int Calls { get; private set; }
+    public Guid LastOwnerId { get; private set; }
+    public Guid? LastMeetingTypeId { get; private set; }
+    public IReadOnlyList<ExtractedAction>? LastActions { get; private set; }
+    public SummarizationRequestConfig? LastConfig { get; private set; }
+
+    public Task<string> GenerateAsync(
+        Guid recordingOwnerId, Guid? meetingTypeId, MeetingMinutesContext context,
+        IReadOnlyList<SegmentDto> segments, IReadOnlyList<ExtractedAction> actions,
+        SummarizationRequestConfig config, int charBudget, CancellationToken ct = default)
+    {
+        Calls++;
+        LastOwnerId = recordingOwnerId;
+        LastMeetingTypeId = meetingTypeId;
+        LastActions = actions;
+        LastConfig = config;
         if (ThrowOnCall is not null) throw ThrowOnCall;
         return Task.FromResult(Result);
     }

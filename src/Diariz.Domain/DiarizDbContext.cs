@@ -137,11 +137,16 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         });
 
         // Platform-wide settings: a single seeded row (Id = 1).
-        builder.Entity<PlatformSettings>().HasData(new PlatformSettings
+        builder.Entity<PlatformSettings>(e =>
         {
-            Id = Entities.PlatformSettings.SingletonId,
-            StarterQuotaBytes = Entities.PlatformSettings.DefaultStarterQuotaBytes,
-            MaxQuotaBytes = Entities.PlatformSettings.DefaultMaxQuotaBytes,
+            e.Property(s => s.MinutesGenerationMode).HasDefaultValue(MinutesGenerationMode.SingleCall);
+            e.HasData(new PlatformSettings
+            {
+                Id = Entities.PlatformSettings.SingletonId,
+                StarterQuotaBytes = Entities.PlatformSettings.DefaultStarterQuotaBytes,
+                MaxQuotaBytes = Entities.PlatformSettings.DefaultMaxQuotaBytes,
+                MinutesGenerationMode = MinutesGenerationMode.SingleCall,
+            });
         });
 
         builder.Entity<Transcription>(e =>
