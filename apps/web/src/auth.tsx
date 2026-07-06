@@ -86,6 +86,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [token]);
 
+  // Desktop shell: after a diariz:// Google sign-in, the shell pushes the access token here. Adopt it
+  // through the same path as a normal login (persist + schedule refresh). No-op in a plain browser.
+  useEffect(() => {
+    const unsub = window.diariz?.onAuthToken?.((incoming) => setSession(incoming));
+    return () => unsub?.();
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{ isAuthed: Boolean(token), email, fullName, roles, isAdmin, isPlatformAdmin, initials, pictureUrl, login, setSession, logout }}
