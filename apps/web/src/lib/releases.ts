@@ -106,6 +106,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.97.6",
+    date: "2026-07-06",
+    pr: 215,
+    headline: "Docs: publish the long-term product roadmap",
+    summary:
+      "Internal docs only. Adds a long-term roadmap covering the next major arc - note enhancement, " +
+      "workflows/automations, collaborative shared spaces, and optional consent-gated ambient capture - and " +
+      "links it from the README. No code or behaviour change.",
+    added: [
+      "docs/long_term_roadmap.md and a README link to it.",
+    ],
+  },
+  {
     version: "0.97.5",
     date: "2026-07-06",
     pr: 214,
