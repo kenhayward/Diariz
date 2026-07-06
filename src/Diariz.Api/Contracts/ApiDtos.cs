@@ -164,7 +164,7 @@ public record RecordingDetailDto(
 /// Platform type). <see cref="Content"/> is the structured template (H1/H2 sections of blocks).</summary>
 public record MeetingTypeDto(
     Guid Id, bool IsPlatform, bool CanEdit, string GroupName, string Title, string Overview,
-    string Icon, string Color, Diariz.Api.Services.MeetingTypeContent Content);
+    string Icon, string Color, Diariz.Api.Services.MeetingTypeContent Content, bool IsDefault = false);
 
 /// <summary>Create or update a meeting type. <paramref name="IsPlatform"/> requests a shared Platform type
 /// (honoured only for Platform Administrators; normal users always get a Personal type).</summary>

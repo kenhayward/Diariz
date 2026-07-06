@@ -31,6 +31,41 @@ export interface RecordingSummary {
   calendarEventId: string | null;
   /// The linked calendar's Google colour (hex) for tinting the list's calendar icon. Null when unlinked.
   calendarColor?: string | null;
+  /// The chosen meeting type driving the minutes template, or null for the General default.
+  meetingTypeId?: string | null;
+}
+
+// ---- Meeting types (minutes templates) ----
+/// A block within a template section: literal boilerplate text, a substituted recording field, or a model prompt.
+export type TemplateBlockKind = "boilerplate" | "field" | "prompt";
+export interface TemplateBlock {
+  kind: TemplateBlockKind;
+  text?: string | null;
+  field?: string | null;
+}
+/// One H1/H2 section (level 1 or 2) of a template, with its ordered content blocks.
+export interface TemplateSection {
+  level: number;
+  title: string;
+  blocks: TemplateBlock[];
+}
+export interface MeetingTypeContent {
+  sections: TemplateSection[];
+}
+/// A meeting type (minutes template). `isPlatform` = a shared, admin-owned type; `canEdit` = the caller may
+/// edit/delete it (owns a Personal type, or is a Platform Admin for a Platform type).
+export interface MeetingType {
+  id: string;
+  isPlatform: boolean;
+  canEdit: boolean;
+  groupName: string;
+  title: string;
+  overview: string;
+  icon: string;
+  color: string;
+  content: MeetingTypeContent;
+  /// True for the seeded "General Meeting" default (used when a recording has no explicit type).
+  isDefault: boolean;
 }
 
 export interface SectionDto {
@@ -189,6 +224,8 @@ export interface RecordingDetail {
   hasAudio: boolean;
   /// The persisted Google Calendar link (snapshot), or null when unlinked.
   calendarLink: CalendarLink | null;
+  /// The chosen meeting type driving the minutes template, or null for the General default.
+  meetingTypeId?: string | null;
 }
 
 export interface AuthResponse {
@@ -219,9 +256,12 @@ export interface UserStorage {
 }
 
 /// Platform-wide storage-quota defaults (bytes), edited by the Platform Administrator.
+/// How template-driven minutes generate (platform-wide, admin-only). 0 = SingleCall, 1 = PerSection.
+export type MinutesGenerationMode = 0 | 1;
 export interface PlatformSettings {
   starterQuotaBytes: number;
   maxQuotaBytes: number;
+  minutesGenerationMode: MinutesGenerationMode;
 }
 
 export interface GrantResult {

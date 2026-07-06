@@ -102,6 +102,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.96.1",
+    date: "2026-07-06",
+    pr: 208,
+    headline: "Pick a meeting type from the Minutes toolbar",
+    summary:
+      "The Minutes tab now has a meeting-type picker: choose a type (grouped by template group, each with its " +
+      "icon) and the minutes re-run in that structure straight away - the picker is disabled until the run " +
+      "finishes. It shows the currently-applied type, or the General default when none has been chosen. Platform " +
+      "Administrators also get a 'Minutes generation' control in Settings - AI to switch between one call per " +
+      "section (best structure) and a single call (fewer tokens), applied from the next run. Managing the " +
+      "templates themselves comes next. Server redeploy.",
+    added: [
+      "A meeting-type picker on the Minutes toolbar that applies a template and re-runs the minutes immediately.",
+      "A platform-wide 'Minutes generation' mode switch (per-section vs single call) in Settings - AI, for Platform Administrators.",
+    ],
+  },
+  {
     version: "0.96.0",
     date: "2026-07-06",
     pr: 207,

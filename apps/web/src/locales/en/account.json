@@ -117,5 +117,9 @@
   "aboutAria": "About Diariz",
   "aboutVersion": "Version {{version}}",
   "releaseNotesLink": "Release notes →",
-  "githubLink": "GitHub →"
+  "githubLink": "GitHub →",
+  "minutesModeLabel": "Minutes generation",
+  "minutesModeSingle": "Single call (fewer tokens)",
+  "minutesModePerSection": "Per section (best structure)",
+  "minutesModeHint": "Platform-wide: how meeting minutes are generated from a template. Applies from the next run."
 }

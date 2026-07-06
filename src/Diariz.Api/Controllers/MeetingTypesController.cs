@@ -117,6 +117,6 @@ public class MeetingTypesController : ControllerBase
         var canEdit = isPlatform ? IsPlatformAdmin : m.UserId == UserId;
         return new MeetingTypeDto(
             m.Id, isPlatform, canEdit, m.GroupName, m.Title, m.Overview, m.Icon, m.Color,
-            MeetingTypeContent.Parse(m.ContentJson));
+            MeetingTypeContent.Parse(m.ContentJson), m.Key == MeetingType.GeneralKey);
     }
 }

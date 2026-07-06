@@ -296,5 +296,7 @@
   "resizeRecordings": "Redimensionner le panneau des enregistrements",
   "resizeChat": "Redimensionner le panneau de chat",
   "collapsePanel": "Réduire le panneau {{title}}",
-  "expandPanel": "Développer le panneau {{label}}"
+  "expandPanel": "Développer le panneau {{label}}",
+  "meetingType": "Type de réunion",
+  "meetingTypeHint": "Choisissez un type de réunion pour structurer le compte rendu ; le changer le régénère."
 }

@@ -296,5 +296,7 @@
   "resizeRecordings": "Resize recordings panel",
   "resizeChat": "Resize chat panel",
   "collapsePanel": "Collapse {{title}} panel",
-  "expandPanel": "Expand {{label}} panel"
+  "expandPanel": "Expand {{label}} panel",
+  "meetingType": "Meeting type",
+  "meetingTypeHint": "Choose a meeting type to shape the minutes; changing it re-runs them."
 }

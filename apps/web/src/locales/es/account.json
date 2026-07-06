@@ -117,5 +117,9 @@
   "aboutAria": "Acerca de Diariz",
   "aboutVersion": "Versión {{version}}",
   "releaseNotesLink": "Notas de la versión →",
-  "githubLink": "GitHub →"
+  "githubLink": "GitHub →",
+  "minutesModeLabel": "Generación de actas",
+  "minutesModeSingle": "Una sola llamada (menos tokens)",
+  "minutesModePerSection": "Por sección (mejor estructura)",
+  "minutesModeHint": "Para toda la plataforma: cómo se generan las actas a partir de una plantilla. Se aplica desde la próxima ejecución."
 }

@@ -296,5 +296,7 @@
   "resizeRecordings": "Cambiar el tamaño del panel de grabaciones",
   "resizeChat": "Cambiar el tamaño del panel de chat",
   "collapsePanel": "Contraer el panel {{title}}",
-  "expandPanel": "Expandir el panel {{label}}"
+  "expandPanel": "Expandir el panel {{label}}",
+  "meetingType": "Tipo de reunión",
+  "meetingTypeHint": "Elige un tipo de reunión para dar forma al acta; cambiarlo la vuelve a generar."
 }

@@ -296,5 +296,7 @@
   "resizeRecordings": "Größe des Aufnahmen-Panels ändern",
   "resizeChat": "Größe des Chat-Panels ändern",
   "collapsePanel": "Panel {{title}} einklappen",
-  "expandPanel": "Panel {{label}} ausklappen"
+  "expandPanel": "Panel {{label}} ausklappen",
+  "meetingType": "Besprechungstyp",
+  "meetingTypeHint": "Wählen Sie einen Besprechungstyp für das Protokoll; eine Änderung erzeugt es neu."
 }
