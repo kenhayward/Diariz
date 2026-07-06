@@ -102,6 +102,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.95.1",
+    date: "2026-07-06",
+    pr: 206,
+    headline: "Meeting types: create, edit, and delete templates (API)",
+    summary:
+      "Adds the write API for meeting types: create, update (atomic - the whole template saves at once), and " +
+      "delete. A normal user manages their own Personal templates; a Platform Administrator also manages the " +
+      "shared Platform templates (including the seeded standards). Requests are validated (title and group " +
+      "required, a known icon, a hex colour, a well-formed template). Still no visible change - the picker and " +
+      "editor UI come next. Server redeploy.",
+    added: [
+      "Create/update/delete endpoints for meeting types, with the Platform-vs-Personal permission rules enforced (a normal user only ever touches their own templates).",
+    ],
+  },
+  {
     version: "0.95.0",
     date: "2026-07-06",
     pr: 205,
