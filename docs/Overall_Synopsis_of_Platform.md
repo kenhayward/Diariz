@@ -404,8 +404,16 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   Gmail/Calendar yet); stores the Google `sub` on `ApplicationUser.GoogleSubject` (unique) + the profile
   picture on `PictureUrl` (a `picture` JWT claim → account-menu avatar). New Google users land as `Requested`
   (same admin-approval gate; an admin granting a Google account activates it directly, no setup link); a
-  verified Google email matching an existing account **auto-links**. Web-only for now — the Electron shell
-  hides the button (Google blocks OAuth in embedded webviews).
+  verified Google email matching an existing account **auto-links**.
+- **Google sign-in on the desktop (system browser + `diariz://` handoff):** Google blocks OAuth in embedded
+  webviews, so the Electron shell runs consent in the **system browser** and gets the result back via a custom
+  protocol. `google/start` carries a **`desktopChallenge`** (the S256 of a PKCE verifier the app holds) in the
+  encrypted state cookie; on success `google/callback` mints a **single-use, 2-minute code** in Redis
+  (`IDesktopAuthCodeStore`, GETDEL) and **302s to `diariz://auth/callback?code=…`** (a raw redirect, reached
+  only from the encrypted-state desktop flow — never an open redirect). The desktop app redeems the code at
+  **`POST /api/auth/desktop/exchange`** by sending its `verifier`; the server checks `S256(verifier)` against the
+  bound challenge (constant-time) and returns the JWT. The token never travels in a URL. *(Server contract; the
+  desktop shell button + token intake are wired in a later change.)*
 - **Google data access (opt-in, Phase 2):** a Google-linked user can grant **Calendar (read)** from
   Preferences via an **incremental-consent, offline** flow (`AuthController`
   `POST google/connect` → the shared `google/callback` branches on a `mode` in the state cookie →

@@ -145,6 +145,7 @@ builder.Services.AddScoped<ISchemaVersion, EfSchemaVersion>();
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
     ConnectionMultiplexer.Connect(queue.RedisConnection));
 builder.Services.AddSingleton<IJobQueue, RedisJobQueue>();
+builder.Services.AddSingleton<IDesktopAuthCodeStore, RedisDesktopAuthCodeStore>();
 
 // ---- Data Protection (encrypts user-supplied API keys at rest) ----
 // In Docker, point DataProtection:KeysPath at a mounted volume so the keyring survives container

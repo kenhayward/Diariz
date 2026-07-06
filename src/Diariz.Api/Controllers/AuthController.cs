@@ -32,12 +32,13 @@ public class AuthController : ControllerBase
     private readonly ILogger<AuthController> _logger;
     private readonly DiarizDbContext _db;
     private readonly IGoogleTokenProtector _tokenProtector;
+    private readonly IDesktopAuthCodeStore _desktopCodes;
 
     public AuthController(
         UserManager<ApplicationUser> users, ITokenService tokens, IPlatformSettingsService platform,
         IGoogleAuthService google, IGoogleSignInHandler googleSignIn, IOptions<GoogleAuthOptions> googleOpts,
         IOptions<AppPublicOptions> appOpts, IDataProtectionProvider dataProtection, ILogger<AuthController> logger,
-        DiarizDbContext db, IGoogleTokenProtector tokenProtector)
+        DiarizDbContext db, IGoogleTokenProtector tokenProtector, IDesktopAuthCodeStore desktopCodes)
     {
         _users = users;
         _tokens = tokens;
@@ -50,6 +51,7 @@ public class AuthController : ControllerBase
         _logger = logger;
         _db = db;
         _tokenProtector = tokenProtector;
+        _desktopCodes = desktopCodes;
     }
 
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -161,24 +163,28 @@ public class AuthController : ControllerBase
 
     private const string StateCookie = "diariz_g_oauth";
     /// <summary>State stashed in the signed cookie during /start or /connect. <c>Mode</c> = "signin" | "connect";
-    /// <c>UserId</c> identifies the connecting user (set server-side during the authorized /connect).</summary>
-    private record OAuthState(string State, string Verifier, string Mode = "signin", string? UserId = null);
+    /// <c>UserId</c> identifies the connecting user (set server-side during the authorized /connect);
+    /// <c>DesktopChallenge</c> (non-null) marks a desktop sign-in and carries the app's S256 PKCE challenge.</summary>
+    private record OAuthState(string State, string Verifier, string Mode = "signin", string? UserId = null,
+        string? DesktopChallenge = null);
 
     /// <summary>Public: which external sign-in providers are enabled (so the login page shows the button).</summary>
     [HttpGet("providers")]
     public IActionResult Providers() => Ok(new { google = _google.Enabled });
 
     /// <summary>Public: begin Google sign-in. Stashes PKCE state in a short-lived signed cookie and
-    /// redirects to Google's consent screen.</summary>
+    /// redirects to Google's consent screen. <paramref name="desktopChallenge"/> (from the desktop shell)
+    /// marks this as a desktop flow so the callback hands back a diariz:// code instead of the SPA cookie.</summary>
     [HttpGet("google/start")]
-    public IActionResult GoogleStart()
+    public IActionResult GoogleStart([FromQuery] string? desktopChallenge = null)
     {
         if (!_google.Enabled) return NotFound();
 
         var verifier = OAuthPkce.NewCodeVerifier();
         var state = OAuthPkce.NewState();
         var protectedState = _stateProtector.Protect(
-            JsonSerializer.Serialize(new OAuthState(state, verifier)), TimeSpan.FromMinutes(10));
+            JsonSerializer.Serialize(new OAuthState(state, verifier, DesktopChallenge: desktopChallenge)),
+            TimeSpan.FromMinutes(10));
         Response.Cookies.Append(StateCookie, protectedState, StateCookieOptions());
 
         return Redirect(_google.BuildAuthorizationUrl(
@@ -260,7 +266,9 @@ public class AuthController : ControllerBase
 
         return result.Outcome switch
         {
-            GoogleSignInOutcome.SignedIn => await SignedInRedirectAsync(result.User!),
+            GoogleSignInOutcome.SignedIn => saved.DesktopChallenge is { } challenge
+                ? await DesktopSignedInRedirectAsync(result.User!, challenge)
+                : await SignedInRedirectAsync(result.User!),
             GoogleSignInOutcome.AwaitingApproval => RedirectToLogin("pending"),
             GoogleSignInOutcome.Disabled => RedirectToLogin("disabled"),
             _ => RedirectToLogin("failed"),
@@ -353,6 +361,7 @@ public class AuthController : ControllerBase
     private const string AuthHandoffCookie = "diariz_auth";
     private const string HandoffCookiePath = "/api/auth/google";
     private const string SpaCallbackPath = "/auth/google/callback";
+    private const string DesktopCallbackUri = "diariz://auth/callback";
 
     /// <summary>Hand the freshly-minted JWT to the SPA without ever putting it in a URL. The token rides in a
     /// short-lived, <b>HttpOnly</b> cookie scoped to the Google auth path; the SPA then trades it for the
@@ -364,6 +373,17 @@ public class AuthController : ControllerBase
         var (token, _) = _tokens.CreateAccessToken(user, await _users.GetRolesAsync(user));
         Response.Cookies.Append(AuthHandoffCookie, token, HandoffCookieOptions());
         return Redirect(SafeRedirect.Within($"{WebBase()}{SpaCallbackPath}", AllowedRedirectHosts()));
+    }
+
+    /// <summary>Desktop sign-in handoff: mint a single-use code bound to the app's PKCE challenge and
+    /// redirect the system browser to the diariz:// deep link. The JWT never rides in the URL - the app
+    /// redeems the code at <c>POST desktop/exchange</c> by proving it holds the verifier. Deliberately a
+    /// raw <see cref="ControllerBase.Redirect(string)"/> (not <see cref="SafeRedirect"/>): the custom
+    /// scheme is fixed and only reachable from an encrypted-state desktop flow.</summary>
+    private async Task<IActionResult> DesktopSignedInRedirectAsync(ApplicationUser user, string challenge)
+    {
+        var code = await _desktopCodes.MintAsync(user.Id, challenge, TimeSpan.FromMinutes(2));
+        return Redirect($"{DesktopCallbackUri}?code={Uri.EscapeDataString(code)}");
     }
 
     private CookieOptions HandoffCookieOptions() => new()
@@ -385,6 +405,24 @@ public class AuthController : ControllerBase
         Response.Cookies.Delete(AuthHandoffCookie, HandoffCookieOptions());
         if (string.IsNullOrEmpty(token)) return Unauthorized();
         return Ok(new { accessToken = token }); // the SPA reads the token's expiry from the JWT itself
+    }
+
+    /// <summary>Public: the desktop app swaps its one-time diariz:// code for an access token, proving it
+    /// holds the PKCE verifier whose S256 challenge was bound to the code. Any failure -> generic 401.</summary>
+    [HttpPost("desktop/exchange")]
+    public async Task<IActionResult> DesktopExchange(DesktopExchangeRequest req)
+    {
+        if (string.IsNullOrEmpty(req.Code) || string.IsNullOrEmpty(req.Verifier)) return Unauthorized();
+
+        var ticket = await _desktopCodes.RedeemAsync(req.Code);
+        if (ticket is null || !FixedTimeEquals(ticket.Challenge, OAuthPkce.Challenge(req.Verifier)))
+            return Unauthorized();
+
+        var user = await _users.FindByIdAsync(ticket.UserId.ToString());
+        if (user is null || !user.IsEnabled) return Unauthorized();
+
+        var (token, _) = _tokens.CreateAccessToken(user, await _users.GetRolesAsync(user));
+        return Ok(new { accessToken = token });
     }
 
     private CookieOptions StateCookieOptions() => new()

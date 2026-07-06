@@ -106,6 +106,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.97.9",
+    date: "2026-07-06",
+    pr: 219,
+    headline: "Groundwork for Google sign-in on the desktop app",
+    summary:
+      "Backend groundwork (no user-visible change yet). Adds a server-side handoff so the desktop app " +
+      "can complete Google sign-in via the system browser: the Google callback can hand back a single-use " +
+      "code over a diariz:// deep link, which the app exchanges for a session. Ships fully in a later update.",
+    added: [
+      "Server support for a desktop Google sign-in handoff (single-use code + diariz:// deep link).",
+    ],
+  },
+  {
     version: "0.97.8",
     date: "2026-07-06",
     pr: 218,
