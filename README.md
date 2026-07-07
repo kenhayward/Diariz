@@ -44,8 +44,8 @@ merging, extracting actions, uploading, errors — in their tone colours) and ri
 transcription usage · total transcripts.
 - **Identify speakers** across recordings: enrol a person from a recording's speaker and Diariz recognises
 that voice automatically in later recordings (SpeechBrain ECAPA voiceprints in pgvector, cosine matching),
-with manual reassignment. A **People** screen renames, prunes training samples, merges duplicates, and
-erases voiceprints (GDPR — biometric data).
+with manual reassignment. The **Voice Prints** tab (Preferences) renames, prunes training samples, merges
+duplicates, and erases voiceprints (GDPR — biometric data).
 - **Summarize** recordings (with automatic naming) and generate a full set of **professional meeting minutes**
 (Markdown: headings, lists, tables — no emojis) as part of the pipeline; edit them in a **WYSIWYG editor**,
 re-create them, or **email them to yourself** (optionally with the recording's attachments). The minutes also
@@ -127,13 +127,16 @@ system browser and returns you to the app, since Google blocks sign-in inside em
 the meeting it belongs to** (auto-saved on open, or picked by hand when the times don't line up), its Overview
 shows the meeting's **full details** (time, location, organiser, attendees, description), and the **Calendar
 tab overlays their meetings** (a linked recording and its meeting show as one row; a meeting with no recording
-opens a preview you can link a recording to) — a revocable grant.
+opens a preview you can link a recording to) — a revocable grant. They can also **choose which of their Google
+calendars** to consider (Preferences → Google Account); only the selected calendars are used for matching and
+shown on the Calendar tab.
 - **Subscribe to external calendar feeds**: add any public iCalendar (`.ics`) URL — a team or shared
 calendar — in **Preferences → Calendar feeds**, give it a name and colour, and its meetings appear on the
 Calendar tab in that colour (fetched behind an SSRF guard, no Google connection required).
-- **Preferences**: every user can change their own **display name** and pick their **native** and **app**
-language (chosen at signup or later from the account menu) — groundwork for upcoming UI localization and
-transcript translation.
+- **Preferences**: a tabbed window (Profile, Google Account, Calendar Feeds, Claude Access, Voice Prints).
+Each user can edit their **profile** — display name, job title, company, job/company descriptions, LinkedIn
+account name — pick their **native** and **app** language, and choose a **theme** (Light/Dark/Auto) that is
+saved to their account and follows them across devices.
 - **Storage quotas**: each user gets an audio-storage quota (starter + maximum set by the Platform
 Administrator; any admin can raise a user up to the maximum). Usage shows in the account menu and
 per-recording; over-quota uploads are rejected.
@@ -267,7 +270,7 @@ the trained weights is legally unsettled; for a commercial deployment, get your 
 the embedder for one trained on commercially-cleared data (e.g. NVIDIA NeMo TitaNet, WeSpeaker), **or**
 simply disable the feature with `ENABLE_SPEAKER_EMBEDDINGS=false` on the worker — transcription and
 diarization still work, you just lose cross-recording speaker identification. Voiceprints are **biometric
-data**: only enrol people with their consent, and use the People screen to erase them on request.
+data**: only enrol people with their consent, and use the Voice Prints tab to erase them on request.
 - **Object storage (MinIO) is AGPL-3.0.** Used unmodified as a separate container it does **not** impose
 copyleft on Diariz's own code, but if AGPL is a concern, point storage at **any S3-compatible store** (AWS
 S3, Cloudflare R2, …) and drop MinIO entirely.

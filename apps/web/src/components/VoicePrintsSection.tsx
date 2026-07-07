@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
@@ -6,7 +6,8 @@ import type { SpeakerProfile } from "../lib/types";
 
 /// Manage enrolled people / voiceprints: rename, view & prune training contributions, merge two people,
 /// and erase one or all (GDPR). Voiceprints are biometric data — erasure reverts auto-applied labels.
-export default function PeopleModal({ onClose }: { onClose: () => void }) {
+/// Rendered as the "Voice Prints" tab of the Preferences modal (formerly a standalone People modal).
+export default function VoicePrintsSection() {
   const { t } = useTranslation("people");
   const qc = useQueryClient();
   const { data: people = [], isLoading } = useQuery({
@@ -15,12 +16,6 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
   });
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   /// Run an action, then refresh the list (and any open detail). Surfaces errors in the banner.
   async function act(fn: () => Promise<unknown>, detailId?: string) {
@@ -59,73 +54,57 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div
-        role="dialog"
-        aria-label={t("title")}
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-lg border bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Pinned header. */}
-        <h2 className="shrink-0 text-base font-semibold dark:text-gray-100">{t("title")}</h2>
-        <p className="mb-3 shrink-0 text-xs text-gray-500 dark:text-gray-400">{t("description")}</p>
+    <div className="flex h-full min-h-0 flex-col">
+      <h3 className="shrink-0 text-base font-semibold dark:text-gray-100">{t("title")}</h3>
+      <p className="mb-3 shrink-0 text-xs text-gray-500 dark:text-gray-400">{t("description")}</p>
 
-        {error && <p className="mb-2 shrink-0 text-sm text-red-600 dark:text-red-400">{error}</p>}
-        {isLoading && <p className="shrink-0 text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>}
-        {!isLoading && people.length === 0 && (
-          <p className="shrink-0 text-sm text-gray-500 dark:text-gray-400">{t("empty")}</p>
-        )}
+      {error && <p className="mb-2 shrink-0 text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {isLoading && <p className="shrink-0 text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>}
+      {!isLoading && people.length === 0 && (
+        <p className="shrink-0 text-sm text-gray-500 dark:text-gray-400">{t("empty")}</p>
+      )}
 
-        {/* Scrollable people table (one row per person; the ▸ expand adds a detail row). Sticky header. */}
-        {people.length > 0 && (
-          <div className="min-h-0 flex-1 overflow-auto">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10 bg-white text-left text-xs text-gray-400 dark:bg-gray-900 dark:text-gray-500">
-                <tr>
-                  <th className="py-1 pr-2 font-medium">{t("colName")}</th>
-                  <th className="py-1 pr-2 font-medium">{t("colSamples")}</th>
-                  <th className="py-1 font-medium">{t("colActions")}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y dark:divide-gray-800">
-                {people.map((p) => (
-                  <PersonRow
-                    key={p.id}
-                    person={p}
-                    others={people.filter((o) => o.id !== p.id)}
-                    expanded={expandedId === p.id}
-                    onToggle={() => setExpandedId((cur) => (cur === p.id ? null : p.id))}
-                    act={act}
-                    onPlay={playSample}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+      {/* Scrollable people table (one row per person; the ▸ expand adds a detail row). Sticky header. */}
+      {people.length > 0 && (
+        <div className="min-h-0 flex-1 overflow-auto">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 z-10 bg-white text-left text-xs text-gray-400 dark:bg-gray-900 dark:text-gray-500">
+              <tr>
+                <th className="py-1 pr-2 font-medium">{t("colName")}</th>
+                <th className="py-1 pr-2 font-medium">{t("colSamples")}</th>
+                <th className="py-1 font-medium">{t("colActions")}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y dark:divide-gray-800">
+              {people.map((p) => (
+                <PersonRow
+                  key={p.id}
+                  person={p}
+                  others={people.filter((o) => o.id !== p.id)}
+                  expanded={expandedId === p.id}
+                  onToggle={() => setExpandedId((cur) => (cur === p.id ? null : p.id))}
+                  act={act}
+                  onPlay={playSample}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-        {/* Shared player for listening to training samples — pinned so it's always reachable while scrolling. */}
-        <audio ref={audioRef} controls className="mt-3 w-full shrink-0" />
+      {/* Shared player for listening to training samples — pinned so it's always reachable while scrolling. */}
+      <audio ref={audioRef} controls className="mt-3 w-full shrink-0" />
 
-        <div className="mt-4 flex shrink-0 items-center justify-between border-t pt-3 dark:border-gray-700">
-          {people.length > 0 ? (
-            <button
-              onClick={eraseAll}
-              className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-600 dark:border-red-800 dark:text-red-400"
-            >
-              {t("eraseAll")}
-            </button>
-          ) : (
-            <span />
-          )}
+      {people.length > 0 && (
+        <div className="mt-4 flex shrink-0 items-center border-t pt-3 dark:border-gray-700">
           <button
-            onClick={onClose}
-            className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+            onClick={eraseAll}
+            className="rounded border border-red-300 px-3 py-1.5 text-sm text-red-600 dark:border-red-800 dark:text-red-400"
           >
-            {t("common:close")}
+            {t("eraseAll")}
           </button>
         </div>
-      </div>
+      )}
     </div>
   );
 }

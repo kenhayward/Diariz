@@ -20,7 +20,7 @@ import { renderMarkdown } from "../lib/markdown";
 import AttachmentsManager from "../components/AttachmentsManager";
 import CalendarEventDetails from "../components/CalendarEventDetails";
 import CalendarLinkModal from "../components/CalendarLinkModal";
-import PeopleModal from "../components/PeopleModal";
+import PreferencesModal from "../components/PreferencesModal";
 import SpeakerAssign from "../components/SpeakerAssign";
 import ToolbarButton, { iconProps } from "../components/ToolbarButton";
 import { recordingMenu } from "../components/recordingMenu";
@@ -1354,7 +1354,7 @@ export default function RecordingDetail() {
 
       {moving && <MoveToSectionModal recordingId={id} onClose={() => setMoving(false)} />}
       {downloading && <DownloadTranscriptModal recordingId={id} onClose={() => setDownloading(false)} />}
-      {peopleOpen && <PeopleModal onClose={() => setPeopleOpen(false)} />}
+      {peopleOpen && <PreferencesModal initialTab="voiceprints" onClose={() => setPeopleOpen(false)} />}
       {linkModalOpen && (
         <CalendarLinkModal recordingId={id} aroundDate={rec.createdAt} onClose={() => setLinkModalOpen(false)} />
       )}

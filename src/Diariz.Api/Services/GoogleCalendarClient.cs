@@ -38,6 +38,10 @@ public interface IGoogleCalendarClient
     /// <summary>A single event by id (with rich fields), searched across the user's selected calendars, or null
     /// if the user hasn't connected Calendar or the event isn't found. Throws if the calendar list can't be read.</summary>
     Task<CalendarEvent?> GetEventAsync(Guid userId, string eventId, CancellationToken ct = default);
+
+    /// <summary>The user's full calendarList (unfiltered by their Diariz selection), so the Preferences picker
+    /// can offer every calendar. Null when the user hasn't connected Calendar.</summary>
+    Task<IReadOnlyList<CalendarListEntry>?> ListAllCalendarsAsync(Guid userId, CancellationToken ct = default);
 }
 
 public class GoogleCalendarClient : IGoogleCalendarClient
@@ -47,11 +51,13 @@ public class GoogleCalendarClient : IGoogleCalendarClient
 
     private readonly HttpClient _http;
     private readonly IGoogleTokenProvider _tokens;
+    private readonly IGoogleCalendarSelectionStore _selection;
 
-    public GoogleCalendarClient(HttpClient http, IGoogleTokenProvider tokens)
+    public GoogleCalendarClient(HttpClient http, IGoogleTokenProvider tokens, IGoogleCalendarSelectionStore selection)
     {
         _http = http;
         _tokens = tokens;
+        _selection = selection;
     }
 
     public async Task<IReadOnlyList<CalendarEvent>?> ListEventsAsync(
@@ -60,7 +66,7 @@ public class GoogleCalendarClient : IGoogleCalendarClient
         var access = await _tokens.GetAccessTokenAsync(userId, ct);
         if (access is null) return null; // not connected / refresh failed — caller prompts to reconnect
 
-        var calendars = await ListCalendarsAsync(access, ct);
+        var calendars = await ListCalendarsAsync(access, userId, ct);
 
         // Fetch each calendar's events in parallel and tag them with that calendar's id/name/colour. A single
         // flaky calendar (e.g. a shared one that 403s) is skipped, not fatal — the rest still show.
@@ -86,7 +92,7 @@ public class GoogleCalendarClient : IGoogleCalendarClient
         if (access is null) return null; // not connected / refresh failed
 
         // Try the primary first (the common case), then the other selected calendars until the event is found.
-        var calendars = (await ListCalendarsAsync(access, ct)).OrderByDescending(c => c.Primary);
+        var calendars = (await ListCalendarsAsync(access, userId, ct)).OrderByDescending(c => c.Primary);
         foreach (var cal in calendars)
         {
             var ev = await GetEventFromCalendarAsync(access, cal.Id, eventId, ct);
@@ -96,8 +102,34 @@ public class GoogleCalendarClient : IGoogleCalendarClient
         return null;
     }
 
-    /// <summary>The user's calendars worth showing: those they've ticked visible plus their primary (always).</summary>
-    private async Task<IReadOnlyList<CalendarListEntry>> ListCalendarsAsync(string access, CancellationToken ct)
+    public async Task<IReadOnlyList<CalendarListEntry>?> ListAllCalendarsAsync(Guid userId, CancellationToken ct = default)
+    {
+        var access = await _tokens.GetAccessTokenAsync(userId, ct);
+        if (access is null) return null;
+        return await FetchCalendarListAsync(access, ct);
+    }
+
+    /// <summary>The user's calendars to enumerate for events, narrowed to their stored Diariz selection (or,
+    /// when they haven't chosen, the calendars they've made visible in Google plus their primary).</summary>
+    private async Task<IReadOnlyList<CalendarListEntry>> ListCalendarsAsync(string access, Guid userId, CancellationToken ct)
+    {
+        var all = await FetchCalendarListAsync(access, ct);
+        var selection = await _selection.GetSelectedIdsAsync(userId, ct);
+        return ApplySelection(all, selection);
+    }
+
+    /// <summary>Narrow the full calendar list to the ones to enumerate. A null <paramref name="selection"/>
+    /// (user hasn't chosen) keeps the Google-visible calendars plus the primary; otherwise keeps exactly the
+    /// user's chosen ids. Pure, so it's unit-testable without the Calendar API.</summary>
+    public static IReadOnlyList<CalendarListEntry> ApplySelection(
+        IReadOnlyList<CalendarListEntry> all, IReadOnlySet<string>? selection) =>
+        (selection is null
+            ? all.Where(c => c.Selected || c.Primary)
+            : all.Where(c => selection.Contains(c.Id)))
+        .ToList();
+
+    /// <summary>Fetch + parse the user's full calendarList (unfiltered).</summary>
+    private async Task<IReadOnlyList<CalendarListEntry>> FetchCalendarListAsync(string access, CancellationToken ct)
     {
         var url = QueryHelpers.AddQueryString(CalendarListEndpoint, new Dictionary<string, string?>
         {
@@ -113,9 +145,7 @@ public class GoogleCalendarClient : IGoogleCalendarClient
             var body = await resp.Content.ReadAsStringAsync(ct);
             throw new InvalidOperationException($"Calendar list failed ({(int)resp.StatusCode}): {Truncate(body, 500)}");
         }
-        return ParseCalendarList(await resp.Content.ReadAsStringAsync(ct))
-            .Where(c => c.Selected || c.Primary)
-            .ToList();
+        return ParseCalendarList(await resp.Content.ReadAsStringAsync(ct));
     }
 
     /// <summary>Project a Google calendarList response into <see cref="CalendarListEntry"/>s. Pure so it's

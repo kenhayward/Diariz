@@ -89,6 +89,42 @@ public class UserProfileIntegrationTests(ContainersFixture fx)
     }
 
     [Fact]
+    public async Task Update_RoundTrips_ProfileFieldsAndTheme()
+    {
+        await using var sp = BuildIdentity();
+        var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
+        var user = new ApplicationUser { UserName = $"p-{Guid.NewGuid():N}@x.test", Email = $"p-{Guid.NewGuid():N}@x.test" };
+        await users.CreateAsync(user);
+
+        await Build(sp, user.Id).Update(new UpdateUserProfileRequest(
+            "Jane", null, null,
+            JobTitle: "Engineer", CompanyName: "Acme", JobDescription: "Builds things",
+            CompanyDescription: "Makes widgets", LinkedIn: "jane-doe", Theme: "dark"));
+
+        var got = Assert.IsType<UserProfileDto>((await Build(sp, user.Id).Get()).Value);
+        Assert.Equal("Engineer", got.JobTitle);
+        Assert.Equal("Acme", got.CompanyName);
+        Assert.Equal("Builds things", got.JobDescription);
+        Assert.Equal("Makes widgets", got.CompanyDescription);
+        Assert.Equal("jane-doe", got.LinkedIn);
+        Assert.Equal("dark", got.Theme);
+
+        await using var verify = fx.CreateDbContext();
+        Assert.Equal(ThemePreference.Dark, (await verify.UserSettings.FindAsync(user.Id))!.Theme);
+    }
+
+    [Fact]
+    public async Task Get_ThemeDefaultsToAuto_WhenUnset()
+    {
+        await using var sp = BuildIdentity();
+        var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
+        var user = new ApplicationUser { UserName = $"p-{Guid.NewGuid():N}@x.test", Email = $"p-{Guid.NewGuid():N}@x.test" };
+        await users.CreateAsync(user);
+
+        Assert.Equal("auto", Assert.IsType<UserProfileDto>((await Build(sp, user.Id).Get()).Value).Theme);
+    }
+
+    [Fact]
     public async Task Update_RejectsUnknownLanguage()
     {
         await using var sp = BuildIdentity();

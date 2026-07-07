@@ -884,6 +884,14 @@ namespace Diariz.Domain.Migrations
                     b.Property<bool?>("ChatToolsEnabled")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("CompanyDescription")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("CompanyName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
                     b.Property<bool>("GoogleCalendarGranted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -891,6 +899,21 @@ namespace Diariz.Domain.Migrations
 
                     b.Property<string>("GoogleRefreshTokenEncrypted")
                         .HasColumnType("text");
+
+                    b.Property<string>("GoogleSelectedCalendarIdsJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("JobDescription")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("JobTitle")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("LinkedIn")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<string>("NativeLanguage")
                         .HasColumnType("text");
@@ -911,6 +934,11 @@ namespace Diariz.Domain.Migrations
                     b.Property<string>("SummaryModel")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
+
+                    b.Property<int>("Theme")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
 
                     b.Property<string>("UiLanguage")
                         .HasColumnType("text");

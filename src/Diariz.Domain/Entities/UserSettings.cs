@@ -50,4 +50,21 @@ public class UserSettings
 
     /// <summary>The user granted read access to their Google Calendar.</summary>
     public bool GoogleCalendarGranted { get; set; }
+
+    /// <summary>Which Google calendars to consider for recording attribution + the Calendar overlay, as a
+    /// JSON array of calendar ids. Null = the user hasn't chosen (fall back to the calendars they've made
+    /// visible in Google + their primary).</summary>
+    public string? GoogleSelectedCalendarIdsJson { get; set; }
+
+    // ---- Profile (free-text, user-editable) ----
+    public string? JobTitle { get; set; }
+    public string? CompanyName { get; set; }
+    public string? JobDescription { get; set; }
+    public string? CompanyDescription { get; set; }
+
+    /// <summary>The user's LinkedIn account name / handle (not a full URL).</summary>
+    public string? LinkedIn { get; set; }
+
+    /// <summary>Preferred colour theme for the web UI (default <see cref="ThemePreference.Auto"/>).</summary>
+    public ThemePreference Theme { get; set; } = ThemePreference.Auto;
 }

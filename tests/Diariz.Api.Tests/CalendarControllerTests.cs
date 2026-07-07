@@ -1,6 +1,8 @@
+using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
+using Diariz.Domain;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Diariz.Api.Tests;
@@ -27,6 +29,10 @@ public class CalendarControllerTests
             RequestedEventId = eventId;
             return Task.FromResult(Event);
         }
+
+        public IReadOnlyList<CalendarListEntry>? AllCalendars { get; set; }
+        public Task<IReadOnlyList<CalendarListEntry>?> ListAllCalendarsAsync(Guid userId, CancellationToken ct = default) =>
+            Task.FromResult(AllCalendars);
     }
 
     private sealed class FakeIcsClient : IIcsCalendarClient
@@ -39,8 +45,12 @@ public class CalendarControllerTests
             Task.FromResult((true, (string?)null));
     }
 
-    private static CalendarController Build(FakeCalendarClient cal, Guid userId, FakeIcsClient? ics = null) =>
-        new(cal, ics ?? new FakeIcsClient()) { ControllerContext = Http.Context(userId) };
+    private static CalendarController Build(
+        FakeCalendarClient cal, Guid userId, FakeIcsClient? ics = null, IGoogleCalendarSelectionStore? selection = null) =>
+        new(cal, ics ?? new FakeIcsClient(), selection ?? new GoogleCalendarSelectionStore(TestDb.Create()))
+        {
+            ControllerContext = Http.Context(userId),
+        };
 
     private static readonly DateTimeOffset Min = DateTimeOffset.Parse("2026-07-01T00:00:00Z");
     private static readonly DateTimeOffset Max = DateTimeOffset.Parse("2026-08-01T00:00:00Z");
@@ -158,5 +168,54 @@ public class CalendarControllerTests
         var controller = Build(cal, Guid.NewGuid());
 
         Assert.IsType<NotFoundResult>((await controller.Event("nope", default)).Result);
+    }
+
+    // ---- Calendar selection (Preferences picker) ----
+
+    private static FakeCalendarClient CalsClient() => new()
+    {
+        AllCalendars = new List<CalendarListEntry>
+        {
+            new("primary", "Me", "#ff0000", "#fff", Selected: false, Primary: true),
+            new("shown", "Work", "#00ff00", "#fff", Selected: true, Primary: false),
+            new("hidden", "Old", "#0000ff", "#fff", Selected: false, Primary: false),
+        },
+    };
+
+    [Fact]
+    public async Task Calendars_DefaultsSelectedToGoogleVisiblePlusPrimary_WhenNoneStored()
+    {
+        var ok = Assert.IsType<OkObjectResult>((await Build(CalsClient(), Guid.NewGuid()).Calendars(default)).Result);
+        var items = Assert.IsAssignableFrom<IReadOnlyList<CalendarListItemDto>>(ok.Value);
+
+        Assert.True(items.Single(i => i.Id == "primary").Selected);
+        Assert.True(items.Single(i => i.Id == "shown").Selected);
+        Assert.False(items.Single(i => i.Id == "hidden").Selected);
+        Assert.Equal("#ff0000", items.Single(i => i.Id == "primary").BackgroundColor); // colour surfaced
+    }
+
+    [Fact]
+    public async Task Calendars_WhenNotConnected_ReturnsEmpty()
+    {
+        var cal = new FakeCalendarClient { AllCalendars = null };
+        var ok = Assert.IsType<OkObjectResult>((await Build(cal, Guid.NewGuid()).Calendars(default)).Result);
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<CalendarListItemDto>>(ok.Value));
+    }
+
+    [Fact]
+    public async Task SaveCalendars_ThenCalendars_ReflectsStoredSelection()
+    {
+        using var db = TestDb.Create();
+        var store = new GoogleCalendarSelectionStore(db);
+        var userId = Guid.NewGuid();
+
+        await Build(CalsClient(), userId, selection: store)
+            .SaveCalendars(new SaveCalendarSelectionRequest(["primary"]), default);
+
+        var ok = Assert.IsType<OkObjectResult>((await Build(CalsClient(), userId, selection: store).Calendars(default)).Result);
+        var items = Assert.IsAssignableFrom<IReadOnlyList<CalendarListItemDto>>(ok.Value);
+        Assert.True(items.Single(i => i.Id == "primary").Selected);
+        Assert.False(items.Single(i => i.Id == "shown").Selected); // was Google-visible; now excluded by the explicit set
+        Assert.False(items.Single(i => i.Id == "hidden").Selected);
     }
 }

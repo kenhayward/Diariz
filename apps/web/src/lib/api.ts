@@ -39,6 +39,7 @@ import type {
   SectionDto,
   SetupValidation,
   SpeakerProfile,
+  GoogleCalendarListItem,
   SpeakerProfileDetail,
   UpdateUserProfile,
   UpdateUserSettings,
@@ -608,6 +609,17 @@ export const api = {
   async updateProfile(body: UpdateUserProfile): Promise<AuthResponse> {
     const { data } = await http.put<AuthResponse>("/api/user/profile", body);
     return data;
+  },
+
+  /// The user's Google calendars for the Preferences picker (empty when Calendar isn't connected).
+  async listCalendars(): Promise<GoogleCalendarListItem[]> {
+    const { data } = await http.get<GoogleCalendarListItem[]>("/api/calendar/calendars");
+    return data;
+  },
+
+  /// Save which Google calendars to consider for recording attribution + the Calendar overlay.
+  async saveCalendarSelection(ids: string[]): Promise<void> {
+    await http.put("/api/calendar/calendars", { ids });
   },
 
   async getUserSettings(): Promise<UserSettings> {

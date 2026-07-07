@@ -11,6 +11,15 @@ public class GoogleCalendarClientTests
         public Task<string?> GetAccessTokenAsync(Guid userId, CancellationToken ct = default) => Task.FromResult(token);
     }
 
+    /// <summary>No stored selection -> the client keeps its default (Google-visible + primary) filter.</summary>
+    private sealed class StubSelectionStore : IGoogleCalendarSelectionStore
+    {
+        public Task<IReadOnlySet<string>?> GetSelectedIdsAsync(Guid userId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlySet<string>?>(null);
+        public Task SetSelectedIdsAsync(Guid userId, IReadOnlyList<string> ids, CancellationToken ct = default) =>
+            Task.CompletedTask;
+    }
+
     private static DateTimeOffset At(string iso) => DateTimeOffset.Parse(iso);
 
     private const string OneEventBody =
@@ -106,7 +115,7 @@ public class GoogleCalendarClientTests
     public async Task GetEventAsync_ReturnsNull_WhenNoAccessToken()
     {
         var handler = new FakeHttpMessageHandler("{}");
-        var client = new GoogleCalendarClient(new HttpClient(handler), new StubTokenProvider(null));
+        var client = new GoogleCalendarClient(new HttpClient(handler), new StubTokenProvider(null), new StubSelectionStore());
 
         Assert.Null(await client.GetEventAsync(Guid.NewGuid(), "evt1"));
         Assert.Null(handler.LastRequest); // never called Calendar
@@ -127,7 +136,7 @@ public class GoogleCalendarClientTests
             getReq = req;
             return (HttpStatusCode.OK, eventJson);
         });
-        var client = new GoogleCalendarClient(new HttpClient(handler), new StubTokenProvider("cal-tok"));
+        var client = new GoogleCalendarClient(new HttpClient(handler), new StubTokenProvider("cal-tok"), new StubSelectionStore());
 
         var e = await client.GetEventAsync(Guid.NewGuid(), "evt1");
 
@@ -145,7 +154,7 @@ public class GoogleCalendarClientTests
         const string calList = "{ \"items\": [ { \"id\": \"primary\", \"primary\": true, \"selected\": true } ] }";
         var handler = new RoutingHandler(req =>
             IsCalendarList(req) ? (HttpStatusCode.OK, calList) : (HttpStatusCode.NotFound, "{\"error\":\"notFound\"}"));
-        var client = new GoogleCalendarClient(new HttpClient(handler), new StubTokenProvider("tok"));
+        var client = new GoogleCalendarClient(new HttpClient(handler), new StubTokenProvider("tok"), new StubSelectionStore());
 
         Assert.Null(await client.GetEventAsync(Guid.NewGuid(), "gone"));
     }
@@ -181,7 +190,7 @@ public class GoogleCalendarClientTests
     public async Task ListEventsAsync_ReturnsNull_WhenNoAccessToken()
     {
         var handler = new FakeHttpMessageHandler("{}");
-        var client = new GoogleCalendarClient(new HttpClient(handler), new StubTokenProvider(null));
+        var client = new GoogleCalendarClient(new HttpClient(handler), new StubTokenProvider(null), new StubSelectionStore());
 
         var events = await client.ListEventsAsync(Guid.NewGuid(), At("2026-07-02T09:00:00Z"), At("2026-07-02T10:00:00Z"));
 
@@ -200,7 +209,7 @@ public class GoogleCalendarClientTests
             eventsReq = req;
             return (HttpStatusCode.OK, OneEventBody);
         });
-        var client = new GoogleCalendarClient(new HttpClient(handler), new StubTokenProvider("cal-tok"));
+        var client = new GoogleCalendarClient(new HttpClient(handler), new StubTokenProvider("cal-tok"), new StubSelectionStore());
 
         var events = await client.ListEventsAsync(Guid.NewGuid(), At("2026-07-02T08:30:00Z"), At("2026-07-02T10:30:00Z"));
 
@@ -236,7 +245,7 @@ public class GoogleCalendarClientTests
                 : calId.StartsWith("team") ? (HttpStatusCode.OK, teamEvents)
                 : (HttpStatusCode.OK, "{ \"items\": [] }");
         });
-        var client = new GoogleCalendarClient(new HttpClient(handler), new StubTokenProvider("tok"));
+        var client = new GoogleCalendarClient(new HttpClient(handler), new StubTokenProvider("tok"), new StubSelectionStore());
 
         var events = (await client.ListEventsAsync(Guid.NewGuid(), At("2026-07-02T00:00:00Z"), At("2026-07-03T00:00:00Z")))!;
 
@@ -253,7 +262,7 @@ public class GoogleCalendarClientTests
     public async Task ListEventsAsync_Throws_WhenCalendarListFails()
     {
         var handler = new FakeHttpMessageHandler("{\"error\":\"rateLimitExceeded\"}", HttpStatusCode.TooManyRequests);
-        var client = new GoogleCalendarClient(new HttpClient(handler), new StubTokenProvider("tok"));
+        var client = new GoogleCalendarClient(new HttpClient(handler), new StubTokenProvider("tok"), new StubSelectionStore());
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => client.ListEventsAsync(Guid.NewGuid(), At("2026-07-02T09:00:00Z"), At("2026-07-02T10:00:00Z")));

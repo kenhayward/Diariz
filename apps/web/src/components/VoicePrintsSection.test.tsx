@@ -17,7 +17,7 @@ vi.mock("../lib/api", () => ({
 }));
 
 import { api } from "../lib/api";
-import PeopleModal from "./PeopleModal";
+import VoicePrintsSection from "./VoicePrintsSection";
 import type { SpeakerProfile, SpeakerProfileDetail } from "../lib/types";
 
 const mock = (f: unknown) => f as ReturnType<typeof vi.fn>;
@@ -25,7 +25,7 @@ const render_ = () => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <PeopleModal onClose={() => {}} />
+      <VoicePrintsSection />
     </QueryClientProvider>,
   );
 };
@@ -35,7 +35,7 @@ const people: SpeakerProfile[] = [
   { id: "p2", name: "Bob", sampleCount: 1 },
 ];
 
-describe("PeopleModal", () => {
+describe("VoicePrintsSection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mock(api.listSpeakerProfiles).mockResolvedValue(people);

@@ -37,6 +37,8 @@ public class RecordingsControllerIntegrationTests(ContainersFixture fx)
             Task.FromResult<IReadOnlyList<CalendarEvent>?>(new List<CalendarEvent> { ev });
         public Task<CalendarEvent?> GetEventAsync(Guid u, string id, CancellationToken ct = default) =>
             Task.FromResult<CalendarEvent?>(ev);
+        public Task<IReadOnlyList<CalendarListEntry>?> ListAllCalendarsAsync(Guid u, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<CalendarListEntry>?>(null);
     }
 
     private async Task<(Guid userId, Guid recId)> SeedRecording()

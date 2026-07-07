@@ -429,11 +429,16 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   scopes are **restricted** and would require a recurring third-party security assessment to verify; the
   minutes-email-to-self feature covers that need.*
 - **Multiple calendars (Phase 2 feature):** `IGoogleCalendarClient` reads **all the user's selected calendars**,
-  not just primary. `ListCalendarsAsync` (private) fetches **`users/me/calendarList`** and keeps the entries the
-  user has ticked visible (`selected`) plus their `primary`; `ListEventsAsync` then fetches each calendar's events
+  not just primary. `ListCalendarsAsync` (private) fetches **`users/me/calendarList`** and narrows it via the
+  pure `ApplySelection` helper to the user's **stored Diariz selection** (`UserSettings.GoogleSelectedCalendarIdsJson`,
+  read via `IGoogleCalendarSelectionStore`); when unchosen (null) it falls back to the entries the user has ticked
+  visible in Google (`selected`) plus their `primary`. `ListEventsAsync` then fetches each calendar's events
   **in parallel** (a single flaky/shared calendar is skipped, not fatal), tagging every event with its
   **`CalendarId`/`CalendarName`/`Color`** (the calendar's Google background hex). `GetEventAsync` searches the
-  selected calendars (primary first) for an event by id. Still `calendar.readonly` - the existing grant already
+  selected calendars (primary first) for an event by id. Users manage the selection in **Preferences → Google
+  Account** (`GET`/`PUT /api/calendar/calendars`, backed by the public `ListAllCalendarsAsync` which returns the
+  unfiltered list for the picker); the single `ListCalendarsAsync` chokepoint means the selection restricts
+  matching, linking, and the Calendar overlay alike. Still `calendar.readonly` - the existing grant already
   covers team/shared/subscribed calendars, so no new scope.
 - **Match a recording to its calendar meeting (Phase 2 feature):** with the Calendar grant, the recording's
   Overview calls **`GET /api/recordings/{id}/calendar-match`**, which asks `ListEventsAsync` for events across the
@@ -507,11 +512,17 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   The recording detail (`GET /api/recordings/{id}`) surfaces a **computed** `AudioScheduledDeletionAt` (`CreatedAt` + retention days,
   non-null only when auto-delete is on and the recording is a live, unprotected, eligible candidate) so the Overview can show
   "Protected from audio deletion" or "Audio will be deleted on {date}".
-- **Self-service profile:** every user has a **Preferences** screen to change their **display name**
-  (`PUT /api/user/profile` → updates `ApplicationUser.FullName` and re-issues the token so the name claim
-  updates without a re-login) and their **native / UI language** (stored on `UserSettings`). The supported
-  languages come from a shared list at **`GET /api/languages`** (anonymous, so the signup page offers a
-  language selector too). This underpins the localization & translation feature.
+- **Self-service profile:** every user has a **Preferences** modal - a **vertical-tabbed** window (Profile,
+  Google Account, Calendar Feeds, Claude Access, Voice Prints; the former standalone "People" voiceprints modal
+  is folded in as **Voice Prints**), headed by the user's avatar + name. The **Profile** tab edits the
+  **display name** (`PUT /api/user/profile` → updates `ApplicationUser.FullName` and re-issues the token so the
+  name claim updates without a re-login), the **native / UI language**, free-text profile fields (job title,
+  company, job/company descriptions, LinkedIn), and the **colour theme** - all stored on `UserSettings` (theme as
+  the `ThemePreference` int enum, surfaced as `"auto"|"light"|"dark"`). The theme is **server-persisted** so it
+  follows the user across devices: `<ThemeSync>` adopts `profile.theme` on load, with localStorage as the pre-auth
+  cache (the theme picker moved out of the account menu). The supported languages come from a shared list at
+  **`GET /api/languages`** (anonymous, so the signup page offers a language selector too). This underpins the
+  localization & translation feature.
 
 ## Speaker identification (voiceprints)
 
