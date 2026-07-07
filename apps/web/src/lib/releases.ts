@@ -114,6 +114,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.100.1",
+    date: "2026-07-07",
+    pr: 226,
+    headline: "Fix: desktop app failed to start (electron-store)",
+    summary:
+      "The desktop app could crash on launch with \"A JavaScript error occurred in the main process - " +
+      "TypeError: Store is not a constructor\". A dependency (electron-store) had been upgraded to a version " +
+      "that no longer works with how the desktop shell loads it; this pins it back to a compatible version so " +
+      "the app starts normally. Desktop release only (a new installer) - the web app and server are unaffected.",
+    fixed: [
+      "Desktop app no longer crashes on startup with \"Store is not a constructor\"; pinned electron-store to the last CommonJS-compatible version.",
+    ],
+  },
+  {
     version: "0.100.0",
     date: "2026-07-07",
     pr: 225,
