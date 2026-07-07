@@ -32,12 +32,19 @@ public record SetEnabledRequest(bool IsEnabled);
 public record GrantResultDto(bool Emailed, string? SetupUrl);
 
 // ---- Platform settings & storage quotas ----
-/// <summary>Platform-wide storage-quota defaults (bytes), edited by the Platform Administrator.</summary>
+/// <summary>Platform-wide storage-quota defaults (bytes) and audio-retention policy, edited by the Platform
+/// Administrator. <see cref="AudioDeletionTimeOfDay"/> is the server-local time the nightly job runs.</summary>
 public record PlatformSettingsDto(
-    long StarterQuotaBytes, long MaxQuotaBytes, Diariz.Domain.Entities.MinutesGenerationMode MinutesGenerationMode);
+    long StarterQuotaBytes, long MaxQuotaBytes, MinutesGenerationMode MinutesGenerationMode,
+    bool AutoDeleteAudioEnabled, int AudioRetentionDays, TimeOnly AudioDeletionTimeOfDay);
 public record UpdatePlatformSettingsRequest(
     long StarterQuotaBytes, long MaxQuotaBytes,
-    Diariz.Domain.Entities.MinutesGenerationMode MinutesGenerationMode = Diariz.Domain.Entities.MinutesGenerationMode.SingleCall);
+    MinutesGenerationMode MinutesGenerationMode = MinutesGenerationMode.SingleCall,
+    bool AutoDeleteAudioEnabled = false,
+    int AudioRetentionDays = PlatformSettings.DefaultAudioRetentionDays,
+    TimeOnly AudioDeletionTimeOfDay = default);
+/// <summary>Result of a manual "run the audio-retention pass now" trigger: how many recordings had audio deleted.</summary>
+public record AudioRetentionRunResult(int Deleted);
 /// <summary>The signed-in user's storage usage vs their quota (bytes), plus the total wall-clock time
 /// spent transcribing all their recordings (ms, summed across every transcription version).</summary>
 public record StorageUsageDto(long UsedBytes, long QuotaBytes, long TotalTranscriptionMs = 0);
@@ -160,7 +167,14 @@ public record RecordingDetailDto(
     /// <summary>The persisted Google Calendar link (snapshot), or null when unlinked.</summary>
     CalendarLinkDto? CalendarLink = null,
     /// <summary>The chosen meeting type driving the minutes template, or null for the General default.</summary>
-    Guid? MeetingTypeId = null);
+    Guid? MeetingTypeId = null,
+    /// <summary>When the owner protected the audio from deletion (null = not protected).</summary>
+    DateTimeOffset? AudioProtectedAt = null,
+    /// <summary>When the audio blob was deleted (null = still present). Mirrors <see cref="HasAudio"/>.</summary>
+    DateTimeOffset? AudioDeletedAt = null);
+
+/// <summary>Toggle a recording's protection from audio deletion (auto and manual).</summary>
+public record SetAudioProtectionRequest(bool Protected);
 
 // ---- Meeting types (minutes templates) ----
 /// <summary>A meeting type (minutes template). <see cref="IsPlatform"/> = a shared, admin-owned type;

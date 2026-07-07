@@ -51,6 +51,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         {
             e.HasIndex(r => new { r.UserId, r.CreatedAt });
             e.Ignore(r => r.HasAudio); // computed from AudioDeletedAt, not stored
+            e.Ignore(r => r.IsAudioProtected); // computed from AudioProtectedAt, not stored
             e.Property(r => r.Title).HasMaxLength(512);
             e.Property(r => r.Name).HasMaxLength(512);
             e.HasMany(r => r.Transcriptions)
@@ -140,12 +141,19 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         builder.Entity<PlatformSettings>(e =>
         {
             e.Property(s => s.MinutesGenerationMode).HasDefaultValue(MinutesGenerationMode.SingleCall);
+            e.Property(s => s.AutoDeleteAudioEnabled).HasDefaultValue(false);
+            e.Property(s => s.AudioRetentionDays)
+                .HasDefaultValue(Entities.PlatformSettings.DefaultAudioRetentionDays);
+            e.Property(s => s.AudioDeletionTimeOfDay).HasDefaultValue(new TimeOnly(3, 0));
             e.HasData(new PlatformSettings
             {
                 Id = Entities.PlatformSettings.SingletonId,
                 StarterQuotaBytes = Entities.PlatformSettings.DefaultStarterQuotaBytes,
                 MaxQuotaBytes = Entities.PlatformSettings.DefaultMaxQuotaBytes,
                 MinutesGenerationMode = MinutesGenerationMode.SingleCall,
+                AutoDeleteAudioEnabled = false,
+                AudioRetentionDays = Entities.PlatformSettings.DefaultAudioRetentionDays,
+                AudioDeletionTimeOfDay = new TimeOnly(3, 0),
             });
         });
 

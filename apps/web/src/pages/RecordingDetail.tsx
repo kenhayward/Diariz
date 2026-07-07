@@ -810,6 +810,12 @@ export default function RecordingDetail() {
       qc.invalidateQueries({ queryKey: ["recordings"] });
       qc.invalidateQueries({ queryKey: ["user-storage"] });
     },
+    onSetAudioProtection: async () => {
+      await api.setAudioProtection(id, !rec.audioProtectedAt);
+      qc.invalidateQueries({ queryKey: ["recording", id] });
+      qc.invalidateQueries({ queryKey: ["recordings"] });
+    },
+    isAudioProtected: Boolean(rec.audioProtectedAt),
     onDelete: async () => {
       if (!window.confirm(t("workspace:confirmDelete", { name: rec.name ?? rec.title }))) return;
       await api.deleteRecording(id);
@@ -854,6 +860,20 @@ export default function RecordingDetail() {
             <dd className="text-gray-800 dark:text-gray-200">{formatTimeHm(rec.createdAt)}</dd>
             <dt className="text-gray-500 dark:text-gray-400">{t("workspace:durationLabel")}</dt>
             <dd className="text-gray-800 dark:text-gray-200">{formatDurationHm(rec.durationMs)}</dd>
+            <dt className="text-gray-500 dark:text-gray-400">{t("workspace:audioStatusLabel")}</dt>
+            <dd className="text-gray-800 dark:text-gray-200">
+              {rec.hasAudio
+                ? t("workspace:audioAvailable")
+                : t("workspace:audioDeletedOn", { date: formatLongDate(rec.audioDeletedAt!, i18n.language) })}
+            </dd>
+            {rec.audioProtectedAt && (
+              <>
+                <dt className="text-gray-500 dark:text-gray-400">{t("workspace:audioProtectionLabel")}</dt>
+                <dd className="text-gray-800 dark:text-gray-200">
+                  {t("workspace:audioProtectedOn", { date: formatLongDate(rec.audioProtectedAt, i18n.language) })}
+                </dd>
+              </>
+            )}
           </dl>
 
           {/* Linked meeting: full invite details (live, falling back to the stored snapshot) + manage actions. */}

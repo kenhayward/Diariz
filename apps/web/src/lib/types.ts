@@ -233,6 +233,10 @@ export interface RecordingDetail {
   actionsExtracted: boolean;
   /// Whether the original audio is still present (false once the audio has been deleted).
   hasAudio: boolean;
+  /// When the owner protected the audio from deletion (null = not protected).
+  audioProtectedAt: string | null;
+  /// When the audio blob was deleted (null = still present). Mirrors `hasAudio`.
+  audioDeletedAt: string | null;
   /// The persisted Google Calendar link (snapshot), or null when unlinked.
   calendarLink: CalendarLink | null;
   /// The chosen meeting type driving the minutes template, or null for the General default.
@@ -274,6 +278,11 @@ export interface PlatformSettings {
   starterQuotaBytes: number;
   maxQuotaBytes: number;
   minutesGenerationMode: MinutesGenerationMode;
+  /// Audio retention: master switch (off by default), the retention window in days, and the
+  /// server-local time of day the nightly deletion job runs (serialised as "HH:mm:ss").
+  autoDeleteAudioEnabled: boolean;
+  audioRetentionDays: number;
+  audioDeletionTimeOfDay: string;
 }
 
 export interface GrantResult {

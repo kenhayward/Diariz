@@ -6,13 +6,16 @@ using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Diariz.Api.Tests;
 
 public class PlatformSettingsControllerTests
 {
-    private static PlatformSettingsController Build(DiarizDbContext db) =>
-        new(new PlatformSettingsService(db), db) { ControllerContext = Http.Context(Guid.NewGuid()) };
+    private static PlatformSettingsController Build(DiarizDbContext db, FakeAudioStorage? storage = null) =>
+        new(new PlatformSettingsService(db), db, storage ?? new FakeAudioStorage(),
+            NullLogger<PlatformSettingsController>.Instance)
+        { ControllerContext = Http.Context(Guid.NewGuid()) };
 
     [Fact]
     public async Task Get_ReturnsDefaults_WhenUnset()
@@ -74,5 +77,79 @@ public class PlatformSettingsControllerTests
     {
         using var db = TestDb.Create();
         Assert.Equal(MinutesGenerationMode.SingleCall, (await Build(db).Get()).MinutesGenerationMode);
+    }
+
+    [Fact]
+    public async Task Get_DefaultsTo_AutoDeleteDisabled_30Days_0300()
+    {
+        using var db = TestDb.Create();
+        var dto = await Build(db).Get();
+
+        Assert.False(dto.AutoDeleteAudioEnabled);
+        Assert.Equal(30, dto.AudioRetentionDays);
+        Assert.Equal(new TimeOnly(3, 0), dto.AudioDeletionTimeOfDay);
+    }
+
+    [Fact]
+    public async Task Update_RoundTrips_AudioRetentionSettings()
+    {
+        using var db = TestDb.Create();
+        var gb = 5L * 1024 * 1024 * 1024;
+
+        var result = await Build(db).Update(new UpdatePlatformSettingsRequest(
+            gb, gb, MinutesGenerationMode.SingleCall,
+            AutoDeleteAudioEnabled: true, AudioRetentionDays: 7, AudioDeletionTimeOfDay: new TimeOnly(2, 15)));
+
+        var dto = Assert.IsType<PlatformSettingsDto>(result.Value);
+        Assert.True(dto.AutoDeleteAudioEnabled);
+        Assert.Equal(7, dto.AudioRetentionDays);
+        Assert.Equal(new TimeOnly(2, 15), dto.AudioDeletionTimeOfDay);
+        var row = await db.PlatformSettings.SingleAsync();
+        Assert.True(row.AutoDeleteAudioEnabled);
+        Assert.Equal(7, row.AudioRetentionDays);
+        Assert.Equal(new TimeOnly(2, 15), row.AudioDeletionTimeOfDay);
+    }
+
+    [Fact]
+    public async Task Update_AudioRetentionDaysBelowOne_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var gb = 5L * 1024 * 1024 * 1024;
+
+        var result = await Build(db).Update(new UpdatePlatformSettingsRequest(
+            gb, gb, AudioRetentionDays: 0));
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task RunAudioRetentionNow_DeletesEligibleAudio_ReturnsCount_EvenWhenDisabled()
+    {
+        using var db = TestDb.Create();
+        var storage = new FakeAudioStorage();
+        var userId = Guid.NewGuid();
+        var eligible = new Recording
+        {
+            Id = Guid.NewGuid(), UserId = userId, BlobKey = "u/old.webm", SizeBytes = 100,
+            Status = RecordingStatus.Transcribed, CreatedAt = DateTimeOffset.UtcNow.AddDays(-40),
+        };
+        var recent = new Recording
+        {
+            Id = Guid.NewGuid(), UserId = userId, BlobKey = "u/new.webm", SizeBytes = 100,
+            Status = RecordingStatus.Transcribed, CreatedAt = DateTimeOffset.UtcNow.AddDays(-1),
+        };
+        db.Recordings.AddRange(eligible, recent);
+        storage.Objects["u/old.webm"] = new byte[100];
+        storage.Objects["u/new.webm"] = new byte[100];
+        await db.SaveChangesAsync();
+        // Auto-delete is disabled by default; Run Now is a manual trigger that runs regardless.
+        var controller = Build(db, storage);
+
+        var result = await controller.RunAudioRetentionNow();
+
+        Assert.Equal(1, result.Deleted); // only the 40-day-old one (default 30-day window)
+        Assert.False(storage.Objects.ContainsKey("u/old.webm"));
+        Assert.True(storage.Objects.ContainsKey("u/new.webm"));
+        Assert.NotNull((await db.Recordings.FindAsync(eligible.Id))!.AudioDeletedAt);
     }
 }

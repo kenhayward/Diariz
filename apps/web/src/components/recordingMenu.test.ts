@@ -79,4 +79,20 @@ describe("recordingMenu", () => {
     const menu = build({ isSummarizing: true });
     expect(menu.find((a) => a.label === "Summarise")!.disabled).toBe(true);
   });
+
+  it("offers Protect audio (detail) and swaps Delete audio for Remove protection when protected", () => {
+    // No protection handler (the list menu): neither protect item appears.
+    const base = build().map((a) => a.label);
+    expect(base).not.toContain("Protect audio");
+    expect(base).not.toContain("Remove audio protection");
+
+    const unprot = build({ onSetAudioProtection: () => {} }).map((a) => a.label);
+    expect(unprot).toContain("Protect audio");
+    expect(unprot).toContain("Delete audio");
+
+    const prot = build({ onSetAudioProtection: () => {}, isAudioProtected: true }).map((a) => a.label);
+    expect(prot).toContain("Remove audio protection");
+    expect(prot).not.toContain("Protect audio");
+    expect(prot).not.toContain("Delete audio"); // protection blocks manual delete too (server 409)
+  });
 });

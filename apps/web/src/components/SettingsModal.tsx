@@ -42,6 +42,13 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const [maxGb, setMaxGb] = useState("");
   // Platform-wide minutes generation mode; Platform-Admin only. String enum name on the wire.
   const [minutesMode, setMinutesMode] = useState<MinutesGenerationMode>("SingleCall");
+  // Audio retention (Platform-Admin only): master switch, window in days, and server-local run time ("HH:mm").
+  const [autoDeleteAudio, setAutoDeleteAudio] = useState(false);
+  const [retentionDays, setRetentionDays] = useState("");
+  const [deletionTime, setDeletionTime] = useState("03:00");
+  // "Run now" (manual one-shot deletion pass) state.
+  const [retentionRunBusy, setRetentionRunBusy] = useState(false);
+  const [retentionRunMsg, setRetentionRunMsg] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -62,6 +69,10 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       setStarterGb(String(bytesToGb(platform.starterQuotaBytes)));
       setMaxGb(String(bytesToGb(platform.maxQuotaBytes)));
       setMinutesMode(platform.minutesGenerationMode);
+      setAutoDeleteAudio(platform.autoDeleteAudioEnabled);
+      setRetentionDays(String(platform.audioRetentionDays));
+      // "HH:mm:ss" on the wire -> "HH:mm" for the <input type="time">.
+      setDeletionTime((platform.audioDeletionTimeOfDay ?? "03:00:00").slice(0, 5));
     }
   }, [platform]);
 
@@ -92,10 +103,16 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         const max = gbToBytes(Number(maxGb));
         if (!(starter > 0) || !(max > 0)) throw new Error("Quota values must be greater than zero.");
         if (starter > max) throw new Error("The starter quota can't exceed the maximum quota.");
+        const days = Number(retentionDays);
+        if (!Number.isInteger(days) || days < 1) throw new Error(t("retentionDaysInvalid"));
         await api.updatePlatformSettings({
           starterQuotaBytes: starter,
           maxQuotaBytes: max,
           minutesGenerationMode: minutesMode,
+          autoDeleteAudioEnabled: autoDeleteAudio,
+          audioRetentionDays: days,
+          // "HH:mm" from the input -> "HH:mm:ss" for the TimeOnly wire type.
+          audioDeletionTimeOfDay: `${deletionTime || "03:00"}:00`,
         });
         qc.invalidateQueries({ queryKey: ["platform-settings"] });
       }
@@ -103,6 +120,25 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
     } catch (e) {
       setError(apiErrorMessage(e));
       setBusy(false);
+    }
+  }
+
+  // Manual one-shot: run the audio-deletion pass immediately, using the saved retention window (independent
+  // of the auto-delete toggle). Does not save or close the modal.
+  async function runRetentionNow() {
+    const days = platform?.audioRetentionDays ?? Number(retentionDays);
+    if (!window.confirm(t("runAudioRetentionConfirm", { days }))) return;
+    setRetentionRunMsg(null);
+    setRetentionRunBusy(true);
+    try {
+      const { deleted } = await api.runAudioRetention();
+      setRetentionRunMsg(t("runAudioRetentionResult", { count: deleted }));
+      qc.invalidateQueries({ queryKey: ["recordings"] });
+      qc.invalidateQueries({ queryKey: ["user-storage"] });
+    } catch (e) {
+      setRetentionRunMsg(apiErrorMessage(e));
+    } finally {
+      setRetentionRunBusy(false);
     }
   }
 
@@ -315,6 +351,59 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                   className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                 />
               </label>
+
+              {/* Audio retention: opt-in nightly deletion of old recordings' audio (transcripts are kept). */}
+              <div className="border-t pt-3 dark:border-gray-700">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={autoDeleteAudio}
+                    onChange={(e) => setAutoDeleteAudio(e.target.checked)}
+                  />
+                  <span className="font-medium text-gray-700 dark:text-gray-200">{t("autoDeleteAudio")}</span>
+                </label>
+                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t("autoDeleteAudioHint")}</p>
+                <div className="mt-2 flex gap-3">
+                  <label className="block flex-1 text-sm">
+                    <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("retentionDays")}</span>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={retentionDays}
+                      onChange={(e) => setRetentionDays(e.target.value)}
+                      disabled={!autoDeleteAudio}
+                      aria-label={t("retentionDays")}
+                      className="w-full rounded border px-2 py-1 text-sm disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                    />
+                  </label>
+                  <label className="block flex-1 text-sm">
+                    <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("deletionTime")}</span>
+                    <input
+                      type="time"
+                      value={deletionTime}
+                      onChange={(e) => setDeletionTime(e.target.value)}
+                      disabled={!autoDeleteAudio}
+                      aria-label={t("deletionTime")}
+                      className="w-full rounded border px-2 py-1 text-sm disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                    />
+                  </label>
+                </div>
+                {/* Manual trigger: runs the same deletion pass now (uses the saved window, regardless of the switch). */}
+                <div className="mt-3 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={runRetentionNow}
+                    disabled={retentionRunBusy}
+                    className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                  >
+                    {retentionRunBusy ? t("runAudioRetentionRunning") : t("runAudioRetentionNow")}
+                  </button>
+                  {retentionRunMsg && (
+                    <span className="text-xs text-gray-600 dark:text-gray-300">{retentionRunMsg}</span>
+                  )}
+                </div>
+              </div>
             </div>
           ) : (
             <MaintenancePanel />

@@ -10,6 +10,7 @@ vi.mock("../lib/api", () => ({
     updateUserSettings: vi.fn(),
     getPlatformSettings: vi.fn().mockResolvedValue({ starterQuotaBytes: 5 * 1024 ** 3, maxQuotaBytes: 50 * 1024 ** 3 }),
     updatePlatformSettings: vi.fn().mockResolvedValue({ starterQuotaBytes: 0, maxQuotaBytes: 0 }),
+    runAudioRetention: vi.fn().mockResolvedValue({ deleted: 0 }),
     backupUrl: () => "/api/maintenance/backup?access_token=t",
     restoreBackup: vi.fn().mockResolvedValue(undefined),
   },
@@ -53,6 +54,10 @@ describe("SettingsModal", () => {
     (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
       starterQuotaBytes: 5 * 1024 ** 3,
       maxQuotaBytes: 50 * 1024 ** 3,
+      minutesGenerationMode: "SingleCall",
+      autoDeleteAudioEnabled: false,
+      audioRetentionDays: 30,
+      audioDeletionTimeOfDay: "03:00:00",
     });
   });
 
@@ -324,12 +329,74 @@ describe("SettingsModal", () => {
     fireEvent.click(screen.getByRole("button", { name: /^ok$/i }));
 
     await waitFor(() =>
-      expect(api.updatePlatformSettings).toHaveBeenCalledWith({
-        starterQuotaBytes: 2 * 1024 ** 3,
-        maxQuotaBytes: 20 * 1024 ** 3,
-      }),
+      expect(api.updatePlatformSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          starterQuotaBytes: 2 * 1024 ** 3,
+          maxQuotaBytes: 20 * 1024 ** 3,
+        }),
+      ),
     );
     // OK also saves the AI settings in the same action.
     expect(api.updateUserSettings).toHaveBeenCalled();
+  });
+
+  it("lets a Platform Administrator enable audio auto-delete and saves the retention policy", async () => {
+    authState.isPlatformAdmin = true;
+    (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      starterQuotaBytes: 5 * 1024 ** 3,
+      maxQuotaBytes: 50 * 1024 ** 3,
+      minutesGenerationMode: "SingleCall",
+      autoDeleteAudioEnabled: false,
+      audioRetentionDays: 30,
+      audioDeletionTimeOfDay: "03:00:00",
+    });
+    renderModal();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /storage quotas/i }));
+    // Retention window pre-filled at 30 days and the time at 03:00.
+    const days = await screen.findByLabelText(/delete audio after/i);
+    await waitFor(() => expect((days as HTMLInputElement).value).toBe("30"));
+    expect((screen.getByLabelText(/deletion time/i) as HTMLInputElement).value).toBe("03:00");
+
+    fireEvent.click(screen.getByLabelText(/automatically delete audio/i)); // turn it on
+    fireEvent.change(days, { target: { value: "7" } });
+    fireEvent.change(screen.getByLabelText(/deletion time/i), { target: { value: "02:15" } });
+    fireEvent.click(screen.getByRole("button", { name: /^ok$/i }));
+
+    await waitFor(() =>
+      expect(api.updatePlatformSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          autoDeleteAudioEnabled: true,
+          audioRetentionDays: 7,
+          audioDeletionTimeOfDay: "02:15:00",
+        }),
+      ),
+    );
+  });
+
+  it("lets a Platform Administrator run the audio-deletion pass now and shows the result", async () => {
+    authState.isPlatformAdmin = true;
+    (api.runAudioRetention as ReturnType<typeof vi.fn>).mockResolvedValue({ deleted: 3 });
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderModal();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /storage quotas/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /run now/i }));
+
+    await waitFor(() => expect(api.runAudioRetention).toHaveBeenCalled());
+    expect(await screen.findByText(/deleted audio for 3/i)).toBeTruthy();
+    confirm.mockRestore();
+  });
+
+  it("does not run the deletion pass when the confirmation is cancelled", async () => {
+    authState.isPlatformAdmin = true;
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    renderModal();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /storage quotas/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /run now/i }));
+
+    expect(api.runAudioRetention).not.toHaveBeenCalled();
+    confirm.mockRestore();
   });
 });

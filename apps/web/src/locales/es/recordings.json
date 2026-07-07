@@ -15,6 +15,8 @@
   "emailTranscript": "Enviarme la transcripción por correo",
   "downloadAudio": "Descargar audio",
   "deleteAudio": "Eliminar audio",
+  "protectAudio": "Proteger audio",
+  "unprotectAudio": "Quitar protección del audio",
   "delete": "Eliminar",
   "edit": "Editar"
 }

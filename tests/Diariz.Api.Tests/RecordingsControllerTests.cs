@@ -2067,6 +2067,113 @@ public class RecordingsControllerTests
         Assert.False(dto.HasAudio);
     }
 
+    // ---- Audio-deletion protection ----
+
+    [Fact]
+    public async Task SetAudioProtection_Protect_StampsProtectedAt()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.SetAudioProtection(rec.Id, new SetAudioProtectionRequest(true));
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.NotNull((await db.Recordings.FindAsync(rec.Id))!.AudioProtectedAt);
+    }
+
+    [Fact]
+    public async Task SetAudioProtection_Unprotect_ClearsProtectedAt()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        rec.AudioProtectedAt = DateTimeOffset.UtcNow.AddDays(-1);
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.SetAudioProtection(rec.Id, new SetAudioProtectionRequest(false));
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Null((await db.Recordings.FindAsync(rec.Id))!.AudioProtectedAt);
+    }
+
+    [Fact]
+    public async Task SetAudioProtection_OnAnotherUsersRecording_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var rec = await SeedRecording(db, Guid.NewGuid(), versions: 1);
+        var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue());
+
+        Assert.IsType<NotFoundResult>(
+            await controller.SetAudioProtection(rec.Id, new SetAudioProtectionRequest(true)));
+        Assert.Null((await db.Recordings.FindAsync(rec.Id))!.AudioProtectedAt);
+    }
+
+    [Fact]
+    public async Task Get_Surfaces_AudioProtectedAt_AndAudioDeletedAt()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var protectedAt = DateTimeOffset.UtcNow.AddDays(-2);
+        var deletedAt = DateTimeOffset.UtcNow.AddDays(-1);
+        rec.AudioProtectedAt = protectedAt;
+        rec.AudioDeletedAt = deletedAt;
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var dto = Assert.IsType<RecordingDetailDto>((await controller.Get(rec.Id)).Value);
+        Assert.Equal(protectedAt, dto.AudioProtectedAt);
+        Assert.Equal(deletedAt, dto.AudioDeletedAt);
+    }
+
+    [Fact]
+    public async Task DeleteAudio_WhenProtected_ReturnsConflict_AndKeepsBlob()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        rec.AudioProtectedAt = DateTimeOffset.UtcNow;
+        rec.SizeBytes = 500;
+        storage.Objects[rec.BlobKey] = Encoding.UTF8.GetBytes("audio");
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue(), storage);
+
+        var result = await controller.DeleteAudio(rec.Id);
+
+        Assert.IsType<ConflictObjectResult>(result);
+        var reloaded = (await db.Recordings.FindAsync(rec.Id))!;
+        Assert.True(reloaded.HasAudio);                       // not deleted
+        Assert.Equal(500, reloaded.SizeBytes);
+        Assert.True(storage.Objects.ContainsKey(rec.BlobKey)); // blob kept
+    }
+
+    [Fact]
+    public async Task DeleteAudioBulk_SkipsProtected()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var unprotected = await SeedRecording(db, userId, versions: 1);
+        var protectedRec = await SeedRecording(db, userId, versions: 1);
+        unprotected.BlobKey = $"{userId}/unprotected.webm"; // SeedRecording reuses one key per user
+        protectedRec.BlobKey = $"{userId}/protected.webm";
+        protectedRec.AudioProtectedAt = DateTimeOffset.UtcNow;
+        storage.Objects[unprotected.BlobKey] = Encoding.UTF8.GetBytes("a");
+        storage.Objects[protectedRec.BlobKey] = Encoding.UTF8.GetBytes("b");
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue(), storage);
+
+        await controller.DeleteAudioBulk(new DeleteAudioRequest([unprotected.Id, protectedRec.Id]));
+
+        Assert.False(storage.Objects.ContainsKey(unprotected.BlobKey)); // deleted
+        Assert.True(storage.Objects.ContainsKey(protectedRec.BlobKey));  // protected, kept
+        Assert.True((await db.Recordings.FindAsync(protectedRec.Id))!.HasAudio);
+    }
+
     // ---- Merge transcripts (+ audio concatenation) ----
 
     private static async Task<Recording> SeedMergeable(

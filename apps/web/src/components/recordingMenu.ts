@@ -26,8 +26,15 @@ export interface RecordingMenuHandlers {
   /// Opens the "Download as…" format chooser (Plain Text / Markdown / RTF).
   onDownloadTranscript: () => void;
   onDownloadAudio: () => void;
-  /// Delete just the audio (keeps the transcript). Shown only while the recording still has audio.
+  /// Delete just the audio (keeps the transcript). Shown only while the recording still has audio and is
+  /// not protected.
   onDeleteAudio: () => void;
+  /// Optional (detail page only): protect/unprotect the audio from deletion. When set, a Protect/Remove
+  /// protection item appears (while the audio is present).
+  onSetAudioProtection?: () => void;
+  /// Whether the audio is currently protected from deletion. Drives the Protect/Remove label and hides
+  /// Delete audio (protection blocks manual deletion, matching the server).
+  isAudioProtected?: boolean;
   /// Optional (detail page only): email the transcript to the signed-in user.
   onEmailTranscript?: () => void;
   onDelete: () => void;
@@ -71,7 +78,16 @@ export function recordingMenu(h: RecordingMenuHandlers, t: TFunction): KebabActi
       ? [{ label: t("recordings:emailTranscript"), onClick: h.onEmailTranscript, disabled: !h.hasTranscript }]
       : []),
     ...(h.hasAudio ? [{ label: t("recordings:downloadAudio"), onClick: h.onDownloadAudio }] : []),
-    ...(h.hasAudio ? [{ label: t("recordings:deleteAudio"), danger: true, onClick: h.onDeleteAudio }] : []),
+    ...(h.onSetAudioProtection && h.hasAudio
+      ? [{
+          label: h.isAudioProtected ? t("recordings:unprotectAudio") : t("recordings:protectAudio"),
+          onClick: h.onSetAudioProtection,
+        }]
+      : []),
+    // Protection blocks manual deletion too, so Delete audio is hidden while protected.
+    ...(h.hasAudio && !h.isAudioProtected
+      ? [{ label: t("recordings:deleteAudio"), danger: true, onClick: h.onDeleteAudio }]
+      : []),
     { label: t("recordings:delete"), danger: true, onClick: h.onDelete },
   ];
 }

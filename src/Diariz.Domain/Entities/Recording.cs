@@ -36,6 +36,14 @@ public class Recording
     /// (playback, download, re-transcribe, re-identify) are only valid when this holds.</summary>
     public bool HasAudio => AudioDeletedAt is null;
 
+    /// <summary>When the owner protected this recording's audio from deletion (null = not protected). While
+    /// set, both the nightly auto-retention job and the manual "delete audio" action skip/refuse it.</summary>
+    public DateTimeOffset? AudioProtectedAt { get; set; }
+
+    /// <summary>True when the audio is protected from deletion (auto and manual). Computed from
+    /// <see cref="AudioProtectedAt"/>.</summary>
+    public bool IsAudioProtected => AudioProtectedAt is not null;
+
     public long DurationMs { get; set; }
     public RecordingStatus Status { get; set; } = RecordingStatus.Uploaded;
     public string? Error { get; set; }

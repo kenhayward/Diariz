@@ -85,7 +85,10 @@ disconnect any time. Beyond Google, anyone can **subscribe to external iCalendar
 or shared calendars) in **Preferences → Calendar feeds**, each with its own name and colour, and those meetings
 appear on the Calendar tab too - no Google connection required. Each user has a **storage quota** (audio): the Platform
 Administrator sets the starter and maximum, any administrator can raise an individual user, and your
-usage shows in the account menu. The Platform Administrator can also **back up and restore the whole
+usage shows in the account menu. To reclaim space, the Platform Administrator can turn on **automatic audio
+deletion** - a nightly job removes the original audio of recordings older than a chosen number of days
+(the transcript is always kept), and any recording can be **protected** so its audio is never deleted. The
+Platform Administrator can also **back up and restore the whole
 platform** (database + stored files) as a single transferable archive from Settings → Maintenance.
 
 The interface is **localized** - pick your language (English, Spanish, French, German today) at signup or
@@ -106,6 +109,27 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.99.0",
+    date: "2026-07-07",
+    pr: 223,
+    headline: "Automatic audio deletion (storage retention) + protected recordings",
+    summary:
+      "Adds an opt-in storage-retention policy: the Platform Administrator can have Diariz automatically " +
+      "delete the original audio of older recordings to reclaim space, while always keeping the transcript, " +
+      "summary, and everything else. Turn it on under Settings → Storage Quotas, choose how many days to keep " +
+      "audio for (default 30) and the time of day the nightly clean-up runs (default 03:00 server time). Only " +
+      "fully transcribed recordings are eligible, so nothing is lost. Any individual recording can be marked " +
+      "**Protected from audio deletion** from its menu - protected recordings are skipped by the nightly job " +
+      "and can't have their audio deleted manually until you remove the protection. The recording's Overview " +
+      "now shows whether its audio is available, when it was deleted, and whether it is protected. It is off by " +
+      "default - no audio is deleted until an administrator enables it. Server redeploy only.",
+    added: [
+      "Opt-in automatic audio deletion: a nightly job removes the audio of recordings older than a configurable retention window (default 30 days), keeping the transcript. Configured under Settings → Storage Quotas (off by default).",
+      "A 'Run now' button (Settings → Storage Quotas) runs the deletion pass immediately using the saved retention window, so an administrator can reclaim space on demand.",
+      "Per-recording 'Protect audio' toggle (recording menu) that exempts a recording from both automatic and manual audio deletion; the Overview shows audio/protection status.",
+    ],
+  },
   {
     version: "0.98.1",
     date: "2026-07-07",

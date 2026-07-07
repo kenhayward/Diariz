@@ -577,6 +577,11 @@ export const api = {
     await http.post("/api/recordings/audio/delete", { ids });
   },
 
+  /// Protect (or unprotect) a recording's audio from deletion (auto + manual).
+  async setAudioProtection(id: string, protectedFlag: boolean): Promise<void> {
+    await http.put(`/api/recordings/${id}/audio-protection`, { protected: protectedFlag });
+  },
+
   /// Merge 2+ recordings into the earliest-created one (transcripts + audio). Async on the worker.
   async mergeRecordings(ids: string[]): Promise<void> {
     await http.post("/api/recordings/merge", { ids });
@@ -657,6 +662,13 @@ export const api = {
 
   async updatePlatformSettings(body: PlatformSettings): Promise<PlatformSettings> {
     const { data } = await http.put<PlatformSettings>("/api/platform/settings", body);
+    return data;
+  },
+
+  /// Run the audio-retention deletion pass immediately (Platform Administrator). Returns how many
+  /// recordings had their audio deleted.
+  async runAudioRetention(): Promise<{ deleted: number }> {
+    const { data } = await http.post<{ deleted: number }>("/api/platform/settings/run-audio-retention");
     return data;
   },
 
