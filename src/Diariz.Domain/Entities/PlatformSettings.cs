@@ -35,4 +35,8 @@ public class PlatformSettings
 
     /// <summary>Server-local time of day at which the nightly audio-retention job runs (default 03:00).</summary>
     public TimeOnly AudioDeletionTimeOfDay { get; set; } = new TimeOnly(3, 0);
+
+    /// <summary>Master switch for user API access (personal <c>dz_api_</c> tokens). Off by default: no API key
+    /// authenticates until the Platform Administrator opts in.</summary>
+    public bool ApiAccessEnabled { get; set; }
 }

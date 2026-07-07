@@ -7,7 +7,7 @@ import { useAuth } from "../auth";
 import { bytesToGb, gbToBytes } from "../lib/format";
 import MaintenancePanel from "./MaintenancePanel";
 
-type Tab = "ai" | "tools" | "quotas" | "maintenance";
+type Tab = "ai" | "tools" | "quotas" | "maintenance" | "integration";
 
 /// Settings modal. Every user gets Model Settings (per-user summarisation/model config) and Chat Tools
 /// (the chat tool-calling switch + per-tool table); the Platform Administrator also gets Storage Quotas
@@ -49,6 +49,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   // "Run now" (manual one-shot deletion pass) state.
   const [retentionRunBusy, setRetentionRunBusy] = useState(false);
   const [retentionRunMsg, setRetentionRunMsg] = useState<string | null>(null);
+  // Integration (Platform-Admin only): master switch for user API access (personal tokens).
+  const [apiAccessEnabled, setApiAccessEnabled] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -73,6 +75,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       setRetentionDays(String(platform.audioRetentionDays));
       // "HH:mm:ss" on the wire -> "HH:mm" for the <input type="time">.
       setDeletionTime((platform.audioDeletionTimeOfDay ?? "03:00:00").slice(0, 5));
+      setApiAccessEnabled(platform.apiAccessEnabled);
     }
   }, [platform]);
 
@@ -113,6 +116,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
           audioRetentionDays: days,
           // "HH:mm" from the input -> "HH:mm:ss" for the TimeOnly wire type.
           audioDeletionTimeOfDay: `${deletionTime || "03:00"}:00`,
+          apiAccessEnabled,
         });
         qc.invalidateQueries({ queryKey: ["platform-settings"] });
       }
@@ -166,6 +170,9 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 </TabButton>
                 <TabButton active={tab === "maintenance"} onClick={() => setTab("maintenance")}>
                   {t("maintenanceTab")}
+                </TabButton>
+                <TabButton active={tab === "integration"} onClick={() => setTab("integration")}>
+                  {t("integrationTab")}
                 </TabButton>
               </>
             )}
@@ -405,8 +412,21 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
             </div>
-          ) : (
+          ) : tab === "maintenance" ? (
             <MaintenancePanel />
+          ) : (
+            /* Integration: platform-wide toggles for external access. API access is off by default. */
+            <div className="space-y-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={apiAccessEnabled}
+                  onChange={(e) => setApiAccessEnabled(e.target.checked)}
+                />
+                <span className="font-medium text-gray-700 dark:text-gray-200">{t("apiAccessEnabledLabel")}</span>
+              </label>
+              <p className="text-xs text-gray-400 dark:text-gray-500">{t("apiAccessEnabledHelp")}</p>
+            </div>
           )}
         </div>
 

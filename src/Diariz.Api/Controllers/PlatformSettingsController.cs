@@ -57,6 +57,7 @@ public class PlatformSettingsController : ControllerBase
         s.AutoDeleteAudioEnabled = req.AutoDeleteAudioEnabled;
         s.AudioRetentionDays = req.AudioRetentionDays;
         s.AudioDeletionTimeOfDay = req.AudioDeletionTimeOfDay;
+        s.ApiAccessEnabled = req.ApiAccessEnabled;
         await _db.SaveChangesAsync();
         return ToDto(s);
     }
@@ -75,5 +76,5 @@ public class PlatformSettingsController : ControllerBase
 
     private static PlatformSettingsDto ToDto(PlatformSettings s) => new(
         s.StarterQuotaBytes, s.MaxQuotaBytes, s.MinutesGenerationMode,
-        s.AutoDeleteAudioEnabled, s.AudioRetentionDays, s.AudioDeletionTimeOfDay);
+        s.AutoDeleteAudioEnabled, s.AudioRetentionDays, s.AudioDeletionTimeOfDay, s.ApiAccessEnabled);
 }

@@ -36,13 +36,15 @@ public record GrantResultDto(bool Emailed, string? SetupUrl);
 /// Administrator. <see cref="AudioDeletionTimeOfDay"/> is the server-local time the nightly job runs.</summary>
 public record PlatformSettingsDto(
     long StarterQuotaBytes, long MaxQuotaBytes, MinutesGenerationMode MinutesGenerationMode,
-    bool AutoDeleteAudioEnabled, int AudioRetentionDays, TimeOnly AudioDeletionTimeOfDay);
+    bool AutoDeleteAudioEnabled, int AudioRetentionDays, TimeOnly AudioDeletionTimeOfDay,
+    bool ApiAccessEnabled);
 public record UpdatePlatformSettingsRequest(
     long StarterQuotaBytes, long MaxQuotaBytes,
     MinutesGenerationMode MinutesGenerationMode = MinutesGenerationMode.SingleCall,
     bool AutoDeleteAudioEnabled = false,
     int AudioRetentionDays = PlatformSettings.DefaultAudioRetentionDays,
-    TimeOnly AudioDeletionTimeOfDay = default);
+    TimeOnly AudioDeletionTimeOfDay = default,
+    bool ApiAccessEnabled = false);
 /// <summary>Result of a manual "run the audio-retention pass now" trigger: how many recordings had audio deleted.</summary>
 public record AudioRetentionRunResult(int Deleted);
 /// <summary>The signed-in user's storage usage vs their quota (bytes), plus the total wall-clock time
@@ -274,7 +276,9 @@ public record UserProfileDto(
     string? JobTitle = null, string? CompanyName = null, string? JobDescription = null,
     string? CompanyDescription = null, string? LinkedIn = null,
     /// <summary>Colour theme: "auto" | "light" | "dark".</summary>
-    string Theme = "auto");
+    string Theme = "auto",
+    /// <summary>Whether the platform has user API access enabled (drives the Preferences "Developers" tab).</summary>
+    bool ApiAccessEnabled = false);
 
 /// <summary>Self-service profile update. Each field is trimmed; blank clears it. Language codes must be
 /// in the supported set (else 400). <paramref name="Theme"/> is "auto" | "light" | "dark" (unknown -> auto).</summary>
@@ -331,6 +335,17 @@ public record McpTokenCreatedDto(Guid Id, string Name, string Prefix, string Tok
 
 /// <summary>Request to mint a new MCP token with a user-supplied label.</summary>
 public record CreateMcpTokenRequest(string? Name);
+
+/// <summary>A stored personal REST-API token, listed in Preferences. The secret is never returned - only a
+/// short display <paramref name="Prefix"/> and usage timestamps.</summary>
+public record ApiTokenDto(Guid Id, string Name, string Prefix, DateTimeOffset CreatedAt, DateTimeOffset? LastUsedAt);
+
+/// <summary>The response to generating an API token: the plaintext <paramref name="Token"/> is returned
+/// exactly once (never retrievable again).</summary>
+public record ApiTokenCreatedDto(Guid Id, string Name, string Prefix, string Token);
+
+/// <summary>Request to mint a new personal REST-API token with a user-supplied label.</summary>
+public record CreateApiTokenRequest(string? Name);
 
 // ---- Chat ----
 public record ChatTurnDto(string Role, string Content);

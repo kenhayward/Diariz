@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth";
+import { api } from "../lib/api";
 import Avatar from "./Avatar";
 import ProfileSection from "./ProfileSection";
 import GoogleAccountSection from "./GoogleAccountSection";
 import CalendarFeedsSection from "./CalendarFeedsSection";
 import McpAccessSection from "./McpAccessSection";
+import DeveloperAccessSection from "./DeveloperAccessSection";
 import VoicePrintsSection from "./VoicePrintsSection";
 
-export type PreferencesTab = "profile" | "google" | "feeds" | "claude" | "voiceprints";
+export type PreferencesTab = "profile" | "google" | "feeds" | "claude" | "developers" | "voiceprints";
 
 /// Personal preferences, organised as a vertical-tabbed modal (a left nav headed by the user's avatar/name,
 /// with a content panel on the right). Each tab self-saves; the footer only closes. Sized to 60vw x 80vh and,
@@ -23,6 +26,8 @@ export default function PreferencesModal({
   const { t } = useTranslation("account");
   const { initials, pictureUrl, fullName, email } = useAuth();
   const [tab, setTab] = useState<PreferencesTab>(initialTab);
+  // The Developers tab appears only when a Platform Admin has enabled API access platform-wide.
+  const { data: profile } = useQuery({ queryKey: ["user-profile"], queryFn: api.getProfile });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -35,6 +40,7 @@ export default function PreferencesModal({
     { id: "google", label: t("tabGoogleAccount") },
     { id: "feeds", label: t("tabCalendarFeeds") },
     { id: "claude", label: t("tabClaudeAccess") },
+    ...(profile?.apiAccessEnabled ? [{ id: "developers" as const, label: t("tabDevelopers") }] : []),
     { id: "voiceprints", label: t("tabVoicePrints") },
   ];
 
@@ -85,6 +91,7 @@ export default function PreferencesModal({
             {tab === "google" && <GoogleAccountSection />}
             {tab === "feeds" && <CalendarFeedsSection />}
             {tab === "claude" && <McpAccessSection />}
+            {tab === "developers" && <DeveloperAccessSection />}
             {tab === "voiceprints" && <VoicePrintsSection />}
           </div>
           <div className="flex items-center justify-end border-t px-5 py-3 dark:border-gray-700">
