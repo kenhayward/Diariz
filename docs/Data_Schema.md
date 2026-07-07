@@ -65,6 +65,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddMinutesGenerationMode` | `PlatformSettings.MinutesGenerationMode` (int, NOT NULL, default 0 = SingleCall) — platform-wide switch for how template-driven minutes generate (per-section calls vs one call) |
 | `AddAudioRetention` | `PlatformSettings.AutoDeleteAudioEnabled` (bool, default false) + `AudioRetentionDays` (int, default 30) + `AudioDeletionTimeOfDay` (time, default 03:00) — the opt-in nightly audio-retention policy; and `Recording.AudioProtectedAt` (timestamptz null) — per-recording exemption from audio deletion |
 | `AddUserProfileAndCalendarSelection` | `UserSettings` gains `JobTitle`/`CompanyName`/`LinkedIn` (varchar(256) null), `JobDescription`/`CompanyDescription` (varchar(2048) null), `Theme` (int, default 0 = Auto), and `GoogleSelectedCalendarIdsJson` (jsonb null) — richer profile + per-user theme + the Google calendar selection |
+| `AddApiAccessTokens` | `ApiAccessTokens` (per-user personal REST-API tokens; SHA-256 hash only, **unique** on `TokenHash`, cascade on user delete) + `PlatformSettings.ApiAccessEnabled` (bool, default false) — user API access, off until a Platform Admin enables it |
 
 ### Entity-relationship overview
 
@@ -413,6 +414,7 @@ Single seeded row (`Id = 1`), edited by the Platform Administrator.
 | `AutoDeleteAudioEnabled` | bool | master switch for the nightly audio-retention job (default false = off) |
 | `AudioRetentionDays` | int | audio older than this many days (by `Recording.CreatedAt`) is eligible for auto-deletion (default 30) |
 | `AudioDeletionTimeOfDay` | time | server-local time of day the nightly retention job runs (default 03:00) |
+| `ApiAccessEnabled` | bool | master switch for user API access (personal `dz_api_` tokens); default false = off |
 
 #### Identity tables (`AspNet*`)
 Standard ASP.NET Identity schema with **Guid** keys: `AspNetUsers`, `AspNetRoles`, `AspNetUserRoles`,
@@ -443,6 +445,23 @@ plaintext is shown to the user once at generation and is never recoverable.
 | `Prefix` | varchar(32) | short non-secret display prefix (e.g. `dz_mcp_ab12cd`) |
 | `CreatedAt` | timestamptz | |
 | `LastUsedAt` | timestamptz null | last time the token was presented on an MCP request |
+
+Indexes: unique `(TokenHash)`, `(UserId)`.
+
+#### `ApiAccessTokens`
+Per-user personal REST-API tokens (`dz_api_…`), used to call the Diariz API as the owning user. Same shape and
+storage discipline as `McpAccessTokens` (hash-only, shown once), but a **separate** credential: gated by
+`PlatformSettings.ApiAccessEnabled` and accepted on the general `/api/*` surface (not `/mcp`).
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `UserId` | uuid FK → AspNetUsers | owner; **cascade** on user delete |
+| `Name` | varchar(128) | user label (e.g. "CI pipeline") |
+| `TokenHash` | varchar(64) | lowercase-hex SHA-256 of the full token; **unique index** |
+| `Prefix` | varchar(32) | short non-secret display prefix (e.g. `dz_api_ab12cd`) |
+| `CreatedAt` | timestamptz | |
+| `LastUsedAt` | timestamptz null | last time the token was presented on an API request |
 
 Indexes: unique `(TokenHash)`, `(UserId)`.
 

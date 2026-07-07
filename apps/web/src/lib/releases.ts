@@ -64,7 +64,9 @@ Code. Either way Claude uses the same built-in tools to search and read *your* m
 to you), **@-mention a specific meeting** (its transcript or minutes, exposed as MCP resources), or run a
 **prompt starter** (summarise your last meeting, list open action items, find where a topic was discussed) - all
 scoped to your account. You manage both **tokens and web connections** (with one-click **revoke**) in the same
-Preferences section.
+Preferences section. When a Platform Administrator has enabled it (Settings → Integration), you can also
+generate a **personal API token** (Preferences → Developers) to call the Diariz **REST API** directly as
+yourself - acting with your own permissions, over your own data.
 Recordings organise into **sections** (with sub-sections) and drag-and-drop ordering, can be **merged**
 into one, and can be browsed as a **list, a calendar, or a cross-meeting Actions list** (the left panel is
 **Meetings**). A **status bar** along the bottom shows live progress (transcribing, summarising, merging,
@@ -92,7 +94,8 @@ deletion** - a nightly job removes the original audio of recordings older than a
 Platform Administrator can also **back up and restore the whole
 platform** (database + stored files) as a single transferable archive from Settings → Maintenance.
 
-**Preferences** is a tabbed window (Profile, Google Account, Calendar Feeds, Claude Access, Voice Prints):
+**Preferences** is a tabbed window (Profile, Google Account, Calendar Feeds, Claude Access, Developers when API
+access is enabled, Voice Prints):
 your **profile** holds a display name, job title, company, job/company descriptions, and a LinkedIn account
 name, and a **theme** (Light/Dark/Auto) that is saved to your account and follows you across devices.
 The interface is **localized** - pick your language (English, Spanish, French, German today) at signup or
@@ -113,6 +116,22 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.101.0",
+    date: "2026-07-07",
+    pr: 231,
+    headline: "Personal API tokens: call the Diariz API as yourself",
+    summary:
+      "You can now generate a personal API token and call the Diariz REST API programmatically as yourself - " +
+      "handy for scripts and integrations. Manage your tokens in Preferences -> Developers (shown a token once, " +
+      "revocable), and send it as a Bearer header. A token acts with your own permissions and only ever sees " +
+      "your own data. The feature is off by default: a Platform Administrator turns it on in Settings -> " +
+      "Integration, where a browsable API reference is coming next. Server redeploy (web + API) only.",
+    added: [
+      "Personal REST-API tokens (Preferences -> Developers): generate, copy once, and revoke; sent as an Authorization: Bearer header.",
+      "Platform Administrators can enable or disable user API access in Settings -> Integration (off by default).",
+    ],
+  },
   {
     version: "0.100.5",
     date: "2026-07-07",

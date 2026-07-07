@@ -389,6 +389,18 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   don't lapse. Recordings are also written to the browser (**IndexedDB**, `lib/pendingRecording.ts`) the moment
   Stop is pressed, before upload, and offered for re-upload on return if the upload didn't complete — so a
   session lapse can never lose audio.
+- **Personal API tokens (user API access).** A user can call the general REST API programmatically with a
+  personal token (`dz_api_` + base64url(32), **SHA-256 hash only** stored on `ApiAccessToken`, shown once;
+  `ApiTokensController`, `/api/user/api-tokens`, JWT-authed). Auth is a dedicated `"ApiKey"` scheme
+  (`ApiKeyAuthenticationHandler`) that resolves the token (`ApiTokenAuthenticator`) and builds a principal with
+  the owner's id **and role claims** — **full session parity**, so ownership checks and admin authorization work
+  exactly as for a JWT. To make it satisfy every `[Authorize]` variant (including `[Authorize(Roles=…)]`, which
+  authenticate with the default scheme), the **default authenticate scheme is a forwarding policy scheme**:
+  `Bearer dz_api_…` routes to the ApiKey handler, everything else (JWT, or the query-string SignalR/audio/backup
+  flows) to JWT. Isolation: a `dz_mcp_` token is rejected on `/api/*` and a `dz_api_` token on `/mcp` (each scheme
+  accepts only its own prefix). The feature is **gated by `PlatformSettings.ApiAccessEnabled` (default off)** —
+  the authenticator fails while it's off — and a Platform Admin toggles it in **Settings → Integration**; users
+  manage tokens in **Preferences → Developers** (shown only when enabled).
 - **RBAC:** `Standard` / `Administrator` / `PlatformAdministrator`. The Platform Administrator is the seed
   user — undeletable, undemotable, non-disable-able.
 - **Access lifecycle:** a person **requests access** (`UserStatus.Requested`) → an admin **grants** it
