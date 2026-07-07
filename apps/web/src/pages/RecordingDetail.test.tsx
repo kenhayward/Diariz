@@ -54,6 +54,10 @@ vi.mock("../lib/api", () => ({
     createSpeakerProfile: vi.fn(),
     listMeetingTypes: vi.fn().mockResolvedValue([]),
     applyMeetingType: vi.fn(),
+    listNotes: vi.fn().mockResolvedValue([]),
+    createNotes: vi.fn(),
+    updateNote: vi.fn(),
+    deleteNote: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -537,6 +541,37 @@ describe("RecordingDetail", () => {
     expect((await screen.findByDisplayValue("doc.pdf"))).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^remove$/i }));
     await waitFor(() => expect(api.deleteAttachment).toHaveBeenCalledWith("rec-123", "a1"));
+  });
+
+  it("shows the Notes tab, lists notes, and adds one on Enter", async () => {
+    (api.listNotes as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "n1", text: "Comp expectations", capturedAtMs: 61_000, ordinal: 0, createdAt: base.createdAt },
+    ]);
+    (api.createNotes as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    renderPage(base);
+    await loaded();
+    openTab(/notes/i);
+
+    expect(await screen.findByText("Comp expectations")).toBeTruthy();
+
+    const box = screen.getByPlaceholderText(/add a note/i);
+    fireEvent.change(box, { target: { value: "IPO experience APAC" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    await waitFor(() => expect(api.createNotes).toHaveBeenCalledWith("rec-123", [{ text: "IPO experience APAC" }]));
+  });
+
+  it("clicking a note stamp switches to the transcript tab", async () => {
+    (api.listNotes as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "n1", text: "Comp expectations", capturedAtMs: 61_000, ordinal: 0, createdAt: base.createdAt },
+    ]);
+    renderPage(base);
+    await loaded();
+    openTab(/notes/i);
+
+    fireEvent.click(await screen.findByRole("button", { name: /jump to 1:01/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: /transcript/i }).getAttribute("aria-selected")).toBe("true"),
+    );
   });
 
   // Bug: the minutes picker spinner only cleared on a SignalR "completed" push. If that event is missed

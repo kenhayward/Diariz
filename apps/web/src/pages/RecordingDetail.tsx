@@ -16,6 +16,7 @@ import SummaryEditModal from "../components/SummaryEditModal";
 import MeetingMinutesEditModal from "../components/MeetingMinutesEditModal";
 import EmailMinutesModal from "../components/EmailMinutesModal";
 import MeetingTypeMenu from "../components/MeetingTypeMenu";
+import NotesSection from "../components/NotesSection";
 import ManageMeetingTypesModal from "../components/ManageMeetingTypesModal";
 import { renderMarkdown } from "../lib/markdown";
 import AttachmentsManager from "../components/AttachmentsManager";
@@ -101,6 +102,12 @@ export default function RecordingDetail() {
   const { data: attachments = [] } = useQuery({
     queryKey: ["attachments", id],
     queryFn: () => api.listAttachments(id),
+    enabled: Boolean(id),
+  });
+  // The user's own note lines (the Notes tab). Sparse trigger phrases that will steer the minutes (PR 3).
+  const { data: notes = [] } = useQuery({
+    queryKey: ["notes", id],
+    queryFn: () => api.listNotes(id),
     enabled: Boolean(id),
   });
   // The user's native language drives the "Translate to …" action; resolve its display name.
@@ -602,6 +609,49 @@ export default function RecordingDetail() {
     }
   }
 
+  // ---- Notes tab handlers (the user's own note lines) ----
+  async function addNote(text: string) {
+    setActionError(null);
+    try {
+      await api.createNotes(id, [{ text }]);
+      qc.invalidateQueries({ queryKey: ["notes", id] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e));
+    }
+  }
+
+  async function editNote(noteId: string, text: string) {
+    setActionError(null);
+    try {
+      await api.updateNote(id, noteId, text);
+      qc.invalidateQueries({ queryKey: ["notes", id] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e));
+    }
+  }
+
+  async function removeNote(noteId: string) {
+    setActionError(null);
+    try {
+      await api.deleteNote(id, noteId);
+      qc.invalidateQueries({ queryKey: ["notes", id] });
+    } catch (e) {
+      setActionError(apiErrorMessage(e));
+    }
+  }
+
+  // Jump from a stamped note line to that moment in the transcript (the ?t= deep-link behaviour).
+  function jumpToMs(ms: number) {
+    setSearchParams(
+      (prev) => {
+        prev.set("t", String(ms));
+        return prev;
+      },
+      { replace: true },
+    );
+    selectTab("transcript");
+  }
+
   async function mergeSegments() {
     if (!window.confirm(t("workspace:confirmMerge"))) return;
     setActionError(null);
@@ -1059,6 +1109,15 @@ export default function RecordingDetail() {
           onToggleComplete={toggleActionComplete}
           onDelete={removeAction}
         />
+      ),
+    },
+    {
+      key: "notes",
+      label: t("workspace:detailTabNotes"),
+      content: (
+        <div className="px-4 pb-4">
+          <NotesSection notes={notes} onAdd={addNote} onEdit={editNote} onDelete={removeNote} onJump={jumpToMs} />
+        </div>
       ),
     },
     {
