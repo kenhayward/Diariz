@@ -71,8 +71,25 @@ builder.Services.AddIdentityCore<ApplicationUser>(o =>
     .AddEntityFrameworkStores<DiarizDbContext>()
     .AddDefaultTokenProviders(); // one-time account-setup token
 
-// ---- Auth (JWT) ----
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+// ---- Auth (JWT + personal API key) ----
+// The default authenticate scheme is a forwarding policy scheme: a `Bearer dz_api_…` personal API token
+// routes to the ApiKey handler, everything else (a JWT bearer, or no Authorization header for the
+// SignalR/audio/backup query-string flows) routes to JWT. This makes a personal API key satisfy every
+// [Authorize] variant - including [Authorize(Roles=…)] endpoints, which authenticate with the default
+// scheme. Named schemes (e.g. the Mcp policy on /mcp) select their own scheme and are unaffected.
+const string SmartAuthScheme = "smart";
+builder.Services.AddAuthentication(SmartAuthScheme)
+    .AddPolicyScheme(SmartAuthScheme, SmartAuthScheme, o =>
+    {
+        o.ForwardDefaultSelector = ctx =>
+        {
+            string auth = ctx.Request.Headers.Authorization!;
+            return !string.IsNullOrEmpty(auth)
+                   && auth.StartsWith("Bearer " + Diariz.Api.Services.ApiTokenService.TokenPrefix, StringComparison.Ordinal)
+                ? Diariz.Api.Auth.ApiKeyAuthenticationHandler.SchemeName
+                : JwtBearerDefaults.AuthenticationScheme;
+        };
+    })
     .AddJwtBearer(o =>
     {
         o.TokenValidationParameters = new TokenValidationParameters
@@ -110,7 +127,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     // MCP personal-access-token scheme, used only by the /mcp endpoint (a bearer token pasted into Claude's
     // MCP config). Independent of the JWT session.
     .AddScheme<Diariz.Api.Auth.McpAuthSchemeOptions, Diariz.Api.Auth.McpBearerAuthenticationHandler>(
-        Diariz.Api.Auth.McpBearerAuthenticationHandler.SchemeName, _ => { });
+        Diariz.Api.Auth.McpBearerAuthenticationHandler.SchemeName, _ => { })
+    // Personal REST-API token scheme (dz_api_…), routed here by the forwarding default selector above.
+    .AddScheme<Diariz.Api.Auth.ApiKeyAuthSchemeOptions, Diariz.Api.Auth.ApiKeyAuthenticationHandler>(
+        Diariz.Api.Auth.ApiKeyAuthenticationHandler.SchemeName, _ => { });
 builder.Services.AddAuthorization(o =>
 {
     o.AddPolicy("Admin", p => p.RequireRole(Roles.Administrator, Roles.PlatformAdministrator));
@@ -281,6 +301,8 @@ builder.Services.AddScoped<IIcsCalendarClient, IcsCalendarClient>();
 // The token services back both the management controller (JWT) and the /mcp bearer scheme.
 builder.Services.AddSingleton<IMcpTokenService, McpTokenService>();
 builder.Services.AddScoped<IMcpTokenAuthenticator, McpTokenAuthenticator>();
+builder.Services.AddSingleton<IApiTokenService, ApiTokenService>();
+builder.Services.AddScoped<IApiTokenAuthenticator, ApiTokenAuthenticator>();
 builder.Services.AddScoped<IMcpResourceService, McpResourceService>();
 var mcpOptions = builder.Configuration.GetSection(McpOptions.Section).Get<McpOptions>() ?? new McpOptions();
 if (mcpOptions.Enabled)
