@@ -69,12 +69,21 @@ export default function RecordingDetail() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  // While a minutes run (recreate or a template apply) is in flight the picker is disabled and the status bar
+  // shows progress; both clear when fresh minutes arrive. Declared before the query so the query can poll while
+  // a run is in flight (below).
+  const [minutesRunning, setMinutesRunning] = useState(false);
+  const minutesBaselineRef = useRef<string | null>(null);
   const { data: rec, error: recError } = useQuery({
     queryKey: ["recording", id],
     queryFn: () => api.getRecording(id),
     enabled: Boolean(id),
     // A missing recording won't come back by retrying, and we want the redirect (below) to fire promptly.
     retry: (_count, e) => (e as { response?: { status?: number } })?.response?.status !== 404,
+    // Minutes generation is async with no status change, and its only "done" signal is a single SignalR push.
+    // If that event is missed (slow LLM + a proxy that idle-drops the socket), the picker would spin forever.
+    // Poll while a run is in flight so the fresh minutes are picked up regardless; the effect below stops it.
+    refetchInterval: minutesRunning ? 2500 : false,
   });
 
   // If the recording no longer exists - deleted from here, from the list, on another device, or reached via
@@ -235,10 +244,6 @@ export default function RecordingDetail() {
   const [editingSummary, setEditingSummary] = useState(false);
   const [editingMinutes, setEditingMinutes] = useState(false);
   const [emailMinutesOpen, setEmailMinutesOpen] = useState(false);
-  // While a minutes run (recreate or a template apply) is in flight the picker is disabled and the status bar
-  // shows progress; both clear when fresh minutes arrive (SignalR refetch).
-  const [minutesRunning, setMinutesRunning] = useState(false);
-  const minutesBaselineRef = useRef<string | null>(null);
   const [managingTypes, setManagingTypes] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [editingSeg, setEditingSeg] = useState<SegmentDto | null>(null);
@@ -446,6 +451,18 @@ export default function RecordingDetail() {
       setStatus(null);
     }
   }, [minutesRunning, rec?.meetingMinutes?.createdAt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Safety net: if a run never produces fresh minutes (the generation failed server-side, so no new
+  // timestamp ever arrives), stop the busy state + polling after a generous cap rather than spinning forever.
+  useEffect(() => {
+    if (!minutesRunning) return;
+    const timer = setTimeout(() => {
+      setMinutesRunning(false);
+      setStatus(null);
+      setActionInfo(t("workspace:minutesSlow"));
+    }, 5 * 60 * 1000);
+    return () => clearTimeout(timer);
+  }, [minutesRunning]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Save hand-edited meeting minutes (Markdown; flagged user-edited so the auto-generator won't clobber them).
   async function saveMinutes(markdown: string) {

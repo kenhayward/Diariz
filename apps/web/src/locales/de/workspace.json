@@ -136,6 +136,7 @@
   "minutesEmpty": "Noch kein Protokoll - mit der Aktualisieren-Schaltfläche erzeugen.",
   "emailedMinutes": "Besprechungsprotokoll per E-Mail gesendet.",
   "generatingMinutes": "Besprechungsprotokoll wird erstellt…",
+  "minutesSlow": "Die Protokollerstellung dauert länger als erwartet. Aktualisieren Sie, um das Ergebnis zu sehen.",
   "errMinutes": "Das Besprechungsprotokoll konnte nicht aktualisiert werden.",
   "confirmRecreateMinutes": "Besprechungsprotokoll neu erstellen? Deine bearbeitete Version wird ersetzt.",
   "includeAttachmentsBody_one": "Diese Aufnahme hat {{count}} Anhang. In die E-Mail aufnehmen?",

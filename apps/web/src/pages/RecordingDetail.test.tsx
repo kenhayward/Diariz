@@ -52,6 +52,8 @@ vi.mock("../lib/api", () => ({
     attachmentContentUrl: (rec: string, aid: string) => `/api/recordings/${rec}/attachments/${aid}/content`,
     assignSpeaker: vi.fn(),
     createSpeakerProfile: vi.fn(),
+    listMeetingTypes: vi.fn().mockResolvedValue([]),
+    applyMeetingType: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -536,6 +538,49 @@ describe("RecordingDetail", () => {
     fireEvent.click(screen.getByRole("button", { name: /^remove$/i }));
     await waitFor(() => expect(api.deleteAttachment).toHaveBeenCalledWith("rec-123", "a1"));
   });
+
+  // Bug: the minutes picker spinner only cleared on a SignalR "completed" push. If that event is missed
+  // (slow LLM + a proxy that idle-drops the socket), minutes finished but the spinner span forever until a
+  // manual refresh. The page must poll while a run is in flight so it notices the fresh minutes regardless.
+  it("clears the minutes spinner by polling when no SignalR completion event arrives", async () => {
+    const t0 = "2026-06-26T12:00:00.000Z";
+    const t1 = "2026-06-26T12:05:00.000Z";
+    const withMinutes = (createdAt: string, text: string): RecordingDetailType => ({
+      ...base,
+      meetingMinutes: { model: "gpt", text, createdAt, isUserEdited: false },
+    } as unknown as RecordingDetailType);
+    let done = false; // flips true when the backend "finishes" - but no SignalR event is fired.
+    (api.getRecording as ReturnType<typeof vi.fn>).mockImplementation(() =>
+      Promise.resolve(done ? withMinutes(t1, "New minutes") : withMinutes(t0, "Old minutes")),
+    );
+    (api.generateMeetingMinutes as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={["/recordings/rec-123"]}>
+          <Routes>
+            <Route path="/recordings/:id" element={<RecordingDetail />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await loaded();
+    openTab(/minutes/i);
+
+    // Kick off a re-create; the picker goes busy (spinner shown on the Meeting type button).
+    fireEvent.click(screen.getByRole("button", { name: /re-create minutes/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Meeting type" }).querySelector(".animate-spin")).toBeTruthy(),
+    );
+
+    // Backend finished, but NO SignalR event is delivered. Polling must still pick up the fresh minutes.
+    done = true;
+    await waitFor(
+      () => expect(screen.getByRole("button", { name: "Meeting type" }).querySelector(".animate-spin")).toBeNull(),
+      { timeout: 6000 },
+    );
+  }, 10000);
 
   // Bug 1: the shared <audio> must stay mounted on every tab. It used to live inside the Transcript tab's
   // content, so switching to Speakers unmounted it and per-speaker Play silently no-op'd (audioRef was null).
