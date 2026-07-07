@@ -17,10 +17,11 @@ describe("pipelineStatus", () => {
     });
   });
 
-  it("then Transcribing, then Queued/Uploaded, then Summarizing", () => {
+  it("shows the pre-transcript wait (Queued/Uploaded) as Transcribing, then Summarizing", () => {
     expect(pipelineStatus(recs("Summarizing", "Transcribing"))?.key).toBe("transcribing");
-    expect(pipelineStatus(recs("Summarizing", "Queued"))?.key).toBe("queuing");
-    expect(pipelineStatus(recs("Summarizing", "Uploaded"))?.key).toBe("queuing");
+    // Queued/Uploaded read as "transcribing" too - the user shouldn't see an internal queue state.
+    expect(pipelineStatus(recs("Summarizing", "Queued"))?.key).toBe("transcribing");
+    expect(pipelineStatus(recs("Summarizing", "Uploaded"))?.key).toBe("transcribing");
     expect(pipelineStatus(recs("Summarizing"))?.key).toBe("summarising");
   });
 

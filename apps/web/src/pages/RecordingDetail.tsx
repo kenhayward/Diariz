@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import { createHub } from "../lib/signalr";
+import { isProcessing } from "../lib/recordingStatus";
 import { useStatus } from "../lib/status";
 import KebabMenu from "../components/KebabMenu";
 import DetailToolbar from "../components/DetailToolbar";
@@ -854,6 +855,7 @@ export default function RecordingDetail() {
     hasTranscript,
     hasAudio: rec.hasAudio,
     isSummarizing,
+    isProcessing: isProcessing(rec.status),
   }, t);
 
   // The recording detail is organised into horizontal tabs; each tab carries its own toolbar (rendered in a
