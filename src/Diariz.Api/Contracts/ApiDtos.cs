@@ -332,6 +332,17 @@ public record McpTokenCreatedDto(Guid Id, string Name, string Prefix, string Tok
 /// <summary>Request to mint a new MCP token with a user-supplied label.</summary>
 public record CreateMcpTokenRequest(string? Name);
 
+/// <summary>A stored personal REST-API token, listed in Preferences. The secret is never returned - only a
+/// short display <paramref name="Prefix"/> and usage timestamps.</summary>
+public record ApiTokenDto(Guid Id, string Name, string Prefix, DateTimeOffset CreatedAt, DateTimeOffset? LastUsedAt);
+
+/// <summary>The response to generating an API token: the plaintext <paramref name="Token"/> is returned
+/// exactly once (never retrievable again).</summary>
+public record ApiTokenCreatedDto(Guid Id, string Name, string Prefix, string Token);
+
+/// <summary>Request to mint a new personal REST-API token with a user-supplied label.</summary>
+public record CreateApiTokenRequest(string? Name);
+
 // ---- Chat ----
 public record ChatTurnDto(string Role, string Content);
 
