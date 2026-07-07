@@ -18,8 +18,9 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Google sign-in is offered only when the server has it configured — and not inside the Electron shell
-  // (Google blocks OAuth in embedded webviews), where password login is used instead.
+  // Google sign-in is offered when the server has it configured. In the Electron shell it runs through
+  // the system browser (via IPC) because Google blocks OAuth in embedded webviews; on the web it is a
+  // normal full-page redirect.
   const [googleEnabled, setGoogleEnabled] = useState(false);
   useEffect(() => {
     let active = true;
@@ -101,14 +102,17 @@ export default function Login() {
         >
           {busy ? t("signingIn") : t("signIn")}
         </button>
-        {googleEnabled && !isElectron && (
+        {googleEnabled && (
           <>
             <div className="flex items-center gap-2 text-xs text-gray-400">
               <span className="h-px flex-grow bg-gray-200 dark:bg-gray-700" />
               {t("or")}
               <span className="h-px flex-grow bg-gray-200 dark:bg-gray-700" />
             </div>
-            <GoogleSignInButton label={t("signInWithGoogle")} />
+            <GoogleSignInButton
+              label={t("signInWithGoogle")}
+              onClick={isElectron ? () => window.diariz?.startGoogleSignIn?.() : undefined}
+            />
           </>
         )}
         <p className="text-center text-sm text-gray-500 dark:text-gray-400">
