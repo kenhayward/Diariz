@@ -118,6 +118,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.102.1",
+    date: "2026-07-07",
+    pr: 233,
+    headline: "Fix: API reference page layout",
+    summary:
+      "The built-in API reference (Developers -> View API reference) was rendering unstyled - its stylesheet " +
+      "wasn't being loaded. It now displays correctly, with the sidebar and endpoint layout. Server redeploy " +
+      "(web) only.",
+    fixed: [
+      "The in-app API reference now loads its stylesheet, so it renders with the proper sidebar/content layout instead of unstyled text.",
+    ],
+  },
+  {
     version: "0.102.0",
     date: "2026-07-07",
     pr: 232,

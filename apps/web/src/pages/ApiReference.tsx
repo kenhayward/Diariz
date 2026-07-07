@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { ApiReferenceReact } from "@scalar/api-reference-react";
+import "@scalar/api-reference-react/style.css";
 import { api } from "../lib/api";
 
 /// Full-page, in-app API reference (Scalar) backed by the curated, authed OpenAPI document. Reached at
