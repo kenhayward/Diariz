@@ -143,10 +143,22 @@ public class RecordingsController : ControllerBase
             : new(current.MeetingMinutes.Model, current.MeetingMinutes.Text, current.MeetingMinutes.CreatedAt,
                 current.MeetingMinutes.IsUserEdited);
 
+        // Projected auto-deletion date: only when the policy is on and this recording is a live, unprotected,
+        // eligible candidate (matches the nightly sweep's predicate). Read the singleton settings row directly
+        // (no lazy-create in a GET); absent/off -> no projection.
+        var platform = await _db.PlatformSettings
+            .FirstOrDefaultAsync(p => p.Id == Diariz.Domain.Entities.PlatformSettings.SingletonId);
+        DateTimeOffset? scheduledDeletion =
+            platform is { AutoDeleteAudioEnabled: true }
+            && rec.HasAudio && !rec.IsAudioProtected
+            && AudioRetentionSweep.IsTranscribedStatus(rec.Status)
+                ? rec.CreatedAt.AddDays(platform.AudioRetentionDays)
+                : null;
+
         return new RecordingDetailDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.SizeBytes,
             rec.Status, rec.Error, rec.CreatedAt, rec.MinSpeakers, rec.MaxSpeakers, names, speakers, tDto, sDto,
             mDto, actions, rec.ActionsExtractedAt != null, rec.HasAudio, ToLinkDto(rec.CalendarLink),
-            rec.MeetingTypeId, rec.AudioProtectedAt, rec.AudioDeletedAt);
+            rec.MeetingTypeId, rec.AudioProtectedAt, rec.AudioDeletedAt, scheduledDeletion);
     }
 
     private static CalendarLinkDto? ToLinkDto(RecordingCalendarLink? link) => link is null

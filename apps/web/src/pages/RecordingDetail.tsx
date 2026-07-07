@@ -866,11 +866,15 @@ export default function RecordingDetail() {
                 ? t("workspace:audioAvailable")
                 : t("workspace:audioDeletedOn", { date: formatLongDate(rec.audioDeletedAt!, i18n.language) })}
             </dd>
-            {rec.audioProtectedAt && (
+            {rec.hasAudio && (rec.audioProtectedAt || rec.audioScheduledDeletionAt) && (
               <>
-                <dt className="text-gray-500 dark:text-gray-400">{t("workspace:audioProtectionLabel")}</dt>
+                <dt className="text-gray-500 dark:text-gray-400">{t("workspace:audioRetentionLabel")}</dt>
                 <dd className="text-gray-800 dark:text-gray-200">
-                  {t("workspace:audioProtectedOn", { date: formatLongDate(rec.audioProtectedAt, i18n.language) })}
+                  {rec.audioProtectedAt
+                    ? t("workspace:audioProtectedFromDeletion")
+                    : t("workspace:audioWillBeDeletedOn", {
+                        date: formatLongDate(rec.audioScheduledDeletionAt!, i18n.language),
+                      })}
                 </dd>
               </>
             )}

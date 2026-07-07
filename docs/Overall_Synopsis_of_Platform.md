@@ -504,6 +504,9 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   on demand via `POST /api/platform/settings/run-audio-retention` (a "Run now" button on the Storage Quotas tab), which runs it
   immediately using the saved window regardless of the toggle. A recording is exempted via `PUT /api/recordings/{id}/audio-protection`
   (stamps `Recording.AudioProtectedAt`); while protected, both the nightly job and the manual delete-audio action skip/refuse it.
+  The recording detail (`GET /api/recordings/{id}`) surfaces a **computed** `AudioScheduledDeletionAt` (`CreatedAt` + retention days,
+  non-null only when auto-delete is on and the recording is a live, unprotected, eligible candidate) so the Overview can show
+  "Protected from audio deletion" or "Audio will be deleted on {date}".
 - **Self-service profile:** every user has a **Preferences** screen to change their **display name**
   (`PUT /api/user/profile` → updates `ApplicationUser.FullName` and re-issues the token so the name claim
   updates without a re-login) and their **native / UI language** (stored on `UserSettings`). The supported

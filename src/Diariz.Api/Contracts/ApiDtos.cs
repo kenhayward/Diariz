@@ -171,7 +171,10 @@ public record RecordingDetailDto(
     /// <summary>When the owner protected the audio from deletion (null = not protected).</summary>
     DateTimeOffset? AudioProtectedAt = null,
     /// <summary>When the audio blob was deleted (null = still present). Mirrors <see cref="HasAudio"/>.</summary>
-    DateTimeOffset? AudioDeletedAt = null);
+    DateTimeOffset? AudioDeletedAt = null,
+    /// <summary>Projected date the nightly job will delete this recording's audio (`CreatedAt` + retention days),
+    /// or null when auto-delete is off, the recording is protected/ineligible, or the audio is already gone.</summary>
+    DateTimeOffset? AudioScheduledDeletionAt = null);
 
 /// <summary>Toggle a recording's protection from audio deletion (auto and manual).</summary>
 public record SetAudioProtectionRequest(bool Protected);
