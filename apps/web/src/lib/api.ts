@@ -34,6 +34,7 @@ import type {
   PlatformSettings,
   RecordingAction,
   ActionListItem,
+  MeetingNote,
   RecordingDetail,
   RecordingSource,
   RecordingSummary,
@@ -471,6 +472,48 @@ export const api = {
 
   async deleteAction(id: string, actionId: string): Promise<void> {
     await http.delete(`/api/recordings/${id}/actions/${actionId}`);
+  },
+
+  // ---- Meeting notes (the user's own note lines) ----
+
+  async listNotes(recordingId: string): Promise<MeetingNote[]> {
+    const { data } = await http.get<MeetingNote[]>(`/api/recordings/${recordingId}/notes`);
+    return data;
+  },
+
+  /// Bulk append; used for single adds too. Returns the created lines.
+  async createNotes(recordingId: string, lines: { text: string; capturedAtMs?: number | null }[]): Promise<MeetingNote[]> {
+    const { data } = await http.post<MeetingNote[]>(`/api/recordings/${recordingId}/notes`, { lines });
+    return data;
+  },
+
+  async updateNote(recordingId: string, noteId: string, text: string): Promise<void> {
+    await http.put(`/api/recordings/${recordingId}/notes/${noteId}`, { text });
+  },
+
+  async deleteNote(recordingId: string, noteId: string): Promise<void> {
+    await http.delete(`/api/recordings/${recordingId}/notes/${noteId}`);
+  },
+
+  /// Pre-meeting notes anchored to a calendar event; adopted onto the recording when the link forms.
+  async listEventNotes(calendarId: string, eventId: string): Promise<MeetingNote[]> {
+    const { data } = await http.get<MeetingNote[]>(
+      `/api/calendar/events/${encodeURIComponent(calendarId)}/${encodeURIComponent(eventId)}/notes`);
+    return data;
+  },
+
+  async createEventNotes(calendarId: string, eventId: string, lines: { text: string }[]): Promise<MeetingNote[]> {
+    const { data } = await http.post<MeetingNote[]>(
+      `/api/calendar/events/${encodeURIComponent(calendarId)}/${encodeURIComponent(eventId)}/notes`, { lines });
+    return data;
+  },
+
+  async updateEventNote(calendarId: string, eventId: string, noteId: string, text: string): Promise<void> {
+    await http.put(`/api/calendar/events/${encodeURIComponent(calendarId)}/${encodeURIComponent(eventId)}/notes/${noteId}`, { text });
+  },
+
+  async deleteEventNote(calendarId: string, eventId: string, noteId: string): Promise<void> {
+    await http.delete(`/api/calendar/events/${encodeURIComponent(calendarId)}/${encodeURIComponent(eventId)}/notes/${noteId}`);
   },
 
   /// Every action across the user's recordings (the "Actions" tab), each tagged with its source recording.

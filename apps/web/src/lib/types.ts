@@ -194,6 +194,16 @@ export interface RecordingAction {
   completedAt: string | null;
 }
 
+/// One line of the user's own meeting notes. capturedAtMs = offset into the recording clock
+/// (null = pre-meeting/post-hoc); immutable after capture.
+export interface MeetingNote {
+  id: string;
+  text: string;
+  capturedAtMs: number | null;
+  ordinal: number;
+  createdAt: string;
+}
+
 /// An action across the whole library (the "Actions" tab), carrying its source recording so the row can
 /// link back to that transcript.
 export interface ActionListItem {
