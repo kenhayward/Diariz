@@ -286,6 +286,8 @@ export interface PlatformSettings {
   autoDeleteAudioEnabled: boolean;
   audioRetentionDays: number;
   audioDeletionTimeOfDay: string;
+  /// Master switch for user API access (personal tokens). Off by default.
+  apiAccessEnabled: boolean;
 }
 
 export interface GrantResult {
@@ -379,6 +381,26 @@ export interface UserProfile {
   companyDescription: string | null;
   linkedIn: string | null;
   theme: "auto" | "light" | "dark";
+  /// Whether the platform has user API access enabled (drives the Preferences "Developers" tab).
+  apiAccessEnabled: boolean;
+}
+
+/// A stored personal REST-API token, listed in Preferences -> Developers. The secret is never returned -
+/// only a short display prefix and usage timestamps.
+export interface ApiToken {
+  id: string;
+  name: string;
+  prefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+/// The response to generating an API token: the plaintext token, shown to the user exactly once.
+export interface ApiTokenCreated {
+  id: string;
+  name: string;
+  prefix: string;
+  token: string;
 }
 
 /// One of the user's Google calendars, for the Preferences picker. `selected` is the user's effective

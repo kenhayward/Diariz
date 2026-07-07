@@ -26,6 +26,8 @@ import type {
   Language,
   McpToken,
   McpTokenCreated,
+  ApiToken,
+  ApiTokenCreated,
   MeetingType,
   MeetingTypeInput,
   OAuthConnection,
@@ -647,6 +649,23 @@ export const api = {
 
   async revokeMcpToken(id: string): Promise<void> {
     await http.delete(`/api/user/mcp-tokens/${id}`);
+  },
+
+  // ---- Personal REST-API tokens (Developers / API access) ----
+
+  async listApiTokens(): Promise<ApiToken[]> {
+    const { data } = await http.get<ApiToken[]>("/api/user/api-tokens");
+    return data;
+  },
+
+  /// Generate a new API token. The plaintext token is returned once - show it to the user immediately.
+  async createApiToken(name: string): Promise<ApiTokenCreated> {
+    const { data } = await http.post<ApiTokenCreated>("/api/user/api-tokens", { name });
+    return data;
+  },
+
+  async revokeApiToken(id: string): Promise<void> {
+    await http.delete(`/api/user/api-tokens/${id}`);
   },
 
   /// Active OAuth connections (the claude.ai web MCP connector and any other OAuth client the user approved).

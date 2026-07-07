@@ -49,6 +49,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   // "Run now" (manual one-shot deletion pass) state.
   const [retentionRunBusy, setRetentionRunBusy] = useState(false);
   const [retentionRunMsg, setRetentionRunMsg] = useState<string | null>(null);
+  // Integration (Platform-Admin only): master switch for user API access (personal tokens).
+  const [apiAccessEnabled, setApiAccessEnabled] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -73,6 +75,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       setRetentionDays(String(platform.audioRetentionDays));
       // "HH:mm:ss" on the wire -> "HH:mm" for the <input type="time">.
       setDeletionTime((platform.audioDeletionTimeOfDay ?? "03:00:00").slice(0, 5));
+      setApiAccessEnabled(platform.apiAccessEnabled);
     }
   }, [platform]);
 
@@ -113,6 +116,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
           audioRetentionDays: days,
           // "HH:mm" from the input -> "HH:mm:ss" for the TimeOnly wire type.
           audioDeletionTimeOfDay: `${deletionTime || "03:00"}:00`,
+          apiAccessEnabled,
         });
         qc.invalidateQueries({ queryKey: ["platform-settings"] });
       }
