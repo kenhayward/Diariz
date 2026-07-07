@@ -5,9 +5,14 @@ import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 const TOKEN = `h.${btoa(JSON.stringify({ sub: "u1" }))}.s`;
 
 vi.mock("../lib/api", () => ({
-  api: { upload: vi.fn() },
+  api: { upload: vi.fn(), createNotes: vi.fn() },
   apiErrorMessage: (_e: unknown, fb: string) => fb,
   getToken: () => TOKEN,
+}));
+vi.mock("../lib/pendingNotes", () => ({
+  savePendingNotes: vi.fn().mockResolvedValue(undefined),
+  loadPendingNotes: vi.fn().mockResolvedValue(null),
+  clearPendingNotes: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../lib/uploadContext", () => ({ useUpload: () => ({ uploadFiles: vi.fn() }) }));
 vi.mock("../lib/audioSource", () => ({
@@ -27,6 +32,7 @@ vi.mock("../lib/pendingRecording", () => ({
 import { api } from "../lib/api";
 import { getStream, listInputDevices, micPermissionState, unlockDeviceLabels } from "../lib/audioSource";
 import { loadPendingRecording, clearPendingRecording } from "../lib/pendingRecording";
+import { savePendingNotes, clearPendingNotes } from "../lib/pendingNotes";
 import Recorder from "./Recorder";
 
 // jsdom has no MediaRecorder; a minimal stub lets start() run without capturing real audio.
@@ -296,5 +302,89 @@ describe("Recorder pause/resume", () => {
     // Resumed: back to Pause, no "Paused" indicator.
     expect(await screen.findByRole("button", { name: /^pause$/i })).toBeTruthy();
     expect(screen.queryByText(/paused/i)).toBeNull();
+  });
+});
+
+describe("live notes", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
+    (getStream as Mock).mockResolvedValue(fakeStream);
+    (api.upload as Mock).mockResolvedValue({ id: "rec-new" });
+    (api.createNotes as Mock).mockResolvedValue([]);
+  });
+
+  it("shows the notes panel while recording and commits a stamped, mirrored line", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByText(/notes while recording/i); // auto-opened
+
+    const box = screen.getByPlaceholderText(/add a note/i);
+    fireEvent.change(box, { target: { value: "budget concern" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(await screen.findByText("budget concern")).toBeTruthy();
+
+    await waitFor(() =>
+      expect(savePendingNotes).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recordingId: null,
+          lines: [expect.objectContaining({ text: "budget concern" })],
+        }),
+      ),
+    );
+  });
+
+  it("attaches committed lines to the uploaded recording and clears the stash", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByText(/notes while recording/i);
+    const box = screen.getByPlaceholderText(/add a note/i);
+    fireEvent.change(box, { target: { value: "follow up with legal" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() =>
+      expect(api.createNotes).toHaveBeenCalledWith("rec-new", [
+        expect.objectContaining({ text: "follow up with legal" }),
+      ]),
+    );
+    await waitFor(() => expect(clearPendingNotes).toHaveBeenCalledWith("u1"));
+  });
+
+  it("keeps lines durable and offers a retry when the attach fails", async () => {
+    (api.createNotes as Mock).mockRejectedValueOnce(new Error("boom"));
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByText(/notes while recording/i);
+    const box = screen.getByPlaceholderText(/add a note/i);
+    fireEvent.change(box, { target: { value: "x" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    expect(await screen.findByText(/could not be attached/i)).toBeTruthy();
+    await waitFor(() =>
+      expect(savePendingNotes).toHaveBeenCalledWith(expect.objectContaining({ recordingId: "rec-new" })),
+    );
+
+    // Retry succeeds and the banner clears.
+    fireEvent.click(screen.getByRole("button", { name: /attach notes/i }));
+    await waitFor(() => expect(api.createNotes).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText(/could not be attached/i)).toBeNull());
+  });
+
+  it("closing the panel persists the preference; toggle reopens it", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByText(/notes while recording/i);
+
+    fireEvent.click(screen.getByRole("button", { name: /close notes/i }));
+    expect(screen.queryByText(/notes while recording/i)).toBeNull();
+    expect(localStorage.getItem("diariz.recorder.notesOpen")).toBe("false");
+
+    fireEvent.click(screen.getByRole("button", { name: /^notes$/i }));
+    expect(await screen.findByText(/notes while recording/i)).toBeTruthy();
   });
 });

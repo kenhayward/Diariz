@@ -296,10 +296,14 @@ the recording automatically** when its calendar link forms (`MeetingNoteAdoption
 `LinkCalendar` chokepoint that both the auto-match save and manual linking use - one-way and additive).
 Recording-anchored lines live on the detail page's **Notes tab** (CRUD at `/api/recordings/{id}/notes`);
 lines can carry a **`CapturedAtMs`** recording-clock timestamp (immutable; stamped lines deep-link to that
-moment in the transcript via the existing `?t=` navigation). Planned follow-ups: a live notes panel during
-recording (stamps from `recorderTiming`, IndexedDB-durable, attached on upload) and the **minutes weave**
-(notes steer every template section + an "Enhanced notes" section with provenance) - see
-`docs/superpowers/specs/2026-07-07-enhanced-notes-design.md`.
+moment in the transcript via the existing `?t=` navigation). **Live capture:** while recording, a
+`LiveNotesPanel` auto-opens beside the recorder (dismissable; preference in localStorage) - each
+Enter-committed line is stamped with the current *recorded* time (`recorderTiming`, pause-aware), mirrored
+to IndexedDB (`lib/pendingNotes.ts`, its own `diariz-notes` DB, keyed by user) so a crash never loses lines,
+and bulk-attached to the recording right after upload; an attach failure keeps the lines durable (with the
+recording id) behind a retry banner, and recovered pending recordings adopt their stashed lines on
+re-upload. Remaining follow-up: the **minutes weave** (notes steer every template section + an "Enhanced
+notes" section with provenance) - see `docs/superpowers/specs/2026-07-07-enhanced-notes-design.md`.
 
 ## MCP server (connect Claude to transcripts)
 

@@ -33,6 +33,14 @@ import {
 } from "../lib/pendingRecording";
 import * as timing from "../lib/recorderTiming";
 import type { Timing } from "../lib/recorderTiming";
+import {
+  savePendingNotes,
+  loadPendingNotes,
+  clearPendingNotes,
+  type PendingNotes,
+} from "../lib/pendingNotes";
+import LiveNotesPanel from "./LiveNotesPanel";
+import type { MeetingNote } from "../lib/types";
 
 const SOURCE_KEY = "diariz.recorder.source";
 const CONSTRAINTS_KEY = "diariz.recorder.audioConstraints";
@@ -84,15 +92,25 @@ export default function Recorder({
   // An unsaved recording recovered from local storage (its upload failed previously, e.g. the session
   // expired). Offered back for upload so the audio is never lost.
   const [pending, setPending] = useState<PendingRecording | null>(null);
+  // Live notes taken while recording: local lines (fake ids) stamped with the *recorded* clock, mirrored to
+  // IndexedDB so a crash never loses them, and attached to the recording after upload.
+  const [liveLines, setLiveLines] = useState<MeetingNote[]>([]);
+  const [notesOpen, setNotesOpen] = useState(false);
+  // Lines whose audio uploaded but whose attach failed (durable, with the recording id) - drives the retry banner.
+  const [notesAttach, setNotesAttach] = useState<PendingNotes | null>(null);
 
   const userId = userIdFromToken(getToken());
 
-  // On mount, surface any unsaved recording stashed for this user.
+  // On mount, surface any unsaved recording stashed for this user - and any note lines whose audio uploaded
+  // but whose attach failed (they carry the recording id, so the banner can retry).
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
     void loadPendingRecording(userId).then((rec) => {
       if (!cancelled && rec) setPending(rec);
+    });
+    void loadPendingNotes(userId).then((stash) => {
+      if (!cancelled && stash && stash.lines.length > 0 && stash.recordingId) setNotesAttach(stash);
     });
     return () => {
       cancelled = true;
@@ -105,6 +123,8 @@ export default function Recorder({
   const chunksRef = useRef<Blob[]>([]);
   // Tracks *recorded* time (excludes paused stretches) so the timer + uploaded duration stay honest.
   const timingRef = useRef<Timing>({ accumulatedMs: 0, runningSince: null });
+  // Read inside upload() (state may not have flushed when onstop fires).
+  const liveLinesRef = useRef<MeetingNote[]>([]);
   const timerRef = useRef<number | null>(null);
   // The coarse source actually being recorded (mic vs system); the tray only speaks in these terms,
   // and the upload title/enum needs it, so we can't rely on `selection` state having flushed.
@@ -239,6 +259,83 @@ export default function Recorder({
     });
   }
 
+  // ---- Live notes (taken while recording; attached to the recording after upload) ----
+
+  const NOTES_OPEN_KEY = "diariz.recorder.notesOpen";
+
+  /// Update the local lines and mirror them to IndexedDB (recordingId null = still recording).
+  function mirrorLines(lines: MeetingNote[]) {
+    liveLinesRef.current = lines;
+    setLiveLines(lines);
+    if (userId)
+      void savePendingNotes({
+        userId,
+        recordingId: null,
+        updatedAt: Date.now(),
+        lines: lines.map((l) => ({ text: l.text, capturedAtMs: l.capturedAtMs })),
+      });
+  }
+
+  function addLiveNote(text: string) {
+    const line: MeetingNote = {
+      id: crypto.randomUUID(),
+      text,
+      capturedAtMs: timing.elapsedMs(timingRef.current, Date.now()),
+      ordinal: liveLinesRef.current.length,
+      createdAt: new Date().toISOString(),
+    };
+    mirrorLines([...liveLinesRef.current, line]);
+  }
+
+  function editLiveNote(id: string, text: string) {
+    mirrorLines(liveLinesRef.current.map((l) => (l.id === id ? { ...l, text } : l)));
+  }
+
+  function deleteLiveNote(id: string) {
+    mirrorLines(liveLinesRef.current.filter((l) => l.id !== id));
+  }
+
+  function closeNotes() {
+    setNotesOpen(false);
+    try {
+      localStorage.setItem(NOTES_OPEN_KEY, "false");
+    } catch {
+      /* non-fatal */
+    }
+  }
+
+  function openNotes() {
+    setNotesOpen(true);
+    try {
+      localStorage.setItem(NOTES_OPEN_KEY, "true");
+    } catch {
+      /* non-fatal */
+    }
+  }
+
+  /// Attach lines to the created recording. Success clears the durable stash; failure keeps the lines (with
+  /// the recording id) and surfaces the retry banner. A notes failure never fails the upload itself.
+  async function attachNotes(recordingId: string, fromRetry?: PendingNotes) {
+    const lines = fromRetry
+      ? fromRetry.lines
+      : liveLinesRef.current.map((l) => ({ text: l.text, capturedAtMs: l.capturedAtMs }));
+    if (lines.length === 0) {
+      if (userId) void clearPendingNotes(userId);
+      return;
+    }
+    try {
+      await api.createNotes(recordingId, lines);
+      if (userId) await clearPendingNotes(userId);
+      liveLinesRef.current = [];
+      setLiveLines([]);
+      setNotesAttach(null);
+    } catch {
+      const stash: PendingNotes = { userId: userId ?? "", recordingId, lines, updatedAt: Date.now() };
+      if (userId) await savePendingNotes(stash);
+      setNotesAttach(stash);
+    }
+  }
+
   // `trayKind` is set only when the Electron tray drives us (it speaks coarse mic/system); the on-screen
   // button passes nothing and records the current `selection`. A tray "mic" maps to the current specific
   // mic (or default), "system" to loopback.
@@ -269,6 +366,12 @@ export default function Recorder({
       startTicker();
       setRecording(true);
       setPaused(false);
+      // Fresh notes for a fresh recording: clear any stale unattached lines (orphans from a crash whose
+      // audio never reached Stop - there is nothing to attach them to) and open the panel per preference.
+      liveLinesRef.current = [];
+      setLiveLines([]);
+      if (userId) void clearPendingNotes(userId);
+      setNotesOpen(localStorage.getItem(NOTES_OPEN_KEY) !== "false");
       reportRef.current({ phase: "recording", source: coarse });
       // A mic grant unlocks device labels — re-enumerate so specifics appear next time.
       if (coarse === "mic") void refreshDevices();
@@ -331,9 +434,11 @@ export default function Recorder({
     if (userId) await savePendingRecording(rec);
 
     try {
-      await api.upload(blob, title, durationMs, source);
+      const created = await api.upload(blob, title, durationMs, source);
       if (userId) await clearPendingRecording(userId);
       setPending(null);
+      // Attach any live notes to the new recording (failure keeps them durable + shows the retry banner).
+      await attachNotes(created.id);
       onUploaded();
       reportRef.current({ phase: "idle" });
     } catch (e) {
@@ -351,9 +456,18 @@ export default function Recorder({
     setBusy(true);
     setError(null);
     try {
-      await api.upload(pending.blob, pending.title, pending.durationMs, pending.source);
+      const created = await api.upload(pending.blob, pending.title, pending.durationMs, pending.source);
       if (userId) await clearPendingRecording(userId);
       setPending(null);
+      // Recovered audio adopts any note lines stashed with it (recordingId null = never attached).
+      if (liveLinesRef.current.length === 0 && userId) {
+        const stash = await loadPendingNotes(userId);
+        if (stash && stash.recordingId === null && stash.lines.length > 0) {
+          await attachNotes(created.id, { ...stash, recordingId: created.id });
+        }
+      } else {
+        await attachNotes(created.id);
+      }
       onUploaded();
     } catch (e) {
       setError(apiErrorMessage(e, t("errUpload")));
@@ -366,6 +480,10 @@ export default function Recorder({
     if (!window.confirm(t("confirmDiscardRecording"))) return;
     if (userId) await clearPendingRecording(userId);
     setPending(null);
+    // Notes about discarded audio die with it.
+    if (userId) await clearPendingNotes(userId);
+    liveLinesRef.current = [];
+    setLiveLines([]);
   }
 
   // Upload existing audio files (the "Upload" button). The shared upload queue handles validation,
@@ -529,6 +647,16 @@ export default function Recorder({
             )}
             {/* Meter (and its silence detection) only runs while actively capturing. */}
             {!paused && <InputLevelMeter stream={streamRef.current} onSilentChange={setSilent} />}
+            {/* Live notes toggle: reopen the panel after it was closed. */}
+            {!notesOpen && (
+              <button
+                type="button"
+                onClick={openNotes}
+                className="rounded border px-2 py-1 text-xs dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
+              >
+                {t("liveNotesToggle")}
+              </button>
+            )}
           </>
         )}
         {error && compact && <span className="text-xs text-red-600">{error}</span>}
@@ -564,6 +692,29 @@ export default function Recorder({
         <p role="status" aria-live="polite" className="mt-2 text-xs text-gray-500 dark:text-gray-400">
           {t("noSoundHint")}
         </p>
+      )}
+      {/* Live notes panel: floats below the TopBar while recording (incl. paused). */}
+      {recording && notesOpen && (
+        <LiveNotesPanel
+          lines={liveLines}
+          onAdd={addLiveNote}
+          onEdit={editLiveNote}
+          onDelete={deleteLiveNote}
+          onClose={closeNotes}
+        />
+      )}
+      {/* Notes attached-failure banner: the audio uploaded, the lines are safe - offer a retry. */}
+      {notesAttach && !recording && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+          <span>{t("notesAttachFailed")}</span>
+          <button
+            type="button"
+            onClick={() => void attachNotes(notesAttach.recordingId!, notesAttach)}
+            className="ml-auto rounded bg-amber-600 px-2 py-1 text-xs text-white"
+          >
+            {t("notesAttachRetry")}
+          </button>
+        </div>
       )}
     </div>
   );
