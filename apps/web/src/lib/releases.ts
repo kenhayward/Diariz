@@ -21,8 +21,11 @@ diarization. You get speaker-labelled, timestamped segments you can rename, edit
 (per segment, per speaker, or the whole recording), and can re-transcribe at any time. Edits are kept **separately from
 the model's original words**, so a **Show original / Show revised** toggle always gets you back to what the
 model said. You can **merge** consecutive same-speaker rows into single blocks and **email yourself the
-transcript**. The recording page is organised into **tabs** - Overview, Minutes, Actions, Speakers, Transcript,
-and Attachments - each with its own toolbar.
+transcript**. The recording page is organised into **tabs** - Overview, Minutes, Actions, Notes, Speakers,
+Transcript, and Attachments - each with its own toolbar. The **Notes tab** holds your own note lines for the
+meeting (sparse trigger phrases, questions, observations); timestamped lines jump to that moment in the
+transcript, and you can also jot **prep notes on an upcoming Google Calendar meeting** (from its preview page) -
+they attach to the recording automatically once it is linked to that meeting.
 
 It can **identify speakers** across recordings: enrol a person from a recording's speaker and Diariz
 recognises that voice in later recordings automatically (using **SpeechBrain ECAPA** voiceprints), with
@@ -117,6 +120,23 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.103.0",
+    date: "2026-07-07",
+    pr: 235,
+    headline: "Your own meeting notes - on recordings and upcoming meetings",
+    summary:
+      "A new Notes tab on every recording holds your own note lines for the meeting - short trigger phrases, " +
+      "questions, things to follow up. Lines with a timestamp jump straight to that moment in the transcript. " +
+      "You can also jot prep notes on an upcoming Google Calendar meeting from its preview page; they attach to " +
+      "the recording automatically as soon as it is linked to that meeting. This is the first part of a larger " +
+      "capability - next, your notes will steer the generated meeting minutes and expand into an enhanced-notes " +
+      "section with links back to the transcript. Server redeploy (web + API) only.",
+    added: [
+      "Notes tab on the recording page: add, edit, and delete your own note lines; timestamped lines jump to that moment in the transcript.",
+      "Prep notes on an upcoming Google Calendar meeting (event preview page) - adopted onto the recording automatically when it is linked.",
+    ],
+  },
   {
     version: "0.102.2",
     date: "2026-07-07",

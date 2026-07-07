@@ -286,6 +286,21 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   transcripts before saying it doesn't know. With tools off, chat is the same single-pass stream as before.
   Tools run inside the API (no worker) — server-redeploy only.
 
+## Meeting notes (the user's own notes)
+
+Users can jot their **own note lines** for a meeting - sparse trigger phrases, questions, observations - as
+a first-class entity (**`MeetingNote`**, row per line). A line is anchored to **either a recording or an
+upcoming Google Calendar event**: prep notes are taken on the calendar-event preview page
+(`/calendar-event/:id`, CRUD at `/api/calendar/events/{calendarId}/{eventId}/notes`) and are **adopted onto
+the recording automatically** when its calendar link forms (`MeetingNoteAdoption`, called inside the
+`LinkCalendar` chokepoint that both the auto-match save and manual linking use - one-way and additive).
+Recording-anchored lines live on the detail page's **Notes tab** (CRUD at `/api/recordings/{id}/notes`);
+lines can carry a **`CapturedAtMs`** recording-clock timestamp (immutable; stamped lines deep-link to that
+moment in the transcript via the existing `?t=` navigation). Planned follow-ups: a live notes panel during
+recording (stamps from `recorderTiming`, IndexedDB-durable, attached on upload) and the **minutes weave**
+(notes steer every template section + an "Enhanced notes" section with provenance) - see
+`docs/superpowers/specs/2026-07-07-enhanced-notes-design.md`.
+
 ## MCP server (connect Claude to transcripts)
 
 Diariz hosts a **Model Context Protocol server in-process** (the official `ModelContextProtocol.AspNetCore`
