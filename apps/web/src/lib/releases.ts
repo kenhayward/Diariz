@@ -118,6 +118,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.102.2",
+    date: "2026-07-07",
+    pr: 234,
+    headline: "Fix: web Docker build (Node 22)",
+    summary:
+      "The web container image failed to build after the API-reference feature was added, because that library " +
+      "requires a newer Node version than the build image used. Bumped the web build image (and CI) to Node 22. " +
+      "Server redeploy (web) only.",
+    fixed: [
+      "Web Docker image now builds: the build stage (and CI) use Node 22, required by the in-app API-reference library.",
+    ],
+  },
+  {
     version: "0.102.1",
     date: "2026-07-07",
     pr: 233,
