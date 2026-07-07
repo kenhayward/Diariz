@@ -39,13 +39,20 @@ test("a manual check gives feedback for available / up-to-date / error", () => {
     title: "Diariz",
     body: "Downloading update 0.12.0…",
   });
-  assert.deepEqual(notificationForUpdate("not-available", { manual: true }), {
+  assert.deepEqual(notificationForUpdate("not-available", { manual: true, version: "0.98.0" }), {
     title: "Diariz",
-    body: "You're already up to date",
+    body: "You are on the latest version 0.98.0",
   });
   assert.deepEqual(notificationForUpdate("error", { manual: true }), {
     title: "Diariz",
     body: "Update check failed",
+  });
+});
+
+test("the up-to-date notification omits the version when unknown", () => {
+  assert.deepEqual(notificationForUpdate("not-available", { manual: true }), {
+    title: "Diariz",
+    body: "You are on the latest version",
   });
 });
 

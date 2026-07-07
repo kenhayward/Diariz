@@ -292,7 +292,7 @@ function restartToUpdate() {
 
 function checkForUpdates(manual) {
   if (!autoUpdater) {
-    if (manual) notifyUpdate("not-available", { manual: true });
+    if (manual) notifyUpdate("not-available", { manual: true, version: app.getVersion() });
     return;
   }
   pendingManualCheck = manual;
@@ -313,7 +313,7 @@ function setupAutoUpdater() {
     notifyUpdate("available", { version: info?.version, manual: pendingManualCheck }),
   );
   autoUpdater.on("update-not-available", () => {
-    notifyUpdate("not-available", { manual: pendingManualCheck });
+    notifyUpdate("not-available", { manual: pendingManualCheck, version: app.getVersion() });
     pendingManualCheck = false;
   });
   autoUpdater.on("error", () => {
