@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const authState = { isPlatformAdmin: false, logout: vi.fn() };
@@ -24,7 +25,9 @@ function renderModal() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <SettingsModal onClose={() => {}} />
+      <MemoryRouter>
+        <SettingsModal onClose={() => {}} />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -350,6 +353,8 @@ describe("SettingsModal", () => {
     renderModal();
 
     fireEvent.click(await screen.findByRole("tab", { name: /integration/i }));
+    // The Integration tab links to the in-app API reference.
+    expect(screen.getByRole("link", { name: /view api reference/i }).getAttribute("href")).toBe("/developers/api");
     const toggle = await screen.findByLabelText(/enable user api access/i);
     await waitFor(() => expect((toggle as HTMLInputElement).checked).toBe(false));
     fireEvent.click(toggle);
