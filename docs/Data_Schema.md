@@ -66,6 +66,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddAudioRetention` | `PlatformSettings.AutoDeleteAudioEnabled` (bool, default false) + `AudioRetentionDays` (int, default 30) + `AudioDeletionTimeOfDay` (time, default 03:00) — the opt-in nightly audio-retention policy; and `Recording.AudioProtectedAt` (timestamptz null) — per-recording exemption from audio deletion |
 | `AddUserProfileAndCalendarSelection` | `UserSettings` gains `JobTitle`/`CompanyName`/`LinkedIn` (varchar(256) null), `JobDescription`/`CompanyDescription` (varchar(2048) null), `Theme` (int, default 0 = Auto), and `GoogleSelectedCalendarIdsJson` (jsonb null) — richer profile + per-user theme + the Google calendar selection |
 | `AddApiAccessTokens` | `ApiAccessTokens` (per-user personal REST-API tokens; SHA-256 hash only, **unique** on `TokenHash`, cascade on user delete) + `PlatformSettings.ApiAccessEnabled` (bool, default false) — user API access, off until a Platform Admin enables it |
+| `AddMeetingNotes` | `MeetingNotes` (the user's own note lines; anchored to a recording **or** a calendar event, adopted onto the recording when the calendar link forms; cascades from both user and recording) |
 
 ### Entity-relationship overview
 
@@ -225,6 +226,28 @@ Extracted/hand-edited action items.
 
 Index: `(RecordingId, Ordinal)`. The cross-meeting Actions list (`GET /api/actions`) joins to `Recordings`
 for ownership + display name; bulk complete/un-complete via `POST /api/actions/complete`.
+
+#### `MeetingNotes`
+The user's own note lines for a meeting - sparse trigger phrases that (from a later PR) steer minutes
+generation. A row is anchored to EITHER a recording (`RecordingId` set) OR an upcoming calendar event
+(`CalendarId`+`EventId` set, `RecordingId` null). When a recording's calendar link forms (the `LinkCalendar`
+chokepoint - auto-match or manual), the owner's event-anchored lines are **adopted**: `RecordingId` set,
+event keys cleared, ordinals appended after existing lines (one-way, additive; unlinking never detaches).
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `UserId` | uuid FK → AspNetUsers | owner; **cascade** (event-anchored notes have no recording) |
+| `RecordingId` | uuid FK → Recordings, null | **cascade**; set once anchored/adopted |
+| `CalendarId` | varchar(256) null | pre-meeting anchor; cleared on adoption |
+| `EventId` | varchar(256) null | pre-meeting anchor; cleared on adoption |
+| `Text` | varchar(2048) | the note line (trimmed; blank lines skipped on create) |
+| `CapturedAtMs` | bigint null | offset into the recording clock (pause-aware); null = pre-meeting/post-hoc; immutable |
+| `Ordinal` | int | 0-based order within the anchor |
+| `CreatedAt` / `UpdatedAt` | timestamptz | |
+
+Indexes: `(RecordingId, Ordinal)`, `(UserId, CalendarId, EventId)`. CRUD at
+`/api/recordings/{id}/notes` and `/api/calendar/events/{calendarId}/{eventId}/notes`.
 
 #### `Attachments`
 Supporting documents on a recording — an uploaded file (blob) or a URL.

@@ -589,6 +589,8 @@ public class RecordingsController : ControllerBase
         link.HtmlLink = ev.HtmlLink;
         link.LinkedManually = req.Manual;
         link.SyncedAt = DateTimeOffset.UtcNow;
+        // Adopt any pre-meeting notes the user attached to this event (one-way, additive - see MeetingNoteAdoption).
+        await MeetingNoteAdoption.AdoptAsync(_db, UserId, rec.Id, link.CalendarId, link.EventId, ct);
         await _db.SaveChangesAsync(ct);
 
         return Ok(ToLinkDto(link));

@@ -21,6 +21,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<SpeakerProfile> SpeakerProfiles => Set<SpeakerProfile>();
     public DbSet<ProfileContribution> ProfileContributions => Set<ProfileContribution>();
     public DbSet<RecordingAction> RecordingActions => Set<RecordingAction>();
+    public DbSet<MeetingNote> MeetingNotes => Set<MeetingNote>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<RecordingCalendarLink> RecordingCalendarLinks => Set<RecordingCalendarLink>();
     public DbSet<IcsCalendarSource> IcsCalendarSources => Set<IcsCalendarSource>();
@@ -118,6 +119,17 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         builder.Entity<RecordingAction>(e =>
         {
             e.HasIndex(a => new { a.RecordingId, a.Ordinal });
+        });
+
+        builder.Entity<MeetingNote>(e =>
+        {
+            e.HasIndex(n => new { n.RecordingId, n.Ordinal });
+            e.HasIndex(n => new { n.UserId, n.CalendarId, n.EventId });
+            e.Property(n => n.Text).HasMaxLength(2048);
+            e.Property(n => n.CalendarId).HasMaxLength(256);
+            e.Property(n => n.EventId).HasMaxLength(256);
+            e.HasOne(n => n.User).WithMany().HasForeignKey(n => n.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(n => n.Recording).WithMany().HasForeignKey(n => n.RecordingId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<Attachment>(e =>

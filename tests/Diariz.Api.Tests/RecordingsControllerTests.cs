@@ -1675,6 +1675,31 @@ public class RecordingsControllerTests
     }
 
     [Fact]
+    public async Task LinkCalendar_AdoptsPreMeetingEventNotes()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var rec = await SeedRecordingAt(db, userId, DateTimeOffset.Parse("2026-07-02T09:00:00Z"), 600_000);
+        GrantCalendar(db, userId);
+        // A pre-meeting note anchored to the event (on the calendar the sample event reports).
+        db.MeetingNotes.Add(new MeetingNote
+        {
+            Id = Guid.NewGuid(), UserId = userId,
+            CalendarId = "team@group.calendar.google.com", EventId = "evt1", Text = "prep note", Ordinal = 0,
+        });
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue(), calendar: new FakeCalendarClient { Event = SampleEvent() });
+
+        Assert.IsType<OkObjectResult>(await controller.LinkCalendar(rec.Id, new("evt1", true), default));
+
+        var note = await db.MeetingNotes.SingleAsync();
+        Assert.Equal(rec.Id, note.RecordingId); // adopted onto the recording
+        Assert.Null(note.CalendarId);
+        Assert.Null(note.EventId);
+    }
+
+    [Fact]
     public async Task LinkCalendar_Relinking_OverwritesTheExistingSnapshot()
     {
         using var db = TestDb.Create();
