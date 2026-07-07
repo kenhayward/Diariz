@@ -340,6 +340,28 @@ describe("SettingsModal", () => {
     expect(api.updateUserSettings).toHaveBeenCalled();
   });
 
+  it("lets a Platform Administrator enable user API access from the Integration tab and saves it", async () => {
+    authState.isPlatformAdmin = true;
+    (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      starterQuotaBytes: 5 * 1024 ** 3, maxQuotaBytes: 50 * 1024 ** 3,
+      minutesGenerationMode: "SingleCall", autoDeleteAudioEnabled: false,
+      audioRetentionDays: 30, audioDeletionTimeOfDay: "03:00:00", apiAccessEnabled: false,
+    });
+    renderModal();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /integration/i }));
+    const toggle = await screen.findByLabelText(/enable user api access/i);
+    await waitFor(() => expect((toggle as HTMLInputElement).checked).toBe(false));
+    fireEvent.click(toggle);
+
+    fireEvent.click(screen.getByRole("button", { name: /^ok$/i }));
+    await waitFor(() =>
+      expect(api.updatePlatformSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ apiAccessEnabled: true }),
+      ),
+    );
+  });
+
   it("lets a Platform Administrator enable audio auto-delete and saves the retention policy", async () => {
     authState.isPlatformAdmin = true;
     (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
