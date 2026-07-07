@@ -114,6 +114,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.100.2",
+    date: "2026-07-07",
+    pr: 227,
+    headline: "Fixes: play a speaker's audio from the Speakers tab; deleted recordings return you home",
+    summary:
+      "Two recording-page fixes. On the Speakers tab, pressing Play on a speaker (or clicking one of their " +
+      "segments) now actually plays the audio - previously nothing happened, because the hidden audio player " +
+      "only existed on the Transcript tab. And when a recording no longer exists - you deleted it, it was " +
+      "removed on another device, or you followed a stale link - the page now returns you to the home screen " +
+      "instead of showing 'Loading...' indefinitely. Server redeploy (web) only.",
+    fixed: [
+      "Speakers tab: playing a speaker's audio (or clicking one of their segments) now works from that tab.",
+      "Opening a recording that no longer exists now redirects to the home page instead of loading forever.",
+    ],
+  },
+  {
     version: "0.100.1",
     date: "2026-07-07",
     pr: 226,

@@ -69,11 +69,21 @@ export default function RecordingDetail() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { data: rec } = useQuery({
+  const { data: rec, error: recError } = useQuery({
     queryKey: ["recording", id],
     queryFn: () => api.getRecording(id),
     enabled: Boolean(id),
+    // A missing recording won't come back by retrying, and we want the redirect (below) to fire promptly.
+    retry: (_count, e) => (e as { response?: { status?: number } })?.response?.status !== 404,
   });
+
+  // If the recording no longer exists - deleted from here, from the list, on another device, or reached via
+  // a stale link - send the user home instead of leaving them on a "Loading..." / stale transcript page.
+  useEffect(() => {
+    if ((recError as { response?: { status?: number } })?.response?.status === 404) {
+      navigate("/", { replace: true });
+    }
+  }, [recError, navigate]);
   const { data: profiles = [] } = useQuery({
     queryKey: ["speaker-profiles"],
     queryFn: api.listSpeakerProfiles,
@@ -1181,16 +1191,6 @@ export default function RecordingDetail() {
       ) : undefined,
       content: rec.current ? (
         <div className="space-y-3 pb-2">
-          {/* Hidden audio element — the header bar + the Play buttons drive it (no native controls). */}
-          {rec.hasAudio && (
-            <audio
-              ref={audioRef}
-              onTimeUpdate={onTimeUpdate}
-              onPlay={() => setAudioPaused(false)}
-              onPause={() => setAudioPaused(true)}
-              className="hidden"
-            />
-          )}
           {matchTimes.length > 1 && (
             <div className="sticky top-0 z-10 mb-2 flex items-center gap-2 rounded-md border bg-blue-50 px-3 py-1.5 text-xs text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
               <span className="font-medium">
@@ -1310,6 +1310,20 @@ export default function RecordingDetail() {
 
       {rec.status === "Failed" && rec.error && (
         <p className="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{rec.error}</p>
+      )}
+
+      {/* Hidden audio element — the header bar + the per-speaker/segment Play buttons drive it (no native
+          controls). It lives here, outside the tabs, so it stays mounted on every tab: DetailTabs renders
+          only the active tab, so keeping it inside the Transcript tab meant audioRef was null on the
+          Speakers tab and Play silently no-op'd. */}
+      {rec.hasAudio && (
+        <audio
+          ref={audioRef}
+          onTimeUpdate={onTimeUpdate}
+          onPlay={() => setAudioPaused(false)}
+          onPause={() => setAudioPaused(true)}
+          className="hidden"
+        />
       )}
 
       <DetailTabs tabs={detailTabs} active={tab} onSelect={selectTab} />
