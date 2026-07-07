@@ -114,6 +114,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.100.4",
+    date: "2026-07-07",
+    pr: 229,
+    headline: "Cleaner transcripts: no blank lines between merged lines",
+    summary:
+      "Transcript text no longer contains repeated line breaks or blank lines. New transcriptions have their " +
+      "segment text tidied as it is saved, and merging consecutive same-speaker lines now joins them with a " +
+      "single line break instead of leaving a blank line between them. (Applies to new transcriptions and " +
+      "future merges; existing transcripts are unchanged until re-transcribed or merged.) Server redeploy only.",
+    changed: [
+      "Merging same-speaker transcript lines now uses a single line break, not a blank line between sections.",
+    ],
+    fixed: [
+      "Transcript segments no longer keep repeated line feeds / blank lines; each line break is a single end-of-paragraph mark.",
+    ],
+  },
+  {
     version: "0.100.3",
     date: "2026-07-07",
     pr: 228,

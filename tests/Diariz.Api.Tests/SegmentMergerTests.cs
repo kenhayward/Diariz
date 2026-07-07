@@ -22,7 +22,7 @@ public class SegmentMergerTests
         var merged = Merge(parts);
 
         Assert.Equal(3, merged.Count);
-        Assert.Equal(new Part("SPEAKER_00", "SPEAKER_00", 0, 2000, "Hello\n\nthere"), merged[0]);
+        Assert.Equal(new Part("SPEAKER_00", "SPEAKER_00", 0, 2000, "Hello\nthere"), merged[0]);
         Assert.Equal(new Part("SPEAKER_01", "SPEAKER_01", 2000, 3000, "Hi"), merged[1]);
         Assert.Equal(new Part("SPEAKER_00", "SPEAKER_00", 3000, 4000, "Bye"), merged[2]);
     }
@@ -41,7 +41,7 @@ public class SegmentMergerTests
         var merged = Merge(parts);
 
         Assert.Single(merged);
-        Assert.Equal(new Part("p:alice", "SPEAKER_00", 0, 2000, "Hello\n\nagain"), merged[0]);
+        Assert.Equal(new Part("p:alice", "SPEAKER_00", 0, 2000, "Hello\nagain"), merged[0]);
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public class SegmentMergerTests
         var merged = Merge(parts);
 
         Assert.Single(merged);
-        Assert.Equal(new Part("S", "S", 0, 3000, "a\n\nb\n\nc"), merged[0]);
+        Assert.Equal(new Part("S", "S", 0, 3000, "a\nb\nc"), merged[0]);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public class SegmentMergerTests
     }
 
     [Fact]
-    public void Merge_SkipsBlankTextWithoutDoubleSpacing()
+    public void Merge_SkipsBlankTextWithoutBlankLine()
     {
         var parts = new List<Part>
         {
@@ -95,7 +95,21 @@ public class SegmentMergerTests
             new("S", "S", 2000, 3000, "world"),
         };
 
-        Assert.Equal("hello\n\nworld", Merge(parts).Single().Text);
+        Assert.Equal("hello\nworld", Merge(parts).Single().Text);
+    }
+
+    [Fact]
+    public void Merge_CollapsesBlankLinesWithinMergedText()
+    {
+        // Merged parts may themselves carry blank lines (e.g. from a hand-edited revision); the merge must
+        // leave a single line break, never a blank line.
+        var parts = new List<Part>
+        {
+            new("S", "S", 0, 1000, "a\n\nb"),
+            new("S", "S", 1000, 2000, "c"),
+        };
+
+        Assert.Equal("a\nb\nc", Merge(parts).Single().Text);
     }
 
     [Fact]

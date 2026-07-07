@@ -1001,7 +1001,7 @@ public class RecordingsControllerTests
         Assert.IsType<NoContentResult>(result);
         var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
         var seg = Assert.Single(await db.Segments.Where(s => s.TranscriptionId == tr.Id).ToListAsync());
-        Assert.Equal("Hello\n\nWorld", seg.EffectiveText); // paragraph break between merged sections
+        Assert.Equal("Hello\nWorld", seg.EffectiveText); // single line break between merged sections, no blank line
         Assert.Equal(0, seg.StartMs);
         Assert.Equal(2000, seg.EndMs);
         Assert.Equal(0, seg.Ordinal);
@@ -1040,7 +1040,7 @@ public class RecordingsControllerTests
 
         Assert.IsType<NoContentResult>(result);
         var seg = Assert.Single(await db.Segments.Where(s => s.TranscriptionId == tr.Id).ToListAsync());
-        Assert.Equal("Hello\n\nWorld", seg.EffectiveText);
+        Assert.Equal("Hello\nWorld", seg.EffectiveText);
         Assert.Equal("SPEAKER_00", seg.SpeakerLabel); // keeps the first run's label
         Assert.Equal(0, seg.StartMs);
         Assert.Equal(2000, seg.EndMs);
