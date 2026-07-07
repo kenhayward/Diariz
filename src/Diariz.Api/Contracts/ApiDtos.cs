@@ -36,13 +36,15 @@ public record GrantResultDto(bool Emailed, string? SetupUrl);
 /// Administrator. <see cref="AudioDeletionTimeOfDay"/> is the server-local time the nightly job runs.</summary>
 public record PlatformSettingsDto(
     long StarterQuotaBytes, long MaxQuotaBytes, MinutesGenerationMode MinutesGenerationMode,
-    bool AutoDeleteAudioEnabled, int AudioRetentionDays, TimeOnly AudioDeletionTimeOfDay);
+    bool AutoDeleteAudioEnabled, int AudioRetentionDays, TimeOnly AudioDeletionTimeOfDay,
+    bool ApiAccessEnabled);
 public record UpdatePlatformSettingsRequest(
     long StarterQuotaBytes, long MaxQuotaBytes,
     MinutesGenerationMode MinutesGenerationMode = MinutesGenerationMode.SingleCall,
     bool AutoDeleteAudioEnabled = false,
     int AudioRetentionDays = PlatformSettings.DefaultAudioRetentionDays,
-    TimeOnly AudioDeletionTimeOfDay = default);
+    TimeOnly AudioDeletionTimeOfDay = default,
+    bool ApiAccessEnabled = false);
 /// <summary>Result of a manual "run the audio-retention pass now" trigger: how many recordings had audio deleted.</summary>
 public record AudioRetentionRunResult(int Deleted);
 /// <summary>The signed-in user's storage usage vs their quota (bytes), plus the total wall-clock time

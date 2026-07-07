@@ -111,6 +111,18 @@ public class PlatformSettingsControllerTests
     }
 
     [Fact]
+    public async Task Update_RoundTrips_ApiAccessEnabled()
+    {
+        using var db = TestDb.Create();
+        var gb = 5L * 1024 * 1024 * 1024;
+
+        var result = await Build(db).Update(new UpdatePlatformSettingsRequest(gb, gb, ApiAccessEnabled: true));
+
+        Assert.True(Assert.IsType<PlatformSettingsDto>(result.Value).ApiAccessEnabled);
+        Assert.True((await db.PlatformSettings.SingleAsync()).ApiAccessEnabled);
+    }
+
+    [Fact]
     public async Task Update_AudioRetentionDaysBelowOne_ReturnsBadRequest()
     {
         using var db = TestDb.Create();
