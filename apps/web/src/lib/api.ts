@@ -665,6 +665,13 @@ export const api = {
     return data;
   },
 
+  /// Run the audio-retention deletion pass immediately (Platform Administrator). Returns how many
+  /// recordings had their audio deleted.
+  async runAudioRetention(): Promise<{ deleted: number }> {
+    const { data } = await http.post<{ deleted: number }>("/api/platform/settings/run-audio-retention");
+    return data;
+  },
+
   // ---- Chat ----
 
   /// Stream a chat reply. Uses raw fetch (not the axios instance) so the response body can be read

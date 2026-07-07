@@ -500,7 +500,9 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   `AudioRetentionSweep` over recordings older than the window that are **fully transcribed** (status Transcribed/Summarized/
   Summarizing) and **not protected** - deleting each audio blob, stamping `Recording.AudioDeletedAt`, and zeroing `SizeBytes`
   (the transcript and all metadata are kept). It reuses the same delete-audio recipe as the manual `DELETE /api/recordings/{id}/audio`.
-  **Off by default** - no audio is removed until an admin turns it on. A recording is exempted via `PUT /api/recordings/{id}/audio-protection`
+  **Off by default** - no audio is removed until an admin turns it on. The Platform Administrator can also trigger the same sweep
+  on demand via `POST /api/platform/settings/run-audio-retention` (a "Run now" button on the Storage Quotas tab), which runs it
+  immediately using the saved window regardless of the toggle. A recording is exempted via `PUT /api/recordings/{id}/audio-protection`
   (stamps `Recording.AudioProtectedAt`); while protected, both the nightly job and the manual delete-audio action skip/refuse it.
 - **Self-service profile:** every user has a **Preferences** screen to change their **display name**
   (`PUT /api/user/profile` → updates `ApplicationUser.FullName` and re-issues the token so the name claim

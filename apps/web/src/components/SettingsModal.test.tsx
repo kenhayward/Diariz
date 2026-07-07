@@ -10,6 +10,7 @@ vi.mock("../lib/api", () => ({
     updateUserSettings: vi.fn(),
     getPlatformSettings: vi.fn().mockResolvedValue({ starterQuotaBytes: 5 * 1024 ** 3, maxQuotaBytes: 50 * 1024 ** 3 }),
     updatePlatformSettings: vi.fn().mockResolvedValue({ starterQuotaBytes: 0, maxQuotaBytes: 0 }),
+    runAudioRetention: vi.fn().mockResolvedValue({ deleted: 0 }),
     backupUrl: () => "/api/maintenance/backup?access_token=t",
     restoreBackup: vi.fn().mockResolvedValue(undefined),
   },
@@ -371,5 +372,31 @@ describe("SettingsModal", () => {
         }),
       ),
     );
+  });
+
+  it("lets a Platform Administrator run the audio-deletion pass now and shows the result", async () => {
+    authState.isPlatformAdmin = true;
+    (api.runAudioRetention as ReturnType<typeof vi.fn>).mockResolvedValue({ deleted: 3 });
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderModal();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /storage quotas/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /run now/i }));
+
+    await waitFor(() => expect(api.runAudioRetention).toHaveBeenCalled());
+    expect(await screen.findByText(/deleted audio for 3/i)).toBeTruthy();
+    confirm.mockRestore();
+  });
+
+  it("does not run the deletion pass when the confirmation is cancelled", async () => {
+    authState.isPlatformAdmin = true;
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    renderModal();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /storage quotas/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /run now/i }));
+
+    expect(api.runAudioRetention).not.toHaveBeenCalled();
+    confirm.mockRestore();
   });
 });

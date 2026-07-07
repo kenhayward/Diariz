@@ -46,6 +46,9 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const [autoDeleteAudio, setAutoDeleteAudio] = useState(false);
   const [retentionDays, setRetentionDays] = useState("");
   const [deletionTime, setDeletionTime] = useState("03:00");
+  // "Run now" (manual one-shot deletion pass) state.
+  const [retentionRunBusy, setRetentionRunBusy] = useState(false);
+  const [retentionRunMsg, setRetentionRunMsg] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -117,6 +120,25 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
     } catch (e) {
       setError(apiErrorMessage(e));
       setBusy(false);
+    }
+  }
+
+  // Manual one-shot: run the audio-deletion pass immediately, using the saved retention window (independent
+  // of the auto-delete toggle). Does not save or close the modal.
+  async function runRetentionNow() {
+    const days = platform?.audioRetentionDays ?? Number(retentionDays);
+    if (!window.confirm(t("runAudioRetentionConfirm", { days }))) return;
+    setRetentionRunMsg(null);
+    setRetentionRunBusy(true);
+    try {
+      const { deleted } = await api.runAudioRetention();
+      setRetentionRunMsg(t("runAudioRetentionResult", { count: deleted }));
+      qc.invalidateQueries({ queryKey: ["recordings"] });
+      qc.invalidateQueries({ queryKey: ["user-storage"] });
+    } catch (e) {
+      setRetentionRunMsg(apiErrorMessage(e));
+    } finally {
+      setRetentionRunBusy(false);
     }
   }
 
@@ -366,6 +388,20 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                       className="w-full rounded border px-2 py-1 text-sm disabled:opacity-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                     />
                   </label>
+                </div>
+                {/* Manual trigger: runs the same deletion pass now (uses the saved window, regardless of the switch). */}
+                <div className="mt-3 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={runRetentionNow}
+                    disabled={retentionRunBusy}
+                    className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                  >
+                    {retentionRunBusy ? t("runAudioRetentionRunning") : t("runAudioRetentionNow")}
+                  </button>
+                  {retentionRunMsg && (
+                    <span className="text-xs text-gray-600 dark:text-gray-300">{retentionRunMsg}</span>
+                  )}
                 </div>
               </div>
             </div>

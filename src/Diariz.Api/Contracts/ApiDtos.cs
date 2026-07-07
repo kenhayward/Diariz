@@ -43,6 +43,8 @@ public record UpdatePlatformSettingsRequest(
     bool AutoDeleteAudioEnabled = false,
     int AudioRetentionDays = PlatformSettings.DefaultAudioRetentionDays,
     TimeOnly AudioDeletionTimeOfDay = default);
+/// <summary>Result of a manual "run the audio-retention pass now" trigger: how many recordings had audio deleted.</summary>
+public record AudioRetentionRunResult(int Deleted);
 /// <summary>The signed-in user's storage usage vs their quota (bytes), plus the total wall-clock time
 /// spent transcribing all their recordings (ms, summed across every transcription version).</summary>
 public record StorageUsageDto(long UsedBytes, long QuotaBytes, long TotalTranscriptionMs = 0);

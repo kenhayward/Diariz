@@ -126,6 +126,7 @@ export const RELEASES: Release[] = [
       "default - no audio is deleted until an administrator enables it. Server redeploy only.",
     added: [
       "Opt-in automatic audio deletion: a nightly job removes the audio of recordings older than a configurable retention window (default 30 days), keeping the transcript. Configured under Settings → Storage Quotas (off by default).",
+      "A 'Run now' button (Settings → Storage Quotas) runs the deletion pass immediately using the saved retention window, so an administrator can reclaim space on demand.",
       "Per-recording 'Protect audio' toggle (recording menu) that exempts a recording from both automatic and manual audio deletion; the Overview shows audio/protection status.",
     ],
   },

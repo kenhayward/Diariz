@@ -141,7 +141,7 @@ per-recording; over-quota uploads are rejected.
 deletes the original audio of recordings older than a chosen number of days (default 30, at a chosen
 server-local time), keeping the transcript. Only fully transcribed recordings are eligible, and any
 recording can be marked **Protected from audio deletion** to exempt it (from both the job and manual
-deletion). Off by default.
+deletion). A **Run now** button runs the same pass on demand. Off by default.
 - **Backup & restore** (Platform Administrator, Settings → Maintenance): download the whole platform —
 the Postgres database (`pg_dump`) plus every stored file — as one transferable archive, and restore from
 one. Restore is destructive (replaces all data) and only accepts a backup from the same app version.
