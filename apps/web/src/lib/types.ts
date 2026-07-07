@@ -237,6 +237,9 @@ export interface RecordingDetail {
   audioProtectedAt: string | null;
   /// When the audio blob was deleted (null = still present). Mirrors `hasAudio`.
   audioDeletedAt: string | null;
+  /// Projected date the nightly job will delete this recording's audio, or null when auto-delete is off,
+  /// the recording is protected/ineligible, or the audio is already gone.
+  audioScheduledDeletionAt: string | null;
   /// The persisted Google Calendar link (snapshot), or null when unlinked.
   calendarLink: CalendarLink | null;
   /// The chosen meeting type driving the minutes template, or null for the General default.

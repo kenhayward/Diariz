@@ -110,6 +110,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.99.1",
+    date: "2026-07-07",
+    pr: 0,
+    headline: "Clearer audio-retention status on a recording",
+    summary:
+      "Refines the audio-retention wording on a recording's Overview. A protected recording now simply reads " +
+      "'Protected from audio deletion', and a recording that is scheduled for automatic audio deletion shows " +
+      "'Audio will be deleted on <date>' (its created date plus the retention window) - so you can see at a " +
+      "glance when the audio will go and act before it does. The projected date only appears when auto-delete " +
+      "is enabled and the recording is an eligible, unprotected candidate. Server redeploy only.",
+    changed: [
+      "A recording's Overview now shows 'Protected from audio deletion' (protected) or 'Audio will be deleted on <date>' (scheduled), instead of a protection date.",
+    ],
+  },
+  {
     version: "0.99.0",
     date: "2026-07-07",
     pr: 223,

@@ -2130,6 +2130,58 @@ public class RecordingsControllerTests
     }
 
     [Fact]
+    public async Task Get_ProjectsAudioScheduledDeletion_WhenAutoDeleteEnabledAndEligible()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.PlatformSettings.Add(new Diariz.Domain.Entities.PlatformSettings
+        {
+            Id = Diariz.Domain.Entities.PlatformSettings.SingletonId,
+            AutoDeleteAudioEnabled = true, AudioRetentionDays = 30,
+        });
+        var rec = await SeedRecording(db, userId, versions: 1); // Status = Transcribed (eligible)
+        var created = DateTimeOffset.UtcNow.AddDays(-2);
+        rec.CreatedAt = created;
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var dto = Assert.IsType<RecordingDetailDto>((await controller.Get(rec.Id)).Value);
+        Assert.Equal(created.AddDays(30), dto.AudioScheduledDeletionAt);
+    }
+
+    [Fact]
+    public async Task Get_NoAudioScheduledDeletion_WhenProtected()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.PlatformSettings.Add(new Diariz.Domain.Entities.PlatformSettings
+        {
+            Id = Diariz.Domain.Entities.PlatformSettings.SingletonId,
+            AutoDeleteAudioEnabled = true, AudioRetentionDays = 30,
+        });
+        var rec = await SeedRecording(db, userId, versions: 1);
+        rec.AudioProtectedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var dto = Assert.IsType<RecordingDetailDto>((await controller.Get(rec.Id)).Value);
+        Assert.Null(dto.AudioScheduledDeletionAt);
+    }
+
+    [Fact]
+    public async Task Get_NoAudioScheduledDeletion_WhenAutoDeleteDisabled()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        // No PlatformSettings row seeded (auto-delete effectively off).
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var dto = Assert.IsType<RecordingDetailDto>((await controller.Get(rec.Id)).Value);
+        Assert.Null(dto.AudioScheduledDeletionAt);
+    }
+
+    [Fact]
     public async Task DeleteAudio_WhenProtected_ReturnsConflict_AndKeepsBlob()
     {
         using var db = TestDb.Create();

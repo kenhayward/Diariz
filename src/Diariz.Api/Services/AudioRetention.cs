@@ -33,6 +33,10 @@ public static class AudioRetentionSweep
         RecordingStatus.Transcribed, RecordingStatus.Summarized, RecordingStatus.Summarizing,
     ];
 
+    /// <summary>Whether a recording's status makes it eligible for audio deletion (a completed transcript
+    /// exists). Shared with the detail projection so the "will be deleted" hint matches the sweep exactly.</summary>
+    public static bool IsTranscribedStatus(RecordingStatus status) => Transcribed.Contains(status);
+
     public static async Task<int> RunAsync(
         DiarizDbContext db, IAudioStorage storage, DateTimeOffset nowUtc, int retentionDays,
         ILogger logger, CancellationToken ct = default)
