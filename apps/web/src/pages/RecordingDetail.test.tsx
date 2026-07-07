@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Routes, Route, useNavigate } from "react-router-dom";
+import { MemoryRouter, Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { RecordingDetail as RecordingDetailType } from "../lib/types";
 import { StatusProvider, useStatus } from "../lib/status";
@@ -535,5 +535,39 @@ describe("RecordingDetail", () => {
     expect((await screen.findByDisplayValue("doc.pdf"))).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^remove$/i }));
     await waitFor(() => expect(api.deleteAttachment).toHaveBeenCalledWith("rec-123", "a1"));
+  });
+
+  // Bug 1: the shared <audio> must stay mounted on every tab. It used to live inside the Transcript tab's
+  // content, so switching to Speakers unmounted it and per-speaker Play silently no-op'd (audioRef was null).
+  it("plays a speaker's audio from the Speakers tab (audio element is mounted off-tab)", async () => {
+    renderPage(base);
+    await loaded();
+    openTab(/speakers/i);
+
+    fireEvent.click(screen.getByRole("button", { name: /play speaker_00's segments/i }));
+    await waitFor(() => expect(api.audioUrl).toHaveBeenCalledWith("rec-123"));
+  });
+
+  // Bug 2: a recording that no longer exists (deleted here, on another device, or a stale list link) must
+  // redirect to the home page instead of showing "Loading..." forever / a stale transcript.
+  it("redirects to the home page when the recording is not found (404)", async () => {
+    let path = "";
+    function PathSpy() { path = useLocation().pathname; return null; }
+    (api.getRecording as ReturnType<typeof vi.fn>).mockRejectedValue({
+      isAxiosError: true, response: { status: 404 },
+    });
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={["/recordings/rec-123"]}>
+          <PathSpy />
+          <Routes>
+            <Route path="/" element={<div>HOME</div>} />
+            <Route path="/recordings/:id" element={<RecordingDetail />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(path).toBe("/"));
   });
 });
