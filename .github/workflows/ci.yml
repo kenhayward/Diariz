@@ -48,7 +48,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
       - name: Install
@@ -68,7 +68,7 @@ jobs:
           fetch-depth: 0 # need history to diff the branch against its base
       - uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '22'
       # A translation-only PR may touch at most one non-English locale folder (core PRs are exempt).
       # Runs from the repo root so `git diff` finds the working tree.
       - name: Check one non-en locale per translation PR

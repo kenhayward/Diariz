@@ -1,5 +1,5 @@
-# Build the static SPA.
-FROM node:20-alpine AS build
+# Build the static SPA. Node 22: @scalar/api-reference-react (the in-app API reference) requires Node >=22.
+FROM node:22-alpine AS build
 WORKDIR /app
 # Optional build-time stamp shown in the About box (best-effort; blank if not provided).
 ARG BUILD_COMMIT=""
