@@ -668,6 +668,12 @@ export const api = {
     await http.delete(`/api/user/api-tokens/${id}`);
   },
 
+  /// The curated OpenAPI document (authed) that backs the in-app API reference at /developers/api.
+  async getOpenApiDocument(): Promise<unknown> {
+    const { data } = await http.get("/api/openapi/v1.json");
+    return data;
+  },
+
   /// Active OAuth connections (the claude.ai web MCP connector and any other OAuth client the user approved).
   async listOAuthConnections(): Promise<OAuthConnection[]> {
     const { data } = await http.get<OAuthConnection[]>("/api/oauth/connections");
