@@ -109,7 +109,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.98.1",
     date: "2026-07-07",
-    pr: 0, // set to the real PR number when opened
+    pr: 222,
     headline: "Desktop update reliability + a clearer up-to-date message",
     summary:
       "Fixes desktop auto-update publishing and improves the 'Check for updates' feedback. The release " +
