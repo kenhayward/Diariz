@@ -21,12 +21,15 @@ public class UserProfileController : ControllerBase
     private readonly UserManager<ApplicationUser> _users;
     private readonly DiarizDbContext _db;
     private readonly ITokenService _tokens;
+    private readonly IPlatformSettingsService _platform;
 
-    public UserProfileController(UserManager<ApplicationUser> users, DiarizDbContext db, ITokenService tokens)
+    public UserProfileController(
+        UserManager<ApplicationUser> users, DiarizDbContext db, ITokenService tokens, IPlatformSettingsService platform)
     {
         _users = users;
         _db = db;
         _tokens = tokens;
+        _platform = platform;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -37,12 +40,14 @@ public class UserProfileController : ControllerBase
         var user = await _users.FindByIdAsync(UserId.ToString());
         if (user is null) return NotFound();
         var s = await _db.UserSettings.FindAsync(UserId);
+        var apiAccessEnabled = (await _platform.GetAsync()).ApiAccessEnabled;
         return new UserProfileDto(user.Email ?? "", user.FullName, s?.NativeLanguage, s?.UiLanguage,
             GoogleConnected: user.GoogleSubject is not null,
             GoogleCalendar: s?.GoogleCalendarGranted ?? false,
             JobTitle: s?.JobTitle, CompanyName: s?.CompanyName, JobDescription: s?.JobDescription,
             CompanyDescription: s?.CompanyDescription, LinkedIn: s?.LinkedIn,
-            Theme: ThemeToString(s?.Theme ?? ThemePreference.Auto));
+            Theme: ThemeToString(s?.Theme ?? ThemePreference.Auto),
+            ApiAccessEnabled: apiAccessEnabled);
     }
 
     [HttpPut]

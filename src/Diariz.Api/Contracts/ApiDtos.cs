@@ -276,7 +276,9 @@ public record UserProfileDto(
     string? JobTitle = null, string? CompanyName = null, string? JobDescription = null,
     string? CompanyDescription = null, string? LinkedIn = null,
     /// <summary>Colour theme: "auto" | "light" | "dark".</summary>
-    string Theme = "auto");
+    string Theme = "auto",
+    /// <summary>Whether the platform has user API access enabled (drives the Preferences "Developers" tab).</summary>
+    bool ApiAccessEnabled = false);
 
 /// <summary>Self-service profile update. Each field is trimmed; blank clears it. Language codes must be
 /// in the supported set (else 400). <paramref name="Theme"/> is "auto" | "light" | "dark" (unknown -> auto).</summary>

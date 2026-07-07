@@ -40,10 +40,33 @@ public class UserProfileIntegrationTests(ContainersFixture fx)
     {
         var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
         var db = sp.GetRequiredService<DiarizDbContext>();
-        return new UserProfileController(users, db, Tokens())
+        return new UserProfileController(users, db, Tokens(), new PlatformSettingsService(db))
         {
             ControllerContext = Http.Context(userId),
         };
+    }
+
+    [Fact]
+    public async Task Get_ReflectsPlatformApiAccessEnabled()
+    {
+        await using var sp = BuildIdentity();
+        var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
+        var user = new ApplicationUser { UserName = $"a-{Guid.NewGuid():N}@x.test", Email = $"a-{Guid.NewGuid():N}@x.test" };
+        await users.CreateAsync(user);
+
+        var db = sp.GetRequiredService<DiarizDbContext>();
+        var settings = await new PlatformSettingsService(db).GetAsync();
+        settings.ApiAccessEnabled = true;
+        await db.SaveChangesAsync();
+        try
+        {
+            Assert.True(Assert.IsType<UserProfileDto>((await Build(sp, user.Id).Get()).Value).ApiAccessEnabled);
+        }
+        finally
+        {
+            settings.ApiAccessEnabled = false; // reset the shared singleton row
+            await db.SaveChangesAsync();
+        }
     }
 
     [Fact]
