@@ -112,7 +112,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.99.0",
     date: "2026-07-07",
-    pr: 0,
+    pr: 223,
     headline: "Automatic audio deletion (storage retention) + protected recordings",
     summary:
       "Adds an opt-in storage-retention policy: the Platform Administrator can have Diariz automatically " +
