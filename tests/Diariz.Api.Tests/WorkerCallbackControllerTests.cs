@@ -102,6 +102,26 @@ public class WorkerCallbackControllerTests
     }
 
     [Fact]
+    public async Task Result_NormalizesSegmentText_CollapsingRepeatedLineFeeds()
+    {
+        var (controller, db, _) = Build(presentedSecret: Secret);
+        var (_, transcriptionId) = await SeedQueuedRecording(db, Guid.NewGuid());
+
+        var body = new TranscriptionResult(transcriptionId, "en",
+        [
+            new SegmentResult("SPEAKER_00", 0, 1000, "Hello\n\n\nthere"),
+            new SegmentResult("SPEAKER_00", 1000, 2000, "  spaced  "),
+        ]);
+
+        Assert.IsType<OkResult>(await controller.Result(body));
+
+        var segments = await db.Segments.Where(s => s.TranscriptionId == transcriptionId)
+            .OrderBy(s => s.Ordinal).ToListAsync();
+        Assert.Equal("Hello\nthere", segments[0].Original); // repeated line feeds collapsed to one, no blank line
+        Assert.Equal("spaced", segments[1].Original);
+    }
+
+    [Fact]
     public async Task Result_BackfillsDurationFromWorker()
     {
         var (controller, db, _) = Build(presentedSecret: Secret);

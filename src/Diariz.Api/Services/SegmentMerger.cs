@@ -11,8 +11,8 @@ public static class SegmentMerger
     /// a merged run is kept, so the block still resolves to that speaker).</param>
     public record Part(string SpeakerKey, string SpeakerLabel, long StartMs, long EndMs, string Text);
 
-    /// <summary>Merge runs of adjacent parts that share a speaker <em>key</em>: each original part becomes
-    /// its own paragraph (joined by a blank line) so the block stays readable, the span runs from the first
+    /// <summary>Merge runs of adjacent parts that share a speaker <em>key</em>: the parts are joined with a
+    /// single line break (never a blank line - see <see cref="TranscriptText"/>), the span runs from the first
     /// start to the last end, and the first part's label is kept. Input must already be in display order.</summary>
     public static List<Part> Merge(IReadOnlyList<Part> ordered)
     {
@@ -22,14 +22,13 @@ public static class SegmentMerger
             if (result.Count > 0 && result[^1].SpeakerKey == p.SpeakerKey)
             {
                 var prev = result[^1];
-                var text = string.IsNullOrWhiteSpace(prev.Text) ? p.Text
-                    : string.IsNullOrWhiteSpace(p.Text) ? prev.Text
-                    : $"{prev.Text}\n\n{p.Text}"; // paragraph break between merged sections
+                // One line break between merged sections, and collapse any blank lines the parts carried.
+                var text = TranscriptText.Normalize($"{prev.Text}\n{p.Text}");
                 result[^1] = prev with { EndMs = p.EndMs, Text = text };
             }
             else
             {
-                result.Add(p);
+                result.Add(p with { Text = TranscriptText.Normalize(p.Text) });
             }
         }
         return result;

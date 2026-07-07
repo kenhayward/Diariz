@@ -74,7 +74,9 @@ public class WorkerCallbackController : ControllerBase
                 SpeakerLabel = string.IsNullOrWhiteSpace(s.Speaker) ? "UNKNOWN" : s.Speaker,
                 StartMs = s.StartMs,
                 EndMs = s.EndMs,
-                Original = s.Text,
+                // Collapse repeated line feeds / blank lines so the stored transcript uses a single
+                // end-of-paragraph mark between lines (see TranscriptText).
+                Original = TranscriptText.Normalize(s.Text),
                 Ordinal = ordinal++
             });
         }
