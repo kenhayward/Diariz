@@ -401,9 +401,10 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   accepts only its own prefix). The feature is **gated by `PlatformSettings.ApiAccessEnabled` (default off)** —
   the authenticator fails while it's off — and a Platform Admin toggles it in **Settings → Integration**; users
   manage tokens in **Preferences → Developers** (shown only when enabled). A **curated OpenAPI document** is
-  published at **`/api/openapi/v1.json`** (`Microsoft.AspNetCore.OpenApi`, authenticated; only `api/*` minus
-  `api/oauth` — `internal/*`, `connect/*`, `.well-known/*`, `/mcp` are excluded — with a bearer security scheme
-  declared, see `OpenApiCuration`), and a signed-in user can browse it via an in-app **Scalar** reference at
+  published at **`/api/openapi/v1.json`** (`Microsoft.AspNetCore.OpenApi`, authenticated; the user-facing REST
+  surface only — `api/*` minus the admin/OAuth prefixes `api/oauth`/`api/platform`/`api/admin`/`api/maintenance`,
+  and the non-`api/` `internal/*`, `connect/*`, `.well-known/*`, `/mcp` — with a bearer security scheme declared,
+  see `OpenApiCuration`), and a signed-in user can browse it via an in-app **Scalar** reference at
   **`/developers/api`** (lazy-loaded route, `@scalar/api-reference-react`), linked from both the Developers and
   Integration tabs.
 - **RBAC:** `Standard` / `Administrator` / `PlatformAdministrator`. The Platform Administrator is the seed

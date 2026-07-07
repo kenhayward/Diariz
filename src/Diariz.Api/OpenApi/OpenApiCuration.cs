@@ -10,10 +10,15 @@ namespace Diariz.Api.OpenApi;
 /// works with a personal API token or the session JWT.</summary>
 public static class OpenApiCuration
 {
+    /// <summary>Admin/OAuth prefixes dropped from the published document: the reference is for the user-facing
+    /// REST API. (The admin surface also carries the only <c>TimeOnly</c> field, which the OpenAPI schema
+    /// exporter can't map - excluding it keeps the document generatable as well as on-topic.)</summary>
+    private static readonly string[] ExcludedPrefixes = ["api/oauth", "api/platform", "api/admin", "api/maintenance"];
+
     public static bool ShouldInclude(string? relativePath) =>
         relativePath is not null
         && relativePath.StartsWith("api/", StringComparison.OrdinalIgnoreCase)
-        && !relativePath.StartsWith("api/oauth", StringComparison.OrdinalIgnoreCase);
+        && !ExcludedPrefixes.Any(p => relativePath.StartsWith(p, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Adds an HTTP bearer security scheme (a personal <c>dz_api_</c> token or the session JWT) and a
     /// global security requirement, so the reference UI can send an Authorization header.</summary>
