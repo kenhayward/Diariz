@@ -348,6 +348,52 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("MeetingMinutes");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.MeetingNote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CalendarId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<long?>("CapturedAtMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EventId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("RecordingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecordingId", "Ordinal");
+
+                    b.HasIndex("UserId", "CalendarId", "EventId");
+
+                    b.ToTable("MeetingNotes");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.MeetingType", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1394,6 +1440,24 @@ namespace Diariz.Domain.Migrations
                         .IsRequired();
 
                     b.Navigation("Transcription");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.MeetingNote", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.Recording", "Recording")
+                        .WithMany()
+                        .HasForeignKey("RecordingId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Recording");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.MeetingType", b =>
