@@ -112,7 +112,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.99.1",
     date: "2026-07-07",
-    pr: 0,
+    pr: 224,
     headline: "Clearer audio-retention status on a recording",
     summary:
       "Refines the audio-retention wording on a recording's Overview. A protected recording now simply reads " +
