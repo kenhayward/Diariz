@@ -25,7 +25,9 @@ transcript**. The recording page is organised into **tabs** - Overview, Minutes,
 Transcript, and Attachments - each with its own toolbar. The **Notes tab** holds your own note lines for the
 meeting (sparse trigger phrases, questions, observations); timestamped lines jump to that moment in the
 transcript, and you can also jot **prep notes on an upcoming Google Calendar meeting** (from its preview page) -
-they attach to the recording automatically once it is linked to that meeting.
+they attach to the recording automatically once it is linked to that meeting. While recording, a **live notes
+panel** lets you take those notes in the moment - each line is stamped at the second you wrote it, survives a
+crash, and lands on the recording's Notes tab automatically after upload.
 
 It can **identify speakers** across recordings: enrol a person from a recording's speaker and Diariz
 recognises that voice in later recordings automatically (using **SpeechBrain ECAPA** voiceprints), with
@@ -120,6 +122,22 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.104.0",
+    date: "2026-07-07",
+    pr: 236,
+    headline: "Take notes live while you record",
+    summary:
+      "A notes panel now opens beside the recorder when you start recording. Type a thought and press Enter - " +
+      "the line is stamped at the exact moment you wrote it (pauses excluded), so it lines up with the " +
+      "transcript. Your lines survive a crash or an expired session, and land on the recording's Notes tab " +
+      "automatically after upload; if attaching fails, nothing is lost - a banner offers a retry. Close the " +
+      "panel if you don't want it; your choice is remembered. Server redeploy (web) only.",
+    added: [
+      "Live notes panel while recording: Enter-stamped lines (pause-aware clock), crash-durable, attached to the recording automatically after upload.",
+      "A Notes toggle beside the recording timer reopens the panel; closing it is remembered.",
+    ],
+  },
   {
     version: "0.103.0",
     date: "2026-07-07",
