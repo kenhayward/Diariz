@@ -302,8 +302,20 @@ Enter-committed line is stamped with the current *recorded* time (`recorderTimin
 to IndexedDB (`lib/pendingNotes.ts`, its own `diariz-notes` DB, keyed by user) so a crash never loses lines,
 and bulk-attached to the recording right after upload; an attach failure keeps the lines durable (with the
 recording id) behind a retry banner, and recovered pending recordings adopt their stashed lines on
-re-upload. Remaining follow-up: the **minutes weave** (notes steer every template section + an "Enhanced
-notes" section with provenance) - see `docs/superpowers/specs/2026-07-07-enhanced-notes-design.md`.
+re-upload. **The minutes weave:** notes feed minutes generation two ways (`MeetingMinutesProcessor` loads
+them; `IMeetingTypeMinutesGenerator` takes them alongside actions). (1) **Steering** - when notes exist, a
+"NOTE-TAKER'S EMPHASIS" block listing the lines rides the shared section preamble, so **every**
+prompt-driven template section weights them (both SingleCall and PerSection inherit it; no notes → prompts
+byte-identical). (2) **Enhanced notes section** - templates may use a **`notes` field** (peer of
+`action_items`; in the editor's field picker; the seeded General template gains an "Enhanced notes" section
+via a conservative upgrade that only applies when the admin never edited it). When present, a **pre-pass**
+runs: `NotesEnhancer` (one `IMeetingMinutesClient` call, strict JSON with parser repair) expands each note
+line from the transcript, then `NotesComposer` renders **deterministically with provenance** - the user's
+literal words bold (never paraphrased), capture stamps italic, `[mm:ss](/recordings/{id}?t=ms)` deep-links
+per supporting moment, and lines the transcript doesn't support kept and marked *not discussed in the
+recording*. Failure posture: an enhancer failure renders the raw stamped lines and the minutes still
+generate; a `notes` field with no notes renders "No notes were taken for this meeting." Design:
+`docs/superpowers/specs/2026-07-07-enhanced-notes-design.md`.
 
 ## MCP server (connect Claude to transcripts)
 
