@@ -44,6 +44,9 @@ export interface RecordingMenuHandlers {
   /// download/delete audio) are hidden once the audio has been deleted.
   hasAudio: boolean;
   isSummarizing?: boolean;
+  /// Whether the transcript pipeline is still running (Uploaded/Queued/Transcribing/Merging). Delete is
+  /// disabled while processing so the user can't remove a recording mid-pipeline.
+  isProcessing?: boolean;
 }
 
 /// The single source of truth for a recording's kebab actions, so the list and detail menus
@@ -88,6 +91,6 @@ export function recordingMenu(h: RecordingMenuHandlers, t: TFunction): KebabActi
     ...(h.hasAudio && !h.isAudioProtected
       ? [{ label: t("recordings:deleteAudio"), danger: true, onClick: h.onDeleteAudio }]
       : []),
-    { label: t("recordings:delete"), danger: true, onClick: h.onDelete },
+    { label: t("recordings:delete"), danger: true, onClick: h.onDelete, disabled: h.isProcessing },
   ];
 }

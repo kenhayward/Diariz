@@ -114,6 +114,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.100.5",
+    date: "2026-07-07",
+    pr: 230,
+    headline: "Clearer transcription status, and no deleting a recording mid-pipeline",
+    summary:
+      "Two small tidy-ups. While a recording is still being processed it now shows \"Transcribing\" rather than " +
+      "an internal \"Queuing\" state (both on the recording's status badge and the bottom status bar). And the " +
+      "Delete action is disabled until the transcript is ready, so you can't remove a recording while it is " +
+      "still uploading, queued, transcribing, or merging. Server redeploy (web) only.",
+    changed: [
+      "A recording that is queued/uploading now shows \"Transcribing\" (status badge and bottom bar) instead of \"Queuing\".",
+    ],
+    fixed: [
+      "Delete is now disabled while a recording is still being processed (no transcript yet), so it can't be removed mid-pipeline.",
+    ],
+  },
+  {
     version: "0.100.4",
     date: "2026-07-07",
     pr: 229,

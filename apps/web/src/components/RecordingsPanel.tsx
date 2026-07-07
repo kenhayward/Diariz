@@ -10,6 +10,7 @@ import ToolbarButton, { iconProps } from "./ToolbarButton";
 import MoveToSectionModal from "./MoveToSectionModal";
 import DownloadTranscriptModal from "./DownloadTranscriptModal";
 import { recordingMenu } from "./recordingMenu";
+import { isProcessing, statusLabel } from "../lib/recordingStatus";
 import { copyRichLink, transcriptUrl } from "../lib/clipboard";
 import { useSelection } from "../lib/selection";
 import { useActiveRecordingId } from "../lib/useActiveRecordingId";
@@ -1073,6 +1074,7 @@ function RecordingRow({
     hasTranscript: hasTranscript(r.status),
     hasAudio: r.hasAudio,
     isSummarizing: r.status === "Summarizing",
+    isProcessing: isProcessing(r.status),
   }, t);
 
   return (
@@ -1138,7 +1140,7 @@ function RecordingRow({
         )}
         {showStatusBadge(r.status) && (
           <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${statusColor[r.status]}`}>
-            {r.status}
+            {statusLabel(r.status)}
           </span>
         )}
         <KebabMenu actions={actions} />
