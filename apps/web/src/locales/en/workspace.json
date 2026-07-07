@@ -363,6 +363,7 @@
   "mtFieldOpt_attendees": "Attendees",
   "mtFieldOpt_duration": "Duration",
   "mtFieldOpt_action_items": "Action items table",
+  "mtFieldOpt_notes": "Enhanced notes (from your notes)",
   "mtTitleRequired": "A title is required.",
   "mtGroupRequired": "A group name is required.",
   "sectionTitleRequired": "Every section needs a title.",

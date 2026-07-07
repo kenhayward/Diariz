@@ -1,7 +1,7 @@
 import type { MeetingTypeContent, TemplateSection, TemplateBlock, TemplateBlockKind } from "./types";
 
 /// The substitutable recording fields a `field` block may use (must match the backend `MeetingTypeContent.Fields`).
-export const FIELD_OPTIONS = ["date", "time", "title", "attendees", "duration", "action_items"] as const;
+export const FIELD_OPTIONS = ["date", "time", "title", "attendees", "duration", "action_items", "notes"] as const;
 
 export function newBlock(kind: TemplateBlockKind): TemplateBlock {
   if (kind === "field") return { kind, field: "date" };
