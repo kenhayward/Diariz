@@ -146,7 +146,7 @@ public class RecordingsController : ControllerBase
         return new RecordingDetailDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.SizeBytes,
             rec.Status, rec.Error, rec.CreatedAt, rec.MinSpeakers, rec.MaxSpeakers, names, speakers, tDto, sDto,
             mDto, actions, rec.ActionsExtractedAt != null, rec.HasAudio, ToLinkDto(rec.CalendarLink),
-            rec.MeetingTypeId);
+            rec.MeetingTypeId, rec.AudioProtectedAt, rec.AudioDeletedAt);
     }
 
     private static CalendarLinkDto? ToLinkDto(RecordingCalendarLink? link) => link is null
@@ -903,6 +903,8 @@ public class RecordingsController : ControllerBase
     {
         var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
         if (rec is null) return NotFound();
+        if (rec.IsAudioProtected)
+            return Conflict("This recording's audio is protected from deletion. Remove the protection first.");
 
         if (rec.HasAudio)
         {
@@ -923,7 +925,8 @@ public class RecordingsController : ControllerBase
         if (ids.Count == 0) return NoContent();
 
         var recs = await _db.Recordings
-            .Where(r => ids.Contains(r.Id) && r.UserId == UserId && r.AudioDeletedAt == null)
+            .Where(r => ids.Contains(r.Id) && r.UserId == UserId
+                && r.AudioDeletedAt == null && r.AudioProtectedAt == null)
             .ToListAsync();
         foreach (var rec in recs)
         {
@@ -932,6 +935,23 @@ public class RecordingsController : ControllerBase
             rec.SizeBytes = 0;
         }
         if (recs.Count > 0) await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>Protect (or unprotect) a recording's audio from deletion. While protected, both the nightly
+    /// auto-retention job and the manual <see cref="DeleteAudio"/> action skip/refuse it.</summary>
+    [HttpPut("{id:guid}/audio-protection")]
+    public async Task<IActionResult> SetAudioProtection(Guid id, SetAudioProtectionRequest req)
+    {
+        var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+        if (rec is null) return NotFound();
+
+        // Preserve the original protection date on a redundant re-protect; only stamp when toggling on.
+        if (req.Protected)
+            rec.AudioProtectedAt ??= DateTimeOffset.UtcNow;
+        else
+            rec.AudioProtectedAt = null;
+        await _db.SaveChangesAsync();
         return NoContent();
     }
 

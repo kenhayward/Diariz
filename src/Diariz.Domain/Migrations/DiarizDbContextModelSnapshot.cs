@@ -373,6 +373,21 @@ namespace Diariz.Domain.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<TimeOnly>("AudioDeletionTimeOfDay")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("time without time zone")
+                        .HasDefaultValue(new TimeOnly(3, 0, 0));
+
+                    b.Property<int>("AudioRetentionDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(30);
+
+                    b.Property<bool>("AutoDeleteAudioEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<long>("MaxQuotaBytes")
                         .HasColumnType("bigint");
 
@@ -392,6 +407,9 @@ namespace Diariz.Domain.Migrations
                         new
                         {
                             Id = 1,
+                            AudioDeletionTimeOfDay = new TimeOnly(3, 0, 0),
+                            AudioRetentionDays = 30,
+                            AutoDeleteAudioEnabled = false,
                             MaxQuotaBytes = 53687091200L,
                             MinutesGenerationMode = 0,
                             StarterQuotaBytes = 5368709120L
@@ -439,6 +457,9 @@ namespace Diariz.Domain.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset?>("AudioDeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("AudioProtectedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("BlobKey")

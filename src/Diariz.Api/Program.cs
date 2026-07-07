@@ -360,6 +360,9 @@ builder.Services.AddScoped<IPlatformSettingsService, PlatformSettingsService>();
 builder.Services.AddScoped<IStorageUsage, StorageUsage>();
 // One-time backfill of legacy recordings' SizeBytes (HEAD each blob), runs once after startup.
 builder.Services.AddHostedService<StorageBackfillService>();
+// Nightly audio-retention job: deletes audio blobs of old, transcribed, unprotected recordings when the
+// Platform Administrator has opted in (off by default). Runs at the configured server-local time of day.
+builder.Services.AddHostedService<AudioRetentionWorker>();
 
 builder.Services.AddControllers()
     .AddJsonOptions(o => JsonConfig.Apply(o.JsonSerializerOptions));

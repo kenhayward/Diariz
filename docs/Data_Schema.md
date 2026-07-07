@@ -63,6 +63,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddIcsCalendarSource` | `IcsCalendarSources` (per-user external `.ics` feed subscriptions; indexed on `UserId`, cascade on user delete) — events fetched live and merged into the Calendar views |
 | `AddMeetingType` | `MeetingTypes` (minutes templates; nullable `UserId` — null = shared Platform type, non-null = a user's Personal type; unique `Key` for seeded standards; `ContentJson` **jsonb**; cascade on user delete) + `Recordings.MeetingTypeId` (FK, `ON DELETE SET NULL`) — the chosen template driving a recording's minutes |
 | `AddMinutesGenerationMode` | `PlatformSettings.MinutesGenerationMode` (int, NOT NULL, default 0 = SingleCall) — platform-wide switch for how template-driven minutes generate (per-section calls vs one call) |
+| `AddAudioRetention` | `PlatformSettings.AutoDeleteAudioEnabled` (bool, default false) + `AudioRetentionDays` (int, default 30) + `AudioDeletionTimeOfDay` (time, default 03:00) — the opt-in nightly audio-retention policy; and `Recording.AudioProtectedAt` (timestamptz null) — per-recording exemption from audio deletion |
 
 ### Entity-relationship overview
 
@@ -110,6 +111,7 @@ The owned audio recording.
 | `ContentType` | text | MIME of the stored audio (e.g. `audio/webm`) |
 | `SizeBytes` | bigint | blob size; counts toward the owner's quota (reset to 0 when the audio is deleted) |
 | `AudioDeletedAt` | timestamptz null | non-null once the audio blob was deleted to reclaim storage (transcript kept); audio endpoints 404 |
+| `AudioProtectedAt` | timestamptz null | non-null once the owner protected the audio from deletion; skips the nightly retention job and refuses the manual delete-audio action |
 | `DurationMs` | bigint | measured by the worker for uploads (no client duration) |
 | `Status` | int | `RecordingStatus`: 0 Uploaded, 1 Queued, 2 Transcribing, 3 Transcribed, 4 Summarized, 5 Failed, 6 Summarizing, 7 Merging |
 | `Error` | text null | last failure message |
@@ -403,6 +405,9 @@ Single seeded row (`Id = 1`), edited by the Platform Administrator.
 | `StarterQuotaBytes` | bigint | quota granted to new users (default 5 GiB) |
 | `MaxQuotaBytes` | bigint | ceiling any admin may raise a user to (default 50 GiB) |
 | `MinutesGenerationMode` | int | how template-driven minutes generate: `0` = SingleCall (default), `1` = PerSection. Append-only enum |
+| `AutoDeleteAudioEnabled` | bool | master switch for the nightly audio-retention job (default false = off) |
+| `AudioRetentionDays` | int | audio older than this many days (by `Recording.CreatedAt`) is eligible for auto-deletion (default 30) |
+| `AudioDeletionTimeOfDay` | time | server-local time of day the nightly retention job runs (default 03:00) |
 
 #### Identity tables (`AspNet*`)
 Standard ASP.NET Identity schema with **Guid** keys: `AspNetUsers`, `AspNetRoles`, `AspNetUserRoles`,

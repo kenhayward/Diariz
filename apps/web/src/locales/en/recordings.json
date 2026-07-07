@@ -15,6 +15,8 @@
   "emailTranscript": "Email me the transcript",
   "downloadAudio": "Download audio",
   "deleteAudio": "Delete audio",
+  "protectAudio": "Protect audio",
+  "unprotectAudio": "Remove audio protection",
   "delete": "Delete",
   "edit": "Edit"
 }

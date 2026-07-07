@@ -494,6 +494,14 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
 - **Isolation:** every recording/section/chat/voiceprint query filters by `UserId` from the JWT
   `NameIdentifier` claim. **Storage quotas** (audio bytes) are per-user: the Platform Administrator sets the
   starter + maximum (`PlatformSettings`), any admin can raise an individual user up to the max.
+- **Audio retention (auto-delete).** An opt-in `PlatformSettings` policy (`AutoDeleteAudioEnabled` + `AudioRetentionDays`
+  + `AudioDeletionTimeOfDay`, edited on Settings → Storage Quotas) drives a nightly `AudioRetentionWorker` (a singleton
+  `BackgroundService`). At the configured **server-local** time it opens a DI scope and, when enabled, runs the pure
+  `AudioRetentionSweep` over recordings older than the window that are **fully transcribed** (status Transcribed/Summarized/
+  Summarizing) and **not protected** - deleting each audio blob, stamping `Recording.AudioDeletedAt`, and zeroing `SizeBytes`
+  (the transcript and all metadata are kept). It reuses the same delete-audio recipe as the manual `DELETE /api/recordings/{id}/audio`.
+  **Off by default** - no audio is removed until an admin turns it on. A recording is exempted via `PUT /api/recordings/{id}/audio-protection`
+  (stamps `Recording.AudioProtectedAt`); while protected, both the nightly job and the manual delete-audio action skip/refuse it.
 - **Self-service profile:** every user has a **Preferences** screen to change their **display name**
   (`PUT /api/user/profile` → updates `ApplicationUser.FullName` and re-issues the token so the name claim
   updates without a re-login) and their **native / UI language** (stored on `UserSettings`). The supported

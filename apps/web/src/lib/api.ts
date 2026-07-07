@@ -577,6 +577,11 @@ export const api = {
     await http.post("/api/recordings/audio/delete", { ids });
   },
 
+  /// Protect (or unprotect) a recording's audio from deletion (auto + manual).
+  async setAudioProtection(id: string, protectedFlag: boolean): Promise<void> {
+    await http.put(`/api/recordings/${id}/audio-protection`, { protected: protectedFlag });
+  },
+
   /// Merge 2+ recordings into the earliest-created one (transcripts + audio). Async on the worker.
   async mergeRecordings(ids: string[]): Promise<void> {
     await http.post("/api/recordings/merge", { ids });

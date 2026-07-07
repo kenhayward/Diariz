@@ -27,7 +27,7 @@ public class PlatformSettingsController : ControllerBase
     public async Task<PlatformSettingsDto> Get()
     {
         var s = await _settings.GetAsync();
-        return new PlatformSettingsDto(s.StarterQuotaBytes, s.MaxQuotaBytes, s.MinutesGenerationMode);
+        return ToDto(s);
     }
 
     [HttpPut]
@@ -40,12 +40,21 @@ public class PlatformSettingsController : ControllerBase
             return BadRequest("The starter quota can't exceed the maximum quota.");
         if (!Enum.IsDefined(req.MinutesGenerationMode))
             return BadRequest("Unknown minutes generation mode.");
+        if (req.AudioRetentionDays < 1)
+            return BadRequest("The audio retention window must be at least 1 day.");
 
         var s = await _settings.GetAsync();
         s.StarterQuotaBytes = req.StarterQuotaBytes;
         s.MaxQuotaBytes = req.MaxQuotaBytes;
         s.MinutesGenerationMode = req.MinutesGenerationMode;
+        s.AutoDeleteAudioEnabled = req.AutoDeleteAudioEnabled;
+        s.AudioRetentionDays = req.AudioRetentionDays;
+        s.AudioDeletionTimeOfDay = req.AudioDeletionTimeOfDay;
         await _db.SaveChangesAsync();
-        return new PlatformSettingsDto(s.StarterQuotaBytes, s.MaxQuotaBytes, s.MinutesGenerationMode);
+        return ToDto(s);
     }
+
+    private static PlatformSettingsDto ToDto(PlatformSettings s) => new(
+        s.StarterQuotaBytes, s.MaxQuotaBytes, s.MinutesGenerationMode,
+        s.AutoDeleteAudioEnabled, s.AudioRetentionDays, s.AudioDeletionTimeOfDay);
 }

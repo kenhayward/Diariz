@@ -75,4 +75,47 @@ public class PlatformSettingsControllerTests
         using var db = TestDb.Create();
         Assert.Equal(MinutesGenerationMode.SingleCall, (await Build(db).Get()).MinutesGenerationMode);
     }
+
+    [Fact]
+    public async Task Get_DefaultsTo_AutoDeleteDisabled_30Days_0300()
+    {
+        using var db = TestDb.Create();
+        var dto = await Build(db).Get();
+
+        Assert.False(dto.AutoDeleteAudioEnabled);
+        Assert.Equal(30, dto.AudioRetentionDays);
+        Assert.Equal(new TimeOnly(3, 0), dto.AudioDeletionTimeOfDay);
+    }
+
+    [Fact]
+    public async Task Update_RoundTrips_AudioRetentionSettings()
+    {
+        using var db = TestDb.Create();
+        var gb = 5L * 1024 * 1024 * 1024;
+
+        var result = await Build(db).Update(new UpdatePlatformSettingsRequest(
+            gb, gb, MinutesGenerationMode.SingleCall,
+            AutoDeleteAudioEnabled: true, AudioRetentionDays: 7, AudioDeletionTimeOfDay: new TimeOnly(2, 15)));
+
+        var dto = Assert.IsType<PlatformSettingsDto>(result.Value);
+        Assert.True(dto.AutoDeleteAudioEnabled);
+        Assert.Equal(7, dto.AudioRetentionDays);
+        Assert.Equal(new TimeOnly(2, 15), dto.AudioDeletionTimeOfDay);
+        var row = await db.PlatformSettings.SingleAsync();
+        Assert.True(row.AutoDeleteAudioEnabled);
+        Assert.Equal(7, row.AudioRetentionDays);
+        Assert.Equal(new TimeOnly(2, 15), row.AudioDeletionTimeOfDay);
+    }
+
+    [Fact]
+    public async Task Update_AudioRetentionDaysBelowOne_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var gb = 5L * 1024 * 1024 * 1024;
+
+        var result = await Build(db).Update(new UpdatePlatformSettingsRequest(
+            gb, gb, AudioRetentionDays: 0));
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
 }
