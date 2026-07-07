@@ -10,6 +10,7 @@ namespace Diariz.Api.Services;
 /// appends the recording's canonical actions deterministically (see <see cref="MeetingMinutesPrompt.WithActionItems"/>)
 /// so the minutes' Action Items table always matches the Actions panel exactly.</summary>
 public record MeetingMinutesContext(
+    Guid RecordingId,
     DateTimeOffset? MeetingDate,
     string Title,
     IReadOnlyList<string> Attendees,

@@ -57,7 +57,7 @@ public static class MeetingMinutesProcessor
             if (!cfg.Enabled) throw new InvalidOperationException("Summarisation is not configured.");
 
             var attendees = segs.Select(s => s.SpeakerDisplay).Distinct().ToList();
-            var context = new MeetingMinutesContext(rec.CreatedAt, rec.Name ?? rec.Title, attendees, rec.DurationMs);
+            var context = new MeetingMinutesContext(rec.Id, rec.CreatedAt, rec.Name ?? rec.Title, attendees, rec.DurationMs);
 
             // The recording's canonical actions feed the template's `action_items` field (rendered deterministically
             // by the generator), so the minutes' Action Items table always matches the Actions panel exactly.
@@ -67,10 +67,18 @@ public static class MeetingMinutesProcessor
                 .Select(a => new ExtractedAction(a.Text, a.Actor, a.Deadline))
                 .ToListAsync(ct);
 
+            // The user's own note lines: they steer every prompt-driven section and feed the template's
+            // `notes` field (the Enhanced notes section) when present.
+            var notes = await db.MeetingNotes
+                .Where(n => n.RecordingId == rec.Id)
+                .OrderBy(n => n.Ordinal)
+                .Select(n => new MeetingNoteDto(n.Id, n.Text, n.CapturedAtMs, n.Ordinal, n.CreatedAt))
+                .ToListAsync(ct);
+
             // Generate from the recording's chosen meeting type (or the General default), honouring the
             // platform-wide generation mode.
             var markdown = await generator.GenerateAsync(
-                rec.UserId, rec.MeetingTypeId, context, segs, actions, cfg, charBudget, ct);
+                rec.UserId, rec.MeetingTypeId, context, segs, actions, notes, cfg, charBudget, ct);
 
             var minutes = transcription.MeetingMinutes;
             if (minutes is null)

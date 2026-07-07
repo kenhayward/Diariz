@@ -48,6 +48,11 @@ public class MeetingMinutesProcessorTests
         {
             Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Send report", Actor = "Bob", Deadline = "", Ordinal = 0,
         });
+        db.MeetingNotes.Add(new MeetingNote
+        {
+            Id = Guid.NewGuid(), UserId = userId, RecordingId = rec.Id, Text = "Comp expectations",
+            CapturedAtMs = 61_000, Ordinal = 0,
+        });
         await db.SaveChangesAsync();
 
         var generator = new FakeMeetingTypeMinutesGenerator { Result = "# Cadence Call\n\nMinutes." };
@@ -65,6 +70,9 @@ public class MeetingMinutesProcessorTests
         Assert.Equal(typeId, generator.LastMeetingTypeId);         // the recording's chosen type
         Assert.Equal(resolver.Config, generator.LastConfig);       // the resolved config, straight through
         Assert.Equal("Send report", Assert.Single(generator.LastActions!).Text); // canonical actions handed over
+        var note = Assert.Single(generator.LastNotes!);                          // the user's notes handed over
+        Assert.Equal("Comp expectations", note.Text);
+        Assert.Equal(61_000, note.CapturedAtMs);
 
         var reloaded = await db.Recordings.FindAsync(rec.Id);
         Assert.Equal(RecordingStatus.Summarized, reloaded!.Status); // status untouched (no race with summary)

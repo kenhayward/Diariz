@@ -9,9 +9,15 @@ namespace Diariz.Api.Services;
 public record MeetingTypeContent(IReadOnlyList<TemplateSection> Sections)
 {
     /// <summary>The recording values a <c>field</c> block may substitute. <c>action_items</c> renders the
-    /// recording's canonical Action Items table (see <see cref="MeetingMinutesPrompt.RenderActionItems"/>).</summary>
+    /// recording's canonical Action Items table (see <see cref="MeetingMinutesPrompt.RenderActionItems"/>);
+    /// <c>notes</c> renders the Enhanced notes section (the user's note lines expanded from the transcript,
+    /// see <see cref="NotesComposer"/>).</summary>
     public static readonly IReadOnlyList<string> Fields =
-        ["date", "time", "title", "attendees", "duration", "action_items"];
+        ["date", "time", "title", "attendees", "duration", "action_items", "notes"];
+
+    /// <summary>Whether any section contains a <c>field</c> block substituting <paramref name="name"/>.</summary>
+    public bool HasField(string name) =>
+        Sections.Any(s => s.Blocks.Any(b => b.Kind == TemplateBlock.FieldKind && b.Field == name));
 
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
