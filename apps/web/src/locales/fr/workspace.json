@@ -363,6 +363,7 @@
   "mtFieldOpt_attendees": "Participants",
   "mtFieldOpt_duration": "Durée",
   "mtFieldOpt_action_items": "Tableau des actions",
+  "mtFieldOpt_notes": "Notes enrichies (à partir de vos notes)",
   "mtTitleRequired": "Un titre est requis.",
   "mtGroupRequired": "Un nom de groupe est requis.",
   "sectionTitleRequired": "Chaque section doit avoir un titre.",

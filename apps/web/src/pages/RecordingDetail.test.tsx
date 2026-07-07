@@ -560,6 +560,16 @@ describe("RecordingDetail", () => {
     await waitFor(() => expect(api.createNotes).toHaveBeenCalledWith("rec-123", [{ text: "IPO experience APAC" }]));
   });
 
+  it("offers Re-create minutes from the Notes tab toolbar", async () => {
+    (api.generateMeetingMinutes as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    renderPage(base);
+    await loaded();
+    openTab(/notes/i);
+
+    fireEvent.click(screen.getByRole("button", { name: /re-create minutes/i }));
+    await waitFor(() => expect(api.generateMeetingMinutes).toHaveBeenCalledWith("rec-123"));
+  });
+
   it("clicking a note stamp switches to the transcript tab", async () => {
     (api.listNotes as ReturnType<typeof vi.fn>).mockResolvedValue([
       { id: "n1", text: "Comp expectations", capturedAtMs: 61_000, ordinal: 0, createdAt: base.createdAt },

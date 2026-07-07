@@ -24,7 +24,7 @@ public class MeetingMinutesPromptTests
     public void BuildMessages_SubstitutesPlaceholders_AndPutsTranscriptInAUserTurn()
     {
         var ctx = new MeetingMinutesContext(
-            new DateTimeOffset(2026, 3, 4, 9, 0, 0, TimeSpan.Zero), "Weekly Sync",
+            Guid.NewGuid(), new DateTimeOffset(2026, 3, 4, 9, 0, 0, TimeSpan.Zero), "Weekly Sync",
             ["Alice", "Bob"], (60 + 5) * 60_000L); // 1h 05m
 
         var msgs = MeetingMinutesPrompt.BuildMessages(Template, ctx, Segments, 16000);
@@ -89,7 +89,7 @@ public class MeetingMinutesPromptTests
     [Fact]
     public void BuildMessages_UsesPlaceholders_WhenMetadataMissing()
     {
-        var ctx = new MeetingMinutesContext(null, "", [], null);
+        var ctx = new MeetingMinutesContext(Guid.NewGuid(), null, "", [], null);
         var system = MeetingMinutesPrompt.BuildMessages(Template, ctx, Segments, 16000)[0].Content;
         Assert.Contains("Meeting Date: [placeholder]", system);
         Assert.Contains("Meeting Time: [placeholder]", system);

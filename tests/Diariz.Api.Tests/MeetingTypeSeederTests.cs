@@ -56,4 +56,58 @@ public class MeetingTypeSeederTests
         var again = await db.MeetingTypes.SingleAsync(t => t.Key == MeetingType.GeneralKey);
         Assert.Equal("Renamed by admin", again.Title); // insert-if-missing: the edit survives
     }
+
+    [Fact]
+    public async Task SeedAsync_freshGeneral_containsTheEnhancedNotesField()
+    {
+        using var db = TestDb.Create();
+        await MeetingTypeSeeder.SeedAsync(db);
+
+        var general = await db.MeetingTypes.SingleAsync(t => t.Key == MeetingType.GeneralKey);
+        Assert.True(MeetingTypeContent.Parse(general.ContentJson).HasField("notes"));
+    }
+
+    [Fact]
+    public async Task SeedAsync_upgradesALegacyNeverEditedGeneral_ToIncludeEnhancedNotes()
+    {
+        using var db = TestDb.Create();
+        await MeetingTypeSeeder.SeedAsync(db);
+
+        // Simulate a pre-notes deployment: strip the notes section back to the legacy shape.
+        var general = await db.MeetingTypes.SingleAsync(t => t.Key == MeetingType.GeneralKey);
+        var content = MeetingTypeContent.Parse(general.ContentJson);
+        general.ContentJson = (content with
+        {
+            Sections = content.Sections.Where(s => s.Title != "Enhanced notes").ToList(),
+        }).Serialize();
+        await db.SaveChangesAsync();
+        Assert.False(MeetingTypeContent.Parse(general.ContentJson).HasField("notes")); // sanity: legacy shape
+
+        await MeetingTypeSeeder.SeedAsync(db); // next boot upgrades it
+
+        var upgraded = await db.MeetingTypes.SingleAsync(t => t.Key == MeetingType.GeneralKey);
+        Assert.True(MeetingTypeContent.Parse(upgraded.ContentJson).HasField("notes"));
+
+        await MeetingTypeSeeder.SeedAsync(db); // idempotent
+        Assert.Equal(MeetingTypeSeeder.Standards.Count, await db.MeetingTypes.CountAsync());
+    }
+
+    [Fact]
+    public async Task SeedAsync_leavesAnAdminEditedGeneral_Untouched()
+    {
+        using var db = TestDb.Create();
+        await MeetingTypeSeeder.SeedAsync(db);
+
+        // An admin customised the General template's content (any divergence from the seeds).
+        var general = await db.MeetingTypes.SingleAsync(t => t.Key == MeetingType.GeneralKey);
+        var custom = new MeetingTypeContent(
+            [new TemplateSection(1, "My custom section", [new TemplateBlock(TemplateBlock.Prompt, Text: "Write.")])]).Serialize();
+        general.ContentJson = custom;
+        await db.SaveChangesAsync();
+
+        await MeetingTypeSeeder.SeedAsync(db); // next boot
+
+        var after = await db.MeetingTypes.SingleAsync(t => t.Key == MeetingType.GeneralKey);
+        Assert.Equal(custom, after.ContentJson); // edits are sacred - no upgrade applied
+    }
 }

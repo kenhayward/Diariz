@@ -363,6 +363,7 @@
   "mtFieldOpt_attendees": "Asistentes",
   "mtFieldOpt_duration": "Duración",
   "mtFieldOpt_action_items": "Tabla de acciones",
+  "mtFieldOpt_notes": "Notas mejoradas (a partir de tus notas)",
   "mtTitleRequired": "Se requiere un título.",
   "mtGroupRequired": "Se requiere un nombre de grupo.",
   "sectionTitleRequired": "Cada sección necesita un título.",

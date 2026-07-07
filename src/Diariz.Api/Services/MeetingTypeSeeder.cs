@@ -36,6 +36,29 @@ public static class MeetingTypeSeeder
             Prompt("List any open questions or parking-lot items. Omit this section if there are none.")),
         Sec(1, "Next steps",
             Prompt("Describe the next steps or next meeting in narrative form. Omit this section if there are none.")),
+        Sec(1, "Enhanced notes",
+            Field("notes")),
+        Sec(1, "Action items",
+            Field("action_items")));
+
+    /// <summary>The General template's content as seeded BEFORE the Enhanced-notes section existed. Kept so
+    /// <see cref="SeedAsync"/> can recognise a never-edited legacy row and upgrade it - and only it.</summary>
+    private static string LegacyGeneralContent() => Content(
+        Sec(1, "Meeting details",
+            Text("Date: "), Field("date"),
+            Text("Time: "), Field("time"),
+            Text("Attendees: "), Field("attendees"),
+            Text("Duration: "), Field("duration")),
+        Sec(1, "Purpose",
+            Prompt("State the purpose / context of the meeting in 1-2 lines.")),
+        Sec(1, "Discussion",
+            Prompt("Summarise the discussion grouped by theme (not chronologically), concise and decision-oriented. Omit this section if there was no substantive discussion.")),
+        Sec(1, "Decisions",
+            Prompt("List the decisions made. Omit this section if none were made.")),
+        Sec(1, "Open questions",
+            Prompt("List any open questions or parking-lot items. Omit this section if there are none.")),
+        Sec(1, "Next steps",
+            Prompt("Describe the next steps or next meeting in narrative form. Omit this section if there are none.")),
         Sec(1, "Action items",
             Field("action_items")));
 
@@ -144,6 +167,21 @@ public static class MeetingTypeSeeder
                 ContentJson = std.ContentJson,
             });
         }
+
+        // One-time additive upgrade: give the seeded General template the Enhanced notes section, but only
+        // when the admin has never edited it (content still equals the previous seed) - edits are sacred.
+        // Compare CANONICALLY (parse + re-serialize), not byte-wise: ContentJson is a jsonb column and
+        // Postgres re-formats stored JSON (spaces after colons/commas), so raw string equality never matches
+        // the compact serializer output. (The in-memory test provider stores strings verbatim and hides this.)
+        var general = await db.MeetingTypes
+            .FirstOrDefaultAsync(m => m.Key == MeetingType.GeneralKey, ct);
+        if (general is not null && Canonical(general.ContentJson) == Canonical(LegacyGeneralContent()))
+            general.ContentJson = Standards.First(s => s.Key == MeetingType.GeneralKey).ContentJson;
+
         await db.SaveChangesAsync(ct);
     }
+
+    /// <summary>Canonical form of a template-content JSON string (parse + compact re-serialize), so content
+    /// comparison survives jsonb's whitespace normalization.</summary>
+    private static string Canonical(string json) => MeetingTypeContent.Parse(json).Serialize();
 }

@@ -1114,6 +1114,15 @@ export default function RecordingDetail() {
     {
       key: "notes",
       label: t("workspace:detailTabNotes"),
+      // Notes steer the minutes (and fill a template's Enhanced-notes section), so offer a re-run here.
+      toolbar: (
+        <ToolbarButton
+          label={t("workspace:recreateMeetingMinutes")}
+          icon={RefreshIcon}
+          disabled={!hasTranscript || isSummarizing}
+          onClick={recreateMinutes}
+        />
+      ),
       content: (
         <div className="px-4 pb-4">
           <NotesSection notes={notes} onAdd={addNote} onEdit={editNote} onDelete={removeNote} onJump={jumpToMs} />

@@ -363,6 +363,7 @@
   "mtFieldOpt_attendees": "Teilnehmer",
   "mtFieldOpt_duration": "Dauer",
   "mtFieldOpt_action_items": "Aktionstabelle",
+  "mtFieldOpt_notes": "Erweiterte Notizen (aus Ihren Notizen)",
   "mtTitleRequired": "Ein Titel ist erforderlich.",
   "mtGroupRequired": "Ein Gruppenname ist erforderlich.",
   "sectionTitleRequired": "Jeder Abschnitt braucht einen Titel.",

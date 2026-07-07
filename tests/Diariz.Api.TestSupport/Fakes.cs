@@ -136,17 +136,20 @@ public sealed class FakeMeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerat
     public Guid LastOwnerId { get; private set; }
     public Guid? LastMeetingTypeId { get; private set; }
     public IReadOnlyList<ExtractedAction>? LastActions { get; private set; }
+    public IReadOnlyList<MeetingNoteDto>? LastNotes { get; private set; }
     public SummarizationRequestConfig? LastConfig { get; private set; }
 
     public Task<string> GenerateAsync(
         Guid recordingOwnerId, Guid? meetingTypeId, MeetingMinutesContext context,
         IReadOnlyList<SegmentDto> segments, IReadOnlyList<ExtractedAction> actions,
+        IReadOnlyList<MeetingNoteDto> notes,
         SummarizationRequestConfig config, int charBudget, CancellationToken ct = default)
     {
         Calls++;
         LastOwnerId = recordingOwnerId;
         LastMeetingTypeId = meetingTypeId;
         LastActions = actions;
+        LastNotes = notes;
         LastConfig = config;
         if (ThrowOnCall is not null) throw ThrowOnCall;
         return Task.FromResult(Result);

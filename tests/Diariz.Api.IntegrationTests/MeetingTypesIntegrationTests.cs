@@ -27,6 +27,40 @@ public class MeetingTypesIntegrationTests(ContainersFixture fx)
     }
 
     [Fact]
+    public async Task Seeder_upgradesALegacyGeneral_ThroughJsonbNormalization()
+    {
+        // Seed, then strip the Enhanced-notes section back to the pre-notes shape - and let REAL Postgres
+        // round-trip the JSON through jsonb, which reformats it (spaces after colons/commas). The upgrade
+        // must compare canonically, or it never fires outside the in-memory provider.
+        await using (var db = fx.CreateDbContext())
+            await MeetingTypeSeeder.SeedAsync(db);
+
+        await using (var db = fx.CreateDbContext())
+        {
+            var general = await db.MeetingTypes.SingleAsync(m => m.Key == MeetingType.GeneralKey);
+            var content = MeetingTypeContent.Parse(general.ContentJson);
+            general.ContentJson = (content with
+            {
+                Sections = content.Sections.Where(s => s.Title != "Enhanced notes").ToList(),
+            }).Serialize();
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = fx.CreateDbContext())
+        {
+            // Sanity: jsonb reformatted the stored string (it no longer equals the compact serializer form).
+            var stored = await db.MeetingTypes.SingleAsync(m => m.Key == MeetingType.GeneralKey);
+            Assert.False(MeetingTypeContent.Parse(stored.ContentJson).HasField("notes"));
+
+            await MeetingTypeSeeder.SeedAsync(db); // next boot upgrades it
+        }
+
+        await using var verify = fx.CreateDbContext();
+        var upgraded = await verify.MeetingTypes.SingleAsync(m => m.Key == MeetingType.GeneralKey);
+        Assert.True(MeetingTypeContent.Parse(upgraded.ContentJson).HasField("notes"));
+    }
+
+    [Fact]
     public async Task Deleting_a_meeting_type_nulls_the_recordings_that_used_it()
     {
         Guid userId, typeId, recId;

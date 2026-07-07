@@ -15,12 +15,12 @@ public class MeetingTypeMinutesGeneratorTests
         [new(Guid.NewGuid(), "SPEAKER_00", "Alice", 0, 1000, "Hello")];
     private static readonly SummarizationRequestConfig Config = new("https://llm.test/v1", "sk", "m", 60);
     private static readonly MeetingMinutesContext Context =
-        new(new DateTimeOffset(2026, 3, 4, 9, 0, 0, TimeSpan.Zero), "Weekly Sync", ["Alice", "Bob"], 3_600_000);
+        new(Guid.NewGuid(), new DateTimeOffset(2026, 3, 4, 9, 0, 0, TimeSpan.Zero), "Weekly Sync", ["Alice", "Bob"], 3_600_000);
 
     private static MeetingTypeMinutesGenerator Build(DiarizDbContext db, FakeMeetingMinutesClient client) =>
         new(db,
             [new PerSectionMinutesStrategy(client), new SingleCallMinutesStrategy(client)],
-            new FilePromptTemplateProvider("nonexistent-prompts-dir")); // -> built-in preamble fallback
+            new FilePromptTemplateProvider("nonexistent-prompts-dir"), client); // -> built-in preamble fallback
 
     private static async Task SetMode(DiarizDbContext db, MinutesGenerationMode mode)
     {
@@ -54,7 +54,7 @@ public class MeetingTypeMinutesGeneratorTests
         var client = new FakeMeetingMinutesClient { Result = "PROMPT-OUT" };
 
         var md = await Build(db, client).GenerateAsync(
-            Guid.NewGuid(), null, Context, Segments, Actions, Config, 16000);
+            Guid.NewGuid(), null, Context, Segments, Actions, [], Config, 16000);
 
         Assert.Contains("# Meeting details", md);        // General template's structure
         Assert.Contains("Date: 2026-03-04", md);          // date field substituted from the context
@@ -73,7 +73,7 @@ public class MeetingTypeMinutesGeneratorTests
         var client = new FakeMeetingMinutesClient { Result = "x" };
 
         var md = await Build(db, client).GenerateAsync(
-            Guid.NewGuid(), otherUsersType, Context, Segments, Actions, Config, 16000);
+            Guid.NewGuid(), otherUsersType, Context, Segments, Actions, [], Config, 16000);
 
         Assert.DoesNotContain("SOMEONE ELSES", md);
         Assert.Contains("# Meeting details", md);        // General used instead
@@ -88,7 +88,7 @@ public class MeetingTypeMinutesGeneratorTests
         var client = new FakeMeetingMinutesClient { Result = "body" };
 
         var md = await Build(db, client).GenerateAsync(
-            Guid.NewGuid(), typeId, Context, Segments, Actions, Config, 16000);
+            Guid.NewGuid(), typeId, Context, Segments, Actions, [], Config, 16000);
 
         Assert.Contains("# CUSTOM SECTION", md);
     }
@@ -103,7 +103,7 @@ public class MeetingTypeMinutesGeneratorTests
             typeId = AddTwoPromptType(db);
             await SetMode(db, MinutesGenerationMode.PerSection);
             var client = new FakeMeetingMinutesClient { Result = "x" };
-            await Build(db, client).GenerateAsync(Guid.NewGuid(), typeId, Context, Segments, Actions, Config, 16000);
+            await Build(db, client).GenerateAsync(Guid.NewGuid(), typeId, Context, Segments, Actions, [], Config, 16000);
             Assert.Equal(2, client.Calls);
         }
         using (var db = TestDb.Create())
@@ -111,7 +111,7 @@ public class MeetingTypeMinutesGeneratorTests
             typeId = AddTwoPromptType(db);
             await SetMode(db, MinutesGenerationMode.SingleCall);
             var client = new FakeMeetingMinutesClient { Result = "x" };
-            await Build(db, client).GenerateAsync(Guid.NewGuid(), typeId, Context, Segments, Actions, Config, 16000);
+            await Build(db, client).GenerateAsync(Guid.NewGuid(), typeId, Context, Segments, Actions, [], Config, 16000);
             Assert.Equal(1, client.Calls);
         }
     }

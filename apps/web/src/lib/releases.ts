@@ -27,7 +27,11 @@ meeting (sparse trigger phrases, questions, observations); timestamped lines jum
 transcript, and you can also jot **prep notes on an upcoming Google Calendar meeting** (from its preview page) -
 they attach to the recording automatically once it is linked to that meeting. While recording, a **live notes
 panel** lets you take those notes in the moment - each line is stamped at the second you wrote it, survives a
-crash, and lands on the recording's Notes tab automatically after upload.
+crash, and lands on the recording's Notes tab automatically after upload. Your notes then **shape the meeting
+minutes**: every section gives weight to what you flagged, and templates can include an **Enhanced notes**
+section where each of your lines is expanded from the transcript - your words kept verbatim in bold, the
+expansion beside them, with **clickable links to the exact transcript moments** (and anything the meeting
+never covered is kept and marked "not discussed", never silently dropped).
 
 It can **identify speakers** across recordings: enrol a person from a recording's speaker and Diariz
 recognises that voice in later recordings automatically (using **SpeechBrain ECAPA** voiceprints), with
@@ -122,6 +126,25 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.105.0",
+    date: "2026-07-07",
+    pr: 237,
+    headline: "Your notes now shape the meeting minutes",
+    summary:
+      "The payoff of the notes feature: your own note lines now steer the generated meeting minutes - every " +
+      "section gives weight to the points you flagged during the meeting. Templates can also include a new " +
+      "'Enhanced notes' section (the standard General template gains one automatically unless you've " +
+      "customised it): each of your lines is expanded with what was actually said, your words kept verbatim " +
+      "in bold, with clickable links to the exact transcript moments. Anything the meeting never covered is " +
+      "kept and marked 'not discussed' - nothing you wrote is ever dropped. If the notes expansion fails, " +
+      "your raw lines still appear and the minutes still generate. Server redeploy (web + API) only.",
+    added: [
+      "Minutes generation now weights the points you flagged in your notes (all templates, both generation modes).",
+      "New 'Enhanced notes' template section: your note lines expanded from the transcript with verbatim bold text, timestamps, and clickable transcript links; uncovered lines marked 'not discussed'.",
+      "A Re-create minutes button on the Notes tab, and the new section available in the template editor's field picker.",
+    ],
+  },
   {
     version: "0.104.0",
     date: "2026-07-07",
