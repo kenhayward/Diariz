@@ -267,6 +267,7 @@ builder.Services.AddHttpClient<IGoogleAuthService, GoogleAuthService>();
 builder.Services.AddScoped<IGoogleSignInHandler, GoogleSignInHandler>();
 builder.Services.AddSingleton<IGoogleTokenProtector, GoogleTokenProtector>();
 builder.Services.AddScoped<IGoogleTokenProvider, GoogleTokenProvider>();
+builder.Services.AddScoped<IGoogleCalendarSelectionStore, GoogleCalendarSelectionStore>();
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient<IGoogleCalendarClient, GoogleCalendarClient>();
 

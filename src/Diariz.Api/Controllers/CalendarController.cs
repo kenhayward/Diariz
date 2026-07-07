@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Diariz.Api.Contracts;
 using Diariz.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,11 +20,14 @@ public class CalendarController : ControllerBase
 
     private readonly IGoogleCalendarClient _calendar;
     private readonly IIcsCalendarClient _ics;
+    private readonly IGoogleCalendarSelectionStore _selection;
 
-    public CalendarController(IGoogleCalendarClient calendar, IIcsCalendarClient ics)
+    public CalendarController(
+        IGoogleCalendarClient calendar, IIcsCalendarClient ics, IGoogleCalendarSelectionStore selection)
     {
         _calendar = calendar;
         _ics = ics;
+        _selection = selection;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -52,5 +56,29 @@ public class CalendarController : ControllerBase
         var ev = await _calendar.GetEventAsync(UserId, eventId, ct);
         if (ev is null) return NotFound();
         return Ok(ev);
+    }
+
+    /// <summary>The user's Google calendars for the Preferences picker, each flagged with the user's effective
+    /// selection (an unchosen selection defaults to the Google-visible calendars + primary). Empty when the
+    /// user hasn't connected Calendar.</summary>
+    [HttpGet("calendars")]
+    public async Task<ActionResult<IReadOnlyList<CalendarListItemDto>>> Calendars(CancellationToken ct)
+    {
+        var all = await _calendar.ListAllCalendarsAsync(UserId, ct);
+        if (all is null) return Ok(Array.Empty<CalendarListItemDto>());
+
+        var selection = await _selection.GetSelectedIdsAsync(UserId, ct);
+        var items = all.Select(c => new CalendarListItemDto(
+            c.Id, c.Summary, c.BackgroundColor, c.Primary,
+            Selected: selection is null ? (c.Selected || c.Primary) : selection.Contains(c.Id)));
+        return Ok(items.ToList());
+    }
+
+    /// <summary>Save which Google calendars to consider for attribution + the overlay.</summary>
+    [HttpPut("calendars")]
+    public async Task<IActionResult> SaveCalendars(SaveCalendarSelectionRequest req, CancellationToken ct)
+    {
+        await _selection.SetSelectedIdsAsync(UserId, req.Ids ?? [], ct);
+        return NoContent();
     }
 }

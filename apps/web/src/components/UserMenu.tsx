@@ -2,36 +2,25 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth";
-import { useTheme } from "../theme";
 import { api } from "../lib/api";
 import { useTour } from "../lib/tour";
 import { formatBytes, storagePercent } from "../lib/format";
 import { transcriptionTimeParts } from "../lib/transcriptionTime";
-import type { ThemeChoice } from "../lib/theme";
 import Avatar from "./Avatar";
 import SettingsModal from "./SettingsModal";
 import PreferencesModal from "./PreferencesModal";
 import ManageUsersModal from "./ManageUsersModal";
-import PeopleModal from "./PeopleModal";
 import AboutModal from "./AboutModal";
-
-const THEMES: { value: ThemeChoice; key: string }[] = [
-  { value: "auto", key: "themeAuto" },
-  { value: "light", key: "themeLight" },
-  { value: "dark", key: "themeDark" },
-];
 
 export default function UserMenu() {
   const { t } = useTranslation("account");
   const { initials, pictureUrl, email, fullName, isAdmin, logout } = useAuth();
-  const { theme, setTheme } = useTheme();
   const tour = useTour();
   const { data: storage } = useQuery({ queryKey: ["user-storage"], queryFn: api.getUserStorage });
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [usersOpen, setUsersOpen] = useState(false);
-  const [peopleOpen, setPeopleOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -134,18 +123,6 @@ export default function UserMenu() {
             role="menuitem"
             onClick={() => {
               setOpen(false);
-              setPeopleOpen(true);
-            }}
-            className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
-          >
-            {t("people")}
-          </button>
-
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
               tour.start();
             }}
             className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
@@ -165,23 +142,6 @@ export default function UserMenu() {
             {t("about")}
           </button>
 
-          <div className="border-t py-1 dark:border-gray-700">
-            <div className="px-3 py-1 text-xs font-medium text-gray-400 dark:text-gray-500">{t("theme")}</div>
-            {THEMES.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                role="menuitemradio"
-                aria-checked={theme === opt.value}
-                onClick={() => setTheme(opt.value)}
-                className="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
-              >
-                {t(opt.key)}
-                {theme === opt.value && <span aria-hidden>✓</span>}
-              </button>
-            ))}
-          </div>
-
           <button
             type="button"
             role="menuitem"
@@ -199,7 +159,6 @@ export default function UserMenu() {
       {preferencesOpen && <PreferencesModal onClose={() => setPreferencesOpen(false)} />}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       {usersOpen && <ManageUsersModal onClose={() => setUsersOpen(false)} />}
-      {peopleOpen && <PeopleModal onClose={() => setPeopleOpen(false)} />}
       {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
     </div>
   );

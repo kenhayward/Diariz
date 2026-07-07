@@ -270,15 +270,29 @@ public record LanguageDto(string Code, string EnglishName, string NativeName, bo
 /// account is linked to a Google identity (used by the Preferences "Google account" section).</summary>
 public record UserProfileDto(
     string Email, string? FullName, string? NativeLanguage, string? UiLanguage, bool GoogleConnected = false,
-    bool GoogleCalendar = false);
+    bool GoogleCalendar = false,
+    string? JobTitle = null, string? CompanyName = null, string? JobDescription = null,
+    string? CompanyDescription = null, string? LinkedIn = null,
+    /// <summary>Colour theme: "auto" | "light" | "dark".</summary>
+    string Theme = "auto");
 
 /// <summary>Self-service profile update. Each field is trimmed; blank clears it. Language codes must be
-/// in the supported set (else 400).</summary>
-public record UpdateUserProfileRequest(string? FullName, string? NativeLanguage, string? UiLanguage);
+/// in the supported set (else 400). <paramref name="Theme"/> is "auto" | "light" | "dark" (unknown -> auto).</summary>
+public record UpdateUserProfileRequest(
+    string? FullName, string? NativeLanguage, string? UiLanguage,
+    string? JobTitle = null, string? CompanyName = null, string? JobDescription = null,
+    string? CompanyDescription = null, string? LinkedIn = null, string? Theme = null);
 
 /// <summary>Translate a transcript (or one segment) into <see cref="Language"/> (BCP-47). When null, the
 /// caller's saved native language is used; 400 if neither is set.</summary>
 public record TranslateRequest(string? Language = null);
+
+/// <summary>One of the user's Google calendars for the Preferences picker. <paramref name="Selected"/> is the
+/// user's effective Diariz selection (whether its events count toward attribution + the overlay).</summary>
+public record CalendarListItemDto(string Id, string? Summary, string? BackgroundColor, bool Primary, bool Selected);
+
+/// <summary>Save which Google calendars to consider for recording attribution + the Calendar overlay.</summary>
+public record SaveCalendarSelectionRequest(IReadOnlyList<string> Ids);
 
 // ---- User settings (per-user summarisation config) ----
 /// <summary>Settings returned to the client. The API key is never exposed — only whether one is set.

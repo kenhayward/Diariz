@@ -66,6 +66,12 @@ export default function Setup() {
             fullName: fullName.trim() || null,
             nativeLanguage: language,
             uiLanguage: language,
+            jobTitle: null,
+            companyName: null,
+            jobDescription: null,
+            companyDescription: null,
+            linkedIn: null,
+            theme: "auto",
           });
           setSession(updated.accessToken);
         } catch {

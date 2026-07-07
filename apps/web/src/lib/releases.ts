@@ -81,7 +81,8 @@ belongs to** (auto-saved on open, or picked by hand even when the times don't li
 the meeting's **full invite details** (time, location, organiser, attendees, description), and the
 **Calendar tab overlays their meetings** (a merged day list; a linked recording and its meeting show as one
 row, and a meeting with no recording opens a preview you can link a recording to) - a revocable grant they can
-disconnect any time. Beyond Google, anyone can **subscribe to external iCalendar (.ics) feeds** (public team
+disconnect any time. They can **choose which of their Google calendars** to consider (Preferences → Google
+Account); only the selected calendars are used for matching and shown on the Calendar tab. Beyond Google, anyone can **subscribe to external iCalendar (.ics) feeds** (public team
 or shared calendars) in **Preferences → Calendar feeds**, each with its own name and colour, and those meetings
 appear on the Calendar tab too - no Google connection required. Each user has a **storage quota** (audio): the Platform
 Administrator sets the starter and maximum, any administrator can raise an individual user, and your
@@ -91,6 +92,9 @@ deletion** - a nightly job removes the original audio of recordings older than a
 Platform Administrator can also **back up and restore the whole
 platform** (database + stored files) as a single transferable archive from Settings → Maintenance.
 
+**Preferences** is a tabbed window (Profile, Google Account, Calendar Feeds, Claude Access, Voice Prints):
+your **profile** holds a display name, job title, company, job/company descriptions, and a LinkedIn account
+name, and a **theme** (Light/Dark/Auto) that is saved to your account and follows you across devices.
 The interface is **localized** - pick your language (English, Spanish, French, German today) at signup or
 in Preferences, and downloaded/emailed transcripts use it too. Translations are community-extensible via
 simple JSON files.
@@ -109,6 +113,29 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.100.0",
+    date: "2026-07-07",
+    pr: 225,
+    headline: "Redesigned Preferences: tabs, richer profile, Google calendar picker",
+    summary:
+      "Preferences is now a tabbed window (Profile, Google Account, Calendar Feeds, Claude Access, Voice " +
+      "Prints) with your avatar and name in a left panel. Your profile gains a job title, company name, job " +
+      "and company descriptions, a LinkedIn account name, and a theme choice (Light/Dark/Auto) that now " +
+      "follows you across devices - the theme picker has moved out of the account menu into Profile. The " +
+      "voiceprints manager (formerly the 'People' pop-up) is now the 'Voice Prints' tab, and the account " +
+      "menu's People item is gone. On the Google Account tab you can now choose which of your Google " +
+      "calendars Diariz considers when matching recordings to meetings - only the calendars you select " +
+      "appear elsewhere in the app. Server redeploy only.",
+    added: [
+      "Profile fields: job title, company name, job description, company description, and LinkedIn account name.",
+      "Per-user theme (Light/Dark/Auto) saved to your account, so it follows you across devices; moved from the account menu into Preferences -> Profile.",
+      "Google calendar selection (Preferences -> Google Account): pick which calendars count toward recording attribution and the Calendar overlay.",
+    ],
+    changed: [
+      "Preferences is now a vertical-tabbed window; the 'People' voiceprints pop-up is folded in as the 'Voice Prints' tab (and removed from the account menu).",
+    ],
+  },
   {
     version: "0.99.1",
     date: "2026-07-07",

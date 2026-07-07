@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import Recorder from "./Recorder";
 import UserMenu from "./UserMenu";
+import ThemeSync from "./ThemeSync";
 
 /// Persistent bar: brand on the left, the record control in the middle, the account menu on the right.
 export default function TopBar() {
@@ -18,6 +19,7 @@ export default function TopBar() {
       </div>
 
       <UserMenu />
+      <ThemeSync />
     </header>
   );
 }

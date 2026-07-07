@@ -258,8 +258,17 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.Property(s => s.SummaryApiBase).HasMaxLength(512);
             e.Property(s => s.SummaryModel).HasMaxLength(256);
             e.Property(s => s.GoogleCalendarGranted).HasDefaultValue(false);
+            e.Property(s => s.Theme).HasDefaultValue(ThemePreference.Auto);
+            e.Property(s => s.JobTitle).HasMaxLength(256);
+            e.Property(s => s.CompanyName).HasMaxLength(256);
+            e.Property(s => s.LinkedIn).HasMaxLength(256);
+            e.Property(s => s.JobDescription).HasMaxLength(2048);
+            e.Property(s => s.CompanyDescription).HasMaxLength(2048);
             if (isNpgsql)
+            {
                 e.Property(s => s.ChatToolOverridesJson).HasColumnType("jsonb");
+                e.Property(s => s.GoogleSelectedCalendarIdsJson).HasColumnType("jsonb");
+            }
             e.HasOne(s => s.User)
                 .WithOne(u => u.Settings)
                 .HasForeignKey<UserSettings>(s => s.UserId)

@@ -364,7 +364,8 @@ export interface Language {
   rtl: boolean;
 }
 
-/// The signed-in user's editable profile (display name + language preferences). Email is read-only.
+/// The signed-in user's editable profile (display name + language preferences + free-text profile fields +
+/// colour theme). Email is read-only.
 export interface UserProfile {
   email: string;
   fullName: string | null;
@@ -372,6 +373,22 @@ export interface UserProfile {
   uiLanguage: string | null;
   googleConnected: boolean; // account is linked to a Google identity
   googleCalendar: boolean; // user granted Google Calendar read access
+  jobTitle: string | null;
+  companyName: string | null;
+  jobDescription: string | null;
+  companyDescription: string | null;
+  linkedIn: string | null;
+  theme: "auto" | "light" | "dark";
+}
+
+/// One of the user's Google calendars, for the Preferences picker. `selected` is the user's effective
+/// choice (whether its events count toward attribution + the Calendar overlay).
+export interface GoogleCalendarListItem {
+  id: string;
+  summary: string | null;
+  backgroundColor: string | null;
+  primary: boolean;
+  selected: boolean;
 }
 
 /// One person on a calendar event (organizer or attendee).
@@ -444,6 +461,12 @@ export interface UpdateUserProfile {
   fullName: string | null;
   nativeLanguage: string | null;
   uiLanguage: string | null;
+  jobTitle: string | null;
+  companyName: string | null;
+  jobDescription: string | null;
+  companyDescription: string | null;
+  linkedIn: string | null;
+  theme: "auto" | "light" | "dark";
 }
 
 export interface UpdateUserSettings {

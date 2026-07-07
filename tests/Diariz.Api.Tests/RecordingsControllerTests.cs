@@ -57,6 +57,9 @@ public class RecordingsControllerTests
             RequestedEventId = eventId;
             return Task.FromResult(Event);
         }
+
+        public Task<IReadOnlyList<CalendarListEntry>?> ListAllCalendarsAsync(Guid userId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<CalendarListEntry>?>(null);
     }
 
     private static async Task SeedUser(DiarizDbContext db, Guid userId, long? quotaBytes = null)

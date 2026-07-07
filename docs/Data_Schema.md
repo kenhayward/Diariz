@@ -64,6 +64,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddMeetingType` | `MeetingTypes` (minutes templates; nullable `UserId` — null = shared Platform type, non-null = a user's Personal type; unique `Key` for seeded standards; `ContentJson` **jsonb**; cascade on user delete) + `Recordings.MeetingTypeId` (FK, `ON DELETE SET NULL`) — the chosen template driving a recording's minutes |
 | `AddMinutesGenerationMode` | `PlatformSettings.MinutesGenerationMode` (int, NOT NULL, default 0 = SingleCall) — platform-wide switch for how template-driven minutes generate (per-section calls vs one call) |
 | `AddAudioRetention` | `PlatformSettings.AutoDeleteAudioEnabled` (bool, default false) + `AudioRetentionDays` (int, default 30) + `AudioDeletionTimeOfDay` (time, default 03:00) — the opt-in nightly audio-retention policy; and `Recording.AudioProtectedAt` (timestamptz null) — per-recording exemption from audio deletion |
+| `AddUserProfileAndCalendarSelection` | `UserSettings` gains `JobTitle`/`CompanyName`/`LinkedIn` (varchar(256) null), `JobDescription`/`CompanyDescription` (varchar(2048) null), `Theme` (int, default 0 = Auto), and `GoogleSelectedCalendarIdsJson` (jsonb null) — richer profile + per-user theme + the Google calendar selection |
 
 ### Entity-relationship overview
 
@@ -392,6 +393,10 @@ Per-user preferences (1:1 with the user via a **shared primary key** = `UserId`)
 | `UiLanguage` | text null | the language the app UI is shown in (BCP-47); null → follow the browser |
 | `GoogleRefreshTokenEncrypted` | text null | Google OAuth refresh token (offline Calendar access), **encrypted at rest** (Data Protection); never returned to clients |
 | `GoogleCalendarGranted` | bool | user granted Google Calendar read access |
+| `GoogleSelectedCalendarIdsJson` | jsonb null | JSON array of the Google calendar ids to consider for attribution + the overlay; null → not chosen (fall back to the Google-visible calendars + primary) |
+| `JobTitle` / `CompanyName` / `LinkedIn` | varchar(256) null | free-text profile fields |
+| `JobDescription` / `CompanyDescription` | varchar(2048) null | free-text profile fields |
+| `Theme` | int | UI colour theme (`ThemePreference`): `0` = Auto (default), `1` = Light, `2` = Dark. Append-only enum |
 
 Each field falls back to the server `Summarization`/`Chat` defaults when null. The display name lives on
 `AspNetUsers.FullName` (editable via `PUT /api/user/profile`), not here.

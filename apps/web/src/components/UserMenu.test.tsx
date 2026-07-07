@@ -3,7 +3,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const logout = vi.fn();
-const setTheme = vi.fn();
 
 // Mutable so individual tests can flip isAdmin.
 const authState: { initials: string; email: string; fullName: string | null; isAdmin: boolean; logout: () => void } = {
@@ -11,9 +10,6 @@ const authState: { initials: string; email: string; fullName: string | null; isA
 };
 
 vi.mock("../auth", () => ({ useAuth: () => authState }));
-vi.mock("../theme", () => ({
-  useTheme: () => ({ theme: "auto", setTheme }),
-}));
 vi.mock("../lib/api", () => ({
   api: {
     getUserSettings: vi.fn().mockResolvedValue({ apiBase: null, model: null, hasApiKey: false }),
@@ -52,7 +48,7 @@ describe("UserMenu", () => {
     expect(screen.getByRole("menuitem", { name: /manage users/i })).toBeTruthy();
   });
 
-  it("shows the initials and opens a menu with the user's name, Settings, themes and Sign Out", () => {
+  it("shows the initials and opens a menu with the user's name, Settings and Sign Out", () => {
     renderMenu();
     expect(screen.getByText("JD")).toBeTruthy();
 
@@ -61,8 +57,15 @@ describe("UserMenu", () => {
     expect(screen.getByText("Jane Doe")).toBeTruthy();
     expect(screen.queryByText("jane.doe@x.com")).toBeNull();
     expect(screen.getByRole("menuitem", { name: /settings/i })).toBeTruthy();
-    expect(screen.getByRole("menuitemradio", { name: /auto/i })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /sign out/i })).toBeTruthy();
+  });
+
+  it("no longer shows the People item or the theme picker (moved into Preferences)", () => {
+    renderMenu();
+    fireEvent.click(screen.getByRole("button", { name: /account/i }));
+    expect(screen.queryByRole("menuitem", { name: /people/i })).toBeNull();
+    expect(screen.queryByRole("menuitemradio")).toBeNull();
+    expect(screen.getByRole("menuitem", { name: /preferences/i })).toBeTruthy();
   });
 
   it("shows the storage usage line", async () => {
@@ -84,13 +87,6 @@ describe("UserMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: /account/i }));
     fireEvent.click(screen.getByRole("menuitem", { name: /sign out/i }));
     expect(logout).toHaveBeenCalled();
-  });
-
-  it("selecting a theme calls setTheme", () => {
-    renderMenu();
-    fireEvent.click(screen.getByRole("button", { name: /account/i }));
-    fireEvent.click(screen.getByRole("menuitemradio", { name: /dark/i }));
-    expect(setTheme).toHaveBeenCalledWith("dark");
   });
 
   it("Settings opens the modal", () => {
