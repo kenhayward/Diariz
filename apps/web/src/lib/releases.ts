@@ -107,6 +107,25 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.98.1",
+    date: "2026-07-07",
+    pr: 222,
+    headline: "Desktop update reliability + a clearer up-to-date message",
+    summary:
+      "Fixes desktop auto-update publishing and improves the 'Check for updates' feedback. The release " +
+      "workflow now publishes every installer file to a single GitHub release, instead of a race that " +
+      "could split them across two releases for the same version and stop the app from seeing the update. " +
+      "When you check for updates and are already current, the app now shows 'You are on the latest " +
+      "version X.Y.Z' instead of a vaguer message. Also adds a small deploy helper script for cutting a " +
+      "desktop release.",
+    changed: [
+      "'Check for updates' now shows 'You are on the latest version X.Y.Z' when no update is found.",
+    ],
+    fixed: [
+      "Desktop releases now publish all installer files (including update metadata) to one GitHub release, so the auto-updater reliably detects new versions.",
+    ],
+  },
+  {
     version: "0.98.0",
     date: "2026-07-06",
     pr: 221,

@@ -34,6 +34,21 @@ jobs:
         run: npm ci
       - name: Unit tests
         run: npm test
+      # electron-builder's GitHub publisher can race while uploading multiple assets and create TWO
+      # releases for the same tag, splitting latest.yml / .exe / .blockmap across them - which breaks
+      # electron-updater's asset resolution so "Check for updates" finds nothing. Pre-creating the
+      # release means the publisher finds an existing one and uploads every asset to it, never creating
+      # duplicates. (GitHub path only; a fork on a generic feed doesn't use GitHub Releases.)
+      - name: Ensure a single GitHub release exists for this tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "$GITHUB_REF_NAME" --notes "Diariz $GITHUB_REF_NAME"
+          fi
       - name: Build + publish installer (GitHub Releases)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -32,7 +32,9 @@ function notificationForUpdate(kind, opts = {}) {
         ? { title: "Diariz", body: version ? `Downloading update ${version}…` : "Downloading update…" }
         : null;
     case "not-available":
-      return manual ? { title: "Diariz", body: "You're already up to date" } : null;
+      return manual
+        ? { title: "Diariz", body: version ? `You are on the latest version ${version}` : "You are on the latest version" }
+        : null;
     case "error":
       return manual ? { title: "Diariz", body: "Update check failed" } : null;
     default:
