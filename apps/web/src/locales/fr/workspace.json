@@ -136,6 +136,7 @@
   "minutesEmpty": "Pas encore de compte rendu - utilisez le bouton d’actualisation pour le générer.",
   "emailedMinutes": "Compte rendu de réunion envoyé par e-mail.",
   "generatingMinutes": "Génération du compte rendu de réunion…",
+  "minutesSlow": "La génération du compte rendu prend plus de temps que prévu. Actualisez pour voir le résultat.",
   "errMinutes": "Impossible de mettre à jour le compte rendu de réunion.",
   "confirmRecreateMinutes": "Régénérer le compte rendu de réunion ? Votre version modifiée sera remplacée.",
   "includeAttachmentsBody_one": "Cet enregistrement a {{count}} pièce jointe. L'inclure dans l'e-mail ?",

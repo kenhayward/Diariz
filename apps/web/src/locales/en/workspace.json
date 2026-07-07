@@ -136,6 +136,7 @@
   "minutesEmpty": "No meeting minutes yet - use the refresh button to generate them.",
   "emailedMinutes": "Meeting minutes emailed to you.",
   "generatingMinutes": "Generating meeting minutes…",
+  "minutesSlow": "Minutes generation is taking longer than expected. Refresh to check the result.",
   "errMinutes": "Could not update the meeting minutes.",
   "confirmRecreateMinutes": "Re-create the meeting minutes? This replaces your edited version.",
   "includeAttachmentsBody_one": "This recording has {{count}} attachment. Include it in the email?",

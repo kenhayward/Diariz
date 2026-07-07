@@ -114,6 +114,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.100.3",
+    date: "2026-07-07",
+    pr: 228,
+    headline: "Fix: minutes picker sometimes kept spinning after the minutes were ready",
+    summary:
+      "When generating meeting minutes, the picker's spinner could keep spinning even though the minutes had " +
+      "actually finished - you only saw them after refreshing the page. Minutes generate in the background and " +
+      "the page was relying on a single live update to know they were done; if that update didn't arrive (a slow " +
+      "model or a connection hiccup), the spinner never cleared. The page now also checks for the finished " +
+      "minutes on its own while a run is in progress, so the spinner clears and the minutes appear without a " +
+      "refresh. Server redeploy (web) only.",
+    fixed: [
+      "Meeting-minutes picker no longer spins indefinitely after generation completes; the finished minutes now appear without a manual page refresh.",
+    ],
+  },
+  {
     version: "0.100.2",
     date: "2026-07-07",
     pr: 227,

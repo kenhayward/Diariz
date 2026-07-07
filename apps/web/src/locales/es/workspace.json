@@ -136,6 +136,7 @@
   "minutesEmpty": "Aún no hay actas - usa el botón de actualizar para generarlas.",
   "emailedMinutes": "Acta de la reunión enviada a tu correo.",
   "generatingMinutes": "Generando el acta de la reunión…",
+  "minutesSlow": "La generación del acta está tardando más de lo esperado. Actualiza para ver el resultado.",
   "errMinutes": "No se pudo actualizar el acta de la reunión.",
   "confirmRecreateMinutes": "¿Regenerar el acta de la reunión? Se reemplazará tu versión editada.",
   "includeAttachmentsBody_one": "Esta grabación tiene {{count}} adjunto. ¿Incluirlo en el correo?",
