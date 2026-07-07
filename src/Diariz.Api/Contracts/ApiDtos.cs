@@ -220,6 +220,16 @@ public record RecordingActionDto(
 public record CreateRecordingActionRequest(string? Text, string? Actor, string? Deadline);
 public record UpdateRecordingActionRequest(string? Text, string? Actor, string? Deadline);
 
+/// <summary>One line of the user's own meeting notes. <paramref name="CapturedAtMs"/> is the offset into
+/// the recording clock (null = pre-meeting/post-hoc); immutable after capture.</summary>
+public record MeetingNoteDto(Guid Id, string Text, long? CapturedAtMs, int Ordinal, DateTimeOffset CreatedAt);
+
+/// <summary>Bulk-append request: the live panel attaches all its lines after upload; single adds send one.</summary>
+public record CreateMeetingNotesRequest(IReadOnlyList<CreateMeetingNoteLine> Lines);
+public record CreateMeetingNoteLine(string Text, long? CapturedAtMs = null);
+
+public record UpdateMeetingNoteRequest(string Text);
+
 /// <summary>An action across the user's whole library, carrying its source recording (id + display name)
 /// so the Actions tab can link back to the transcript.</summary>
 public record ActionListItemDto(
