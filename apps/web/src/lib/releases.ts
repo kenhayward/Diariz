@@ -116,7 +116,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.100.0",
     date: "2026-07-07",
-    pr: 0,
+    pr: 225,
     headline: "Redesigned Preferences: tabs, richer profile, Google calendar picker",
     summary:
       "Preferences is now a tabbed window (Profile, Google Account, Calendar Feeds, Claude Access, Voice " +
