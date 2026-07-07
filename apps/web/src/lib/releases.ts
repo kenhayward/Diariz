@@ -66,7 +66,8 @@ to you), **@-mention a specific meeting** (its transcript or minutes, exposed as
 scoped to your account. You manage both **tokens and web connections** (with one-click **revoke**) in the same
 Preferences section. When a Platform Administrator has enabled it (Settings → Integration), you can also
 generate a **personal API token** (Preferences → Developers) to call the Diariz **REST API** directly as
-yourself - acting with your own permissions, over your own data.
+yourself - acting with your own permissions, over your own data - and browse a **built-in API reference**
+(Developers → View API reference) to explore the available calls.
 Recordings organise into **sections** (with sub-sections) and drag-and-drop ordering, can be **merged**
 into one, and can be browsed as a **list, a calendar, or a cross-meeting Actions list** (the left panel is
 **Meetings**). A **status bar** along the bottom shows live progress (transcribing, summarising, merging,
@@ -116,6 +117,21 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.102.0",
+    date: "2026-07-07",
+    pr: 232,
+    headline: "Browsable API reference for user API access",
+    summary:
+      "Following personal API tokens, there's now a built-in, interactive API reference so you can explore and " +
+      "try the Diariz REST API. Open it from Preferences -> Developers (or Settings -> Integration) once a " +
+      "Platform Administrator has enabled API access. It's generated from the live API and shows only the " +
+      "user-facing endpoints. Server redeploy (web + API) only.",
+    added: [
+      "In-app API reference (Scalar) at /developers/api - a browsable, try-it view of the user-facing REST API, linked from the Developers and Integration tabs.",
+      "A curated OpenAPI document at /api/openapi/v1.json (authenticated), used by the reference.",
+    ],
+  },
   {
     version: "0.101.0",
     date: "2026-07-07",

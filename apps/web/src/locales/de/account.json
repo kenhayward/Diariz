@@ -103,6 +103,8 @@
   "apiNeverUsed": "nie verwendet",
   "apiNoTokens": "Noch keine API-Tokens.",
   "apiViewReference": "API-Referenz ansehen",
+  "apiBackToApp": "Zurück zur App",
+  "apiReferenceTitle": "Diariz-API-Referenz",
   "integrationTab": "Integration",
   "apiAccessEnabledLabel": "API-Zugriff für Benutzer aktivieren",
   "apiAccessEnabledHelp": "Ermöglicht Benutzern, persönliche API-Tokens zu erstellen und die Diariz-API aufzurufen. Standardmäßig deaktiviert.",

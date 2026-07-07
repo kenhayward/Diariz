@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./auth";
@@ -11,6 +11,8 @@ import Setup from "./pages/Setup";
 import ReleaseNotes from "./pages/ReleaseNotes";
 import RecordingDetail from "./pages/RecordingDetail";
 import CalendarEventDetail from "./pages/CalendarEventDetail";
+// Lazy-loaded: the Scalar API reference is a large bundle, only needed on /developers/api.
+const ApiReference = lazy(() => import("./pages/ApiReference"));
 import WorkspaceLayout from "./components/WorkspaceLayout";
 import EmptyDetail from "./components/EmptyDetail";
 
@@ -47,6 +49,16 @@ export default function App() {
       <Route path="/request-access" element={<RequestAccess />} />
       <Route path="/setup" element={<Setup />} />
       <Route path="/release-notes" element={<ReleaseNotes />} />
+      <Route
+        path="/developers/api"
+        element={
+          <RequireAuth>
+            <Suspense fallback={null}>
+              <ApiReference />
+            </Suspense>
+          </RequireAuth>
+        }
+      />
       <Route
         path="/"
         element={

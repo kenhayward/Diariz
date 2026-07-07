@@ -390,7 +390,13 @@ builder.Services.AddHostedService<AudioRetentionWorker>();
 builder.Services.AddControllers()
     .AddJsonOptions(o => JsonConfig.Apply(o.JsonSerializerOptions));
 builder.Services.AddSignalR();
-builder.Services.AddOpenApi();
+// Publish a curated OpenAPI document: only user-facing REST endpoints (api/* minus api/oauth), with a bearer
+// security scheme declared so the in-app reference's Authorize works. See OpenApiCuration.
+builder.Services.AddOpenApi("v1", options =>
+{
+    options.ShouldInclude = desc => Diariz.Api.OpenApi.OpenApiCuration.ShouldInclude(desc.RelativePath);
+    options.AddDocumentTransformer<Diariz.Api.OpenApi.OpenApiCuration.SecuritySchemeTransformer>();
+});
 
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
     .WithOrigins(builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? ["http://localhost:5173"])
@@ -413,8 +419,9 @@ await using (var scope = app.Services.CreateAsyncScope())
 // Must run before auth/cookie handling so the pipeline sees the real client scheme.
 app.UseForwardedHeaders();
 
-if (app.Environment.IsDevelopment())
-    app.MapOpenApi();
+// The curated OpenAPI document, served in every environment under /api (so the existing nginx proxy covers
+// it) and requiring auth - it backs the in-app API reference at /developers/api.
+app.MapOpenApi("/api/openapi/{documentName}.json").RequireAuthorization();
 
 app.UseCors();
 app.UseAuthentication();
