@@ -122,8 +122,9 @@ Meeting date: {calendar_date}
 
     /// <summary>The LAST top-level, string-aware balanced <c>[ … ]</c> array in the text, or null. The model
     /// is told to reason first and emit its JSON array last, so this ignores any square brackets that appear in
-    /// the preceding reasoning (which the old "first [ to last ]" scan would wrongly swallow).</summary>
-    private static string? ExtractJsonArray(string s)
+    /// the preceding reasoning (which the old "first [ to last ]" scan would wrongly swallow). Shared with
+    /// <see cref="NotesEnhancer"/>, whose responses have the same reasoning-then-array shape.</summary>
+    internal static string? ExtractJsonArray(string s)
     {
         string? last = null;
         for (var i = 0; i < s.Length; i++)

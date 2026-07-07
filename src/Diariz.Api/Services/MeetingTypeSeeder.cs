@@ -170,11 +170,18 @@ public static class MeetingTypeSeeder
 
         // One-time additive upgrade: give the seeded General template the Enhanced notes section, but only
         // when the admin has never edited it (content still equals the previous seed) - edits are sacred.
+        // Compare CANONICALLY (parse + re-serialize), not byte-wise: ContentJson is a jsonb column and
+        // Postgres re-formats stored JSON (spaces after colons/commas), so raw string equality never matches
+        // the compact serializer output. (The in-memory test provider stores strings verbatim and hides this.)
         var general = await db.MeetingTypes
             .FirstOrDefaultAsync(m => m.Key == MeetingType.GeneralKey, ct);
-        if (general is not null && general.ContentJson == LegacyGeneralContent())
+        if (general is not null && Canonical(general.ContentJson) == Canonical(LegacyGeneralContent()))
             general.ContentJson = Standards.First(s => s.Key == MeetingType.GeneralKey).ContentJson;
 
         await db.SaveChangesAsync(ct);
     }
+
+    /// <summary>Canonical form of a template-content JSON string (parse + compact re-serialize), so content
+    /// comparison survives jsonb's whitespace normalization.</summary>
+    private static string Canonical(string json) => MeetingTypeContent.Parse(json).Serialize();
 }

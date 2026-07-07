@@ -27,7 +27,9 @@ public class NotesEnhancerTests
         Assert.Contains("0: Comp expectations (written at 1:01)", messages[1].Content);
         Assert.Contains("1: IPO experience APAC", messages[1].Content);
         Assert.DoesNotContain("1: IPO experience APAC (written", messages[1].Content); // no stamp when null
-        Assert.Contains("Comp needs to be market-rate.", messages[1].Content); // transcript included
+        // The transcript carries [ms=...] start markers - without them the model cannot return timesMs.
+        Assert.Contains("[ms=60000] Bob: Comp needs to be market-rate.", messages[1].Content);
+        Assert.Contains("[ms=0] Alice: We discussed the budget.", messages[1].Content);
     }
 
     [Fact]
@@ -68,5 +70,22 @@ public class NotesEnhancerTests
         var result = NotesEnhancer.ParseResponse("sorry, I can't do that", 2);
         Assert.Equal(2, result.Count);
         Assert.All(result, e => Assert.True(e.NotDiscussed));
+    }
+
+    [Fact]
+    public void ParseResponse_ExtractsTheArray_FromReasoningModelPreamble()
+    {
+        // Local reasoning models (e.g. qwen) emit thinking prose before the JSON - the parser must find the
+        // last balanced array in the text, not require the whole response to be JSON (the ActionsPrompt
+        // lesson). The prose may even contain stray brackets [like this].
+        var response =
+            "Let me check each note [line by line]. The first is covered at 60000ms.\n" +
+            """Here is the result: [{"i":0,"expansion":"Covered.","timesMs":[60000]}]""";
+
+        var result = NotesEnhancer.ParseResponse(response, 1);
+
+        Assert.False(result[0].NotDiscussed);
+        Assert.Equal("Covered.", result[0].Expansion);
+        Assert.Equal([60_000L], result[0].TimesMs);
     }
 }
