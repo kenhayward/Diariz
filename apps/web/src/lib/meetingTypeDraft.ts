@@ -111,6 +111,22 @@ export function moveBlockCrossSection(
   return { ...content, sections };
 }
 
+/// Back-fill an explicit `breakAfter` on any block that lacks one, using the legacy rule (glue only before a
+/// field). Applied when loading a template so pre-feature templates show correct controls and re-render identically.
+export function normalizeBreaks(content: MeetingTypeContent): MeetingTypeContent {
+  return {
+    ...content,
+    sections: content.sections.map((s) => ({
+      ...s,
+      blocks: s.blocks.map((b, i) => ({ ...b, breakAfter: b.breakAfter ?? legacyBreak(s.blocks[i + 1]) })),
+    })),
+  };
+}
+
+function legacyBreak(next: TemplateBlock | undefined): "none" | "paragraph" {
+  return next && next.kind === "field" ? "none" : "paragraph";
+}
+
 /// The first problem with the template (mirrors the backend's validation), or null when it's savable.
 export function contentError(content: MeetingTypeContent): string | null {
   for (const section of content.sections) {

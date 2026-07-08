@@ -92,6 +92,30 @@ describe("moveBlockCrossSection", () => {
   });
 });
 
+describe("normalizeBreaks", () => {
+  it("back-fills a missing breakAfter from the legacy rule (glue before a field)", () => {
+    const content: MeetingTypeContent = {
+      sections: [{
+        level: 1, title: "S",
+        blocks: [
+          { kind: "boilerplate", text: "Date: " }, // followed by a field -> none
+          { kind: "field", field: "date" },        // followed by boilerplate -> paragraph
+          { kind: "boilerplate", text: "end" },     // last -> paragraph
+        ],
+      }],
+    };
+    const out = normalizeBreaks(content);
+    expect(out.sections[0].blocks.map((b) => b.breakAfter)).toEqual(["none", "paragraph", "paragraph"]);
+  });
+
+  it("keeps an already-set breakAfter", () => {
+    const content: MeetingTypeContent = {
+      sections: [{ level: 1, title: "S", blocks: [{ kind: "boilerplate", text: "x", breakAfter: "line" }] }],
+    };
+    expect(normalizeBreaks(content).sections[0].blocks[0].breakAfter).toBe("line");
+  });
+});
+
 describe("contentError", () => {
   it("passes a well-formed template", () => {
     expect(contentError({ sections: [{ level: 1, title: "S", blocks: [{ kind: "field", field: "date" }] }] })).toBeNull();
