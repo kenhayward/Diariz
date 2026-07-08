@@ -597,6 +597,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
+                    b.Property<DateTimeOffset?>("TagsExtractedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(512)
@@ -698,6 +701,36 @@ namespace Diariz.Domain.Migrations
                     b.HasKey("RecordingId");
 
                     b.ToTable("RecordingCalendarLinks");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.RecordingTag", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("RecordingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Tag")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<double>("Weight")
+                        .HasColumnType("double precision");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecordingId", "Ordinal");
+
+                    b.ToTable("RecordingTags");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.Section", b =>
@@ -1536,6 +1569,17 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("Recording");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.RecordingTag", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.Recording", "Recording")
+                        .WithMany("Tags")
+                        .HasForeignKey("RecordingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Recording");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.Section", b =>
                 {
                     b.HasOne("Diariz.Domain.Entities.Section", "Parent")
@@ -1731,6 +1775,8 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("CalendarLink");
 
                     b.Navigation("Speakers");
+
+                    b.Navigation("Tags");
 
                     b.Navigation("Transcriptions");
                 });

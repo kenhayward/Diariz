@@ -35,6 +35,17 @@ export interface RecordingSummary {
   meetingTypeId?: string | null;
 }
 
+// ---- Tag cloud ----
+/// One aggregated tag across the caller's library (GET /api/tags): display text, how many recordings carry
+/// it, the summed per-recording weight (drives the cloud's font size), and the carrying recording ids (so
+/// the client filters its cached recordings list without a second request).
+export interface TagCloudEntry {
+  tag: string;
+  count: number;
+  weight: number;
+  recordingIds: string[];
+}
+
 // ---- Meeting types (minutes templates) ----
 /// A block within a template section: literal boilerplate text, a substituted recording field, or a model prompt.
 export type TemplateBlockKind = "boilerplate" | "field" | "prompt";

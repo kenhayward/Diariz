@@ -21,6 +21,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<SpeakerProfile> SpeakerProfiles => Set<SpeakerProfile>();
     public DbSet<ProfileContribution> ProfileContributions => Set<ProfileContribution>();
     public DbSet<RecordingAction> RecordingActions => Set<RecordingAction>();
+    public DbSet<RecordingTag> RecordingTags => Set<RecordingTag>();
     public DbSet<MeetingNote> MeetingNotes => Set<MeetingNote>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<RecordingCalendarLink> RecordingCalendarLinks => Set<RecordingCalendarLink>();
@@ -67,6 +68,10 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.HasMany(r => r.Actions)
                 .WithOne(a => a.Recording!)
                 .HasForeignKey(a => a.RecordingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(r => r.Tags)
+                .WithOne(t => t.Recording!)
+                .HasForeignKey(t => t.RecordingId)
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasMany(r => r.Attachments)
                 .WithOne(a => a.Recording!)
@@ -119,6 +124,14 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         builder.Entity<RecordingAction>(e =>
         {
             e.HasIndex(a => new { a.RecordingId, a.Ordinal });
+        });
+
+        // Machine-extracted tag-cloud tags. Provider-agnostic (plain columns, no vector/jsonb), so it
+        // stays outside the Npgsql guard and loads under the in-memory test provider too.
+        builder.Entity<RecordingTag>(e =>
+        {
+            e.HasIndex(t => new { t.RecordingId, t.Ordinal });
+            e.Property(t => t.Tag).HasMaxLength(64);
         });
 
         builder.Entity<MeetingNote>(e =>

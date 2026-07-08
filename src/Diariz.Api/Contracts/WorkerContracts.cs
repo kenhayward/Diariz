@@ -33,6 +33,13 @@ public record EmbeddingJob(
     Guid RecordingId,
     Guid TranscriptionId);
 
+/// <summary>Job payload for async tag-cloud extraction, consumed by the API's TagsWorker. Replaces the
+/// recording's tags wholesale (tags are machine-only), so a re-transcription refreshes them; no-ops when
+/// the owner has no LLM configured or the transcription is no longer the recording's latest version.</summary>
+public record TagsJob(
+    Guid RecordingId,
+    Guid TranscriptionId);
+
 /// <summary>One diarized, timestamped segment returned by the worker.</summary>
 public record SegmentResult(
     string Speaker,

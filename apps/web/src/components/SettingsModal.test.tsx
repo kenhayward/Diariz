@@ -12,6 +12,7 @@ vi.mock("../lib/api", () => ({
     getPlatformSettings: vi.fn().mockResolvedValue({ starterQuotaBytes: 5 * 1024 ** 3, maxQuotaBytes: 50 * 1024 ** 3 }),
     updatePlatformSettings: vi.fn().mockResolvedValue({ starterQuotaBytes: 0, maxQuotaBytes: 0 }),
     runAudioRetention: vi.fn().mockResolvedValue({ deleted: 0 }),
+    runTagBackfill: vi.fn().mockResolvedValue({ enqueued: 3 }),
     backupUrl: () => "/api/maintenance/backup?access_token=t",
     restoreBackup: vi.fn().mockResolvedValue(undefined),
   },
@@ -240,6 +241,19 @@ describe("SettingsModal", () => {
 
     fireEvent.click(screen.getByRole("checkbox", { name: /permanently replace all current data/i }));
     expect((restore as HTMLButtonElement).disabled).toBe(false); // enabled once both confirmed
+  });
+
+  it("Maintenance tab offers a confirmed tag backfill and reports the queued count", async () => {
+    authState.isPlatformAdmin = true;
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderModal();
+    fireEvent.click(await screen.findByRole("tab", { name: /maintenance/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /backfill tags/i }));
+
+    expect(confirm).toHaveBeenCalled();
+    await waitFor(() => expect(api.runTagBackfill).toHaveBeenCalled());
+    expect(await screen.findByText(/3/)).toBeTruthy(); // "Queued tag extraction for 3 recording(s)."
   });
 
   it("renders chat tools and saves the master switch + per-tool overrides", async () => {

@@ -181,6 +181,29 @@ public sealed class FakeActionsClient : IActionsClient
     }
 }
 
+/// <summary>Stub <see cref="ITagsClient"/> — returns a canned tag list or throws.</summary>
+public sealed class FakeTagsClient : ITagsClient
+{
+    public List<ExtractedTag> Result { get; set; } = new();
+    public Exception? ThrowOnCall { get; set; }
+    public int Calls { get; private set; }
+    public SummarizationRequestConfig? LastConfig { get; private set; }
+    public IReadOnlyList<SegmentDto>? LastSegments { get; private set; }
+    public string? LastTemplate { get; private set; }
+
+    public Task<IReadOnlyList<ExtractedTag>> ExtractAsync(
+        SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
+        CancellationToken ct = default)
+    {
+        Calls++;
+        LastConfig = config;
+        LastSegments = segments;
+        LastTemplate = template;
+        if (ThrowOnCall is not null) throw ThrowOnCall;
+        return Task.FromResult<IReadOnlyList<ExtractedTag>>(Result);
+    }
+}
+
 /// <summary>Stub <see cref="ITranslationClient"/> — by default echoes each input prefixed with the target
 /// language (so tests can assert what was translated), or throws.</summary>
 public sealed class FakeTranslationClient : ITranslationClient
@@ -418,6 +441,7 @@ public sealed class FakeJobQueue : IJobQueue
     public List<ActionsJob> ActionsEnqueued { get; } = new();
     public List<AudioMergeJob> AudioMergeEnqueued { get; } = new();
     public List<EmbeddingJob> EmbeddingEnqueued { get; } = new();
+    public List<TagsJob> TagsEnqueued { get; } = new();
 
     public Task EnqueueAsync(TranscriptionJob job, CancellationToken ct = default)
     {
@@ -452,6 +476,12 @@ public sealed class FakeJobQueue : IJobQueue
     public Task EnqueueEmbeddingAsync(EmbeddingJob job, CancellationToken ct = default)
     {
         EmbeddingEnqueued.Add(job);
+        return Task.CompletedTask;
+    }
+
+    public Task EnqueueTagsAsync(TagsJob job, CancellationToken ct = default)
+    {
+        TagsEnqueued.Add(job);
         return Task.CompletedTask;
     }
 }

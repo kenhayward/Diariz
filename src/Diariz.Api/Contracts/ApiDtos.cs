@@ -47,6 +47,13 @@ public record UpdatePlatformSettingsRequest(
     bool ApiAccessEnabled = false);
 /// <summary>Result of a manual "run the audio-retention pass now" trigger: how many recordings had audio deleted.</summary>
 public record AudioRetentionRunResult(int Deleted);
+/// <summary>Result of a manual "backfill tags now" trigger: how many extraction jobs were ENQUEUED (the
+/// tags worker processes them asynchronously; this is not a completion count).</summary>
+public record TagBackfillRunResult(int Enqueued);
+/// <summary>One aggregated tag-cloud entry across the caller's library: display text, how many recordings
+/// carry it, the summed per-recording weight (frequency × salience — drives the cloud's font size), and the
+/// carrying recording ids (so the client filters its cached list without a second request).</summary>
+public record TagCloudEntryDto(string Tag, int Count, double Weight, IReadOnlyList<Guid> RecordingIds);
 /// <summary>The signed-in user's storage usage vs their quota (bytes), plus the total wall-clock time
 /// spent transcribing all their recordings (ms, summed across every transcription version).</summary>
 public record StorageUsageDto(long UsedBytes, long QuotaBytes, long TotalTranscriptionMs = 0);

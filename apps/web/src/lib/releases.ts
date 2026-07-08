@@ -78,8 +78,11 @@ generate a **personal API token** (Preferences → Developers) to call the Diari
 yourself - acting with your own permissions, over your own data - and browse a **built-in API reference**
 (Developers → View API reference) to explore the available calls.
 Recordings organise into **sections** (with sub-sections) and drag-and-drop ordering, can be **merged**
-into one, and can be browsed as a **list, a calendar, or a cross-meeting Actions list** (the left panel is
-**Meetings**). A **status bar** along the bottom shows live progress (transcribing, summarising, merging,
+into one, and can be browsed as a **list, a calendar, a cross-meeting Actions list, or a tag cloud** (the
+left panel is **Meetings**). Every meeting is **tagged automatically** after transcription - the AI model
+extracts the concepts and themes it was about - and the **Tags** tab shows them as a weighted cloud (bigger =
+more central across your meetings): click a tag to list the meetings that carry it, or expand the cloud into
+a full-size view. A **status bar** along the bottom shows live progress (transcribing, summarising, merging,
 extracting, uploading) and your storage usage, transcription usage, and total transcripts.
 
 Diariz is **multi-user** with role-based access: people request access (or an administrator adds them),
@@ -126,6 +129,26 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.107.0",
+    date: "2026-07-08",
+    pr: 243,
+    headline: "Tag cloud across your meetings",
+    summary:
+      "Diariz now tags every meeting with the concepts and themes it was actually about, extracted by your " +
+      "configured AI model right after transcription. A new Tags tab in the left panel shows all your tags as " +
+      "a weighted cloud - the more central a topic across your meetings, the larger it appears - and clicking " +
+      "a tag lists the meetings that carry it. An expand button opens the cloud in a large view for bigger " +
+      "libraries; picking a tag or a meeting there drives the panel behind it. Existing recordings are tagged " +
+      "automatically after the update (a Platform Administrator can also trigger it from Settings -> " +
+      "Maintenance, e.g. for users whose AI model is configured per-user). Server redeploy only.",
+    added: [
+      "Tags tab in the left panel: a weighted tag cloud over all your meetings - more central topics show larger and in a warmer colour - with a slider to show only the most-used tags. Click a tag to list the meetings that carry it (with their date, time, and duration); click it again to clear.",
+      "Expanded tag cloud: an expand button opens a large modal view of the cloud and its meetings; selecting there filters the panel too, and picking a meeting opens it.",
+      "Automatic tag extraction in the transcription pipeline (up to 12 weighted tags per meeting, using your AI model settings); re-transcribing refreshes them.",
+      "Backfill for existing recordings: runs once automatically after the update, plus a 'Backfill tags' button in Settings -> Maintenance (Platform Administrator).",
+    ],
+  },
   {
     version: "0.106.0",
     date: "2026-07-08",

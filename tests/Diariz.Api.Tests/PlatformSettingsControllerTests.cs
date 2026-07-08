@@ -12,8 +12,9 @@ namespace Diariz.Api.Tests;
 
 public class PlatformSettingsControllerTests
 {
-    private static PlatformSettingsController Build(DiarizDbContext db, FakeAudioStorage? storage = null) =>
-        new(new PlatformSettingsService(db), db, storage ?? new FakeAudioStorage(),
+    private static PlatformSettingsController Build(
+        DiarizDbContext db, FakeAudioStorage? storage = null, FakeJobQueue? queue = null) =>
+        new(new PlatformSettingsService(db), db, storage ?? new FakeAudioStorage(), queue ?? new FakeJobQueue(),
             NullLogger<PlatformSettingsController>.Instance)
         { ControllerContext = Http.Context(Guid.NewGuid()) };
 
@@ -163,5 +164,34 @@ public class PlatformSettingsControllerTests
         Assert.False(storage.Objects.ContainsKey("u/old.webm"));
         Assert.True(storage.Objects.ContainsKey("u/new.webm"));
         Assert.NotNull((await db.Recordings.FindAsync(eligible.Id))!.AudioDeletedAt);
+    }
+
+    [Fact]
+    public async Task RunTagBackfillNow_EnqueuesUntaggedRecordings_ReturnsCount()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var untagged = new Recording { Id = Guid.NewGuid(), UserId = userId, BlobKey = "k1" };
+        var tagged = new Recording
+        {
+            Id = Guid.NewGuid(), UserId = userId, BlobKey = "k2", TagsExtractedAt = DateTimeOffset.UtcNow,
+        };
+        db.Recordings.AddRange(untagged, tagged);
+        var tr = new Transcription { Id = Guid.NewGuid(), RecordingId = untagged.Id, Model = "whisperx", Version = 1 };
+        db.Transcriptions.Add(tr);
+        db.Transcriptions.Add(new Transcription
+        {
+            Id = Guid.NewGuid(), RecordingId = tagged.Id, Model = "whisperx", Version = 1,
+        });
+        await db.SaveChangesAsync();
+        var queue = new FakeJobQueue();
+
+        var result = await Build(db, queue: queue).RunTagBackfillNow();
+
+        // Enqueues (fan-out to the tags worker) rather than extracting inline — the count is jobs queued.
+        Assert.Equal(1, result.Enqueued);
+        var job = Assert.Single(queue.TagsEnqueued);
+        Assert.Equal(untagged.Id, job.RecordingId);
+        Assert.Equal(tr.Id, job.TranscriptionId);
     }
 }

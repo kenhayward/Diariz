@@ -40,6 +40,7 @@ import type {
   RecordingSummary,
   SavedChatContext,
   SectionDto,
+  TagCloudEntry,
   SetupValidation,
   SpeakerProfile,
   GoogleCalendarListItem,
@@ -522,6 +523,12 @@ export const api = {
     return data;
   },
 
+  /// The aggregated tag cloud across the user's recordings (the "Tags" tab), weight-descending.
+  async listTags(): Promise<TagCloudEntry[]> {
+    const { data } = await http.get<TagCloudEntry[]>("/api/tags");
+    return data;
+  },
+
   /// Mark a set of actions complete (or not) in one call — works across recordings. Ids not owned are ignored.
   async completeActions(ids: string[], completed: boolean): Promise<void> {
     await http.post(`/api/actions/complete`, { ids, completed });
@@ -749,6 +756,13 @@ export const api = {
   /// recordings had their audio deleted.
   async runAudioRetention(): Promise<{ deleted: number }> {
     const { data } = await http.post<{ deleted: number }>("/api/platform/settings/run-audio-retention");
+    return data;
+  },
+
+  /// Backfill tag-cloud tags immediately (Platform Administrator): queues an extraction job for every
+  /// never-tagged recording. Returns how many jobs were queued (they complete asynchronously).
+  async runTagBackfill(): Promise<{ enqueued: number }> {
+    const { data } = await http.post<{ enqueued: number }>("/api/platform/settings/run-tag-backfill");
     return data;
   },
 

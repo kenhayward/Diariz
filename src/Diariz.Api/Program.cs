@@ -27,6 +27,7 @@ builder.Services.Configure<WorkerOptions>(builder.Configuration.GetSection(Worke
 builder.Services.Configure<SummarizationOptions>(builder.Configuration.GetSection(SummarizationOptions.Section));
 builder.Services.Configure<MeetingMinutesOptions>(builder.Configuration.GetSection(MeetingMinutesOptions.Section));
 builder.Services.Configure<ActionsOptions>(builder.Configuration.GetSection(ActionsOptions.Section));
+builder.Services.Configure<TagsOptions>(builder.Configuration.GetSection(TagsOptions.Section));
 builder.Services.Configure<EmbeddingOptions>(builder.Configuration.GetSection(EmbeddingOptions.Section));
 builder.Services.Configure<ChatOptions>(builder.Configuration.GetSection(ChatOptions.Section));
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.Section));
@@ -222,6 +223,11 @@ builder.Services.AddScoped<IMeetingTypeMinutesGenerator, MeetingTypeMinutesGener
 builder.Services.AddHostedService<MeetingMinutesWorker>();
 // Action extraction also runs in the pipeline (its own stream/worker), reusing IActionsClient (registered above).
 builder.Services.AddHostedService<ActionsWorker>();
+// Tag-cloud extraction runs in the pipeline too (its own stream/worker), sharing the per-user summarisation
+// config; TagBackfillService enqueues jobs once at startup for recordings that predate the feature.
+builder.Services.AddHttpClient<ITagsClient, TagsClient>();
+builder.Services.AddHostedService<TagsWorker>();
+builder.Services.AddHostedService<TagBackfillService>();
 
 // ---- Semantic-search (RAG, M3) embeddings: its own endpoint/model config, stream + consumer, and a
 // one-time startup backfill that indexes the existing library once an embeddings endpoint is configured. ----

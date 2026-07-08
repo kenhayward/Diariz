@@ -202,6 +202,10 @@ public class WorkerCallbackControllerTests
         Assert.Equal(recordingId, actionsJob.RecordingId);
         Assert.Equal(transcriptionId, actionsJob.TranscriptionId);
         Assert.Empty(queue.MeetingMinutesEnqueued);
+        // Tags are re-extracted on every (re)transcription — the processor replaces the previous set wholesale.
+        var tagsJob = Assert.Single(queue.TagsEnqueued);
+        Assert.Equal(recordingId, tagsJob.RecordingId);
+        Assert.Equal(transcriptionId, tagsJob.TranscriptionId);
         // The owner is notified with the new status.
         Assert.Contains(hub.Sent, m => m.Method == "RecordingStatusChanged");
     }
@@ -218,6 +222,7 @@ public class WorkerCallbackControllerTests
         Assert.Equal(RecordingStatus.Transcribed, (await db.Recordings.FindAsync(recordingId))!.Status);
         Assert.Empty(queue.SummarizationEnqueued);
         Assert.Empty(queue.ActionsEnqueued);
+        Assert.Empty(queue.TagsEnqueued);
     }
 
     [Fact]

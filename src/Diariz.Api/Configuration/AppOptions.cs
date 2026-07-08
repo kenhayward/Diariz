@@ -105,6 +105,17 @@ public class ActionsOptions
     public string ConsumerName { get; set; } = "api-1";
 }
 
+/// <summary>Config for the in-process tag-cloud extraction worker (runs alongside the summary/actions in
+/// the pipeline). The LLM endpoint/model/key come from the per-user summarisation config.</summary>
+public class TagsOptions
+{
+    public const string Section = "Tags";
+
+    public string StreamKey { get; set; } = "tag-cloud-jobs";
+    public string ConsumerGroup { get; set; } = "tag-extractors";
+    public string ConsumerName { get; set; } = "api-1";
+}
+
 /// <summary>Semantic-search (RAG, Milestone 3) embeddings. Unlike the chat/summarisation endpoint (free
 /// per-user), the vector index requires every chunk and every query to use the <b>same model and dimension</b>,
 /// so the model is a server-level, dimension-pinned setting. The endpoint/key fall back to the recording
