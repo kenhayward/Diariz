@@ -87,6 +87,30 @@ export function moveBlock(
   return mapSection(content, sectionIndex, (blocks) => move(blocks, from, to));
 }
 
+export function moveBlockCrossSection(
+  content: MeetingTypeContent,
+  from: { section: number; index: number },
+  to: { section: number; index: number },
+): MeetingTypeContent {
+  const src = content.sections[from.section];
+  if (!src) return content;
+  const block = src.blocks[from.index];
+  if (!block) return content;
+  if (from.section === to.section) return moveBlock(content, from.section, from.index, to.index);
+
+  const sections = content.sections.map((s, i) => {
+    if (i === from.section) return { ...s, blocks: s.blocks.filter((_, bi) => bi !== from.index) };
+    if (i === to.section) {
+      const blocks = [...s.blocks];
+      const clamped = Math.max(0, Math.min(to.index, blocks.length));
+      blocks.splice(clamped, 0, block);
+      return { ...s, blocks };
+    }
+    return s;
+  });
+  return { ...content, sections };
+}
+
 /// The first problem with the template (mirrors the backend's validation), or null when it's savable.
 export function contentError(content: MeetingTypeContent): string | null {
   for (const section of content.sections) {

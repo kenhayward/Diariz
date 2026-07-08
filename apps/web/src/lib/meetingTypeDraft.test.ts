@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   addSection, removeSection, updateSection, moveSection,
-  addBlock, removeBlock, updateBlock, moveBlock, contentError,
+  addBlock, removeBlock, updateBlock, moveBlock, moveBlockCrossSection, normalizeBreaks, contentError,
 } from "./meetingTypeDraft";
 import type { MeetingTypeContent } from "./types";
 
@@ -59,6 +59,36 @@ describe("block operations (within a section)", () => {
     };
     expect(moveBlock(c, 0, 0, 1).sections[0].blocks.map((b) => b.text)).toEqual(["2", "1"]);
     expect(removeBlock(c, 0, 0).sections[0].blocks.map((b) => b.text)).toEqual(["2"]);
+  });
+});
+
+describe("moveBlockCrossSection", () => {
+  const two: MeetingTypeContent = {
+    sections: [
+      { level: 1, title: "A", blocks: [{ kind: "boilerplate", text: "a0" }, { kind: "boilerplate", text: "a1" }] },
+      { level: 1, title: "B", blocks: [{ kind: "boilerplate", text: "b0" }] },
+    ],
+  };
+
+  it("moves a block into another section at the given index", () => {
+    const out = moveBlockCrossSection(two, { section: 0, index: 0 }, { section: 1, index: 0 });
+    expect(out.sections[0].blocks.map((b) => b.text)).toEqual(["a1"]);
+    expect(out.sections[1].blocks.map((b) => b.text)).toEqual(["a0", "b0"]);
+    expect(two.sections[0].blocks).toHaveLength(2); // input unchanged
+  });
+
+  it("appends when the destination index is past the end", () => {
+    const out = moveBlockCrossSection(two, { section: 0, index: 1 }, { section: 1, index: 99 });
+    expect(out.sections[1].blocks.map((b) => b.text)).toEqual(["b0", "a1"]);
+  });
+
+  it("delegates a same-section move to reordering", () => {
+    const out = moveBlockCrossSection(two, { section: 0, index: 0 }, { section: 0, index: 1 });
+    expect(out.sections[0].blocks.map((b) => b.text)).toEqual(["a1", "a0"]);
+  });
+
+  it("is a no-op for an out-of-range source", () => {
+    expect(moveBlockCrossSection(two, { section: 5, index: 0 }, { section: 1, index: 0 })).toBe(two);
   });
 });
 
