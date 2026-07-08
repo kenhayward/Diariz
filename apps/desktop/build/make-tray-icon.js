@@ -1,8 +1,9 @@
 "use strict";
 
-// Generates the monochrome macOS menu-bar Template icons - a small 5-bar audio-waveform glyph - as
+// Generates the monochrome macOS menu-bar Template icons - a microphone glyph - as
 // build/trayTemplate.png (18x18) and build/trayTemplate@2x.png (36x36). Template images are black-on-
-// transparent; macOS recolours them for the light/dark menu bar automatically.
+// transparent; macOS recolours them for the light/dark menu bar automatically. Edges are anti-aliased
+// (3x3 supersampling) so the curves stay crisp at menu-bar size.
 //
 // Run: node build/make-tray-icon.js   (from apps/desktop). The committed PNGs are the source of truth;
 // this script just regenerates them if the glyph ever changes. No third-party deps.
@@ -46,33 +47,55 @@ function pngFromRGBA(size, rgba) {
   return Buffer.concat([sig, chunk("IHDR", ihdr), chunk("IDAT", idat), chunk("IEND", Buffer.alloc(0))]);
 }
 
-// A symmetric 5-bar equalizer/waveform, centred vertically. Bars and gaps are equal width.
-function waveform(size) {
+function distToVSegment(x, y, cx, y1, y2) {
+  if (y < y1) return Math.hypot(x - cx, y - y1);
+  if (y > y2) return Math.hypot(x - cx, y - y2);
+  return Math.abs(x - cx);
+}
+
+// True if the point (in pixel coords) is inside the microphone silhouette on an SxS canvas.
+// Shape = capsule (mic head) + U cradle + stem + base, all as fractions of S so it scales.
+function inMic(x, y, S) {
+  const cx = S / 2;
+  // capsule / mic head (a vertical pill)
+  const r = S * 0.16;
+  const capTop = S * 0.12;
+  const capBot = S * 0.54;
+  if (distToVSegment(x, y, cx, capTop + r, capBot - r) <= r) return true;
+  // cradle: lower half of a ring hugging the capsule
+  const arcCy = S * 0.44;
+  const R = S * 0.28;
+  const t = S * 0.09;
+  const d = Math.hypot(x - cx, y - arcCy);
+  if (y >= arcCy && d <= R && d >= R - t) return true;
+  // stem (connects the cradle to the base)
+  if (Math.abs(x - cx) <= S * 0.038 && y >= S * 0.7 && y <= S * 0.83) return true;
+  // base
+  if (Math.abs(x - cx) <= S * 0.16 && Math.abs(y - S * 0.83) <= S * 0.038) return true;
+  return false;
+}
+
+function microphone(size) {
   const rgba = Buffer.alloc(size * size * 4); // transparent
-  const mx = size * 0.12; // horizontal margin
-  const heights = [0.3, 0.55, 0.85, 0.55, 0.3];
-  const slot = (size - 2 * mx) / (heights.length * 2 - 1);
-  const put = (x, y) => {
-    if (x < 0 || x >= size || y < 0 || y >= size) return;
-    const o = (y * size + x) * 4;
-    rgba[o] = 0;
-    rgba[o + 1] = 0;
-    rgba[o + 2] = 0;
-    rgba[o + 3] = 255;
-  };
-  heights.forEach((hf, i) => {
-    const x0 = mx + i * 2 * slot;
-    const x1 = x0 + slot;
-    const h = hf * size;
-    const y0 = (size - h) / 2;
-    const y1 = y0 + h;
-    for (let y = Math.round(y0); y < Math.round(y1); y++)
-      for (let x = Math.round(x0); x < Math.round(x1); x++) put(x, y);
-  });
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      // 3x3 supersample for anti-aliased edges.
+      let hits = 0;
+      for (let sy = 0; sy < 3; sy++)
+        for (let sx = 0; sx < 3; sx++)
+          if (inMic(x + (sx + 0.5) / 3, y + (sy + 0.5) / 3, size)) hits++;
+      if (hits === 0) continue;
+      const o = (y * size + x) * 4;
+      rgba[o] = 0;
+      rgba[o + 1] = 0;
+      rgba[o + 2] = 0;
+      rgba[o + 3] = Math.round((hits / 9) * 255);
+    }
+  }
   return rgba;
 }
 
 const out = __dirname;
-fs.writeFileSync(path.join(out, "trayTemplate.png"), pngFromRGBA(18, waveform(18)));
-fs.writeFileSync(path.join(out, "trayTemplate@2x.png"), pngFromRGBA(36, waveform(36)));
-console.log("wrote trayTemplate.png (18x18) + trayTemplate@2x.png (36x36)");
+fs.writeFileSync(path.join(out, "trayTemplate.png"), pngFromRGBA(18, microphone(18)));
+fs.writeFileSync(path.join(out, "trayTemplate@2x.png"), pngFromRGBA(36, microphone(36)));
+console.log("wrote trayTemplate.png (18x18) + trayTemplate@2x.png (36x36) - microphone glyph");
