@@ -102,16 +102,42 @@ describe("ManageMeetingTypesModal", () => {
     expect(sent.content.sections[0].blocks[0].breakAfter).toBe("line");
   });
 
-  it("shows a markdown hint for text blocks", async () => {
-    const withBlock = mt("mine", "My template", false, true);
-    withBlock.content = {
-      sections: [{ level: 1, title: "S", blocks: [{ kind: "boilerplate", text: "hi", breakAfter: "paragraph" }] }],
-    };
-    vi.mocked(api.listMeetingTypes).mockResolvedValue([withBlock]);
+  it("enables Export only once a template is selected", async () => {
     renderModal();
+    await screen.findByText("My template");
+    const exportBtn = screen.getByRole("button", { name: "Export" }) as HTMLButtonElement;
+    expect(exportBtn.disabled).toBe(true);
 
-    fireEvent.click(await screen.findByText("My template"));
-    expect(screen.getByText("Markdown supported")).toBeTruthy();
+    fireEvent.click(screen.getByText("My template"));
+    expect(exportBtn.disabled).toBe(false);
+  });
+
+  it("imports a template: parses the file, prompts for a name, and creates it", async () => {
+    vi.mocked(api.createMeetingType).mockClear(); // this file's beforeEach doesn't clear, so drop earlier calls
+    vi.mocked(api.createMeetingType).mockResolvedValue(mt("imp", "Imported Interview", false, true));
+    const origPrompt = window.prompt;
+    window.prompt = () => "Imported Interview";
+    try {
+      renderModal();
+      await screen.findByText("My template");
+
+      const file = new File(
+        [JSON.stringify({
+          "diariz-meeting-type": 1, groupName: "Hiring", title: "Interview", overview: "", icon: "chat", color: "#5C6BC0",
+          content: { sections: [{ level: 1, title: "Details", blocks: [{ kind: "boilerplate", text: "hi", breakAfter: "paragraph" }] }] },
+        })],
+        "interview.json",
+        { type: "application/json" },
+      );
+      fireEvent.change(screen.getByTestId("import-input"), { target: { files: [file] } });
+
+      await waitFor(() => expect(api.createMeetingType).toHaveBeenCalledTimes(1));
+      const input = vi.mocked(api.createMeetingType).mock.calls[0][0];
+      expect(input).toMatchObject({ title: "Imported Interview", groupName: "Hiring", isPlatform: false });
+      expect(input.content.sections[0].title).toBe("Details");
+    } finally {
+      window.prompt = origPrompt;
+    }
   });
 
   it("does not close when the backdrop is clicked (X/Escape only)", async () => {

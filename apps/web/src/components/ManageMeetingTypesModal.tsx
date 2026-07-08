@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth";
 import type { MeetingType, MeetingTypeContent, TemplateBlock, TemplateBlockKind } from "../lib/types";
 import { groupMeetingTypes } from "../lib/meetingTypes";
+import { serializeMeetingType, parseMeetingType, exportFilename } from "../lib/meetingTypeIo";
 import {
   FIELD_OPTIONS, addSection, removeSection, updateSection, moveSection,
   addBlock, removeBlock, updateBlock, moveBlock, moveBlockCrossSection, normalizeBreaks,
@@ -123,6 +124,53 @@ export default function ManageMeetingTypesModal({ onClose }: { onClose: () => vo
     }
   }
 
+  // Export the selected template as a JSON file (portable subset - no id/permission fields).
+  const importRef = useRef<HTMLInputElement>(null);
+  function exportTemplate() {
+    if (!draft) return;
+    const json = serializeMeetingType({
+      groupName: draft.groupName, title: draft.title, overview: draft.overview,
+      icon: draft.icon, color: draft.color, content: draft.content,
+    });
+    const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = exportFilename(draft.title);
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Import a template from a JSON file: parse it, ask for a name (it may duplicate an existing one), then create
+  // it as a Personal type. A Platform Admin can flip it to Platform afterwards.
+  async function onImportFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file later
+    if (!file) return;
+    setError(null);
+    let tpl;
+    try {
+      tpl = parseMeetingType(await file.text());
+    } catch {
+      return setError(t("workspace:mtImportError"));
+    }
+    const name = window.prompt(t("workspace:mtImportNamePrompt"), tpl.title);
+    if (name === null) return; // cancelled
+    setBusy(true);
+    try {
+      const created = await api.createMeetingType({
+        groupName: tpl.groupName || t("workspace:mtImportedGroup"),
+        title: name.trim() || tpl.title || t("workspace:mtImportedGroup"),
+        overview: tpl.overview, icon: tpl.icon, color: tpl.color, content: tpl.content, isPlatform: false,
+      });
+      await qc.invalidateQueries({ queryKey: ["meeting-types"] });
+      setDraft(draftFrom(created));
+    } catch (err) {
+      setError(apiErrorMessage(err, t("workspace:mtSaveError")));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const patch = (p: Partial<Draft>) => setDraft((d) => (d ? { ...d, ...p } : d));
   const setContent = (content: MeetingTypeContent) => patch({ content });
 
@@ -176,7 +224,7 @@ export default function ManageMeetingTypesModal({ onClose }: { onClose: () => vo
                 <p className="px-2 py-4 text-xs text-gray-400 dark:text-gray-500">{t("workspace:mtNone")}</p>
               )}
             </div>
-            <div className="border-t p-2 dark:border-gray-700">
+            <div className="space-y-1 border-t p-2 dark:border-gray-700">
               <button
                 type="button"
                 onClick={startNew}
@@ -184,6 +232,31 @@ export default function ManageMeetingTypesModal({ onClose }: { onClose: () => vo
               >
                 + {t("workspace:mtNew")}
               </button>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => importRef.current?.click()}
+                  className="flex-1 rounded border px-2 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                >
+                  {t("workspace:mtImport")}
+                </button>
+                <button
+                  type="button"
+                  onClick={exportTemplate}
+                  disabled={!draft}
+                  className="flex-1 rounded border px-2 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-40 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                >
+                  {t("workspace:mtExport")}
+                </button>
+              </div>
+              <input
+                ref={importRef}
+                type="file"
+                accept="application/json,.json"
+                onChange={onImportFile}
+                className="hidden"
+                data-testid="import-input"
+              />
             </div>
           </div>
 
@@ -511,15 +584,12 @@ function BlockRow({
             ))}
           </select>
         ) : (
-          <div>
-            <AutoGrowTextarea
-              value={text}
-              onChange={onText}
-              placeholder={kind === "prompt" ? t("workspace:mtPromptPlaceholder") : t("workspace:mtBoilerplatePlaceholder")}
-              ariaLabel={label}
-            />
-            <span className="mt-0.5 block text-[11px] text-gray-400 dark:text-gray-500">{t("workspace:mtMarkdownHint")}</span>
-          </div>
+          <AutoGrowTextarea
+            value={text}
+            onChange={onText}
+            placeholder={kind === "prompt" ? t("workspace:mtPromptPlaceholder") : t("workspace:mtBoilerplatePlaceholder")}
+            ariaLabel={label}
+          />
         )}
       </div>
       <select

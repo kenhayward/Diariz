@@ -118,9 +118,7 @@ public sealed class MeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerator
         "date" => ctx.MeetingDate?.ToString("yyyy-MM-dd"),
         "time" => ctx.MeetingDate?.ToString("HH:mm"),
         "title" => string.IsNullOrWhiteSpace(ctx.Title) ? null : ctx.Title.Trim(),
-        "attendees" => ctx.Attendees is { Count: > 0 }
-            ? string.Join(", ", ctx.Attendees.Where(a => !string.IsNullOrWhiteSpace(a)))
-            : null,
+        "attendees" => AttendeeFormatter.Summarize(ctx.Attendees),
         "duration" => FormatDuration(ctx.DurationMs),
         "action_items" => NullIfEmpty(MeetingMinutesPrompt.RenderActionItems(actions)),
         "notes" => notesMarkdown,

@@ -18,7 +18,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Transcribe & diarize** | Server-side WhisperX (word-level timestamps) with pyannote speaker diarization; speaker-labelled, editable, playable segments you can re-transcribe any time. |
 | **Speaker identification** | Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). |
 | **Notes** | Take your own note lines live during a meeting (timestamped, crash-safe); they steer the minutes and can be woven into an enhanced-notes section linking to the exact transcript moments. |
-| **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable, driven by reusable meeting-type templates with per-block layout control (break, Markdown, drag-to-reorder). |
+| **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable, driven by reusable meeting-type templates with per-block layout control (break, Markdown, drag-to-reorder) and JSON import/export. |
 | **Action items** | Auto-extracted with owner and deadline, tracked across every meeting with completion and a person filter, linking back to the transcript. |
 | **Tag cloud** | Every meeting is auto-tagged with weighted topics; a Tags tab shows a weighted cloud and the meetings behind each tag. |
 | **Chat over transcripts** | Stream answers over one, several, or all meetings via your OpenAI-compatible model, with attachments and saved conversations. |
@@ -49,6 +49,26 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.111.0",
+    date: "2026-07-08",
+    pr: 249,
+    headline: "Import/export meeting-type templates, tidier attendees",
+    summary:
+      "You can now move meeting-type templates between accounts. The template editor has New, Import, and " +
+      "Export buttons where New used to be: Export saves the selected template to a JSON file, and Import reads " +
+      "one back, asking for a name (handy when it duplicates one you already have). Separately, when a template " +
+      "substitutes the attendee list into your minutes, it now names the people who were identified and then " +
+      "summarises the rest, e.g. \"Alice, Bob and 11 unidentified attendees\", instead of listing every " +
+      "SPEAKER_nn placeholder. The small \"Markdown supported\" hint under template text blocks was removed.",
+    added: [
+      "Import and Export buttons in the meeting-type template editor (Export a template to JSON, Import one back under a new name).",
+    ],
+    changed: [
+      "The minutes attendees field lists identified people, then a count of unidentified speakers, instead of every SPEAKER_nn label.",
+      "Removed the \"Markdown supported\" hint under template text blocks.",
+    ],
+  },
   {
     version: "0.110.1",
     date: "2026-07-08",
