@@ -7,7 +7,7 @@ const Store = require("electron-store");
 const { normalizeServerUrl } = require("./url");
 const { trayRecorderItems, trayTooltip, notificationFor } = require("./recorderState");
 const { updateRestartItem, notificationForUpdate } = require("./updateState");
-const { buildStartUrl, codeFromArgv } = require("./desktopAuth");
+const { buildStartUrl, codeFromArgv, notificationForAuthError } = require("./desktopAuth");
 
 // In dev we load the Vite dev server directly and skip first-run setup.
 const DEV_URL = process.env.DIARIZ_DEV ? "http://localhost:5173" : null;
@@ -244,34 +244,51 @@ function startGoogleSignIn() {
 // for a token and hand it to the renderer; then surface the window.
 async function handleAuthDeepLink(argv) {
   const code = codeFromArgv(argv);
-  if (!code || !pendingVerifier) return;
+  if (!code) return; // not an auth deep link (e.g. a normal launch) - nothing to do or report
+  // A code arrived. Any failure from here is surfaced (native notification + auth:error to the renderer)
+  // rather than silently leaving the user on the login screen.
+  if (!pendingVerifier) return reportAuthError("expired"); // sign-in state lost (app restarted mid-flow?)
   const verifier = pendingVerifier;
   pendingVerifier = null;
   const server = targetUrl();
-  if (!server) return;
+  if (!server) return reportAuthError("expired");
   try {
     const res = await fetch(`${new URL(server).origin}/api/auth/desktop/exchange`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code, verifier }),
     });
-    if (!res.ok) return;
+    if (!res.ok) return reportAuthError("rejected");
     const { accessToken } = await res.json();
     if (accessToken) deliverAuthToken(accessToken);
+    else reportAuthError("rejected");
   } catch {
-    // network/other error: leave the user on the login screen to retry
+    reportAuthError("network"); // couldn't reach the server (offline, DNS, TLS)
   }
 }
 
-// Send the token to the renderer, waiting for the page to finish loading on a cold start.
-function deliverAuthToken(token) {
+// Surface a whole window to the renderer, waiting for the page to finish loading on a cold start. Used
+// for both the signed-in token and sign-in failures.
+function sendToRenderer(channel, payload) {
   showMainWindow();
   if (!mainWindow) return;
   const wc = mainWindow.webContents;
-  if (wc.isLoading()) wc.once("did-finish-load", () => wc.send("auth:token", token));
-  else wc.send("auth:token", token);
+  if (wc.isLoading()) wc.once("did-finish-load", () => wc.send(channel, payload));
+  else wc.send(channel, payload);
   mainWindow.show();
   mainWindow.focus();
+}
+
+function deliverAuthToken(token) {
+  sendToRenderer("auth:token", token);
+}
+
+// A desktop sign-in failed: pop a native notification and tell the renderer so the login screen can show
+// why, instead of the old silent return that left the user staring at the login form.
+function reportAuthError(reason) {
+  const note = notificationForAuthError(reason);
+  if (note && Notification.isSupported()) new Notification(note).show();
+  sendToRenderer("auth:error", reason);
 }
 
 // ---- Auto-update (packaged builds only) ----

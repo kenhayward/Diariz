@@ -27,4 +27,18 @@ function codeFromArgv(argv) {
   return null;
 }
 
-module.exports = { buildStartUrl, codeFromArgv };
+/// Native-notification copy for a failed desktop sign-in, by reason. Pure (returns { title, body }) so
+/// it's unit-testable; main.js shows it via Electron's Notification. Mirrors updateState's
+/// notificationForUpdate. Reasons: "network" (couldn't reach the server), "expired" (the sign-in state
+/// was lost - e.g. the app restarted mid-flow, or a stale/duplicate deep link), else "rejected"/generic.
+function notificationForAuthError(reason) {
+  const body =
+    reason === "network"
+      ? "Couldn't reach the server to finish signing in. Check your connection and try again."
+      : reason === "expired"
+        ? "Sign-in was interrupted. Please sign in again."
+        : "Google sign-in didn't complete. Please try again.";
+  return { title: "Diariz", body };
+}
+
+module.exports = { buildStartUrl, codeFromArgv, notificationForAuthError };

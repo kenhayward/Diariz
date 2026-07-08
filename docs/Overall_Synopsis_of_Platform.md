@@ -465,8 +465,11 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   `diariz://` scheme (`electron-builder` `protocols` + `setAsDefaultProtocolClient`), opens the start URL with
   `shell.openExternal`, receives the deep link (cold-start argv / `second-instance` / macOS `open-url`), redeems it,
   and pushes the token to the renderer over an `auth:token` IPC channel; the web `AuthProvider` adopts it via
-  `window.diariz.onAuthToken` through the same path as a password login. The login page shows the Google button in
-  the shell too (it calls `window.diariz.startGoogleSignIn()` instead of a full-page redirect).
+  `window.diariz.onAuthToken` through the same path as a password login, and the **login page redirects on
+  `isAuthed`** so an out-of-band token (the desktop hand-off) leaves the login screen. The login page shows the
+  Google button in the shell too (it calls `window.diariz.startGoogleSignIn()` instead of a full-page redirect).
+  A **failed** exchange is no longer silent: the shell pops a native notification and pushes an `auth:error`
+  (reason `network`/`expired`/`rejected`) which the login page surfaces (`window.diariz.onAuthError`).
 - **Google data access (opt-in, Phase 2):** a Google-linked user can grant **Calendar (read)** from
   Preferences via an **incremental-consent, offline** flow (`AuthController`
   `POST google/connect` → the shared `google/callback` branches on a `mode` in the state cookie →

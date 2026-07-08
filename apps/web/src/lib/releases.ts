@@ -127,6 +127,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.105.3",
+    date: "2026-07-07",
+    pr: 240,
+    headline: "Desktop sign-in failures no longer fail silently",
+    summary:
+      "If Google sign-in from the desktop app doesn't complete (e.g. the server is unreachable or the sign-in " +
+      "was interrupted), the app used to just leave you on the login screen with no explanation. It now shows " +
+      "the reason on the login screen and pops a desktop notification. Needs a new desktop app version (plus a " +
+      "server redeploy for the on-screen message).",
+    added: [
+      "Desktop Google sign-in now reports failures - an on-screen reason on the login page plus a native notification - instead of silently doing nothing.",
+    ],
+  },
+  {
     version: "0.105.2",
     date: "2026-07-07",
     pr: 239,
