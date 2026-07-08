@@ -82,6 +82,7 @@ function createMainWindow(url) {
 
   // Close to tray rather than quitting (this is a tray-resident app).
   mainWindow.on("close", (e) => {
+    console.log("[diariz-diag] window 'close' fired; isQuitting=", isQuitting); // [DIAG] temporary
     if (!isQuitting) {
       e.preventDefault();
       mainWindow.hide();
@@ -398,13 +399,22 @@ function refreshTray() {
 }
 
 function buildTray() {
-  const trayIcon = ICON.isEmpty() ? ICON : ICON.resize({ width: 16, height: 16 });
-  tray = new Tray(trayIcon);
-  // Windows: left-click opens the window and right-click shows the menu. macOS: a click should show the
-  // menu-bar dropdown (the standard behaviour) - its "Open Diariz" item opens the window - so we must NOT
-  // bind a click handler on darwin, or it steals the click and the dropdown never appears.
-  if (process.platform !== "darwin") tray.on("click", () => showMainWindow());
-  refreshTray();
+  // [DIAG] temporary: pinpoint the macOS "no menu-bar item" report.
+  try {
+    console.log("[diariz-diag] buildTray platform=", process.platform,
+      "iconEmpty=", ICON.isEmpty(), "iconSize=", JSON.stringify(ICON.getSize()));
+    const trayIcon = ICON.isEmpty() ? ICON : ICON.resize({ width: 16, height: 16 });
+    tray = new Tray(trayIcon);
+    console.log("[diariz-diag] Tray created OK");
+    // Windows: left-click opens the window and right-click shows the menu. macOS: a click should show the
+    // menu-bar dropdown (the standard behaviour) - its "Open Diariz" item opens the window - so we must NOT
+    // bind a click handler on darwin, or it steals the click and the dropdown never appears.
+    if (process.platform !== "darwin") tray.on("click", () => showMainWindow());
+    refreshTray();
+    console.log("[diariz-diag] tray context menu set");
+  } catch (e) {
+    console.error("[diariz-diag] buildTray FAILED:", e);
+  }
 }
 
 ipcMain.on("recorder:state", (_event, state) => {
@@ -465,5 +475,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   // Tray-resident: keep running when all windows are closed/hidden.
-  app.on("window-all-closed", () => {});
+  app.on("window-all-closed", () => {
+    console.log("[diariz-diag] window-all-closed fired (window was destroyed, not just hidden)"); // [DIAG]
+  });
 }
