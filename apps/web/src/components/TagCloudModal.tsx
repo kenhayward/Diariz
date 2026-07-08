@@ -55,11 +55,16 @@ export default function TagCloudModal({
           </button>
         </div>
 
-        <div className="shrink-0 overflow-y-auto border-b dark:border-gray-700" style={{ maxHeight: "45%" }}>
+        {/* The tag panel is user-resizable (drag the bottom edge) so you can grow it to show more tags at once. */}
+        <div
+          data-testid="tag-cloud-panel"
+          className="shrink-0 resize-y overflow-auto border-b dark:border-gray-700"
+          style={{ height: "40%", minHeight: "6rem", maxHeight: "80%" }}
+        >
           <div className="flex px-4 pt-3">
             <TagCountSlider value={Math.min(limit, tags.length)} max={tags.length} onChange={setLimit} />
           </div>
-          <TagCloud tags={shownTags} selected={selected} onSelect={onSelect} minPx={14} maxPx={40} />
+          <TagCloud tags={shownTags} selected={selected} onSelect={onSelect} minPx={11} maxPx={22} />
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">

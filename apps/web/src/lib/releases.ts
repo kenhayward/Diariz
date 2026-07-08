@@ -50,6 +50,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.110.0",
+    date: "2026-07-08",
+    pr: 247,
+    headline: "Roomier, easier-to-read tag cloud",
+    summary:
+      "The expanded Tag cloud is easier to work with. The tag text is now substantially smaller so more tags " +
+      "fit on screen without the biggest ones dominating, and you can drag the bottom edge of the tag panel to " +
+      "make it taller and see more tags at once.",
+    changed: [
+      "Tag cloud text in the expanded view is substantially smaller.",
+      "The tag panel in the Tag cloud modal can be resized taller by dragging its bottom edge.",
+    ],
+  },
+  {
     version: "0.109.0",
     date: "2026-07-08",
     pr: 246,
