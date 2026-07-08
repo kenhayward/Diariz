@@ -79,4 +79,43 @@ public class MeetingTypeMinutesComposerTests
 
         Assert.Equal(["first", "second"], seen);
     }
+
+    [Theory]
+    [InlineData(TemplateBlock.BreakNone, "AB")]
+    [InlineData(TemplateBlock.BreakLine, "A\nB")]
+    [InlineData(TemplateBlock.BreakParagraph, "A\n\nB")]
+    public async Task Break_after_controls_the_gap_between_two_blocks(string breakAfter, string expectedBody)
+    {
+        var content = new MeetingTypeContent(
+        [
+            new TemplateSection(1, "S",
+            [
+                new TemplateBlock(TemplateBlock.Boilerplate, Text: "A", BreakAfter: breakAfter),
+                new TemplateBlock(TemplateBlock.Boilerplate, Text: "B"),
+            ]),
+        ]);
+
+        var md = await MeetingTypeMinutesComposer.ComposeAsync(content, Field, Prompt);
+
+        Assert.Equal($"# S\n\n{expectedBody}", md);
+    }
+
+    [Fact]
+    public async Task Null_break_after_falls_back_to_legacy_field_glue()
+    {
+        // No BreakAfter set anywhere: a field still glues to the preceding boilerplate, two boilerplates break.
+        var content = new MeetingTypeContent(
+        [
+            new TemplateSection(1, "S",
+            [
+                new TemplateBlock(TemplateBlock.Boilerplate, Text: "Date: "),
+                new TemplateBlock(TemplateBlock.FieldKind, Field: "date"),
+                new TemplateBlock(TemplateBlock.Boilerplate, Text: "Next line"),
+            ]),
+        ]);
+
+        var md = await MeetingTypeMinutesComposer.ComposeAsync(content, Field, Prompt);
+
+        Assert.Equal("# S\n\nDate: 2026-07-06\n\nNext line", md);
+    }
 }
