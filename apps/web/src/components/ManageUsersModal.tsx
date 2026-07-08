@@ -171,7 +171,12 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
                   onPromote={run(() => api.setUserRole(u.id, "Administrator"))}
                   onDemote={run(() => api.setUserRole(u.id, "Standard"))}
                   onSetEnabled={(v) => run(() => api.setUserEnabled(u.id, v))()}
-                  onSetQuota={(bytes) => run(() => api.setUserQuota(u.id, bytes))()}
+                  onSetQuota={(bytes) => run(async () => {
+                    await api.setUserQuota(u.id, bytes);
+                    // The account dropdown reads ["user-storage"]; refresh it so a quota change to the current
+                    // user shows immediately (a no-op refetch when the edited user is someone else).
+                    await qc.invalidateQueries({ queryKey: ["user-storage"] });
+                  })()}
                   onDelete={run(async () => {
                     if (window.confirm(t("confirmDeleteUser", { email: u.email }))) await api.deleteUser(u.id);
                   })}

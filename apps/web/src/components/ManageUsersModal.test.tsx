@@ -95,6 +95,21 @@ describe("ManageUsersModal", () => {
     await waitFor(() => expect(api.setUserQuota).toHaveBeenCalledWith("s1", 10 * 1024 ** 3));
   });
 
+  it("refreshes the account storage query after a quota change", async () => {
+    mock(api.listUsers).mockResolvedValue([u({ id: "s1", email: "std@x.test", quotaBytes: 5 * 1024 ** 3 })]);
+    mock(api.setUserQuota).mockResolvedValue(undefined);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const spy = vi.spyOn(qc, "invalidateQueries");
+    render(<QueryClientProvider client={qc}><ManageUsersModal onClose={() => {}} /></QueryClientProvider>);
+
+    fireEvent.click(await screen.findByRole("button", { name: /edit quota/i }));
+    fireEvent.change(screen.getByLabelText(/quota for std@x.test/i), { target: { value: "10" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    // The account dropdown reads ["user-storage"]; a quota change must invalidate it so the header updates.
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: ["user-storage"] }));
+  });
+
   it("deletes a user after confirmation", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     mock(api.listUsers).mockResolvedValue([u({ id: "s1", email: "std@x.test" })]);
