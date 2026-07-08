@@ -71,6 +71,11 @@ public class Recording
     /// "show the Actions panel by exception" rule — an extraction that found zero actions still sets it.</summary>
     public DateTimeOffset? ActionsExtractedAt { get; set; }
 
+    /// <summary>When tags were last extracted for this recording (null = never). The backfill only
+    /// targets null rows; an extraction that found zero tags still sets it (thin transcript = done,
+    /// not retry-forever). Left null when the owner has no LLM configured so a later backfill retries.</summary>
+    public DateTimeOffset? TagsExtractedAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     /// <summary>Optional link to the Google Calendar event this recording belongs to (1:1). Null = unlinked.</summary>
@@ -79,5 +84,6 @@ public class Recording
     public ICollection<Transcription> Transcriptions { get; set; } = new List<Transcription>();
     public ICollection<Speaker> Speakers { get; set; } = new List<Speaker>();
     public ICollection<RecordingAction> Actions { get; set; } = new List<RecordingAction>();
+    public ICollection<RecordingTag> Tags { get; set; } = new List<RecordingTag>();
     public ICollection<Attachment> Attachments { get; set; } = new List<Attachment>();
 }

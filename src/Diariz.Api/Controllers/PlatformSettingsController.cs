@@ -18,15 +18,17 @@ public class PlatformSettingsController : ControllerBase
     private readonly IPlatformSettingsService _settings;
     private readonly DiarizDbContext _db;
     private readonly IAudioStorage _storage;
+    private readonly IJobQueue _queue;
     private readonly ILogger<PlatformSettingsController> _logger;
 
     public PlatformSettingsController(
-        IPlatformSettingsService settings, DiarizDbContext db, IAudioStorage storage,
+        IPlatformSettingsService settings, DiarizDbContext db, IAudioStorage storage, IJobQueue queue,
         ILogger<PlatformSettingsController> logger)
     {
         _settings = settings;
         _db = db;
         _storage = storage;
+        _queue = queue;
         _logger = logger;
     }
 
@@ -72,6 +74,18 @@ public class PlatformSettingsController : ControllerBase
         var deleted = await AudioRetentionSweep.RunAsync(
             _db, _storage, DateTimeOffset.UtcNow, s.AudioRetentionDays, _logger, ct);
         return new AudioRetentionRunResult(deleted);
+    }
+
+    /// <summary>Backfill tag-cloud tags immediately (manual trigger): enqueue a tag-extraction job for every
+    /// recording never tagged (unlike the retention pass, the work runs asynchronously on the tags worker).
+    /// Useful when the LLM is configured per-user only, which the startup backfill can't see. Returns how
+    /// many jobs were queued, not how many completed.</summary>
+    [HttpPost("run-tag-backfill")]
+    [Authorize(Roles = Roles.PlatformAdministrator)]
+    public async Task<TagBackfillRunResult> RunTagBackfillNow(CancellationToken ct = default)
+    {
+        var enqueued = await TagBackfill.RunAsync(_db, _queue, _logger, ct);
+        return new TagBackfillRunResult(enqueued);
     }
 
     private static PlatformSettingsDto ToDto(PlatformSettings s) => new(

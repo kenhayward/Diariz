@@ -154,7 +154,8 @@ Meeting date: {calendar_date}
         return last;
     }
 
-    private static string StripCodeFence(string s)
+    /// <summary>Strips a leading/trailing markdown code fence. Shared with <see cref="TagsPrompt"/>.</summary>
+    internal static string StripCodeFence(string s)
     {
         if (!s.StartsWith("```")) return s;
         var firstNl = s.IndexOf('\n');

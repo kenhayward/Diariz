@@ -120,6 +120,9 @@ public class WorkerCallbackController : ControllerBase
             // never clobbers manual edits). It is status-neutral (no race with the summary) and, when it finishes,
             // chains the meeting-minutes job — so the minutes render the same canonical action set.
             await _queue.EnqueueActionsAsync(new ActionsJob(transcription.RecordingId, transcription.Id));
+            // Tag-cloud tags are re-extracted on every (re)transcription — the tags processor replaces the
+            // previous set wholesale (tags are machine-only, so there are no manual edits to preserve).
+            await _queue.EnqueueTagsAsync(new TagsJob(transcription.RecordingId, transcription.Id));
         }
 
         // Build/refresh the RAG index for this recording's latest transcription (status-neutral, independent of
