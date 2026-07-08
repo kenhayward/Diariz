@@ -50,6 +50,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.111.1",
+    date: "2026-07-08",
+    pr: 250,
+    headline: "Count UNKNOWN speakers in the attendees line",
+    summary:
+      "Follow-up to the attendee summary: a recording can have an UNKNOWN speaker (segments with no attributed " +
+      "voice), which was being listed as a named attendee. It now counts towards the unidentified total like the " +
+      "SPEAKER_nn placeholders, so the minutes read \"Ken Hayward and 4 unidentified attendees\" rather than " +
+      "\"Ken Hayward, UNKNOWN and 3 unidentified attendees\".",
+    fixed: [
+      "The minutes attendees field now counts UNKNOWN speakers as unidentified instead of naming them.",
+    ],
+  },
+  {
     version: "0.111.0",
     date: "2026-07-08",
     pr: 249,
