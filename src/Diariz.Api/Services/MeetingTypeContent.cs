@@ -74,6 +74,10 @@ public record MeetingTypeContent(IReadOnlyList<TemplateSection> Sections)
                     default:
                         return (false, $"Unknown block kind '{block.Kind}'.");
                 }
+
+                if (block.BreakAfter is not null &&
+                    block.BreakAfter is not (TemplateBlock.BreakNone or TemplateBlock.BreakLine or TemplateBlock.BreakParagraph))
+                    return (false, $"Unknown break value '{block.BreakAfter}'.");
             }
         }
         return (true, null);
@@ -87,9 +91,14 @@ public record TemplateSection(int Level, string Title, IReadOnlyList<TemplateBlo
 /// <summary>One content block within a section. <paramref name="Kind"/> is one of <see cref="Boilerplate"/> (emit
 /// <paramref name="Text"/> verbatim), <see cref="Field"/> (substitute the recording value named by
 /// <see cref="TemplateBlock.Field"/>), or <see cref="Prompt"/> (run <paramref name="Text"/> as a model instruction).</summary>
-public record TemplateBlock(string Kind, string? Text = null, string? Field = null)
+public record TemplateBlock(string Kind, string? Text = null, string? Field = null, string? BreakAfter = null)
 {
     public const string Boilerplate = "boilerplate";
     public const string FieldKind = "field";
     public const string Prompt = "prompt";
+
+    // The whitespace emitted after this block, before the next (see MeetingTypeMinutesComposer). Null = legacy rule.
+    public const string BreakNone = "none";
+    public const string BreakLine = "line";
+    public const string BreakParagraph = "paragraph";
 }

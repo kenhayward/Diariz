@@ -4,8 +4,8 @@ import type { MeetingTypeContent, TemplateSection, TemplateBlock, TemplateBlockK
 export const FIELD_OPTIONS = ["date", "time", "title", "attendees", "duration", "action_items", "notes"] as const;
 
 export function newBlock(kind: TemplateBlockKind): TemplateBlock {
-  if (kind === "field") return { kind, field: "date" };
-  return { kind, text: "" };
+  if (kind === "field") return { kind, field: "date", breakAfter: "none" };
+  return { kind, text: "", breakAfter: "paragraph" };
 }
 
 export function newSection(level: 1 | 2 = 1): TemplateSection {
@@ -85,6 +85,46 @@ export function moveBlock(
   to: number,
 ): MeetingTypeContent {
   return mapSection(content, sectionIndex, (blocks) => move(blocks, from, to));
+}
+
+export function moveBlockCrossSection(
+  content: MeetingTypeContent,
+  from: { section: number; index: number },
+  to: { section: number; index: number },
+): MeetingTypeContent {
+  const src = content.sections[from.section];
+  if (!src) return content;
+  const block = src.blocks[from.index];
+  if (!block) return content;
+  if (from.section === to.section) return moveBlock(content, from.section, from.index, to.index);
+
+  const sections = content.sections.map((s, i) => {
+    if (i === from.section) return { ...s, blocks: s.blocks.filter((_, bi) => bi !== from.index) };
+    if (i === to.section) {
+      const blocks = [...s.blocks];
+      const clamped = Math.max(0, Math.min(to.index, blocks.length));
+      blocks.splice(clamped, 0, block);
+      return { ...s, blocks };
+    }
+    return s;
+  });
+  return { ...content, sections };
+}
+
+/// Back-fill an explicit `breakAfter` on any block that lacks one, using the legacy rule (glue only before a
+/// field). Applied when loading a template so pre-feature templates show correct controls and re-render identically.
+export function normalizeBreaks(content: MeetingTypeContent): MeetingTypeContent {
+  return {
+    ...content,
+    sections: content.sections.map((s) => ({
+      ...s,
+      blocks: s.blocks.map((b, i) => ({ ...b, breakAfter: b.breakAfter ?? legacyBreak(s.blocks[i + 1]) })),
+    })),
+  };
+}
+
+function legacyBreak(next: TemplateBlock | undefined): "none" | "paragraph" {
+  return next && next.kind === "field" ? "none" : "paragraph";
 }
 
 /// The first problem with the template (mirrors the backend's validation), or null when it's savable.

@@ -23,7 +23,7 @@ At a glance - see **[docs/features.md](docs/features.md)** for the full detail o
 | **Capture** | Record from the browser mic (device picker, DSP tuning, live level meter, pause/resume) or system audio via the desktop app; upload files (WAV/MP3/FLAC/Ogg/Opus/WebM/M4A) or drag-drop several at once. |
 | **Transcribe & diarize** | Server-side WhisperX (large-v3, word-level timestamps) + pyannote speaker diarization; speaker-labelled, editable, playable segments; re-transcribe any time, with an original/revised toggle. |
 | **Speaker identification** | Enrol a voice once (SpeechBrain ECAPA voiceprints) and Diariz recognises it across later recordings; rename, merge, and erase voiceprints (GDPR). |
-| **Summaries & minutes** | Auto summary plus full professional meeting minutes (WYSIWYG-editable, emailable), driven by reusable meeting-type templates. |
+| **Summaries & minutes** | Auto summary plus full professional meeting minutes (WYSIWYG-editable, emailable), driven by reusable meeting-type templates with per-block layout control (break, Markdown, drag-to-reorder). |
 | **Notes** | Jot your own note lines during or before a meeting (live, timestamped, crash-safe); they steer the minutes and can be woven into an "enhanced notes" section that links to the exact transcript moments. |
 | **Action items** | Auto-extracted with owner and deadline into an editable table, tracked across every meeting with completion, a person filter, and links back to the transcript. |
 | **Tag cloud** | Every meeting auto-tagged with weighted topics; a Tags tab shows a weighted cloud and lists the meetings behind each tag, with an expanded modal view. |

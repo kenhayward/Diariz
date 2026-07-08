@@ -84,6 +84,36 @@ describe("ManageMeetingTypesModal", () => {
     });
   });
 
+  it("changes a block's break-after and saves it", async () => {
+    const withBlock = mt("mine", "My template", false, true);
+    withBlock.content = {
+      sections: [{ level: 1, title: "S", blocks: [{ kind: "boilerplate", text: "hi", breakAfter: "paragraph" }] }],
+    };
+    vi.mocked(api.listMeetingTypes).mockResolvedValue([withBlock]);
+    vi.mocked(api.updateMeetingType).mockResolvedValue(withBlock);
+    renderModal();
+
+    fireEvent.click(await screen.findByText("My template"));
+    fireEvent.change(screen.getByLabelText("Break after"), { target: { value: "line" } });
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() => expect(api.updateMeetingType).toHaveBeenCalled());
+    const sent = vi.mocked(api.updateMeetingType).mock.calls[0][1];
+    expect(sent.content.sections[0].blocks[0].breakAfter).toBe("line");
+  });
+
+  it("shows a markdown hint for text blocks", async () => {
+    const withBlock = mt("mine", "My template", false, true);
+    withBlock.content = {
+      sections: [{ level: 1, title: "S", blocks: [{ kind: "boilerplate", text: "hi", breakAfter: "paragraph" }] }],
+    };
+    vi.mocked(api.listMeetingTypes).mockResolvedValue([withBlock]);
+    renderModal();
+
+    fireEvent.click(await screen.findByText("My template"));
+    expect(screen.getByText("Markdown supported")).toBeTruthy();
+  });
+
   it("does not close when the backdrop is clicked (X/Escape only)", async () => {
     const { onClose } = renderModal();
     await screen.findByText("My template");

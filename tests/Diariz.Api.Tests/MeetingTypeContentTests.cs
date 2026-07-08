@@ -103,4 +103,24 @@ public class MeetingTypeContentTests
         Assert.Contains("attendees", MeetingTypeContent.Fields);
         Assert.Contains("action_items", MeetingTypeContent.Fields);
     }
+
+    [Theory]
+    [InlineData(TemplateBlock.BreakNone)]
+    [InlineData(TemplateBlock.BreakLine)]
+    [InlineData(TemplateBlock.BreakParagraph)]
+    [InlineData(null)]
+    public void Validate_accepts_a_known_or_null_break_after(string? breakAfter)
+    {
+        var content = new MeetingTypeContent(
+            [new TemplateSection(1, "S", [new TemplateBlock(TemplateBlock.Boilerplate, Text: "hi", BreakAfter: breakAfter)])]);
+        Assert.True(content.Validate().Ok);
+    }
+
+    [Fact]
+    public void Validate_rejects_an_unknown_break_after()
+    {
+        var content = new MeetingTypeContent(
+            [new TemplateSection(1, "S", [new TemplateBlock(TemplateBlock.Boilerplate, Text: "hi", BreakAfter: "double")])]);
+        Assert.False(content.Validate().Ok);
+    }
 }

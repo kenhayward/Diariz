@@ -3,11 +3,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth";
-import type { MeetingType, MeetingTypeContent, TemplateBlockKind } from "../lib/types";
+import type { MeetingType, MeetingTypeContent, TemplateBlock, TemplateBlockKind } from "../lib/types";
 import { groupMeetingTypes } from "../lib/meetingTypes";
 import {
   FIELD_OPTIONS, addSection, removeSection, updateSection, moveSection,
-  addBlock, removeBlock, updateBlock, moveBlock, contentError, emptyContent,
+  addBlock, removeBlock, updateBlock, moveBlock, moveBlockCrossSection, normalizeBreaks,
+  contentError, emptyContent,
 } from "../lib/meetingTypeDraft";
 import { MEETING_TYPE_ICONS } from "./MeetingTypeIcon";
 import MeetingTypeIcon from "./MeetingTypeIcon";
@@ -29,7 +30,7 @@ const DEFAULT_COLOR = "#5C6BC0";
 function draftFrom(t: MeetingType): Draft {
   return {
     id: t.id, groupName: t.groupName, title: t.title, overview: t.overview,
-    icon: t.icon || "document", color: t.color || DEFAULT_COLOR, content: t.content, isPlatform: t.isPlatform,
+    icon: t.icon || "document", color: t.color || DEFAULT_COLOR, content: normalizeBreaks(t.content), isPlatform: t.isPlatform,
   };
 }
 
@@ -320,6 +321,7 @@ function ContentEditor({
   t: (k: string) => string;
 }) {
   const dragSection = useRef<number | null>(null);
+  const dragBlock = useRef<{ section: number; index: number } | null>(null);
 
   return (
     <div className="border-t pt-3 dark:border-gray-700">
@@ -375,7 +377,17 @@ function ContentEditor({
               />
             </div>
 
-            <div className="space-y-2 p-2">
+            <div
+              className="space-y-2 p-2"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                if (dragBlock.current) {
+                  e.stopPropagation();
+                  onChange(moveBlockCrossSection(content, dragBlock.current, { section: si, index: section.blocks.length }));
+                }
+                dragBlock.current = null;
+              }}
+            >
               {section.blocks.length === 0 && (
                 <p className="text-xs text-gray-400 dark:text-gray-500">{t("workspace:mtNoBlocks")}</p>
               )}
@@ -387,10 +399,17 @@ function ContentEditor({
                   kind={block.kind}
                   text={block.text ?? ""}
                   field={block.field ?? "date"}
+                  breakAfter={block.breakAfter ?? "paragraph"}
                   count={section.blocks.length}
                   t={t}
                   onText={(text) => onChange(updateBlock(content, si, bi, { text }))}
                   onField={(field) => onChange(updateBlock(content, si, bi, { field }))}
+                  onBreakAfter={(breakAfter) => onChange(updateBlock(content, si, bi, { breakAfter: breakAfter as TemplateBlock["breakAfter"] }))}
+                  onDragStart={() => { dragBlock.current = { section: si, index: bi }; dragSection.current = null; }}
+                  onBlockDrop={() => {
+                    if (dragBlock.current) onChange(moveBlockCrossSection(content, dragBlock.current, { section: si, index: bi }));
+                    dragBlock.current = null;
+                  }}
                   onMove={(to) => onChange(moveBlock(content, si, bi, to))}
                   onRemove={() => onChange(removeBlock(content, si, bi))}
                 />
@@ -410,8 +429,37 @@ function ContentEditor({
   );
 }
 
+/// A textarea that grows to fit its content (no inner scrollbar), for the raw-markdown block text.
+function AutoGrowTextarea({
+  value, onChange, placeholder, ariaLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  ariaLabel: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      rows={1}
+      className="w-full resize-none overflow-hidden rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+    />
+  );
+}
+
 function BlockRow({
-  kind, text, field, index, count, t, onText, onField, onMove, onRemove,
+  kind, text, field, breakAfter, index, count, t, onText, onField, onBreakAfter, onDragStart, onBlockDrop, onMove, onRemove,
 }: {
   section: number;
   index: number;
@@ -419,9 +467,13 @@ function BlockRow({
   kind: TemplateBlockKind;
   text: string;
   field: string;
+  breakAfter: string;
   t: (k: string) => string;
   onText: (v: string) => void;
   onField: (v: string) => void;
+  onBreakAfter: (v: string) => void;
+  onDragStart: () => void;
+  onBlockDrop: () => void;
   onMove: (to: number) => void;
   onRemove: () => void;
 }) {
@@ -431,7 +483,20 @@ function BlockRow({
     : t("workspace:mtKindPrompt");
 
   return (
-    <div className="flex items-start gap-2 rounded border px-2 py-1.5 dark:border-gray-700">
+    <div
+      className="flex items-start gap-2 rounded border px-2 py-1.5 dark:border-gray-700"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onBlockDrop(); }}
+    >
+      <span
+        draggable
+        onDragStart={onDragStart}
+        aria-label={t("workspace:mtDragBlock")}
+        title={t("workspace:mtDragBlock")}
+        className="mt-1 cursor-grab select-none text-gray-400"
+      >
+        ⠿
+      </span>
       <span className="mt-1 w-16 shrink-0 text-xs font-medium uppercase text-gray-400">{label}</span>
       <div className="min-w-0 flex-1">
         {kind === "field" ? (
@@ -446,16 +511,28 @@ function BlockRow({
             ))}
           </select>
         ) : (
-          <textarea
-            value={text}
-            onChange={(e) => onText(e.target.value)}
-            rows={kind === "prompt" ? 2 : 1}
-            placeholder={kind === "prompt" ? t("workspace:mtPromptPlaceholder") : t("workspace:mtBoilerplatePlaceholder")}
-            aria-label={label}
-            className="w-full resize-y rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          />
+          <div>
+            <AutoGrowTextarea
+              value={text}
+              onChange={onText}
+              placeholder={kind === "prompt" ? t("workspace:mtPromptPlaceholder") : t("workspace:mtBoilerplatePlaceholder")}
+              ariaLabel={label}
+            />
+            <span className="mt-0.5 block text-[11px] text-gray-400 dark:text-gray-500">{t("workspace:mtMarkdownHint")}</span>
+          </div>
         )}
       </div>
+      <select
+        value={breakAfter}
+        onChange={(e) => onBreakAfter(e.target.value)}
+        aria-label={t("workspace:mtBreakAfter")}
+        title={t("workspace:mtBreakAfter")}
+        className="mt-1 shrink-0 rounded border px-1 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+      >
+        <option value="none">{t("workspace:mtBreakNone")}</option>
+        <option value="line">{t("workspace:mtBreakLine")}</option>
+        <option value="paragraph">{t("workspace:mtBreakParagraph")}</option>
+      </select>
       <KebabMenu
         label={t("workspace:mtBlockActions")}
         actions={[
