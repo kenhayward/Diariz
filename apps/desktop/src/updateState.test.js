@@ -2,7 +2,7 @@
 
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { updateRestartItem, notificationForUpdate } = require("./updateState");
+const { updateRestartItem, notificationForUpdate, isNewerVersion } = require("./updateState");
 
 test("updateRestartItem is null until an update is downloaded", () => {
   assert.equal(updateRestartItem({ ready: false }), null);
@@ -60,4 +60,33 @@ test("automatic (non-manual) checks stay quiet except when an update is download
   assert.equal(notificationForUpdate("available", { version: "0.12.0" }), null);
   assert.equal(notificationForUpdate("not-available", {}), null);
   assert.equal(notificationForUpdate("error", {}), null);
+});
+
+// isNewerVersion drives the macOS manual "Check for Updates" (which compares the app version against the
+// latest GitHub release tag). Compares Major.Minor.Build numerically, tolerating a leading "v".
+test("isNewerVersion is true only when latest is strictly greater", () => {
+  assert.equal(isNewerVersion("0.105.3", "0.105.4"), true); // build
+  assert.equal(isNewerVersion("0.105.3", "0.106.0"), true); // minor
+  assert.equal(isNewerVersion("0.105.3", "1.0.0"), true); // major
+  assert.equal(isNewerVersion("0.105.3", "0.105.3"), false); // equal
+  assert.equal(isNewerVersion("0.105.3", "0.105.2"), false); // older
+  assert.equal(isNewerVersion("0.105.3", "0.104.9"), false);
+});
+
+test("isNewerVersion tolerates a leading v and whitespace on the tag", () => {
+  assert.equal(isNewerVersion("0.105.3", "v0.105.4"), true);
+  assert.equal(isNewerVersion("0.105.3", "  v0.105.4  "), true);
+});
+
+test("isNewerVersion compares segments numerically, not lexically", () => {
+  assert.equal(isNewerVersion("0.9.9", "0.10.0"), true); // 10 > 9, not "10" < "9"
+  assert.equal(isNewerVersion("0.100.0", "0.99.9"), false);
+});
+
+test("isNewerVersion returns false for missing or unparseable input (never prompt on bad data)", () => {
+  assert.equal(isNewerVersion("0.105.3", ""), false);
+  assert.equal(isNewerVersion("0.105.3", null), false);
+  assert.equal(isNewerVersion("0.105.3", "not-a-version"), false);
+  assert.equal(isNewerVersion("", "0.105.4"), false);
+  assert.equal(isNewerVersion(undefined, "0.105.4"), false);
 });
