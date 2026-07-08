@@ -56,7 +56,8 @@ export default function UserMenu() {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-lg border bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-900"
+          // z-50 keeps the menu above the floating live-notes panel (z-40), which is rendered while recording.
+          className="absolute right-0 z-50 mt-2 w-48 overflow-hidden rounded-lg border bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-900"
         >
           {(fullName || email) && (
             <div className="border-b px-3 py-2 dark:border-gray-700">

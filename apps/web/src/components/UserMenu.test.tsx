@@ -82,6 +82,13 @@ describe("UserMenu", () => {
     expect(await screen.findByText(/Transcription 1:01:01/)).toBeTruthy();
   });
 
+  it("renders the menu above the live-notes panel", () => {
+    renderMenu();
+    fireEvent.click(screen.getByRole("button", { name: /account/i }));
+    // The floating live-notes panel is z-40; the account menu must sit above it, not behind.
+    expect(screen.getByRole("menu").className).toContain("z-50");
+  });
+
   it("Sign Out calls logout", () => {
     renderMenu();
     fireEvent.click(screen.getByRole("button", { name: /account/i }));
