@@ -16,6 +16,38 @@ skipped on darwin; `identity: null` → unsigned `.dmg`, opens via right-click �
 universal build + a `macos-14` CI job (so one `v*` tag builds both OSes); **Sign in with Apple** — all gated
 on an Apple Developer Program account. The sections below are the plan for those.
 
+## Publishing a macOS build (unsigned beta)
+
+Until the signed `macos-14` CI job lands (Milestone B), the mac `.dmg` is built by hand on a Mac and
+attached to the GitHub Release. The Windows installer is still cut by CI on the `v*` tag.
+
+1. **Build on a Mac** (from up-to-date `main`):
+   ```bash
+   cd apps/desktop && npm run dist
+   ls release/*.dmg          # e.g. release/Diariz-<version>-arm64.dmg
+   ```
+   `npm run dist` builds for the host arch, so on Apple Silicon you get an **`-arm64.dmg`** (Apple-Silicon
+   only until the universal build in Milestone B).
+
+2. **Ensure a Release `v<version>` exists** - it must match `apps/desktop/package.json`, and the app's manual
+   "Check for Updates" compares against `releases/latest`, so use a normal (not draft/pre-release) Release:
+   - Preferred - cut the tag so CI also builds the Windows installer, from Windows on up-to-date `main`:
+     `deploy\PushVersion.cmd --current` (pushes `v<version>` -> the desktop-release workflow creates the
+     Release with the `.exe`).
+   - Or create it directly from the Mac: `gh release create v<version> --repo kenhayward/Diariz --title "v<version>" --notes "..."`.
+
+3. **Attach the `.dmg`** (run on the Mac where the file is):
+   ```bash
+   gh release upload v<version> release/Diariz-<version>-arm64.dmg --repo kenhayward/Diariz
+   # add --clobber to replace an existing asset
+   ```
+   Or via the web UI: **Releases -> the release -> Edit -> drag the `.dmg` into "Attach binaries"**.
+
+**Gotchas:** don't mark the Release **pre-release/draft** (the app's `releases/latest` update check skips
+those); the unsigned `.dmg` opens via **right-click -> Open** on first launch (Gatekeeper). Signing +
+notarization + a universal build + a CI mac job that publishes the `.dmg` automatically all come with
+Milestone B.
+
 ## TL;DR
 
 - The desktop app is an **Electron thin shell** that loads the web app from the server origin, so **most of
