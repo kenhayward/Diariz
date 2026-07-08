@@ -451,18 +451,25 @@ function buildTray() {
   try {
     console.log("[diariz-diag] buildTray platform=", process.platform,
       "iconEmpty=", ICON.isEmpty(), "iconSize=", JSON.stringify(ICON.getSize()));
-    const trayIcon = ICON.isEmpty() ? ICON : ICON.resize({ width: 16, height: 16 });
+    // [DIAG] macOS test: create the status item with an EMPTY image + a title only, to isolate whether the
+    // colored icon was preventing it from rendering. If "Diariz" now shows, the icon was the culprit.
+    const trayIcon =
+      process.platform === "darwin"
+        ? nativeImage.createEmpty()
+        : ICON.isEmpty()
+          ? ICON
+          : ICON.resize({ width: 16, height: 16 });
     tray = new Tray(trayIcon);
     console.log("[diariz-diag] Tray created OK");
     // Windows: left-click opens the window and right-click shows the menu. macOS: a click should show the
     // menu-bar dropdown (the standard behaviour) - its "Open Diariz" item opens the window - so we must NOT
     // bind a click handler on darwin, or it steals the click and the dropdown never appears.
     if (process.platform !== "darwin") tray.on("click", () => showMainWindow());
-    // macOS: the colored app icon renders (near-)invisibly in the menu bar. A short title guarantees a
-    // findable, clickable item until we ship a monochrome Template icon. (No title on Windows.)
     if (process.platform === "darwin") tray.setTitle("Diariz");
     refreshTray();
-    console.log("[diariz-diag] tray context menu set");
+    const bounds = tray.getBounds();
+    console.log("[diariz-diag] tray set; bounds=", JSON.stringify(bounds),
+      "title=", JSON.stringify(process.platform === "darwin" ? tray.getTitle() : ""));
   } catch (e) {
     console.error("[diariz-diag] buildTray FAILED:", e);
   }
