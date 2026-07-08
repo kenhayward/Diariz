@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { applyTheme, getStoredTheme, setStoredTheme, type ThemeChoice } from "./lib/theme";
 
 interface ThemeState {
@@ -24,10 +24,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => mq.removeEventListener("change", onChange);
   }, [theme]);
 
-  function setTheme(choice: ThemeChoice) {
+  // Stable identity: ThemeSync's effect depends on setTheme, so a fresh function each render would make it
+  // re-run and re-apply the server profile - reverting a just-picked (unsaved) choice back to the stored value.
+  const setTheme = useCallback((choice: ThemeChoice) => {
     setStoredTheme(choice);
     setThemeState(choice);
-  }
+  }, []);
 
   return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>;
 }
