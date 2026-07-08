@@ -75,6 +75,19 @@ describe("TagCloudModal", () => {
     expect(screen.getByText("detail page")).toBeTruthy();
   });
 
+  it("sizes the cloud with the smaller modal font bounds", () => {
+    renderModal();
+    // Heaviest tag (weight 0.9) lands on the max bound, lightest (0.4) on the min - both substantially
+    // smaller than the previous 14-40px range.
+    expect(screen.getByRole("button", { name: "Budget Planning" }).style.fontSize).toBe("22px");
+    expect(screen.getByRole("button", { name: "Vendor Selection" }).style.fontSize).toBe("11px");
+  });
+
+  it("makes the top tag panel vertically resizable", () => {
+    renderModal();
+    expect(screen.getByTestId("tag-cloud-panel").className).toContain("resize-y");
+  });
+
   it("closes on Escape and on the close button, without navigating", () => {
     const props = renderModal();
     fireEvent.keyDown(document, { key: "Escape" });
