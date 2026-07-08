@@ -2,7 +2,7 @@
 
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { buildStartUrl, codeFromArgv } = require("./desktopAuth");
+const { buildStartUrl, codeFromArgv, notificationForAuthError } = require("./desktopAuth");
 
 test("buildStartUrl points at the server's Google start with the desktop challenge", () => {
   const url = buildStartUrl("https://diariz.example.com", "CHALLENGE123");
@@ -37,4 +37,13 @@ test("codeFromArgv returns null for junk / no code / wrong host", () => {
 
 test("codeFromArgv rejects a look-alike path that only starts with the callback prefix", () => {
   assert.equal(codeFromArgv(["diariz://auth/callback-evil?code=x"]), null);
+});
+
+test("notificationForAuthError gives a distinct, titled message per failure reason", () => {
+  assert.equal(notificationForAuthError("network").title, "Diariz");
+  assert.match(notificationForAuthError("network").body, /reach the server/i);
+  assert.match(notificationForAuthError("expired").body, /interrupted|sign in again/i);
+  assert.match(notificationForAuthError("rejected").body, /didn't complete|try again/i);
+  // Unknown reasons fall back to the generic message rather than throwing.
+  assert.match(notificationForAuthError("something-else").body, /didn't complete|try again/i);
 });

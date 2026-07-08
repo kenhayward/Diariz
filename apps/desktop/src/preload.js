@@ -35,4 +35,12 @@ contextBridge.exposeInMainWorld("diariz", {
     ipcRenderer.on("auth:token", listener);
     return () => ipcRenderer.removeListener("auth:token", listener);
   },
+
+  /// Subscribe to a desktop sign-in FAILURE (reason: "network"|"expired"|"rejected") so the login
+  /// screen can show why, instead of silently doing nothing. Returns an unsubscribe function.
+  onAuthError: (cb) => {
+    const listener = (_event, reason) => cb(reason);
+    ipcRenderer.on("auth:error", listener);
+    return () => ipcRenderer.removeListener("auth:error", listener);
+  },
 });

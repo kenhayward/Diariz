@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -78,5 +78,31 @@ describe("Login redirect when authenticated", () => {
     authState = { login: vi.fn(), isAuthed: false };
     renderLogin("/login");
     expect(navigateSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("Login surfaces desktop sign-in failures", () => {
+  beforeEach(() => {
+    authState = { login: vi.fn(), isAuthed: false };
+  });
+
+  it("shows the reason the desktop shell reports (instead of the old silent failure)", () => {
+    let handler: ((reason: string) => void) | undefined;
+    (window as unknown as { diariz: unknown }).diariz = {
+      startGoogleSignIn: vi.fn(),
+      onAuthError: (cb: (r: string) => void) => {
+        handler = cb;
+        return () => {};
+      },
+    };
+    renderLogin("/login");
+    act(() => handler?.("network"));
+    expect(screen.getByText("desktopSignInNetwork")).toBeTruthy();
+
+    act(() => handler?.("expired"));
+    expect(screen.getByText("desktopSignInExpired")).toBeTruthy();
+
+    act(() => handler?.("rejected"));
+    expect(screen.getByText("desktopSignInRejected")).toBeTruthy();
   });
 });

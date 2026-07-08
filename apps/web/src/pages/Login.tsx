@@ -53,6 +53,24 @@ export default function Login() {
       )
     : null;
 
+  // Desktop shell: a diariz:// sign-in that fails to complete reports the reason over IPC (instead of the
+  // old silent nothing), so we can tell the user why they're still on the login screen.
+  const [desktopError, setDesktopError] = useState<string | null>(null);
+  useEffect(() => {
+    const unsub = window.diariz?.onAuthError?.((reason) =>
+      setDesktopError(
+        t(
+          reason === "network"
+            ? "desktopSignInNetwork"
+            : reason === "expired"
+              ? "desktopSignInExpired"
+              : "desktopSignInRejected",
+        ),
+      ),
+    );
+    return () => unsub?.();
+  }, [t]);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -100,8 +118,8 @@ export default function Login() {
           className="w-full rounded border px-3 py-2 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           required
         />
-        {(error || googleErrorMsg) && (
-          <p className="text-sm text-red-600 dark:text-red-400">{error ?? googleErrorMsg}</p>
+        {(error || googleErrorMsg || desktopError) && (
+          <p className="text-sm text-red-600 dark:text-red-400">{error ?? googleErrorMsg ?? desktopError}</p>
         )}
         <button
           type="submit"
