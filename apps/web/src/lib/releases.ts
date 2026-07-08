@@ -127,6 +127,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.105.1",
+    date: "2026-07-07",
+    pr: 238,
+    headline: "Diagnostics for desktop Google sign-in",
+    summary:
+      "Adds server-side logging around the desktop app's Google sign-in token exchange (whether the request " +
+      "arrives, and success or the exact failure reason), to diagnose a report of desktop sign-in returning to " +
+      "the app but staying on the login screen. No behaviour change. Server redeploy (API) only.",
+    changed: [
+      "The API logs the outcome of the desktop app's Google sign-in token exchange (arrival + success/failure reason) - diagnostics only, no behaviour change.",
+    ],
+  },
+  {
     version: "0.105.0",
     date: "2026-07-07",
     pr: 237,

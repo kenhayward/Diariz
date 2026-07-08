@@ -412,16 +412,43 @@ public class AuthController : ControllerBase
     [HttpPost("desktop/exchange")]
     public async Task<IActionResult> DesktopExchange(DesktopExchangeRequest req)
     {
-        if (string.IsNullOrEmpty(req.Code) || string.IsNullOrEmpty(req.Verifier)) return Unauthorized();
+        // Diagnostic logging: the desktop app calls this from its main-process fetch after a diariz:// deep
+        // link, and swallows any failure silently (the user just stays on the login screen). Logging the
+        // arrival + the precise outcome makes the otherwise-invisible flow observable. If "request received"
+        // never appears while the browser reached Google, the app's fetch isn't reaching the server (TLS/proxy
+        // /network), not a code/challenge problem. No secrets are logged - only field lengths and the reason.
+        _logger.LogInformation("Desktop sign-in exchange: request received (code {CodeLen} chars, verifier {VerifierLen} chars).",
+            req.Code?.Length ?? 0, req.Verifier?.Length ?? 0);
+
+        if (string.IsNullOrEmpty(req.Code) || string.IsNullOrEmpty(req.Verifier))
+        {
+            _logger.LogWarning("Desktop sign-in exchange: missing code or verifier -> 401.");
+            return Unauthorized();
+        }
 
         var ticket = await _desktopCodes.RedeemAsync(req.Code);
-        if (ticket is null || !FixedTimeEquals(ticket.Challenge, OAuthPkce.Challenge(req.Verifier)))
+        if (ticket is null)
+        {
+            _logger.LogWarning("Desktop sign-in exchange: code not found / expired / already redeemed -> 401.");
             return Unauthorized();
+        }
+        if (!FixedTimeEquals(ticket.Challenge, OAuthPkce.Challenge(req.Verifier)))
+        {
+            _logger.LogWarning("Desktop sign-in exchange: PKCE challenge mismatch -> 401 (the verifier does not "
+                + "match the challenge the code was minted with).");
+            return Unauthorized();
+        }
 
         var user = await _users.FindByIdAsync(ticket.UserId.ToString());
-        if (user is null || !user.IsEnabled) return Unauthorized();
+        if (user is null || !user.IsEnabled)
+        {
+            _logger.LogWarning("Desktop sign-in exchange: user missing or disabled -> 401.");
+            return Unauthorized();
+        }
 
         var (token, _) = _tokens.CreateAccessToken(user, await _users.GetRolesAsync(user));
+        _logger.LogInformation("Desktop sign-in exchange: success for {Email} -> access token issued (200).",
+            LogSanitizer.Clean(user.Email ?? ""));
         return Ok(new { accessToken = token });
     }
 
