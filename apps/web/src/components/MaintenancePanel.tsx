@@ -15,6 +15,23 @@ export default function MaintenancePanel() {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  // Tag backfill (manual one-shot): queue tag extraction for every never-tagged recording.
+  const [tagRunBusy, setTagRunBusy] = useState(false);
+  const [tagRunMsg, setTagRunMsg] = useState<string | null>(null);
+
+  async function runTagBackfillNow() {
+    if (!window.confirm(t("runTagBackfillConfirm"))) return;
+    setTagRunMsg(null);
+    setTagRunBusy(true);
+    try {
+      const { enqueued } = await api.runTagBackfill();
+      setTagRunMsg(t("runTagBackfillResult", { count: enqueued }));
+    } catch (e) {
+      setTagRunMsg(apiErrorMessage(e));
+    } finally {
+      setTagRunBusy(false);
+    }
+  }
 
   async function restore() {
     if (!file || !confirmed) return;
@@ -49,6 +66,22 @@ export default function MaintenancePanel() {
         >
           {t("downloadBackup")}
         </a>
+      </section>
+
+      <section className="space-y-2 border-t pt-4 dark:border-gray-700">
+        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-200">{t("tagBackfillHeading")}</h3>
+        <p className="text-xs text-gray-500 dark:text-gray-400">{t("tagBackfillDescription")}</p>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={runTagBackfillNow}
+            disabled={tagRunBusy}
+            className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+          >
+            {tagRunBusy ? t("runTagBackfillRunning") : t("runTagBackfillNow")}
+          </button>
+          {tagRunMsg && <span className="text-xs text-gray-600 dark:text-gray-300">{tagRunMsg}</span>}
+        </div>
       </section>
 
       <section className="space-y-2 border-t pt-4 dark:border-gray-700">

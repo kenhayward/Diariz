@@ -105,6 +105,14 @@ original words (so you can always flip back), and exports/email/chat use them.
 - **Organise** recordings into **sections and sub-sections** (one level of nesting) with drag-and-drop
 ordering and cross-group moves; select a whole group at once to build chat context. Browse them as a
 **list or a calendar** (days with recordings are highlighted; click one to see that day's recordings).
+- **Tag cloud across your meetings**: every meeting is **tagged automatically** after transcription — the
+LLM extracts up to 12 weighted concepts/themes it was actually about (participant names and filler are
+excluded). The left panel's **Tags** tab shows them as a flat weighted cloud (font size scales with how
+central a topic is across your library); click a tag to list the meetings that carry it, and an **expand**
+button opens the cloud in a large modal (picking a tag there filters the panel too; picking a meeting opens
+it). Re-transcribing refreshes a meeting's tags. Existing libraries are **backfilled** automatically at
+startup (when a server-wide LLM is configured), and a Platform Administrator can trigger the backfill from
+**Settings → Maintenance** (e.g. for per-user-only LLM configs).
 - **Attach supporting documents** to a transcript — upload files (PDFs, Office docs, emails, calendar
 invites, images, …) or add URLs, then rename, open, and remove them from an "Attachments (N)" button
 (or drag files onto the page). Files are stored in object storage and count toward your quota. Turn on

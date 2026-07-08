@@ -67,6 +67,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddUserProfileAndCalendarSelection` | `UserSettings` gains `JobTitle`/`CompanyName`/`LinkedIn` (varchar(256) null), `JobDescription`/`CompanyDescription` (varchar(2048) null), `Theme` (int, default 0 = Auto), and `GoogleSelectedCalendarIdsJson` (jsonb null) — richer profile + per-user theme + the Google calendar selection |
 | `AddApiAccessTokens` | `ApiAccessTokens` (per-user personal REST-API tokens; SHA-256 hash only, **unique** on `TokenHash`, cascade on user delete) + `PlatformSettings.ApiAccessEnabled` (bool, default false) — user API access, off until a Platform Admin enables it |
 | `AddMeetingNotes` | `MeetingNotes` (the user's own note lines; anchored to a recording **or** a calendar event, adopted onto the recording when the calendar link forms; cascades from both user and recording) |
+| `AddRecordingTags` | `RecordingTags` (LLM-extracted weighted tag-cloud tags, machine-only; cascade on `Recording`, index `(RecordingId, Ordinal)`) + `Recordings.TagsExtractedAt` (timestamptz null) — the tag-backfill "done" marker |
 
 ### Entity-relationship overview
 
@@ -84,7 +85,8 @@ ApplicationUser (AspNetUsers)
          │       └─1:1─ MeetingMinutes (cascade)
          ├─1:n─ Speaker         (cascade)         Embedding vector(192)?, (RecordingId, Label) unique
          │       └─n:1─ SpeakerProfile (SetNull)  ProfileId
-         └─1:n─ RecordingAction (cascade)
+         ├─1:n─ RecordingAction (cascade)
+         └─1:n─ RecordingTag    (cascade)         LLM tag-cloud tags (machine-only)
 
 SpeakerProfile (Embedding vector(192), centroid)
  └─1:n─ ProfileContribution     (cascade)         Embedding vector(192) snapshot
@@ -123,9 +125,10 @@ The owned audio recording.
 | `MeetingTypeId` | uuid FK → MeetingTypes null | chosen minutes template; null = the seeded General default; **SetNull** on type delete |
 | `Position` | int | manual sort order within its group |
 | `ActionsExtractedAt` | timestamptz null | non-null once action extraction has run (drives the by-exception Actions panel) |
+| `TagsExtractedAt` | timestamptz null | non-null once tag extraction has run (even a zero-tag result); null rows are the tag backfill's work list. Left null when the owner has no LLM so a later backfill retries |
 | `CreatedAt` | timestamptz | |
 
-Index: `(UserId, CreatedAt)`. Children cascade: `Transcriptions`, `Speakers`, `RecordingActions`.
+Index: `(UserId, CreatedAt)`. Children cascade: `Transcriptions`, `Speakers`, `RecordingActions`, `RecordingTags`.
 
 #### `Transcriptions`
 One transcription pass; recordings are **versioned**.
@@ -226,6 +229,23 @@ Extracted/hand-edited action items.
 
 Index: `(RecordingId, Ordinal)`. The cross-meeting Actions list (`GET /api/actions`) joins to `Recordings`
 for ownership + display name; bulk complete/un-complete via `POST /api/actions/complete`.
+
+#### `RecordingTags`
+LLM-extracted weighted tag-cloud tags. Machine-only (never user-edited): the tags worker **replaces the
+whole set** on every (re)transcription, guarded against stale jobs (only the recording's latest
+transcription version may write). `GET /api/tags` aggregates them case-insensitively per owner (count +
+summed weight + carrying recording ids) for the web's Tags tab cloud.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `RecordingId` | uuid FK → Recordings | cascade |
+| `Tag` | varchar(64) | canonical tag text (Title Case, 1-2 words per the prompt) |
+| `Weight` | double precision | per-recording salience 0-1 (clamped on ingest) |
+| `Ordinal` | int | 0-based, the LLM's weight-descending order |
+| `CreatedAt` | timestamptz | |
+
+Index: `(RecordingId, Ordinal)`.
 
 #### `MeetingNotes`
 The user's own note lines for a meeting - sparse trigger phrases that (from a later PR) steer minutes

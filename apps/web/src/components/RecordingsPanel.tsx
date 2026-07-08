@@ -22,9 +22,12 @@ import MonthCalendar from "./MonthCalendar";
 import { recordingDayKeys, dayKey, eventDayKeys, visibleGridRange, dayItems } from "../lib/calendar";
 import { useUpload } from "../lib/uploadContext";
 import { distinctActors, filterActions } from "../lib/actionsView";
+import { recordingsForTags } from "../lib/tagCloud";
 import ActionsToolbar from "./ActionsToolbar";
 import ActionsTab from "./ActionsTab";
 import EditActionModal from "./EditActionModal";
+import TagCloud from "./TagCloud";
+import TagCloudModal from "./TagCloudModal";
 import type { UploadItem } from "../lib/uploadQueue";
 import type { ActionListItem, CalendarEvent, RecordingStatus, RecordingSource, RecordingSummary } from "../lib/types";
 
@@ -44,7 +47,7 @@ const statusColor: Record<RecordingStatus, string> = {
 const COLLAPSE_KEY = "diariz.recordings.collapsedGroups";
 const UNGROUPED_KEY = "__ungrouped__";
 const TAB_KEY = "diariz.recordings.tab";
-type PanelTab = "list" | "calendar" | "actions";
+type PanelTab = "list" | "calendar" | "actions" | "tags";
 /// Drag payload type marking a section-header drag (vs a recording's "text/plain" id or a file drop).
 const SECTION_MIME = "application/x-diariz-section";
 
@@ -76,7 +79,11 @@ export default function RecordingsPanel() {
   const { data: sections = [] } = useQuery({ queryKey: ["sections"], queryFn: api.listSections });
 
   useEffect(() => {
-    const hub = createHub(() => qc.invalidateQueries({ queryKey: ["recordings"] }));
+    const hub = createHub(() => {
+      qc.invalidateQueries({ queryKey: ["recordings"] });
+      // Tag extraction pings the same status event when it lands, so the cloud stays live too.
+      qc.invalidateQueries({ queryKey: ["tags"] });
+    });
     hub.start().catch(() => {});
     return () => void hub.stop();
   }, [qc]);
@@ -89,7 +96,7 @@ export default function RecordingsPanel() {
   // selected day's recordings below it.
   const [tab, setTab] = useState<PanelTab>(() => {
     const v = localStorage.getItem(TAB_KEY);
-    return v === "calendar" || v === "actions" ? v : "list";
+    return v === "calendar" || v === "actions" || v === "tags" ? v : "list";
   });
   function selectTab(next: PanelTab) {
     localStorage.setItem(TAB_KEY, next);
@@ -113,6 +120,25 @@ export default function RecordingsPanel() {
     () => filterActions(allActions, { person: personFilter, hideComplete }),
     [allActions, personFilter, hideComplete],
   );
+  // Tags tab: the aggregated cloud + a single selected tag filtering the recordings list below it. The
+  // selection is shared with the expanded modal so the panel always mirrors what was picked there.
+  const { data: tags = [] } = useQuery({
+    queryKey: ["tags"],
+    queryFn: api.listTags,
+    enabled: tab === "tags",
+  });
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [tagCloudExpanded, setTagCloudExpanded] = useState(false);
+  // A refetch can drop the selected tag (recording deleted / re-tagged) — clear a stale selection so the
+  // list doesn't silently show "nothing" for a tag that no longer exists.
+  useEffect(() => {
+    if (selectedTag && tags.length > 0 && !tags.some((x) => x.tag === selectedTag)) setSelectedTag(null);
+  }, [tags, selectedTag]);
+  const tagItems = useMemo(
+    () => recordingsForTags(recordings, tags, selectedTag),
+    [recordings, tags, selectedTag],
+  );
+
   const [month, setMonth] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
@@ -436,15 +462,66 @@ export default function RecordingsPanel() {
               )}
             </div>
           </div>
-        ) : (
+        ) : tab === "actions" ? (
           // Actions: a flat, cross-transcript list with its own filter/select/complete toolbar above.
           <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
             {opError && <p className="px-3 py-1 text-xs text-red-600 dark:text-red-400">{opError}</p>}
             <ActionsTab actions={visibleActions} persons={persons} person={personFilter} onPerson={setPersonFilter} />
           </div>
+        ) : (
+          // Tags: the weighted cloud stays fixed at the top (like the calendar's month grid); only the
+          // matching-recordings list below it scrolls. min-w-0 for the same truncation reason as calendar.
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            {tags.length === 0 ? (
+              <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("tagsEmpty")}</p>
+            ) : (
+              <>
+                <div className="relative shrink-0 border-b dark:border-gray-800">
+                  <TagCloud tags={tags} selected={selectedTag} onSelect={setSelectedTag} />
+                  <button
+                    type="button"
+                    aria-label={t("tagCloudExpand")}
+                    title={t("tagCloudExpand")}
+                    onClick={() => setTagCloudExpanded(true)}
+                    className="absolute right-1 top-1 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+                  >
+                    <svg {...iconProps}>
+                      <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+                  {tagItems.length > 0 && (
+                    <ul className="divide-y dark:divide-gray-800">
+                      {tagItems.map((r) => (
+                        <RecordingRow
+                          key={r.id}
+                          r={r}
+                          indentClass="pl-3"
+                          selectMode={selection.selectMode}
+                          selected={selection.selectedIds.includes(r.id)}
+                          onToggleSelect={() => selection.toggle(r.id)}
+                          onDropBefore={() => {}}
+                        />
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         )}
       </div>
       {editingAction && <EditActionModal action={editingAction} onClose={() => setEditingAction(null)} />}
+      {tagCloudExpanded && (
+        <TagCloudModal
+          tags={tags}
+          recordings={recordings}
+          selected={selectedTag}
+          onSelect={setSelectedTag}
+          onClose={() => setTagCloudExpanded(false)}
+        />
+      )}
     </div>
   );
 }
@@ -471,6 +548,7 @@ function TabStrip({ tab, onSelect }: { tab: PanelTab; onSelect: (t: PanelTab) =>
       {item("list", t("tabList"))}
       {item("calendar", t("tabCalendar"))}
       {item("actions", t("tabActions"))}
+      {item("tags", t("tabTags"))}
     </div>
   );
 }

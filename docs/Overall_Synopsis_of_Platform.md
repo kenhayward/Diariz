@@ -189,6 +189,22 @@ field is **omitted entirely** so non-reasoning endpoints aren't broken.
   calls the LLM inline and **replaces** the recording's **`RecordingAction`** rows. Actions also travel into
   transcript downloads, the emailed transcript, and the chat context. Its instruction prompt is the **editable**
   `prompts/extract-actions.md` (`{calendar_date}` substituted).
+- **Tag cloud (pipeline + backfill).** Every transcription also gets **weighted topic tags** for the web's
+  cross-transcript tag cloud: a Redis stream **`tag-cloud-jobs`** (group `tag-extractors`) with its own
+  `TagsWorker` (singleton `BackgroundService`) runs `TagsProcessor` → `TagsClient`/`TagsPrompt` (editable
+  prompt `prompts/tagcloud.md`; strict JSON array of `{tag, weight}` hardened for reasoning models via
+  `ActionsPrompt.ExtractJsonArray`), enqueued alongside the summary/actions after transcription. Unlike
+  actions, tags are **machine-only**, so the processor **replaces the recording's `RecordingTag` set
+  wholesale** on every (re)transcription — guarded instead against **stale jobs** (only the recording's
+  latest transcription version may write) — and sets `Recording.TagsExtractedAt` even on a zero-tag result.
+  Status-neutral; no LLM configured → silent no-op with the marker left null. **Backfill:** a one-shot
+  `TagBackfillService` enqueues jobs for every never-tagged recording at startup (gated on a server-wide
+  summarisation endpoint), and a Platform Admin can trigger the same via
+  `POST /api/platform/settings/run-tag-backfill` (Settings → Maintenance; returns the enqueued count —
+  per-user-only LLM configs are covered this way). The web reads **`GET /api/tags`**: owner-scoped,
+  case-insensitive aggregation (count + summed weight + carrying recording ids) that the left panel's
+  **Tags tab** renders as a flat weighted cloud (log-scaled font sizes, single-select filter, an expanded
+  80% modal sharing the same selection state).
 - **Semantic search index (RAG, M3 - backend).** A **fifth Redis stream `embedding-jobs`** (group `embedders`)
   with its own `EmbeddingWorker` (singleton `BackgroundService`) builds the semantic-search index. Per job,
   `EmbeddingProcessor` windows the transcription's segments into overlapping passages (`TranscriptChunker`,
@@ -617,11 +633,11 @@ Voiceprints are **per-user** (a user's voiceprints only match their own recordin
 
 ## Cross-boundary contracts (the non-obvious glue)
 
-- **Redis Streams, six of them.** `transcription-jobs`/`workers` and `audio-merge-jobs` (both API → Python
+- **Redis Streams, seven of them.** `transcription-jobs`/`workers` and `audio-merge-jobs` (both API → Python
   worker, sharing the `workers` group — the worker `XREADGROUP`s both streams and dispatches by stream key) and
-  four API-internal streams with their own in-process consumers: `summarization-jobs`/`summarizers`,
-  `meeting-minutes-jobs`/`minute-takers`, `actions-jobs`/`actions-extractors`, and `embedding-jobs`/`embedders`
-  (the RAG index). Job payloads are **PascalCase JSON**
+  five API-internal streams with their own in-process consumers: `summarization-jobs`/`summarizers`,
+  `meeting-minutes-jobs`/`minute-takers`, `actions-jobs`/`actions-extractors`, `embedding-jobs`/`embedders`
+  (the RAG index), and `tag-cloud-jobs`/`tag-extractors` (the tag cloud). Job payloads are **PascalCase JSON**
   so .NET produces and Python/.NET consume without renaming. Keep `TranscriptionJob` / `TranscriptionResult` /
   `AudioMergeJob` / `Segment` shapes in sync across both languages.
 - **Merge recordings.** `POST /api/recordings/merge` folds 2+ recordings into the earliest one: it builds a new
