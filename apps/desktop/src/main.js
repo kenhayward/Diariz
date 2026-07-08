@@ -6,7 +6,7 @@ const { app, BrowserWindow, Tray, Menu, Notification, desktopCapturer, ipcMain, 
 const Store = require("electron-store");
 const { normalizeServerUrl } = require("./url");
 const { trayRecorderItems, trayTooltip, notificationFor } = require("./recorderState");
-const { updateRestartItem, notificationForUpdate } = require("./updateState");
+const { updateRestartItem, notificationForUpdate, isNewerVersion } = require("./updateState");
 const { buildStartUrl, codeFromArgv, notificationForAuthError } = require("./desktopAuth");
 
 // In dev we load the Vite dev server directly and skip first-run setup.
@@ -309,6 +309,13 @@ function restartToUpdate() {
 }
 
 function checkForUpdates(manual) {
+  // macOS (unsigned POC): Squirrel.Mac can't auto-update an unsigned app and there is no mac feed, so use a
+  // lightweight GitHub-Releases check that opens the download page when a newer tag exists (Milestone B
+  // swaps this for electron-updater once the build is signed).
+  if (process.platform === "darwin") {
+    void checkForUpdatesMac(manual);
+    return;
+  }
   if (!autoUpdater) {
     if (manual) notifyUpdate("not-available", { manual: true, version: app.getVersion() });
     return;
@@ -320,9 +327,50 @@ function checkForUpdates(manual) {
   });
 }
 
+/// owner/repo parsed from package.json's repository URL (fork-friendly), or null.
+function githubRepo() {
+  try {
+    const url = require("../package.json").repository?.url || "";
+    const m = url.match(/github\.com[/:]([^/]+)\/([^/.]+)/i);
+    return m ? `${m[1]}/${m[2]}` : null;
+  } catch {
+    return null;
+  }
+}
+
+/// macOS manual update check: compare the app version against the latest GitHub release tag; if newer,
+/// notify and (on a manual check) open the Releases page. Automatic checks only notify, never auto-open.
+async function checkForUpdatesMac(manual) {
+  const repo = githubRepo();
+  if (!repo) return;
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
+      headers: { Accept: "application/vnd.github+json", "User-Agent": "Diariz" },
+    });
+    if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+    const data = await res.json();
+    if (isNewerVersion(app.getVersion(), data.tag_name)) {
+      if (Notification.isSupported()) {
+        new Notification({ title: "Diariz", body: `A new version (${data.tag_name}) is available` }).show();
+      }
+      if (manual) shell.openExternal(data.html_url || `https://github.com/${repo}/releases`);
+    } else if (manual) {
+      notifyUpdate("not-available", { manual: true, version: app.getVersion() });
+    }
+  } catch {
+    if (manual) notifyUpdate("error", { manual: true });
+  }
+}
+
 function setupAutoUpdater() {
-  // electron-updater only works in a packaged build (it reads app-update.yml).
+  // electron-updater only works in a packaged, signed build (Squirrel.Mac refuses unsigned; it also reads
+  // app-update.yml). On the unsigned macOS POC use the manual GitHub check instead of electron-updater.
   if (!app.isPackaged) return;
+  if (process.platform === "darwin") {
+    void checkForUpdatesMac(false);
+    setInterval(() => void checkForUpdatesMac(false), 6 * 60 * 60 * 1000);
+    return;
+  }
   autoUpdater = require("electron-updater").autoUpdater;
   autoUpdater.autoDownload = true; // fetch in the background
   autoUpdater.autoInstallOnAppQuit = true; // also apply on a normal quit
@@ -410,6 +458,9 @@ function buildTray() {
     // menu-bar dropdown (the standard behaviour) - its "Open Diariz" item opens the window - so we must NOT
     // bind a click handler on darwin, or it steals the click and the dropdown never appears.
     if (process.platform !== "darwin") tray.on("click", () => showMainWindow());
+    // macOS: the colored app icon renders (near-)invisibly in the menu bar. A short title guarantees a
+    // findable, clickable item until we ship a monochrome Template icon. (No title on Windows.)
+    if (process.platform === "darwin") tray.setTitle("Diariz");
     refreshTray();
     console.log("[diariz-diag] tray context menu set");
   } catch (e) {
