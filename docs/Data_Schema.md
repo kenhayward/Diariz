@@ -68,6 +68,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddApiAccessTokens` | `ApiAccessTokens` (per-user personal REST-API tokens; SHA-256 hash only, **unique** on `TokenHash`, cascade on user delete) + `PlatformSettings.ApiAccessEnabled` (bool, default false) — user API access, off until a Platform Admin enables it |
 | `AddMeetingNotes` | `MeetingNotes` (the user's own note lines; anchored to a recording **or** a calendar event, adopted onto the recording when the calendar link forms; cascades from both user and recording) |
 | `AddRecordingTags` | `RecordingTags` (LLM-extracted weighted tag-cloud tags, machine-only; cascade on `Recording`, index `(RecordingId, Ordinal)`) + `Recordings.TagsExtractedAt` (timestamptz null) — the tag-backfill "done" marker |
+| `AddLlmTimeout` | `PlatformSettings.LlmTimeoutSeconds` (int, NOT NULL, default 120) — the platform-wide per-request timeout applied to every LLM call (the single authority; the HTTP clients have no cap) |
 
 ### Entity-relationship overview
 
@@ -458,6 +459,7 @@ Single seeded row (`Id = 1`), edited by the Platform Administrator.
 | `AudioRetentionDays` | int | audio older than this many days (by `Recording.CreatedAt`) is eligible for auto-deletion (default 30) |
 | `AudioDeletionTimeOfDay` | time | server-local time of day the nightly retention job runs (default 03:00) |
 | `ApiAccessEnabled` | bool | master switch for user API access (personal `dz_api_` tokens); default false = off |
+| `LlmTimeoutSeconds` | int | platform-wide per-request timeout (seconds) for every LLM call - the single authority (the HTTP clients have no cap); default 120 |
 
 #### Identity tables (`AspNet*`)
 Standard ASP.NET Identity schema with **Guid** keys: `AspNetUsers`, `AspNetRoles`, `AspNetUserRoles`,

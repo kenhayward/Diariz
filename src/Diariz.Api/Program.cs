@@ -208,14 +208,18 @@ builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<ISpeakerIdentifier, SpeakerIdentifier>();
 
 // ---- Summarisation (OpenAI-compatible endpoint + background consumer) ----
-builder.Services.AddHttpClient<ISummarizationClient, SummarizationClient>();
-builder.Services.AddHttpClient<IActionsClient, ActionsClient>();
-builder.Services.AddHttpClient<ITranslationClient, TranslationClient>();
+// Every LLM client disables HttpClient's own 100s timeout so the per-request timeout (the admin-set
+// PlatformSettings.LlmTimeoutSeconds, applied via a linked CTS in each client) is the single authority -
+// otherwise a configured timeout above 100s was silently capped and slow local models timed out.
+static void NoHttpTimeout(HttpClient c) => c.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
+builder.Services.AddHttpClient<ISummarizationClient, SummarizationClient>(NoHttpTimeout);
+builder.Services.AddHttpClient<IActionsClient, ActionsClient>(NoHttpTimeout);
+builder.Services.AddHttpClient<ITranslationClient, TranslationClient>(NoHttpTimeout);
 builder.Services.AddScoped<ISummarizationSettingsResolver, SummarizationSettingsResolver>();
 builder.Services.AddHostedService<SummarizationWorker>();
 
 // ---- Meeting minutes (shares the per-user summarisation config; its own stream + consumer) ----
-builder.Services.AddHttpClient<IMeetingMinutesClient, MeetingMinutesClient>();
+builder.Services.AddHttpClient<IMeetingMinutesClient, MeetingMinutesClient>(NoHttpTimeout);
 // Template-driven generation: two strategies (per-section vs single-call), chosen per run by the platform mode.
 builder.Services.AddScoped<IMeetingTypeMinutesStrategy, PerSectionMinutesStrategy>();
 builder.Services.AddScoped<IMeetingTypeMinutesStrategy, SingleCallMinutesStrategy>();
@@ -225,13 +229,13 @@ builder.Services.AddHostedService<MeetingMinutesWorker>();
 builder.Services.AddHostedService<ActionsWorker>();
 // Tag-cloud extraction runs in the pipeline too (its own stream/worker), sharing the per-user summarisation
 // config; TagBackfillService enqueues jobs once at startup for recordings that predate the feature.
-builder.Services.AddHttpClient<ITagsClient, TagsClient>();
+builder.Services.AddHttpClient<ITagsClient, TagsClient>(NoHttpTimeout);
 builder.Services.AddHostedService<TagsWorker>();
 builder.Services.AddHostedService<TagBackfillService>();
 
 // ---- Semantic-search (RAG, M3) embeddings: its own endpoint/model config, stream + consumer, and a
 // one-time startup backfill that indexes the existing library once an embeddings endpoint is configured. ----
-builder.Services.AddHttpClient<IEmbeddingClient, EmbeddingClient>();
+builder.Services.AddHttpClient<IEmbeddingClient, EmbeddingClient>(NoHttpTimeout);
 builder.Services.AddScoped<IEmbeddingSettingsResolver, EmbeddingSettingsResolver>();
 builder.Services.AddHostedService<EmbeddingWorker>();
 builder.Services.AddHostedService<EmbeddingBackfillService>();

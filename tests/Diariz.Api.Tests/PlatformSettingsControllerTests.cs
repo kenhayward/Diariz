@@ -61,6 +61,36 @@ public class PlatformSettingsControllerTests
     }
 
     [Fact]
+    public async Task Update_RoundTrips_LlmTimeoutSeconds()
+    {
+        using var db = TestDb.Create();
+        var gb = 5L * 1024 * 1024 * 1024;
+
+        var result = await Build(db).Update(new UpdatePlatformSettingsRequest(gb, gb, LlmTimeoutSeconds: 300));
+
+        Assert.Equal(300, Assert.IsType<PlatformSettingsDto>(result.Value).LlmTimeoutSeconds);
+        Assert.Equal(300, (await db.PlatformSettings.SingleAsync()).LlmTimeoutSeconds);
+    }
+
+    [Fact]
+    public async Task Update_TimeoutBelowMinimum_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var gb = 5L * 1024 * 1024 * 1024;
+
+        var result = await Build(db).Update(new UpdatePlatformSettingsRequest(gb, gb, LlmTimeoutSeconds: 2));
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Get_ReturnsLlmTimeoutDefault()
+    {
+        using var db = TestDb.Create();
+        Assert.Equal(PlatformSettings.DefaultLlmTimeoutSeconds, (await Build(db).Get()).LlmTimeoutSeconds);
+    }
+
+    [Fact]
     public async Task Update_RoundTrips_MinutesGenerationMode()
     {
         using var db = TestDb.Create();

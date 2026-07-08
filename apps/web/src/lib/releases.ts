@@ -130,6 +130,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.108.0",
+    date: "2026-07-08",
+    pr: 244,
+    headline: "Global AI timeout setting (and no more silent 100s cap)",
+    summary:
+      "AI calls could quietly time out at 100 seconds even when a longer timeout was configured - a hidden " +
+      "cap in the HTTP layer - so slow local models sometimes failed on long transcripts. That cap is gone: " +
+      "the configured timeout is now the only one that applies. A Platform Administrator can set a single " +
+      "global AI timeout (in seconds, default 120) on Settings -> Model Settings that governs every AI call - " +
+      "summaries, minutes, actions, tags, and embeddings. Raise it for slow local models. Server redeploy only.",
+    added: [
+      "Global AI request timeout on Settings -> Model Settings (Platform Administrator): one value in seconds, default 120, applied to every AI call.",
+    ],
+    fixed: [
+      "AI calls no longer time out at a hidden 100-second cap regardless of the configured timeout - the configured value is now the single authority, so slow local models get the full time.",
+    ],
+  },
+  {
     version: "0.107.0",
     date: "2026-07-08",
     pr: 243,

@@ -37,14 +37,15 @@ public record GrantResultDto(bool Emailed, string? SetupUrl);
 public record PlatformSettingsDto(
     long StarterQuotaBytes, long MaxQuotaBytes, MinutesGenerationMode MinutesGenerationMode,
     bool AutoDeleteAudioEnabled, int AudioRetentionDays, TimeOnly AudioDeletionTimeOfDay,
-    bool ApiAccessEnabled);
+    bool ApiAccessEnabled, int LlmTimeoutSeconds);
 public record UpdatePlatformSettingsRequest(
     long StarterQuotaBytes, long MaxQuotaBytes,
     MinutesGenerationMode MinutesGenerationMode = MinutesGenerationMode.SingleCall,
     bool AutoDeleteAudioEnabled = false,
     int AudioRetentionDays = PlatformSettings.DefaultAudioRetentionDays,
     TimeOnly AudioDeletionTimeOfDay = default,
-    bool ApiAccessEnabled = false);
+    bool ApiAccessEnabled = false,
+    int LlmTimeoutSeconds = PlatformSettings.DefaultLlmTimeoutSeconds);
 /// <summary>Result of a manual "run the audio-retention pass now" trigger: how many recordings had audio deleted.</summary>
 public record AudioRetentionRunResult(int Deleted);
 /// <summary>Result of a manual "backfill tags now" trigger: how many extraction jobs were ENQUEUED (the

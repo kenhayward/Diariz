@@ -140,7 +140,12 @@ Protection, keyring on the `DataProtection:KeysPath` volume) and is **write-only
 only `hasApiKey`). The resolved config also carries an optional **`reasoning_effort`** (`UserSettings.ReasoningEnabled`/
 `ReasoningEffort` ?? server `Summarization:ReasoningEnabled`/`ReasoningEffort`); when reasoning is on, every LLM
 client (summarise / actions / translation / chat) adds the field to its `/chat/completions` body, and when off the
-field is **omitted entirely** so non-reasoning endpoints aren't broken.
+field is **omitted entirely** so non-reasoning endpoints aren't broken. The **per-request timeout** is a single
+platform-wide value (`PlatformSettings.LlmTimeoutSeconds`, default 120, Platform-Admin-editable on Settings → Model
+Settings), applied by the resolvers and enforced via a linked `CancellationTokenSource` in each client; the typed
+`HttpClient`s themselves are registered with `Timeout = InfiniteTimeSpan` so that per-request value is the **only**
+cap (otherwise `HttpClient`'s default 100 s silently capped anything longer). The streaming chat client keeps the
+default timeout for its header phase and relies on client-disconnect for cancellation.
 
 - **Summarise (async).** `POST /api/recordings/{id}/summarize` sets status `Summarizing` and enqueues on a
   **second Redis stream `summarization-jobs`** (group `summarizers`). The API's **only stream consumer**,

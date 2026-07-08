@@ -13,6 +13,10 @@ public class PlatformSettings
     /// <summary>Default retention window (days) after which a recording's audio is eligible for auto-deletion.</summary>
     public const int DefaultAudioRetentionDays = 30;
 
+    /// <summary>Default per-request timeout (seconds) for every LLM call (summary, actions, minutes, tags,
+    /// translation, embeddings). Local models can be slow, so it is generous and admin-adjustable.</summary>
+    public const int DefaultLlmTimeoutSeconds = 120;
+
     public int Id { get; set; } = SingletonId;
 
     /// <summary>Storage quota (bytes of recorded audio) granted to each user at account creation.</summary>
@@ -39,4 +43,9 @@ public class PlatformSettings
     /// <summary>Master switch for user API access (personal <c>dz_api_</c> tokens). Off by default: no API key
     /// authenticates until the Platform Administrator opts in.</summary>
     public bool ApiAccessEnabled { get; set; }
+
+    /// <summary>Per-request timeout (seconds) applied to every LLM call platform-wide. The single authority
+    /// for the request-level timeout - the HTTP clients themselves have no cap - so slow local models can be
+    /// given room. Admin-editable on the Model Settings tab.</summary>
+    public int LlmTimeoutSeconds { get; set; } = DefaultLlmTimeoutSeconds;
 }

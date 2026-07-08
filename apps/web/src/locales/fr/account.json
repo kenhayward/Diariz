@@ -177,5 +177,8 @@
   "minutesModeLabel": "Génération du compte rendu",
   "minutesModeSingle": "Un seul appel (moins de jetons)",
   "minutesModePerSection": "Par section (meilleure structure)",
-  "minutesModeHint": "À l’échelle de la plateforme : comment le compte rendu est généré à partir d’un modèle. S’applique dès la prochaine exécution."
+  "minutesModeHint": "À l’échelle de la plateforme : comment le compte rendu est généré à partir d’un modèle. S’applique dès la prochaine exécution.",
+  "llmTimeoutLabel": "Délai d’expiration IA (secondes)",
+  "llmTimeoutHint": "Délai d’expiration par requête, à l’échelle de la plateforme, pour chaque appel IA (résumés, comptes rendus, actions, tags, plongements). Augmentez-le pour les modèles locaux lents. Par défaut 120.",
+  "llmTimeoutInvalid": "Le délai d’expiration IA doit être un nombre entier de secondes (au moins 5)."
 }

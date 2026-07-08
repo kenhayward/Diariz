@@ -177,5 +177,8 @@
   "minutesModeLabel": "Protokollerstellung",
   "minutesModeSingle": "Einzelaufruf (weniger Tokens)",
   "minutesModePerSection": "Pro Abschnitt (beste Struktur)",
-  "minutesModeHint": "Plattformweit: wie das Protokoll aus einer Vorlage erzeugt wird. Gilt ab dem nächsten Lauf."
+  "minutesModeHint": "Plattformweit: wie das Protokoll aus einer Vorlage erzeugt wird. Gilt ab dem nächsten Lauf.",
+  "llmTimeoutLabel": "KI-Timeout (Sekunden)",
+  "llmTimeoutHint": "Plattformweites Anfrage-Timeout für jeden KI-Aufruf (Zusammenfassungen, Protokolle, Aktionen, Tags, Embeddings). Für langsame lokale Modelle erhöhen. Standard 120.",
+  "llmTimeoutInvalid": "Das KI-Timeout muss eine ganze Zahl in Sekunden sein (mindestens 5)."
 }

@@ -62,7 +62,10 @@ describe("SettingsModal", () => {
       autoDeleteAudioEnabled: false,
       audioRetentionDays: 30,
       audioDeletionTimeOfDay: "03:00:00",
+      apiAccessEnabled: false,
+      llmTimeoutSeconds: 120,
     });
+    (api.updatePlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   });
 
   it("loads existing endpoint/model and indicates a key is set", async () => {
@@ -254,6 +257,44 @@ describe("SettingsModal", () => {
     expect(confirm).toHaveBeenCalled();
     await waitFor(() => expect(api.runTagBackfill).toHaveBeenCalled());
     expect(await screen.findByText(/3/)).toBeTruthy(); // "Queued tag extraction for 3 recording(s)."
+  });
+
+  it("shows the global LLM timeout (admin) on Model Settings, loaded from the API, and saves it", async () => {
+    authState.isPlatformAdmin = true;
+    // A distinct loaded value proves the field reads from platform settings (not just the initial default).
+    (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      starterQuotaBytes: 5 * 1024 ** 3, maxQuotaBytes: 50 * 1024 ** 3, minutesGenerationMode: "SingleCall",
+      autoDeleteAudioEnabled: false, audioRetentionDays: 30, audioDeletionTimeOfDay: "03:00:00",
+      apiAccessEnabled: false, llmTimeoutSeconds: 90,
+    });
+    renderModal();
+
+    const timeout = await screen.findByRole("spinbutton", { name: /llm timeout/i });
+    await waitFor(() => expect((timeout as HTMLInputElement).value).toBe("90")); // wait for the query to load
+    fireEvent.change(timeout, { target: { value: "300" } });
+    fireEvent.click(screen.getByRole("button", { name: /^ok$/i }));
+
+    await waitFor(() =>
+      expect(api.updatePlatformSettings).toHaveBeenCalledWith(expect.objectContaining({ llmTimeoutSeconds: 300 })),
+    );
+  });
+
+  it("rejects a sub-5-second LLM timeout", async () => {
+    authState.isPlatformAdmin = true;
+    (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      starterQuotaBytes: 5 * 1024 ** 3, maxQuotaBytes: 50 * 1024 ** 3, minutesGenerationMode: "SingleCall",
+      autoDeleteAudioEnabled: false, audioRetentionDays: 30, audioDeletionTimeOfDay: "03:00:00",
+      apiAccessEnabled: false, llmTimeoutSeconds: 90,
+    });
+    renderModal();
+
+    const timeout = await screen.findByRole("spinbutton", { name: /llm timeout/i });
+    await waitFor(() => expect((timeout as HTMLInputElement).value).toBe("90"));
+    fireEvent.change(timeout, { target: { value: "3" } });
+    fireEvent.click(screen.getByRole("button", { name: /^ok$/i }));
+
+    expect(await screen.findByText(/at least 5/i)).toBeTruthy(); // the specific invalid message
+    expect(api.updatePlatformSettings).not.toHaveBeenCalled();
   });
 
   it("renders chat tools and saves the master switch + per-tool overrides", async () => {

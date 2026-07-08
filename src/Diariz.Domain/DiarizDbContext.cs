@@ -171,6 +171,8 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.Property(s => s.AudioRetentionDays)
                 .HasDefaultValue(Entities.PlatformSettings.DefaultAudioRetentionDays);
             e.Property(s => s.AudioDeletionTimeOfDay).HasDefaultValue(new TimeOnly(3, 0));
+            e.Property(s => s.LlmTimeoutSeconds)
+                .HasDefaultValue(Entities.PlatformSettings.DefaultLlmTimeoutSeconds);
             e.HasData(new PlatformSettings
             {
                 Id = Entities.PlatformSettings.SingletonId,
@@ -180,6 +182,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 AutoDeleteAudioEnabled = false,
                 AudioRetentionDays = Entities.PlatformSettings.DefaultAudioRetentionDays,
                 AudioDeletionTimeOfDay = new TimeOnly(3, 0),
+                LlmTimeoutSeconds = Entities.PlatformSettings.DefaultLlmTimeoutSeconds,
             });
         });
 
