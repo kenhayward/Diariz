@@ -42,6 +42,15 @@ public class AttendeeFormatterTests
     }
 
     [Fact]
+    public void The_UNKNOWN_placeholder_counts_as_unidentified()
+    {
+        // Segments with no attributed speaker carry the literal "UNKNOWN" label (Segment.SpeakerLabel default).
+        Assert.Equal("1 unidentified attendee", AttendeeFormatter.Summarize(["UNKNOWN"]));
+        Assert.Equal("Ken Hayward and 4 unidentified attendees",
+            AttendeeFormatter.Summarize(["Ken Hayward", "UNKNOWN", "SPEAKER_00", "SPEAKER_02", "SPEAKER_03"]));
+    }
+
+    [Fact]
     public void Whitespace_names_are_ignored()
     {
         Assert.Equal("Alice and 1 unidentified attendee",
