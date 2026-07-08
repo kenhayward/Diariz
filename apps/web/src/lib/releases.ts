@@ -18,7 +18,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Transcribe & diarize** | Server-side WhisperX (word-level timestamps) with pyannote speaker diarization; speaker-labelled, editable, playable segments you can re-transcribe any time. |
 | **Speaker identification** | Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). |
 | **Notes** | Take your own note lines live during a meeting (timestamped, crash-safe); they steer the minutes and can be woven into an enhanced-notes section linking to the exact transcript moments. |
-| **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable, driven by reusable meeting-type templates. |
+| **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable, driven by reusable meeting-type templates with per-block layout control (break, Markdown, drag-to-reorder). |
 | **Action items** | Auto-extracted with owner and deadline, tracked across every meeting with completion and a person filter, linking back to the transcript. |
 | **Tag cloud** | Every meeting is auto-tagged with weighted topics; a Tags tab shows a weighted cloud and the meetings behind each tag. |
 | **Chat over transcripts** | Stream answers over one, several, or all meetings via your OpenAI-compatible model, with attachments and saved conversations. |

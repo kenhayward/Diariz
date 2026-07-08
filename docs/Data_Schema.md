@@ -326,7 +326,10 @@ and merged into the Calendar views tagged `ics:{Id}`; nothing from the feed is s
 Reusable minutes templates. A **Platform** type (`UserId` null) is created by a Platform Administrator and is
 shared read-only to everyone (the app seeds a standard set on startup, insert-if-missing by `Key`); a **Personal**
 type (`UserId` set) is a user's own, with full CRUD. `ContentJson` holds the structured template (an ordered list
-of H1/H2 sections whose blocks are boilerplate text, substituted recording values, or model prompts).
+of H1/H2 sections whose blocks are boilerplate text, substituted recording values, or model prompts). Each block
+also carries an optional **`breakAfter`** (`"none" | "line" | "paragraph"`) controlling the whitespace emitted
+after it when the minutes are composed; a null/absent value uses the legacy rule (a `field` glues to the preceding
+block, otherwise a paragraph break). It lives inside the existing `ContentJson` blob, so it needs **no migration**.
 
 | Column | Type | Notes |
 |---|---|---|
