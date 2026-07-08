@@ -18,7 +18,7 @@ module.exports = {
   protocols: [{ name: "Diariz", schemes: ["diariz"] }],
   directories: { output: "release", buildResources: "build" },
   // Loads the web app from the configured server, so the SPA itself isn't bundled.
-  files: ["src/**/*", "!src/**/*.test.js", "build/icon.png", "package.json"],
+  files: ["src/**/*", "!src/**/*.test.js", "build/icon.png", "build/trayTemplate.png", "build/trayTemplate@2x.png", "package.json"],
   win: {
     target: ["nsis"],
     icon: "build/icon.png",
@@ -28,6 +28,22 @@ module.exports = {
     perMachine: false,
     allowToChangeInstallationDirectory: true,
     shortcutName: "Diariz",
+  },
+  // macOS (unsigned proof-of-concept). `identity: null` skips code signing so it builds without an Apple
+  // Developer ID — the .dmg opens via right-click -> Open (Gatekeeper). Signing + notarization + a `zip`
+  // (Squirrel.Mac auto-update) target + `arch: "universal"` come with the Apple Developer enrolment.
+  // electron-builder converts the >=512px build/icon.png to .icns automatically.
+  mac: {
+    target: ["dmg"],
+    icon: "build/icon.png",
+    category: "public.app-category.productivity",
+    identity: null,
+    extendInfo: {
+      // Required or macOS silently denies mic access. Screen Recording (for system-audio capture) has no
+      // Info.plist string - it's a runtime TCC grant the user allows in System Settings on first capture.
+      NSMicrophoneUsageDescription:
+        "Diariz records your microphone to capture meetings for transcription.",
+    },
   },
   publish: generic
     ? { provider: "generic", url: process.env.DIARIZ_UPDATE_URL || "https://example.invalid/updates/", channel: "latest" }

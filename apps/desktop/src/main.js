@@ -6,7 +6,7 @@ const { app, BrowserWindow, Tray, Menu, Notification, desktopCapturer, ipcMain, 
 const Store = require("electron-store");
 const { normalizeServerUrl } = require("./url");
 const { trayRecorderItems, trayTooltip, notificationFor } = require("./recorderState");
-const { updateRestartItem, notificationForUpdate } = require("./updateState");
+const { updateRestartItem, notificationForUpdate, isNewerVersion } = require("./updateState");
 const { buildStartUrl, codeFromArgv, notificationForAuthError } = require("./desktopAuth");
 
 // In dev we load the Vite dev server directly and skip first-run setup.
@@ -80,7 +80,7 @@ function createMainWindow(url) {
     }
   });
 
-  // Close to tray rather than quitting (this is a tray-resident app).
+  // Close to tray/menu bar rather than quitting (this is a tray-resident app).
   mainWindow.on("close", (e) => {
     if (!isQuitting) {
       e.preventDefault();
@@ -308,6 +308,13 @@ function restartToUpdate() {
 }
 
 function checkForUpdates(manual) {
+  // macOS (unsigned POC): Squirrel.Mac can't auto-update an unsigned app and there is no mac feed, so use a
+  // lightweight GitHub-Releases check that opens the download page when a newer tag exists (Milestone B
+  // swaps this for electron-updater once the build is signed).
+  if (process.platform === "darwin") {
+    void checkForUpdatesMac(manual);
+    return;
+  }
   if (!autoUpdater) {
     if (manual) notifyUpdate("not-available", { manual: true, version: app.getVersion() });
     return;
@@ -319,9 +326,50 @@ function checkForUpdates(manual) {
   });
 }
 
+/// owner/repo parsed from package.json's repository URL (fork-friendly), or null.
+function githubRepo() {
+  try {
+    const url = require("../package.json").repository?.url || "";
+    const m = url.match(/github\.com[/:]([^/]+)\/([^/.]+)/i);
+    return m ? `${m[1]}/${m[2]}` : null;
+  } catch {
+    return null;
+  }
+}
+
+/// macOS manual update check: compare the app version against the latest GitHub release tag; if newer,
+/// notify and (on a manual check) open the Releases page. Automatic checks only notify, never auto-open.
+async function checkForUpdatesMac(manual) {
+  const repo = githubRepo();
+  if (!repo) return;
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
+      headers: { Accept: "application/vnd.github+json", "User-Agent": "Diariz" },
+    });
+    if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+    const data = await res.json();
+    if (isNewerVersion(app.getVersion(), data.tag_name)) {
+      if (Notification.isSupported()) {
+        new Notification({ title: "Diariz", body: `A new version (${data.tag_name}) is available` }).show();
+      }
+      if (manual) shell.openExternal(data.html_url || `https://github.com/${repo}/releases`);
+    } else if (manual) {
+      notifyUpdate("not-available", { manual: true, version: app.getVersion() });
+    }
+  } catch {
+    if (manual) notifyUpdate("error", { manual: true });
+  }
+}
+
 function setupAutoUpdater() {
-  // electron-updater only works in a packaged build (it reads app-update.yml).
+  // electron-updater only works in a packaged, signed build (Squirrel.Mac refuses unsigned; it also reads
+  // app-update.yml). On the unsigned macOS POC use the manual GitHub check instead of electron-updater.
   if (!app.isPackaged) return;
+  if (process.platform === "darwin") {
+    void checkForUpdatesMac(false);
+    setInterval(() => void checkForUpdatesMac(false), 6 * 60 * 60 * 1000);
+    return;
+  }
   autoUpdater = require("electron-updater").autoUpdater;
   autoUpdater.autoDownload = true; // fetch in the background
   autoUpdater.autoInstallOnAppQuit = true; // also apply on a normal quit
@@ -380,11 +428,23 @@ function refreshTray() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "Open Diariz", click: () => showMainWindow() },
+      {
+        label: "Open in Browser",
+        click: () => {
+          const u = targetUrl();
+          if (u) shell.openExternal(u);
+        },
+      },
       ...(restart ? [{ label: restart.label, click: restartToUpdate }] : []),
       { type: "separator" },
       ...recordItems,
       { type: "separator" },
-      { label: "Start with Windows", type: "checkbox", checked: openAtLogin(), click: toggleOpenAtLogin },
+      {
+        label: process.platform === "darwin" ? "Open at Login" : "Start with Windows",
+        type: "checkbox",
+        checked: openAtLogin(),
+        click: toggleOpenAtLogin,
+      },
       { label: "Check for Updates…", click: () => checkForUpdates(true) },
       { label: "Settings…", click: () => showSetupWindow() },
       { label: "Quit", click: () => { isQuitting = true; app.quit(); } },
@@ -392,10 +452,26 @@ function refreshTray() {
   );
 }
 
+/// macOS menu-bar icon: a monochrome Template image (black-on-transparent) that macOS recolours for the
+/// light/dark menu bar. Named `...Template` and flagged, so it's icon-only (no text - a title alongside the
+/// icon made the item too wide and it fell behind the notch). The @2x variant is picked up automatically.
+function macTrayIcon() {
+  const img = nativeImage.createFromPath(path.join(__dirname, "..", "build", "trayTemplate.png"));
+  img.setTemplateImage(true);
+  return img;
+}
+
 function buildTray() {
-  const trayIcon = ICON.isEmpty() ? ICON : ICON.resize({ width: 16, height: 16 });
+  const trayIcon =
+    process.platform === "darwin"
+      ? macTrayIcon()
+      : ICON.isEmpty()
+        ? ICON
+        : ICON.resize({ width: 16, height: 16 });
   tray = new Tray(trayIcon);
-  tray.on("click", () => showMainWindow());
+  // Windows: left-click opens the window, right-click shows the menu. macOS: a click shows the menu-bar
+  // dropdown (don't bind a click handler or it steals the click; the menu's "Open Diariz" opens the window).
+  if (process.platform !== "darwin") tray.on("click", () => showMainWindow());
   refreshTray();
 }
 
@@ -412,8 +488,8 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   // Windows shows this as the toast attribution and groups taskbar/notifications;
-  // without it, notifications are titled "Electron". Match the installer's appId.
-  app.setAppUserModelId("com.diariz.desktop");
+  // without it, notifications are titled "Electron". Match the installer's appId. Windows-only.
+  if (process.platform === "win32") app.setAppUserModelId("com.diariz.desktop");
 
   // Own the diariz:// scheme so Google sign-in deep links come back to this app. In dev (unpackaged)
   // Windows needs the explicit exec path + script arg; packaged builds register it via the installer.
@@ -434,8 +510,15 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.whenReady().then(() => {
-    // No app menu — this is a tray-resident shell; keep just the window's title bar.
-    Menu.setApplicationMenu(null);
+    // macOS needs a real app menu for the standard shortcuts (Cmd-Q to quit, Cmd-C/V/X/A in text fields
+    // like the setup URL / login, Cmd-M/W). On Windows this stays a menu-less tray shell.
+    if (process.platform === "darwin") {
+      Menu.setApplicationMenu(
+        Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }, { role: "windowMenu" }]),
+      );
+    } else {
+      Menu.setApplicationMenu(null);
+    }
     buildTray();
     if (targetUrl()) createMainWindow(targetUrl());
     else showSetupWindow();

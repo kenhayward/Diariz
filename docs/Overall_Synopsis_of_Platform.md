@@ -8,7 +8,7 @@ data model and object-storage layout see [`Data_Schema.md`](Data_Schema.md); for
 ## What it is
 
 Diariz is a **self-hostable, multi-user voice/meeting transcription platform**. You **record** (microphone,
-or Windows system/loopback audio via the desktop app) or **upload** an audio file; the server **transcribes
+or system audio via the desktop app - Windows loopback / macOS ScreenCaptureKit) or **upload** an audio file; the server **transcribes
 it with speaker diarization and word-level timestamps**; and you get speaker-labelled, timestamped segments
 you can rename, edit, play back, and re-transcribe. On top of the transcript it can **identify known speakers
 across recordings** (voiceprints), **summarise**, **extract action items**, **email/download** the
@@ -31,7 +31,7 @@ infrastructure services.
 | **Domain** | EF Core + Npgsql + pgvector | `src/Diariz.Domain` | Entities, `DiarizDbContext`, migrations (compiled into the API) |
 | **Worker** | Python: WhisperX (large-v3), pyannote 3.1, SpeechBrain ECAPA, CUDA | `src/Diariz.Worker` | GPU transcription → alignment → diarization → per-speaker voiceprints |
 | **Web** | React 19 + TypeScript + Vite + Tailwind v4 | `apps/web` | SPA UI (served by nginx in Docker) |
-| **Desktop** | Electron (Windows tray shell) | `apps/desktop` | Mic + Windows loopback capture, tray recording, auto-update; loads the web app from the server origin |
+| **Desktop** | Electron thin shell - Windows tray + **macOS (beta) menu-bar** | `apps/desktop` | Mic + system audio (Windows loopback / macOS ScreenCaptureKit), tray recording; auto-update on Windows, manual update check on macOS; loads the web app from the server origin |
 
 Infrastructure (via Docker Compose, project name **`diariz`**):
 
@@ -710,4 +710,6 @@ CI runs all four suites on a self-hosted Windows runner.
   `{userId}/attachments/…` and counted toward the quota).
 - **M3 — partial:** chat across transcripts (shipped); full embedding-backed RAG over `Segment.Embedding`
   (`vector(768)`, sized for `nomic-embed-text`) is scaffolded but not yet populated.
-- **M4 — planned:** packaging/TLS hardening, macOS desktop build (see the macOS guide).
+- **M4 — in progress:** packaging/TLS hardening; **macOS desktop app** shipped as an unsigned **beta**
+  (mic + ScreenCaptureKit system audio, menu-bar shell, manual update check) - signing/notarization +
+  auto-update + Sign in with Apple are the next macOS milestones (see the macOS guide).

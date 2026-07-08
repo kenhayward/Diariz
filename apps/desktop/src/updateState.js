@@ -42,4 +42,30 @@ function notificationForUpdate(kind, opts = {}) {
   }
 }
 
-module.exports = { updateRestartItem, notificationForUpdate };
+/// True when `latest` is a strictly greater Major.Minor.Build than `current`. Used by the macOS manual
+/// "Check for Updates" (which compares the app version against the latest GitHub release tag, since
+/// Squirrel.Mac auto-update needs a signed build). Tolerates a leading "v"/whitespace on the tag; returns
+/// false for missing/unparseable input so a bad API response never prompts a phantom update.
+function isNewerVersion(current, latest) {
+  const parse = (v) => {
+    if (typeof v !== "string") return null;
+    const s = v.trim().replace(/^v/i, "");
+    if (s === "") return null;
+    // Number("") is 0, so reject empty segments explicitly ("", "0.105." etc. are not versions).
+    const nums = s.split(".").map((p) => (p === "" ? NaN : Number(p)));
+    return nums.every((n) => Number.isInteger(n) && n >= 0) ? nums : null;
+  };
+  const a = parse(current);
+  const b = parse(latest);
+  if (!a || !b) return false;
+  const len = Math.max(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    const x = a[i] ?? 0;
+    const y = b[i] ?? 0;
+    if (y > x) return true;
+    if (y < x) return false;
+  }
+  return false; // equal
+}
+
+module.exports = { updateRestartItem, notificationForUpdate, isNewerVersion };
