@@ -10,110 +10,30 @@ export const LICENSE = "AGPL-3.0";
 /// Short summary of what the app does today, shown in the About box (markdown). Update this whenever
 /// the app's scope changes.
 export const CAPABILITIES = `
-Diariz records audio - from your microphone (**choose a specific input and tune capture**, with a **live
-input-level meter** while recording, and **pause/resume** mid-recording for breaks or sensitive moments -
-paused audio is never captured), or Windows
-system/loopback audio via the desktop app
-(which can also **start and stop recording straight from its system-tray menu**) - or you can **upload
-an existing audio file** (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A), and it transcribes it server-side with
-**WhisperX** (word-level timestamps) and **pyannote** speaker
-diarization. You get speaker-labelled, timestamped segments you can rename, edit, and play back
-(per segment, per speaker, or the whole recording), and can re-transcribe at any time. Edits are kept **separately from
-the model's original words**, so a **Show original / Show revised** toggle always gets you back to what the
-model said. You can **merge** consecutive same-speaker rows into single blocks and **email yourself the
-transcript**. The recording page is organised into **tabs** - Overview, Minutes, Actions, Notes, Speakers,
-Transcript, and Attachments - each with its own toolbar. The **Notes tab** holds your own note lines for the
-meeting (sparse trigger phrases, questions, observations); timestamped lines jump to that moment in the
-transcript, and you can also jot **prep notes on an upcoming Google Calendar meeting** (from its preview page) -
-they attach to the recording automatically once it is linked to that meeting. While recording, a **live notes
-panel** lets you take those notes in the moment - each line is stamped at the second you wrote it, survives a
-crash, and lands on the recording's Notes tab automatically after upload. Your notes then **shape the meeting
-minutes**: every section gives weight to what you flagged, and templates can include an **Enhanced notes**
-section where each of your lines is expanded from the transcript - your words kept verbatim in bold, the
-expansion beside them, with **clickable links to the exact transcript moments** (and anything the meeting
-never covered is kept and marked "not discussed", never silently dropped).
+Diariz turns your meetings into searchable, speaker-labelled transcripts, then summarises, tags, and lets you chat over them.
 
-It can **identify speakers** across recordings: enrol a person from a recording's speaker and Diariz
-recognises that voice in later recordings automatically (using **SpeechBrain ECAPA** voiceprints), with
-manual reassignment. A **People** screen manages enrolled voiceprints - rename, prune training samples,
-merge duplicates, and erase one or all (GDPR) of the stored biometric voiceprints.
+| Feature | Description |
+| --- | --- |
+| **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume) or system audio via the desktop app; or upload files (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A). |
+| **Transcribe & diarize** | Server-side WhisperX (word-level timestamps) with pyannote speaker diarization; speaker-labelled, editable, playable segments you can re-transcribe any time. |
+| **Speaker identification** | Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). |
+| **Notes** | Take your own note lines live during a meeting (timestamped, crash-safe); they steer the minutes and can be woven into an enhanced-notes section linking to the exact transcript moments. |
+| **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable, driven by reusable meeting-type templates. |
+| **Action items** | Auto-extracted with owner and deadline, tracked across every meeting with completion and a person filter, linking back to the transcript. |
+| **Tag cloud** | Every meeting is auto-tagged with weighted topics; a Tags tab shows a weighted cloud and the meetings behind each tag. |
+| **Chat over transcripts** | Stream answers over one, several, or all meetings via your OpenAI-compatible model, with attachments and saved conversations. |
+| **Search** | Keyword search across your library, upgraded to semantic (meaning-based) search when an embeddings endpoint is configured. |
+| **Chat tools** | The assistant searches your library with built-in tools (who-said-what, attendees, talk time, summaries, email-to-self) and links to the exact segment. |
+| **Connect Claude (MCP)** | Connect Claude to your own meetings via OAuth (claude.ai) or a personal token (Claude Desktop/Code). |
+| **Translate** | Translate a whole transcript or a single segment, stored as revisions you can flip back. |
+| **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) and optionally feed them to chat. |
+| **Organise & merge** | Sections and sub-sections with drag-and-drop; browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
+| **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
+| **API access** | Generate a personal API token (when enabled) to call the REST API as yourself, with a built-in API reference. |
+| **Multi-user & roles** | Standard / Administrator / Platform Administrator with an approval lifecycle, per-user isolation, and Light/Dark/Auto themes. |
+| **Admin controls** | Storage quotas, optional audio auto-deletion, a global AI request timeout, and whole-platform backup & restore. |
 
-It can **summarise** recordings and generate a full set of **professional meeting minutes** (headings, lists,
-tables - no emojis) that you can edit in a rich editor, re-create, and **email to yourself** (with or without
-the recording's attachments). Minutes are driven by a **meeting type** - a reusable template of sections,
-boilerplate, substituted values, and model prompts (Customer, Cadence Call, 1:1, Interview, Town Hall, Webinar,
-and more ship as standard). Pick a type from the Minutes toolbar to re-run the minutes in that structure, and
-build your own or edit the shared ones in a **Manage Meeting Types** editor; a Platform Administrator can also
-choose whether minutes generate with one call per section or a single call. It **automatically extracts action items** (with actor and deadline) as part of
-the pipeline into an editable table, and **tracks them across all your meetings** in a dedicated **Actions** view - filter by person, mark
-items done (with a completion date), and jump from an action back to the transcript it came from. It can
-**translate** a transcript (segments, summary, and actions) into your chosen language, and let you
-**chat across one or more transcripts - or all your meetings at once** (an "All meetings" mode) - with file
-attachments, a context-usage dial, and saved
-conversations - using an OpenAI-compatible LLM endpoint you configure. The chat can also call **built-in
-tools** that search your **whole transcript library** - and, when an embeddings endpoint is configured, that
-search is **semantic**, finding the right moments by **meaning as well as keywords** (so "worried about the
-budget" can surface a meeting that said "we can't afford this quarter"). The tools answer who said a phrase,
-what a person said about a topic,
-which recordings exist or mention something, action items, summaries, attendees, talk time, the lines
-around a moment, and a recording's **full transcript, meeting minutes, or details** - answering with
-**When · Who · What** and **linking back to the transcript** (click a link
-to open it and jump to the exact segment). It can also **email you** (yourself only) a message it composes -
-a summary, action items, or notes - always delivering to your own registered address (and it **files a copy
-of that email onto the transcript** as a Markdown attachment), or **save that output
-to a transcript as a Markdown attachment**. Toggle
-the tools on, and choose which, under Settings → Chat Tools; under Settings → Model Settings you
-can also **enable reasoning** (and pick a level) for reasoning-capable models. You can **attach supporting
-documents** (files or URLs) to a recording, open them from the transcript page, and optionally **feed them
-to the chat** (PDFs, text, Office docs, emails/calendar invites are read into text; URLs are fetched).
-You can also **connect Claude to your transcripts over MCP**, two ways: **sign in** from the **Claude website**
-(add Diariz as a custom connector and approve it on a consent screen - an OAuth flow, no token to copy), or
-generate a **personal access token** in Preferences → Claude / MCP access and paste it into Claude Desktop or
-Code. Either way Claude uses the same built-in tools to search and read *your* meetings (and can email a summary
-to you), **@-mention a specific meeting** (its transcript or minutes, exposed as MCP resources), or run a
-**prompt starter** (summarise your last meeting, list open action items, find where a topic was discussed) - all
-scoped to your account. You manage both **tokens and web connections** (with one-click **revoke**) in the same
-Preferences section. When a Platform Administrator has enabled it (Settings → Integration), you can also
-generate a **personal API token** (Preferences → Developers) to call the Diariz **REST API** directly as
-yourself - acting with your own permissions, over your own data - and browse a **built-in API reference**
-(Developers → View API reference) to explore the available calls.
-Recordings organise into **sections** (with sub-sections) and drag-and-drop ordering, can be **merged**
-into one, and can be browsed as a **list, a calendar, a cross-meeting Actions list, or a tag cloud** (the
-left panel is **Meetings**). Every meeting is **tagged automatically** after transcription - the AI model
-extracts the concepts and themes it was about - and the **Tags** tab shows them as a weighted cloud (bigger =
-more central across your meetings): click a tag to list the meetings that carry it, or expand the cloud into
-a full-size view. A **status bar** along the bottom shows live progress (transcribing, summarising, merging,
-extracting, uploading) and your storage usage, transcription usage, and total transcripts.
-
-Diariz is **multi-user** with role-based access: people request access (or an administrator adds them),
-an administrator approves, and each user sets up their own account and keeps their own private
-recordings, transcripts, and chats. Users can also **sign in with Google** (when an administrator has
-configured it) - Diariz reads their name, email, and profile picture (shown in the account menu), still
-subject to admin approval for new sign-ups. Google sign-in works in the web app **and the desktop app**
-(the desktop client runs consent in your system browser and returns you to the app). A Google-linked user can opt in (Preferences → Google) to let
-Diariz **read their Google Calendar** (read-only) - so a recording is **linked to the meeting it
-belongs to** (auto-saved on open, or picked by hand even when the times don't line up), its Overview shows
-the meeting's **full invite details** (time, location, organiser, attendees, description), and the
-**Calendar tab overlays their meetings** (a merged day list; a linked recording and its meeting show as one
-row, and a meeting with no recording opens a preview you can link a recording to) - a revocable grant they can
-disconnect any time. They can **choose which of their Google calendars** to consider (Preferences → Google
-Account); only the selected calendars are used for matching and shown on the Calendar tab. Beyond Google, anyone can **subscribe to external iCalendar (.ics) feeds** (public team
-or shared calendars) in **Preferences → Calendar feeds**, each with its own name and colour, and those meetings
-appear on the Calendar tab too - no Google connection required. Each user has a **storage quota** (audio): the Platform
-Administrator sets the starter and maximum, any administrator can raise an individual user, and your
-usage shows in the account menu. To reclaim space, the Platform Administrator can turn on **automatic audio
-deletion** - a nightly job removes the original audio of recordings older than a chosen number of days
-(the transcript is always kept), and any recording can be **protected** so its audio is never deleted. The
-Platform Administrator can also **back up and restore the whole
-platform** (database + stored files) as a single transferable archive from Settings → Maintenance.
-
-**Preferences** is a tabbed window (Profile, Google Account, Calendar Feeds, Claude Access, Developers when API
-access is enabled, Voice Prints):
-your **profile** holds a display name, job title, company, job/company descriptions, and a LinkedIn account
-name, and a **theme** (Light/Dark/Auto) that is saved to your account and follows you across devices.
-The interface is **localized** - pick your language (English, Spanish, French, German today) at signup or
-in Preferences, and downloaded/emailed transcripts use it too. Translations are community-extensible via
-simple JSON files.
+The interface is localized (English, Spanish, French, German), and languages are community-extensible via simple JSON files.
 `.trim();
 
 export interface Release {
@@ -129,6 +49,20 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.108.1",
+    date: "2026-07-08",
+    pr: 245,
+    headline: "Condensed the About box and README into feature tables",
+    summary:
+      "The About box (and the GitHub README) had grown into long prose as the app gained features. Both are " +
+      "now a concise two-column table - one line per feature - so you can scan what Diariz does at a glance. " +
+      "The full prose description of every feature moved to docs/features.md on GitHub, linked from the README. " +
+      "No functional change. Server redeploy only.",
+    changed: [
+      "About box: the capabilities summary is now a compact feature/description table instead of long prose.",
+    ],
+  },
   {
     version: "0.108.0",
     date: "2026-07-08",

@@ -119,12 +119,17 @@ is **Major.Minor.Build** (currently `0.x`).
   understand the impact), and `added`/`changed`/`fixed` bullet lists as applicable.
 - **When the app's scope changes**, update the About-box `CAPABILITIES` summary in the same file (and
   the disclaimers list in `apps/web/src/components/AboutModal.tsx` if a new third-party library/model
-  is introduced).
+  is introduced). `CAPABILITIES` is a **concise two-column markdown table** (`| Feature | Description |`,
+  one line per feature) — add/edit a row, don't reintroduce long prose (the About box renders it via
+  `renderMarkdown`; `.chat-md` table CSS in `apps/web/src/index.css` styles it).
 - **Keep `README.md` current.** When a PR changes what the app does — a new user-facing feature, a stack
-  change, or a shipped roadmap milestone — update the README's **Features**, **Architecture**, and
-  **Roadmap** sections in the same PR (it mirrors the `CAPABILITIES`/release-notes edits above). The README
-  deliberately does **not** carry a version number (it would drift) — the version lives only in `version.json`
-  / `releases.ts`.
+  change, or a shipped roadmap milestone — update the README in the same PR (it mirrors the
+  `CAPABILITIES`/release-notes edits above). The README's **Features** section is a **two-column table**
+  (`| Feature | Description |`, one concise line each) that links to **`docs/features.md`** — the canonical
+  **full prose** feature list. On a feature change, update **all three in lockstep**: the README Features
+  table row, the matching `docs/features.md` bullet, and the About-box `CAPABILITIES` table row (plus
+  **Architecture**/**Roadmap** in the README when relevant). The README deliberately does **not** carry a
+  version number (it would drift) — the version lives only in `version.json` / `releases.ts`.
 - **Keep the architecture & schema docs current.** Two reference docs must not be allowed to drift:
   `docs/Overall_Synopsis_of_Platform.md` (components, data flow, cross-boundary contracts, deployment) and
   `docs/Data_Schema.md` (every Postgres table + column/key/index/cascade, the pgvector columns/dimensions, the
