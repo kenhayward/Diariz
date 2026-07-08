@@ -10,9 +10,20 @@ import GoogleSignInButton from "../components/GoogleSignInButton";
 
 export default function Login() {
   const { t } = useTranslation("auth");
-  const { login } = useAuth();
+  const { login, isAuthed } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
+
+  // Leave the login screen the moment we're authenticated - by the password form below, OR by a token
+  // adopted out-of-band. The desktop shell delivers the Google sign-in token over IPC (auth.tsx's
+  // onAuthToken -> setSession), which flips auth state without ever going through onSubmit; without this
+  // the user would sit on the login screen despite being signed in. Honour an internal ?returnTo=.
+  useEffect(() => {
+    if (!isAuthed) return;
+    const returnTo = params.get("returnTo");
+    const dest = returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "/";
+    navigate(dest, { replace: true });
+  }, [isAuthed, params, navigate]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -48,11 +59,8 @@ export default function Login() {
     setError(null);
     try {
       await login(email, password);
-      // Honour an internal ?returnTo= (e.g. the OAuth consent screen sends the user here first). Only
-      // same-app absolute paths are allowed, never an external URL.
-      const returnTo = params.get("returnTo");
-      const dest = returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "/";
-      navigate(dest);
+      // Navigation is handled by the isAuthed effect above (login() flips auth state), so both the
+      // password path and the desktop token path leave the login screen the same way.
     } catch (err) {
       // 401 from the API has no body and genuinely means bad credentials;
       // anything else (500, network) shows the real reason.

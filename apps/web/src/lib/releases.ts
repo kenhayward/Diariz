@@ -127,6 +127,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.105.2",
+    date: "2026-07-07",
+    pr: 239,
+    headline: "Fix: desktop Google sign-in now completes",
+    summary:
+      "Signing in with Google from the desktop app returned you to the app but left you on the login screen. " +
+      "The sign-in actually succeeded - you were authenticated - but the login page didn't move you on. The " +
+      "login screen now redirects as soon as you're signed in, however that happens (the desktop app hands the " +
+      "Google token to the app in the background). Server redeploy (web) only.",
+    fixed: [
+      "Desktop Google sign-in: the login screen now redirects to the app once authenticated, instead of stranding you on the login form after a successful sign-in.",
+    ],
+  },
+  {
     version: "0.105.1",
     date: "2026-07-07",
     pr: 238,
