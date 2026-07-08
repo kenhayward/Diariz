@@ -7,7 +7,8 @@ import type { MeetingType, MeetingTypeContent, TemplateBlock, TemplateBlockKind 
 import { groupMeetingTypes } from "../lib/meetingTypes";
 import {
   FIELD_OPTIONS, addSection, removeSection, updateSection, moveSection,
-  addBlock, removeBlock, updateBlock, moveBlock, contentError, emptyContent,
+  addBlock, removeBlock, updateBlock, moveBlock, moveBlockCrossSection, normalizeBreaks,
+  contentError, emptyContent,
 } from "../lib/meetingTypeDraft";
 import { MEETING_TYPE_ICONS } from "./MeetingTypeIcon";
 import MeetingTypeIcon from "./MeetingTypeIcon";
@@ -29,7 +30,7 @@ const DEFAULT_COLOR = "#5C6BC0";
 function draftFrom(t: MeetingType): Draft {
   return {
     id: t.id, groupName: t.groupName, title: t.title, overview: t.overview,
-    icon: t.icon || "document", color: t.color || DEFAULT_COLOR, content: t.content, isPlatform: t.isPlatform,
+    icon: t.icon || "document", color: t.color || DEFAULT_COLOR, content: normalizeBreaks(t.content), isPlatform: t.isPlatform,
   };
 }
 
@@ -320,6 +321,7 @@ function ContentEditor({
   t: (k: string) => string;
 }) {
   const dragSection = useRef<number | null>(null);
+  const dragBlock = useRef<{ section: number; index: number } | null>(null);
 
   return (
     <div className="border-t pt-3 dark:border-gray-700">
@@ -375,7 +377,17 @@ function ContentEditor({
               />
             </div>
 
-            <div className="space-y-2 p-2">
+            <div
+              className="space-y-2 p-2"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                if (dragBlock.current) {
+                  e.stopPropagation();
+                  onChange(moveBlockCrossSection(content, dragBlock.current, { section: si, index: section.blocks.length }));
+                }
+                dragBlock.current = null;
+              }}
+            >
               {section.blocks.length === 0 && (
                 <p className="text-xs text-gray-400 dark:text-gray-500">{t("workspace:mtNoBlocks")}</p>
               )}
@@ -393,6 +405,11 @@ function ContentEditor({
                   onText={(text) => onChange(updateBlock(content, si, bi, { text }))}
                   onField={(field) => onChange(updateBlock(content, si, bi, { field }))}
                   onBreakAfter={(breakAfter) => onChange(updateBlock(content, si, bi, { breakAfter: breakAfter as TemplateBlock["breakAfter"] }))}
+                  onDragStart={() => { dragBlock.current = { section: si, index: bi }; dragSection.current = null; }}
+                  onBlockDrop={() => {
+                    if (dragBlock.current) onChange(moveBlockCrossSection(content, dragBlock.current, { section: si, index: bi }));
+                    dragBlock.current = null;
+                  }}
                   onMove={(to) => onChange(moveBlock(content, si, bi, to))}
                   onRemove={() => onChange(removeBlock(content, si, bi))}
                 />
@@ -442,7 +459,7 @@ function AutoGrowTextarea({
 }
 
 function BlockRow({
-  kind, text, field, breakAfter, index, count, t, onText, onField, onBreakAfter, onMove, onRemove,
+  kind, text, field, breakAfter, index, count, t, onText, onField, onBreakAfter, onDragStart, onBlockDrop, onMove, onRemove,
 }: {
   section: number;
   index: number;
@@ -455,6 +472,8 @@ function BlockRow({
   onText: (v: string) => void;
   onField: (v: string) => void;
   onBreakAfter: (v: string) => void;
+  onDragStart: () => void;
+  onBlockDrop: () => void;
   onMove: (to: number) => void;
   onRemove: () => void;
 }) {
@@ -464,7 +483,20 @@ function BlockRow({
     : t("workspace:mtKindPrompt");
 
   return (
-    <div className="flex items-start gap-2 rounded border px-2 py-1.5 dark:border-gray-700">
+    <div
+      className="flex items-start gap-2 rounded border px-2 py-1.5 dark:border-gray-700"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onBlockDrop(); }}
+    >
+      <span
+        draggable
+        onDragStart={onDragStart}
+        aria-label={t("workspace:mtDragBlock")}
+        title={t("workspace:mtDragBlock")}
+        className="mt-1 cursor-grab select-none text-gray-400"
+      >
+        ⠿
+      </span>
       <span className="mt-1 w-16 shrink-0 text-xs font-medium uppercase text-gray-400">{label}</span>
       <div className="min-w-0 flex-1">
         {kind === "field" ? (
