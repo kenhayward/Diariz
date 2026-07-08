@@ -384,7 +384,12 @@ function refreshTray() {
       { type: "separator" },
       ...recordItems,
       { type: "separator" },
-      { label: "Start with Windows", type: "checkbox", checked: openAtLogin(), click: toggleOpenAtLogin },
+      {
+        label: process.platform === "darwin" ? "Open at Login" : "Start with Windows",
+        type: "checkbox",
+        checked: openAtLogin(),
+        click: toggleOpenAtLogin,
+      },
       { label: "Check for Updates…", click: () => checkForUpdates(true) },
       { label: "Settings…", click: () => showSetupWindow() },
       { label: "Quit", click: () => { isQuitting = true; app.quit(); } },
@@ -412,8 +417,8 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   // Windows shows this as the toast attribution and groups taskbar/notifications;
-  // without it, notifications are titled "Electron". Match the installer's appId.
-  app.setAppUserModelId("com.diariz.desktop");
+  // without it, notifications are titled "Electron". Match the installer's appId. Windows-only.
+  if (process.platform === "win32") app.setAppUserModelId("com.diariz.desktop");
 
   // Own the diariz:// scheme so Google sign-in deep links come back to this app. In dev (unpackaged)
   // Windows needs the explicit exec path + script arg; packaged builds register it via the installer.
@@ -434,8 +439,15 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.whenReady().then(() => {
-    // No app menu — this is a tray-resident shell; keep just the window's title bar.
-    Menu.setApplicationMenu(null);
+    // macOS needs a real app menu for the standard shortcuts (Cmd-Q to quit, Cmd-C/V/X/A in text fields
+    // like the setup URL / login, Cmd-M/W). On Windows this stays a menu-less tray shell.
+    if (process.platform === "darwin") {
+      Menu.setApplicationMenu(
+        Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }, { role: "windowMenu" }]),
+      );
+    } else {
+      Menu.setApplicationMenu(null);
+    }
     buildTray();
     if (targetUrl()) createMainWindow(targetUrl());
     else showSetupWindow();
