@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth";
-import type { MeetingType, MeetingTypeContent, TemplateBlockKind } from "../lib/types";
+import type { MeetingType, MeetingTypeContent, TemplateBlock, TemplateBlockKind } from "../lib/types";
 import { groupMeetingTypes } from "../lib/meetingTypes";
 import {
   FIELD_OPTIONS, addSection, removeSection, updateSection, moveSection,
@@ -387,10 +387,12 @@ function ContentEditor({
                   kind={block.kind}
                   text={block.text ?? ""}
                   field={block.field ?? "date"}
+                  breakAfter={block.breakAfter ?? "paragraph"}
                   count={section.blocks.length}
                   t={t}
                   onText={(text) => onChange(updateBlock(content, si, bi, { text }))}
                   onField={(field) => onChange(updateBlock(content, si, bi, { field }))}
+                  onBreakAfter={(breakAfter) => onChange(updateBlock(content, si, bi, { breakAfter: breakAfter as TemplateBlock["breakAfter"] }))}
                   onMove={(to) => onChange(moveBlock(content, si, bi, to))}
                   onRemove={() => onChange(removeBlock(content, si, bi))}
                 />
@@ -410,8 +412,37 @@ function ContentEditor({
   );
 }
 
+/// A textarea that grows to fit its content (no inner scrollbar), for the raw-markdown block text.
+function AutoGrowTextarea({
+  value, onChange, placeholder, ariaLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  ariaLabel: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      aria-label={ariaLabel}
+      rows={1}
+      className="w-full resize-none overflow-hidden rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+    />
+  );
+}
+
 function BlockRow({
-  kind, text, field, index, count, t, onText, onField, onMove, onRemove,
+  kind, text, field, breakAfter, index, count, t, onText, onField, onBreakAfter, onMove, onRemove,
 }: {
   section: number;
   index: number;
@@ -419,9 +450,11 @@ function BlockRow({
   kind: TemplateBlockKind;
   text: string;
   field: string;
+  breakAfter: string;
   t: (k: string) => string;
   onText: (v: string) => void;
   onField: (v: string) => void;
+  onBreakAfter: (v: string) => void;
   onMove: (to: number) => void;
   onRemove: () => void;
 }) {
@@ -446,16 +479,28 @@ function BlockRow({
             ))}
           </select>
         ) : (
-          <textarea
-            value={text}
-            onChange={(e) => onText(e.target.value)}
-            rows={kind === "prompt" ? 2 : 1}
-            placeholder={kind === "prompt" ? t("workspace:mtPromptPlaceholder") : t("workspace:mtBoilerplatePlaceholder")}
-            aria-label={label}
-            className="w-full resize-y rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          />
+          <div>
+            <AutoGrowTextarea
+              value={text}
+              onChange={onText}
+              placeholder={kind === "prompt" ? t("workspace:mtPromptPlaceholder") : t("workspace:mtBoilerplatePlaceholder")}
+              ariaLabel={label}
+            />
+            <span className="mt-0.5 block text-[11px] text-gray-400 dark:text-gray-500">{t("workspace:mtMarkdownHint")}</span>
+          </div>
         )}
       </div>
+      <select
+        value={breakAfter}
+        onChange={(e) => onBreakAfter(e.target.value)}
+        aria-label={t("workspace:mtBreakAfter")}
+        title={t("workspace:mtBreakAfter")}
+        className="mt-1 shrink-0 rounded border px-1 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+      >
+        <option value="none">{t("workspace:mtBreakNone")}</option>
+        <option value="line">{t("workspace:mtBreakLine")}</option>
+        <option value="paragraph">{t("workspace:mtBreakParagraph")}</option>
+      </select>
       <KebabMenu
         label={t("workspace:mtBlockActions")}
         actions={[
