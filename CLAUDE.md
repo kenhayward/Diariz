@@ -20,7 +20,7 @@ Four deployables that communicate across process/language boundaries:
 | Domain model + migrations | EF Core + Postgres/pgvector | `src/Diariz.Domain` |
 | Transcription worker | Python: WhisperX (large-v3) + pyannote 3.1, GPU | `src/Diariz.Worker` |
 | Web UI | React 19 + TS + Vite + Tailwind v4 | `apps/web` |
-| Desktop shell | Electron (mic + Windows loopback capture) | `apps/desktop` |
+| Desktop shell | Electron (mic + system audio; Windows tray + macOS beta menu-bar) | `apps/desktop` |
 
 **End-to-end flow:** client records → `POST /api/recordings` (multipart) → API stores the blob in
 MinIO and a `Recording` row in Postgres → API creates a `Transcription` row (versioned) and
@@ -142,8 +142,10 @@ is **Major.Minor.Build** (currently `0.x`).
 - **State the deployment surface in every PR.** When opening a PR, say whether shipping it needs a
   **desktop release** (a new installer, cut by pushing a `v*` tag) or just a **server redeploy**. The
   desktop app is a thin shell that loads the web app from the server origin, so it only needs a new release
-  when the PR touches the **desktop shell** — `apps/desktop/src/**`, `electron-builder.config.js`, or desktop
-  dependencies. **Web (`apps/web`) and API (`src/Diariz.Api`) changes ship by redeploying the server** and
+  when the PR touches the **desktop shell** — `apps/desktop/src/**`, `apps/desktop/build/**`,
+  `electron-builder.config.js`, or desktop dependencies. A desktop release now covers both the **Windows
+  installer** and the **macOS `.dmg`** (built on a Mac). **Web (`apps/web`) and API (`src/Diariz.Api`)
+  changes ship by redeploying the server** and
   are picked up by installed desktop apps automatically. A lockstep version bump to `apps/desktop/package.json`
   alone does **not** require a desktop release (desktop version numbers may skip). Docs/CI-only PRs need
   neither — say so.
@@ -254,20 +256,23 @@ build doesn't depend on vitest). Tests are `src/**/*.test.ts(x)`, excluded from 
 via `tsconfig.json`. No DOM/component testing library is wired yet — add `@testing-library/react`
 (+ the react plugin in `vitest.config.ts`) when you start testing components.
 
-### Desktop (Electron — Windows system-tray app)
+### Desktop (Electron — Windows system-tray + macOS menu-bar app)
 ```bash
 cd apps/desktop && npm run dev    # DIARIZ_DEV=1 → loads the Vite dev server, skips first-run setup
-npm test                          # pure unit tests (node --test, no Electron); npm run dist → NSIS installer
+npm test                          # pure unit tests (node --test, no Electron)
+npm run dist                      # NSIS installer on Windows; unsigned .dmg on macOS (run on a Mac)
 ```
 A **thin tray shell** (`apps/desktop/src/`): `main.js` owns the tray, single-instance
 lock, close-to-tray, and a **first-run setup window** (`setup.html`) that stores the **server address**
 (validated via `GET {url}/health`) in `electron-store`. The main window then **loads the web app from that
 server origin** (so the SPA is same-origin — no bundled SPA, no API-base override needed; the old
-`__DIARIZ_API_BASE__` is gone). Only the shell can capture **system/loopback** audio
-(`setDisplayMediaRequestHandler` → `audio: "loopback"`, Windows only); it exposes `window.diariz.isElectron`
-to enable the "System audio" recorder option. Releases: `electron-builder` (NSIS) via
-`.github/workflows/desktop-release.yml` on a `v*` tag → GitHub Releases (or a self-hosted feed when
-`DIARIZ_PUBLISH=generic`).
+`__DIARIZ_API_BASE__` is gone). Only the shell can capture **system audio**
+(`setDisplayMediaRequestHandler` → `audio: "loopback"`; the **same** handler captures **macOS
+ScreenCaptureKit** system audio on Electron 43 / macOS 13+, granted via the Screen Recording permission - no
+mac-specific code needed); it exposes `window.diariz.isElectron` to enable the "System audio" recorder
+option. Releases: `electron-builder` via `.github/workflows/desktop-release.yml` on a `v*` tag → GitHub
+Releases (or a self-hosted feed when `DIARIZ_PUBLISH=generic`). The tag currently builds **Windows only**
+(NSIS); the unsigned macOS `.dmg` is built by hand on a Mac until the signed CI job lands.
 
 **Tray-driven recording (phase 2).** The tray menu can start/stop recording. Recording itself always
 happens in the **web app's** `MediaRecorder` (the desktop has no recorder of its own), so the two sides
@@ -287,9 +292,23 @@ It auto-downloads in the background (on launch + every 6 h + a manual **Check fo
 `update-downloaded` it shows a notification and a **Restart to update (x.y.z)** tray item (→
 `autoUpdater.quitAndInstall()`; `autoInstallOnAppQuit` also applies it on a normal quit). The user-facing
 copy/menu item come from the **pure** `src/updateState.js` model (`updateRestartItem`/`notificationForUpdate`,
-unit-tested) — automatic checks stay silent, manual checks always give feedback. A **Start with Windows**
-tray checkbox toggles `app.setLoginItemSettings({ openAtLogin })` (off by default). Builds are **unsigned**
-for now (code signing is deferred), so SmartScreen may warn on first install.
+unit-tested) — automatic checks stay silent, manual checks always give feedback. An **Open at Login / Start
+with Windows** tray checkbox (platform-aware label) toggles `app.setLoginItemSettings({ openAtLogin })` (off
+by default). Builds are **unsigned** for now (code signing is deferred), so SmartScreen may warn on first
+install.
+
+**macOS (Electron — beta, unsigned).** The same shell runs on macOS as a **dock + menu-bar** app
+(hide-to-menu-bar on window close). Platform branches in `main.js` (`process.platform === "darwin"`): a
+minimal **app menu** (`appMenu`/`editMenu`/`windowMenu` roles - so Cmd-Q/C/V work), a **monochrome Template
+menu-bar icon** (`build/trayTemplate.png` + `@2x`, a microphone glyph generated by `build/make-tray-icon.js`,
+icon-only - a title made it too wide behind the notch), `setAppUserModelId` guarded to win32, and an **"Open
+in Browser"** tray item. **Updates:** Squirrel.Mac can't update an unsigned app and there's no mac feed, so
+on darwin `setupAutoUpdater`/`checkForUpdates` skip electron-updater and use a **manual GitHub-Releases
+check** (`isNewerVersion` in `updateState.js` vs the latest tag; opens the Releases page when newer).
+electron-builder `mac` block is `identity: null` (unsigned) → a `.dmg` that opens via right-click → Open.
+**Deferred to later macOS milestones:** Developer ID signing + notarization + Squirrel.Mac auto-update (needs
+an Apple Developer account), a `macos-14` CI job (one `v*` tag then builds both OSes), and **Sign in with
+Apple**. Design: `docs/macOS_Desktop_App_Guide.md`.
 
 ### Full stack (Docker)
 ```bash

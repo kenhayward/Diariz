@@ -127,6 +127,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.106.0",
+    date: "2026-07-08",
+    pr: 241,
+    headline: "macOS desktop app (beta)",
+    summary:
+      "Diariz now has a macOS desktop app alongside Windows - a menu-bar shell that loads your server, " +
+      "captures your mic and system audio (macOS 13+, via Screen Recording), records from the menu bar, and " +
+      "signs in with Google. It's an early, unsigned beta: download it from GitHub Releases and open it with " +
+      "right-click -> Open the first time; it checks for updates by opening the Releases page (automatic " +
+      "updates and Sign in with Apple come once the app is code-signed). Server side is unchanged.",
+    added: [
+      "macOS desktop app (beta, unsigned): mic + system audio capture, dock + menu-bar with hide-to-menu-bar, a microphone menu-bar icon, Open at Login, Open in Browser, and a manual 'Check for Updates' that opens the Releases page.",
+    ],
+  },
+  {
     version: "0.105.3",
     date: "2026-07-07",
     pr: 240,

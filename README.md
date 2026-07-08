@@ -3,7 +3,7 @@
 ![Diariz](images/Diariz%20Backdrop.png)
 
 **Smart Meeting Transcription.** Personal, multi-user voice/meeting transcription platform: record audio
-(mic or system loopback), transcribe it server-side with **speaker diarization** and word-level timestamps,
+(mic or system audio), transcribe it server-side with **speaker diarization** and word-level timestamps,
 **identify known speakers** across recordings, **summarize**, and **chat across transcripts**. 
 See [diariz.app](https://www.diariz.app) for more details, videos and screenshots.
 
@@ -20,10 +20,9 @@ the in-app **Release Notes** page (`/release-notes`), reachable from **About** i
 remembered, and the list refreshes on hot-plug), **tune capture** (echo cancellation, noise suppression,
 auto gain, mono) from a ⚙ popover, and watch a **live input-level meter** while recording (with a subtle
 silence hint). **Pause and resume** a recording in progress (separate from Stop) for breaks or sensitive
-moments — paused audio is never captured and never counts toward the recording's duration. Or capture Windows
-system/loopback audio via the Electron desktop
-shell — which can also **start/stop recording from its system-tray menu** (in the background, with
-notifications). Or **upload existing audio files** to transcribe (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A) —
+moments — paused audio is never captured and never counts toward the recording's duration. Or capture
+**system audio** via the Electron **desktop app** (Windows, and **macOS - beta**) — which can also
+**start/stop recording from its tray / menu-bar menu** (in the background, with notifications). Or **upload existing audio files** to transcribe (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A) —
 via the Upload button or by **dragging several onto the recordings list**, with per-file status.
 - **Transcribe + diarize** server-side with WhisperX (large-v3, word-level timestamps) and pyannote 3.1,
 producing speaker-labelled, timestamped segments you can rename, edit, and play back (per segment, per speaker,
@@ -157,7 +156,7 @@ one. Restore is destructive (replaces all data) and only accepts a backup from t
 | Domain model + migrations | EF Core + Postgres/pgvector | [src/Diariz.Domain](src/Diariz.Domain) |
 | Transcription + diarization + voiceprints | Python: WhisperX (large-v3) + pyannote 3.1 + SpeechBrain ECAPA (GPU) | [src/Diariz.Worker](src/Diariz.Worker) |
 | Web UI | React + TypeScript + Vite + Tailwind | [apps/web](apps/web) |
-| Desktop app | Electron — Windows system-tray shell (first-run server config, mic + Windows loopback, tray recording, auto-update) | [apps/desktop](apps/desktop) |
+| Desktop app | Electron thin shell — Windows system-tray + **macOS (beta) menu-bar** (first-run server config, mic + system audio, tray recording; auto-update on Windows, manual update check on macOS) | [apps/desktop](apps/desktop) |
 | Orchestration | docker-compose (postgres/pgvector, redis, minio) | [deploy](deploy) |
 
 Summaries and chat use any OpenAI-compatible LLM endpoint you configure (OpenAI, or a local server such
@@ -230,7 +229,8 @@ The headings in
 - **M3 — done:** chat across transcripts, including **semantic (RAG) search** over an embedded transcript
   index (pgvector) fused with keyword search, and an **"All meetings"** chat mode that answers across your whole
   library; speaker identification via enrolled voiceprints (pgvector).
-- **M4 — in progress:** windows desktop app, macOS/mobile,  packaging, live streaming.
+- **M4 — in progress:** Windows desktop app (done), **macOS desktop app (beta - unsigned)**, mobile,
+  packaging, live streaming.
 
 For the next major arc - note enhancement, workflows/automations, collaborative shared spaces, and
 optional ambient capture - see the [long-term roadmap](docs/long_term_roadmap.md).
