@@ -1,5 +1,7 @@
 using Diariz.Api.Configuration;
 using Diariz.Domain;
+using Diariz.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Services;
@@ -43,11 +45,16 @@ public class SummarizationSettingsResolver : ISummarizationSettingsResolver
         var reasoningOn = s?.ReasoningEnabled ?? _opts.ReasoningEnabled;
         var effort = reasoningOn ? Coalesce(s?.ReasoningEffort, _opts.ReasoningEffort) : null;
 
+        // The request timeout is the platform-wide admin setting (the single authority - the HTTP clients
+        // themselves have no cap), falling back to the server option when no settings row exists yet.
+        var ps = await _db.PlatformSettings
+            .FirstOrDefaultAsync(p => p.Id == PlatformSettings.SingletonId, ct);
+
         return new SummarizationRequestConfig(
             ApiBase: Coalesce(s?.SummaryApiBase, _opts.ApiBase),
             ApiKey: Coalesce(_protector.Unprotect(s?.SummaryApiKeyEncrypted), _opts.ApiKey),
             Model: Coalesce(s?.SummaryModel, _opts.Model),
-            TimeoutSeconds: _opts.TimeoutSeconds)
+            TimeoutSeconds: ps?.LlmTimeoutSeconds ?? _opts.TimeoutSeconds)
         {
             ReasoningEffort = effort,
         };

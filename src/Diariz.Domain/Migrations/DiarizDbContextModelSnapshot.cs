@@ -477,6 +477,11 @@ namespace Diariz.Domain.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<int>("LlmTimeoutSeconds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(120);
+
                     b.Property<long>("MaxQuotaBytes")
                         .HasColumnType("bigint");
 
@@ -500,6 +505,7 @@ namespace Diariz.Domain.Migrations
                             AudioDeletionTimeOfDay = new TimeOnly(3, 0, 0),
                             AudioRetentionDays = 30,
                             AutoDeleteAudioEnabled = false,
+                            LlmTimeoutSeconds = 120,
                             MaxQuotaBytes = 53687091200L,
                             MinutesGenerationMode = 0,
                             StarterQuotaBytes = 5368709120L

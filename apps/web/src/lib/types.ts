@@ -309,6 +309,8 @@ export interface PlatformSettings {
   audioDeletionTimeOfDay: string;
   /// Master switch for user API access (personal tokens). Off by default.
   apiAccessEnabled: boolean;
+  /// Per-request timeout (seconds) applied to every LLM call platform-wide. Default 120.
+  llmTimeoutSeconds: number;
 }
 
 export interface GrantResult {

@@ -177,5 +177,8 @@
   "minutesModeLabel": "Generación de actas",
   "minutesModeSingle": "Una sola llamada (menos tokens)",
   "minutesModePerSection": "Por sección (mejor estructura)",
-  "minutesModeHint": "Para toda la plataforma: cómo se generan las actas a partir de una plantilla. Se aplica desde la próxima ejecución."
+  "minutesModeHint": "Para toda la plataforma: cómo se generan las actas a partir de una plantilla. Se aplica desde la próxima ejecución.",
+  "llmTimeoutLabel": "Tiempo de espera de IA (segundos)",
+  "llmTimeoutHint": "Tiempo de espera por solicitud para toda la plataforma en cada llamada de IA (resúmenes, actas, acciones, etiquetas, incrustaciones). Auméntalo para modelos locales lentos. Predeterminado 120.",
+  "llmTimeoutInvalid": "El tiempo de espera de IA debe ser un número entero de segundos (al menos 5)."
 }

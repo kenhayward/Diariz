@@ -43,6 +43,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const [maxGb, setMaxGb] = useState("");
   // Platform-wide minutes generation mode; Platform-Admin only. String enum name on the wire.
   const [minutesMode, setMinutesMode] = useState<MinutesGenerationMode>("SingleCall");
+  // Platform-wide LLM request timeout in seconds (Platform-Admin only). Default 120.
+  const [llmTimeout, setLlmTimeout] = useState("120");
   // Audio retention (Platform-Admin only): master switch, window in days, and server-local run time ("HH:mm").
   const [autoDeleteAudio, setAutoDeleteAudio] = useState(false);
   const [retentionDays, setRetentionDays] = useState("");
@@ -72,6 +74,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       setStarterGb(String(bytesToGb(platform.starterQuotaBytes)));
       setMaxGb(String(bytesToGb(platform.maxQuotaBytes)));
       setMinutesMode(platform.minutesGenerationMode);
+      setLlmTimeout(String(platform.llmTimeoutSeconds ?? 120));
       setAutoDeleteAudio(platform.autoDeleteAudioEnabled);
       setRetentionDays(String(platform.audioRetentionDays));
       // "HH:mm:ss" on the wire -> "HH:mm" for the <input type="time">.
@@ -109,6 +112,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         if (starter > max) throw new Error("The starter quota can't exceed the maximum quota.");
         const days = Number(retentionDays);
         if (!Number.isInteger(days) || days < 1) throw new Error(t("retentionDaysInvalid"));
+        const timeout = Number(llmTimeout);
+        if (!Number.isInteger(timeout) || timeout < 5) throw new Error(t("llmTimeoutInvalid"));
         await api.updatePlatformSettings({
           starterQuotaBytes: starter,
           maxQuotaBytes: max,
@@ -118,6 +123,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
           // "HH:mm" from the input -> "HH:mm:ss" for the TimeOnly wire type.
           audioDeletionTimeOfDay: `${deletionTime || "03:00"}:00`,
           apiAccessEnabled,
+          llmTimeoutSeconds: timeout,
         });
         qc.invalidateQueries({ queryKey: ["platform-settings"] });
       }
@@ -270,9 +276,9 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 )}
               </div>
 
-              {/* Minutes generation mode - platform-wide, Platform-Admin only. Applies from the next run. */}
+              {/* Minutes generation mode + global LLM timeout - platform-wide, Platform-Admin only. */}
               {isPlatformAdmin && (
-                <div className="border-t pt-3 dark:border-gray-700">
+                <div className="space-y-3 border-t pt-3 dark:border-gray-700">
                   <label className="block text-sm">
                     <span className="mb-1 block font-medium text-gray-700 dark:text-gray-200">{t("minutesModeLabel")}</span>
                     <select
@@ -284,8 +290,21 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                       <option value="SingleCall">{t("minutesModeSingle")}</option>
                       <option value="PerSection">{t("minutesModePerSection")}</option>
                     </select>
+                    <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("minutesModeHint")}</span>
                   </label>
-                  <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{t("minutesModeHint")}</p>
+                  <label className="block text-sm">
+                    <span className="mb-1 block font-medium text-gray-700 dark:text-gray-200">{t("llmTimeoutLabel")}</span>
+                    <input
+                      type="number"
+                      min={5}
+                      step={1}
+                      value={llmTimeout}
+                      onChange={(e) => setLlmTimeout(e.target.value)}
+                      aria-label={t("llmTimeoutLabel")}
+                      className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                    />
+                    <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("llmTimeoutHint")}</span>
+                  </label>
                 </div>
               )}
             </div>

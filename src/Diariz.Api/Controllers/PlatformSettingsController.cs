@@ -51,6 +51,8 @@ public class PlatformSettingsController : ControllerBase
             return BadRequest("Unknown minutes generation mode.");
         if (req.AudioRetentionDays < 1)
             return BadRequest("The audio retention window must be at least 1 day.");
+        if (req.LlmTimeoutSeconds < 5)
+            return BadRequest("The LLM timeout must be at least 5 seconds.");
 
         var s = await _settings.GetAsync();
         s.StarterQuotaBytes = req.StarterQuotaBytes;
@@ -60,6 +62,7 @@ public class PlatformSettingsController : ControllerBase
         s.AudioRetentionDays = req.AudioRetentionDays;
         s.AudioDeletionTimeOfDay = req.AudioDeletionTimeOfDay;
         s.ApiAccessEnabled = req.ApiAccessEnabled;
+        s.LlmTimeoutSeconds = req.LlmTimeoutSeconds;
         await _db.SaveChangesAsync();
         return ToDto(s);
     }
@@ -90,5 +93,6 @@ public class PlatformSettingsController : ControllerBase
 
     private static PlatformSettingsDto ToDto(PlatformSettings s) => new(
         s.StarterQuotaBytes, s.MaxQuotaBytes, s.MinutesGenerationMode,
-        s.AutoDeleteAudioEnabled, s.AudioRetentionDays, s.AudioDeletionTimeOfDay, s.ApiAccessEnabled);
+        s.AutoDeleteAudioEnabled, s.AudioRetentionDays, s.AudioDeletionTimeOfDay, s.ApiAccessEnabled,
+        s.LlmTimeoutSeconds);
 }

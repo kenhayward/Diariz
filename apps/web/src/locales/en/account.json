@@ -177,5 +177,8 @@
   "minutesModeLabel": "Minutes generation",
   "minutesModeSingle": "Single call (fewer tokens)",
   "minutesModePerSection": "Per section (best structure)",
-  "minutesModeHint": "Platform-wide: how meeting minutes are generated from a template. Applies from the next run."
+  "minutesModeHint": "Platform-wide: how meeting minutes are generated from a template. Applies from the next run.",
+  "llmTimeoutLabel": "LLM timeout (seconds)",
+  "llmTimeoutHint": "Platform-wide request timeout for every AI call (summaries, minutes, actions, tags, embeddings). Raise it for slow local models. Default 120.",
+  "llmTimeoutInvalid": "The LLM timeout must be a whole number of seconds (at least 5)."
 }

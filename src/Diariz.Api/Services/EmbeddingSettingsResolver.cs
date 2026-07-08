@@ -1,5 +1,7 @@
 using Diariz.Api.Configuration;
 using Diariz.Domain;
+using Diariz.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Services;
@@ -63,12 +65,17 @@ public class EmbeddingSettingsResolver : IEmbeddingSettingsResolver
             apiKey = Coalesce(_protector.Unprotect(s?.SummaryApiKeyEncrypted), _summary.ApiKey);
         }
 
+        // The request timeout is the platform-wide admin setting (the single authority), falling back to the
+        // embedding option when no settings row exists yet.
+        var ps = await _db.PlatformSettings
+            .FirstOrDefaultAsync(p => p.Id == PlatformSettings.SingletonId, ct);
+
         return new EmbeddingRequestConfig(
             ApiBase: apiBase,
             ApiKey: apiKey,
             Model: _emb.Model,
             Dimension: _emb.Dimension,
-            TimeoutSeconds: _emb.TimeoutSeconds,
+            TimeoutSeconds: ps?.LlmTimeoutSeconds ?? _emb.TimeoutSeconds,
             BatchSize: Math.Max(1, _emb.BatchSize))
         {
             QueryPrefix = _emb.QueryPrefix ?? "",

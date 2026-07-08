@@ -89,6 +89,22 @@ public class EmbeddingSettingsResolverTests
     }
 
     [Fact]
+    public async Task Resolve_UsesPlatformTimeout_WhenPresent_ElseEmbeddingOption()
+    {
+        using var db = TestDb.Create();
+        var emb = new EmbeddingOptions { ApiBase = "http://emb.test/v1", TimeoutSeconds = 45 };
+
+        // No platform row → the embedding option's timeout.
+        Assert.Equal(45, (await Build(db, emb, new SummarizationOptions()).ResolveAsync(Guid.NewGuid())).TimeoutSeconds);
+
+        db.PlatformSettings.Add(new PlatformSettings { Id = PlatformSettings.SingletonId, LlmTimeoutSeconds = 300 });
+        await db.SaveChangesAsync();
+
+        // Platform row present → the admin-set global timeout wins.
+        Assert.Equal(300, (await Build(db, emb, new SummarizationOptions()).ResolveAsync(Guid.NewGuid())).TimeoutSeconds);
+    }
+
+    [Fact]
     public async Task Resolve_Disabled_WhenNoEndpointAnywhere()
     {
         using var db = TestDb.Create();

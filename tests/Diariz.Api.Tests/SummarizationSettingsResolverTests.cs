@@ -99,6 +99,25 @@ public class SummarizationSettingsResolverTests
         Assert.False((await resolver.ResolveAsync(Guid.NewGuid())).Enabled);
     }
 
+    // ---- Timeout (platform-wide, admin-set; falls back to the server option) ----
+
+    [Fact]
+    public async Task Timeout_UsesPlatformSetting_WhenPresent()
+    {
+        using var db = TestDb.Create();
+        db.PlatformSettings.Add(new PlatformSettings { Id = PlatformSettings.SingletonId, LlmTimeoutSeconds = 300 });
+        await db.SaveChangesAsync();
+
+        Assert.Equal(300, (await Build(db).ResolveAsync(Guid.NewGuid())).TimeoutSeconds);
+    }
+
+    [Fact]
+    public async Task Timeout_FallsBackToServerOption_WhenNoPlatformRow()
+    {
+        using var db = TestDb.Create();
+        Assert.Equal(90, (await Build(db).ResolveAsync(Guid.NewGuid())).TimeoutSeconds); // Server.TimeoutSeconds
+    }
+
     // ---- Reasoning (effective effort: null = omit the field) ----
 
     [Fact]
