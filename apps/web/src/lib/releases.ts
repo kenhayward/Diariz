@@ -50,6 +50,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.110.1",
+    date: "2026-07-08",
+    pr: 248,
+    headline: "Account and theme fixes",
+    summary:
+      "Three small fixes. Changing a user's storage quota now updates the storage line in the account menu " +
+      "right away instead of staying stale. The theme picker in Preferences no longer snaps back to Auto when " +
+      "you choose Light or Dark. And the account menu now opens in front of the live-notes panel while a " +
+      "recording is in progress, instead of behind it.",
+    fixed: [
+      "The account menu storage line now refreshes immediately after a quota change.",
+      "The Light/Dark/Auto theme picker keeps your choice instead of reverting to Auto.",
+      "The account menu opens above the live-notes panel during a recording.",
+    ],
+  },
+  {
     version: "0.110.0",
     date: "2026-07-08",
     pr: 247,
