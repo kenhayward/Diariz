@@ -428,6 +428,13 @@ function refreshTray() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "Open Diariz", click: () => showMainWindow() },
+      {
+        label: "Open in Browser",
+        click: () => {
+          const u = targetUrl();
+          if (u) shell.openExternal(u);
+        },
+      },
       ...(restart ? [{ label: restart.label, click: restartToUpdate }] : []),
       { type: "separator" },
       ...recordItems,
