@@ -4,8 +4,8 @@ import type { MeetingTypeContent, TemplateSection, TemplateBlock, TemplateBlockK
 export const FIELD_OPTIONS = ["date", "time", "title", "attendees", "duration", "action_items", "notes"] as const;
 
 export function newBlock(kind: TemplateBlockKind): TemplateBlock {
-  if (kind === "field") return { kind, field: "date" };
-  return { kind, text: "" };
+  if (kind === "field") return { kind, field: "date", breakAfter: "none" };
+  return { kind, text: "", breakAfter: "paragraph" };
 }
 
 export function newSection(level: 1 | 2 = 1): TemplateSection {

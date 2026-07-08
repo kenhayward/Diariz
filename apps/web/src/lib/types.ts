@@ -53,6 +53,8 @@ export interface TemplateBlock {
   kind: TemplateBlockKind;
   text?: string | null;
   field?: string | null;
+  /// The break emitted after this block (see MeetingTypeMinutesComposer). Absent = legacy rule.
+  breakAfter?: "none" | "line" | "paragraph" | null;
 }
 /// One H1/H2 section (level 1 or 2) of a template, with its ordered content blocks.
 export interface TemplateSection {

@@ -39,11 +39,13 @@ describe("section operations (immutable)", () => {
 describe("block operations (within a section)", () => {
   it("adds a field block with a default field", () => {
     const out = addBlock(base, 1, "field");
-    expect(out.sections[1].blocks).toEqual([{ kind: "field", field: "date" }]);
+    expect(out.sections[1].blocks).toEqual([{ kind: "field", field: "date", breakAfter: "none" }]);
   });
 
   it("adds a prompt block with empty text", () => {
-    expect(addBlock(base, 1, "prompt").sections[1].blocks[0]).toEqual({ kind: "prompt", text: "" });
+    expect(addBlock(base, 1, "prompt").sections[1].blocks[0]).toEqual({
+      kind: "prompt", text: "", breakAfter: "paragraph",
+    });
   });
 
   it("updates a block", () => {
