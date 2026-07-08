@@ -80,9 +80,8 @@ function createMainWindow(url) {
     }
   });
 
-  // Close to tray rather than quitting (this is a tray-resident app).
+  // Close to tray/menu bar rather than quitting (this is a tray-resident app).
   mainWindow.on("close", (e) => {
-    console.log("[diariz-diag] window 'close' fired; isQuitting=", isQuitting); // [DIAG] temporary
     if (!isQuitting) {
       e.preventDefault();
       mainWindow.hide();
@@ -446,33 +445,27 @@ function refreshTray() {
   );
 }
 
+/// macOS menu-bar icon: a monochrome Template image (black-on-transparent) that macOS recolours for the
+/// light/dark menu bar. Named `...Template` and flagged, so it's icon-only (no text - a title alongside the
+/// icon made the item too wide and it fell behind the notch). The @2x variant is picked up automatically.
+function macTrayIcon() {
+  const img = nativeImage.createFromPath(path.join(__dirname, "..", "build", "trayTemplate.png"));
+  img.setTemplateImage(true);
+  return img;
+}
+
 function buildTray() {
-  // [DIAG] temporary: pinpoint the macOS "no menu-bar item" report.
-  try {
-    console.log("[diariz-diag] buildTray platform=", process.platform,
-      "iconEmpty=", ICON.isEmpty(), "iconSize=", JSON.stringify(ICON.getSize()));
-    // [DIAG] macOS test: create the status item with an EMPTY image + a title only, to isolate whether the
-    // colored icon was preventing it from rendering. If "Diariz" now shows, the icon was the culprit.
-    const trayIcon =
-      process.platform === "darwin"
-        ? nativeImage.createEmpty()
-        : ICON.isEmpty()
-          ? ICON
-          : ICON.resize({ width: 16, height: 16 });
-    tray = new Tray(trayIcon);
-    console.log("[diariz-diag] Tray created OK");
-    // Windows: left-click opens the window and right-click shows the menu. macOS: a click should show the
-    // menu-bar dropdown (the standard behaviour) - its "Open Diariz" item opens the window - so we must NOT
-    // bind a click handler on darwin, or it steals the click and the dropdown never appears.
-    if (process.platform !== "darwin") tray.on("click", () => showMainWindow());
-    if (process.platform === "darwin") tray.setTitle("Diariz");
-    refreshTray();
-    const bounds = tray.getBounds();
-    console.log("[diariz-diag] tray set; bounds=", JSON.stringify(bounds),
-      "title=", JSON.stringify(process.platform === "darwin" ? tray.getTitle() : ""));
-  } catch (e) {
-    console.error("[diariz-diag] buildTray FAILED:", e);
-  }
+  const trayIcon =
+    process.platform === "darwin"
+      ? macTrayIcon()
+      : ICON.isEmpty()
+        ? ICON
+        : ICON.resize({ width: 16, height: 16 });
+  tray = new Tray(trayIcon);
+  // Windows: left-click opens the window, right-click shows the menu. macOS: a click shows the menu-bar
+  // dropdown (don't bind a click handler or it steals the click; the menu's "Open Diariz" opens the window).
+  if (process.platform !== "darwin") tray.on("click", () => showMainWindow());
+  refreshTray();
 }
 
 ipcMain.on("recorder:state", (_event, state) => {
@@ -533,7 +526,5 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   // Tray-resident: keep running when all windows are closed/hidden.
-  app.on("window-all-closed", () => {
-    console.log("[diariz-diag] window-all-closed fired (window was destroyed, not just hidden)"); // [DIAG]
-  });
+  app.on("window-all-closed", () => {});
 }

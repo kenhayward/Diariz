@@ -18,7 +18,7 @@ module.exports = {
   protocols: [{ name: "Diariz", schemes: ["diariz"] }],
   directories: { output: "release", buildResources: "build" },
   // Loads the web app from the configured server, so the SPA itself isn't bundled.
-  files: ["src/**/*", "!src/**/*.test.js", "build/icon.png", "package.json"],
+  files: ["src/**/*", "!src/**/*.test.js", "build/icon.png", "build/trayTemplate.png", "build/trayTemplate@2x.png", "package.json"],
   win: {
     target: ["nsis"],
     icon: "build/icon.png",
