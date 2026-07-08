@@ -50,6 +50,25 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.109.0",
+    date: "2026-07-08",
+    pr: 246,
+    headline: "More control over meeting-minutes templates",
+    summary:
+      "The meeting-type template editor now gives you finer control over how your minutes are laid out. " +
+      "Each block (text, field, or model prompt) has a Break-after setting - no break, a line break, or a " +
+      "full paragraph - so you decide exactly where content runs together and where it separates. Existing " +
+      "templates keep their current spacing. Text blocks are now an auto-growing box that accepts Markdown, " +
+      "and you can drag any block by its handle to reorder it within a section or move it into another section.",
+    added: [
+      "Per-block Break-after control (none / line break / paragraph) for template text, field, and prompt blocks.",
+      "Drag blocks by a handle to move them within a section or between sections.",
+    ],
+    changed: [
+      "Template text blocks are now an auto-growing input that supports Markdown.",
+    ],
+  },
+  {
     version: "0.108.1",
     date: "2026-07-08",
     pr: 245,
