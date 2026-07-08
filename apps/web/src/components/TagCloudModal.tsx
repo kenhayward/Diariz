@@ -1,16 +1,16 @@
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import TagCloud from "./TagCloud";
-import { recordingsForTags } from "../lib/tagCloud";
-import { formatDuration } from "../lib/format";
+import { RecordingRow, TagCountSlider } from "./RecordingsPanel";
+import { recordingsForTags, topTagsByCount } from "../lib/tagCloud";
 import type { RecordingSummary, TagCloudEntry } from "../lib/types";
 
 /// The expanded tag-cloud view: a large modal (~80% of the page) with a bigger cloud on top and the
 /// matching recordings below. The tag selection is the PARENT's state (shared with the left panel's
-/// cloud), so picking a tag here filters the panel behind too and survives closing. Clicking a recording
-/// closes the modal and opens it; ✕/Escape close without navigating (no outside-click close - repo
-/// convention). Mirrors the ManageMeetingTypesModal shell.
+/// cloud), so picking a tag here filters the panel behind too and survives closing; the count slider is
+/// local (the modal can show more than the compact panel). Recordings render with the same row as the
+/// list/calendar (icons, duration, date/time); clicking one closes the modal and opens it. ✕/Escape close
+/// without navigating (no outside-click close - repo convention). Mirrors the ManageMeetingTypesModal shell.
 export default function TagCloudModal({
   tags,
   recordings,
@@ -25,7 +25,7 @@ export default function TagCloudModal({
   onClose: () => void;
 }) {
   const { t } = useTranslation(["workspace", "common"]);
-  const navigate = useNavigate();
+  const [limit, setLimit] = useState(() => Math.min(tags.length, 80));
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -33,12 +33,8 @@ export default function TagCloudModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const items = recordingsForTags(recordings, tags, selected);
-
-  function open(id: string) {
-    onClose();
-    navigate(`/recordings/${id}`);
-  }
+  const shownTags = useMemo(() => topTagsByCount(tags, limit), [tags, limit]);
+  const items = useMemo(() => recordingsForTags(recordings, shownTags, selected), [recordings, shownTags, selected]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -59,8 +55,11 @@ export default function TagCloudModal({
           </button>
         </div>
 
-        <div className="shrink-0 overflow-y-auto border-b px-4 py-2 dark:border-gray-700" style={{ maxHeight: "45%" }}>
-          <TagCloud tags={tags} selected={selected} onSelect={onSelect} minPx={16} maxPx={48} />
+        <div className="shrink-0 overflow-y-auto border-b dark:border-gray-700" style={{ maxHeight: "45%" }}>
+          <div className="flex px-4 pt-3">
+            <TagCountSlider value={Math.min(limit, tags.length)} max={tags.length} onChange={setLimit} />
+          </div>
+          <TagCloud tags={shownTags} selected={selected} onSelect={onSelect} minPx={14} maxPx={40} />
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
@@ -69,18 +68,17 @@ export default function TagCloudModal({
           ) : (
             <ul className="divide-y dark:divide-gray-800">
               {items.map((r) => (
-                <li key={r.id}>
-                  <button
-                    type="button"
-                    onClick={() => open(r.id)}
-                    className="flex w-full items-center gap-2 px-4 py-1.5 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
-                  >
-                    <span className="min-w-0 flex-1 truncate dark:text-gray-100">{r.name ?? r.title}</span>
-                    <span className="shrink-0 text-xs text-gray-400 dark:text-gray-500">
-                      {formatDuration(r.durationMs)}
-                    </span>
-                  </button>
-                </li>
+                <RecordingRow
+                  key={r.id}
+                  r={r}
+                  indentClass="pl-3"
+                  selectMode={false}
+                  selected={false}
+                  onToggleSelect={() => {}}
+                  onDropBefore={() => {}}
+                  showDate
+                  onNavigate={onClose}
+                />
               ))}
             </ul>
           )}

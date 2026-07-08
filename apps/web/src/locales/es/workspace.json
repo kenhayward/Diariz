@@ -279,6 +279,7 @@
   "tagTooltip_other": "{{count}} reuniones",
   "tagCloudExpand": "Ampliar la nube de etiquetas",
   "tagCloudTitle": "Nube de etiquetas",
+  "tagCountLabel": "Las {{count}} etiquetas principales",
   "selectActions": "Seleccionar acciones",
   "markComplete": "Marcar completada",
   "markIncomplete": "Marcar pendiente",

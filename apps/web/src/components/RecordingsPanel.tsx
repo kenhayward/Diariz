@@ -22,7 +22,7 @@ import MonthCalendar from "./MonthCalendar";
 import { recordingDayKeys, dayKey, eventDayKeys, visibleGridRange, dayItems } from "../lib/calendar";
 import { useUpload } from "../lib/uploadContext";
 import { distinctActors, filterActions } from "../lib/actionsView";
-import { recordingsForTags } from "../lib/tagCloud";
+import { recordingsForTags, topTagsByCount } from "../lib/tagCloud";
 import ActionsToolbar from "./ActionsToolbar";
 import ActionsTab from "./ActionsTab";
 import EditActionModal from "./EditActionModal";
@@ -47,6 +47,7 @@ const statusColor: Record<RecordingStatus, string> = {
 const COLLAPSE_KEY = "diariz.recordings.collapsedGroups";
 const UNGROUPED_KEY = "__ungrouped__";
 const TAB_KEY = "diariz.recordings.tab";
+const TAG_LIMIT_KEY = "diariz.recordings.tagLimit";
 type PanelTab = "list" | "calendar" | "actions" | "tags";
 /// Drag payload type marking a section-header drag (vs a recording's "text/plain" id or a file drop).
 const SECTION_MIME = "application/x-diariz-section";
@@ -129,14 +130,22 @@ export default function RecordingsPanel() {
   });
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [tagCloudExpanded, setTagCloudExpanded] = useState(false);
+  // Count slider: how many tags to show (the most-used first). Persisted; clamped to what's available.
+  const [tagLimit, setTagLimit] = useState<number>(() => Number(localStorage.getItem(TAG_LIMIT_KEY)) || 40);
+  function setTagLimitPersisted(n: number) {
+    localStorage.setItem(TAG_LIMIT_KEY, String(n));
+    setTagLimit(n);
+  }
   // A refetch can drop the selected tag (recording deleted / re-tagged) — clear a stale selection so the
   // list doesn't silently show "nothing" for a tag that no longer exists.
   useEffect(() => {
     if (selectedTag && tags.length > 0 && !tags.some((x) => x.tag === selectedTag)) setSelectedTag(null);
   }, [tags, selectedTag]);
+  const shownTags = useMemo(() => topTagsByCount(tags, tagLimit), [tags, tagLimit]);
+  // The list follows the shown tags: with no tag picked it's every recording carrying a *shown* tag.
   const tagItems = useMemo(
-    () => recordingsForTags(recordings, tags, selectedTag),
-    [recordings, tags, selectedTag],
+    () => recordingsForTags(recordings, shownTags, selectedTag),
+    [recordings, shownTags, selectedTag],
   );
 
   const [month, setMonth] = useState(() => {
@@ -476,19 +485,30 @@ export default function RecordingsPanel() {
               <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("tagsEmpty")}</p>
             ) : (
               <>
-                <div className="relative shrink-0 border-b dark:border-gray-800">
-                  <TagCloud tags={tags} selected={selectedTag} onSelect={setSelectedTag} />
-                  <button
-                    type="button"
-                    aria-label={t("tagCloudExpand")}
-                    title={t("tagCloudExpand")}
-                    onClick={() => setTagCloudExpanded(true)}
-                    className="absolute right-1 top-1 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-                  >
-                    <svg {...iconProps}>
-                      <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
-                    </svg>
-                  </button>
+                {/* The cloud + its count slider stay fixed at the top; the cloud is height-capped and scrolls
+                    internally so the recordings list below is always visible however many tags there are. */}
+                <div className="shrink-0 border-b dark:border-gray-800">
+                  <div className="flex items-center gap-2 px-3 pt-2">
+                    <TagCountSlider
+                      value={Math.min(tagLimit, tags.length)}
+                      max={tags.length}
+                      onChange={setTagLimitPersisted}
+                    />
+                    <button
+                      type="button"
+                      aria-label={t("tagCloudExpand")}
+                      title={t("tagCloudExpand")}
+                      onClick={() => setTagCloudExpanded(true)}
+                      className="ml-auto shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+                    >
+                      <svg {...iconProps}>
+                        <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="max-h-[38vh] overflow-y-auto">
+                    <TagCloud tags={shownTags} selected={selectedTag} onSelect={setSelectedTag} />
+                  </div>
                 </div>
                 <div className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
                   {tagItems.length > 0 && (
@@ -502,6 +522,7 @@ export default function RecordingsPanel() {
                           selected={selection.selectedIds.includes(r.id)}
                           onToggleSelect={() => selection.toggle(r.id)}
                           onDropBefore={() => {}}
+                          showDate
                         />
                       ))}
                     </ul>
@@ -522,6 +543,38 @@ export default function RecordingsPanel() {
           onClose={() => setTagCloudExpanded(false)}
         />
       )}
+    </div>
+  );
+}
+
+/// A slider that limits how many tags the cloud shows (the most-used first). Exported so the expanded modal
+/// reuses the exact control. Hidden when there are 2 or fewer tags (nothing to trim).
+export function TagCountSlider({
+  value,
+  max,
+  onChange,
+}: {
+  value: number;
+  max: number;
+  onChange: (n: number) => void;
+}) {
+  const { t } = useTranslation("workspace");
+  if (max <= 2) return null;
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+      <label htmlFor="tag-count-slider" className="shrink-0">
+        {t("tagCountLabel", { count: value })}
+      </label>
+      <input
+        id="tag-count-slider"
+        type="range"
+        min={1}
+        max={max}
+        value={value}
+        aria-label={t("tagCountLabel", { count: value })}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="min-w-0 flex-1 accent-blue-600"
+      />
     </div>
   );
 }
@@ -1078,13 +1131,15 @@ function EventRow({ event, locale, t }: { event: CalendarEvent; locale: string; 
   );
 }
 
-function RecordingRow({
+export function RecordingRow({
   r,
   indentClass,
   selectMode,
   selected,
   onToggleSelect,
   onDropBefore,
+  showDate = false,
+  onNavigate,
 }: {
   r: RecordingSummary;
   /// Left-padding class that indents the row under its section heading (e.g. "pl-6" / "pl-10").
@@ -1093,6 +1148,11 @@ function RecordingRow({
   selected: boolean;
   onToggleSelect: () => void;
   onDropBefore: (draggedId: string) => void;
+  /// Show a second line with the source + date/time (the dense list keeps these in the hover title; the
+  /// Tags views have room to show them). Off by default so the list/calendar rows are unchanged.
+  showDate?: boolean;
+  /// Called when the row's name link is clicked - lets the expanded modal close itself as it navigates.
+  onNavigate?: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();
@@ -1198,17 +1258,23 @@ function RecordingRow({
           <NavLink
             to={`/recordings/${r.id}`}
             draggable={false}
+            onClick={() => onNavigate?.()}
             // Single-line row: name + right-aligned duration. Source + date (and the full, untruncated name)
-            // move to the hover tooltip to keep the list dense.
+            // move to the hover tooltip to keep the list dense (unless showDate puts the date on a 2nd line).
             title={`${r.name ?? r.title} — ${sourceLabel(r.source, t)} · ${new Date(r.createdAt).toLocaleDateString(i18n.language)}`}
             className={({ isActive }) =>
-              `flex min-w-0 flex-1 items-baseline gap-2 rounded px-1 py-0.5 leading-tight ${
+              `flex min-w-0 flex-1 gap-2 rounded px-1 py-0.5 leading-tight ${showDate ? "items-start" : "items-baseline"} ${
                 isActive ? "bg-blue-50 dark:bg-blue-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-800"
               }`
             }
           >
-            <span className="min-w-0 flex-1 truncate text-sm font-medium dark:text-gray-100">
-              {r.name ?? r.title}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium dark:text-gray-100">{r.name ?? r.title}</span>
+              {showDate && (
+                <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
+                  {sourceLabel(r.source, t)} · {new Date(r.createdAt).toLocaleString(i18n.language, { dateStyle: "medium", timeStyle: "short" })}
+                </span>
+              )}
             </span>
             {/* Duration right-aligned (tabular-nums) so durations line up down the list. */}
             <span className="shrink-0 tabular-nums text-xs text-gray-500 dark:text-gray-400">

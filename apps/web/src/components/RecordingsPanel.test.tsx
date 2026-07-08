@@ -476,6 +476,33 @@ describe("RecordingsPanel", () => {
     expect(screen.getByText("Budget call")).toBeTruthy();
   });
 
+  it("Tags tab rows show the transcript date/time and the count slider trims the cloud", async () => {
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...rec, id: "a", name: "Budget call", createdAt: "2026-07-01T09:30:00Z" },
+      { ...rec, id: "b", name: "Vendor call", createdAt: "2026-07-02T09:30:00Z" },
+      { ...rec, id: "c", name: "Cloud call", createdAt: "2026-07-03T09:30:00Z" },
+    ]);
+    (api.listTags as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { tag: "Budget Planning", count: 3, weight: 0.9, recordingIds: ["a", "b", "c"] },
+      { tag: "Vendor Selection", count: 2, weight: 0.6, recordingIds: ["b", "c"] },
+      { tag: "Cloud Infra", count: 1, weight: 0.3, recordingIds: ["c"] },
+    ]);
+    localStorage.setItem("diariz.recordings.tagLimit", "10"); // show all initially
+    renderList();
+    await screen.findByText("Budget call");
+    fireEvent.click(screen.getByRole("button", { name: "Tags", pressed: false }));
+    await screen.findByRole("button", { name: "Budget Planning" });
+
+    // Each row shows a date/time line (year proves the visible date, not just the duration).
+    expect(screen.getAllByText(/2026/).length).toBeGreaterThan(0);
+
+    // Slider trims to the most-used tag only; the rarer tags drop out of the cloud.
+    const slider = screen.getByRole("slider");
+    fireEvent.change(slider, { target: { value: "1" } });
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Cloud Infra" })).toBeNull());
+    expect(screen.getByRole("button", { name: "Budget Planning" })).toBeTruthy(); // highest count kept
+  });
+
   it("Tags tab shows the empty state when nothing is tagged", async () => {
     renderList();
     await screen.findByText("Weekly Standup");

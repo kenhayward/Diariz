@@ -279,6 +279,7 @@
   "tagTooltip_other": "{{count}} Meetings",
   "tagCloudExpand": "Tag-Wolke vergrößern",
   "tagCloudTitle": "Tag-Wolke",
+  "tagCountLabel": "Top {{count}} Tags",
   "selectActions": "Aktionen auswählen",
   "markComplete": "Als erledigt markieren",
   "markIncomplete": "Als offen markieren",

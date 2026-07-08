@@ -1,12 +1,18 @@
 import { render, screen, fireEvent } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
+import { SelectionProvider } from "../lib/selection";
 import TagCloudModal from "./TagCloudModal";
 import type { RecordingSummary, TagCloudEntry } from "../lib/types";
 
 const recordings = [
-  { id: "a", name: "Budget call", title: "Mic 1", durationMs: 9000, hasAudio: true } as RecordingSummary,
-  { id: "b", name: "Vendor call", title: "Mic 2", durationMs: 61000, hasAudio: true } as RecordingSummary,
+  { id: "a", name: "Budget call", title: "Mic 1", source: "Microphone", durationMs: 9000, status: "Transcribed",
+    createdAt: "2026-07-01T10:00:00Z", hasAudio: true, hasActions: false, sectionId: null, sectionName: null,
+    calendarEventId: null } as RecordingSummary,
+  { id: "b", name: "Vendor call", title: "Mic 2", source: "Microphone", durationMs: 61000, status: "Transcribed",
+    createdAt: "2026-07-02T10:00:00Z", hasAudio: true, hasActions: false, sectionId: null, sectionName: null,
+    calendarEventId: null } as RecordingSummary,
 ];
 
 const tags: TagCloudEntry[] = [
@@ -23,13 +29,18 @@ function renderModal(over: Partial<Parameters<typeof TagCloudModal>[0]> = {}) {
     onClose: vi.fn(),
     ...over,
   };
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <MemoryRouter initialEntries={["/"]}>
-      <Routes>
-        <Route path="/" element={<TagCloudModal {...props} />} />
-        <Route path="/recordings/:id" element={<div>detail page</div>} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={qc}>
+      <SelectionProvider>
+        <MemoryRouter initialEntries={["/"]}>
+          <Routes>
+            <Route path="/" element={<TagCloudModal {...props} />} />
+            <Route path="/recordings/:id" element={<div>detail page</div>} />
+          </Routes>
+        </MemoryRouter>
+      </SelectionProvider>
+    </QueryClientProvider>,
   );
   return props;
 }

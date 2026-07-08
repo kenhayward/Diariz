@@ -279,6 +279,7 @@
   "tagTooltip_other": "{{count}} meetings",
   "tagCloudExpand": "Expand tag cloud",
   "tagCloudTitle": "Tag cloud",
+  "tagCountLabel": "Top {{count}} tags",
   "selectActions": "Select actions",
   "markComplete": "Mark complete",
   "markIncomplete": "Mark incomplete",

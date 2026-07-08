@@ -143,7 +143,7 @@ export const RELEASES: Release[] = [
       "automatically after the update (a Platform Administrator can also trigger it from Settings -> " +
       "Maintenance, e.g. for users whose AI model is configured per-user). Server redeploy only.",
     added: [
-      "Tags tab in the left panel: a weighted tag cloud over all your meetings, with the matching meetings listed below; click a tag to filter, click it again to clear.",
+      "Tags tab in the left panel: a weighted tag cloud over all your meetings - more central topics show larger and in a warmer colour - with a slider to show only the most-used tags. Click a tag to list the meetings that carry it (with their date, time, and duration); click it again to clear.",
       "Expanded tag cloud: an expand button opens a large modal view of the cloud and its meetings; selecting there filters the panel too, and picking a meeting opens it.",
       "Automatic tag extraction in the transcription pipeline (up to 12 weighted tags per meeting, using your AI model settings); re-transcribing refreshes them.",
       "Backfill for existing recordings: runs once automatically after the update, plus a 'Backfill tags' button in Settings -> Maintenance (Platform Administrator).",
