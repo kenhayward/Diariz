@@ -6,12 +6,14 @@
 /// All operations degrade to a no-op / null when IndexedDB is unavailable (e.g. jsdom in tests, or a
 /// locked-down browser), so persistence is strictly best-effort and never blocks recording.
 
+import type { RecordingSource } from "./types";
+
 export interface PendingRecording {
   userId: string;
   blob: Blob;
   title: string;
   durationMs: number;
-  source: "Microphone" | "System";
+  source: RecordingSource;
   createdAt: number;
 }
 
