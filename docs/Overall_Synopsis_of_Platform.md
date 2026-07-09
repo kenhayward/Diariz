@@ -279,9 +279,15 @@ default timeout for its header phase and relies on client-disconnect for cancell
   does one segment, and `POST .../segments/translate { ids, language? }` does a selected set in one batched call.
   The English language name is resolved from `SupportedLanguages`.
 - **Chat (streaming).** `POST /api/chat/stream` builds a system prompt from the selected transcripts
-  (current / selected / none) **plus their action items** and an optional uploaded attachment
-  (`ChatContextBuilder`), then streams tokens back via **Server-Sent Events** (`ChatStreamClient`).
-  With **`IncludeAttachments`** the selected recordings' **attachments** are folded in too: uploaded files
+  **plus their action items** and an optional uploaded attachment (`ChatContextBuilder`), then streams tokens
+  back via **Server-Sent Events** (`ChatStreamClient`). The web infers the context from what's open rather
+  than a manual pick (`lib/chatContext.ts`): the open recording, the open **folder**, the 2+ ticked
+  recordings, or all/none — the pill label (Current Transcript / Current Folder / Selected Transcripts) is
+  snapshotted on input focus. When **`SectionId`** is set the request is **folder chat**: `ChatController`
+  builds the context from the folder's **roll-up summary + minutes + aggregated actions** (`ChatFolderContext`,
+  across the section and its child sections) and scopes attachments + `scope:"current"` tools to the folder's
+  recordings. With **`IncludeAttachments`** the in-context recordings' **attachments** are folded in too (for a
+  folder, every attachment across it and its sub-folders): uploaded files
   are read into text by **`AttachmentExtractor`** (PDF, text, Office `.docx/.xlsx/.pptx`, email/calendar
   `.eml/.ics` — via PdfPig / Open XML SDK / MimeKit), and **URL** attachments are fetched by
   **`UrlFetcher`** behind **SSRF guards** (`UrlFetchGuard` — blocks loopback/private/link-local IPs and

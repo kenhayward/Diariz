@@ -21,7 +21,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable, driven by reusable meeting-type templates with per-block layout control (H1-H3 headings, break, Markdown, horizontal rules, drag-to-reorder) and JSON import/export. |
 | **Action items** | Auto-extracted with owner and deadline, tracked across every meeting with completion and a person filter, linking back to the transcript. |
 | **Tag cloud** | Every meeting is auto-tagged with weighted topics; a Tags tab shows a weighted cloud and the meetings behind each tag. |
-| **Chat over transcripts** | Stream answers over one, several, or all meetings via your OpenAI-compatible model, with attachments and saved conversations. |
+| **Chat over transcripts** | Stream answers over one meeting, a folder (its summary/minutes/actions), several selected, or all meetings - context inferred from what you're viewing - via your OpenAI-compatible model, with attachments and saved conversations. |
 | **Search** | Keyword search across your library, upgraded to semantic (meaning-based) search when an embeddings endpoint is configured. |
 | **Chat tools** | The assistant searches your library with built-in tools (who-said-what, attendees, talk time, summaries, email-to-self) and links to the exact segment. |
 | **Connect Claude (MCP)** | Connect Claude to your own meetings via OAuth (claude.ai) or a personal token (Claude Desktop/Code). |
@@ -50,6 +50,28 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.116.0",
+    date: "2026-07-09",
+    pr: 257,
+    headline: "Smarter chat context, and chat about a folder",
+    summary:
+      "The chat box now infers its context from what you're doing instead of making you pick. The explicit " +
+      "'Selected transcripts' option is gone; the context is read from your selection - the recording you're " +
+      "viewing, the folder you're viewing, or the transcripts you've ticked - and the label reads 'Current " +
+      "Transcript', 'Current Folder', or 'Selected Transcripts' to match (it updates when you click into the " +
+      "chat box). When a folder is open, chat is about that folder: it uses the folder's summary, minutes, and " +
+      "aggregated actions as context, and 'Include attachments' pulls in every attachment across the folder and " +
+      "its sub-folders. The input's placeholder is now two lines: 'Ask about your transcripts' and 'Type / for " +
+      "the command list'.",
+    added: [
+      "Chat about a folder: its summary, minutes, actions (and, optionally, all its attachments) become the context.",
+    ],
+    changed: [
+      "The chat context is inferred (Current Transcript / Current Folder / Selected Transcripts); the explicit 'Selected transcripts' option was removed.",
+      "The chat input placeholder is now two lines.",
+    ],
+  },
   {
     version: "0.115.0",
     date: "2026-07-09",
