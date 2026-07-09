@@ -1025,6 +1025,27 @@ public class RecordingsControllerTests
     }
 
     [Fact]
+    public async Task MergeSegments_DoesNotMergeAcrossANote()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedTranscribedRecording(db, userId); // two consecutive SPEAKER_00 segments (0-1000, 1000-2000)
+        // A note taken during the first segment sits between the two - they must stay separate.
+        db.MeetingNotes.Add(new MeetingNote
+        {
+            Id = Guid.NewGuid(), UserId = userId, RecordingId = rec.Id, Text = "budget concern", CapturedAtMs = 500, Ordinal = 0,
+        });
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.MergeSegments(rec.Id);
+
+        var tr = await db.Transcriptions.SingleAsync(t => t.RecordingId == rec.Id);
+        var segs = await db.Segments.Where(s => s.TranscriptionId == tr.Id).OrderBy(s => s.Ordinal).ToListAsync();
+        Assert.Equal(2, segs.Count); // the note boundary kept the same-speaker segments apart
+    }
+
+    [Fact]
     public async Task MergeSegments_OnAnotherUsersRecording_ReturnsNotFound()
     {
         using var db = TestDb.Create();

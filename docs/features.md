@@ -36,7 +36,10 @@ is remembered.
 observations. A **live notes panel** while recording stamps each line at the second you wrote it (crash-safe,
 lands on the recording's **Notes** tab after upload); you can also jot **prep notes on an upcoming Google Calendar
 meeting** from its preview page (they attach to the recording once it is linked). Timestamped lines jump to that
-moment in the transcript. Your notes then **shape the meeting minutes** (every section weights what you flagged),
+moment in the transcript. Each timestamped note is also **woven inline into the Transcript tab** - it appears as
+its own **green line** (with your name as the speaker) right after the point in the conversation where you wrote
+it; the **Merge same-speaker rows** action treats a note as a boundary, so transcript text either side of a note
+stays separate. Your notes then **shape the meeting minutes** (every section weights what you flagged),
 and a template can include an **Enhanced notes** section where each line is expanded from the transcript — your
 words kept verbatim in bold beside the expansion, with links to the exact transcript moments (anything the meeting
 never covered is kept and marked "not discussed", never silently dropped).

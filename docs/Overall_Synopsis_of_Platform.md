@@ -340,7 +340,12 @@ the recording automatically** when its calendar link forms (`MeetingNoteAdoption
 `LinkCalendar` chokepoint that both the auto-match save and manual linking use - one-way and additive).
 Recording-anchored lines live on the detail page's **Notes tab** (CRUD at `/api/recordings/{id}/notes`);
 lines can carry a **`CapturedAtMs`** recording-clock timestamp (immutable; stamped lines deep-link to that
-moment in the transcript via the existing `?t=` navigation). **Live capture:** while recording, a
+moment in the transcript via the existing `?t=` navigation). **Transcript weave:** a stamped note is rendered
+inline in the **Transcript tab** right after the segment being spoken when it was written (pure
+`lib/transcriptNotes.ts` `weaveTranscript`; anchor = greatest `StartMs ≤ CapturedAtMs`) as its own green row
+with the current user as the "speaker"; the same anchor rule (server-side `TranscriptNoteAnchor`) makes the
+**merge-segments** action treat a note as a boundary, so `SegmentMerger` won't collapse same-speaker text from
+either side of a note (a `BreakBefore` flag on the segment after each note's anchor). **Live capture:** while recording, a
 `LiveNotesPanel` auto-opens beside the recorder (dismissable; preference in localStorage) - each
 Enter-committed line is stamped with the current *recorded* time (`recorderTiming`, pause-aware), mirrored
 to IndexedDB (`lib/pendingNotes.ts`, its own `diariz-notes` DB, keyed by user) so a crash never loses lines,

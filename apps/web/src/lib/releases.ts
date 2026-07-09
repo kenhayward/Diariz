@@ -17,7 +17,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume), system audio, or both mixed together on one device - system audio works in Chromium browsers ("Share audio") and seamlessly in the desktop app; or upload files (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A). |
 | **Transcribe & diarize** | Server-side WhisperX (word-level timestamps) with pyannote speaker diarization; speaker-labelled, editable, playable segments you can re-transcribe any time. |
 | **Speaker identification** | Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). |
-| **Notes** | Take your own note lines live during a meeting (timestamped, crash-safe); they steer the minutes and can be woven into an enhanced-notes section linking to the exact transcript moments. |
+| **Notes** | Take your own note lines live during a meeting (timestamped, crash-safe); they appear inline in the transcript at the moment you wrote them, steer the minutes, and can be woven into an enhanced-notes section linking to the exact transcript moments. |
 | **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable, driven by reusable meeting-type templates with per-block layout control (H1-H3 headings, break, Markdown, horizontal rules, drag-to-reorder) and JSON import/export. |
 | **Action items** | Auto-extracted with owner and deadline, tracked across every meeting with completion and a person filter, linking back to the transcript. |
 | **Tag cloud** | Every meeting is auto-tagged with weighted topics; a Tags tab shows a weighted cloud and the meetings behind each tag. |
@@ -50,6 +50,24 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.115.0",
+    date: "2026-07-09",
+    pr: 256,
+    headline: "Your notes, woven into the transcript",
+    summary:
+      "Notes you take during a meeting now appear inline in the Transcript tab, each slotted in right after " +
+      "the point in the conversation where you wrote it. A note shows as its own line in green (to stand out " +
+      "from transcribed speech) with your name as the speaker. Relatedly, the 'Merge same-speaker rows' action " +
+      "no longer merges transcript text across a note - the lines either side of a note stay separate, so the " +
+      "note keeps its place in the conversation.",
+    added: [
+      "Meeting notes are woven into the Transcript tab (green, timestamped, your name as the speaker) after the closest moment.",
+    ],
+    changed: [
+      "Merging same-speaker rows now treats a note as a boundary - it won't collapse transcript text from either side of a note.",
+    ],
+  },
   {
     version: "0.114.0",
     date: "2026-07-09",

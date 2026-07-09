@@ -156,6 +156,7 @@
   "liveNotesTitle": "Notes pendant l'enregistrement",
   "liveNotesHint": "Chaque ligne est horodatée au moment où vous appuyez sur Entrée.",
   "liveNotesToggle": "Notes",
+  "noteSpeakerYou": "Vous",
   "liveNotesClose": "Fermer les notes",
   "notesAttachFailed": "Vos notes ont été enregistrées mais n'ont pas pu être attachées à l'enregistrement.",
   "notesAttachRetry": "Attacher les notes",

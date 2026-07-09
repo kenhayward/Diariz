@@ -16,6 +16,9 @@ vi.mock("../lib/signalr", () => ({
   createHub: () => ({ start: () => Promise.resolve(), stop: () => Promise.resolve(), on: () => {} }),
 }));
 
+// The transcript weaves the current user's notes in, so the page reads useAuth for the note "speaker".
+vi.mock("../auth", () => ({ useAuth: () => ({ fullName: "Test User", email: "t@x.test" }) }));
+
 vi.mock("../lib/api", () => ({
   api: {
     getRecording: vi.fn(),
@@ -229,6 +232,25 @@ describe("RecordingDetail", () => {
     const transcriptTab = await screen.findByRole("tab", { name: /transcript/i });
     expect(transcriptTab.getAttribute("aria-selected")).toBe("true");
     expect(await screen.findByText("Hi")).toBeTruthy();
+  });
+
+  it("weaves the user's timed notes into the transcript with the user as the speaker", async () => {
+    (api.getRecording as ReturnType<typeof vi.fn>).mockResolvedValue(base);
+    (api.listNotes as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "note-1", text: "budget concern", capturedAtMs: 500, ordinal: 0, createdAt: "2026-07-01T00:00:00Z" },
+    ]);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={["/recordings/rec-123?t=500"]}>
+          <Routes>
+            <Route path="/recordings/:id" element={<RecordingDetail />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText("budget concern")).toBeTruthy();
+    expect(await screen.findByText("Test User")).toBeTruthy(); // the note's "speaker" (from useAuth)
   });
 
   it("switches to the Minutes tab; Re-create calls the API", async () => {

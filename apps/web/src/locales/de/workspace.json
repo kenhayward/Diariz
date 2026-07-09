@@ -156,6 +156,7 @@
   "liveNotesTitle": "Notizen während der Aufnahme",
   "liveNotesHint": "Jede Zeile wird in dem Moment gestempelt, in dem Sie die Eingabetaste drücken.",
   "liveNotesToggle": "Notizen",
+  "noteSpeakerYou": "Sie",
   "liveNotesClose": "Notizen schließen",
   "notesAttachFailed": "Ihre Notizen wurden gespeichert, konnten aber nicht der Aufnahme zugeordnet werden.",
   "notesAttachRetry": "Notizen zuordnen",
