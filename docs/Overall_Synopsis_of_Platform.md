@@ -233,6 +233,12 @@ default timeout for its header phase and relies on client-disconnect for cancell
   `Summary`/`MeetingMinutes`) with their own `Status/Error`, and a **`SectionStatusChanged`** SignalR event
   (distinct from `RecordingStatusChanged`) tells the folder page to refetch; hand-edits set `IsUserEdited` and
   survive the next regenerate.
+- **Folder-direct attachments.** Besides the read-only aggregation of its transcripts' attachments, a folder
+  can hold **its own** attachments (files or URLs) filed directly against the `Section` (`SectionAttachments`
+  table + `SectionAttachmentsController` at `api/sections/{id}/folder-attachments`, blobs under
+  `{userId}/section-attachments/…`, counted toward the quota by `StorageUsage`). The folder page's Attachments
+  tab shows these as a second, **addable** list above the transcript-aggregated one. Files open in a new tab
+  via `/content` (the `access_token` query-auth allowance in `Program.cs` was extended to `/api/sections/…/content`).
 - **Semantic search index (RAG, M3 - backend).** A **fifth Redis stream `embedding-jobs`** (group `embedders`)
   with its own `EmbeddingWorker` (singleton `BackgroundService`) builds the semantic-search index. Per job,
   `EmbeddingProcessor` windows the transcription's segments into overlapping passages (`TranscriptChunker`,
@@ -324,6 +330,11 @@ default timeout for its header phase and relies on client-disconnect for cancell
   (SSE `attachment` event carrying the name, Markdown, and candidate recordings). The web resolves the
   destination — one in-context transcript → POST it straight to `POST /api/recordings/{id}/attachments/markdown`;
   several → a picker modal, then the same endpoint (which stores a `.md`/`text/markdown` file blob, quota-enforced).
+  Separately, a **client-side `/attach` slash command** (not an LLM tool) saves the **whole current conversation**
+  as a Markdown attachment straight from the browser — onto the current transcript, the first selected transcript,
+  or the current folder (folder-direct attachment), depending on chat context. Any **Markdown attachment is editable
+  in place**: clicking Open on a `text/markdown` attachment opens the TipTap editor and Save overwrites the blob via
+  `PUT …/attachments/{id}/content` (recording or folder route).
   Both write tools are on by default (safe: email only ever reaches the user; the note only their own transcripts);
   either can be disabled in Settings / `Chat:DisabledTools`. The chat **system prompt** also now names the current
   user (`FullName` +
@@ -762,8 +773,9 @@ CI runs all four suites on a self-hosted Windows runner.
 - **M2 — done:** multi-user auth + RBAC, LLM summaries, action extraction, transcript export/email,
   re-transcribe with model choice, sections (**two-level nesting**: `Section.ParentId`, drag-to-reorder),
   speaker identification, delete-audio (keep transcript, free quota), **supporting-document attachments**
-  (files or URLs on a recording — `Attachments` table + `AttachmentsController`, files in MinIO under
-  `{userId}/attachments/…` and counted toward the quota).
+  (files or URLs on a recording — `Attachments` table + `AttachmentsController` — or **directly on a folder** —
+  `SectionAttachments` + `SectionAttachmentsController`; files in MinIO under `{userId}/attachments/…` /
+  `{userId}/section-attachments/…` and counted toward the quota; Markdown attachments are editable in place).
 - **M3 — partial:** chat across transcripts (shipped); full embedding-backed RAG over `Segment.Embedding`
   (`vector(768)`, sized for `nomic-embed-text`) is scaffolded but not yet populated.
 - **M4 — in progress:** packaging/TLS hardening; **macOS desktop app** shipped as an unsigned **beta**

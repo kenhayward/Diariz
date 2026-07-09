@@ -2,9 +2,9 @@
 /// model — so typing a command (e.g. "/tools") always does the same thing deterministically and can't be
 /// misread by the LLM as a request to run a tool.
 
-export type ChatCommand = "tools" | "help" | "clear" | "context" | "save" | "load" | "copy" | "retry";
+export type ChatCommand = "tools" | "help" | "clear" | "context" | "save" | "load" | "copy" | "retry" | "attach";
 
-const COMMANDS: ChatCommand[] = ["tools", "help", "clear", "context", "save", "load", "copy", "retry"];
+const COMMANDS: ChatCommand[] = ["tools", "help", "clear", "context", "save", "load", "copy", "retry", "attach"];
 
 /// Parse a chat input into a slash command, or null when it's a normal message. Only a *bare* command counts
 /// ("/tools", not "run /tools please") so ordinary messages that mention a slash still go to the model.
@@ -67,4 +67,17 @@ export function buildHelpOutput(commands: { command: string; description: string
 /// A simple "**heading**\n\n- item\n- item" Markdown block (used by "/context").
 export function bulletList(heading: string, items: string[]): string {
   return `**${heading}**\n\n` + items.map((i) => `- ${i}`).join("\n");
+}
+
+/// Render a chat conversation as a Markdown document (used by "/attach"). Each turn becomes a labelled
+/// section - the user's messages under `youLabel`, the assistant's under `assistantLabel`. Blank turns are
+/// skipped. Pure so it can be unit-tested without the component.
+export function conversationToMarkdown(
+  messages: { role: string; content: string }[],
+  labels: { title: string; youLabel: string; assistantLabel: string },
+): string {
+  const blocks = messages
+    .filter((m) => m.content.trim().length > 0)
+    .map((m) => `## ${m.role === "user" ? labels.youLabel : labels.assistantLabel}\n\n${m.content.trim()}`);
+  return `# ${labels.title}\n\n${blocks.join("\n\n")}\n`;
 }

@@ -6,22 +6,21 @@ import { formatBytes } from "../lib/format";
 import type { Attachment } from "../lib/types";
 import MarkdownAttachmentEditModal from "./MarkdownAttachmentEditModal";
 
-/// Open an attachment using the browser's default behaviour: a file streams from a self-authenticating
-/// URL (PDFs/images render inline, others download); a URL attachment opens its address.
-export function openAttachment(recordingId: string, a: Attachment) {
-  const href = a.kind === "Url" ? a.url ?? "" : api.attachmentContentUrl(recordingId, a.id);
+/// Open a folder-direct attachment: a file streams from a self-authenticating URL; a URL opens its address.
+export function openFolderAttachment(sectionId: string, a: Attachment) {
+  const href = a.kind === "Url" ? a.url ?? "" : api.folderAttachmentContentUrl(sectionId, a.id);
   if (href) window.open(href, "_blank", "noopener");
 }
 
-/// Manage a recording's attachments: add files or a URL (top), then rename, open, and remove the existing
-/// ones (list). Chrome-less — hosts the Attachments tab on the recording detail page. The parent owns the
-/// list (react-query); every change calls `onChange` to refetch.
-export default function AttachmentsManager({
-  recordingId,
+/// Manage a folder's own attachments (filed directly against the folder, not aggregated from its transcripts):
+/// add files or a URL, then rename, open/edit, and remove. Mirrors `AttachmentsManager` but points at the
+/// folder-attachment endpoints. The parent owns the list (react-query); every change calls `onChange`.
+export default function FolderAttachmentsManager({
+  sectionId,
   attachments,
   onChange,
 }: {
-  recordingId: string;
+  sectionId: string;
   attachments: Attachment[];
   onChange: () => void;
 }) {
@@ -49,7 +48,7 @@ export default function AttachmentsManager({
   async function onFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     await run(async () => {
-      for (const f of Array.from(files)) await api.addFileAttachment(recordingId, f);
+      for (const f of Array.from(files)) await api.addFolderFileAttachment(sectionId, f);
     }, "errAddAttachment");
     if (fileInput.current) fileInput.current.value = "";
   }
@@ -58,7 +57,7 @@ export default function AttachmentsManager({
     const trimmed = url.trim();
     if (!trimmed) return;
     void run(async () => {
-      await api.addUrlAttachment(recordingId, trimmed, urlName.trim() || undefined);
+      await api.addFolderUrlAttachment(sectionId, trimmed, urlName.trim() || undefined);
       setUrl("");
       setUrlName("");
     }, "errAddAttachment");
@@ -129,7 +128,7 @@ export default function AttachmentsManager({
                     aria-label={t("attachmentName")}
                     onBlur={(e) => {
                       const v = e.target.value.trim();
-                      if (v && v !== a.name) void run(() => api.renameAttachment(recordingId, a.id, v), "errRenameAttachment");
+                      if (v && v !== a.name) void run(() => api.renameFolderAttachment(sectionId, a.id, v), "errRenameAttachment");
                     }}
                     className="w-full rounded border px-2 py-1 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                   />
@@ -140,7 +139,7 @@ export default function AttachmentsManager({
                 <td className="py-1 text-right whitespace-nowrap">
                   <button
                     type="button"
-                    onClick={() => (isMarkdownAttachment(a) ? setEditing(a) : openAttachment(recordingId, a))}
+                    onClick={() => (isMarkdownAttachment(a) ? setEditing(a) : openFolderAttachment(sectionId, a))}
                     className="mr-2 text-blue-600 hover:underline dark:text-blue-400"
                   >
                     {isMarkdownAttachment(a) ? t("editAttachment") : t("openAttachment")}
@@ -150,7 +149,7 @@ export default function AttachmentsManager({
                     disabled={busy}
                     onClick={() => {
                       if (window.confirm(t("confirmDeleteAttachment")))
-                        void run(() => api.deleteAttachment(recordingId, a.id), "errDeleteAttachment");
+                        void run(() => api.deleteFolderAttachment(sectionId, a.id), "errDeleteAttachment");
                     }}
                     className="text-red-600 hover:underline dark:text-red-400"
                   >
@@ -166,8 +165,8 @@ export default function AttachmentsManager({
       {editing && (
         <MarkdownAttachmentEditModal
           name={editing.name}
-          load={() => api.getAttachmentText(recordingId, editing.id)}
-          save={(md) => api.updateAttachmentContent(recordingId, editing.id, md)}
+          load={() => api.getFolderAttachmentText(sectionId, editing.id)}
+          save={(md) => api.updateFolderAttachmentContent(sectionId, editing.id, md)}
           onSaved={onChange}
           onClose={() => setEditing(null)}
         />

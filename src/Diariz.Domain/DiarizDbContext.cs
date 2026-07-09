@@ -19,6 +19,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<Section> Sections => Set<Section>();
     public DbSet<SectionSummary> SectionSummaries => Set<SectionSummary>();
     public DbSet<SectionMinutes> SectionMinutes => Set<SectionMinutes>();
+    public DbSet<SectionAttachment> SectionAttachments => Set<SectionAttachment>();
     public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
     public DbSet<SpeakerProfile> SpeakerProfiles => Set<SpeakerProfile>();
     public DbSet<ProfileContribution> ProfileContributions => Set<ProfileContribution>();
@@ -131,6 +132,11 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 .WithOne(x => x.Section!)
                 .HasForeignKey<SectionMinutes>(x => x.SectionId)
                 .OnDelete(DeleteBehavior.Cascade);
+            // Folder-direct attachments (many per folder), cascade-deleted with the section.
+            e.HasMany(s => s.Attachments)
+                .WithOne(a => a.Section!)
+                .HasForeignKey(a => a.SectionId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<SectionMinutes>(e =>
@@ -169,6 +175,14 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         builder.Entity<Attachment>(e =>
         {
             e.HasIndex(a => new { a.RecordingId, a.Ordinal });
+            e.Property(a => a.Name).HasMaxLength(512);
+        });
+
+        // Folder-direct attachments. Provider-agnostic (plain columns, no vector/jsonb), so it stays outside
+        // the Npgsql guard and loads under the in-memory test provider too.
+        builder.Entity<SectionAttachment>(e =>
+        {
+            e.HasIndex(a => new { a.SectionId, a.Ordinal });
             e.Property(a => a.Name).HasMaxLength(512);
         });
 

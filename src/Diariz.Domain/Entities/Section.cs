@@ -30,4 +30,7 @@ public class Section
 
     /// <summary>The folder-level LLM minutes (the included recordings' minutes reshaped through a template).</summary>
     public SectionMinutes? Minutes { get; set; }
+
+    /// <summary>Attachments filed directly against this folder (not aggregated from its transcripts).</summary>
+    public ICollection<SectionAttachment> Attachments { get; set; } = new List<SectionAttachment>();
 }

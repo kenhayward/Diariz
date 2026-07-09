@@ -319,4 +319,62 @@ public class AttachmentsControllerTests
 
         Assert.IsType<NotFoundResult>((await controller.List(rec.Id)).Result);
     }
+
+    [Fact]
+    public async Task UpdateContent_OverwritesMarkdownBlob_RecomputesSize()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await Seed(db, userId);
+        var storage = new FakeAudioStorage();
+        var controller = Build(db, userId, storage);
+        var created = (await controller.AddMarkdown(rec.Id, new AddMarkdownAttachmentRequest("doc", "old"))).Value!;
+        var key = (await db.Attachments.FindAsync(created.Id))!.BlobKey!;
+
+        var result = await controller.UpdateContent(rec.Id, created.Id, new UpdateAttachmentContentRequest("# New body"));
+
+        Assert.IsType<NoContentResult>(result);
+        var expected = Encoding.UTF8.GetBytes("# New body");
+        Assert.Equal(expected.Length, (await db.Attachments.FindAsync(created.Id))!.SizeBytes);
+        Assert.Equal(expected, storage.Objects[key]);
+    }
+
+    [Fact]
+    public async Task UpdateContent_OnNonMarkdown_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await Seed(db, userId);
+        var controller = Build(db, userId, new FakeAudioStorage());
+        var created = (await controller.AddFile(rec.Id, FileOf("a.pdf", "application/pdf", new byte[4]))).Value!;
+
+        var result = await controller.UpdateContent(rec.Id, created.Id, new UpdateAttachmentContentRequest("x"));
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task UpdateContent_OverQuotaOnDelta_Returns413()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await Seed(db, userId, quota: 20);
+        var controller = Build(db, userId);
+        var created = (await controller.AddMarkdown(rec.Id, new AddMarkdownAttachmentRequest("doc", "small"))).Value!;
+
+        var result = await controller.UpdateContent(rec.Id, created.Id, new UpdateAttachmentContentRequest(new string('x', 100)));
+
+        Assert.Equal(StatusCodes.Status413PayloadTooLarge, Assert.IsType<ObjectResult>(result).StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateContent_NotOwned_ReturnsNotFound()
+    {
+        using var db = TestDb.Create();
+        var rec = await Seed(db, Guid.NewGuid());
+        var controller = Build(db, userId: Guid.NewGuid());
+
+        var result = await controller.UpdateContent(rec.Id, Guid.NewGuid(), new UpdateAttachmentContentRequest("x"));
+        Assert.IsType<NotFoundResult>(result);
+    }
 }

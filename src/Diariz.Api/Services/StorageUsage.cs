@@ -19,6 +19,10 @@ public class StorageUsage(DiarizDbContext db) : IStorageUsage
             .Where(r => r.UserId == userId)
             .SelectMany(r => r.Attachments)
             .SumAsync(a => a.SizeBytes, ct); // URL attachments are 0 bytes
-        return audio + attachments;
+        // Folder-direct attachments count too (owned via the section).
+        var sectionAttachments = await db.SectionAttachments
+            .Where(a => a.Section!.UserId == userId)
+            .SumAsync(a => a.SizeBytes, ct);
+        return audio + attachments + sectionAttachments;
     }
 }

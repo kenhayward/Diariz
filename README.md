@@ -33,7 +33,7 @@ At a glance - see **[docs/features.md](docs/features.md)** for the full detail o
 | **Connect Claude (MCP)** | An in-process MCP server lets Claude connect to your own meetings via OAuth (claude.ai) or a personal token (Claude Desktop/Code). |
 | **User API access** | When a Platform Administrator enables it, generate a personal API token to call the REST API as yourself, with a built-in API reference. |
 | **Translate** | Translate a whole transcript (segments, summary, actions) or a single segment; stored as revisions you can flip back. |
-| **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) to a recording and optionally feed them to chat. |
+| **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) to a recording or directly to a folder, edit Markdown attachments in place, save a chat conversation with /attach, and optionally feed them to chat. |
 | **Organise & merge** | Sections and sub-sections with drag-and-drop; browse as a list, calendar, cross-meeting actions, or tag cloud; merge recordings into one. |
 | **Folder pages** | Open a folder as a page with a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus aggregated actions, notes, and attachments tagged with their source meeting. |
 | **Google sign-in & Calendar** | Optional Google OAuth sign-in; opt-in read-only Calendar linking, invite details, and a month overlay. |

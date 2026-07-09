@@ -217,6 +217,38 @@ public class AttachmentsController : ControllerBase
         return File(stream, a.ContentType ?? "application/octet-stream");
     }
 
+    /// <summary>Overwrite a Markdown attachment's content in place (the in-app TipTap editor's Save). The blob
+    /// key is reused so MinIO replaces the object wholesale; the size is recomputed and quota re-checked on the
+    /// delta. Only Markdown file attachments are editable this way.</summary>
+    [HttpPut("{attachmentId:guid}/content")]
+    public async Task<IActionResult> UpdateContent(
+        Guid recordingId, Guid attachmentId, UpdateAttachmentContentRequest req)
+    {
+        if (!await OwnsAsync(recordingId)) return NotFound();
+        var a = await _db.Attachments.FirstOrDefaultAsync(
+            x => x.Id == attachmentId && x.RecordingId == recordingId && x.Kind == AttachmentKind.File);
+        if (a?.BlobKey is null) return NotFound();
+        if (!MarkdownAttachments.IsMarkdown(a.Name, a.ContentType))
+            return BadRequest("Only Markdown attachments can be edited.");
+
+        var bytes = Encoding.UTF8.GetBytes(req.Content ?? string.Empty);
+        if (bytes.Length > _options.MaxBytes)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge,
+                $"Attachment too large. The maximum is {_options.MaxBytes / (1024 * 1024)} MB.");
+
+        var quota = await _db.Users.Where(u => u.Id == UserId).Select(u => u.QuotaBytes).FirstOrDefaultAsync();
+        var used = await _usage.UsedBytesAsync(UserId);
+        if (used - a.SizeBytes + bytes.Length > quota)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge,
+                "Storage quota exceeded. Delete some recordings/attachments or ask an administrator to raise your quota.");
+
+        await using (var ms = new MemoryStream(bytes))
+            await _storage.UploadAsync(a.BlobKey, ms, "text/markdown");
+        a.SizeBytes = bytes.Length;
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     /// <summary>Trim a display name and cap its length (the file branch path-strips before calling this).</summary>
     private static string SafeName(string name)
     {

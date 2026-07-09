@@ -15,10 +15,14 @@ export default function MeetingMinutesEditModal({
   initial,
   onClose,
   onSave,
+  title,
 }: {
   initial: string;
   onClose: () => void;
   onSave: (markdown: string) => Promise<void> | void;
+  /// Heading text; defaults to the meeting-minutes title. Set it to reuse this editor for other Markdown
+  /// (e.g. editing a Markdown attachment).
+  title?: string;
 }) {
   const { t } = useTranslation(["workspace", "common"]);
   const [saving, setSaving] = useState(false);
@@ -50,7 +54,7 @@ export default function MeetingMinutesEditModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
       <div className="flex max-h-[85vh] w-full max-w-3xl flex-col rounded-lg bg-white p-5 shadow-xl dark:bg-gray-900">
-        <h2 className="mb-3 text-base font-semibold dark:text-gray-100">{t("workspace:minutesEditTitle")}</h2>
+        <h2 className="mb-3 text-base font-semibold dark:text-gray-100">{title ?? t("workspace:minutesEditTitle")}</h2>
 
         <MinutesToolbar editor={editor} t={t} />
 
