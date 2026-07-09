@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { copyRichLink, transcriptUrl } from "./clipboard";
+import { copyRichLink, transcriptUrl, folderUrl } from "./clipboard";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -16,6 +16,12 @@ class FakeBlob {
 describe("transcriptUrl", () => {
   it("builds an absolute /recordings/:id link on the current origin", () => {
     expect(transcriptUrl("abc-123")).toBe(`${window.location.origin}/recordings/abc-123`);
+  });
+});
+
+describe("folderUrl", () => {
+  it("builds an absolute /sections/:id link on the current origin", () => {
+    expect(folderUrl("f-1")).toBe(`${window.location.origin}/sections/f-1`);
   });
 });
 

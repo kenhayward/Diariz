@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate, useMatch } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -874,6 +874,7 @@ function GroupHeadingButton({
   onToggle,
   withBg = false,
   leading,
+  to,
 }: {
   name: string;
   count: number;
@@ -883,7 +884,14 @@ function GroupHeadingButton({
   /// Optional control rendered left of the chevron (the group select-all checkbox in Select mode). Kept
   /// outside the toggle button so it isn't a nested interactive element.
   leading?: React.ReactNode;
+  /// When set (a real section), the name navigates to the folder page and the chevron is a *separate*
+  /// larger-hit-target collapse toggle. When absent (Ungrouped), the whole label toggles collapse.
+  to?: string;
 }) {
+  const { t } = useTranslation("workspace");
+  const chevron = (
+    <span aria-hidden className="text-[11px] leading-none text-indigo-400">{collapsed ? "▸" : "▾"}</span>
+  );
   return (
     <div
       className={`flex min-w-0 items-center gap-1 ${
@@ -891,18 +899,40 @@ function GroupHeadingButton({
       }`}
     >
       {leading}
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={!collapsed}
-        className="flex min-w-0 flex-1 items-center gap-1 text-left"
-      >
-        <span aria-hidden className="text-[10px] text-indigo-400">{collapsed ? "▸" : "▾"}</span>
-        <h3 className="truncate text-xs font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
-          {name}
-        </h3>
-        <span className="text-[10px] font-normal text-indigo-400 dark:text-indigo-500">({count})</span>
-      </button>
+      {to ? (
+        <>
+          {/* Bigger hit-target chevron: collapse/expand only, decoupled from selecting the folder. */}
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? t("expandGroup", { name }) : t("collapseGroup", { name })}
+            className="-my-0.5 flex shrink-0 items-center justify-center rounded px-1.5 py-1 hover:bg-indigo-100 dark:hover:bg-indigo-900/60"
+          >
+            {chevron}
+          </button>
+          {/* The name opens the folder page (and shows as selected via the row highlight). */}
+          <NavLink to={to} className="flex min-w-0 flex-1 items-center gap-1 text-left" draggable={false}>
+            <h3 className="truncate text-xs font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+              {name}
+            </h3>
+            <span className="text-[10px] font-normal text-indigo-400 dark:text-indigo-500">({count})</span>
+          </NavLink>
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={!collapsed}
+          className="flex min-w-0 flex-1 items-center gap-1 text-left"
+        >
+          {chevron}
+          <h3 className="truncate text-xs font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+            {name}
+          </h3>
+          <span className="text-[10px] font-normal text-indigo-400 dark:text-indigo-500">({count})</span>
+        </button>
+      )}
     </div>
   );
 }
@@ -968,6 +998,8 @@ function SectionHeading({
   const { t } = useTranslation("workspace");
   const qc = useQueryClient();
   const [renaming, setRenaming] = useState(false);
+  // Highlight the row when its folder page is open (the "selected folder" state).
+  const active = useMatch("/sections/:id")?.params.id === id;
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["recordings"] });
     qc.invalidateQueries({ queryKey: ["sections"] });
@@ -1013,9 +1045,11 @@ function SectionHeading({
     // The whole header row is the drag source (no separate handle) — it highlights on hover, mirroring the
     // recording rows. Dragging is disabled while renaming so text can be selected in the input.
     <div
-      className={`flex items-center justify-between bg-indigo-50 py-0.5 pr-3 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 ${
-        nested ? "pl-7" : "pl-3"
-      }`}
+      className={`flex items-center justify-between py-0.5 pr-3 ${
+        active
+          ? "bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50"
+          : "bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60"
+      } ${nested ? "pl-7" : "pl-3"}`}
       draggable={!renaming}
       onDragStart={(e) => {
         e.dataTransfer.setData(SECTION_MIME, id);
@@ -1037,7 +1071,7 @@ function SectionHeading({
       {renaming ? (
         <SectionRenameForm initial={name} onSave={save} onCancel={() => setRenaming(false)} />
       ) : (
-        <GroupHeadingButton name={name} count={count} collapsed={collapsed} onToggle={onToggle} />
+        <GroupHeadingButton name={name} count={count} collapsed={collapsed} onToggle={onToggle} to={`/sections/${id}`} />
       )}
       <KebabMenu actions={actions} label={t("sectionActions")} />
     </div>

@@ -18,7 +18,7 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
         var opts = Options.Create(new JobQueueOptions { StreamKey = $"jobs-{Guid.NewGuid()}" });
         var queue = new RedisJobQueue(mux, opts, Options.Create(new SummarizationOptions()),
             Options.Create(new MeetingMinutesOptions()), Options.Create(new ActionsOptions()), Options.Create(new EmbeddingOptions()),
-            Options.Create(new TagsOptions()));
+            Options.Create(new TagsOptions()), Options.Create(new SectionSummaryOptions()), Options.Create(new SectionMinutesOptions()));
 
         var job = new TranscriptionJob(Guid.NewGuid(), Guid.NewGuid(), "user/blob.webm", "whisperx-large-v3");
         await queue.EnqueueAsync(job);
@@ -47,7 +47,7 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
         var queue = new RedisJobQueue(mux, Options.Create(new JobQueueOptions()),
             Options.Create(new SummarizationOptions { StreamKey = streamKey }),
             Options.Create(new MeetingMinutesOptions()), Options.Create(new ActionsOptions()), Options.Create(new EmbeddingOptions()),
-            Options.Create(new TagsOptions()));
+            Options.Create(new TagsOptions()), Options.Create(new SectionSummaryOptions()), Options.Create(new SectionMinutesOptions()));
 
         var job = new SummarizationJob(Guid.NewGuid(), Guid.NewGuid());
         await queue.EnqueueSummarizationAsync(job);
@@ -67,7 +67,7 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
         var queue = new RedisJobQueue(mux, Options.Create(new JobQueueOptions()),
             Options.Create(new SummarizationOptions()),
             Options.Create(new MeetingMinutesOptions { StreamKey = streamKey }), Options.Create(new ActionsOptions()), Options.Create(new EmbeddingOptions()),
-            Options.Create(new TagsOptions()));
+            Options.Create(new TagsOptions()), Options.Create(new SectionSummaryOptions()), Options.Create(new SectionMinutesOptions()));
 
         var job = new MeetingMinutesJob(Guid.NewGuid(), Guid.NewGuid());
         await queue.EnqueueMeetingMinutesAsync(job);
@@ -87,7 +87,7 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
         var queue = new RedisJobQueue(mux, Options.Create(new JobQueueOptions()),
             Options.Create(new SummarizationOptions()), Options.Create(new MeetingMinutesOptions()),
             Options.Create(new ActionsOptions { StreamKey = streamKey }), Options.Create(new EmbeddingOptions()),
-            Options.Create(new TagsOptions()));
+            Options.Create(new TagsOptions()), Options.Create(new SectionSummaryOptions()), Options.Create(new SectionMinutesOptions()));
 
         var job = new ActionsJob(Guid.NewGuid(), Guid.NewGuid());
         await queue.EnqueueActionsAsync(job);
@@ -107,7 +107,7 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
         var queue = new RedisJobQueue(mux, Options.Create(new JobQueueOptions()),
             Options.Create(new SummarizationOptions()), Options.Create(new MeetingMinutesOptions()),
             Options.Create(new ActionsOptions()), Options.Create(new EmbeddingOptions { StreamKey = streamKey }),
-            Options.Create(new TagsOptions()));
+            Options.Create(new TagsOptions()), Options.Create(new SectionSummaryOptions()), Options.Create(new SectionMinutesOptions()));
 
         var job = new EmbeddingJob(Guid.NewGuid(), Guid.NewGuid());
         await queue.EnqueueEmbeddingAsync(job);
@@ -127,7 +127,7 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
         var queue = new RedisJobQueue(mux, Options.Create(new JobQueueOptions()),
             Options.Create(new SummarizationOptions()), Options.Create(new MeetingMinutesOptions()),
             Options.Create(new ActionsOptions()), Options.Create(new EmbeddingOptions()),
-            Options.Create(new TagsOptions { StreamKey = streamKey }));
+            Options.Create(new TagsOptions { StreamKey = streamKey }), Options.Create(new SectionSummaryOptions()), Options.Create(new SectionMinutesOptions()));
 
         var job = new TagsJob(Guid.NewGuid(), Guid.NewGuid());
         await queue.EnqueueTagsAsync(job);

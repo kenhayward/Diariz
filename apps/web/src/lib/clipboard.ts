@@ -6,6 +6,12 @@ export function transcriptUrl(id: string): string {
   return `${window.location.origin}/recordings/${id}`;
 }
 
+/// The persistent, owner-only deep-link to a folder (section) page. Like transcriptUrl, it's a personal
+/// bookmark - the opener must be signed in as the owner.
+export function folderUrl(id: string): string {
+  return `${window.location.origin}/sections/${id}`;
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")

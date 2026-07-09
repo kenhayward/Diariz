@@ -442,6 +442,8 @@ public sealed class FakeJobQueue : IJobQueue
     public List<AudioMergeJob> AudioMergeEnqueued { get; } = new();
     public List<EmbeddingJob> EmbeddingEnqueued { get; } = new();
     public List<TagsJob> TagsEnqueued { get; } = new();
+    public List<SectionSummaryJob> SectionSummaryEnqueued { get; } = new();
+    public List<SectionMinutesJob> SectionMinutesEnqueued { get; } = new();
 
     public Task EnqueueAsync(TranscriptionJob job, CancellationToken ct = default)
     {
@@ -482,6 +484,18 @@ public sealed class FakeJobQueue : IJobQueue
     public Task EnqueueTagsAsync(TagsJob job, CancellationToken ct = default)
     {
         TagsEnqueued.Add(job);
+        return Task.CompletedTask;
+    }
+
+    public Task EnqueueSectionSummaryAsync(SectionSummaryJob job, CancellationToken ct = default)
+    {
+        SectionSummaryEnqueued.Add(job);
+        return Task.CompletedTask;
+    }
+
+    public Task EnqueueSectionMinutesAsync(SectionMinutesJob job, CancellationToken ct = default)
+    {
+        SectionMinutesEnqueued.Add(job);
         return Task.CompletedTask;
     }
 }

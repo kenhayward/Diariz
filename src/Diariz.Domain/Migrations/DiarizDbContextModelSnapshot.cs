@@ -771,6 +771,91 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("Sections");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.SectionMinutes", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsUserEdited")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("MeetingTypeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("SectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MeetingTypeId");
+
+                    b.HasIndex("SectionId")
+                        .IsUnique();
+
+                    b.ToTable("SectionMinutes");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.SectionSummary", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsUserEdited")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("SectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SectionId")
+                        .IsUnique();
+
+                    b.ToTable("SectionSummaries");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.Segment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1604,6 +1689,35 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.SectionMinutes", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.MeetingType", "MeetingType")
+                        .WithMany()
+                        .HasForeignKey("MeetingTypeId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Diariz.Domain.Entities.Section", "Section")
+                        .WithOne("Minutes")
+                        .HasForeignKey("Diariz.Domain.Entities.SectionMinutes", "SectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("MeetingType");
+
+                    b.Navigation("Section");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.SectionSummary", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.Section", "Section")
+                        .WithOne("Summary")
+                        .HasForeignKey("Diariz.Domain.Entities.SectionSummary", "SectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Section");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.Segment", b =>
                 {
                     b.HasOne("Diariz.Domain.Entities.Transcription", "Transcription")
@@ -1791,7 +1905,11 @@ namespace Diariz.Domain.Migrations
                 {
                     b.Navigation("Children");
 
+                    b.Navigation("Minutes");
+
                     b.Navigation("Recordings");
+
+                    b.Navigation("Summary");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.SpeakerProfile", b =>

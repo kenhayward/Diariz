@@ -115,6 +115,16 @@ original words (so you can always flip back), and exports/email/chat use them.
 - **Organise** recordings into **sections and sub-sections** (one level of nesting) with drag-and-drop
 ordering and cross-group moves; select a whole group at once to build chat context. Browse them as a
 **list or a calendar** (days with recordings are highlighted; click one to see that day's recordings).
+- **Folder pages.** Open any folder (section) as a **first-class page** - the same layout as a recording
+(heading, subheading, toolbar, tabs). The disclosure triangle (enlarged) still collapses/expands; clicking the
+folder **name** opens its page and highlights the folder. **Overview** shows folder stats (transcript count,
+total duration, first/last date), a **roll-up LLM summary** of all the folder's recordings (and its
+sub-folders), and a read-only transcript list grouped by sub-folder. **Minutes** produces **consolidated
+minutes** by reshaping the recordings' individual minutes through a **meeting-type template** you pick. Both
+regenerate any missing per-recording summaries/minutes first, run in the background, are editable, and are
+saved on the folder. **Actions**, **Notes**, and **Attachments** tabs aggregate every item across the folder
+and its sub-folders, each tagged with the **meeting** it came from - editable and deletable in place
+(attachments removable); adding happens on the recording, not the folder.
 - **Tag cloud across your meetings**: every meeting is **tagged automatically** after transcription — the
 LLM extracts up to 12 weighted concepts/themes it was actually about (participant names and filler are
 excluded). The left panel's **Tags** tab shows them as a flat weighted cloud (font size scales with how

@@ -17,6 +17,8 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<MeetingMinutes> MeetingMinutes => Set<MeetingMinutes>();
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
     public DbSet<Section> Sections => Set<Section>();
+    public DbSet<SectionSummary> SectionSummaries => Set<SectionSummary>();
+    public DbSet<SectionMinutes> SectionMinutes => Set<SectionMinutes>();
     public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
     public DbSet<SpeakerProfile> SpeakerProfiles => Set<SpeakerProfile>();
     public DbSet<ProfileContribution> ProfileContributions => Set<ProfileContribution>();
@@ -119,6 +121,25 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 .WithMany(s => s.Children)
                 .HasForeignKey(s => s.ParentId)
                 .OnDelete(DeleteBehavior.Cascade);
+            // Folder-level LLM artifacts, 1:1, cascade-deleted with the section (and, transitively, with a
+            // parent section). Provider-agnostic (no vector/jsonb), so kept outside the Npgsql guard.
+            e.HasOne(s => s.Summary)
+                .WithOne(x => x.Section!)
+                .HasForeignKey<SectionSummary>(x => x.SectionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(s => s.Minutes)
+                .WithOne(x => x.Section!)
+                .HasForeignKey<SectionMinutes>(x => x.SectionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<SectionMinutes>(e =>
+        {
+            // The folder's chosen template; deleting the type falls back to the General default (SetNull).
+            e.HasOne(m => m.MeetingType)
+                .WithMany()
+                .HasForeignKey(m => m.MeetingTypeId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<RecordingAction>(e =>

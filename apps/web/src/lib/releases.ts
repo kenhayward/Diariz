@@ -28,6 +28,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Translate** | Translate a whole transcript or a single segment, stored as revisions you can flip back. |
 | **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) and optionally feed them to chat. |
 | **Organise & merge** | Sections and sub-sections with drag-and-drop; browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
+| **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
 | **API access** | Generate a personal API token (when enabled) to call the REST API as yourself, with a built-in API reference. |
 | **Multi-user & roles** | Standard / Administrator / Platform Administrator with an approval lifecycle, per-user isolation, and Light/Dark/Auto themes. |
@@ -49,6 +50,30 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.114.0",
+    date: "2026-07-09",
+    pr: 255,
+    headline: "Folder pages: summarise and manage a whole folder at once",
+    summary:
+      "Folders are now first-class. Click a folder's name (the disclosure triangle, now bigger, still just " +
+      "collapses/expands) to open a folder page - the same layout as a recording, with a heading, subheading, " +
+      "and tabs. The Overview rolls up an LLM summary of all the folder's recordings (and its sub-folders), " +
+      "shows folder stats, and lists the included transcripts grouped by sub-folder. The Minutes tab produces " +
+      "consolidated minutes by reshaping the recordings' minutes through a meeting-type template you pick. Both " +
+      "regenerate any missing per-recording summaries/minutes first, run in the background, and can be edited. " +
+      "The Actions, Notes, and Attachments tabs gather every item across the folder and its sub-folders, each " +
+      "tagged with the meeting it came from - editable and deletable in place (attachments removable), with no " +
+      "adding. Folder summaries and minutes are saved on the folder.",
+    added: [
+      "A folder (section) detail page with Overview, Minutes, Actions, Notes, and Attachments tabs.",
+      "LLM folder summary and folder minutes, aggregated across a folder and its sub-folders and persisted on the folder.",
+      "Aggregated Actions/Notes/Attachments across a folder with a read-only 'Meeting' column (edit/delete, no add).",
+    ],
+    changed: [
+      "The sidebar folder chevron is a larger, separate collapse toggle; clicking a folder's name opens its page and highlights it.",
+    ],
+  },
   {
     version: "0.113.0",
     date: "2026-07-09",

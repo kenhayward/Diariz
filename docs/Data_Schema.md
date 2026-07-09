@@ -69,6 +69,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddMeetingNotes` | `MeetingNotes` (the user's own note lines; anchored to a recording **or** a calendar event, adopted onto the recording when the calendar link forms; cascades from both user and recording) |
 | `AddRecordingTags` | `RecordingTags` (LLM-extracted weighted tag-cloud tags, machine-only; cascade on `Recording`, index `(RecordingId, Ordinal)`) + `Recordings.TagsExtractedAt` (timestamptz null) — the tag-backfill "done" marker |
 | `AddLlmTimeout` | `PlatformSettings.LlmTimeoutSeconds` (int, NOT NULL, default 120) — the platform-wide per-request timeout applied to every LLM call (the single authority; the HTTP clients have no cap) |
+| `AddSectionSummaryAndMinutes` | `SectionSummaries` + `SectionMinutes` (1:1 with `Section`, cascade) — the folder-level roll-up LLM summary/minutes; `SectionMinutes.MeetingTypeId` (FK, `ON DELETE SET NULL`) is the folder's chosen template |
 
 ### Entity-relationship overview
 
@@ -409,6 +410,26 @@ User-defined group recordings are filed under.
 Index: `(UserId, Name)`, `(ParentId)`. Sections nest **one level deep** (a sub-section can't be a parent;
 enforced in `SectionsController`). Deleting a section **Cascade**-deletes its sub-sections and **SetNull**s
 the recordings of itself and those sub-sections (ungroups, not deletes).
+
+#### `SectionSummaries` / `SectionMinutes`
+The folder-level LLM roll-ups shown on the section (folder) page - a summary combining the included
+recordings' summaries, and minutes reshaping their minutes through a template. Each is **1:1 with `Section`**
+(cascade), mirroring `Summary`/`MeetingMinutes` (which are per-`Transcription`). Generated asynchronously by
+the `SectionSummaryWorker`/`SectionMinutesWorker`; "included" = recordings whose `SectionId` is the section or
+one of its child sections.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `SectionId` | uuid FK → Sections | **unique** (1:1); cascade |
+| `MeetingTypeId` | uuid FK → MeetingTypes null | **`SectionMinutes` only** - the folder's chosen template; `ON DELETE SET NULL` |
+| `Model` | text | LLM model, or `"user"` for a hand-edit |
+| `Text` | text | the summary (plain) / minutes (Markdown) |
+| `CreatedAt` | timestamptz | |
+| `IsUserEdited` | bool | protects a hand-edit from the next regenerate |
+| `UpdatedAt` | timestamptz null | last user edit |
+| `Status` | int | `SectionGenerationStatus`: 0 Idle, 1 Generating, 2 Ready, 3 Failed |
+| `Error` | text null | last generation error (when Failed) |
 
 #### `ChatSessions`
 Saved chat conversations; stateless server (thread + context stored as JSON).
