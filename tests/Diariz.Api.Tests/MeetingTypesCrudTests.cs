@@ -85,7 +85,7 @@ public class MeetingTypesCrudTests
     public async Task Create_rejects_malformed_content()
     {
         using var db = TestDb.Create();
-        var bad = new MeetingTypeContent([new TemplateSection(3, "Bad", [])]); // level 3
+        var bad = new MeetingTypeContent([new TemplateSection(4, "Bad", [])]); // level 4 (H1-H3 only)
         var req = new MeetingTypeRequest("Standard", "My type", "", "document", "#5C6BC0", bad);
         Assert.IsType<BadRequestObjectResult>((await Build(db, Guid.NewGuid()).Create(req)).Result);
     }

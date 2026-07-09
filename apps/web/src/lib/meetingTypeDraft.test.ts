@@ -48,6 +48,10 @@ describe("block operations (within a section)", () => {
     });
   });
 
+  it("adds a horizontal-line block (no text or field, its own paragraph)", () => {
+    expect(addBlock(base, 1, "hr").sections[1].blocks[0]).toEqual({ kind: "hr", breakAfter: "paragraph" });
+  });
+
   it("updates a block", () => {
     const out = updateBlock(base, 0, 0, { text: "changed" });
     expect(out.sections[0].blocks[0]).toEqual({ kind: "boilerplate", text: "changed" });
@@ -135,5 +139,9 @@ describe("contentError", () => {
     expect(contentError({ sections: [{ level: 1, title: "S", blocks: [{ kind: "field", field: "salary" }] }] })).toBe(
       "blockFieldRequired",
     );
+  });
+
+  it("passes a horizontal-line block (needs neither text nor a field)", () => {
+    expect(contentError({ sections: [{ level: 1, title: "S", blocks: [{ kind: "hr" }] }] })).toBeNull();
   });
 });

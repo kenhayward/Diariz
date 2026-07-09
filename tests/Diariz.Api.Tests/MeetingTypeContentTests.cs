@@ -55,12 +55,33 @@ public class MeetingTypeContentTests
     }
 
     [Fact]
-    public void Validate_rejects_a_heading_level_outside_1_or_2()
+    public void Validate_rejects_a_heading_level_outside_1_to_3()
     {
-        var content = new MeetingTypeContent([new TemplateSection(3, "Bad", [])]);
+        var content = new MeetingTypeContent([new TemplateSection(4, "Bad", [])]);
         var (ok, error) = content.Validate();
         Assert.False(ok);
         Assert.NotNull(error);
+    }
+
+    [Fact]
+    public void Validate_accepts_an_H3_heading()
+    {
+        var content = new MeetingTypeContent(
+            [new TemplateSection(3, "Sub-sub", [new TemplateBlock(TemplateBlock.Boilerplate, Text: "x")])]);
+        var (ok, error) = content.Validate();
+        Assert.True(ok);
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public void Validate_accepts_a_horizontal_line_block()
+    {
+        // A horizontal-line block carries neither text nor a field - it just emits a rule.
+        var content = new MeetingTypeContent(
+            [new TemplateSection(1, "S", [new TemplateBlock(TemplateBlock.HorizontalLine)])]);
+        var (ok, error) = content.Validate();
+        Assert.True(ok);
+        Assert.Null(error);
     }
 
     [Fact]

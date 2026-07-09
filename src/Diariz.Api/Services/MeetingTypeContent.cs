@@ -54,8 +54,8 @@ public record MeetingTypeContent(IReadOnlyList<TemplateSection> Sections)
         if (Sections is null) return (false, "Content has no sections.");
         foreach (var section in Sections)
         {
-            if (section.Level is not (1 or 2))
-                return (false, $"Section heading level must be 1 or 2 (was {section.Level}).");
+            if (section.Level is not (1 or 2 or 3))
+                return (false, $"Section heading level must be 1, 2 or 3 (was {section.Level}).");
             if (string.IsNullOrWhiteSpace(section.Title))
                 return (false, "Every section needs a title.");
             foreach (var block in section.Blocks ?? [])
@@ -71,6 +71,8 @@ public record MeetingTypeContent(IReadOnlyList<TemplateSection> Sections)
                         if (block.Field is null || !Fields.Contains(block.Field))
                             return (false, $"Unknown substitution field '{block.Field}'.");
                         break;
+                    case TemplateBlock.HorizontalLine:
+                        break; // carries neither text nor a field
                     default:
                         return (false, $"Unknown block kind '{block.Kind}'.");
                 }
@@ -90,12 +92,14 @@ public record TemplateSection(int Level, string Title, IReadOnlyList<TemplateBlo
 
 /// <summary>One content block within a section. <paramref name="Kind"/> is one of <see cref="Boilerplate"/> (emit
 /// <paramref name="Text"/> verbatim), <see cref="Field"/> (substitute the recording value named by
-/// <see cref="TemplateBlock.Field"/>), or <see cref="Prompt"/> (run <paramref name="Text"/> as a model instruction).</summary>
+/// <see cref="TemplateBlock.Field"/>), <see cref="Prompt"/> (run <paramref name="Text"/> as a model instruction),
+/// or <see cref="HorizontalLine"/> (emit a Markdown rule, no text/field).</summary>
 public record TemplateBlock(string Kind, string? Text = null, string? Field = null, string? BreakAfter = null)
 {
     public const string Boilerplate = "boilerplate";
     public const string FieldKind = "field";
     public const string Prompt = "prompt";
+    public const string HorizontalLine = "hr"; // emits a Markdown rule ("---"); carries no text/field
 
     // The whitespace emitted after this block, before the next (see MeetingTypeMinutesComposer). Null = legacy rule.
     public const string BreakNone = "none";

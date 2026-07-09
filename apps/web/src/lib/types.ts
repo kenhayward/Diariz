@@ -47,8 +47,9 @@ export interface TagCloudEntry {
 }
 
 // ---- Meeting types (minutes templates) ----
-/// A block within a template section: literal boilerplate text, a substituted recording field, or a model prompt.
-export type TemplateBlockKind = "boilerplate" | "field" | "prompt";
+/// A block within a template section: literal boilerplate text, a substituted recording field, a model prompt, or a
+/// horizontal rule (`hr`, which carries no text or field).
+export type TemplateBlockKind = "boilerplate" | "field" | "prompt" | "hr";
 export interface TemplateBlock {
   kind: TemplateBlockKind;
   text?: string | null;

@@ -101,6 +101,26 @@ public class MeetingTypeMinutesComposerTests
     }
 
     [Fact]
+    public async Task Horizontal_line_renders_as_a_rule_isolated_by_blank_lines()
+    {
+        // Even when the preceding block asks for no break, the rule must sit on its own paragraph - otherwise
+        // Markdown reads "Intro\n---" as a setext H2 heading rather than a horizontal rule.
+        var content = new MeetingTypeContent(
+        [
+            new TemplateSection(1, "S",
+            [
+                new TemplateBlock(TemplateBlock.Boilerplate, Text: "Intro", BreakAfter: TemplateBlock.BreakNone),
+                new TemplateBlock(TemplateBlock.HorizontalLine),
+                new TemplateBlock(TemplateBlock.Boilerplate, Text: "Outro"),
+            ]),
+        ]);
+
+        var md = await MeetingTypeMinutesComposer.ComposeAsync(content, Field, Prompt);
+
+        Assert.Equal("# S\n\nIntro\n\n---\n\nOutro", md);
+    }
+
+    [Fact]
     public async Task Null_break_after_falls_back_to_legacy_field_glue()
     {
         // No BreakAfter set anywhere: a field still glues to the preceding boilerplate, two boilerplates break.
