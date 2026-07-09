@@ -50,6 +50,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.112.2",
+    date: "2026-07-09",
+    pr: 253,
+    headline: "Fix the web container health check",
+    summary:
+      "Follow-up to the compose hardening: the web container's health check pointed at http://localhost/, which " +
+      "can resolve to IPv6 (::1). The nginx SPA server only listens on IPv4 (:80), so the probe was refused and " +
+      "the container reported unhealthy even though it was serving fine. It now probes 127.0.0.1 explicitly. No " +
+      "app behaviour change; the check lives in the compose file, so this needs only a redeploy (no image rebuild).",
+    fixed: [
+      "The web container now reports healthy (its health check probes 127.0.0.1 instead of an IPv6 localhost).",
+    ],
+  },
+  {
     version: "0.112.1",
     date: "2026-07-09",
     pr: 252,
