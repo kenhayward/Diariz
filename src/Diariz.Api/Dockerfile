@@ -12,9 +12,9 @@ RUN dotnet publish src/Diariz.Api/Diariz.Api.csproj -c Release -o /app /p:UseApp
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 # postgresql-client gives pg_dump/pg_restore for the platform backup/restore (MaintenanceController). The
 # client major must be >= the Postgres server major (PG16) — a newer client is fine, which the distro's
-# default package satisfies.
+# default package satisfies. curl is for the container HEALTHCHECK (hits GET /health).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends postgresql-client \
+    && apt-get install -y --no-install-recommends postgresql-client curl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app ./

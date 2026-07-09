@@ -9,6 +9,7 @@ name: diariz
 services:
   postgres:
     image: pgvector/pgvector:pg16
+    restart: unless-stopped
     environment:
       POSTGRES_DB: diariz
       POSTGRES_USER: diariz
@@ -23,6 +24,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -31,13 +33,16 @@ services:
 
   minio:
     image: minio/minio:latest
+    restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    # Only the S3 API is published on the host (handy for debugging/mc). The web console (container :9001,
+    # still served for direct `docker exec`/port-forward use) is deliberately NOT published - the app never
+    # uses it (the API reaches MinIO in-network at minio:9000), so there's no reason to expose it.
     ports:
       - "9002:9000"   # S3 API   (host 9002 -> container 9000)
-      - "9003:9001"   # console   (host 9003 -> container 9001)
     volumes:
       - miniodata:/data
     healthcheck:
@@ -50,10 +55,18 @@ services:
     build:
       context: ..
       dockerfile: src/Diariz.Api/Dockerfile
+    restart: unless-stopped
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       minio: { condition: service_started }
+    healthcheck:
+      # GET /health (reports version + DB/Redis readiness). start_period covers first-run EF migrations + seeding.
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=diariz;Username=diariz;Password=${POSTGRES_PASSWORD:-diariz}"
@@ -126,19 +139,37 @@ services:
       context: ../apps/web
       args:
         BUILD_COMMIT: ${BUILD_COMMIT:-}
+    restart: unless-stopped
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      # nginx serves the SPA index (busybox wget ships in nginx:alpine). This checks web liveness only,
+      # independent of the API - the static index is returned even when /api is down.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:80/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     ports:
       - "8081:80"   # open the app at http://localhost:8081
 
   worker:
     build:
       context: ../src/Diariz.Worker
+    restart: unless-stopped
     depends_on:
       redis: { condition: service_healthy }
       minio: { condition: service_started }
-      api: { condition: service_started }
+      api: { condition: service_healthy }
+    healthcheck:
+      # The worker has no HTTP server - healthcheck.py checks the liveness heartbeat file (touched by a
+      # daemon thread), so a worker busy on a long transcription still reports healthy. start_period covers
+      # the torch/model import on first boot.
+      test: ["CMD", "python3", "healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
     environment:
       REDIS_URL: "redis://redis:6379/0"
       S3_ENDPOINT: "http://minio:9000"
