@@ -140,6 +140,23 @@ public class ChatControllerTests
     }
 
     [Fact]
+    public async Task Get_RoundTripsAFolderChatSectionId()
+    {
+        var me = Guid.NewGuid();
+        var (controller, _, _) = Build(me);
+        var sectionId = Guid.NewGuid();
+        var save = await controller.CreateConversation(
+            new SaveChatConversationRequest(
+                [new ChatTurnDto("user", "summarise the folder")],
+                new SavedChatContextDto([], null, null, SectionId: sectionId)),
+            default);
+        var id = Assert.IsType<SaveChatConversationResult>(save.Value).Id;
+
+        var dto = Assert.IsType<ChatConversationDto>((await controller.GetConversation(id)).Value);
+        Assert.Equal(sectionId, dto.Context.SectionId); // folder chat restores its folder
+    }
+
+    [Fact]
     public async Task Get_OtherUsers_Returns404()
     {
         var (controller, db, _) = Build(Guid.NewGuid());

@@ -292,8 +292,9 @@ default timeout for its header phase and relies on client-disconnect for cancell
   `.eml/.ics` — via PdfPig / Open XML SDK / MimeKit), and **URL** attachments are fetched by
   **`UrlFetcher`** behind **SSRF guards** (`UrlFetchGuard` — blocks loopback/private/link-local IPs and
   non-http(s) schemes), with a size cap, redirect re-validation, and HTML→text reduction. Conversations
-  save to **`ChatSession`** rows (thread + context stored as `jsonb`), so the server stays stateless
-  between turns — each request resends the full history and context.
+  save to **`ChatSession`** rows (thread + context stored as `jsonb`, including a folder chat's `SectionId`
+  so reopening it resumes the folder context), so the server stays stateless between turns — each request
+  resends the full history and context.
 - **Chat tool calling (built-in transcript tools).** When a user enables tools (master switch + per-tool list,
   resolved by **`ChatToolSettingsResolver`** — user override ?? server `Chat:ToolsEnabled` / `Chat:DisabledTools`),
   the chat turn runs as a bounded **agentic loop** (`ChatToolOrchestrator`, ≤5 rounds): it offers the enabled

@@ -404,7 +404,7 @@ public record ChatTurnDto(string Role, string Content);
 /// the user's whole library on demand.</summary>
 public record SavedChatContextDto(
     IReadOnlyList<Guid> RecordingIds, string? AttachmentName, string? AttachmentText,
-    bool IncludeAttachments = false, bool SearchAllMeetings = false);
+    bool IncludeAttachments = false, bool SearchAllMeetings = false, Guid? SectionId = null);
 
 /// <summary>A streaming chat request: the selected context + the full conversation so far.
 /// <paramref name="SectionId"/> (when set) makes the chat about a folder - its roll-up summary, minutes and

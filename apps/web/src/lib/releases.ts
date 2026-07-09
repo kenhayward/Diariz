@@ -66,6 +66,7 @@ export const RELEASES: Release[] = [
       "the command list'.",
     added: [
       "Chat about a folder: its summary, minutes, actions (and, optionally, all its attachments) become the context.",
+      "Saving a folder chat remembers the folder, so reopening it resumes with the folder's context.",
     ],
     changed: [
       "The chat context is inferred (Current Transcript / Current Folder / Selected Transcripts); the explicit 'Selected transcripts' option was removed.",

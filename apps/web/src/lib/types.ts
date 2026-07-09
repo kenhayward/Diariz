@@ -614,6 +614,8 @@ export interface SavedChatContext {
   includeAttachments?: boolean;
   /// "All meetings" mode: no transcripts pre-loaded; the assistant searches the whole library on demand.
   searchAllMeetings?: boolean;
+  /// Folder chat: the conversation was about this folder (its summary/minutes/actions were the context).
+  sectionId?: string | null;
 }
 
 export interface ChatConversationSummary {

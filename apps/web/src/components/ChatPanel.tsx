@@ -420,9 +420,15 @@ export default function ChatPanel() {
     try {
       const c = await api.getChatConversation(id);
       setMessages(c.messages);
-      // Restore the conversation's transcripts as the shared selection; "current" then infers single/multiple.
+      // Restore the conversation's context. A folder chat reopens its folder in the middle panel (so the
+      // inferred context stays "Current Folder" as the chat continues); otherwise restore the transcripts as
+      // the shared selection and let "current" infer single/multiple.
       const ids = c.context.recordingIds ?? [];
-      if (c.context.searchAllMeetings) {
+      if (c.context.sectionId) {
+        setContextMode("current");
+        setFrozenCurrent({ kind: "folder", sectionId: c.context.sectionId });
+        navigate(`/sections/${c.context.sectionId}`);
+      } else if (c.context.searchAllMeetings) {
         setContextMode("all");
       } else if (ids.length > 0) {
         selection.set(ids);
@@ -453,6 +459,7 @@ export default function ChatPanel() {
       messages,
       context: {
         recordingIds,
+        sectionId,
         attachmentName: attachment?.name ?? null,
         attachmentText: attachment?.text ?? null,
         includeAttachments,
