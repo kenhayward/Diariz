@@ -58,6 +58,26 @@ public class SegmentMergerTests
     }
 
     [Fact]
+    public void Merge_BreakBefore_KeepsSameSpeakerPartsSeparate()
+    {
+        // A note sits between the two middle same-speaker parts (BreakBefore on the third): the run must not
+        // collapse across it - the parts either side of the note stay separate.
+        var parts = new List<Part>
+        {
+            new("S", "S", 0, 1000, "a"),
+            new("S", "S", 1000, 2000, "b"),
+            new("S", "S", 2000, 3000, "c", BreakBefore: true),
+            new("S", "S", 3000, 4000, "d"),
+        };
+
+        var merged = Merge(parts);
+
+        Assert.Equal(2, merged.Count);
+        Assert.Equal(new Part("S", "S", 0, 2000, "a\nb"), merged[0]);
+        Assert.Equal(new Part("S", "S", 2000, 4000, "c\nd"), merged[1]);
+    }
+
+    [Fact]
     public void Merge_AllSameSpeaker_ProducesOnePart()
     {
         var parts = new List<Part>

@@ -388,8 +388,19 @@ public class RecordingsController : ControllerBase
             return string.IsNullOrEmpty(sp.DisplayName) ? $"l:{label}" : $"n:{sp.DisplayName}";
         }
 
+        // A note-taker's note sits between two segments; don't let a same-speaker merge swallow that boundary
+        // (or the note would jump to after the whole merged block). Flag the segment after each note's anchor.
+        var noteTimes = await _db.MeetingNotes
+            .Where(n => n.RecordingId == id && n.CapturedAtMs != null)
+            .Select(n => n.CapturedAtMs!.Value)
+            .ToListAsync();
+        var breakBefore = TranscriptNoteAnchor.BreakBeforeIndices(
+            segments.Select(s => s.StartMs).ToList(), noteTimes);
+
         var merged = SegmentMerger.Merge(segments
-            .Select(s => new SegmentMerger.Part(KeyFor(s.SpeakerLabel), s.SpeakerLabel, s.StartMs, s.EndMs, s.EffectiveText)).ToList());
+            .Select((s, i) => new SegmentMerger.Part(
+                KeyFor(s.SpeakerLabel), s.SpeakerLabel, s.StartMs, s.EndMs, s.EffectiveText, breakBefore.Contains(i)))
+            .ToList());
         if (merged.Count == segments.Count) return NoContent(); // nothing adjacent to merge
 
         _db.Segments.RemoveRange(segments);
