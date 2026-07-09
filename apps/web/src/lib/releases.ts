@@ -14,7 +14,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 
 | Feature | Description |
 | --- | --- |
-| **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume) or system audio via the desktop app; or upload files (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A). |
+| **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume), system audio, or both mixed together on one device - system audio works in Chromium browsers ("Share audio") and seamlessly in the desktop app; or upload files (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A). |
 | **Transcribe & diarize** | Server-side WhisperX (word-level timestamps) with pyannote speaker diarization; speaker-labelled, editable, playable segments you can re-transcribe any time. |
 | **Speaker identification** | Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). |
 | **Notes** | Take your own note lines live during a meeting (timestamped, crash-safe); they steer the minutes and can be woven into an enhanced-notes section linking to the exact transcript moments. |
@@ -49,6 +49,30 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.113.0",
+    date: "2026-07-09",
+    pr: 254,
+    headline: "Record your microphone and system audio together",
+    summary:
+      "You can now capture both sides of a call on a single device - handy on a remote laptop with just one " +
+      "mic and speaker. A new 'System audio' checkbox next to the source dropdown mixes the system audio into " +
+      "your recording; both voices are transcribed and diarized as usual. The dropdown also gains a 'No " +
+      "microphone' option, so you can record system audio on its own (e.g. a webinar). Record is enabled " +
+      "whenever at least one source is active. Along the way, system-audio capture is no longer labelled " +
+      "'desktop only': it works in Chromium browsers too (tick 'Share audio' in the screen-share dialog) and " +
+      "remains seamless in the desktop app; the checkbox and the 'No microphone' option are hidden where the " +
+      "browser can't capture system audio (Firefox/Safari). If system audio isn't shared, the recording falls " +
+      "back to microphone-only rather than failing. The desktop tray gains a 'Record Both' item.",
+    added: [
+      "'System audio' checkbox to mix system audio into a recording (mic + system on one device).",
+      "'No microphone' source option for system-audio-only capture.",
+      "'Record Both' item in the desktop tray menu.",
+    ],
+    changed: [
+      "System audio is no longer 'desktop only' - it works in Chromium browsers via 'Share audio'.",
+    ],
+  },
   {
     version: "0.112.2",
     date: "2026-07-09",

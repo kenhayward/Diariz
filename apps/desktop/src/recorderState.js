@@ -16,7 +16,9 @@ function formatElapsed(ms) {
 }
 
 function sourceLabel(source) {
-  return source === "system" ? "system audio" : "microphone";
+  if (source === "system") return "system audio";
+  if (source === "both") return "microphone + system audio";
+  return "microphone";
 }
 
 /// The dynamic record/stop menu items for the current phase, as plain descriptors
@@ -32,6 +34,7 @@ function trayRecorderItems(state, elapsedMs) {
       return [
         { id: "record-mic", label: "Record Microphone", enabled },
         { id: "record-system", label: "Record System Audio", enabled },
+        { id: "record-both", label: "Record Both", enabled },
       ];
     }
   }

@@ -8,7 +8,8 @@ data model and object-storage layout see [`Data_Schema.md`](Data_Schema.md); for
 ## What it is
 
 Diariz is a **self-hostable, multi-user voice/meeting transcription platform**. You **record** (microphone,
-or system audio via the desktop app - Windows loopback / macOS ScreenCaptureKit) or **upload** an audio file; the server **transcribes
+system audio, or **both mixed together on one device** - system audio via `getDisplayMedia` "Share audio" in
+Chromium browsers, or the desktop app's Windows loopback / macOS ScreenCaptureKit) or **upload** an audio file; the server **transcribes
 it with speaker diarization and word-level timestamps**; and you get speaker-labelled, timestamped segments
 you can rename, edit, play back, and re-transcribe. On top of the transcript it can **identify known speakers
 across recordings** (voiceprints), **summarise**, **extract action items**, **email/download** the
@@ -86,8 +87,13 @@ Compose service name (`minio:9000`, `redis:6379`, `postgres:5432`, `api:8080`).
 
 ## Core data flow: capture → transcript
 
-1. **Capture/upload.** The web `Recorder` (`MediaRecorder`) records mic or — in the desktop shell — Windows
-   loopback audio; or the user uploads a file. For microphone capture the user can pick a **specific input
+1. **Capture/upload.** The web `Recorder` (`MediaRecorder`) records the mic, **system audio**
+   (`getDisplayMedia` - available in Chromium browsers via "Share audio", and seamlessly in the desktop shell
+   via Windows loopback), or **both mixed** into one track (a Web Audio `MediaStreamAudioDestinationNode`
+   sums the mic + system streams; `RecordingSource.Combined`); or the user uploads a file. A "System audio"
+   checkbox adds system audio to the capture, and a "No microphone" source option records system audio alone
+   (both hidden where `getDisplayMedia` is unsupported); if system audio isn't shared, capture falls back to
+   mic-only. For microphone capture the user can pick a **specific input
    device** (`enumerateDevices()`; the choice is persisted in `localStorage` and re-resolved against the live
    device list on hot-plug via `lib/audioDevices.ts`) and toggle **capture constraints** (echo cancellation /
    noise suppression / auto gain / mono) applied to `getUserMedia`. While recording, a **Web Audio

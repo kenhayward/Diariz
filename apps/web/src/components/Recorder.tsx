@@ -4,11 +4,14 @@ import { api, apiErrorMessage, getToken } from "../lib/api";
 import { userIdFromToken } from "../lib/jwt";
 import {
   getStream,
+  getCombinedStream,
+  supportsDisplayAudio,
   isElectron,
   describeAudioError,
   listInputDevices,
   unlockDeviceLabels,
   type AudioSourceKind,
+  type CaptureSession,
 } from "../lib/audioSource";
 import {
   parseSourceToken,
@@ -40,10 +43,15 @@ import {
   type PendingNotes,
 } from "../lib/pendingNotes";
 import LiveNotesPanel from "./LiveNotesPanel";
-import type { MeetingNote } from "../lib/types";
+import type { MeetingNote, RecordingSource } from "../lib/types";
 
 const SOURCE_KEY = "diariz.recorder.source";
 const CONSTRAINTS_KEY = "diariz.recorder.audioConstraints";
+const SYSTEM_AUDIO_KEY = "diariz.recorder.systemAudio";
+
+// Whether this environment can capture system audio at all (Chromium/desktop). Drives the System audio
+// checkbox + the "No microphone" dropdown option; false in Firefox/Safari.
+const CAN_SYSTEM_AUDIO = supportsDisplayAudio() || isElectron;
 
 function loadSavedSource(): PersistedSource | null {
   try {
@@ -52,6 +60,27 @@ function loadSavedSource(): PersistedSource | null {
   } catch {
     return null;
   }
+}
+
+function loadSavedSystemAudio(): boolean {
+  try {
+    return localStorage.getItem(SYSTEM_AUDIO_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+// A share dialog that was cancelled/denied, or that returned no audio track. When a mic is also being
+// captured we can safely fall back to mic-only; a hard failure (e.g. NotReadableError) is rethrown.
+function isAbortish(e: unknown): boolean {
+  const name = (e as { name?: string } | null)?.name;
+  return (
+    name === "NotAllowedError" ||
+    name === "NotFoundError" ||
+    name === "AbortError" ||
+    name === "SecurityError" ||
+    name === "PermissionDeniedError"
+  );
 }
 
 function loadSavedConstraints(): AudioConstraints {
@@ -74,6 +103,8 @@ export default function Recorder({
   // The chosen source: default mic / a specific mic / system. `selection` carries the deviceId + label
   // so we can survive device-id rotation (see resolvePersistedSource).
   const [selection, setSelection] = useState<SourceSelection>({ kind: "default" });
+  // Add system audio to the capture (mixed with the mic, or on its own when "No microphone" is chosen).
+  const [systemAudio, setSystemAudio] = useState(false);
   const [devices, setDevices] = useState<InputDevice[]>([]);
   const [hasLabels, setHasLabels] = useState(false);
   const [constraints, setConstraints] = useState<AudioConstraints>(DEFAULT_CONSTRAINTS);
@@ -89,6 +120,8 @@ export default function Recorder({
   const [elapsed, setElapsed] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A non-fatal notice (e.g. we fell back to mic-only because system audio wasn't shared).
+  const [notice, setNotice] = useState<string | null>(null);
   // An unsaved recording recovered from local storage (its upload failed previously, e.g. the session
   // expired). Offered back for upload so the audio is never lost.
   const [pending, setPending] = useState<PendingRecording | null>(null);
@@ -118,8 +151,12 @@ export default function Recorder({
   }, [userId]);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
+  // The active capture (its stream is recorded + metered; `stop` tears down all tracks + any AudioContext).
+  const sessionRef = useRef<CaptureSession | null>(null);
   // The live recording stream, exposed to the level meter while recording (nulled in recorder.onstop).
   const streamRef = useRef<MediaStream | null>(null);
+  // Latest checkbox value, read inside start() (state may not have flushed when a tray command fires).
+  const systemAudioRef = useRef(false);
   const chunksRef = useRef<Blob[]>([]);
   // Tracks *recorded* time (excludes paused stretches) so the timer + uploaded duration stay honest.
   const timingRef = useRef<Timing>({ accumulatedMs: 0, runningSince: null });
@@ -147,9 +184,15 @@ export default function Recorder({
     );
   }, []);
 
+  // Keep the ref in step with the checkbox so a tray-driven start() reads the latest value.
+  useEffect(() => {
+    systemAudioRef.current = systemAudio;
+  }, [systemAudio]);
+
   // On mount: restore persisted source + constraints, enumerate devices, subscribe to hot-plug.
   useEffect(() => {
     setConstraints(loadSavedConstraints());
+    setSystemAudio(CAN_SYSTEM_AUDIO && loadSavedSystemAudio());
     const saved = loadSavedSource();
     let cancelled = false;
     void (async () => {
@@ -166,7 +209,9 @@ export default function Recorder({
       if (cancelled) return;
       setDevices(list.devices);
       setHasLabels(list.hasLabels);
-      setSelection(resolvePersistedSource(saved, list.devices));
+      const restored = resolvePersistedSource(saved, list.devices);
+      // "No microphone" is only usable when system audio is available; otherwise it would strand Record.
+      setSelection(restored.kind === "none" && !CAN_SYSTEM_AUDIO ? { kind: "default" } : restored);
     })();
 
     const md = navigator.mediaDevices;
@@ -208,7 +253,16 @@ export default function Recorder({
     if (sel.kind === "device") sel.label = devices.find((d) => d.deviceId === sel.deviceId)?.label || undefined;
     setSelection(sel);
     persistSource(sel);
-    if (sel.kind === "system") setCogOpen(false); // constraints don't apply to loopback
+    if (sel.kind === "none") setCogOpen(false); // no mic to tune
+  }
+
+  function toggleSystemAudio(on: boolean) {
+    setSystemAudio(on);
+    try {
+      localStorage.setItem(SYSTEM_AUDIO_KEY, String(on));
+    } catch {
+      /* non-fatal */
+    }
   }
 
   function toggleConstraint(key: keyof AudioConstraints) {
@@ -340,21 +394,52 @@ export default function Recorder({
   // button passes nothing and records the current `selection`. A tray "mic" maps to the current specific
   // mic (or default), "system" to loopback.
   async function start(trayKind?: AudioSourceKind) {
-    let sel: SourceSelection;
-    if (trayKind === "system") sel = { kind: "system" };
-    else if (trayKind === "mic") sel = selection.kind === "system" ? { kind: "default" } : selection;
-    else sel = selection;
+    // Resolve which mic (if any) and whether to add system audio, from a tray command or the on-screen
+    // controls. A tray "mic" with the current "No microphone" selection falls back to the default mic.
+    let micSel: SourceSelection;
+    let wantMic: boolean;
+    let wantSystem: boolean;
+    const asMic = () => (selection.kind === "none" ? ({ kind: "default" } as SourceSelection) : selection);
+    if (trayKind === "mic") {
+      wantMic = true; wantSystem = false; micSel = asMic();
+    } else if (trayKind === "system") {
+      wantMic = false; wantSystem = true; micSel = { kind: "default" };
+    } else if (trayKind === "both") {
+      wantMic = true; wantSystem = true; micSel = asMic();
+    } else {
+      wantMic = selection.kind !== "none"; wantSystem = systemAudioRef.current; micSel = selection;
+    }
+    if (!wantMic && !wantSystem) return; // nothing selected (Record is disabled, but guard anyway)
 
-    const coarse: AudioSourceKind = sel.kind === "system" ? "system" : "mic";
     setError(null);
+    setNotice(null);
+    let coarse: AudioSourceKind = wantMic && wantSystem ? "both" : wantMic ? "mic" : "system";
     try {
-      const stream = await getStream(sel, coarse === "mic" ? constraints : undefined);
-      streamRef.current = stream; // exposed so the level meter can tap it while recording
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+      let session: CaptureSession;
+      if (wantMic && wantSystem) {
+        try {
+          session = await getCombinedStream(micSel, constraints);
+        } catch (e) {
+          if (!isAbortish(e)) throw e;
+          // System audio wasn't shared - record the mic alone rather than losing the take.
+          session = await getStream(micSel, constraints);
+          coarse = "mic";
+          setNotice(t("combinedFellBackToMic"));
+        }
+      } else if (wantMic) {
+        session = await getStream(micSel, constraints);
+      } else {
+        session = await getStream({ kind: "system" }, undefined);
+      }
+
+      sessionRef.current = session;
+      streamRef.current = session.stream; // exposed so the level meter can tap it while recording
+      const recorder = new MediaRecorder(session.stream, { mimeType: "audio/webm" });
       chunksRef.current = [];
       recorder.ondataavailable = (e) => e.data.size > 0 && chunksRef.current.push(e.data);
       recorder.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
+        sessionRef.current?.stop();
+        sessionRef.current = null;
         streamRef.current = null;
         void upload();
       };
@@ -374,7 +459,7 @@ export default function Recorder({
       setNotesOpen(localStorage.getItem(NOTES_OPEN_KEY) !== "false");
       reportRef.current({ phase: "recording", source: coarse });
       // A mic grant unlocks device labels — re-enumerate so specifics appear next time.
-      if (coarse === "mic") void refreshDevices();
+      if (coarse !== "system") void refreshDevices();
     } catch (e) {
       // Log the raw cause (DOMException name/message) so the actual failure is diagnosable.
       console.error("Audio capture failed:", e);
@@ -424,8 +509,14 @@ export default function Recorder({
     const blob = new Blob(chunksRef.current, { type: "audio/webm" });
     // Recorded time only (pauses excluded); stop() has already folded the final running segment.
     const durationMs = timing.elapsedMs(timingRef.current, Date.now());
-    const source: "Microphone" | "System" = activeSourceRef.current === "system" ? "System" : "Microphone";
-    const prefix = source === "System" ? t("recTitlePrefixSystem") : t("recTitlePrefixMic");
+    const source: RecordingSource =
+      activeSourceRef.current === "both" ? "Combined"
+      : activeSourceRef.current === "system" ? "System"
+      : "Microphone";
+    const prefix =
+      source === "Combined" ? t("recTitlePrefixBoth")
+      : source === "System" ? t("recTitlePrefixSystem")
+      : t("recTitlePrefixMic");
     const title = `${prefix} ${new Date().toLocaleString()}`;
     const rec: PendingRecording = { userId: userId ?? "", blob, title, durationMs, source, createdAt: Date.now() };
 
@@ -532,23 +623,42 @@ export default function Recorder({
           aria-label={t("sourceMicrophone")}
           className="rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         >
-          {buildSourceOptions(devices, hasLabels, {
-            micDefault: t("sourceMicDefault"),
-            system: `${t("sourceSystem")}${isElectron ? "" : t("systemDesktopSuffix")}`,
-            numbered: (n) => t("sourceMicNumbered", { n }),
-          }).map((o) => (
+          {buildSourceOptions(
+            devices,
+            hasLabels,
+            {
+              micDefault: t("sourceMicDefault"),
+              noMic: t("sourceNoMic"),
+              numbered: (n) => t("sourceMicNumbered", { n }),
+            },
+            { canSystemAudio: CAN_SYSTEM_AUDIO },
+          ).map((o) => (
             <option key={o.token} value={o.token}>
               {o.label}
             </option>
           ))}
         </select>
 
-        {/* Capture-constraint popover — mic only (loopback ignores these). */}
+        {/* Add system audio to the capture (mixed with the mic, or on its own for "No microphone").
+            Shown only where getDisplayMedia can capture it. */}
+        {CAN_SYSTEM_AUDIO && (
+          <label className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-200">
+            <input
+              type="checkbox"
+              checked={systemAudio}
+              onChange={(e) => toggleSystemAudio(e.target.checked)}
+              disabled={recording}
+            />
+            {t("systemAudioToggle")}
+          </label>
+        )}
+
+        {/* Capture-constraint popover — mic only (no mic to tune when "No microphone" is selected). */}
         <div className="relative" ref={cogRef}>
           <button
             type="button"
             onClick={() => setCogOpen((o) => !o)}
-            disabled={recording || selection.kind === "system"}
+            disabled={recording || selection.kind === "none"}
             title={t("audioSettings")}
             aria-label={t("audioSettings")}
             aria-expanded={cogOpen}
@@ -556,7 +666,7 @@ export default function Recorder({
           >
             ⚙
           </button>
-          {cogOpen && selection.kind !== "system" && (
+          {cogOpen && selection.kind !== "none" && (
             <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded border bg-white p-3 text-sm shadow-lg dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
@@ -610,7 +720,7 @@ export default function Recorder({
         ) : (
           <button
             onClick={() => start()}
-            disabled={busy}
+            disabled={busy || (selection.kind === "none" && !systemAudio)}
             className="rounded bg-gray-900 px-3 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
           >
             {busy ? t("recUploading") : t("recRecord")}
@@ -685,6 +795,7 @@ export default function Recorder({
         </div>
       )}
       {error && !compact && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {notice && <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">{notice}</p>}
       {labelsTried && !hasLabels && !recording && !error && (
         <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{t("noMicHint")}</p>
       )}

@@ -10,7 +10,7 @@ export type RecordingStatus =
   | "Merging"
   | "Failed";
 
-export type RecordingSource = "Microphone" | "System" | "Upload";
+export type RecordingSource = "Microphone" | "System" | "Upload" | "Combined";
 
 export interface RecordingSummary {
   id: string;

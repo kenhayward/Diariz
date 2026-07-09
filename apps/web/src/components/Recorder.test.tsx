@@ -17,6 +17,8 @@ vi.mock("../lib/pendingNotes", () => ({
 vi.mock("../lib/uploadContext", () => ({ useUpload: () => ({ uploadFiles: vi.fn() }) }));
 vi.mock("../lib/audioSource", () => ({
   getStream: vi.fn(),
+  getCombinedStream: vi.fn(),
+  supportsDisplayAudio: vi.fn(() => true),
   isElectron: false,
   describeAudioError: () => "audio error",
   listInputDevices: vi.fn().mockResolvedValue({ devices: [], hasLabels: false }),
@@ -30,7 +32,9 @@ vi.mock("../lib/pendingRecording", () => ({
 }));
 
 import { api } from "../lib/api";
-import { getStream, listInputDevices, micPermissionState, unlockDeviceLabels } from "../lib/audioSource";
+import {
+  getStream, getCombinedStream, listInputDevices, micPermissionState, unlockDeviceLabels,
+} from "../lib/audioSource";
 import { loadPendingRecording, clearPendingRecording } from "../lib/pendingRecording";
 import { savePendingNotes, clearPendingNotes } from "../lib/pendingNotes";
 import Recorder from "./Recorder";
@@ -60,6 +64,8 @@ class FakeMediaRecorder {
 }
 (globalThis as unknown as { MediaRecorder: unknown }).MediaRecorder = FakeMediaRecorder;
 const fakeStream = { getTracks: () => [], getAudioTracks: () => [], getVideoTracks: () => [] };
+// getStream/getCombinedStream resolve to a CaptureSession ({ stream, stop }).
+const fakeSession = { stream: fakeStream, stop: () => {} };
 
 const pending = {
   userId: "u1",
@@ -121,7 +127,7 @@ describe("Recorder source selection", () => {
     (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: false });
   });
 
-  it("lists Microphone (default), then specific mics, then System audio last", async () => {
+  it("lists Microphone (default), then specific mics, then No microphone (system available)", async () => {
     (listInputDevices as Mock).mockResolvedValue({
       devices: [
         { deviceId: "aaa", label: "Built-in Mic" },
@@ -137,7 +143,7 @@ describe("Recorder source selection", () => {
       "Microphone (default)",
       "Built-in Mic",
       "USB Headset",
-      "System audio (desktop only)",
+      "No microphone",
     ]);
   });
 
@@ -146,7 +152,7 @@ describe("Recorder source selection", () => {
       devices: [{ deviceId: "bbb", label: "USB Headset" }],
       hasLabels: true,
     });
-    (getStream as Mock).mockResolvedValue(fakeStream);
+    (getStream as Mock).mockResolvedValue(fakeSession);
     render(<Recorder onUploaded={() => {}} />);
 
     // Wait for the async device load to populate the options before selecting — otherwise a slow
@@ -180,7 +186,7 @@ describe("Recorder source selection", () => {
 
   it("feeds cog constraint changes into capture", async () => {
     (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
-    (getStream as Mock).mockResolvedValue(fakeStream);
+    (getStream as Mock).mockResolvedValue(fakeSession);
     render(<Recorder onUploaded={() => {}} />);
 
     fireEvent.click(await screen.findByRole("button", { name: /audio settings/i }));
@@ -195,13 +201,88 @@ describe("Recorder source selection", () => {
     );
   });
 
-  it("disables the audio-settings cog when System audio is selected", async () => {
+  it("disables the audio-settings cog when No Microphone is selected", async () => {
     (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
     render(<Recorder onUploaded={() => {}} />);
 
-    fireEvent.change(await screen.findByRole("combobox"), { target: { value: "system" } });
+    fireEvent.change(await screen.findByRole("combobox"), { target: { value: "none" } });
     const cog = screen.getByRole("button", { name: /audio settings/i }) as HTMLButtonElement;
     expect(cog.disabled).toBe(true);
+  });
+
+  it("shows the System audio checkbox where supported", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    expect(await screen.findByRole("checkbox", { name: /system audio/i })).toBeTruthy();
+  });
+
+  it("records mic only by default (checkbox off) -> source Microphone, no combined capture", async () => {
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.upload as Mock).mockResolvedValue({ id: "r1" });
+    render(<Recorder onUploaded={() => {}} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByText(/●/);
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+    expect((api.upload as Mock).mock.calls[0][3]).toBe("Microphone");
+    expect(getCombinedStream).not.toHaveBeenCalled();
+  });
+
+  it("mixes system audio when a mic is selected and the checkbox is ticked -> source Combined", async () => {
+    (getCombinedStream as Mock).mockResolvedValue(fakeSession);
+    (api.upload as Mock).mockResolvedValue({ id: "r1" });
+    render(<Recorder onUploaded={() => {}} />);
+
+    fireEvent.click(await screen.findByRole("checkbox", { name: /system audio/i }));
+    fireEvent.click(screen.getByRole("button", { name: /record/i }));
+    await screen.findByText(/●/);
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+    expect(getCombinedStream).toHaveBeenCalled();
+    expect((api.upload as Mock).mock.calls[0][3]).toBe("Combined");
+  });
+
+  it("records system only when No Microphone + system audio -> source System", async () => {
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.upload as Mock).mockResolvedValue({ id: "r1" });
+    render(<Recorder onUploaded={() => {}} />);
+
+    fireEvent.change(await screen.findByRole("combobox"), { target: { value: "none" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /system audio/i }));
+    fireEvent.click(screen.getByRole("button", { name: /record/i }));
+    await screen.findByText(/●/);
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+    expect((api.upload as Mock).mock.calls[0][3]).toBe("System");
+    expect(getStream).toHaveBeenCalledWith({ kind: "system" }, undefined);
+    expect(getCombinedStream).not.toHaveBeenCalled();
+  });
+
+  it("disables Record when No Microphone and system audio is off", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.change(await screen.findByRole("combobox"), { target: { value: "none" } });
+    expect((screen.getByRole("button", { name: /record/i }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("falls back to microphone-only when system audio isn't shared", async () => {
+    (getCombinedStream as Mock).mockRejectedValue(
+      Object.assign(new Error("x"), { name: "NotAllowedError" }),
+    );
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.upload as Mock).mockResolvedValue({ id: "r1" });
+    render(<Recorder onUploaded={() => {}} />);
+
+    fireEvent.click(await screen.findByRole("checkbox", { name: /system audio/i }));
+    fireEvent.click(screen.getByRole("button", { name: /record/i }));
+    await screen.findByText(/●/); // still recording (mic only)
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+    expect((api.upload as Mock).mock.calls[0][3]).toBe("Microphone");
+    expect(screen.getByText(/microphone only/i)).toBeTruthy();
   });
 
   it("closes the audio-settings popover on an outside click", async () => {
@@ -277,7 +358,7 @@ describe("Recorder pause/resume", () => {
     vi.clearAllMocks();
     localStorage.clear();
     (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
-    (getStream as Mock).mockResolvedValue(fakeStream);
+    (getStream as Mock).mockResolvedValue(fakeSession);
   });
 
   it("toggles Pause↔Resume while recording and shows a Paused indicator", async () => {
@@ -310,7 +391,7 @@ describe("live notes", () => {
     vi.clearAllMocks();
     localStorage.clear();
     (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
-    (getStream as Mock).mockResolvedValue(fakeStream);
+    (getStream as Mock).mockResolvedValue(fakeSession);
     (api.upload as Mock).mockResolvedValue({ id: "rec-new" });
     (api.createNotes as Mock).mockResolvedValue([]);
   });

@@ -418,6 +418,7 @@ function refreshTray() {
     click: () => {
       if (item.id === "record-mic") startRecording("mic");
       else if (item.id === "record-system") startRecording("system");
+      else if (item.id === "record-both") startRecording("both");
       else if (item.id === "stop") stopRecording();
     },
   }));

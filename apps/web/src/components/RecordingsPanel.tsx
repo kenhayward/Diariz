@@ -54,6 +54,7 @@ const SECTION_MIME = "application/x-diariz-section";
 
 function sourceLabel(s: RecordingSource, t: TFunction): string {
   if (s === "System") return t("workspace:sourceSystem");
+  if (s === "Combined") return t("workspace:sourceCombined");
   if (s === "Upload") return t("workspace:sourceUpload");
   return t("workspace:sourceMicrophone");
 }

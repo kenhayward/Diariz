@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { describeAudioError } from "./audioSource";
+import { describeAudioError, supportsDisplayAudio } from "./audioSource";
 
 const err = (name: string) => Object.assign(new Error(name), { name });
 
@@ -17,8 +17,10 @@ describe("describeAudioError", () => {
     expect(describeAudioError(err("NotFoundError"), "mic", false)).toMatch(/no microphone|not found|connected/i);
   });
 
-  it("keeps the desktop-app hint for system audio in a plain browser", () => {
-    expect(describeAudioError(err("NotAllowedError"), "system", false)).toMatch(/desktop app/i);
+  it("guides toward 'Share audio' for system capture rather than claiming desktop-only", () => {
+    const msg = describeAudioError(err("NotAllowedError"), "system", false);
+    expect(msg.toLowerCase()).not.toContain("needs the desktop app");
+    expect(msg).toMatch(/share audio/i);
   });
 
   it("falls back to a generic message for unknown errors (in a secure context)", () => {
@@ -37,5 +39,13 @@ describe("describeAudioError", () => {
   it("flags an insecure context when the mediaDevices API is unavailable", () => {
     // jsdom already lacks navigator.mediaDevices, matching an http/non-localhost page.
     expect(describeAudioError(err("TypeError"), "mic", false)).toMatch(/secure page|localhost|https/i);
+  });
+});
+
+describe("supportsDisplayAudio", () => {
+  it("true only when getDisplayMedia exists (Chromium/desktop)", () => {
+    expect(supportsDisplayAudio({ mediaDevices: { getDisplayMedia: () => {} } } as unknown as Navigator)).toBe(true);
+    expect(supportsDisplayAudio({ mediaDevices: {} } as unknown as Navigator)).toBe(false);
+    expect(supportsDisplayAudio({} as unknown as Navigator)).toBe(false);
   });
 });

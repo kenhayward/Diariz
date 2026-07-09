@@ -3,7 +3,11 @@
 // (mirrors segmentPlayback.ts / actionsView.ts). The component in Recorder.tsx does the actual
 // enumeration/getUserMedia and localStorage IO; this module just shapes and reconciles the data.
 
-export type SourceKind = "default" | "device" | "system";
+// "none" = No Microphone (system-audio-only capture, paired with the System audio checkbox).
+export type SourceKind = "default" | "device" | "system" | "none";
+
+// Coarse capture kind used by the tray + upload title/enum: mic, system-only, or both mixed.
+export type AudioSourceKind = "mic" | "system" | "both";
 
 export interface SourceSelection {
   kind: SourceKind;
@@ -29,7 +33,7 @@ export interface SourceOption {
 /** Translated strings the (otherwise pure) option builder needs. */
 export interface SourceOptionLabels {
   micDefault: string;
-  system: string;
+  noMic: string;
   numbered: (n: number) => string;
 }
 
@@ -81,7 +85,8 @@ export function normalizeInputDevices(devices: InputDevice[]): InputDevice[] {
 
 /** Decode a dropdown/persisted token into a selection. Unknown/blank → default (never throws). */
 export function parseSourceToken(value: string): SourceSelection {
-  if (value === "system") return { kind: "system" };
+  if (value === "none") return { kind: "none" };
+  if (value === "system") return { kind: "system" }; // legacy/internal (system-only capture path)
   if (value.startsWith(DEVICE_PREFIX)) {
     const deviceId = value.slice(DEVICE_PREFIX.length);
     if (deviceId) return { kind: "device", deviceId };
@@ -91,20 +96,24 @@ export function parseSourceToken(value: string): SourceSelection {
 
 /** Encode a selection back into its token. */
 export function formatSourceToken(sel: SourceSelection): string {
+  if (sel.kind === "none") return "none";
   if (sel.kind === "system") return "system";
   if (sel.kind === "device" && sel.deviceId) return `${DEVICE_PREFIX}${sel.deviceId}`;
   return "default";
 }
 
 /**
- * Ordered dropdown options: Microphone (default) first, one entry per enumerated device, System last.
- * A device shows its real label when `hasLabels` and the label is non-empty; otherwise a generic
- * "Microphone N" (browsers withhold labels until a getUserMedia grant).
+ * Ordered dropdown options: Microphone (default) first, one entry per enumerated device, then
+ * "No microphone" - but only when system audio is available (`opts.canSystemAudio`), otherwise picking it
+ * with no way to enable system audio would leave Record permanently disabled. System audio itself is a
+ * separate checkbox, not a dropdown entry. A device shows its real label when `hasLabels` and the label is
+ * non-empty; otherwise a generic "Microphone N" (browsers withhold labels until a getUserMedia grant).
  */
 export function buildSourceOptions(
   devices: InputDevice[],
   hasLabels: boolean,
   labels: SourceOptionLabels,
+  opts?: { canSystemAudio?: boolean },
 ): SourceOption[] {
   const options: SourceOption[] = [
     { token: "default", label: labels.micDefault, kind: "default" },
@@ -113,7 +122,7 @@ export function buildSourceOptions(
     const label = hasLabels && d.label ? d.label : labels.numbered(i + 1);
     options.push({ token: `${DEVICE_PREFIX}${d.deviceId}`, label, kind: "device" });
   });
-  options.push({ token: "system", label: labels.system, kind: "system" });
+  if (opts?.canSystemAudio) options.push({ token: "none", label: labels.noMic, kind: "none" });
   return options;
 }
 

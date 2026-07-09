@@ -112,7 +112,7 @@ The owned audio recording.
 | `UserId` | uuid FK → AspNetUsers | owner; every query filters on this |
 | `Title` | varchar(512) | auto descriptor (e.g. "Mic 6/26/2026, 1:25 PM") |
 | `Name` | varchar(512) null | user-editable display name; auto-filled by the summariser when unset (UI shows `Name ?? Title`) |
-| `Source` | int | `RecordingSource`: 0 Microphone, 1 System, 2 Upload |
+| `Source` | int | `RecordingSource`: 0 Microphone, 1 System, 2 Upload, 3 Combined (mic + system mixed) |
 | `BlobKey` | text | MinIO object key (see §2) |
 | `ContentType` | text | MIME of the stored audio (e.g. `audio/webm`) |
 | `SizeBytes` | bigint | blob size; counts toward the owner's quota (reset to 0 when the audio is deleted) |
