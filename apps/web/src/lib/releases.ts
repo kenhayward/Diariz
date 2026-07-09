@@ -18,7 +18,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Transcribe & diarize** | Server-side WhisperX (word-level timestamps) with pyannote speaker diarization; speaker-labelled, editable, playable segments you can re-transcribe any time. |
 | **Speaker identification** | Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). |
 | **Notes** | Take your own note lines live during a meeting (timestamped, crash-safe); they steer the minutes and can be woven into an enhanced-notes section linking to the exact transcript moments. |
-| **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable, driven by reusable meeting-type templates with per-block layout control (break, Markdown, drag-to-reorder) and JSON import/export. |
+| **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable, driven by reusable meeting-type templates with per-block layout control (H1-H3 headings, break, Markdown, horizontal rules, drag-to-reorder) and JSON import/export. |
 | **Action items** | Auto-extracted with owner and deadline, tracked across every meeting with completion and a person filter, linking back to the transcript. |
 | **Tag cloud** | Every meeting is auto-tagged with weighted topics; a Tags tab shows a weighted cloud and the meetings behind each tag. |
 | **Chat over transcripts** | Stream answers over one, several, or all meetings via your OpenAI-compatible model, with attachments and saved conversations. |
@@ -50,7 +50,7 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
-    version: "0.111.2",
+    version: "0.112.1",
     date: "2026-07-09",
     pr: 252,
     headline: "Sturdier Docker Compose: restart policies and health checks",
@@ -66,6 +66,25 @@ export const RELEASES: Release[] = [
     changed: [
       "All Compose services restart unless-stopped; web/API/worker have Docker health checks; web and worker wait for API health.",
       "The MinIO console port is no longer published on the host (the app never used it).",
+    ],
+  },
+  {
+    version: "0.112.0",
+    date: "2026-07-09",
+    pr: 251,
+    headline: "Horizontal rules and H3 headings in minutes templates",
+    summary:
+      "The meeting-type template editor gains two building blocks. A new Horizontal line block drops a rule " +
+      "between content (it always sits on its own line, so the minutes render a clean divider), and the heading " +
+      "dropdown now offers H3 alongside H1 and H2 for a third level of sub-sections. Separately, the Delete audio " +
+      "action is now disabled while a recording is still transcribing - matching Delete - so you can't remove the " +
+      "audio the worker is still reading mid-pipeline.",
+    added: [
+      "Horizontal line block in the meeting-type template editor (renders a Markdown rule, isolated on its own line).",
+      "H3 heading level for template sections (H1-H3).",
+    ],
+    changed: [
+      "Delete audio is disabled while a recording is still processing, the same as Delete.",
     ],
   },
   {

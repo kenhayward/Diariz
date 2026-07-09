@@ -423,12 +423,13 @@ function ContentEditor({
               </span>
               <select
                 value={section.level}
-                onChange={(e) => onChange(updateSection(content, si, { level: Number(e.target.value) as 1 | 2 }))}
+                onChange={(e) => onChange(updateSection(content, si, { level: Number(e.target.value) as 1 | 2 | 3 }))}
                 aria-label={t("workspace:mtHeadingLevel")}
                 className="rounded border px-1 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               >
                 <option value={1}>H1</option>
                 <option value={2}>H2</option>
+                <option value={3}>H3</option>
               </select>
               <input
                 value={section.title}
@@ -443,6 +444,7 @@ function ContentEditor({
                   { label: t("workspace:mtAddBoilerplate"), onClick: () => onChange(addBlock(content, si, "boilerplate")) },
                   { label: t("workspace:mtAddField"), onClick: () => onChange(addBlock(content, si, "field")) },
                   { label: t("workspace:mtAddPrompt"), onClick: () => onChange(addBlock(content, si, "prompt")) },
+                  { label: t("workspace:mtAddHr"), onClick: () => onChange(addBlock(content, si, "hr")) },
                   { label: t("workspace:mtMoveUp"), onClick: () => onChange(moveSection(content, si, si - 1)), disabled: si === 0 },
                   { label: t("workspace:mtMoveDown"), onClick: () => onChange(moveSection(content, si, si + 1)), disabled: si === content.sections.length - 1 },
                   { label: t("workspace:mtDeleteSection"), onClick: () => onChange(removeSection(content, si)), danger: true },
@@ -553,6 +555,7 @@ function BlockRow({
   const label =
     kind === "boilerplate" ? t("workspace:mtKindBoilerplate")
     : kind === "field" ? t("workspace:mtKindField")
+    : kind === "hr" ? t("workspace:mtKindHr")
     : t("workspace:mtKindPrompt");
 
   return (
@@ -583,6 +586,9 @@ function BlockRow({
               <option key={f} value={f}>{t(`workspace:mtFieldOpt_${f}`)}</option>
             ))}
           </select>
+        ) : kind === "hr" ? (
+          // A horizontal rule has nothing to edit - show the line it renders as.
+          <div className="my-2 border-t border-gray-300 dark:border-gray-600" aria-hidden="true" />
         ) : (
           <AutoGrowTextarea
             value={text}
@@ -592,17 +598,20 @@ function BlockRow({
           />
         )}
       </div>
-      <select
-        value={breakAfter}
-        onChange={(e) => onBreakAfter(e.target.value)}
-        aria-label={t("workspace:mtBreakAfter")}
-        title={t("workspace:mtBreakAfter")}
-        className="mt-1 shrink-0 rounded border px-1 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-      >
-        <option value="none">{t("workspace:mtBreakNone")}</option>
-        <option value="line">{t("workspace:mtBreakLine")}</option>
-        <option value="paragraph">{t("workspace:mtBreakParagraph")}</option>
-      </select>
+      {/* A rule always sits on its own paragraph (the composer forces it), so it has no break-after choice. */}
+      {kind !== "hr" && (
+        <select
+          value={breakAfter}
+          onChange={(e) => onBreakAfter(e.target.value)}
+          aria-label={t("workspace:mtBreakAfter")}
+          title={t("workspace:mtBreakAfter")}
+          className="mt-1 shrink-0 rounded border px-1 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+        >
+          <option value="none">{t("workspace:mtBreakNone")}</option>
+          <option value="line">{t("workspace:mtBreakLine")}</option>
+          <option value="paragraph">{t("workspace:mtBreakParagraph")}</option>
+        </select>
+      )}
       <KebabMenu
         label={t("workspace:mtBlockActions")}
         actions={[

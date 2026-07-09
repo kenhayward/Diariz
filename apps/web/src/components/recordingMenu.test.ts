@@ -85,6 +85,11 @@ describe("recordingMenu", () => {
     expect(build({ isProcessing: true }).find((a) => a.label === "Delete")!.disabled).toBe(true);
   });
 
+  it("disables Delete audio while the recording is still processing (audio in use by the pipeline)", () => {
+    expect(build().find((a) => a.label === "Delete audio")!.disabled).toBeFalsy();
+    expect(build({ isProcessing: true }).find((a) => a.label === "Delete audio")!.disabled).toBe(true);
+  });
+
   it("offers Protect audio (detail) and swaps Delete audio for Remove protection when protected", () => {
     // No protection handler (the list menu): neither protect item appears.
     const base = build().map((a) => a.label);
