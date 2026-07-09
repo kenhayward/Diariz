@@ -26,6 +26,14 @@ public record ActionsJob(
     Guid RecordingId,
     Guid TranscriptionId);
 
+/// <summary>Job payload for async folder-summary generation, consumed by the API's SectionSummaryWorker. The
+/// owner and the included recordings are derived from the section inside the processor.</summary>
+public record SectionSummaryJob(Guid SectionId);
+
+/// <summary>Job payload for async folder-minutes generation, consumed by the API's SectionMinutesWorker. The
+/// chosen meeting type is read from the persisted SectionMinutes row (set before enqueue).</summary>
+public record SectionMinutesJob(Guid SectionId);
+
 /// <summary>Job payload for async transcript-chunk embedding (RAG index), consumed by the API's
 /// EmbeddingWorker. The worker windows the transcription's segments, embeds them, and replaces the
 /// recording's existing chunks. No-ops when the owner has no embedding endpoint.</summary>

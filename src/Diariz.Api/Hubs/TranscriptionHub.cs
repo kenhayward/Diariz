@@ -26,4 +26,13 @@ public static class TranscriptionHubExtensions
         Guid userId, Guid recordingId, string status) =>
         hub.Clients.Group(userId.ToString())
             .SendAsync("RecordingStatusChanged", new { recordingId, status });
+
+    /// <summary>Push a folder-level (section) generation status change. A distinct event from
+    /// <c>RecordingStatusChanged</c> so per-recording listeners aren't confused by a section id. <paramref
+    /// name="kind"/> is "summary" or "minutes"; <paramref name="status"/> is a <c>SectionGenerationStatus</c>
+    /// name.</summary>
+    public static Task NotifySectionStatusAsync(this IHubContext<TranscriptionHub> hub,
+        Guid userId, Guid sectionId, string kind, string status) =>
+        hub.Clients.Group(userId.ToString())
+            .SendAsync("SectionStatusChanged", new { sectionId, kind, status });
 }

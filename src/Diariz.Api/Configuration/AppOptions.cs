@@ -105,6 +105,34 @@ public class ActionsOptions
     public string ConsumerName { get; set; } = "api-1";
 }
 
+/// <summary>Config for the folder (section) summary worker: rolls up the included recordings' summaries into
+/// one folder summary. LLM endpoint/model/key come from the per-user summarisation config.</summary>
+public class SectionSummaryOptions
+{
+    public const string Section = "SectionSummary";
+
+    /// <summary>Upper bound on the combined per-recording summaries sent to the model.</summary>
+    public int CombineCharBudget { get; set; } = 24000;
+
+    public string StreamKey { get; set; } = "section-summary-jobs";
+    public string ConsumerGroup { get; set; } = "section-summarizers";
+    public string ConsumerName { get; set; } = "api-1";
+}
+
+/// <summary>Config for the folder (section) minutes worker: reshapes the included recordings' minutes through
+/// a chosen meeting-type template. LLM endpoint/model/key come from the per-user summarisation config.</summary>
+public class SectionMinutesOptions
+{
+    public const string Section = "SectionMinutes";
+
+    /// <summary>Upper bound on the combined per-recording minutes sent to the model.</summary>
+    public int CombineCharBudget { get; set; } = 32000;
+
+    public string StreamKey { get; set; } = "section-minutes-jobs";
+    public string ConsumerGroup { get; set; } = "section-minute-takers";
+    public string ConsumerName { get; set; } = "api-1";
+}
+
 /// <summary>Config for the in-process tag-cloud extraction worker (runs alongside the summary/actions in
 /// the pipeline). The LLM endpoint/model/key come from the per-user summarisation config.</summary>
 public class TagsOptions

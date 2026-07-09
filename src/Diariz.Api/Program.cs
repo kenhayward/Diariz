@@ -29,6 +29,8 @@ builder.Services.Configure<MeetingMinutesOptions>(builder.Configuration.GetSecti
 builder.Services.Configure<ActionsOptions>(builder.Configuration.GetSection(ActionsOptions.Section));
 builder.Services.Configure<TagsOptions>(builder.Configuration.GetSection(TagsOptions.Section));
 builder.Services.Configure<EmbeddingOptions>(builder.Configuration.GetSection(EmbeddingOptions.Section));
+builder.Services.Configure<SectionSummaryOptions>(builder.Configuration.GetSection(SectionSummaryOptions.Section));
+builder.Services.Configure<SectionMinutesOptions>(builder.Configuration.GetSection(SectionMinutesOptions.Section));
 builder.Services.Configure<ChatOptions>(builder.Configuration.GetSection(ChatOptions.Section));
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.Section));
 builder.Services.Configure<AppPublicOptions>(builder.Configuration.GetSection(AppPublicOptions.Section));
@@ -225,6 +227,10 @@ builder.Services.AddScoped<IMeetingTypeMinutesStrategy, PerSectionMinutesStrateg
 builder.Services.AddScoped<IMeetingTypeMinutesStrategy, SingleCallMinutesStrategy>();
 builder.Services.AddScoped<IMeetingTypeMinutesGenerator, MeetingTypeMinutesGenerator>();
 builder.Services.AddHostedService<MeetingMinutesWorker>();
+// Folder-level (section) roll-ups: their own streams/workers, reusing the per-user summarisation config +
+// the arbitrary-prompt IMeetingMinutesClient to combine the included recordings' summaries/minutes.
+builder.Services.AddHostedService<SectionSummaryWorker>();
+builder.Services.AddHostedService<SectionMinutesWorker>();
 // Action extraction also runs in the pipeline (its own stream/worker), reusing IActionsClient (registered above).
 builder.Services.AddHostedService<ActionsWorker>();
 // Tag-cloud extraction runs in the pipeline too (its own stream/worker), sharing the per-user summarisation

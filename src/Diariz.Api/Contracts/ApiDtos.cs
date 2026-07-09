@@ -72,6 +72,37 @@ public record ReorderRecordingsRequest(Guid? SectionId, IReadOnlyList<Guid> Orde
 /// call. <c>ParentId</c> null = top level. Reparenting under a section that itself has a parent is rejected.</summary>
 public record ReorderSectionsRequest(Guid? ParentId, IReadOnlyList<Guid> OrderedIds);
 
+// ---- Section (folder) page ----
+/// <summary>High-level folder stats aggregated across a section and its child sections.</summary>
+public record SectionStatsDto(
+    int TranscriptCount, long TotalDurationMs,
+    DateTimeOffset? FirstRecordingAt, DateTimeOffset? LastRecordingAt);
+
+/// <summary>The folder-level LLM summary (roll-up of the included recordings' summaries), with generation
+/// state so a client that missed the SignalR event still recovers.</summary>
+public record FolderSummaryDto(
+    string Model, string Text, DateTimeOffset CreatedAt, bool IsUserEdited,
+    SectionGenerationStatus Status, string? Error);
+
+/// <summary>The folder-level LLM minutes (the included recordings' minutes reshaped through a template).</summary>
+public record FolderMinutesDto(
+    string Model, string Text, DateTimeOffset CreatedAt, bool IsUserEdited,
+    Guid? MeetingTypeId, SectionGenerationStatus Status, string? Error);
+
+public record SectionDetailDto(
+    Guid Id, string Name, Guid? ParentId,
+    SectionStatsDto Stats, FolderSummaryDto? Summary, FolderMinutesDto? Minutes, Guid? MeetingTypeId);
+
+/// <summary>One note aggregated for the folder Notes tab, carrying its source recording's display name.</summary>
+public record SectionNoteListItemDto(
+    Guid Id, Guid RecordingId, string RecordingName, string Text,
+    long? CapturedAtMs, int Ordinal, DateTimeOffset CreatedAt);
+
+/// <summary>One attachment aggregated for the folder Attachments tab, carrying its source recording name.</summary>
+public record SectionAttachmentListItemDto(
+    Guid Id, Guid RecordingId, string RecordingName, AttachmentKind Kind,
+    string Name, string? ContentType, long SizeBytes, string? Url, int Ordinal);
+
 // ---- Recordings ----
 public record RecordingSummaryDto(
     Guid Id,
