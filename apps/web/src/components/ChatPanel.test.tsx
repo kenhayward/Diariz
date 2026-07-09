@@ -77,6 +77,7 @@ describe("ChatPanel", () => {
     const box = screen.getByLabelText("Chat message");
     // Wrap in act so the streaming promise chain (onMeta/onToken/finally) settles inside act.
     await act(async () => {
+      fireEvent.focus(box); // focusing snapshots the inferred context (as a real user does before typing)
       fireEvent.change(box, { target: { value: text } });
       fireEvent.click(screen.getByRole("button", { name: /^send$/i }));
     });
@@ -101,10 +102,8 @@ describe("ChatPanel", () => {
     await waitFor(() => expect(screen.getByLabelText(/Context \d+% used/)).toBeTruthy());
   });
 
-  it("uses the shared selection when the Selected transcripts mode is chosen", async () => {
+  it("infers the shared selection (2+ ticked) as the context, no menu choice needed", async () => {
     renderPanel("/recordings/rec-1", ["rec-1", "rec-2"]);
-    fireEvent.click(await screen.findByRole("button", { name: /context:/i }));
-    fireEvent.click(await screen.findByRole("menuitemradio", { name: /selected transcript/i }));
 
     await ask("Compare them");
 
@@ -114,6 +113,22 @@ describe("ChatPanel", () => {
         expect.anything(),
       ),
     );
+    // The pill reflects the inferred multi-selection.
+    expect(screen.getByRole("button", { name: /selected transcripts/i })).toBeTruthy();
+  });
+
+  it("infers the open folder as the context (sends a section id)", async () => {
+    renderPanel("/sections/sec-1");
+
+    await ask("Summarise this folder");
+
+    await waitFor(() =>
+      expect(api.chatStream).toHaveBeenCalledWith(
+        expect.objectContaining({ sectionId: "sec-1", recordingIds: [] }),
+        expect.anything(),
+      ),
+    );
+    expect(screen.getByRole("button", { name: /current folder/i })).toBeTruthy();
   });
 
   it("sends no transcript context when None is chosen", async () => {
@@ -176,6 +191,44 @@ describe("ChatPanel", () => {
 
     await act(async () => fireEvent.click(screen.getByRole("button", { name: /delete conversation/i })));
     await waitFor(() => expect(api.deleteChatConversation).toHaveBeenCalledWith("conv-1"));
+  });
+
+  it("saves a folder chat with its section id", async () => {
+    renderPanel("/sections/sec-1");
+    await ask("Summarise this folder");
+    await waitFor(() => expect(screen.getByText("world", { exact: false })).toBeTruthy());
+
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: /save conversation/i })));
+
+    await waitFor(() =>
+      expect(api.createChatConversation).toHaveBeenCalledWith(
+        expect.objectContaining({ context: expect.objectContaining({ sectionId: "sec-1", recordingIds: [] }) }),
+      ),
+    );
+  });
+
+  it("reopening a saved folder chat restores its folder context", async () => {
+    mock(api.listChatConversations).mockResolvedValue([
+      { id: "conv-f", title: "Folder Chat", updatedAt: "2026-01-01T00:00:00Z" },
+    ]);
+    mock(api.getChatConversation).mockResolvedValue({
+      id: "conv-f", title: "Folder Chat", updatedAt: "2026-01-01T00:00:00Z",
+      messages: [{ role: "user", content: "hi" }, { role: "assistant", content: "hey" }],
+      context: { recordingIds: [], sectionId: "sec-9", attachmentName: null, attachmentText: null },
+    });
+    renderPanel("/recordings/rec-1"); // start somewhere else
+
+    await act(async () => fireEvent.click(await screen.findByRole("button", { name: /saved conversations/i })));
+    await act(async () => fireEvent.click(await screen.findByRole("button", { name: "Folder Chat" })));
+
+    expect(await screen.findByRole("button", { name: /current folder/i })).toBeTruthy();
+    await ask("And the action items?");
+    await waitFor(() =>
+      expect(api.chatStream).toHaveBeenCalledWith(
+        expect.objectContaining({ sectionId: "sec-9", recordingIds: [] }),
+        expect.anything(),
+      ),
+    );
   });
 
   it("clears the conversation thread with the Clear button", async () => {

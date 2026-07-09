@@ -70,10 +70,15 @@ imported** back (naming the import, since it may duplicate one you have), so you
 When a template substitutes the **attendees** field it names the identified people and then counts the rest
 (e.g. "Alice, Bob and 11 unidentified attendees"). A Platform Administrator can also pick how minutes generate:
 **one LLM call per section** (best structure) or a **single call** (fewer tokens).
-- **Chat across one or more transcripts — or all your meetings at once** (an "All meetings" mode that
-searches your whole library on demand instead of pre-loading transcripts) — streaming
+- **Chat across one or more transcripts — a folder — or all your meetings at once** (an "All meetings" mode
+that searches your whole library on demand instead of pre-loading transcripts) — streaming
 replies, a context-usage dial, PDF/text attachments, and saved conversations — via a per-user (or
-server-default) OpenAI-compatible LLM endpoint, with the API key encrypted at rest.
+server-default) OpenAI-compatible LLM endpoint, with the API key encrypted at rest. The chat's context is
+**inferred from what you're viewing** rather than picked from a list: the label reads **Current Transcript**,
+**Current Folder**, or **Selected Transcripts** (2+ ticked in the list) and updates when you click into the
+box. When a **folder** is open, chat is about that folder — its roll-up **summary, minutes, and aggregated
+actions** are the context, and "Include attachments" pulls in every attachment across the folder and its
+sub-folders.
 - **Semantic (RAG) search** (opt-in): configure an embeddings endpoint and transcripts are embedded into a
 pgvector index; chat and the tools then search by **meaning as well as keywords** (hybrid vector + trigram,
 fused with Reciprocal Rank Fusion), so a conceptual question finds the right moment even when the words don't

@@ -20,5 +20,10 @@ export default defineConfig({
     globals: true, // enables @testing-library/react's automatic cleanup between tests
     setupFiles: ["./src/test-setup.ts"], // initialise i18next once for component tests
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    // The self-hosted CI runner is resource-constrained (the full suite takes ~60s there vs ~8s locally),
+    // so the 5s default per-test timeout flakes under contention. Raise the ceiling well above any real
+    // render time; a genuine hang still fails, just later.
+    testTimeout: 20000,
+    hookTimeout: 20000,
   },
 });

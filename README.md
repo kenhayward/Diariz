@@ -27,7 +27,7 @@ At a glance - see **[docs/features.md](docs/features.md)** for the full detail o
 | **Notes** | Jot your own note lines during or before a meeting (live, timestamped, crash-safe); they appear inline in the transcript at the moment you wrote them, steer the minutes, and can be woven into an "enhanced notes" section that links to the exact transcript moments. |
 | **Action items** | Auto-extracted with owner and deadline into an editable table, tracked across every meeting with completion, a person filter, and links back to the transcript. |
 | **Tag cloud** | Every meeting auto-tagged with weighted topics; a Tags tab shows a weighted cloud and lists the meetings behind each tag, with an expanded modal view. |
-| **Chat over transcripts** | Stream answers over one, several, or all meetings via an OpenAI-compatible LLM; context dial, file attachments, saved conversations, and slash commands. |
+| **Chat over transcripts** | Stream answers over one meeting, a folder (its summary/minutes/actions), several selected, or all meetings (context inferred from what you're viewing) via an OpenAI-compatible LLM; context dial, file attachments, saved conversations, and slash commands. |
 | **Search** | Keyword search across your library, upgraded to semantic (RAG - hybrid vector + trigram) when an embeddings endpoint is configured. |
 | **Chat tools** | The assistant calls built-in tools (who-said-what, search, attendees, talk time, summaries, email-to-self, and more) and links answers to the exact segment. |
 | **Connect Claude (MCP)** | An in-process MCP server lets Claude connect to your own meetings via OAuth (claude.ai) or a personal token (Claude Desktop/Code). |
