@@ -9,10 +9,15 @@ when the app's scope changes - see [CLAUDE.md](../CLAUDE.md).
 remembered, and the list refreshes on hot-plug), **tune capture** (echo cancellation, noise suppression,
 auto gain, mono) from a ⚙ popover, and watch a **live input-level meter** while recording (with a subtle
 silence hint). **Pause and resume** a recording in progress (separate from Stop) for breaks or sensitive
-moments — paused audio is never captured and never counts toward the recording's duration. Or capture
-**system audio** via the Electron **desktop app** (Windows, and **macOS - beta**) — which can also
-**start/stop recording from its tray / menu-bar menu** (in the background, with notifications). Or **upload existing audio files** to transcribe (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A) —
-via the Upload button or by **dragging several onto the recordings list**, with per-file status.
+moments — paused audio is never captured and never counts toward the recording's duration. Also capture
+**system audio** - tick the **System audio** checkbox to mix it into the recording (both sides of a call on
+one device), or pick **No microphone** to record system audio alone. System audio works in **Chromium
+browsers** (tick "Share audio" in the share dialog) and seamlessly in the Electron **desktop app** (Windows
+loopback / **macOS - beta** ScreenCaptureKit); the checkbox is hidden where the browser can't capture it, and
+if system audio isn't shared the take falls back to microphone-only. The desktop app can also **start/stop
+recording from its tray / menu-bar menu** (in the background, with notifications), including a **Record Both**
+item. Or **upload existing audio files** to transcribe (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A) — via the
+Upload button or by **dragging several onto the recordings list**, with per-file status.
 - **Transcribe + diarize** server-side with WhisperX (large-v3, word-level timestamps) and pyannote 3.1,
 producing speaker-labelled, timestamped segments you can rename, edit, and play back (per segment, per speaker,
 or the whole recording). A **Speakers** panel lists each speaker with their segment count and **total talk time**,
