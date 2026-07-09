@@ -48,10 +48,12 @@ Infrastructure (via Docker Compose, project name **`diariz`**):
 | Postgres | 5432 | 5432 | 5432 |
 | Redis | 6379 | 6379 | 6379 |
 | MinIO S3 API | 9000 | **9002** | — |
-| MinIO console | 9001 | **9003** | — |
+| MinIO console | 9001 | not published | — |
 
-MinIO is remapped on the host (9002/9003) to avoid clashing with other local MinIO instances. In-container,
-services address each other by Compose service name (`minio:9000`, `redis:6379`, `postgres:5432`, `api:8080`).
+The MinIO S3 API is remapped on the host (9002) to avoid clashing with other local MinIO instances; the web
+console (container 9001) is **not published** - the app never uses it (the API reaches MinIO in-network at
+`minio:9000`), so port-forward or `docker exec` if you need it. In-container, services address each other by
+Compose service name (`minio:9000`, `redis:6379`, `postgres:5432`, `api:8080`).
 
 ## Architecture at a glance
 

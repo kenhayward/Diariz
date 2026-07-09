@@ -50,6 +50,25 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.111.2",
+    date: "2026-07-09",
+    pr: 252,
+    headline: "Sturdier Docker Compose: restart policies and health checks",
+    summary:
+      "Deployment hardening for self-hosters (no app behaviour changes). Every container now restarts " +
+      "automatically unless you explicitly stop it, and the web, API, and worker containers report Docker health " +
+      "status - the API via GET /health, the web via its served SPA, and the worker via a liveness heartbeat " +
+      "(the worker has no HTTP server, so a background thread touches a heartbeat file that stays fresh even " +
+      "during a long transcription). The web and worker now wait for the API to be healthy before starting. The " +
+      "MinIO console port is no longer published on the host - the app never uses it (the API reaches MinIO " +
+      "in-network), so it's one less open port. Both the standard and the ROCm compose files get the same " +
+      "treatment.",
+    changed: [
+      "All Compose services restart unless-stopped; web/API/worker have Docker health checks; web and worker wait for API health.",
+      "The MinIO console port is no longer published on the host (the app never used it).",
+    ],
+  },
+  {
     version: "0.111.1",
     date: "2026-07-08",
     pr: 250,

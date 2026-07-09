@@ -13,6 +13,7 @@ import redis
 
 import audio_merge
 import callback
+import heartbeat
 import pipeline
 import storage
 import torch_compat
@@ -137,6 +138,9 @@ def main() -> None:
     ensure_group(r, config.MERGE_STREAM_KEY)
     log.info("Worker %s listening on streams %s, %s",
              config.CONSUMER_NAME, config.STREAM_KEY, config.MERGE_STREAM_KEY)
+
+    # Start the liveness heartbeat (read by the Docker healthcheck) once we're up and consuming.
+    heartbeat.start()
 
     run_loop(r)
 
