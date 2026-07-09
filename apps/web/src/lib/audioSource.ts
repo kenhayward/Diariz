@@ -11,10 +11,29 @@ import {
   type SourceSelection,
 } from "./audioDevices";
 
-// Coarse kind kept for the Electron tray + upload-title path (the tray only knows mic vs system).
-export type AudioSourceKind = "mic" | "system";
+// Coarse capture kind (mic / system-only / both) - defined with the source selection types.
+export type { AudioSourceKind } from "./audioDevices";
+import type { AudioSourceKind } from "./audioDevices";
 
 export const isElectron = Boolean((window as any).diariz?.isElectron);
+
+/// A capture in progress: the stream fed to MediaRecorder + tapped by the level meter, and a `stop` that
+/// releases every underlying track (and any AudioContext, for the mixed combined stream).
+export interface CaptureSession {
+  stream: MediaStream;
+  stop: () => void;
+}
+
+function trackSession(stream: MediaStream): CaptureSession {
+  return { stream, stop: () => stream.getTracks().forEach((t) => t.stop()) };
+}
+
+/// Whether this environment can capture display/system audio at all. `getDisplayMedia` exists in Chromium
+/// and the desktop shell (and Firefox, though it yields no audio track); it is absent in Safari. The UI uses
+/// this to show/hide the "System audio" checkbox + the "No microphone" option.
+export function supportsDisplayAudio(nav: Navigator = navigator): boolean {
+  return typeof nav?.mediaDevices?.getDisplayMedia === "function";
+}
 
 export async function getMicStream(
   deviceId?: string,
@@ -39,14 +58,60 @@ export async function getSystemStream(): Promise<MediaStream> {
 }
 
 // Capture from a resolved selection. System loopback ignores the mic constraints (they don't apply);
-// mic capture applies the chosen device id + DSP/channel constraints.
+// mic capture applies the chosen device id + DSP/channel constraints. Returns a CaptureSession so the
+// caller has one uniform teardown across mic / system / combined.
 export async function getStream(
   selection: SourceSelection,
   constraints?: AudioConstraints,
-): Promise<MediaStream> {
-  if (selection.kind === "system") return getSystemStream();
+): Promise<CaptureSession> {
+  if (selection.kind === "system") return trackSession(await getSystemStream());
   const mtc = constraints ? toMediaTrackConstraints(constraints) : undefined;
-  return getMicStream(selection.kind === "device" ? selection.deviceId : undefined, mtc);
+  return trackSession(
+    await getMicStream(selection.kind === "device" ? selection.deviceId : undefined, mtc),
+  );
+}
+
+// Capture the selected microphone AND system audio, mixed into one track via the Web Audio API. The mic
+// keeps its DSP constraints (echo cancellation on cuts loopback bleed); the destination is mono when the
+// mono constraint is set. `stop` tears down both source streams and closes the AudioContext.
+export async function getCombinedStream(
+  selection: SourceSelection,
+  constraints?: AudioConstraints,
+): Promise<CaptureSession> {
+  const mtc = constraints ? toMediaTrackConstraints(constraints) : undefined;
+  const mic = await getMicStream(selection.kind === "device" ? selection.deviceId : undefined, mtc);
+
+  let sys: MediaStream;
+  try {
+    sys = await getSystemStream();
+  } catch (e) {
+    mic.getTracks().forEach((t) => t.stop());
+    throw e; // share cancelled/denied - the caller decides whether to fall back to mic-only
+  }
+  if (sys.getAudioTracks().length === 0) {
+    // The browser shared a screen/tab but no audio (e.g. "Share audio" left unticked). Treat as "no system".
+    sys.getTracks().forEach((t) => t.stop());
+    mic.getTracks().forEach((t) => t.stop());
+    throw new DOMException("No system audio track was shared.", "NotFoundError");
+  }
+
+  const ctx = new AudioContext();
+  const dest = ctx.createMediaStreamDestination();
+  if (mtc?.channelCount === 1) {
+    dest.channelCount = 1;
+    dest.channelCountMode = "explicit";
+  }
+  ctx.createMediaStreamSource(mic).connect(dest);
+  ctx.createMediaStreamSource(sys).connect(dest);
+
+  return {
+    stream: dest.stream,
+    stop: () => {
+      mic.getTracks().forEach((t) => t.stop());
+      sys.getTracks().forEach((t) => t.stop());
+      void ctx.close();
+    },
+  };
 }
 
 export interface InputDeviceList {
@@ -97,9 +162,24 @@ export async function unlockDeviceLabels(): Promise<void> {
 /// cause via the DOMException `name`; the generic "could not access" hides it, which is unhelpful when
 /// capture suddenly stops working (almost always another app holding the mic, or a revoked permission).
 export function describeAudioError(e: unknown, source: AudioSourceKind, electron: boolean): string {
-  if (source === "system" && !electron) return "System audio capture needs the desktop app.";
-
   const name = (e as { name?: string } | null)?.name;
+
+  // System / combined capture goes through getDisplayMedia: a denied/cancelled share, or a share with no
+  // audio track, is the common case - guide the user to the "Share audio" checkbox rather than claiming the
+  // desktop app is required (it works in Chromium browsers too).
+  if (source === "system" || source === "both") {
+    switch (name) {
+      case "NotAllowedError":
+      case "SecurityError":
+      case "PermissionDeniedError":
+      case "NotFoundError":
+      case "AbortError":
+        return electron
+          ? "Could not capture system audio. Please try again."
+          : "No system audio was shared. In the share dialog, pick a screen or tab and tick 'Share audio' (Chrome or Edge), or use the desktop app.";
+    }
+  }
+
   switch (name) {
     case "NotAllowedError":
     case "SecurityError":
