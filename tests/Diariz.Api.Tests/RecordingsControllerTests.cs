@@ -264,6 +264,23 @@ public class RecordingsControllerTests
     }
 
     [Fact]
+    public async Task Upload_WithCombinedSource_PersistsCombined()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue(), new FakeAudioStorage());
+
+        var result = await controller.Upload(
+            FakeAudio(Encoding.UTF8.GetBytes("both-sides")), title: "Call", durationMs: 1000,
+            source: RecordingSource.Combined);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+        var rec = await db.Recordings.SingleAsync();
+        Assert.Equal(RecordingSource.Combined, rec.Source);
+    }
+
+    [Fact]
     public async Task Upload_EmptyFile_ReturnsBadRequest_AndStoresNothing()
     {
         using var db = TestDb.Create();
