@@ -76,11 +76,14 @@ public static class SectionSummaryProcessor
     /// (ownership-scoped). Explicit query (not a filtered Include) so Npgsql and the in-memory provider agree.</summary>
     internal static async Task<List<RecordingRef>> IncludedRecordingsAsync(DiarizDbContext db, Section section)
     {
-        var childIds = await db.Sections
+        var allIds = await db.Sections
             .Where(s => s.UserId == section.UserId && s.ParentId == section.Id)
             .Select(s => s.Id).ToListAsync();
+        allIds.Add(section.Id);
+        // `SectionId.HasValue &&` guards the `.Value` so Ungrouped (null-section) recordings don't throw under
+        // the in-memory provider; on Npgsql it translates to a plain `SectionId IN (...)`.
         return await db.Recordings
-            .Where(r => r.UserId == section.UserId && (r.SectionId == section.Id || childIds.Contains(r.SectionId!.Value)))
+            .Where(r => r.UserId == section.UserId && r.SectionId.HasValue && allIds.Contains(r.SectionId.Value))
             .OrderBy(r => r.CreatedAt)
             .Select(r => new RecordingRef(r.Id, r.Name, r.Title))
             .ToListAsync();

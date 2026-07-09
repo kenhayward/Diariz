@@ -38,9 +38,15 @@ public class SectionPageController : ControllerBase
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    /// <summary>Ids of the caller's child sections directly under <paramref name="sectionId"/>.</summary>
-    private Task<List<Guid>> ChildSectionIdsAsync(Guid sectionId) =>
-        _db.Sections.Where(s => s.UserId == UserId && s.ParentId == sectionId).Select(s => s.Id).ToListAsync();
+    /// <summary>The section id plus its child section ids - the set a recording's <c>SectionId</c> must be in
+    /// to count as "included" in this folder.</summary>
+    private async Task<List<Guid>> IncludedSectionIdsAsync(Guid sectionId)
+    {
+        var ids = await _db.Sections
+            .Where(s => s.UserId == UserId && s.ParentId == sectionId).Select(s => s.Id).ToListAsync();
+        ids.Add(sectionId);
+        return ids;
+    }
 
     // ---- Detail (stats + folder summary + folder minutes) ----
 
@@ -53,9 +59,9 @@ public class SectionPageController : ControllerBase
             .FirstOrDefaultAsync(s => s.Id == id && s.UserId == UserId);
         if (section is null) return NotFound();
 
-        var childIds = await ChildSectionIdsAsync(id);
+        var allIds = await IncludedSectionIdsAsync(id);
         var recs = _db.Recordings.Where(r =>
-            r.UserId == UserId && (r.SectionId == id || childIds.Contains(r.SectionId!.Value)));
+            r.UserId == UserId && r.SectionId.HasValue && allIds.Contains(r.SectionId.Value));
 
         var stats = new SectionStatsDto(
             await recs.CountAsync(),
@@ -80,11 +86,11 @@ public class SectionPageController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<ActionListItemDto>>> Actions(Guid id)
     {
         if (!await OwnsSectionAsync(id)) return NotFound();
-        var childIds = await ChildSectionIdsAsync(id);
+        var allIds = await IncludedSectionIdsAsync(id);
         return await (
             from a in _db.RecordingActions
             join r in _db.Recordings on a.RecordingId equals r.Id
-            where r.UserId == UserId && (r.SectionId == id || childIds.Contains(r.SectionId!.Value))
+            where r.UserId == UserId && r.SectionId.HasValue && allIds.Contains(r.SectionId.Value)
             orderby r.CreatedAt descending, a.Ordinal
             select new ActionListItemDto(
                 a.Id, a.RecordingId, r.Name ?? r.Title, a.Text, a.Actor, a.Deadline,
@@ -95,11 +101,11 @@ public class SectionPageController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<SectionNoteListItemDto>>> Notes(Guid id)
     {
         if (!await OwnsSectionAsync(id)) return NotFound();
-        var childIds = await ChildSectionIdsAsync(id);
+        var allIds = await IncludedSectionIdsAsync(id);
         return await (
             from n in _db.MeetingNotes
             join r in _db.Recordings on n.RecordingId equals r.Id
-            where r.UserId == UserId && (r.SectionId == id || childIds.Contains(r.SectionId!.Value))
+            where r.UserId == UserId && r.SectionId.HasValue && allIds.Contains(r.SectionId.Value)
             orderby r.CreatedAt descending, n.Ordinal
             select new SectionNoteListItemDto(
                 n.Id, r.Id, r.Name ?? r.Title, n.Text, n.CapturedAtMs, n.Ordinal, n.CreatedAt)).ToListAsync();
@@ -109,11 +115,11 @@ public class SectionPageController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<SectionAttachmentListItemDto>>> Attachments(Guid id)
     {
         if (!await OwnsSectionAsync(id)) return NotFound();
-        var childIds = await ChildSectionIdsAsync(id);
+        var allIds = await IncludedSectionIdsAsync(id);
         return await (
             from a in _db.Attachments
             join r in _db.Recordings on a.RecordingId equals r.Id
-            where r.UserId == UserId && (r.SectionId == id || childIds.Contains(r.SectionId!.Value))
+            where r.UserId == UserId && r.SectionId.HasValue && allIds.Contains(r.SectionId.Value)
             orderby r.CreatedAt descending, a.Ordinal
             select new SectionAttachmentListItemDto(
                 a.Id, r.Id, r.Name ?? r.Title, a.Kind, a.Name, a.ContentType, a.SizeBytes, a.Url, a.Ordinal))
