@@ -95,10 +95,21 @@ public class ChatController : ControllerBase
         var (contexts, allOwned) = await LoadTranscriptsAsync(req.RecordingIds ?? [], ct);
         if (!allOwned) return NotFound(); // a selected recording isn't visible to the caller
 
-        // Optionally pull the selected recordings' attachments into the context (extracted file text +
-        // fetched URL text). Recordings were already ownership-checked by LoadTranscriptsAsync above.
+        // Folder chat: prepend the folder's roll-up (summary + minutes + aggregated actions) and scope the
+        // attachments/tools to the folder's recordings (across it and its sub-folders).
+        var scopeRecIds = (req.RecordingIds ?? []).ToList();
+        if (req.SectionId is { } sectionId)
+        {
+            var folder = await LoadFolderContextAsync(sectionId, ct);
+            if (folder is null) return NotFound(); // folder not visible to the caller
+            contexts.Insert(0, folder.Value.Context);
+            scopeRecIds.AddRange(folder.Value.RecordingIds);
+        }
+
+        // Optionally pull the in-context recordings' attachments into the context (extracted file text +
+        // fetched URL text). For a folder that's every attachment across it and its sub-folders.
         var documents = req.IncludeAttachments
-            ? await LoadAttachmentDocumentsAsync(req.RecordingIds ?? [], ct)
+            ? await LoadAttachmentDocumentsAsync(scopeRecIds, ct)
             : [];
 
         // Resolve the user's enabled tools; when any are active, add a tool-usage instruction so the model
@@ -120,7 +131,7 @@ public class ChatController : ControllerBase
         var messages = ChatContextBuilder.BuildMessages(system, history);
         var contextTotal = await _contextResolver.ResolveContextWindowAsync(UserId, ct);
         var promptTokens = messages.Sum(m => ChatContextMeter.EstimateTokens(m.Content));
-        var toolContext = new ChatToolContext(UserId, req.RecordingIds ?? []);
+        var toolContext = new ChatToolContext(UserId, scopeRecIds);
 
         Response.Headers["Content-Type"] = "text/event-stream";
         Response.Headers["Cache-Control"] = "no-cache";
@@ -332,6 +343,38 @@ public class ChatController : ControllerBase
             contexts.Add(new TranscriptContext(rec.Name ?? rec.Title, text));
         }
         return (contexts, recs.Count == ids.Count);
+    }
+
+    /// <summary>Build a folder's chat context from its roll-ups (summary + minutes + aggregated actions
+    /// across the section and its child sections) and return the folder's recording ids (for attachments +
+    /// tool scope). Null when the folder isn't the caller's.</summary>
+    private async Task<(TranscriptContext Context, List<Guid> RecordingIds)?> LoadFolderContextAsync(
+        Guid sectionId, CancellationToken ct)
+    {
+        var section = await _db.Sections
+            .Include(s => s.Summary)
+            .Include(s => s.Minutes)
+            .FirstOrDefaultAsync(s => s.Id == sectionId && s.UserId == UserId, ct);
+        if (section is null) return null;
+
+        var childIds = await _db.Sections
+            .Where(s => s.UserId == UserId && s.ParentId == sectionId).Select(s => s.Id).ToListAsync(ct);
+        var allIds = childIds.Append(sectionId).ToList();
+
+        var recIds = await _db.Recordings
+            .Where(r => r.UserId == UserId && r.SectionId.HasValue && allIds.Contains(r.SectionId.Value))
+            .Select(r => r.Id).ToListAsync(ct);
+
+        var actions = await (
+            from a in _db.RecordingActions
+            join r in _db.Recordings on a.RecordingId equals r.Id
+            where r.UserId == UserId && r.SectionId.HasValue && allIds.Contains(r.SectionId.Value)
+            orderby r.CreatedAt, a.Ordinal
+            select new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal)).ToListAsync(ct);
+
+        var text = ChatFolderContext.BuildText(
+            section.Summary?.Text, section.Minutes?.Text, TranscriptFormatter.ActionsForChat(actions));
+        return (new TranscriptContext($"Folder: {section.Name}", text), recIds);
     }
 
     /// <summary>Resolve the selected recordings' attachments into text documents for chat context: uploaded

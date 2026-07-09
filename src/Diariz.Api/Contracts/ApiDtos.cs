@@ -406,14 +406,18 @@ public record SavedChatContextDto(
     IReadOnlyList<Guid> RecordingIds, string? AttachmentName, string? AttachmentText,
     bool IncludeAttachments = false, bool SearchAllMeetings = false);
 
-/// <summary>A streaming chat request: the selected context + the full conversation so far.</summary>
+/// <summary>A streaming chat request: the selected context + the full conversation so far.
+/// <paramref name="SectionId"/> (when set) makes the chat about a folder - its roll-up summary, minutes and
+/// aggregated actions become the context (and, with <paramref name="IncludeAttachments"/>, the folder's
+/// attachments).</summary>
 public record ChatStreamRequest(
     IReadOnlyList<Guid> RecordingIds,
     string? AttachmentName,
     string? AttachmentText,
     IReadOnlyList<ChatTurnDto> Messages,
     bool IncludeAttachments = false,
-    bool SearchAllMeetings = false);
+    bool SearchAllMeetings = false,
+    Guid? SectionId = null);
 
 /// <summary>Extracted attachment text returned to the client (held and resent with each turn).</summary>
 public record ChatAttachmentDto(string Name, int Chars, string Text);

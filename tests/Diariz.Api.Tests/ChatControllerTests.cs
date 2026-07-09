@@ -272,6 +272,43 @@ public class ChatControllerTests
         Assert.Contains("Ship the widget (Actor: Alice; Deadline: Friday)", system);
     }
 
+    [Fact]
+    public async Task Stream_WithFolder_LoadsSummaryMinutesAndActionsIntoContext()
+    {
+        var me = Guid.NewGuid();
+        var (controller, db, chat) = Build(me);
+        var section = new Section { Id = Guid.NewGuid(), UserId = me, Name = "Q3 Planning" };
+        db.Sections.Add(section);
+        db.SectionSummaries.Add(new SectionSummary { Id = Guid.NewGuid(), SectionId = section.Id, Text = "Overall Q3 theme." });
+        db.SectionMinutes.Add(new SectionMinutes { Id = Guid.NewGuid(), SectionId = section.Id, Text = "# Minutes\nHire two engineers." });
+        var rec = new Recording { Id = Guid.NewGuid(), UserId = me, Title = "Kickoff", SectionId = section.Id };
+        db.Recordings.Add(rec);
+        db.RecordingActions.Add(new RecordingAction { Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Draft the roadmap", Ordinal = 0 });
+        await db.SaveChangesAsync();
+
+        controller.ControllerContext.HttpContext.Response.Body = new MemoryStream();
+        await controller.Stream(
+            new ChatStreamRequest([], null, null, [new ChatTurnDto("user", "summarise the folder")], SectionId: section.Id), default);
+
+        var system = chat.LastMessages![0].Content;
+        Assert.Contains("Overall Q3 theme.", system);      // folder summary
+        Assert.Contains("Hire two engineers.", system);    // folder minutes
+        Assert.Contains("Draft the roadmap", system);      // aggregated folder actions
+    }
+
+    [Fact]
+    public async Task Stream_WithUnownedSection_Returns404()
+    {
+        var (controller, db, _) = Build(Guid.NewGuid());
+        var theirs = new Section { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Theirs" };
+        db.Sections.Add(theirs);
+        await db.SaveChangesAsync();
+
+        var res = await controller.Stream(
+            new ChatStreamRequest([], null, null, [new ChatTurnDto("user", "hi")], SectionId: theirs.Id), default);
+        Assert.IsType<NotFoundResult>(res);
+    }
+
     // ---- Attachment ----
 
     [Fact]
