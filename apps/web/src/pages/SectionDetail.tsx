@@ -17,6 +17,7 @@ import FolderRecordingList from "../components/FolderRecordingList";
 import FolderActionsTable from "../components/FolderActionsTable";
 import FolderNotesList from "../components/FolderNotesList";
 import FolderAttachmentsList from "../components/FolderAttachmentsList";
+import FolderAttachmentsManager from "../components/FolderAttachmentsManager";
 import type { SectionAttachmentItem, SectionDetail as SectionDetailT } from "../lib/types";
 
 const TAB_KEY = "diariz.sectionTab";
@@ -48,6 +49,7 @@ export default function SectionDetail() {
   const { data: actions } = useQuery({ queryKey: ["section-actions", id], queryFn: () => api.listSectionActions(id!), enabled: !!id });
   const { data: notes } = useQuery({ queryKey: ["section-notes", id], queryFn: () => api.listSectionNotes(id!), enabled: !!id });
   const { data: attachments } = useQuery({ queryKey: ["section-attachments", id], queryFn: () => api.listSectionAttachments(id!), enabled: !!id });
+  const { data: folderAttachments } = useQuery({ queryKey: ["folder-attachments", id], queryFn: () => api.listFolderAttachments(id!), enabled: !!id });
 
   if (!id || !section) return <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>;
 
@@ -181,18 +183,39 @@ export default function SectionDetail() {
       />
     ),
   };
+  const refreshFolderAttachments = () => {
+    qc.invalidateQueries({ queryKey: ["folder-attachments", id] });
+    qc.invalidateQueries({ queryKey: ["user-storage"] });
+  };
   const attachmentsTab: DetailTab = {
     key: "attachments",
     label: t("workspace:detailTabAttachments"),
     content: (
-      <FolderAttachmentsList
-        items={attachments ?? []}
-        onRemove={(a: SectionAttachmentItem) => {
-          if (!window.confirm(t("workspace:confirmDeleteAttachment"))) return;
-          run(() => api.deleteAttachment(a.recordingId, a.id), "workspace:errDeleteAttachment", ["section-attachments", id])
-            .then(() => qc.invalidateQueries({ queryKey: ["user-storage"] }));
-        }}
-      />
+      <div>
+        {/* Folder-direct attachments (addable) */}
+        <h3 className="px-4 pt-3 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+          {t("workspace:folderOwnAttachmentsHeading")}
+        </h3>
+        <FolderAttachmentsManager
+          sectionId={id}
+          attachments={folderAttachments ?? []}
+          onChange={refreshFolderAttachments}
+        />
+
+        {/* Attachments aggregated from the folder's transcripts (read-only) */}
+        <h3 className="border-t px-4 pt-3 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:border-gray-700 dark:text-gray-500">
+          {t("workspace:folderTranscriptAttachmentsHeading")}
+        </h3>
+        <FolderAttachmentsList
+          items={attachments ?? []}
+          onChange={() => qc.invalidateQueries({ queryKey: ["section-attachments", id] })}
+          onRemove={(a: SectionAttachmentItem) => {
+            if (!window.confirm(t("workspace:confirmDeleteAttachment"))) return;
+            run(() => api.deleteAttachment(a.recordingId, a.id), "workspace:errDeleteAttachment", ["section-attachments", id])
+              .then(() => qc.invalidateQueries({ queryKey: ["user-storage"] }));
+          }}
+        />
+      </div>
     ),
   };
 

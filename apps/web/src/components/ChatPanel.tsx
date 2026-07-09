@@ -24,6 +24,7 @@ import {
   buildHelpOutput,
   bulletList,
   matchCommands,
+  conversationToMarkdown,
   type ChatCommand,
   type CommandInfo,
 } from "../lib/chatCommands";
@@ -145,6 +146,15 @@ export default function ChatPanel() {
       : { recordingIds: [] as string[], sectionId: null };
   const hasContext = recordingIds.length > 0 || sectionId != null;
 
+  // For a folder context the recording ids are expanded server-side (recordingIds is empty here), so /context
+  // reads the folder's transcript count from the section detail instead of recordingIds.length.
+  const { data: contextSection } = useQuery({
+    queryKey: ["section", sectionId],
+    queryFn: () => api.getSection(sectionId!),
+    enabled: sectionId != null,
+  });
+  const contextCount = sectionId != null ? contextSection?.stats.transcriptCount ?? 0 : recordingIds.length;
+
   // Dial: show the configured context window from the start (used 0), then the live figures the
   // server reports on each turn via the meta/done events.
   const totalContext = settings ? settings.contextWindow ?? settings.defaultContextWindow : 0;
@@ -203,6 +213,39 @@ export default function ChatPanel() {
     }
   }
 
+  /// "/attach": save the whole current conversation as a Markdown attachment - onto the current transcript,
+  /// the first selected transcript, or the current folder, depending on what's in context.
+  async function attachConversation() {
+    if (streaming || messages.length === 0) {
+      setCommandOutput(t("cmdAttachEmpty"));
+      return;
+    }
+    const md = conversationToMarkdown(messages, {
+      title: t("cmdAttachDocTitle"),
+      youLabel: t("cmdAttachYou"),
+      assistantLabel: t("cmdAttachAssistant"),
+    });
+    const name = t("cmdAttachDocTitle");
+    try {
+      if (frozenCurrent.kind === "single" || frozenCurrent.kind === "selected") {
+        const recId = frozenCurrent.kind === "single" ? frozenCurrent.recordingId : frozenCurrent.recordingIds[0];
+        await api.addMarkdownAttachment(recId, name, md);
+        qc.invalidateQueries({ queryKey: ["attachments", recId] });
+        setCommandOutput(t("cmdAttachAddedTranscript"));
+      } else if (frozenCurrent.kind === "folder") {
+        await api.addFolderMarkdownAttachment(frozenCurrent.sectionId, name, md);
+        qc.invalidateQueries({ queryKey: ["folder-attachments", frozenCurrent.sectionId] });
+        setCommandOutput(t("cmdAttachAddedFolder"));
+      } else {
+        setCommandOutput(t("cmdAttachNoTarget"));
+        return;
+      }
+      qc.invalidateQueries({ queryKey: ["user-storage"] });
+    } catch (e) {
+      setCommandOutput(apiErrorMessage(e, t("cmdAttachFailed")));
+    }
+  }
+
   /// Once the reply completes, act on any attachment the tool queued: one candidate → add it; several → ask.
   function resolvePendingDraft() {
     const draft = pendingDraftRef.current;
@@ -214,6 +257,7 @@ export default function ChatPanel() {
 
   /// The slash commands, in the order shown by the autocomplete popup and /help (client-side only).
   const commandInfos: CommandInfo[] = [
+    { cmd: "attach", command: "/attach", description: t("cmdHelpAttach") },
     { cmd: "clear", command: "/clear", description: t("cmdHelpClear") },
     { cmd: "context", command: "/context", description: t("cmdHelpContext") },
     { cmd: "copy", command: "/copy", description: t("cmdHelpCopy") },
@@ -240,7 +284,7 @@ export default function ChatPanel() {
     if (cmd === "context")
       return bulletList(t("cmdContextHeading"), [
         t("cmdContextScope", { scope: contextLabel }),
-        t("cmdContextCount", { count: recordingIds.length }),
+        t("cmdContextCount", { count: contextCount }),
         t("cmdContextModel", { model: dialModel || "—" }),
         t("cmdContextUsage", { used: dialUsed.toLocaleString(), total: dialTotal.toLocaleString() }),
       ]);
@@ -299,6 +343,9 @@ export default function ChatPanel() {
       case "retry":
         setCommandOutput(null);
         retry();
+        break;
+      case "attach":
+        void attachConversation();
         break;
     }
   }

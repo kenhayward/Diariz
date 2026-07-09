@@ -1,19 +1,27 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink } from "react-router-dom";
+import { api } from "../lib/api";
+import { isMarkdownAttachment } from "../lib/attachments";
 import { formatBytes } from "../lib/format";
 import type { SectionAttachmentItem } from "../lib/types";
 import { openAttachment } from "./AttachmentsManager";
+import MarkdownAttachmentEditModal from "./MarkdownAttachmentEditModal";
 
 /// The folder Attachments tab: every attachment across the folder's recordings (and sub-folders), with a
-/// read-only **Meeting** column. Open + remove are allowed; adding is not (attachments belong to a recording).
+/// read-only **Meeting** column. Open/edit + remove are allowed; adding is not (attachments belong to a
+/// recording). Markdown attachments open the in-app editor (saved back through the recording route).
 export default function FolderAttachmentsList({
   items,
   onRemove,
+  onChange,
 }: {
   items: SectionAttachmentItem[];
   onRemove: (item: SectionAttachmentItem) => void;
+  onChange?: () => void;
 }) {
   const { t } = useTranslation(["workspace", "common"]);
+  const [editing, setEditing] = useState<SectionAttachmentItem | null>(null);
   if (items.length === 0)
     return <p className="px-4 pb-4 text-sm text-gray-500 dark:text-gray-400">{t("workspace:folderNoAttachments")}</p>;
 
@@ -43,10 +51,10 @@ export default function FolderAttachmentsList({
               <td className="py-1 pr-2 text-right">
                 <button
                   type="button"
-                  onClick={() => openAttachment(a.recordingId, a)}
+                  onClick={() => (isMarkdownAttachment(a) ? setEditing(a) : openAttachment(a.recordingId, a))}
                   className="rounded border px-2 py-0.5 text-xs hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
                 >
-                  {t("workspace:openAttachment")}
+                  {isMarkdownAttachment(a) ? t("workspace:editAttachment") : t("workspace:openAttachment")}
                 </button>
                 <button
                   type="button"
@@ -61,6 +69,16 @@ export default function FolderAttachmentsList({
           ))}
         </tbody>
       </table>
+
+      {editing && (
+        <MarkdownAttachmentEditModal
+          name={editing.name}
+          load={() => api.getAttachmentText(editing.recordingId, editing.id)}
+          save={(md) => api.updateAttachmentContent(editing.recordingId, editing.id, md)}
+          onSaved={onChange}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </div>
   );
 }

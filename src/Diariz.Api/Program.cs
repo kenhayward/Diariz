@@ -118,10 +118,14 @@ builder.Services.AddAuthentication(SmartAuthScheme)
                 var isRecordingAsset = path.StartsWithSegments("/api/recordings")
                     && (path.Value!.EndsWith("/audio", StringComparison.OrdinalIgnoreCase)
                         || path.Value!.EndsWith("/content", StringComparison.OrdinalIgnoreCase));
+                // Folder-direct attachment files open in a new tab too (same reason as recording /content).
+                var isSectionAsset = path.StartsWithSegments("/api/sections")
+                    && path.Value!.EndsWith("/content", StringComparison.OrdinalIgnoreCase);
                 // The platform backup is downloaded via an anchor href (can't set an Authorization header).
                 var isBackup = path.StartsWithSegments("/api/maintenance")
                     && path.Value!.EndsWith("/backup", StringComparison.OrdinalIgnoreCase);
-                if (!string.IsNullOrEmpty(token) && (path.StartsWithSegments("/hubs") || isRecordingAsset || isBackup))
+                if (!string.IsNullOrEmpty(token)
+                    && (path.StartsWithSegments("/hubs") || isRecordingAsset || isSectionAsset || isBackup))
                     ctx.Token = token;
                 return Task.CompletedTask;
             }

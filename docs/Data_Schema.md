@@ -70,6 +70,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddRecordingTags` | `RecordingTags` (LLM-extracted weighted tag-cloud tags, machine-only; cascade on `Recording`, index `(RecordingId, Ordinal)`) + `Recordings.TagsExtractedAt` (timestamptz null) — the tag-backfill "done" marker |
 | `AddLlmTimeout` | `PlatformSettings.LlmTimeoutSeconds` (int, NOT NULL, default 120) — the platform-wide per-request timeout applied to every LLM call (the single authority; the HTTP clients have no cap) |
 | `AddSectionSummaryAndMinutes` | `SectionSummaries` + `SectionMinutes` (1:1 with `Section`, cascade) — the folder-level roll-up LLM summary/minutes; `SectionMinutes.MeetingTypeId` (FK, `ON DELETE SET NULL`) is the folder's chosen template |
+| `AddSectionAttachments` | `SectionAttachments` (file/URL supporting documents filed directly on a `Section`, cascade, index `(SectionId, Ordinal)`) — folder-direct attachments, independent of any recording |
 
 ### Entity-relationship overview
 
@@ -288,6 +289,29 @@ Supporting documents on a recording — an uploaded file (blob) or a URL.
 | `CreatedAt` | timestamptz | |
 
 Index: `(RecordingId, Ordinal)`. Attachment blobs live under MinIO key `{userId}/attachments/{attachmentId}{ext}`.
+Markdown attachments (`text/markdown`) are editable in place via `PUT .../attachments/{id}/content`, which
+overwrites the same blob key and recomputes `SizeBytes` (quota re-checked on the delta).
+
+#### `SectionAttachments`
+Supporting documents filed **directly** on a folder (`Section`) rather than a recording — an uploaded file
+(blob) or a URL. Same shape as `Attachments`, keyed on the section; independent of any transcript.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `SectionId` | uuid FK → Sections | cascade (deleting the folder, or a parent folder, removes these) |
+| `Kind` | int | `File`=0, `Url`=1 (reuses `AttachmentKind`) |
+| `Name` | varchar(512) | display name / link text |
+| `BlobKey` | text null | object-storage key (File kind) |
+| `ContentType` | text null | MIME of the uploaded file |
+| `SizeBytes` | bigint | file size — counts toward the quota (0 for a URL) |
+| `Url` | text null | the linked address (Url kind) |
+| `Ordinal` | int | 0-based order within the folder |
+| `CreatedAt` | timestamptz | |
+
+Index: `(SectionId, Ordinal)`. Blobs live under MinIO key `{userId}/section-attachments/{attachmentId}{ext}`.
+Counts toward the owner's storage quota (`StorageUsage` sums recording + section attachment bytes). CRUD +
+in-place Markdown edit live in `SectionAttachmentsController` at route `api/sections/{id}/folder-attachments`.
 
 #### `RecordingCalendarLinks`
 The Google Calendar event a recording belongs to (1:1 with `Recording`, shared primary key). A lightweight
@@ -576,6 +600,8 @@ rendered on demand by the API from the database.
 - The key is stored on `Recording.BlobKey`; `Recording.ContentType` holds the MIME type.
 - **Attachment files** use key `{userId}/attachments/{attachmentId}{ext}` (stored on `Attachment.BlobKey`);
   the API streams them back same-origin (inline) and counts their bytes toward the user's quota.
+- **Folder-direct attachment files** use key `{userId}/section-attachments/{attachmentId}{ext}` (stored on
+  `SectionAttachment.BlobKey`); same streaming + quota behaviour, keyed on the folder instead of a recording.
 - **Blob lifecycle on delete/merge:** deleting a recording also deletes its attachment-file blobs (the DB
   cascade only removes the rows). Merging **moves** the merged-away recordings' attachments onto the survivor
   (rows reparented, blobs kept), so nothing is orphaned; the audio-merge worker callback also defensively

@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { parseChatCommand, buildToolsOutput, buildHelpOutput, bulletList, matchCommands, type CommandInfo } from "./chatCommands";
+import {
+  parseChatCommand, buildToolsOutput, buildHelpOutput, bulletList, matchCommands,
+  conversationToMarkdown, type CommandInfo,
+} from "./chatCommands";
 
 describe("parseChatCommand", () => {
   it("recognises every command (case- and space-insensitive)", () => {
@@ -13,6 +16,7 @@ describe("parseChatCommand", () => {
     expect(parseChatCommand("/load")).toBe("load");
     expect(parseChatCommand("/copy")).toBe("copy");
     expect(parseChatCommand("/retry")).toBe("retry");
+    expect(parseChatCommand("/attach")).toBe("attach");
   });
 
   it("returns null for normal messages, unknown slashes, and text that merely mentions a command", () => {
@@ -99,5 +103,34 @@ describe("buildHelpOutput", () => {
     expect(out).toContain("Commands");
     expect(out).toContain("`/tools`");
     expect(out).toContain("List tools.");
+  });
+});
+
+describe("conversationToMarkdown", () => {
+  const labels = { title: "Chat conversation", youLabel: "You", assistantLabel: "Assistant" };
+
+  it("renders each turn as a labelled section under a title", () => {
+    const out = conversationToMarkdown(
+      [
+        { role: "user", content: "Hello there" },
+        { role: "assistant", content: "Hi! How can I help?" },
+      ],
+      labels,
+    );
+    expect(out).toContain("# Chat conversation");
+    expect(out).toContain("## You\n\nHello there");
+    expect(out).toContain("## Assistant\n\nHi! How can I help?");
+  });
+
+  it("skips blank turns", () => {
+    const out = conversationToMarkdown(
+      [
+        { role: "user", content: "Question" },
+        { role: "assistant", content: "   " },
+      ],
+      labels,
+    );
+    expect(out).toContain("## You\n\nQuestion");
+    expect(out).not.toContain("## Assistant");
   });
 });

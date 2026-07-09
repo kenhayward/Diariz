@@ -771,6 +771,48 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("Sections");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.SectionAttachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BlobKey")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ContentType")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Url")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SectionId", "Ordinal");
+
+                    b.ToTable("SectionAttachments");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.SectionMinutes", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1689,6 +1731,17 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.SectionAttachment", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.Section", "Section")
+                        .WithMany("Attachments")
+                        .HasForeignKey("SectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Section");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.SectionMinutes", b =>
                 {
                     b.HasOne("Diariz.Domain.Entities.MeetingType", "MeetingType")
@@ -1903,6 +1956,8 @@ namespace Diariz.Domain.Migrations
 
             modelBuilder.Entity("Diariz.Domain.Entities.Section", b =>
                 {
+                    b.Navigation("Attachments");
+
                     b.Navigation("Children");
 
                     b.Navigation("Minutes");

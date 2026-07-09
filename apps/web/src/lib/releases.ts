@@ -26,7 +26,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Chat tools** | The assistant searches your library with built-in tools (who-said-what, attendees, talk time, summaries, email-to-self) and links to the exact segment. |
 | **Connect Claude (MCP)** | Connect Claude to your own meetings via OAuth (claude.ai) or a personal token (Claude Desktop/Code). |
 | **Translate** | Translate a whole transcript or a single segment, stored as revisions you can flip back. |
-| **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) and optionally feed them to chat. |
+| **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) to a recording or directly to a folder, edit Markdown attachments in place, save a chat conversation as an attachment with /attach, and optionally feed them to chat. |
 | **Organise & merge** | Sections and sub-sections with drag-and-drop; browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
@@ -50,6 +50,29 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.117.0",
+    date: "2026-07-09",
+    pr: 258,
+    headline: "Folder attachments, editable Markdown, and /attach",
+    summary:
+      "Attachments get more useful in three ways. You can now attach files or URLs directly to a folder - the " +
+      "folder's Attachments tab splits into two lists: the files you've added to the folder itself (which you " +
+      "can add, rename, edit, and remove) above the read-only roll-up of attachments from the folder's " +
+      "transcripts. Any Markdown attachment now opens in the rich editor when you click it, so you can edit and " +
+      "save it in place instead of downloading it. And a new /attach chat command saves the whole current " +
+      "conversation as a Markdown attachment - onto the transcript you're viewing, the first of several you've " +
+      "selected, or the folder you're in. A fix: /context now shows the real transcript count for a folder " +
+      "(it used to read 0).",
+    added: [
+      "Attach files or URLs directly to a folder, shown as a separate addable list in the folder's Attachments tab.",
+      "Edit Markdown attachments in the rich editor and save the revision back in place (recording or folder attachments).",
+      "/attach chat command: save the current conversation as a Markdown attachment on the current transcript, first selected transcript, or folder.",
+    ],
+    fixed: [
+      "/context now reports the number of transcripts in a folder instead of 0 when a folder is in context.",
+    ],
+  },
   {
     version: "0.116.0",
     date: "2026-07-09",

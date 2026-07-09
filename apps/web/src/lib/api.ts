@@ -395,6 +395,18 @@ export const api = {
   async deleteAttachment(id: string, attachmentId: string): Promise<void> {
     await http.delete(`/api/recordings/${id}/attachments/${attachmentId}`);
   },
+  /// Fetch a Markdown attachment's raw text (to seed the in-app editor).
+  async getAttachmentText(id: string, attachmentId: string): Promise<string> {
+    const { data } = await http.get<string>(`/api/recordings/${id}/attachments/${attachmentId}/content`, {
+      responseType: "text",
+      transformResponse: [(d) => d],
+    });
+    return data;
+  },
+  /// Overwrite a Markdown attachment's content in place (the editor's Save).
+  async updateAttachmentContent(id: string, attachmentId: string, content: string): Promise<void> {
+    await http.put(`/api/recordings/${id}/attachments/${attachmentId}/content`, { content });
+  },
   /// A same-origin, self-authenticating URL the browser can open directly (file attachments only).
   /// Carries the bearer as `access_token` since a new tab can't set an Authorization header.
   attachmentContentUrl(id: string, attachmentId: string): string {
@@ -622,6 +634,47 @@ export const api = {
   async listSectionAttachments(id: string): Promise<SectionAttachmentItem[]> {
     const { data } = await http.get<SectionAttachmentItem[]>(`/api/sections/${id}/attachments`);
     return data;
+  },
+
+  // ---- Folder-direct attachments (filed against the folder itself, not aggregated from transcripts) ----
+  async listFolderAttachments(sectionId: string): Promise<Attachment[]> {
+    const { data } = await http.get<Attachment[]>(`/api/sections/${sectionId}/folder-attachments`);
+    return data;
+  },
+  async addFolderFileAttachment(sectionId: string, file: File): Promise<Attachment> {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    const { data } = await http.post<Attachment>(`/api/sections/${sectionId}/folder-attachments/file`, form);
+    return data;
+  },
+  async addFolderUrlAttachment(sectionId: string, url: string, name?: string): Promise<Attachment> {
+    const { data } = await http.post<Attachment>(`/api/sections/${sectionId}/folder-attachments/url`, { url, name });
+    return data;
+  },
+  async addFolderMarkdownAttachment(sectionId: string, name: string, content: string): Promise<Attachment> {
+    const { data } = await http.post<Attachment>(`/api/sections/${sectionId}/folder-attachments/markdown`, { name, content });
+    return data;
+  },
+  async renameFolderAttachment(sectionId: string, attachmentId: string, name: string): Promise<void> {
+    await http.put(`/api/sections/${sectionId}/folder-attachments/${attachmentId}`, { name });
+  },
+  async deleteFolderAttachment(sectionId: string, attachmentId: string): Promise<void> {
+    await http.delete(`/api/sections/${sectionId}/folder-attachments/${attachmentId}`);
+  },
+  async getFolderAttachmentText(sectionId: string, attachmentId: string): Promise<string> {
+    const { data } = await http.get<string>(`/api/sections/${sectionId}/folder-attachments/${attachmentId}/content`, {
+      responseType: "text",
+      transformResponse: [(d) => d],
+    });
+    return data;
+  },
+  async updateFolderAttachmentContent(sectionId: string, attachmentId: string, content: string): Promise<void> {
+    await http.put(`/api/sections/${sectionId}/folder-attachments/${attachmentId}/content`, { content });
+  },
+  /// Self-authenticating URL to open a folder-direct file attachment in a new tab.
+  folderAttachmentContentUrl(sectionId: string, attachmentId: string): string {
+    const token = encodeURIComponent(getToken() ?? "");
+    return `${baseURL}/api/sections/${sectionId}/folder-attachments/${attachmentId}/content?access_token=${token}`;
   },
   /// Kick off (async) generation of the folder summary. Regenerates any missing per-recording summaries first.
   async generateSectionSummary(id: string): Promise<void> {

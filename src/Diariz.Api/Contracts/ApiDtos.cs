@@ -249,6 +249,8 @@ public record AddUrlAttachmentRequest(string Url, string? Name);
 public record AddMarkdownAttachmentRequest(string Name, string Content);
 /// <summary>Rename an attachment.</summary>
 public record RenameAttachmentRequest(string Name);
+/// <summary>Overwrite a Markdown attachment's content in place (from the in-app TipTap editor).</summary>
+public record UpdateAttachmentContentRequest(string Content);
 
 // ---- Action items (extracted from a transcript; user-editable) ----
 // Completed/CompletedAt default so export/chat projections that don't track completion stay unchanged;

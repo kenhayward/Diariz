@@ -132,7 +132,9 @@ minutes** by reshaping the recordings' individual minutes through a **meeting-ty
 regenerate any missing per-recording summaries/minutes first, run in the background, are editable, and are
 saved on the folder. **Actions**, **Notes**, and **Attachments** tabs aggregate every item across the folder
 and its sub-folders, each tagged with the **meeting** it came from - editable and deletable in place
-(attachments removable); adding happens on the recording, not the folder.
+(attachments removable). The **Attachments** tab also has a separate, **addable** list of attachments filed
+**directly on the folder** (files or URLs) that don't belong to any one transcript, shown above the aggregated
+list.
 - **Tag cloud across your meetings**: every meeting is **tagged automatically** after transcription — the
 LLM extracts up to 12 weighted concepts/themes it was actually about (participant names and filler are
 excluded). The left panel's **Tags** tab shows them as a flat weighted cloud (font size scales with how
@@ -141,11 +143,14 @@ button opens the cloud in a large modal (picking a tag there filters the panel t
 it). Re-transcribing refreshes a meeting's tags. Existing libraries are **backfilled** automatically at
 startup (when a server-wide LLM is configured), and a Platform Administrator can trigger the backfill from
 **Settings → Maintenance** (e.g. for per-user-only LLM configs).
-- **Attach supporting documents** to a transcript — upload files (PDFs, Office docs, emails, calendar
-invites, images, …) or add URLs, then rename, open, and remove them from an "Attachments (N)" button
-(or drag files onto the page). Files are stored in object storage and count toward your quota. Turn on
-**Include attachments** in chat to feed them to the LLM (documents are read into text; URLs are fetched
-behind SSRF guards).
+- **Attach supporting documents** to a transcript — or **directly to a folder** — upload files (PDFs, Office
+docs, emails, calendar invites, images, …) or add URLs, then rename, open, and remove them from an
+"Attachments (N)" button (or drag files onto the page). Files are stored in object storage and count toward
+your quota. **Markdown attachments are editable in place**: click Open and a rich (WYSIWYG) editor opens
+seeded with the document; Save overwrites it. You can also save a **whole chat conversation** as a Markdown
+attachment with the **`/attach`** chat command (onto the current transcript, the first selected one, or the
+current folder). Turn on **Include attachments** in chat to feed them to the LLM (documents are read into
+text; URLs are fetched behind SSRF guards).
 - **Manage audio & merge**: **delete a recording's audio** to reclaim its storage while keeping the
 transcript, and **merge** several recordings into the earliest one — their transcripts are laid end-to-end
 and their action items are folded in. Audio is concatenated server-side (ffmpeg) for the recordings that
