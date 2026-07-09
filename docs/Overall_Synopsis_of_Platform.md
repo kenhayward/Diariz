@@ -218,6 +218,21 @@ default timeout for its header phase and relies on client-disconnect for cancell
   case-insensitive aggregation (count + summed weight + carrying recording ids) that the left panel's
   **Tags tab** renders as a flat weighted cloud (log-scaled font sizes, single-select filter, an expanded
   80% modal sharing the same selection state).
+- **Folder (section) pages (async roll-ups).** A **folder page** (`GET /api/sections/{id}` +
+  `SectionPageController`, web route `/sections/:id`) aggregates everything across a section **and its child
+  sections**: stats, an LLM **folder summary**, consolidated **folder minutes**, and the actions/notes/
+  attachments (read aggregations that carry each item's source-recording name; edit/delete reuse the
+  per-item controllers). The two roll-ups generate asynchronously on **their own Redis streams** -
+  **`section-summary-jobs`** (group `section-summarizers`, `SectionSummaryWorker`) and
+  **`section-minutes-jobs`** (group `section-minute-takers`, `SectionMinutesWorker`), each a singleton
+  `BackgroundService` running a static `SectionSummaryProcessor`/`SectionMinutesProcessor`. Each processor
+  first **(re)generates and persists any missing per-recording** summary/minutes (reusing `ISummarizationClient`
+  / `IMeetingTypeMinutesGenerator`), then combines them via the arbitrary-prompt `IMeetingMinutesClient`
+  (editable prompts `prompts/folder-summary.md` / `prompts/folder-minutes.md`; minutes reshape through a chosen
+  `MeetingType`). Results persist on the section (`SectionSummary`/`SectionMinutes`, 1:1, mirroring
+  `Summary`/`MeetingMinutes`) with their own `Status/Error`, and a **`SectionStatusChanged`** SignalR event
+  (distinct from `RecordingStatusChanged`) tells the folder page to refetch; hand-edits set `IsUserEdited` and
+  survive the next regenerate.
 - **Semantic search index (RAG, M3 - backend).** A **fifth Redis stream `embedding-jobs`** (group `embedders`)
   with its own `EmbeddingWorker` (singleton `BackgroundService`) builds the semantic-search index. Per job,
   `EmbeddingProcessor` windows the transcription's segments into overlapping passages (`TranscriptChunker`,
