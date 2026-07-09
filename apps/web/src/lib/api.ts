@@ -40,6 +40,9 @@ import type {
   RecordingSummary,
   SavedChatContext,
   SectionDto,
+  SectionDetail,
+  SectionNoteItem,
+  SectionAttachmentItem,
   TagCloudEntry,
   SetupValidation,
   SpeakerProfile,
@@ -601,6 +604,38 @@ export const api = {
   /// Set the parent + 0-based order of each listed section in one call (drag-and-drop reorder/reparent).
   async reorderSections(parentId: string | null, orderedIds: string[]): Promise<void> {
     await http.put("/api/sections/reorder", { parentId, orderedIds });
+  },
+
+  // ---- Folder (section) page ----
+  async getSection(id: string): Promise<SectionDetail> {
+    const { data } = await http.get<SectionDetail>(`/api/sections/${id}`);
+    return data;
+  },
+  async listSectionActions(id: string): Promise<ActionListItem[]> {
+    const { data } = await http.get<ActionListItem[]>(`/api/sections/${id}/actions`);
+    return data;
+  },
+  async listSectionNotes(id: string): Promise<SectionNoteItem[]> {
+    const { data } = await http.get<SectionNoteItem[]>(`/api/sections/${id}/notes`);
+    return data;
+  },
+  async listSectionAttachments(id: string): Promise<SectionAttachmentItem[]> {
+    const { data } = await http.get<SectionAttachmentItem[]>(`/api/sections/${id}/attachments`);
+    return data;
+  },
+  /// Kick off (async) generation of the folder summary. Regenerates any missing per-recording summaries first.
+  async generateSectionSummary(id: string): Promise<void> {
+    await http.post(`/api/sections/${id}/summary/generate`);
+  },
+  async updateSectionSummary(id: string, text: string): Promise<void> {
+    await http.put(`/api/sections/${id}/summary`, { text });
+  },
+  /// Kick off (async) generation of the folder minutes through the given meeting-type template (null = General).
+  async generateSectionMinutes(id: string, meetingTypeId: string | null): Promise<void> {
+    await http.post(`/api/sections/${id}/minutes/generate`, { meetingTypeId });
+  },
+  async updateSectionMinutes(id: string, text: string): Promise<void> {
+    await http.put(`/api/sections/${id}/minutes`, { text });
   },
 
   async moveRecording(id: string, sectionId: string | null): Promise<void> {

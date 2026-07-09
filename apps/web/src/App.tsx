@@ -10,6 +10,7 @@ import RequestAccess from "./pages/RequestAccess";
 import Setup from "./pages/Setup";
 import ReleaseNotes from "./pages/ReleaseNotes";
 import RecordingDetail from "./pages/RecordingDetail";
+import SectionDetail from "./pages/SectionDetail";
 import CalendarEventDetail from "./pages/CalendarEventDetail";
 // Lazy-loaded: the Scalar API reference is a large bundle, only needed on /developers/api.
 const ApiReference = lazy(() => import("./pages/ApiReference"));
@@ -69,6 +70,7 @@ export default function App() {
       >
         <Route index element={<EmptyDetail />} />
         <Route path="recordings/:id" element={<RecordingDetail />} />
+        <Route path="sections/:id" element={<SectionDetail />} />
         <Route path="calendar-event/:eventId" element={<CalendarEventDetail />} />
       </Route>
     </Routes>

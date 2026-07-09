@@ -102,6 +102,65 @@ export interface SectionDto {
   position: number;
 }
 
+// ---- Folder (section) page ----
+/// Generation lifecycle of a folder-level LLM artifact (summary/minutes).
+export type SectionGenerationStatus = "Idle" | "Generating" | "Ready" | "Failed";
+
+export interface SectionStats {
+  transcriptCount: number;
+  totalDurationMs: number;
+  firstRecordingAt: string | null;
+  lastRecordingAt: string | null;
+}
+export interface FolderSummary {
+  model: string;
+  text: string;
+  createdAt: string;
+  isUserEdited: boolean;
+  status: SectionGenerationStatus;
+  error: string | null;
+}
+export interface FolderMinutes {
+  model: string;
+  text: string;
+  createdAt: string;
+  isUserEdited: boolean;
+  meetingTypeId: string | null;
+  status: SectionGenerationStatus;
+  error: string | null;
+}
+export interface SectionDetail {
+  id: string;
+  name: string;
+  parentId: string | null;
+  stats: SectionStats;
+  summary: FolderSummary | null;
+  minutes: FolderMinutes | null;
+  meetingTypeId: string | null;
+}
+/// One note aggregated for the folder Notes tab (carries its source recording's display name).
+export interface SectionNoteItem {
+  id: string;
+  recordingId: string;
+  recordingName: string;
+  text: string;
+  capturedAtMs: number | null;
+  ordinal: number;
+  createdAt: string;
+}
+/// One attachment aggregated for the folder Attachments tab (carries its source recording's display name).
+export interface SectionAttachmentItem {
+  id: string;
+  recordingId: string;
+  recordingName: string;
+  kind: AttachmentKind;
+  name: string;
+  contentType: string | null;
+  sizeBytes: number;
+  url: string | null;
+  ordinal: number;
+}
+
 /// A supporting document attached to a recording — an uploaded file or a URL.
 export type AttachmentKind = "File" | "Url";
 export interface Attachment {
