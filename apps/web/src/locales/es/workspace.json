@@ -156,6 +156,7 @@
   "liveNotesTitle": "Notas durante la grabación",
   "liveNotesHint": "Cada línea se marca en el momento en que pulsas Intro.",
   "liveNotesToggle": "Notas",
+  "noteSpeakerYou": "Tú",
   "liveNotesClose": "Cerrar notas",
   "notesAttachFailed": "Tus notas se guardaron pero no se pudieron adjuntar a la grabación.",
   "notesAttachRetry": "Adjuntar notas",

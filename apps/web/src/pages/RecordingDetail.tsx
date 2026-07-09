@@ -19,6 +19,8 @@ import MeetingTypeMenu from "../components/MeetingTypeMenu";
 import NotesSection from "../components/NotesSection";
 import ManageMeetingTypesModal from "../components/ManageMeetingTypesModal";
 import { renderMarkdown } from "../lib/markdown";
+import { weaveTranscript } from "../lib/transcriptNotes";
+import { useAuth } from "../auth";
 import AttachmentsManager from "../components/AttachmentsManager";
 import CalendarEventDetails from "../components/CalendarEventDetails";
 import CalendarLinkModal from "../components/CalendarLinkModal";
@@ -32,7 +34,7 @@ import { speakerRanges, selectedRanges, rangeAt, nextRangeStart, type PlayRange 
 import { formatBytes, formatDate, formatDuration, formatLongDate, formatTimeHm, formatDurationHm } from "../lib/format";
 import { hasRevisions, segmentText } from "../lib/transcriptView";
 import { fetchLanguages } from "../lib/languages";
-import type { SegmentDto, SpeakerInfo, SpeakerProfile } from "../lib/types";
+import type { MeetingNote, SegmentDto, SpeakerInfo, SpeakerProfile } from "../lib/types";
 
 // Feather-style icons for the panel toolbars and the per-speaker play control.
 const RefreshIcon = (
@@ -172,6 +174,8 @@ export default function RecordingDetail() {
     }
   }
 
+  // The current user's name, shown as the "speaker" on their notes woven into the transcript.
+  const { fullName, email } = useAuth();
   const audioRef = useRef<HTMLAudioElement>(null);
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
   // Per-speaker audition: the label currently playing and that speaker's (merged) play ranges.
@@ -1304,18 +1308,22 @@ export default function RecordingDetail() {
             </div>
           )}
           <ul className="space-y-2">
-            {rec.current.segments.map((s, i) => (
-              <SegmentRow
-                key={s.id}
-                seg={s}
-                speakerName={multiSpeakerLabels.has(s.speaker) ? t("workspace:multipleSpeakers") : s.speakerDisplay}
-                active={i === activeIdx}
-                selected={selectedSegIds.has(s.id)}
-                selectMode={selectMode}
-                showOriginal={showOriginal}
-                onClick={() => clickSegment(s.id)}
-              />
-            ))}
+            {weaveTranscript(rec.current.segments, notes).map((row) =>
+              row.kind === "note" ? (
+                <NoteRow key={`note-${row.note.id}`} note={row.note} speaker={fullName ?? email ?? t("workspace:noteSpeakerYou")} />
+              ) : (
+                <SegmentRow
+                  key={row.seg.id}
+                  seg={row.seg}
+                  speakerName={multiSpeakerLabels.has(row.seg.speaker) ? t("workspace:multipleSpeakers") : row.seg.speakerDisplay}
+                  active={row.index === activeIdx}
+                  selected={selectedSegIds.has(row.seg.id)}
+                  selectMode={selectMode}
+                  showOriginal={showOriginal}
+                  onClick={() => clickSegment(row.seg.id)}
+                />
+              ),
+            )}
           </ul>
         </div>
       ) : (
@@ -1802,6 +1810,20 @@ export function SpeakerRow({
         <ToolbarButton label={t("deleteSpeaker", { label: name })} icon={TrashIcon} onClick={() => onDelete(name)} />
       </div>
     </div>
+  );
+}
+
+/// A note-taker's note woven into the transcript: same row layout as a segment (timestamp · speaker · text)
+/// but the current user is the "speaker" and the text is green, to distinguish it from transcribed speech.
+function NoteRow({ note, speaker }: { note: MeetingNote; speaker: string }) {
+  return (
+    <li className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50/40 px-4 py-2 dark:border-green-900 dark:bg-green-950/20">
+      <span className="w-12 shrink-0 font-mono text-xs text-gray-400 dark:text-gray-500">
+        {note.capturedAtMs != null ? fmt(note.capturedAtMs) : ""}
+      </span>
+      <span className="w-28 shrink-0 text-sm font-medium text-green-700 dark:text-green-400">{speaker}</span>
+      <span className="flex-1 whitespace-pre-wrap break-words text-sm text-green-700 dark:text-green-400">{note.text}</span>
+    </li>
   );
 }
 

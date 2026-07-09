@@ -156,6 +156,7 @@
   "liveNotesTitle": "Notes while recording",
   "liveNotesHint": "Each line is stamped at the moment you press Enter.",
   "liveNotesToggle": "Notes",
+  "noteSpeakerYou": "You",
   "liveNotesClose": "Close notes",
   "notesAttachFailed": "Your notes were saved but could not be attached to the recording.",
   "notesAttachRetry": "Attach notes",
