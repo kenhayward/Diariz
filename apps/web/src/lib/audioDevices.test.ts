@@ -14,7 +14,7 @@ import {
 
 const labels: SourceOptionLabels = {
   micDefault: "Microphone (default)",
-  system: "System audio",
+  noMic: "No microphone",
   numbered: (n) => `Microphone ${n}`,
 };
 
@@ -34,6 +34,11 @@ describe("parseSourceToken / formatSourceToken", () => {
     expect(formatSourceToken({ kind: "system" })).toBe("system");
   });
 
+  it("round-trips the no-microphone token", () => {
+    expect(parseSourceToken("none")).toEqual({ kind: "none" });
+    expect(formatSourceToken({ kind: "none" })).toBe("none");
+  });
+
   it("round-trips a device token, preserving the id", () => {
     expect(parseSourceToken("dev:aaa")).toEqual({ kind: "device", deviceId: "aaa" });
     expect(formatSourceToken({ kind: "device", deviceId: "aaa" })).toBe("dev:aaa");
@@ -46,12 +51,12 @@ describe("parseSourceToken / formatSourceToken", () => {
 });
 
 describe("buildSourceOptions", () => {
-  it("orders default first, specifics in the middle, system last (with labels)", () => {
-    expect(buildSourceOptions(devices, true, labels)).toEqual([
+  it("orders default first, specifics in the middle, No Microphone last (system available)", () => {
+    expect(buildSourceOptions(devices, true, labels, { canSystemAudio: true })).toEqual([
       { token: "default", label: "Microphone (default)", kind: "default" },
       { token: "dev:aaa", label: "Built-in Mic", kind: "device" },
       { token: "dev:bbb", label: "USB Headset", kind: "device" },
-      { token: "system", label: "System audio", kind: "system" },
+      { token: "none", label: "No microphone", kind: "none" },
     ]);
   });
 
@@ -60,11 +65,11 @@ describe("buildSourceOptions", () => {
       { deviceId: "aaa", label: "" },
       { deviceId: "bbb", label: "" },
     ];
-    expect(buildSourceOptions(withheld, false, labels)).toEqual([
+    expect(buildSourceOptions(withheld, false, labels, { canSystemAudio: true })).toEqual([
       { token: "default", label: "Microphone (default)", kind: "default" },
       { token: "dev:aaa", label: "Microphone 1", kind: "device" },
       { token: "dev:bbb", label: "Microphone 2", kind: "device" },
-      { token: "system", label: "System audio", kind: "system" },
+      { token: "none", label: "No microphone", kind: "none" },
     ]);
   });
 
@@ -73,13 +78,22 @@ describe("buildSourceOptions", () => {
       { deviceId: "aaa", label: "Built-in Mic" },
       { deviceId: "bbb", label: "" },
     ];
-    const opts = buildSourceOptions(mixed, true, labels);
+    const opts = buildSourceOptions(mixed, true, labels, { canSystemAudio: true });
     expect(opts[1].label).toBe("Built-in Mic");
     expect(opts[2].label).toBe("Microphone 2");
   });
 
-  it("yields just default + system when there are no enumerated devices", () => {
-    expect(buildSourceOptions([], false, labels).map((o) => o.token)).toEqual(["default", "system"]);
+  it("omits No Microphone when system audio is unavailable (else Record could never enable)", () => {
+    expect(buildSourceOptions([], false, labels, { canSystemAudio: false }).map((o) => o.token)).toEqual([
+      "default",
+    ]);
+  });
+
+  it("yields default + No Microphone when there are no devices and system is available", () => {
+    expect(buildSourceOptions([], false, labels, { canSystemAudio: true }).map((o) => o.token)).toEqual([
+      "default",
+      "none",
+    ]);
   });
 });
 
