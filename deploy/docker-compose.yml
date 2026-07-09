@@ -145,8 +145,9 @@ services:
         condition: service_healthy
     healthcheck:
       # nginx serves the SPA index (busybox wget ships in nginx:alpine). This checks web liveness only,
-      # independent of the API - the static index is returned even when /api is down.
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:80/"]
+      # independent of the API - the static index is returned even when /api is down. Use 127.0.0.1 (not
+      # localhost): the SPA server block only `listen 80;` (IPv4), so an IPv6 `localhost` (::1) is refused.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:80/"]
       interval: 15s
       timeout: 5s
       retries: 5
