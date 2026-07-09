@@ -51,13 +51,13 @@ re-create them, or **email them to yourself** (optionally with the recording's a
 travel with the emailed transcript and the Markdown/text/RTF downloads. The Meeting Minutes panel is always
 available (collapsed) with a refresh button to generate them on any recording.
 - **Meeting types (minutes templates).** Minutes are driven by a **meeting type** — a reusable template of
-H1/H2 sections whose blocks are **boilerplate text**, **substituted recording values** (date, attendees, the
-action-items table, …), or **model prompts**. A standard set ships (General, Customer, Cadence Call, 1:1,
-Interview, Town Hall, Webinar); pick one from the Minutes toolbar to re-run the minutes in that structure. A
-**Manage Meeting Types** editor creates/edits templates — **Personal** (a user's own) or **Platform**
-(admin-owned, shared read-only). Each block has a **Break-after** control (no break / line break / paragraph) so
-you decide exactly where content runs together or separates; text blocks are an **auto-growing Markdown** box, and
-a **drag handle** moves any block within a section or into another. Templates can be **exported to a JSON file and
+H1/H2/H3 sections whose blocks are **boilerplate text**, **substituted recording values** (date, attendees, the
+action-items table, …), **model prompts**, or a **horizontal rule** (a divider on its own line). A standard set
+ships (General, Customer, Cadence Call, 1:1, Interview, Town Hall, Webinar); pick one from the Minutes toolbar to
+re-run the minutes in that structure. A **Manage Meeting Types** editor creates/edits templates — **Personal** (a
+user's own) or **Platform** (admin-owned, shared read-only). Each block has a **Break-after** control (no break /
+line break / paragraph) so you decide exactly where content runs together or separates; text blocks are an
+**auto-growing Markdown** box, and a **drag handle** moves any block within a section or into another. Templates can be **exported to a JSON file and
 imported** back (naming the import, since it may duplicate one you have), so you can share them between accounts.
 When a template substitutes the **attendees** field it names the identified people and then counts the rest
 (e.g. "Alice, Bob and 11 unidentified attendees"). A Platform Administrator can also pick how minutes generate:

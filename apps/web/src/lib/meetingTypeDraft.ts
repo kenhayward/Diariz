@@ -5,6 +5,7 @@ export const FIELD_OPTIONS = ["date", "time", "title", "attendees", "duration", 
 
 export function newBlock(kind: TemplateBlockKind): TemplateBlock {
   if (kind === "field") return { kind, field: "date", breakAfter: "none" };
+  if (kind === "hr") return { kind, breakAfter: "paragraph" }; // a rule on its own line - no text/field
   return { kind, text: "", breakAfter: "paragraph" };
 }
 
@@ -135,6 +136,8 @@ export function contentError(content: MeetingTypeContent): string | null {
       if (block.kind === "field") {
         if (!block.field || !FIELD_OPTIONS.includes(block.field as (typeof FIELD_OPTIONS)[number]))
           return "blockFieldRequired";
+      } else if (block.kind === "hr") {
+        // a horizontal rule needs neither text nor a field
       } else if (!block.text?.trim()) {
         return "blockTextRequired";
       }

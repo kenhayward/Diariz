@@ -43,6 +43,7 @@ public static class MeetingTypeMinutesComposer
                 TemplateBlock.Boilerplate => block.Text ?? "",
                 TemplateBlock.FieldKind => resolveField(block.Field ?? "") ?? "",
                 TemplateBlock.Prompt => (await resolvePrompt(block) ?? "").Trim(),
+                TemplateBlock.HorizontalLine => "---",
                 _ => "",
             };
             rendered.Add((block, text));
@@ -61,14 +62,19 @@ public static class MeetingTypeMinutesComposer
     }
 
     /// <summary>The whitespace between a rendered block and the next one. Honors the preceding block's explicit
-    /// <c>BreakAfter</c>; a null value falls back to the legacy rule (glue only when the next block is a field).</summary>
-    private static string Separator(TemplateBlock prev, TemplateBlock next) =>
-        (prev.BreakAfter ?? LegacyBreak(next)) switch
+    /// <c>BreakAfter</c>; a null value falls back to the legacy rule (glue only when the next block is a field). A
+    /// horizontal rule on either side always forces a paragraph gap, so "text\n---" can't be read as a setext H2.</summary>
+    private static string Separator(TemplateBlock prev, TemplateBlock next)
+    {
+        if (prev.Kind == TemplateBlock.HorizontalLine || next.Kind == TemplateBlock.HorizontalLine)
+            return "\n\n";
+        return (prev.BreakAfter ?? LegacyBreak(next)) switch
         {
             TemplateBlock.BreakNone => "",
             TemplateBlock.BreakLine => "\n",
             _ => "\n\n", // BreakParagraph (and any unexpected value) => paragraph gap
         };
+    }
 
     private static string LegacyBreak(TemplateBlock next) =>
         next.Kind == TemplateBlock.FieldKind ? TemplateBlock.BreakNone : TemplateBlock.BreakParagraph;
