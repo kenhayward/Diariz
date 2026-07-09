@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useMatch } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
@@ -8,6 +8,9 @@ import { linkifyRecordings } from "../lib/linkify";
 import { renderMarkdown } from "../lib/markdown";
 import { useActiveRecordingId } from "../lib/useActiveRecordingId";
 import { useSelection } from "../lib/selection";
+import {
+  inferCurrentContext, currentContextLabelKey, currentContextRequest, type CurrentContext,
+} from "../lib/chatContext";
 import {
   emptyToolCallLine,
   toolStarted,
@@ -28,7 +31,9 @@ import type { AttachmentDraft, ChatConversationSummary, ChatTurn, ChatUsage } fr
 import ContextDial from "./ContextDial";
 import PickRecordingModal from "./PickRecordingModal";
 
-type ContextMode = "current" | "selected" | "all" | "none";
+// The explicit "selected" mode is gone - the "current" context is inferred (folder / single / multiple) and
+// its label switches accordingly.
+type ContextMode = "current" | "all" | "none";
 
 /// Right-panel chat: ask questions over one or more transcripts, attach a PDF/text file as extra
 /// context, watch the reply stream in, and save / reload / delete conversations.
@@ -36,6 +41,7 @@ export default function ChatPanel() {
   const { t } = useTranslation("chat");
   const navigate = useNavigate();
   const activeId = useActiveRecordingId();
+  const activeSectionId = useMatch("/sections/:id")?.params.id ?? null;
   const selection = useSelection();
   const qc = useQueryClient();
   // The chat "add as attachment" tool: the model queues a note during the turn; we act once the reply lands —
@@ -78,6 +84,11 @@ export default function ChatPanel() {
   const [contextMode, setContextMode] = useState<ContextMode>("current");
   const [includeAttachments, setIncludeAttachments] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // The inferred "current" context, snapshotted when the input is focused - so the context-selector wording
+  // only changes when the user's cursor enters the chat box (not live as they navigate/select). Seeded from
+  // the mount-time inference so the initial pill/context is already correct.
+  const [frozenCurrent, setFrozenCurrent] = useState<CurrentContext>(() =>
+    inferCurrentContext({ sectionId: activeSectionId, recordingId: activeId, selectedIds: selection.selectedIds }));
 
   const [attachment, setAttachment] = useState<{ name: string; text: string; chars: number } | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -119,16 +130,20 @@ export default function ChatPanel() {
 
   const started = messages.length > 0;
 
-  // The transcripts used as context, from the chosen mode: the recording open in the middle panel,
-  // the ones ticked via the list's Select mode, or none.
-  const recordingIds =
+  // What "current" resolves to right now (open folder / open recording / 2+ ticked). Live; the displayed
+  // wording uses `frozenCurrent`, which only updates on input focus.
+  const inferredCurrent = inferCurrentContext({
+    sectionId: activeSectionId,
+    recordingId: activeId,
+    selectedIds: selection.selectedIds,
+  });
+
+  // The context actually sent: a folder (section id) or a set of recording ids, from the chosen mode.
+  const { recordingIds, sectionId } =
     contextMode === "current"
-      ? activeId
-        ? [activeId]
-        : []
-      : contextMode === "selected"
-        ? selection.selectedIds
-        : [];
+      ? currentContextRequest(frozenCurrent)
+      : { recordingIds: [] as string[], sectionId: null };
+  const hasContext = recordingIds.length > 0 || sectionId != null;
 
   // Dial: show the configured context window from the start (used 0), then the live figures the
   // server reports on each turn via the meta/done events.
@@ -306,10 +321,11 @@ export default function ChatPanel() {
       .chatStream(
         {
           recordingIds,
+          sectionId,
           attachmentName: attachment?.name ?? null,
           attachmentText: attachment?.text ?? null,
           messages: history,
-          includeAttachments: includeAttachments && recordingIds.length > 0,
+          includeAttachments: includeAttachments && hasContext,
           searchAllMeetings: contextMode === "all",
         },
         {
@@ -404,13 +420,14 @@ export default function ChatPanel() {
     try {
       const c = await api.getChatConversation(id);
       setMessages(c.messages);
-      // Restore the conversation's transcripts as the shared selection and switch to that mode.
+      // Restore the conversation's transcripts as the shared selection; "current" then infers single/multiple.
       const ids = c.context.recordingIds ?? [];
       if (c.context.searchAllMeetings) {
         setContextMode("all");
       } else if (ids.length > 0) {
         selection.set(ids);
-        setContextMode("selected");
+        setContextMode("current");
+        setFrozenCurrent(ids.length >= 2 ? { kind: "selected", recordingIds: ids } : { kind: "single", recordingId: ids[0] });
       } else {
         setContextMode("none");
       }
@@ -468,14 +485,17 @@ export default function ChatPanel() {
     }
   }
 
+  // The "current" wording (Current Transcript / Selected Transcripts / Current Folder) comes from the frozen
+  // snapshot, so it only changes when the user focuses the input.
+  const currentLabel = t(currentContextLabelKey(frozenCurrent));
+  const currentHint =
+    frozenCurrent.kind === "folder"
+      ? t("pickFolderHint")
+      : frozenCurrent.kind === "selected"
+        ? t("pickSelectedHint", { n: frozenCurrent.recordingIds.length })
+        : t("pickCurrentHint");
   const contextLabel =
-    contextMode === "current"
-      ? t("ctxCurrent")
-      : contextMode === "selected"
-        ? t("ctxSelected", { n: selection.selectedIds.length })
-        : contextMode === "all"
-          ? t("ctxAll")
-          : t("ctxNone");
+    contextMode === "current" ? currentLabel : contextMode === "all" ? t("ctxAll") : t("ctxNone");
 
   // Localized "Tool call: …" indicator: translate the prefix and each tool's friendly name (falling back to
   // a humanized form of the snake_case id when a label isn't translated).
@@ -621,8 +641,7 @@ export default function ChatPanel() {
               >
                 {(
                   [
-                    { mode: "current", label: t("ctxCurrent"), hint: t("pickCurrentHint") },
-                    { mode: "selected", label: t("pickSelected", { count: selection.selectedIds.length }), hint: t("pickSelectedHint", { n: selection.selectedIds.length }) },
+                    { mode: "current", label: currentLabel, hint: currentHint },
                     { mode: "all", label: t("ctxAll"), hint: t("pickAllHint") },
                     { mode: "none", label: t("ctxNone"), hint: t("pickNoneHint") },
                   ] as { mode: ContextMode; label: string; hint: string }[]
@@ -723,6 +742,7 @@ export default function ChatPanel() {
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onFocus={() => setFrozenCurrent(inferredCurrent)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();

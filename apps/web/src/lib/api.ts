@@ -809,6 +809,7 @@ export const api = {
   async chatStream(
     body: {
       recordingIds: string[];
+      sectionId?: string | null;
       attachmentName?: string | null;
       attachmentText?: string | null;
       messages: ChatTurn[];
