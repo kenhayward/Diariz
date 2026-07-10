@@ -1337,6 +1337,14 @@ namespace Diariz.Domain.Migrations
                     b.Property<bool?>("ReasoningEnabled")
                         .HasColumnType("boolean");
 
+                    b.Property<int>("RecordingPlacementMode")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<Guid?>("RecordingPlacementSectionId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("SummaryApiBase")
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");

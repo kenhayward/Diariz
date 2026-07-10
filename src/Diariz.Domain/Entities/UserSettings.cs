@@ -67,4 +67,13 @@ public class UserSettings
 
     /// <summary>Preferred colour theme for the web UI (default <see cref="ThemePreference.Auto"/>).</summary>
     public ThemePreference Theme { get; set; } = ThemePreference.Auto;
+
+    /// <summary>Where a new recording lands in the user's Personal room (default
+    /// <see cref="RecordingPlacementMode.SelectedFolder"/> - the folder they had selected when they pressed
+    /// Record).</summary>
+    public RecordingPlacementMode RecordingPlacementMode { get; set; } = RecordingPlacementMode.SelectedFolder;
+
+    /// <summary>The fixed folder for <see cref="RecordingPlacementMode.SpecificFolder"/>. Null in the other
+    /// modes (and null = Ungrouped even in SpecificFolder mode, if the chosen folder was later deleted).</summary>
+    public Guid? RecordingPlacementSectionId { get; set; }
 }
