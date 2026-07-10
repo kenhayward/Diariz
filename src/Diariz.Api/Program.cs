@@ -450,6 +450,10 @@ await using (var scope = app.Services.CreateAsyncScope())
     await sp.GetRequiredService<IAudioStorage>().EnsureBucketAsync();
     await Seeder.SeedRolesAsync(sp);
     await Seeder.SeedDefaultUserAsync(sp, app.Configuration);
+    // Groups after the seed user, so the platform admin's role row exists to be migrated. Both are
+    // idempotent, so this also backfills a deployment that predates groups.
+    await Seeder.SeedGroupsAsync(db);
+    await Seeder.MigrateRolesToGroupsAsync(db);
     await MeetingTypeSeeder.SeedAsync(db);
 }
 

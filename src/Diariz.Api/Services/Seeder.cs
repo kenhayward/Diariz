@@ -1,3 +1,5 @@
+using Diariz.Domain;
+using Microsoft.EntityFrameworkCore;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
@@ -58,5 +60,61 @@ public static class Seeder
 
         if (!await users.IsInRoleAsync(user, Roles.PlatformAdministrator))
             await users.AddToRoleAsync(user, Roles.PlatformAdministrator);
+    }
+
+    /// <summary>The two seeded groups, mirroring the roles they replace.</summary>
+    public const string PlatformAdminsGroup = "Platform Administrators";
+    public const string AdminsGroup = "Administrators";
+
+    /// <summary>Ensure both seeded groups exist with the right flags. Idempotent; runs on every boot.
+    /// Administrators deliberately does NOT carry ManagePlatform: that flag confers backup/restore and
+    /// platform-settings writes, which the Administrator role has never had.</summary>
+    public static async Task SeedGroupsAsync(DiarizDbContext db)
+    {
+        await EnsureGroup(db, PlatformAdminsGroup, isSystem: true,
+            PlatformPermission.ManageRooms | PlatformPermission.ManageUsers | PlatformPermission.ManagePlatform);
+        await EnsureGroup(db, AdminsGroup, isSystem: false,
+            PlatformPermission.ManageRooms | PlatformPermission.ManageUsers);
+        await db.SaveChangesAsync();
+
+        static async Task EnsureGroup(DiarizDbContext db, string name, bool isSystem, PlatformPermission perms)
+        {
+            var group = await db.UserGroups.FirstOrDefaultAsync(g => g.Name == name);
+            if (group is null)
+            {
+                db.UserGroups.Add(new UserGroup
+                {
+                    Id = Guid.NewGuid(), Name = name, IsSystem = isSystem, Permissions = perms,
+                });
+                return;
+            }
+            // Backfill on an existing deployment. Only ever ADD the flags we own, so an operator who granted
+            // the group something extra does not have it silently revoked on the next boot.
+            group.IsSystem = isSystem;
+            group.Permissions |= perms;
+        }
+    }
+
+    /// <summary>One-way move of Identity role holders into the seeded groups. Idempotent: a user already in
+    /// the group is skipped. The roles remain in the database, unused, until a later chore removes them.</summary>
+    public static async Task MigrateRolesToGroupsAsync(DiarizDbContext db)
+    {
+        await Move(db, Roles.PlatformAdministrator, PlatformAdminsGroup);
+        await Move(db, Roles.Administrator, AdminsGroup);
+        await db.SaveChangesAsync();
+
+        static async Task Move(DiarizDbContext db, string roleName, string groupName)
+        {
+            var group = await db.UserGroups.FirstOrDefaultAsync(g => g.Name == groupName);
+            var role = await db.Roles.FirstOrDefaultAsync(r => r.Name == roleName);
+            if (group is null || role is null) return;
+
+            var holders = await db.UserRoles.Where(ur => ur.RoleId == role.Id).Select(ur => ur.UserId).ToListAsync();
+            var existing = await db.UserGroupMembers.Where(m => m.GroupId == group.Id)
+                .Select(m => m.UserId).ToListAsync();
+
+            foreach (var userId in holders.Except(existing))
+                db.UserGroupMembers.Add(new UserGroupMember { GroupId = group.Id, UserId = userId });
+        }
     }
 }
