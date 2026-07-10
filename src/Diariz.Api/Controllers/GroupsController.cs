@@ -86,7 +86,15 @@ public class GroupsController(DiarizDbContext db) : ControllerBase
         if (group is null) return NotFound();
         if (group.IsSystem) return Forbidden("The Platform Administrators group can't be deleted.");
 
-        db.UserGroups.Remove(group); // members cascade; the users themselves are untouched
+        // RoomMember.PrincipalId has no FK (it points at either AspNetUsers or UserGroups), so the database
+        // cannot cascade. Sweep this group's room-membership rows here, or a stale row survives as a live grant
+        // in every shared room the group belonged to once those have members (Phase 4).
+        var memberships = await db.RoomMembers
+            .Where(m => m.PrincipalType == RoomPrincipalType.Group && m.PrincipalId == id)
+            .ToListAsync();
+        db.RoomMembers.RemoveRange(memberships);
+
+        db.UserGroups.Remove(group); // UserGroupMembers cascade; the users themselves are untouched
         await db.SaveChangesAsync();
         return NoContent();
     }

@@ -196,6 +196,16 @@ public class AdminUsersController : ControllerBase
         if (user is null) return NotFound();
         if (await IsPlatformAdmin(user)) return Forbidden("The Platform Administrator can't be deleted.");
         if (user.Id == CurrentUserId) return Forbidden("You can't delete your own account.");
+
+        // RoomMember.PrincipalId has no FK (it points at either AspNetUsers or UserGroups), so the database
+        // cannot cascade. Sweep the user's membership rows here, or a stale row survives - inert on their
+        // orphaned personal room today, but a live grant in a shared room once those have members (Phase 4).
+        var memberships = await _db.RoomMembers
+            .Where(m => m.PrincipalType == RoomPrincipalType.User && m.PrincipalId == user.Id)
+            .ToListAsync();
+        _db.RoomMembers.RemoveRange(memberships);
+        await _db.SaveChangesAsync();
+
         await _users.DeleteAsync(user); // cascades the user's recordings/sections/chat
         return NoContent();
     }

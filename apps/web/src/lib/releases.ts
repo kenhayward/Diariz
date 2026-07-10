@@ -51,6 +51,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.118.3",
+    date: "2026-07-10",
+    pr: 263,
+    headline: "Tidy up membership on deletion",
+    summary:
+      "A behind-the-scenes correctness fix with no visible effect today. Room membership can be granted to a " +
+      "person or to a user group, and because those are stored without a database link that cleans up " +
+      "automatically, deleting a user or a group used to leave their membership rows behind. Those leftover " +
+      "rows do nothing today, but they would have quietly granted access once shared rooms gain members - so " +
+      "deleting a user or a group now removes their room-membership rows too.",
+    fixed: [
+      "Deleting a user or a user group now also removes their room-membership rows, which the database could not clean up on its own.",
+    ],
+  },
+  {
     version: "0.118.2",
     date: "2026-07-10",
     pr: 262,
