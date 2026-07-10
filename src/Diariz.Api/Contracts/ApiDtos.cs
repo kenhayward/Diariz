@@ -343,6 +343,20 @@ public record PermissionsDto(bool ManageRooms, bool ManageUsers, bool ManagePlat
 public record RoomListItemDto(
     Guid Id, string Name, RoomKind Kind, string? Icon, string? Color, bool IsPersonal, int Permissions);
 
+/// <summary>Create/rename a shared room. Name is required and unique among shared rooms.</summary>
+public record RoomInput(string Name, string? Description, string? Icon, string? Color);
+
+/// <summary>A room member for the Manage Rooms editor: a user or group principal + its permission grid as an
+/// <b>int</b> bitmask (a [Flags] enum would serialise as "A, B" and break the web's bit arithmetic).</summary>
+public record RoomMemberDto(RoomPrincipalType PrincipalType, Guid PrincipalId, int Permissions);
+
+/// <summary>Upsert a member's permission grid on a room.</summary>
+public record RoomMemberInput(RoomPrincipalType PrincipalType, Guid PrincipalId, int Permissions);
+
+/// <summary>A shared room with its membership, for the Manage Rooms editor.</summary>
+public record RoomDetailDto(
+    Guid Id, string Name, string? Description, string? Icon, string? Color, IReadOnlyList<RoomMemberDto> Members);
+
 /// <summary>Self-service profile update. Each field is trimmed; blank clears it. Language codes must be
 /// in the supported set (else 400). <paramref name="Theme"/> is "auto" | "light" | "dark" (unknown -> auto).</summary>
 public record UpdateUserProfileRequest(

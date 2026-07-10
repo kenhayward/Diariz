@@ -12,7 +12,7 @@ public class RoomsControllerTests
     private static RoomsController Build(DiarizDbContext db, Guid userId)
     {
         Users.Ensure(db, userId);
-        return new(new Diariz.Api.Services.RoomScope(db)) { ControllerContext = Http.Context(userId) };
+        return new(new Diariz.Api.Services.RoomScope(db), db) { ControllerContext = Http.Context(userId) };
     }
 
     [Fact]
@@ -67,5 +67,109 @@ public class RoomsControllerTests
         var eng = rooms.Single(r => !r.IsPersonal);
         Assert.Equal("Engineering", eng.Name);
         Assert.Equal((int)RoomPermission.CreateRecording, eng.Permissions);
+    }
+
+    // ---- Writes (Phase 4) ----
+
+    [Fact]
+    public async Task Create_MakesASharedRoom()
+    {
+        using var db = TestDb.Create();
+        var controller = Build(db, Guid.NewGuid());
+
+        var created = Assert.IsType<CreatedAtActionResult>(
+            await controller.Create(new RoomInput("Engineering", "the eng team", "users", "#123456")));
+        var id = (Guid)created.RouteValues!["id"]!;
+
+        var room = db.Rooms.Single(r => r.Id == id);
+        Assert.Equal(RoomKind.Shared, room.Kind);
+        Assert.Equal("Engineering", room.Name);
+    }
+
+    [Fact]
+    public async Task Create_RejectsADuplicateSharedName()
+    {
+        using var db = TestDb.Create();
+        var controller = Build(db, Guid.NewGuid());
+        await controller.Create(new RoomInput("Engineering", null, null, null));
+
+        Assert.IsType<ConflictObjectResult>(await controller.Create(new RoomInput("Engineering", null, null, null)));
+    }
+
+    [Fact]
+    public async Task Update_RenamesASharedRoom()
+    {
+        using var db = TestDb.Create();
+        var controller = Build(db, Guid.NewGuid());
+        var created = (CreatedAtActionResult)await controller.Create(new RoomInput("Eng", null, null, null));
+        var id = (Guid)created.RouteValues!["id"]!;
+
+        Assert.IsType<NoContentResult>(await controller.Update(id, new RoomInput("Engineering", "d", "star", "#abcdef")));
+        Assert.Equal("Engineering", db.Rooms.Single(r => r.Id == id).Name);
+    }
+
+    [Fact]
+    public async Task Update_RefusesThePersonalRoom()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var controller = Build(db, me);
+        var personalId = await new Diariz.Api.Services.RoomScope(db).PersonalRoomIdAsync(me);
+
+        Assert.IsType<BadRequestObjectResult>(await controller.Update(personalId, new RoomInput("Hacked", null, null, null)));
+    }
+
+    [Fact]
+    public async Task Delete_RemovesASharedRoom()
+    {
+        using var db = TestDb.Create();
+        var controller = Build(db, Guid.NewGuid());
+        var created = (CreatedAtActionResult)await controller.Create(new RoomInput("Eng", null, null, null));
+        var id = (Guid)created.RouteValues!["id"]!;
+
+        Assert.IsType<NoContentResult>(await controller.Delete(id));
+        Assert.False(db.Rooms.Any(r => r.Id == id));
+    }
+
+    [Fact]
+    public async Task Delete_RefusesThePersonalRoom()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var controller = Build(db, me);
+        var personalId = await new Diariz.Api.Services.RoomScope(db).PersonalRoomIdAsync(me);
+
+        Assert.IsType<BadRequestObjectResult>(await controller.Delete(personalId));
+        Assert.True(db.Rooms.Any(r => r.Id == personalId));
+    }
+
+    [Fact]
+    public async Task SetMember_ThenGet_ReturnsTheMembership()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var controller = Build(db, me);
+        var created = (CreatedAtActionResult)await controller.Create(new RoomInput("Eng", null, null, null));
+        var id = (Guid)created.RouteValues!["id"]!;
+        var member = Guid.NewGuid();
+
+        Assert.IsType<NoContentResult>(await controller.SetMember(id,
+            new RoomMemberInput(RoomPrincipalType.User, member, (int)RoomPermission.CreateRecording)));
+
+        // Add the caller as a member so they can read the detail.
+        await controller.SetMember(id, new RoomMemberInput(RoomPrincipalType.User, me, (int)RoomPermission.ManageRoom));
+        var detail = Assert.IsType<RoomDetailDto>(Assert.IsType<OkObjectResult>(await controller.Get(id)).Value);
+        Assert.Contains(detail.Members, m => m.PrincipalId == member && m.Permissions == (int)RoomPermission.CreateRecording);
+    }
+
+    [Fact]
+    public async Task Get_HidesARoomTheCallerIsNotAMemberOf()
+    {
+        using var db = TestDb.Create();
+        var controller = Build(db, Guid.NewGuid());
+        var created = (CreatedAtActionResult)await controller.Create(new RoomInput("Eng", null, null, null));
+        var id = (Guid)created.RouteValues!["id"]!;
+
+        Assert.IsType<NotFoundResult>(await controller.Get(id)); // caller is not a member
     }
 }
