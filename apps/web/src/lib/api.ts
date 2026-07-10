@@ -280,6 +280,16 @@ export const api = {
     await http.delete(`/api/rooms/${id}/members/${principalType}/${principalId}`);
   },
 
+  /// Share a recording from one room into another (a non-main placement in the target).
+  async shareRecordingToRoom(id: string, fromRoomId: string, toRoomId: string): Promise<void> {
+    await http.post(`/api/recordings/${id}/share`, { fromRoomId, toRoomId });
+  },
+
+  /// Unshare a recording from a room (never its home room).
+  async removeRecordingFromRoom(roomId: string, id: string): Promise<void> {
+    await http.delete(`/api/rooms/${roomId}/recordings/${id}`);
+  },
+
   async getRecording(id: string): Promise<RecordingDetail> {
     const { data } = await http.get<RecordingDetail>(`/api/recordings/${id}`);
     return data;

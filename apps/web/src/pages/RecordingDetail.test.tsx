@@ -18,6 +18,8 @@ vi.mock("../lib/signalr", () => ({
 
 // The transcript weaves the current user's notes in, so the page reads useAuth for the note "speaker".
 vi.mock("../auth", () => ({ useAuth: () => ({ fullName: "Test User", email: "t@x.test" }) }));
+// RecordingDetail reads the current room to gate Share / Remove-from-room / Delete; stub it (no room context).
+vi.mock("../lib/rooms", () => ({ useRoom: () => ({ rooms: [], currentRoom: undefined }) }));
 
 vi.mock("../lib/api", () => ({
   api: {

@@ -9,6 +9,8 @@
   "reidentifySpeakers": "Réidentifier les intervenants",
   "translateTo": "Traduire en {{language}}",
   "moveToSection": "Déplacer vers une section…",
+  "shareToRoom": "Partager dans une salle…",
+  "removeFromRoom": "Retirer de la salle",
   "moveToSectionShort": "Déplacer vers une section",
   "play": "Lire",
   "downloadTranscript": "Télécharger la transcription",

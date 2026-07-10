@@ -11,6 +11,8 @@ import DetailToolbar from "../components/DetailToolbar";
 import ActionsTable from "../components/ActionsTable";
 import DetailTabs, { type DetailTab } from "../components/DetailTabs";
 import MoveToSectionModal from "../components/MoveToSectionModal";
+import ShareToRoomModal from "../components/ShareToRoomModal";
+import { useRoom } from "../lib/rooms";
 import DownloadTranscriptModal from "../components/DownloadTranscriptModal";
 import SummaryEditModal from "../components/SummaryEditModal";
 import MeetingMinutesEditModal from "../components/MeetingMinutesEditModal";
@@ -252,6 +254,7 @@ export default function RecordingDetail() {
   const [reidentifying, setReidentifying] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [moving, setMoving] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [editingSummary, setEditingSummary] = useState(false);
   const [editingMinutes, setEditingMinutes] = useState(false);
@@ -869,6 +872,16 @@ export default function RecordingDetail() {
   const hasTranscript = (rec.current?.segments.length ?? 0) > 0;
   const isSummarizing = rec.status === "Summarizing" || summarizing;
 
+  // Room context for sharing: the recording's home (main) room, the rooms it is in, and whether the room
+  // currently being viewed is a shared placement (which enables Remove-from-room and hides Delete).
+  const { currentRoom } = useRoom();
+  const homeRoom = rec.rooms?.find((r) => r.isMain);
+  const inRoomIds = (rec.rooms ?? []).map((r) => r.id);
+  const viewingSharedPlacement = Boolean(
+    currentRoom && !currentRoom.isPersonal && inRoomIds.includes(currentRoom.id),
+  );
+  const sharedRoomNames = (rec.rooms ?? []).filter((r) => !r.isMain).map((r) => r.name);
+
   const menuActions = recordingMenu({
     onRename: () => setRenaming(true),
     onCopyLink: copyLink,
@@ -881,6 +894,15 @@ export default function RecordingDetail() {
     onTranslate: nativeLang ? translateRecording : undefined,
     translateLabel: nativeLang?.englishName,
     onMove: () => setMoving(true),
+    onShare: homeRoom ? () => setSharing(true) : undefined,
+    onRemoveFromRoom: viewingSharedPlacement
+      ? async () => {
+          if (!window.confirm(t("workspace:confirmRemoveFromRoom", { room: currentRoom!.name }))) return;
+          await api.removeRecordingFromRoom(currentRoom!.id, id);
+          navigate("/");
+          qc.invalidateQueries({ queryKey: ["recordings"] });
+        }
+      : undefined,
     onPlay: () => void playFrom(0),
     onDownloadTranscript: () => setDownloading(true),
     onEmailTranscript: emailTranscript,
@@ -899,13 +921,19 @@ export default function RecordingDetail() {
     },
     isAudioProtected: Boolean(rec.audioProtectedAt),
     onDelete: async () => {
-      if (!window.confirm(t("workspace:confirmDelete", { name: rec.name ?? rec.title }))) return;
+      // Destroying a recording removes it from every shared room too - name them so the recorder knows.
+      const message = sharedRoomNames.length
+        ? t("workspace:confirmDeleteShared", { name: rec.name ?? rec.title, rooms: sharedRoomNames.join(", ") })
+        : t("workspace:confirmDelete", { name: rec.name ?? rec.title });
+      if (!window.confirm(message)) return;
       await api.deleteRecording(id);
       // Leave the (now-deleted) transcript so no further action targets a missing recording, and refresh the list.
       navigate("/");
       qc.invalidateQueries({ queryKey: ["recordings"] });
       qc.invalidateQueries({ queryKey: ["user-storage"] });
     },
+    // A recording can only be destroyed from its home room; viewing it in a shared room hides Delete.
+    canDelete: !viewingSharedPlacement,
     hasTranscript,
     hasAudio: rec.hasAudio,
     isSummarizing,
@@ -1493,6 +1521,14 @@ export default function RecordingDetail() {
       )}
 
       {moving && <MoveToSectionModal recordingId={id} onClose={() => setMoving(false)} />}
+      {sharing && homeRoom && (
+        <ShareToRoomModal
+          recordingId={id}
+          fromRoomId={homeRoom.id}
+          alreadyInRoomIds={inRoomIds}
+          onClose={() => setSharing(false)}
+        />
+      )}
       {downloading && <DownloadTranscriptModal recordingId={id} onClose={() => setDownloading(false)} />}
       {peopleOpen && <PreferencesModal initialTab="voiceprints" onClose={() => setPeopleOpen(false)} />}
       {linkModalOpen && (

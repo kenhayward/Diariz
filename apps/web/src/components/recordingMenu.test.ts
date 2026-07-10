@@ -90,6 +90,25 @@ describe("recordingMenu", () => {
     expect(build({ isProcessing: true }).find((a) => a.label === "Delete audio")!.disabled).toBe(true);
   });
 
+  it("includes Share to room only with an onShare handler (detail menu)", () => {
+    expect(build().map((a) => a.label)).not.toContain("Share to room…");
+    expect(build({ onShare: () => {} }).map((a) => a.label)).toContain("Share to room…");
+  });
+
+  it("includes Remove from room only with an onRemoveFromRoom handler (viewing a shared room)", () => {
+    expect(build().map((a) => a.label)).not.toContain("Remove from room");
+    const menu = build({ onRemoveFromRoom: () => {} });
+    const item = menu.find((a) => a.label === "Remove from room")!;
+    expect(item).toBeTruthy();
+    expect(item.danger).toBe(true);
+  });
+
+  it("hides Delete when canDelete is false (viewing outside the home room)", () => {
+    expect(build().map((a) => a.label)).toContain("Delete"); // undefined = shown (list surface)
+    expect(build({ canDelete: false }).map((a) => a.label)).not.toContain("Delete");
+    expect(build({ canDelete: true }).map((a) => a.label)).toContain("Delete");
+  });
+
   it("offers Protect audio (detail) and swaps Delete audio for Remove protection when protected", () => {
     // No protection handler (the list menu): neither protect item appears.
     const base = build().map((a) => a.label);
