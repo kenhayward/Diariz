@@ -23,7 +23,8 @@ public class Section
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
-    public ICollection<Recording> Recordings { get; set; } = new List<Recording>();
+    // Recordings are no longer filed under a section directly: the folder is a property of a RoomRecording
+    // placement (the folder within a room). See RoomRecording.
 
     /// <summary>The folder-level LLM summary (a roll-up of the included recordings' summaries), if generated.</summary>
     public SectionSummary? Summary { get; set; }

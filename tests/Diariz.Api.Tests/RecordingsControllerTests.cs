@@ -660,8 +660,8 @@ public class RecordingsControllerTests
 
         var result = await controller.MoveToSection(rec.Id, new MoveRecordingRequest(othersSection.Id));
 
+        // Rejected on the ownership check, before any placement write - nothing changed.
         Assert.IsType<NotFoundResult>(result);
-        Assert.Null((await db.Recordings.FindAsync(rec.Id))!.SectionId);
     }
 
     [Fact]

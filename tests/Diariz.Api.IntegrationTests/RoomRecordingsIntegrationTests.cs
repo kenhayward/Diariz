@@ -26,12 +26,11 @@ public class RoomRecordingsIntegrationTests(ContainersFixture fx)
         return user.Id;
     }
 
-    private static async Task<Guid> NewRecordingAsync(DiarizDbContext db, Guid userId, Guid? sectionId = null)
+    private static async Task<Guid> NewRecordingAsync(DiarizDbContext db, Guid userId)
     {
         var rec = new Recording
         {
             Id = Guid.NewGuid(), UserId = userId, Title = "Rec", BlobKey = $"{userId}/{Guid.NewGuid():N}.webm",
-            SectionId = sectionId,
         };
         db.Recordings.Add(rec);
         await db.SaveChangesAsync();
@@ -149,49 +148,27 @@ public class RoomRecordingsIntegrationTests(ContainersFixture fx)
         Assert.Empty(await db.RoomRecordings.Where(p => p.RecordingId == recId).ToListAsync());
     }
 
-    /// <summary>The backfill: one main placement per recording, in its recorder's personal room, carrying the
-    /// folder the recording was in. Idempotent.</summary>
+    // The two backfill tests that ran RecordingPlacementBackfill.Sql directly were removed here: that SQL reads
+    // Recordings.SectionId, which this phase's DropRecordingSectionId migration removes, so it can no longer be
+    // executed against the fully-migrated test schema. The backfill is a one-shot migration - its logic is
+    // frozen in AddRoomRecordings (verified when written, at commit d1c8f40) and re-verified on a copy of dev in
+    // this phase's manual deployment checks. The personal-room mint it depends on is covered by
+    // RoomsIntegrationTests (PersonalRoomBackfill) and the RoomScope find-or-create tests.
+
+    /// <summary>The column is gone: the folder is a property of the placement, and there is no second, stale
+    /// place to write it.</summary>
     [Fact]
-    public async Task Backfill_PlacesEveryRecordingInItsRecordersPersonalRoom_KeepingItsFolder()
+    public async Task Recordings_NoLongerHasASectionIdColumn()
     {
         await using var db = fx.CreateDbContext();
-        var userId = await NewUserAsync(db, "Ada Lovelace");
-        var sectionId = await NewSectionAsync(db, userId);
-        var filed = await NewRecordingAsync(db, userId, sectionId);
-        var ungrouped = await NewRecordingAsync(db, userId);
 
-        await db.Database.ExecuteSqlRawAsync(RecordingPlacementBackfill.Sql);
-        await db.Database.ExecuteSqlRawAsync(RecordingPlacementBackfill.Sql); // twice: must not duplicate
+        var count = await db.Database
+            .SqlQuery<int>($"""
+                SELECT count(*)::int AS "Value" FROM information_schema.columns
+                WHERE table_name = 'Recordings' AND column_name = 'SectionId'
+                """)
+            .SingleAsync();
 
-        var room = await db.Rooms.Where(r => r.OwnerUserId == userId).Select(r => r.Id).SingleAsync();
-
-        var a = await db.RoomRecordings.SingleAsync(p => p.RecordingId == filed);
-        Assert.Equal(room, a.RoomId);
-        Assert.True(a.IsMainRoom);
-        Assert.Equal(sectionId, a.SectionId);
-        Assert.Null(a.SharedByUserId);
-
-        var b = await db.RoomRecordings.SingleAsync(p => p.RecordingId == ungrouped);
-        Assert.True(b.IsMainRoom);
-        Assert.Null(b.SectionId);
-    }
-
-    /// <summary>THE TRAP. Phase 2a gave rooms only to users who existed then, and nothing calls RoomScope yet,
-    /// so a user created since has NO personal room - and may already own recordings. The backfill must mint
-    /// the missing room first, or their recordings are silently left unplaced and vanish from their list.</summary>
-    [Fact]
-    public async Task Backfill_MintsAMissingPersonalRoom_ForAUserCreatedAfterPhase2a()
-    {
-        await using var db = fx.CreateDbContext();
-        var userId = await NewUserAsync(db, "Grace Hopper");
-        var recId = await NewRecordingAsync(db, userId);
-        Assert.Empty(await db.Rooms.Where(r => r.OwnerUserId == userId).ToListAsync()); // no room yet
-
-        await db.Database.ExecuteSqlRawAsync(RecordingPlacementBackfill.Sql);
-
-        var room = await db.Rooms.SingleAsync(r => r.OwnerUserId == userId);
-        var placement = await db.RoomRecordings.SingleAsync(p => p.RecordingId == recId);
-        Assert.Equal(room.Id, placement.RoomId);
-        Assert.True(placement.IsMainRoom);
+        Assert.Equal(0, count);
     }
 }

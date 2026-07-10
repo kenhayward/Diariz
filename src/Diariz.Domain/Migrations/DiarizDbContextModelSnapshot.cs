@@ -591,9 +591,6 @@ namespace Diariz.Domain.Migrations
                     b.Property<int>("Position")
                         .HasColumnType("integer");
 
-                    b.Property<Guid?>("SectionId")
-                        .HasColumnType("uuid");
-
                     b.Property<long>("SizeBytes")
                         .HasColumnType("bigint");
 
@@ -617,8 +614,6 @@ namespace Diariz.Domain.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("MeetingTypeId");
-
-                    b.HasIndex("SectionId");
 
                     b.HasIndex("UserId", "CreatedAt");
 
@@ -1810,11 +1805,6 @@ namespace Diariz.Domain.Migrations
                         .HasForeignKey("MeetingTypeId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("Diariz.Domain.Entities.Section", "Section")
-                        .WithMany("Recordings")
-                        .HasForeignKey("SectionId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
                         .WithMany("Recordings")
                         .HasForeignKey("UserId")
@@ -1822,8 +1812,6 @@ namespace Diariz.Domain.Migrations
                         .IsRequired();
 
                     b.Navigation("MeetingType");
-
-                    b.Navigation("Section");
 
                     b.Navigation("User");
                 });
@@ -2180,8 +2168,6 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("Children");
 
                     b.Navigation("Minutes");
-
-                    b.Navigation("Recordings");
 
                     b.Navigation("Summary");
                 });

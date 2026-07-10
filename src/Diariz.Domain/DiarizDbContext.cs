@@ -165,11 +165,8 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 .WithOne(a => a.Recording!)
                 .HasForeignKey(a => a.RecordingId)
                 .OnDelete(DeleteBehavior.Cascade);
-            // Deleting a section ungroups its recordings rather than deleting them.
-            e.HasOne(r => r.Section)
-                .WithMany(s => s.Recordings)
-                .HasForeignKey(r => r.SectionId)
-                .OnDelete(DeleteBehavior.SetNull);
+            // The recording's folder lives on its RoomRecording placement now, not on the recording. Deleting a
+            // section ungroups the placement (RoomRecording.SectionId is ON DELETE SET NULL).
             // 1:1 calendar link, shared primary key; cascade-deleted with the recording.
             e.HasOne(r => r.CalendarLink)
                 .WithOne(l => l.Recording!)
