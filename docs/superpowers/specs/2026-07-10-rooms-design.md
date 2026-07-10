@@ -15,8 +15,10 @@ members. Each user has an immutable **Personal Room**; additional **Shared Rooms
 users holding the `ManageRooms` platform permission and are shared with users and groups, each member
 carrying a per-room permission grid.
 
-A recording lives in one **main room** (where it was recorded) and may additionally be **shared into**
-other rooms, landing in a folder of the target room's choosing.
+A recording's **main room is always its recorder's Personal Room**. Recording into a shared room creates
+the recording in your personal room and automatically shares it into the room you are in. A recording may
+be shared into any number of further rooms, landing in a folder of the target room's choosing. No shared
+room is ever a main room.
 
 **User Groups** replace the current Identity role system (`Standard` / `Administrator` /
 `PlatformAdministrator`) as the source of platform-level authority.
@@ -33,12 +35,37 @@ without revisiting this document.
 | Room-scoped data | Voiceprints, meeting types, chat conversations | They are workspace assets. |
 | Storage quota | Stays per-user | Charged to `Recording.UserId` (who recorded it), even in a shared room. |
 | Permissions for a shared recording | The room you are **viewing it in** | Matches "a room behaves as a shared user space". |
+| Main room | Always the recorder's Personal Room | Avoids the deadlock below. A shared room can never hold a recording hostage. |
 | Deleting a recording | Only from its main room | Sharing grants edit and unshare, never destruction. |
-| Deleting a room | Blocked unless empty | Audio is irreplaceable; no cascade to get wrong. |
+| Deleting a room | Allowed, with typed confirmation | Since no shared room is a main room, deletion unshares; it can never destroy audio. |
+| Deleting a user | Orphans their Personal Room | Their recordings survive, so shared rooms keep their history. |
 | Personal Room mutability | Immutable and private | Cannot be renamed, deleted, shared, or gain members. Enforced server-side. |
 | Room transport | Explicit `roomId` in the URL | Visible, linkable, cacheable. Not an ambient header. |
 | Room enforcement | Explicit filter via a `RoomScope` service | Same convention as today's `UserId` filter, one level up. Not EF global query filters. |
 | Recording-to-room storage | A `RoomRecording` join row, main room is a flag | Sharing and ownership use one table; per-room folder falls out naturally. |
+
+## Why the main room is always the Personal Room
+
+An earlier draft let a shared room be a recording's main room. That produces a deadlock: a room cannot be
+deleted while it holds recordings, a recording cannot be moved between rooms, and a recording whose main
+room is the shared room cannot be unshared from it. The only escape is permanently deleting the audio.
+
+Making the main placement always the recorder's Personal Room removes the deadlock by construction. A
+shared room only ever holds *shared placements*, so deleting it unshares and never destroys.
+
+Two consequences follow, and both are deliberate:
+
+1. **Authority over a recording's existence follows the person, not the room.** Only the recorder can
+   destroy a recording, and only from their Personal Room. A room's `RemoveOthersRecordings` permission
+   therefore means *unshare from this room* and nothing more - which is why it is named that way rather
+   than "delete".
+2. **A user's Personal Room is retained when the user is deleted** (`OwnerUserId` → null, no members,
+   hidden from every switcher). Without this, deleting a departing employee would silently destroy every
+   meeting they ever recorded into a shared room. Purging an orphaned room requires `ManageUsers`, and the
+   delete-user dialog offers "also delete their recordings" as an explicit opt-in.
+
+Deleting a recording that is shared elsewhere prompts with the room names, because the recorder is
+destroying other people's record of a meeting.
 
 ## Data model
 
@@ -54,12 +81,16 @@ without revisiting this document.
 | `Icon` | `text?` | Key from the shared icon set. Null for personal rooms. |
 | `Color` | `text?` | Hex. Null for personal rooms. |
 | `Kind` | `int` | `Personal = 0`, `Shared = 1`. Append-only, as with every other int enum in Postgres. |
-| `OwnerUserId` | `uuid?` | Set only for personal rooms; FK to `AspNetUsers`, cascade on user delete. |
+| `OwnerUserId` | `uuid?` | Set only for personal rooms. FK to `AspNetUsers` with `ON DELETE SET NULL` - a deleted user leaves an **orphaned** personal room whose recordings survive in the shared rooms they were shared into. |
 | `CreatedAt` | `timestamptz` | |
 
 Personal rooms render the owner's avatar (Google picture or initials) rather than a stored icon, so
 `Icon`/`Color` stay null. A unique index on `OwnerUserId` (filtered `WHERE OwnerUserId IS NOT NULL`)
-guarantees one personal room per user.
+guarantees one personal room per user, and permits any number of orphaned rooms.
+
+An **orphaned** room is `Kind = Personal` with `OwnerUserId IS NULL`. It has no members, appears in no
+switcher, and is readable only through the shared placements of its recordings. Purging one requires
+`ManageUsers`.
 
 **`UserGroup`** - `Id`, `Name` (unique), `Description?`, `Icon?`, `Color?`, `Permissions`
 (`PlatformPermission` flags), `IsSystem` (bool, true for the seeded Platform Administrators group).
@@ -77,7 +108,7 @@ resolution unions across both and a single table keeps that a single query.
 |---|---|---|
 | `RoomId` | `uuid` | PK part 1. FK, cascade. |
 | `RecordingId` | `uuid` | PK part 2. FK, cascade. |
-| `IsMainRoom` | `bool` | Exactly one true row per recording. |
+| `IsMainRoom` | `bool` | Exactly one true row per recording, and it is always the recorder's Personal Room. |
 | `SectionId` | `uuid?` | The folder **within that room**. Null = ungrouped. `ON DELETE SET NULL`, matching today's section behaviour. |
 | `SharedByUserId` | `uuid?` | Null on the main-room row. |
 | `SharedAt` | `timestamptz?` | Null on the main-room row. |
@@ -88,6 +119,9 @@ Constraints:
 - `CHECK (IsMainRoom = false OR (SharedByUserId IS NULL AND SharedAt IS NULL))`.
 - `SectionId` must belong to `RoomId`. Not expressible as a simple FK; enforced in the controller and
   covered by an integration test.
+- **Invariant:** the `IsMainRoom` row's `RoomId` is the personal room of `Recording.UserId`. `IsMainRoom`
+  is therefore derivable, but is stored anyway: it keeps `RoomScope`'s join simple and preserves the
+  option of a future "move recording between rooms". Asserted by a test, not by the database.
 
 ### Changed entities
 
@@ -114,7 +148,7 @@ Entities that stay strictly personal: `UserSettings` (LLM endpoint and encrypted
 [Flags] public enum PlatformPermission { None = 0, ManageRooms = 1, ManageUsers = 2, ManagePlatform = 4 }
 
 [Flags] public enum RoomPermission {
-    None = 0, ManageRoom = 1, CreateRecording = 2, DeleteOthersRecordings = 4,
+    None = 0, ManageRoom = 1, CreateRecording = 2, RemoveOthersRecordings = 4,
     ShareOut = 8, ManageContents = 16, EditOthersRecordings = 32,
 }
 ```
@@ -133,6 +167,10 @@ every group they belong to. Plus two overrides:
 membership. It does **not** permit reading a room's recordings unless the holder is a member. This is
 called out because the opposite reading ("admins see everything") is a plausible default and is not
 what is wanted.
+
+**`RemoveOthersRecordings` is not a delete grant.** The conceptual spec called it "Delete / Remove Others
+recordings", but because no shared room is ever a main room, it can only ever unshare. It is named for
+what it does. Destroying a recording is possible only from its main (personal) room, by its recorder.
 
 ### The RAG filter (a known risk)
 
@@ -174,15 +212,20 @@ preferred.
 | Route | Notes |
 |---|---|
 | `GET /api/rooms` | Rooms the caller is a member of, with their effective permission grid. |
-| `POST/PUT/DELETE /api/rooms[/{id}]` | Requires `ManageRooms`. Delete refuses a non-empty room (409) and any personal room. |
+| `POST/PUT/DELETE /api/rooms[/{id}]` | Requires `ManageRooms`. Delete refuses any personal room (owned or orphaned; orphan purge needs `ManageUsers`). Deleting a shared room unshares its recordings - audio is never touched - and destroys only room-owned assets: folders, voiceprints, chats, room-scoped meeting types. The response body reports those counts so the UI can name what is lost in a typed confirmation. |
 | `PUT /api/rooms/{id}/members` | Requires `ManageRooms` or `ManageRoom` in that room. Refuses personal rooms. |
 | `GET/POST /api/groups[/{id}]` | Requires `ManageUsers`. |
 | `/api/rooms/{roomId}/recordings`, `/sections`, `/tags`, `/actions`, `/chat`, `/speaker-profiles`, `/meeting-types` | Room-scoped collections. |
 | `GET /api/recordings/{id}?roomId=` | Single entity; `roomId` supplies the permission context and is validated against `RoomRecording`. |
 | `POST /api/recordings/{id}/share` | Body: target room + section. Requires `ShareOut` in the current room **and** `CreateRecording` in the target. |
-| `DELETE /api/rooms/{roomId}/recordings/{id}` | Unshare. Requires `DeleteOthersRecordings` there, or being the recorder. **Refuses when that row is the main room** (that is a delete, and must be issued from home). |
+| `DELETE /api/rooms/{roomId}/recordings/{id}` | Unshare. Requires `RemoveOthersRecordings` there, or being the recorder. **Refuses when that row is the main room** (that is a delete, and must be issued from home). |
+| `DELETE /api/recordings/{id}` | Destroy. Only the recorder, only from the main room. Response lists the shared rooms it will vanish from so the UI can confirm. |
 
-Upload (`POST /api/rooms/{roomId}/recordings`) requires `CreateRecording`.
+**Recording and upload** (`POST /api/rooms/{roomId}/recordings`) requires `CreateRecording` in `roomId`.
+When `roomId` is a shared room the endpoint writes **two** `RoomRecording` rows in one transaction: the
+main placement in the caller's personal room (ungrouped), and the shared placement in `roomId` (in the
+folder the caller currently has open, if any). When `roomId` is the caller's personal room it writes one.
+This is what keeps "no shared room is ever a main room" true by construction rather than by convention.
 
 ### Platform authorization
 
@@ -250,7 +293,7 @@ are gone.
 source of truth - gain **Share to another room** and **Remove from room**. Share opens a modal listing
 rooms where the caller holds `CreateRecording`, then a folder picker for that room's sections (same
 shape as `MoveToSectionModal`, pointed at another room's tree). Remove-from-room is enabled only outside
-the main room, for the recorder or a holder of `DeleteOthersRecordings`. **Delete does not appear
+the main room, for the recorder or a holder of `RemoveOthersRecordings`. **Delete does not appear
 outside the main room.**
 
 ## Migration
@@ -291,8 +334,8 @@ app is never broken between phases.
 | 1 | `UserGroup` + `UserGroupMember` + `PlatformPermission`, permission-based authorization handler, seeded Platform Administrators group, migration from roles. Manage Users modal gains the Groups tab. **No rooms yet.** | Yes - roles become groups, nothing else changes. |
 | 2 | `Room`, `RoomMember`, `RoomRecording`, `RoomPermission`, `RoomScope`, the backfill migration, and the re-scoping of `Section` / `SpeakerProfile` / `ChatSession` / `MeetingType`. Server only; the personal room is the only room, so the API behaves identically. | Yes - invisible to users. |
 | 3 | Room switcher, `/rooms/:roomId` routes, room-scoped query keys, `RoomProvider`, permission-driven UI gating. Still only personal rooms exist. | Yes - a switcher with one entry. |
-| 4 | Manage Rooms modal, room creation/edit/delete, membership editing, shared `IconColorPicker`. Shared rooms become real. | Yes - the feature lands. |
-| 5 | Cross-room sharing: share/unshare endpoints, the Rooms + Recorded-by lines on Overview, Share and Remove-from-room in the toolbar and kebab, the RAG semi-join and its measurement. | Yes. |
+| 4 | Manage Rooms modal, room creation/edit/delete (with the typed confirmation), membership editing, shared `IconColorPicker`, user-delete orphaning. Recording into a shared room writes the two-placement transaction. Shared rooms become real. | Yes - the feature lands. |
+| 5 | Manual cross-room sharing: share/unshare endpoints, the Rooms + Recorded-by lines on Overview, Share and Remove-from-room in the toolbar and kebab, the delete-confirmation listing shared rooms, the RAG semi-join and its measurement. | Yes. |
 
 Phase 2 is the risky one: it touches every controller. It is deliberately invisible to users, so a
 regression surfaces as a failing test rather than a broken UI.
@@ -303,31 +346,42 @@ TDD throughout, per the repository rule: failing test first, then the minimal co
 
 **Unit (`Diariz.Api.Tests`, in-memory, no Docker).** Effective-permission resolution (user row, group
 row, union, personal-room owner override, recorder override). `RoomScope.Require` throwing 403. The
-"delete only from the main room" rule. The "`ManageRooms` is not a read grant" rule. The last-member
-guard on the Platform Administrators group. Personal-room immutability.
+"delete only from the main room" rule. The "`ManageRooms` is not a read grant" rule. The
+"`RemoveOthersRecordings` cannot destroy" rule. The last-member guard on the Platform Administrators
+group. Personal-room immutability.
 
 **Integration (`Diariz.Api.IntegrationTests`, Testcontainers).** Everything the in-memory provider
-cannot honour: the filtered unique index on `IsMainRoom`; FK and cascade behaviour on room delete;
-`SectionId` belonging to the wrong room; the `RoomRecording` semi-join returning main-room and shared-in
-recordings exactly once; the pgvector chunk filter under the new semi-join, **with a recorded
-before/after timing**; the backfill migration applied to a seeded pre-Rooms database.
+cannot honour:
+
+- The filtered unique index on `IsMainRoom`, and the invariant that the main row is the recorder's
+  personal room - including after recording into a shared room, which must write exactly two placements.
+- FK and cascade behaviour on room delete: placements and room assets go, recordings and audio stay.
+- Deleting a user orphans their personal room (`OwnerUserId` → null) and leaves shared placements intact,
+  so another member of the shared room still reads the recording.
+- `SectionId` belonging to the wrong room is rejected.
+- The `RoomRecording` semi-join returns main-room and shared-in recordings exactly once (no duplicate row
+  when a recording is somehow placed twice).
+- The pgvector chunk filter under the new semi-join, **with a recorded before/after timing**.
+- The backfill migrations applied to a seeded pre-Rooms database.
 
 **Web (`vitest`).** The switcher renders the personal room with an avatar and hides Manage Rooms without
 the permission. Record and Upload disable without `CreateRecording`, with the explanatory tooltip. The
-kebab omits Delete outside the main room and offers Remove from room instead. Query keys carry the room
-id, so switching rooms does not show the previous room's recordings.
+kebab omits Delete outside the main room and offers Remove from room instead. Deleting a shared recording
+confirms with the room names. The shared room's calendar renders recordings but no calendar events. Query
+keys carry the room id, so switching rooms does not show the previous room's recordings.
 
 **Worker (`pytest`).** Unaffected. The callback contract does not change shape; only the API's
 interpretation of it does.
 
+## Views inside a shared room
+
+- **Tag cloud and Actions** include shared-in recordings. A shared placement makes a recording a full
+  member of the room's content, not a second-class guest.
+- **Calendar** in a shared room shows **recordings only, no calendar events**. `IcsCalendarSource` is a
+  personal subscription, so a shared room has no calendar of its own, and surfacing the viewer's own
+  invites inside someone else's room would leak their diary. The personal room keeps the full calendar,
+  including invites and `RecordingCalendarLink` matching.
+
 ## Open questions
 
-None blocking. Two to settle during Phase 5:
-
-1. Whether a recording shared into a room appears in that room's **tag cloud and actions tab**, or only
-   in its recordings list. Current assumption: yes, everywhere - it is a full member of the room's
-   content. This should be confirmed against how noisy it makes a busy room's tag cloud.
-2. Whether the calendar view in a shared room shows every member's linked calendar events, or only the
-   viewer's. `IcsCalendarSource` stays personal, which implies the latter, but the recording-to-event
-   links (`RecordingCalendarLink`) are per-recording and therefore room-visible. Likely inconsistent as
-   written; needs a decision before Phase 5.
+None. Both questions raised during brainstorming are resolved above.
