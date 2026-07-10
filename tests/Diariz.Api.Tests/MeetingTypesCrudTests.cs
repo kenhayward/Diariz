@@ -14,11 +14,12 @@ namespace Diariz.Api.Tests;
 /// own Personal type regardless of the requested scope.</summary>
 public class MeetingTypesCrudTests
 {
-    private static MeetingTypesController Build(DiarizDbContext db, Guid userId, bool admin = false) =>
-        new(db)
-        {
-            ControllerContext = Http.Context(userId, roles: admin ? [Roles.PlatformAdministrator] : null),
-        };
+    // Platform authority is group membership in the database now, not a role claim on the principal.
+    private static MeetingTypesController Build(DiarizDbContext db, Guid userId, bool admin = false)
+    {
+        if (admin) Perms.Grant(db, userId, PlatformPermission.ManagePlatform);
+        return new(db, new UserPermissions(db)) { ControllerContext = Http.Context(userId) };
+    }
 
     private static MeetingTypeContent OneSection() =>
         new([new TemplateSection(1, "Summary", [new TemplateBlock(TemplateBlock.Prompt, Text: "Summarise.")])]);

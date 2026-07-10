@@ -32,5 +32,19 @@
   "delete": "Supprimer",
   "statusRequested": "Demandé",
   "statusAwaitingSetup": "En attente de configuration",
-  "statusActive": "Actif"
+  "statusActive": "Actif",
+  "groupsTab": "Groupes",
+  "usersTab": "Utilisateurs",
+  "groupName": "Groupe",
+  "groupMembers": "Membres",
+  "groupSystem": "Système",
+  "groupSystemHint": "Ce groupe est obligatoire. Ses permissions ne peuvent pas être modifiées et son dernier membre ne peut pas être retiré.",
+  "permManageRooms": "Gérer les salles",
+  "permManageUsers": "Gérer les utilisateurs",
+  "permManagePlatform": "Gérer la plateforme",
+  "deleteGroup": "Supprimer",
+  "confirmDeleteGroup": "Supprimer le groupe \"{{name}}\" ? Ses membres conservent leurs comptes.",
+  "newGroupName": "Nom du nouveau groupe",
+  "addGroup": "Ajouter un groupe",
+  "noGroups": "Aucun groupe"
 }

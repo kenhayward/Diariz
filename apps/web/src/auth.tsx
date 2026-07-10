@@ -1,14 +1,21 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, getToken, setToken } from "./lib/api";
-import { emailFromToken, fullNameFromToken, pictureFromToken, rolesFromToken, isAdminFromToken, isPlatformAdminFromToken } from "./lib/jwt";
+import type { Permissions } from "./lib/types";
+import { emailFromToken, fullNameFromToken, pictureFromToken } from "./lib/jwt";
 import { refreshDelayMs } from "./lib/tokenRefresh";
 import { initialsFromName, initialsFromEmail } from "./lib/initials";
+
+/// No authority until the server says otherwise: the profile is fetched, not decoded from the token.
+const NO_PERMISSIONS: Permissions = { manageRooms: false, manageUsers: false, managePlatform: false };
 
 interface AuthState {
   isAuthed: boolean;
   email: string | null;
   fullName: string | null;
-  roles: string[];
+  /// The caller's platform permissions, from GET /api/user/profile. Never inferred from the JWT: a token
+  /// claim would keep granting authority until it expired, long after the user left the group.
+  permissions: Permissions;
   isAdmin: boolean;
   isPlatformAdmin: boolean;
   initials: string;
@@ -24,14 +31,23 @@ const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setTokenState] = useState<string | null>(() => getToken());
+  const qc = useQueryClient();
 
   const email = useMemo(() => emailFromToken(token), [token]);
   const fullName = useMemo(() => fullNameFromToken(token), [token]);
-  const roles = useMemo(() => rolesFromToken(token), [token]);
-  const isAdmin = useMemo(() => isAdminFromToken(token), [token]);
-  const isPlatformAdmin = useMemo(() => isPlatformAdminFromToken(token), [token]);
   const initials = useMemo(() => (fullName ? initialsFromName(fullName) : initialsFromEmail(email)), [fullName, email]);
   const pictureUrl = useMemo(() => pictureFromToken(token), [token]);
+
+  // Authority lives on the profile, so a group change takes effect on the next fetch rather than at token
+  // expiry. Until it arrives (or if it fails) the user holds nothing - the UI fails closed.
+  const { data: profile } = useQuery({
+    queryKey: ["user-profile"],
+    queryFn: api.getProfile,
+    enabled: Boolean(token),
+  });
+  const permissions = profile?.permissions ?? NO_PERMISSIONS;
+  const isAdmin = permissions.manageUsers;
+  const isPlatformAdmin = permissions.managePlatform;
 
   function setSession(accessToken: string) {
     setToken(accessToken);
@@ -46,6 +62,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function logout() {
     setToken(null);
     setTokenState(null);
+    // Drop every cached query, the profile above all: otherwise the next user to sign in on this browser
+    // sees the previous user's permissions (and their recordings) until each refetch lands.
+    qc.clear();
   }
 
   // Silent sliding-session refresh: re-issue the token shortly before it expires (and when the tab
@@ -95,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ isAuthed: Boolean(token), email, fullName, roles, isAdmin, isPlatformAdmin, initials, pictureUrl, login, setSession, logout }}
+      value={{ isAuthed: Boolean(token), email, fullName, permissions, isAdmin, isPlatformAdmin, initials, pictureUrl, login, setSession, logout }}
     >
       {children}
     </AuthContext.Provider>

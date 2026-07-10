@@ -8,12 +8,12 @@ namespace Diariz.Api.Tests;
 
 public class MeetingTypesControllerTests
 {
-    private static MeetingTypesController Build(DiarizDbContext db, Guid userId, bool platformAdmin = false) =>
-        new(db)
-        {
-            ControllerContext = Http.Context(
-                userId, roles: platformAdmin ? [Roles.PlatformAdministrator] : null),
-        };
+    // Platform authority is group membership in the database now, not a role claim on the principal.
+    private static MeetingTypesController Build(DiarizDbContext db, Guid userId, bool platformAdmin = false)
+    {
+        if (platformAdmin) Perms.Grant(db, userId, PlatformPermission.ManagePlatform);
+        return new(db, new UserPermissions(db)) { ControllerContext = Http.Context(userId) };
+    }
 
     private static MeetingType Platform(string key) =>
         new() { Id = Guid.NewGuid(), Key = key, UserId = null, GroupName = "Standard", Title = key,

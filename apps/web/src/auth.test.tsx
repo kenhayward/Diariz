@@ -1,8 +1,10 @@
 import { render, screen, act } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./lib/api", () => ({
-  api: { refresh: vi.fn() },
+  // AuthProvider fetches the profile for the caller's permissions; it is irrelevant to these tests.
+  api: { refresh: vi.fn(), getProfile: vi.fn().mockResolvedValue({ permissions: null }) },
   getToken: vi.fn(() => null),
   setToken: vi.fn(),
 }));
@@ -32,9 +34,11 @@ describe("AuthProvider desktop token intake", () => {
     const token = `eyJhbGciOiJIUzI1NiJ9.${payload}.sig`;
 
     render(
-      <AuthProvider>
-        <Probe />
-      </AuthProvider>,
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <AuthProvider>
+          <Probe />
+        </AuthProvider>
+      </QueryClientProvider>,
     );
     expect(screen.getByText("anon")).toBeTruthy();
 

@@ -11,7 +11,7 @@ namespace Diariz.Api.IntegrationTests;
 public class MeetingTypesIntegrationTests(ContainersFixture fx)
 {
     private static MeetingTypesController Build(Diariz.Domain.DiarizDbContext db, Guid userId) =>
-        new(db) { ControllerContext = Http.Context(userId) };
+        new(db, new UserPermissions(db)) { ControllerContext = Http.Context(userId) };
 
     [Fact]
     public async Task Seeder_persists_standards_with_jsonb_content_through_real_postgres()

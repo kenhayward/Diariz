@@ -38,7 +38,7 @@ At a glance - see **[docs/features.md](docs/features.md)** for the full detail o
 | **Folder pages** | Open a folder as a page with a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus aggregated actions, notes, and attachments tagged with their source meeting. |
 | **Google sign-in & Calendar** | Optional Google OAuth sign-in; opt-in read-only Calendar linking, invite details, and a month overlay. |
 | **External calendar feeds** | Subscribe to public iCalendar (.ics) URLs; their meetings appear on the Calendar tab. |
-| **Multi-user & roles** | Standard / Administrator / Platform Administrator with an access-request to approval lifecycle; per-user data isolation; Light/Dark/Auto themes. |
+| **Multi-user & groups** | User groups grant platform permissions (manage rooms / users / platform), with an access-request to approval lifecycle; per-user data isolation; Light/Dark/Auto themes. |
 | **Preferences & profile** | Per-user AI endpoint/model/key, reasoning, profile fields, native/app language, and a device-synced theme. |
 | **Model settings** | Platform-wide LLM controls: minutes-generation mode and a global AI request timeout (default 120s) covering every AI call. |
 | **Storage quotas & retention** | Per-user audio quotas plus an optional nightly auto-deletion of old audio (transcripts kept) with per-recording protection. |

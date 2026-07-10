@@ -10,7 +10,7 @@ namespace Diariz.Api.Services;
 
 public interface ITokenService
 {
-    (string token, DateTimeOffset expiresAt) CreateAccessToken(ApplicationUser user, IEnumerable<string> roles);
+    (string token, DateTimeOffset expiresAt) CreateAccessToken(ApplicationUser user);
 }
 
 public class TokenService : ITokenService
@@ -18,7 +18,7 @@ public class TokenService : ITokenService
     private readonly JwtOptions _opts;
     public TokenService(IOptions<JwtOptions> opts) => _opts = opts.Value;
 
-    public (string token, DateTimeOffset expiresAt) CreateAccessToken(ApplicationUser user, IEnumerable<string> roles)
+    public (string token, DateTimeOffset expiresAt) CreateAccessToken(ApplicationUser user)
     {
         var expiresAt = DateTimeOffset.UtcNow.AddMinutes(_opts.AccessTokenMinutes);
         var claims = new List<Claim>
@@ -33,8 +33,6 @@ public class TokenService : ITokenService
         // token. Only present when set, so password-only accounts fall back to initials.
         if (!string.IsNullOrEmpty(user.PictureUrl))
             claims.Add(new Claim("picture", user.PictureUrl));
-        foreach (var role in roles)
-            claims.Add(new Claim(ClaimTypes.Role, role));
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_opts.Key));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

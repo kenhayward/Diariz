@@ -14,17 +14,27 @@ public class AdminUsersControllerTests
 {
     private static AdminUsersController Build(IdentityTestHost host, Guid adminId, FakeEmailSender? email = null) =>
         new(host.Users, email ?? new FakeEmailSender(), host.Db, new PlatformSettingsService(host.Db),
-            Options.Create(new AppPublicOptions { PublicUrl = "http://localhost:8081" }))
+            Options.Create(new AppPublicOptions { PublicUrl = "http://localhost:8081" }),
+            new UserPermissions(host.Db))
         {
-            ControllerContext = Http.Context(adminId, [Roles.Administrator]),
+            ControllerContext = Http.Context(adminId),
         };
 
+    /// <summary>Seeds a user whose authority comes from group membership. The role is still assigned, because
+    /// the seeder migrates roles to groups on boot and some tests assert on it, but nothing reads it for
+    /// authorization any more - the matching permission flags are what count.</summary>
     private static async Task<ApplicationUser> Seed(
         IdentityTestHost host, string email, string role, UserStatus status = UserStatus.Active)
     {
         var user = new ApplicationUser { UserName = email, Email = email, Status = status, IsEnabled = true };
         await host.Users.CreateAsync(user);
         await host.Users.AddToRoleAsync(user, role);
+        Perms.Grant(host.Db, user.Id, role switch
+        {
+            Roles.PlatformAdministrator => Perms.PlatformAdministrator,
+            Roles.Administrator => Perms.Administrator,
+            _ => PlatformPermission.None,
+        });
         return user;
     }
 
@@ -225,16 +235,18 @@ public class AdminUsersControllerTests
     {
         using var host = new IdentityTestHost();
         await host.SeedRolesAsync();
+        await Seeder.SeedGroupsAsync(host.Db); // SetRole moves the user in and out of the Administrators group
         var admin = await Seed(host, "admin@x.test", Roles.Administrator);
         var target = await Seed(host, "t@x.test", Roles.Standard);
+        var perms = new UserPermissions(host.Db);
 
         await Build(host, admin.Id).SetRole(target.Id, new SetRoleRequest(Roles.Administrator));
-        Assert.Contains(Roles.Administrator, await host.Users.GetRolesAsync(target));
+        Assert.True((await perms.ForAsync(target.Id)).HasFlag(PlatformPermission.ManageUsers));
+        // Promotion never confers ManagePlatform: that is the Platform Administrators group alone.
+        Assert.False((await perms.ForAsync(target.Id)).HasFlag(PlatformPermission.ManagePlatform));
 
         await Build(host, admin.Id).SetRole(target.Id, new SetRoleRequest(Roles.Standard));
-        var roles = await host.Users.GetRolesAsync(target);
-        Assert.Contains(Roles.Standard, roles);
-        Assert.DoesNotContain(Roles.Administrator, roles);
+        Assert.Equal(PlatformPermission.None, await perms.ForAsync(target.Id));
     }
 
     [Fact]

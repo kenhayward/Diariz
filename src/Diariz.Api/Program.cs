@@ -9,6 +9,7 @@ using Diariz.Api.Services;
 using Diariz.Api.Tools;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
@@ -46,7 +47,7 @@ builder.Services.Configure<McpOAuthOptions>(builder.Configuration.GetSection(Mcp
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
 {
     o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    o.KnownNetworks.Clear();
+    o.KnownIPNetworks.Clear();
     o.KnownProxies.Clear();
 });
 
@@ -78,8 +79,9 @@ builder.Services.AddIdentityCore<ApplicationUser>(o =>
 // The default authenticate scheme is a forwarding policy scheme: a `Bearer dz_api_…` personal API token
 // routes to the ApiKey handler, everything else (a JWT bearer, or no Authorization header for the
 // SignalR/audio/backup query-string flows) routes to JWT. This makes a personal API key satisfy every
-// [Authorize] variant - including [Authorize(Roles=…)] endpoints, which authenticate with the default
-// scheme. Named schemes (e.g. the Mcp policy on /mcp) select their own scheme and are unaffected.
+// [Authorize] variant - including the permission policies, which resolve the caller's group membership from
+// the NameIdentifier claim that both schemes emit. Named schemes (e.g. the Mcp policy on /mcp) select their
+// own scheme and are unaffected.
 const string SmartAuthScheme = "smart";
 builder.Services.AddAuthentication(SmartAuthScheme)
     .AddPolicyScheme(SmartAuthScheme, SmartAuthScheme, o =>
@@ -140,7 +142,16 @@ builder.Services.AddAuthentication(SmartAuthScheme)
         Diariz.Api.Auth.ApiKeyAuthenticationHandler.SchemeName, _ => { });
 builder.Services.AddAuthorization(o =>
 {
-    o.AddPolicy("Admin", p => p.RequireRole(Roles.Administrator, Roles.PlatformAdministrator));
+    // Platform authority, resolved from the caller's group membership. Each policy requires ANY of the flags
+    // it names.
+    o.AddPolicy("ManageRooms", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManageRooms)));
+    o.AddPolicy("ManageUsers", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManageUsers)));
+    o.AddPolicy("ManagePlatform", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManagePlatform)));
+    // Reading platform settings: the Manage Users modal shows the default quota, so an Administrator
+    // (ManageUsers, no ManagePlatform) must still be able to GET them. Writes remain ManagePlatform.
+    o.AddPolicy("ReadAdminSettings", p => p.AddRequirements(
+        new PermissionRequirement(PlatformPermission.ManageUsers | PlatformPermission.ManagePlatform)));
+
     // The /mcp endpoint authenticates only with the MCP token scheme (not the browser's JWT).
     o.AddPolicy(Diariz.Api.Auth.McpBearerAuthenticationHandler.SchemeName, p =>
     {
@@ -167,6 +178,9 @@ builder.Services.AddSingleton<IAudioStorage, AudioStorage>();
 builder.Services.AddSingleton<IDatabaseBackup>(_ =>
     new PgToolsDatabaseBackup(builder.Configuration.GetConnectionString("Postgres")!));
 builder.Services.AddScoped<ISchemaVersion, EfSchemaVersion>();
+// Platform authority, resolved from the caller's group membership on every request (never from a JWT claim).
+builder.Services.AddScoped<IUserPermissions, UserPermissions>();
+builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 
 // ---- Redis job queue ----
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
@@ -432,7 +446,11 @@ await using (var scope = app.Services.CreateAsyncScope())
     await db.Database.MigrateAsync();
     await sp.GetRequiredService<IAudioStorage>().EnsureBucketAsync();
     await Seeder.SeedRolesAsync(sp);
-    await Seeder.SeedDefaultUserAsync(sp, app.Configuration);
+    var seedUserId = await Seeder.SeedDefaultUserAsync(sp, app.Configuration);
+    // Groups exist with their flags, and the seed user is always a Platform Administrator. Existing role
+    // holders were moved into groups once, by the AddUserGroups migration - never on boot, or a demoted user
+    // would be silently re-promoted from their stale AspNetUserRoles row.
+    await Seeder.SeedPlatformAuthorityAsync(db, seedUserId);
     await MeetingTypeSeeder.SeedAsync(db);
 }
 

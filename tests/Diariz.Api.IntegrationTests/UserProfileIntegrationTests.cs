@@ -40,7 +40,7 @@ public class UserProfileIntegrationTests(ContainersFixture fx)
     {
         var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
         var db = sp.GetRequiredService<DiarizDbContext>();
-        return new UserProfileController(users, db, Tokens(), new PlatformSettingsService(db))
+        return new UserProfileController(users, db, Tokens(), new PlatformSettingsService(db), new UserPermissions(db))
         {
             ControllerContext = Http.Context(userId),
         };

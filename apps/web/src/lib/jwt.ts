@@ -35,26 +35,3 @@ export function pictureFromToken(token: string | null | undefined): string | nul
   const claim = decodeJwtPayload(token)?.["picture"];
   return typeof claim === "string" && claim.trim() ? claim : null;
 }
-
-// The role claim may serialize as "role" (compact) or the .NET schema URI, and as a string or array.
-const ROLE_KEYS = ["role", "roles", "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"];
-
-export function rolesFromToken(token: string | null | undefined): string[] {
-  const payload = decodeJwtPayload(token);
-  if (!payload) return [];
-  for (const key of ROLE_KEYS) {
-    const claim = payload[key];
-    if (Array.isArray(claim)) return claim.filter((r): r is string => typeof r === "string");
-    if (typeof claim === "string") return [claim];
-  }
-  return [];
-}
-
-export function isAdminFromToken(token: string | null | undefined): boolean {
-  const roles = rolesFromToken(token);
-  return roles.includes("Administrator") || roles.includes("PlatformAdministrator");
-}
-
-export function isPlatformAdminFromToken(token: string | null | undefined): boolean {
-  return rolesFromToken(token).includes("PlatformAdministrator");
-}

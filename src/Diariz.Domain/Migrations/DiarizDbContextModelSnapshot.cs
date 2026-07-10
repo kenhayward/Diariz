@@ -1126,6 +1126,55 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("Transcriptions");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.UserGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Color")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Icon")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<int>("Permissions")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("UserGroups");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.UserGroupMember", b =>
+                {
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("GroupId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UserGroupMembers");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.UserSettings", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -1844,6 +1893,25 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("Recording");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.UserGroupMember", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.UserGroup", "Group")
+                        .WithMany("Members")
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Group");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.UserSettings", b =>
                 {
                     b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
@@ -1979,6 +2047,11 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("Segments");
 
                     b.Navigation("Summary");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.UserGroup", b =>
+                {
+                    b.Navigation("Members");
                 });
 
             modelBuilder.Entity("OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreApplication", b =>

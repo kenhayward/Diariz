@@ -155,7 +155,7 @@ public class AuthController : ControllerBase
 
     private async Task<IActionResult> TokenResponse(ApplicationUser user)
     {
-        var (token, expires) = _tokens.CreateAccessToken(user, await _users.GetRolesAsync(user));
+        var (token, expires) = _tokens.CreateAccessToken(user);
         return Ok(new AuthResponse(token, expires));
     }
 
@@ -370,7 +370,7 @@ public class AuthController : ControllerBase
     /// JS-visible handoff). The token never appears in a URL, access log, or Referer.</summary>
     private async Task<IActionResult> SignedInRedirectAsync(ApplicationUser user)
     {
-        var (token, _) = _tokens.CreateAccessToken(user, await _users.GetRolesAsync(user));
+        var (token, _) = _tokens.CreateAccessToken(user);
         Response.Cookies.Append(AuthHandoffCookie, token, HandoffCookieOptions());
         return Redirect(SafeRedirect.Within($"{WebBase()}{SpaCallbackPath}", AllowedRedirectHosts()));
     }
@@ -446,7 +446,7 @@ public class AuthController : ControllerBase
             return Unauthorized();
         }
 
-        var (token, _) = _tokens.CreateAccessToken(user, await _users.GetRolesAsync(user));
+        var (token, _) = _tokens.CreateAccessToken(user);
         _logger.LogInformation("Desktop sign-in exchange: success for {Email} -> access token issued (200).",
             LogSanitizer.Clean(user.Email ?? ""));
         return Ok(new { accessToken = token });

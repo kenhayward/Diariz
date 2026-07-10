@@ -329,7 +329,13 @@ public record UserProfileDto(
     /// <summary>Colour theme: "auto" | "light" | "dark".</summary>
     string Theme = "auto",
     /// <summary>Whether the platform has user API access enabled (drives the Preferences "Developers" tab).</summary>
-    bool ApiAccessEnabled = false);
+    bool ApiAccessEnabled = false,
+    /// <summary>The caller's platform permissions, from their group membership. Resolved server-side on every
+    /// request: the web must not infer authority from the JWT, which goes stale when membership changes.</summary>
+    PermissionsDto? Permissions = null);
+
+/// <summary>A user's platform permissions, expanded into booleans so the client never does bit arithmetic.</summary>
+public record PermissionsDto(bool ManageRooms, bool ManageUsers, bool ManagePlatform);
 
 /// <summary>Self-service profile update. Each field is trimmed; blank clears it. Language codes must be
 /// in the supported set (else 400). <paramref name="Theme"/> is "auto" | "light" | "dark" (unknown -> auto).</summary>
