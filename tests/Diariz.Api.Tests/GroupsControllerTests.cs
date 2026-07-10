@@ -41,7 +41,7 @@ public class GroupsControllerTests
         await sut.Create(new GroupInput("Engineering", "The eng team", "users", "#5C6BC0", PlatformPermission.ManageRooms));
 
         var groups = await sut.List();
-        Assert.Contains(groups, g => g.Name == "Engineering" && g.Permissions == PlatformPermission.ManageRooms);
+        Assert.Contains(groups, g => g.Name == "Engineering" && g.Permissions == (int)PlatformPermission.ManageRooms);
     }
 
     [Fact]

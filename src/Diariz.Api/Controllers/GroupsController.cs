@@ -8,8 +8,10 @@ namespace Diariz.Api.Controllers;
 
 public record GroupInput(string Name, string? Description, string? Icon, string? Color, PlatformPermission Permissions);
 
+/// <summary>A group as the web sees it. <paramref name="Permissions"/> is an int, not the enum: the API
+/// serializes enums by name (JsonConfig), and the client does bit arithmetic on this field.</summary>
 public record GroupDto(Guid Id, string Name, string? Description, string? Icon, string? Color,
-    PlatformPermission Permissions, bool IsSystem, Guid[] MemberIds);
+    int Permissions, bool IsSystem, Guid[] MemberIds);
 
 /// <summary>Group administration. The system group (Platform Administrators) is protected three ways: it cannot
 /// be deleted, its name and permissions cannot be edited, and its last member cannot be removed. Any one of
@@ -23,7 +25,7 @@ public class GroupsController(DiarizDbContext db) : ControllerBase
     public async Task<List<GroupDto>> List() =>
         await db.UserGroups
             .OrderByDescending(g => g.IsSystem).ThenBy(g => g.Name)
-            .Select(g => new GroupDto(g.Id, g.Name, g.Description, g.Icon, g.Color, g.Permissions, g.IsSystem,
+            .Select(g => new GroupDto(g.Id, g.Name, g.Description, g.Icon, g.Color, (int)g.Permissions, g.IsSystem,
                 g.Members.Select(m => m.UserId).ToArray()))
             .ToListAsync();
 
@@ -48,7 +50,7 @@ public class GroupsController(DiarizDbContext db) : ControllerBase
         db.UserGroups.Add(group);
         await db.SaveChangesAsync();
         return Ok(new GroupDto(group.Id, group.Name, group.Description, group.Icon, group.Color,
-            group.Permissions, group.IsSystem, []));
+            (int)group.Permissions, group.IsSystem, []));
     }
 
     [HttpPut("{id:guid}")]
