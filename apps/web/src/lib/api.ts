@@ -48,6 +48,7 @@ import type {
   SpeakerProfile,
   GoogleCalendarListItem,
   SpeakerProfileDetail,
+  Group,
   UpdateUserProfile,
   UpdateUserSettings,
   UserProfile,
@@ -198,6 +199,34 @@ export const api = {
 
   async setUserRole(id: string, role: "Standard" | "Administrator"): Promise<void> {
     await http.put(`/api/admin/users/${id}/role`, { role });
+  },
+
+  // ---- Groups (platform permissions) ----
+
+  async listGroups(): Promise<Group[]> {
+    const { data } = await http.get<Group[]>("/api/groups");
+    return data;
+  },
+
+  async createGroup(g: Pick<Group, "name"> & Partial<Pick<Group, "description" | "icon" | "color" | "permissions">>): Promise<Group> {
+    const { data } = await http.post<Group>("/api/groups", { permissions: 0, ...g });
+    return data;
+  },
+
+  async updateGroup(id: string, g: Pick<Group, "name" | "permissions"> & Partial<Pick<Group, "description" | "icon" | "color">>): Promise<void> {
+    await http.put(`/api/groups/${id}`, g);
+  },
+
+  async deleteGroup(id: string): Promise<void> {
+    await http.delete(`/api/groups/${id}`);
+  },
+
+  async addGroupMember(id: string, userId: string): Promise<void> {
+    await http.put(`/api/groups/${id}/members/${userId}`);
+  },
+
+  async removeGroupMember(id: string, userId: string): Promise<void> {
+    await http.delete(`/api/groups/${id}/members/${userId}`);
   },
 
   async setUserEnabled(id: string, isEnabled: boolean): Promise<void> {

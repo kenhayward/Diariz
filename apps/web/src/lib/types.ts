@@ -451,6 +451,29 @@ export interface Language {
   rtl: boolean;
 }
 
+/// The signed-in user's platform authority, resolved server-side from their group membership. Never derived
+/// from the JWT: a token claim would keep granting authority until it expired, long after the user left the
+/// group.
+export interface Permissions {
+  manageRooms: boolean;
+  manageUsers: boolean;
+  managePlatform: boolean;
+}
+
+/// A named collection of users carrying platform permissions. Replaces the old account-type roles. The system
+/// group (Platform Administrators) cannot be deleted, renamed, or have its permissions changed.
+export interface Group {
+  id: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  color: string | null;
+  /// Bit flags, mirroring the server's PlatformPermission: 1 = rooms, 2 = users, 4 = platform.
+  permissions: number;
+  isSystem: boolean;
+  memberIds: string[];
+}
+
 /// The signed-in user's editable profile (display name + language preferences + free-text profile fields +
 /// colour theme). Email is read-only.
 export interface UserProfile {
@@ -468,6 +491,8 @@ export interface UserProfile {
   theme: "auto" | "light" | "dark";
   /// Whether the platform has user API access enabled (drives the Preferences "Developers" tab).
   apiAccessEnabled: boolean;
+  /// The caller's platform permissions. Optional only because the server marks it nullable; always sent.
+  permissions?: Permissions;
 }
 
 /// A stored personal REST-API token, listed in Preferences -> Developers. The secret is never returned -
