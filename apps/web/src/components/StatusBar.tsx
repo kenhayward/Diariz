@@ -46,7 +46,12 @@ export default function StatusBar() {
 
   return (
     <footer className="flex h-5 shrink-0 items-center gap-3 border-t bg-white px-3 text-xs dark:border-gray-700 dark:bg-gray-900">
-      <span className={`min-w-0 flex-1 truncate ${message ? toneClass(message.tone) : ""}`}>
+      {/* Announced: recorder warnings/hints (e.g. "no sound detected") land here rather than inline. */}
+      <span
+        role="status"
+        aria-live="polite"
+        className={`min-w-0 flex-1 truncate ${message ? toneClass(message.tone) : ""}`}
+      >
         {message?.text ?? ""}
       </span>
       <span className="shrink-0 text-gray-500 dark:text-gray-400">{fields.join("  |  ")}</span>

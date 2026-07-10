@@ -51,6 +51,26 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.117.1",
+    date: "2026-07-10",
+    pr: 259,
+    headline: "Icon-only recorder controls",
+    summary:
+      "The recorder controls in the top bar - Record, Pause/Resume, Stop and Upload - now use icons (a " +
+      "microphone, two bars, a triangle, a square, and an arrow into a tray) instead of text " +
+      "labels, so the bar stays compact and reads the same in every language. Their colours are unchanged: " +
+      "Record keeps its solid button and Stop stays red, so the controls that matter still stand out. Each " +
+      "button keeps its name on hover and for screen readers. Recorder errors, warnings and hints (a failed " +
+      "capture, \"System audio wasn't shared\", \"No sound detected\") now appear in the status bar at the " +
+      "bottom of the window in the same colours as before, instead of adding a line under the top bar that " +
+      "nudged it off screen.",
+    changed: [
+      "Record, Pause/Resume, Stop and Upload in the top bar are now icons rather than text, with the label kept as a tooltip and accessible name.",
+      "Recorder errors, warnings and hints moved from under the top bar to the status bar, so the header no longer grows and shifts the page.",
+      "The unsaved-recording and notes-retry banners now float in a popover below the top bar rather than sitting inside it.",
+    ],
+  },
+  {
     version: "0.117.0",
     date: "2026-07-09",
     pr: 258,

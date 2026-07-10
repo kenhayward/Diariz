@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage, getToken } from "../lib/api";
 import { userIdFromToken } from "../lib/jwt";
@@ -25,6 +25,8 @@ import {
   type SourceSelection,
 } from "../lib/audioDevices";
 import { connectTrayRecorder, type RecorderState, type TrayBridge } from "../lib/trayRecorder";
+import { useStatus } from "../lib/status";
+import type { StatusTone } from "../lib/statusBar";
 import InputLevelMeter from "./InputLevelMeter";
 import { AUDIO_ACCEPT_ATTR } from "../lib/audioFormats";
 import { useUpload } from "../lib/uploadContext";
@@ -52,6 +54,63 @@ const SYSTEM_AUDIO_KEY = "diariz.recorder.systemAudio";
 // Whether this environment can capture system audio at all (Chromium/desktop). Drives the System audio
 // checkbox + the "No microphone" dropdown option; false in Firefox/Safari.
 const CAN_SYSTEM_AUDIO = supportsDisplayAudio() || isElectron;
+
+// Transport glyphs (16x16), drawn in `currentColor` so each button's own text colour applies. Record is
+// a microphone, pause two bars, resume a play triangle, stop a filled square, upload the arrow-into-tray.
+// The buttons are icon-only: the label lives on aria-label + title.
+function TransportIcon({ children }: { children: ReactNode }) {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+      {children}
+    </svg>
+  );
+}
+
+const IconRecord = () => (
+  <TransportIcon>
+    <rect x="6" y="1.75" width="4" height="7.5" rx="2" fill="currentColor" />
+    <path
+      d="M3.75 7.5a4.25 4.25 0 0 0 8.5 0M8 11.75V14M5.75 14h4.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </TransportIcon>
+);
+
+const IconPause = () => (
+  <TransportIcon>
+    <rect x="4.5" y="3.5" width="2.5" height="9" rx="0.75" fill="currentColor" />
+    <rect x="9" y="3.5" width="2.5" height="9" rx="0.75" fill="currentColor" />
+  </TransportIcon>
+);
+
+const IconPlay = () => (
+  <TransportIcon>
+    <path d="M5.5 3.4l6.5 4.6-6.5 4.6z" fill="currentColor" />
+  </TransportIcon>
+);
+
+const IconStop = () => (
+  <TransportIcon>
+    <rect x="4" y="4" width="8" height="8" rx="1" fill="currentColor" />
+  </TransportIcon>
+);
+
+const IconUpload = () => (
+  <TransportIcon>
+    <path
+      d="M8 10.5V2.5M5 5.5l3-3 3 3M2.5 10.5v2.5h11v-2.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </TransportIcon>
+);
 
 function loadSavedSource(): PersistedSource | null {
   try {
@@ -612,8 +671,44 @@ export default function Recorder({
   const secs = Math.floor(elapsed / 1000);
   const mmss = `${String(Math.floor(secs / 60)).padStart(2, "0")}:${String(secs % 60).padStart(2, "0")}`;
 
+  // Errors, warnings and hints go to the app-wide status bar rather than inline: the TopBar is a
+  // fixed-height header, so an extra line here pushed the whole bar off screen. One message at a time,
+  // most severe first; the tones keep the colours these lines had inline (red / amber / grey).
+  const { setStatus } = useStatus();
+  const statusText = error ?? notice ?? null;
+  const statusTone: StatusTone = error ? "error" : "progress";
+  const hint =
+    recording && !paused && silent ? t("noSoundHint")
+    : labelsTried && !hasLabels && !recording ? t("noMicHint")
+    : null;
+  const message = statusText ?? hint;
+  const tone: StatusTone = statusText ? statusTone : "info";
+  // Only clear what we pushed, so we never wipe another component's message.
+  const pushedRef = useRef(false);
+  useEffect(() => {
+    if (message) {
+      setStatus(message, tone, { sticky: true });
+      pushedRef.current = true;
+    } else if (pushedRef.current) {
+      setStatus(null);
+      pushedRef.current = false;
+    }
+  }, [message, tone, setStatus]);
+  // Clear a lingering message when the recorder unmounts (e.g. sign-out).
+  useEffect(
+    () => () => {
+      if (pushedRef.current) setStatus(null);
+    },
+    [setStatus],
+  );
+
   return (
-    <div className={compact ? "" : "rounded-lg border bg-white p-4 dark:border-gray-700 dark:bg-gray-900"}>
+    // `relative` anchors the recovery popover below the controls without adding to the bar's height.
+    <div
+      className={
+        compact ? "relative" : "relative rounded-lg border bg-white p-4 dark:border-gray-700 dark:bg-gray-900"
+      }
+    >
       <div className="flex items-center gap-2">
         <select
           value={formatSourceToken(selection)}
@@ -709,21 +804,30 @@ export default function Recorder({
             <button
               type="button"
               onClick={paused ? resume : pause}
-              className="rounded border px-3 py-1.5 text-sm dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
+              title={paused ? t("recResume") : t("recPause")}
+              aria-label={paused ? t("recResume") : t("recPause")}
+              className="flex items-center justify-center rounded border p-2 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
             >
-              {paused ? t("recResume") : t("recPause")}
+              {paused ? <IconPlay /> : <IconPause />}
             </button>
-            <button onClick={stop} className="rounded bg-red-600 px-3 py-1.5 text-sm text-white">
-              {t("recStop")}
+            <button
+              onClick={stop}
+              title={t("recStop")}
+              aria-label={t("recStop")}
+              className="flex items-center justify-center rounded bg-red-600 p-2 text-white"
+            >
+              <IconStop />
             </button>
           </>
         ) : (
           <button
             onClick={() => start()}
             disabled={busy || (selection.kind === "none" && !systemAudio)}
-            className="rounded bg-gray-900 px-3 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
+            title={busy ? t("recUploading") : t("recRecord")}
+            aria-label={busy ? t("recUploading") : t("recRecord")}
+            className="flex items-center justify-center rounded bg-gray-900 p-2 text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
           >
-            {busy ? t("recUploading") : t("recRecord")}
+            <IconRecord />
           </button>
         )}
 
@@ -732,9 +836,10 @@ export default function Recorder({
           onClick={() => fileRef.current?.click()}
           disabled={recording || busy}
           title={t("recUploadTitle")}
-          className="rounded border px-3 py-1.5 text-sm disabled:opacity-50 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
+          aria-label={t("recUpload")}
+          className="flex items-center justify-center rounded border p-2 disabled:opacity-50 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
         >
-          {t("recUpload")}
+          <IconUpload />
         </button>
         <input
           ref={fileRef}
@@ -769,41 +874,54 @@ export default function Recorder({
             )}
           </>
         )}
-        {error && compact && <span className="text-xs text-red-600">{error}</span>}
       </div>
-      {pending && !recording && (
-        <div className="mt-2 flex flex-wrap items-center gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
-          <span>{t("unsavedRecording", { time: new Date(pending.createdAt).toLocaleString() })}</span>
-          <div className="ml-auto flex gap-2">
-            <button
-              type="button"
-              onClick={uploadPending}
-              disabled={busy}
-              className="rounded bg-amber-600 px-2 py-1 text-xs text-white disabled:opacity-50"
-            >
-              {busy ? t("recUploading") : t("recUploadPending")}
-            </button>
-            <button
-              type="button"
-              onClick={discardPending}
-              disabled={busy}
-              className="rounded border border-amber-400 px-2 py-1 text-xs disabled:opacity-50 dark:border-amber-700"
-            >
-              {t("recDiscardPending")}
-            </button>
-          </div>
+
+      {/* Recovery banners float below the bar in a popover. They must stay out of the TopBar's flow: it is
+          a fixed-height header, so an in-flow banner grows it and pushes the page down. */}
+      {!recording && (pending || notesAttach) && (
+        <div
+          data-testid="recorder-popover"
+          className="absolute left-1/2 top-full z-40 mt-1 w-[28rem] max-w-[calc(100vw-2rem)] -translate-x-1/2 space-y-2"
+        >
+          {pending && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 shadow-xl dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+              <span>{t("unsavedRecording", { time: new Date(pending.createdAt).toLocaleString() })}</span>
+              <div className="ml-auto flex gap-2">
+                <button
+                  type="button"
+                  onClick={uploadPending}
+                  disabled={busy}
+                  className="rounded bg-amber-600 px-2 py-1 text-xs text-white disabled:opacity-50"
+                >
+                  {busy ? t("recUploading") : t("recUploadPending")}
+                </button>
+                <button
+                  type="button"
+                  onClick={discardPending}
+                  disabled={busy}
+                  className="rounded border border-amber-400 px-2 py-1 text-xs disabled:opacity-50 dark:border-amber-700"
+                >
+                  {t("recDiscardPending")}
+                </button>
+              </div>
+            </div>
+          )}
+          {/* Notes attached-failure banner: the audio uploaded, the lines are safe - offer a retry. */}
+          {notesAttach && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 shadow-xl dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
+              <span>{t("notesAttachFailed")}</span>
+              <button
+                type="button"
+                onClick={() => void attachNotes(notesAttach.recordingId!, notesAttach)}
+                className="ml-auto rounded bg-amber-600 px-2 py-1 text-xs text-white"
+              >
+                {t("notesAttachRetry")}
+              </button>
+            </div>
+          )}
         </div>
       )}
-      {error && !compact && <p className="mt-2 text-sm text-red-600">{error}</p>}
-      {notice && <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">{notice}</p>}
-      {labelsTried && !hasLabels && !recording && !error && (
-        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{t("noMicHint")}</p>
-      )}
-      {recording && !paused && silent && (
-        <p role="status" aria-live="polite" className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-          {t("noSoundHint")}
-        </p>
-      )}
+
       {/* Live notes panel: floats below the TopBar while recording (incl. paused). */}
       {recording && notesOpen && (
         <LiveNotesPanel
@@ -813,19 +931,6 @@ export default function Recorder({
           onDelete={deleteLiveNote}
           onClose={closeNotes}
         />
-      )}
-      {/* Notes attached-failure banner: the audio uploaded, the lines are safe - offer a retry. */}
-      {notesAttach && !recording && (
-        <div className="mt-2 flex flex-wrap items-center gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200">
-          <span>{t("notesAttachFailed")}</span>
-          <button
-            type="button"
-            onClick={() => void attachNotes(notesAttach.recordingId!, notesAttach)}
-            className="ml-auto rounded bg-amber-600 px-2 py-1 text-xs text-white"
-          >
-            {t("notesAttachRetry")}
-          </button>
-        </div>
       )}
     </div>
   );
