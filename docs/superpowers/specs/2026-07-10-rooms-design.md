@@ -39,7 +39,7 @@ without revisiting this document.
 | Deleting a recording | Only from its main room | Sharing grants edit and unshare, never destruction. |
 | Deleting a room | Allowed, with typed confirmation | Since no shared room is a main room, deletion unshares; it can never destroy audio. |
 | Deleting a user | Orphans their Personal Room | Their recordings survive, so shared rooms keep their history. |
-| Where a new recording lands | The folder selected when Record was pressed | In a shared room, the shared placement takes the folder; the main placement stays ungrouped. |
+| Where a new recording lands | A per-user preference, defaulting to "the folder selected when Record was pressed" | It governs the main placement in the recorder's Personal Room. The shared-room link is always ungrouped for now. |
 | Personal Room mutability | Immutable and private | Cannot be renamed, deleted, shared, or gain members. Enforced server-side. |
 | Room transport | Explicit `roomId` in the URL | Visible, linkable, cacheable. Not an ambient header. |
 | Room enforcement | Explicit filter via a `RoomScope` service | Same convention as today's `UserId` filter, one level up. Not EF global query filters. |
@@ -135,6 +135,7 @@ Constraints:
 | `Recording` | Loses `SectionId` (moves to `RoomRecording`). **Keeps `UserId`, whose meaning changes to "recorded by"** - it drives the "Recorded by" line and storage-quota accounting. |
 | `MeetingNote` | Keeps `UserId` as authorship. |
 | `TranscriptChunk` | Loses the denormalised `UserId` (see below). |
+| `UserSettings` | Gains `RecordingPlacementMode` (`int?`, null = the default `SelectedFolder`) and `RecordingPlacementSectionId` (`uuid?`, FK to `Sections` **`ON DELETE SET NULL`** - so a deleted folder degrades to ungrouped without any application code). |
 
 Entities scoped transitively through `Recording` (`Transcription`, `Segment`, `Speaker`, `Summary`,
 `MeetingMinutes`, `RecordingAction`, `RecordingTag`, `Attachment`, `RecordingCalendarLink`,
@@ -154,7 +155,11 @@ Entities that stay strictly personal: `UserSettings` (LLM endpoint and encrypted
 }
 ```
 
-Both are stored as `int` and are **append-only**, like `RecordingStatus` and `RecordingSource`.
+```csharp
+public enum RecordingPlacementMode { Ungrouped = 0, SelectedFolder = 1, SpecificFolder = 2 }
+```
+
+All three are stored as `int` and are **append-only**, like `RecordingStatus` and `RecordingSource`.
 
 **Effective room permissions** for a user = the union of their own `RoomMember` row and the rows of
 every group they belong to. Plus two overrides:
@@ -228,29 +233,45 @@ requires `CreateRecording` in `roomId`.
 - When `roomId` is the caller's **personal room**, it writes one `RoomRecording` row: main placement,
   `SectionId = sectionId`.
 - When `roomId` is a **shared room**, it writes **two** rows in one transaction: the main placement in the
-  caller's personal room, always **ungrouped** (`SectionId = null`); and the shared placement in `roomId`
-  with `SectionId = sectionId`.
+  caller's personal room with `SectionId = sectionId`, and the shared placement in `roomId` **ungrouped**.
 
-This keeps "no shared room is ever a main room" true by construction rather than by convention.
+This keeps "no shared room is ever a main room" true by construction rather than by convention. `sectionId`
+therefore always names a folder in the caller's **personal** room; a section belonging to any other room is
+rejected.
 
 ### Where a new recording lands
 
-The client captures the **selected folder at the moment Record is pressed** (not at upload - a long
-recording can outlive the selection) and sends it as `sectionId`. The same rule applies to the Upload
-button. Three edge cases:
+The main placement is in the recorder's Personal Room, so "which folder?" is a question about *their own*
+room, answered by a per-user preference (`UserSettings.RecordingPlacementMode`):
+
+| Mode | Main placement lands in |
+|---|---|
+| `Ungrouped` | Ungrouped, always. |
+| `SelectedFolder` (**default**) | The folder selected when Record was pressed - but only when recording into the Personal Room. In a shared room there is no Personal Room selection to honour, so it lands ungrouped. |
+| `SpecificFolder` | `UserSettings.RecordingPlacementSectionId`, a Personal Room folder, regardless of which room the recording was made in. If that folder has been deleted the column is null and it lands ungrouped. |
+
+**The link in a shared room is always ungrouped**, for now. Whether that wants its own preference is a
+question for production feedback, not for this design.
+
+The rules apply equally to **Record and Upload** - both create a recording. Drag-and-drop onto a folder
+names its target explicitly and bypasses the preference entirely.
+
+Three edge cases:
 
 - **What counts as selected.** The section of the current view: the folder page you are on
   (`/rooms/:roomId/sections/:id`), or the folder containing the recording you have open, or the folder
   highlighted in the tree. Nothing selected means ungrouped. Sub-folders count, being sections like any
   other.
-- **The folder is deleted mid-recording.** `SectionId` is validated on upload; a section that no longer
-  exists, or that belongs to another room, is rejected and the recording lands ungrouped rather than
-  failing the upload. Losing audio to a stale folder id would be indefensible.
-- **The room is switched mid-recording.** The captured room and folder win. The recording lands where the
-  user was standing when they pressed Record, which is the only interpretation that matches the button
-  they clicked.
+- **The folder is deleted mid-recording.** `sectionId` is validated on upload; a section that no longer
+  exists, or that belongs to another room, is rejected and the recording lands **ungrouped rather than
+  failing the upload**. Losing audio to a stale folder id would be indefensible.
+- **The room is switched mid-recording.** The client captures the room and folder **at the moment Record is
+  pressed**, not at upload - a long recording can outlive the selection. The recording lands where the user
+  was standing when they clicked the button.
 
-Drag-and-drop upload onto a folder passes that folder's id directly and bypasses the selection rule.
+Note this changes behaviour in the Personal Room even for users who never create a shared room: today every
+new recording lands ungrouped. The default (`SelectedFolder`) is the new behaviour, so the preference exists
+partly to let anyone who preferred the old one set `Ungrouped` and keep it.
 
 ### Platform authorization
 
@@ -300,9 +321,15 @@ and Upload disable without `CreateRecording`; kebab items hide or disable per pe
 controls carry a tooltip explaining *why*.
 
 It also exposes the **selected folder**, which `Recorder` snapshots along with the room when Record is
-pressed and sends with the upload (see "Where a new recording lands"). The Electron tray drives the same
-`Recorder` instance, so a tray-started recording inherits the web app's current selection with no separate
-code path.
+pressed and resolves against the user's placement preference before uploading (see "Where a new recording
+lands"). The Electron tray drives the same `Recorder` instance, so a tray-started recording inherits the
+web app's current selection with no separate code path.
+
+**Settings modal gains a `Recordings` tab.** `SettingsModal.tsx` is already tabbed with a single
+OK/Cancel footer and a fixed height, so this is a new tab, not a new dialog. It holds the three placement
+modes as radio buttons, with a folder chooser (Personal Room sections only, flattened "Parent › Child" as
+`MoveToSectionModal` does) revealed by `Use a specific folder`. The tab is named for the category rather
+than the setting, since more recording preferences are expected to land here.
 
 **Manage Rooms modal.** Left: rooms with icons and names, plus **New Room** at the bottom, which
 creates `Room 1`, `Room 2`, … ready to edit. Right: name, description (auto-expanding textarea), icon +
@@ -347,7 +374,9 @@ Two EF migrations, one per foundational phase.
 4. Add `RoomId` to `Sections`, `SpeakerProfiles`, `ChatSessions` (backfill from `UserId` → that user's
    personal room), and nullable `RoomId` to `MeetingTypes` (personal types → the owner's personal room;
    platform types stay null).
-5. Drop `Recording.SectionId`, `Section.UserId`, `SpeakerProfile.UserId`, `ChatSession.UserId`,
+5. Add `UserSettings.RecordingPlacementMode` and `RecordingPlacementSectionId`, both null (so every
+   existing user gets the `SelectedFolder` default).
+6. Drop `Recording.SectionId`, `Section.UserId`, `SpeakerProfile.UserId`, `ChatSession.UserId`,
    `TranscriptChunk.UserId`, `MeetingType.UserId`.
 
 Both backfills are data-heavy and must be written as SQL inside the migration, not as C# against the
@@ -363,7 +392,7 @@ app is never broken between phases.
 |---|---|---|
 | 1 | `UserGroup` + `UserGroupMember` + `PlatformPermission`, permission-based authorization handler, seeded Platform Administrators group, migration from roles. Manage Users modal gains the Groups tab. **No rooms yet.** | Yes - roles become groups, nothing else changes. |
 | 2 | `Room`, `RoomMember`, `RoomRecording`, `RoomPermission`, `RoomScope`, the backfill migration, and the re-scoping of `Section` / `SpeakerProfile` / `ChatSession` / `MeetingType`. Server only; the personal room is the only room, so the API behaves identically. | Yes - invisible to users. |
-| 3 | Room switcher, `/rooms/:roomId` routes, room-scoped query keys, `RoomProvider`, permission-driven UI gating. Still only personal rooms exist. | Yes - a switcher with one entry. |
+| 3 | Room switcher, `/rooms/:roomId` routes, room-scoped query keys, `RoomProvider`, permission-driven UI gating, and the `Recordings` settings tab with the placement preference. Still only personal rooms exist. | Yes - a switcher with one entry, and new recordings start landing in the selected folder. |
 | 4 | Manage Rooms modal, room creation/edit/delete (with the typed confirmation), membership editing, shared `IconColorPicker`, user-delete orphaning. Recording into a shared room writes the two-placement transaction. Shared rooms become real. | Yes - the feature lands. |
 | 5 | Manual cross-room sharing: share/unshare endpoints, the Rooms + Recorded-by lines on Overview, Share and Remove-from-room in the toolbar and kebab, the delete-confirmation listing shared rooms, the RAG semi-join and its measurement. | Yes. |
 
@@ -385,9 +414,11 @@ cannot honour:
 
 - The filtered unique index on `IsMainRoom`, and the invariant that the main row is the recorder's
   personal room - including after recording into a shared room, which must write exactly two placements:
-  the shared one in the selected folder, the main one ungrouped.
+  the main one in the preferred Personal Room folder, the shared one ungrouped.
 - Uploading with a `sectionId` that was deleted mid-recording, or that belongs to another room, lands the
   recording ungrouped instead of failing.
+- Deleting the folder named by `UserSettings.RecordingPlacementSectionId` nulls the column via
+  `ON DELETE SET NULL`, and the next recording lands ungrouped.
 - FK and cascade behaviour on room delete: placements and room assets go, recordings and audio stay.
 - Deleting a user orphans their personal room (`OwnerUserId` → null) and leaves shared placements intact,
   so another member of the shared room still reads the recording.
@@ -399,9 +430,12 @@ cannot honour:
 
 **Web (`vitest`).** The switcher renders the personal room with an avatar and hides Manage Rooms without
 the permission. Record and Upload disable without `CreateRecording`, with the explanatory tooltip. The
-kebab omits Delete outside the main room and offers Remove from room instead. Pressing Record with a
-folder selected sends that folder's id, and switching folders mid-recording does not change it. Deleting a
-shared recording confirms with the room names. The shared room's calendar renders recordings but no calendar events. Query
+kebab omits Delete outside the main room and offers Remove from room instead. Deleting a shared recording
+confirms with the room names.
+
+Placement preference: each of the three modes resolves to the right `sectionId` at press time
+(`SelectedFolder` in a shared room resolves to none); switching folders mid-recording does not change it;
+the `Recordings` tab reveals the folder chooser only for `SpecificFolder`. The shared room's calendar renders recordings but no calendar events. Query
 keys carry the room id, so switching rooms does not show the previous room's recordings.
 
 **Worker (`pytest`).** Unaffected. The callback contract does not change shape; only the API's
