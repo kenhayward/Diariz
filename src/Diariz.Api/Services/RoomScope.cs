@@ -12,6 +12,10 @@ public class RoomForbiddenException(RoomPermission required)
     public RoomPermission Required { get; } = required;
 }
 
+/// <summary>A room the caller belongs to, with the caller's effective permission grid.</summary>
+public record RoomListEntry(
+    Guid Id, string Name, RoomKind Kind, string? Icon, string? Color, bool IsPersonal, RoomPermission Permissions);
+
 /// <summary>Resolves rooms and the caller's authority inside them.
 ///
 /// Effective permissions are the union of the caller's own <see cref="RoomMember"/> row and the rows of every
@@ -23,6 +27,10 @@ public interface IRoomScope
 {
     /// <summary>The caller's Personal room, created on first ask. Every user has exactly one.</summary>
     Task<Guid> PersonalRoomIdAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>Every room the caller belongs to (their Personal room, minted on demand, plus any shared room
+    /// they are a member of), personal first, each with the caller's effective permission grid.</summary>
+    Task<IReadOnlyList<RoomListEntry>> RoomsForUserAsync(Guid userId, CancellationToken ct = default);
 
     Task<RoomPermission> PermissionsAsync(Guid userId, Guid roomId, CancellationToken ct = default);
 
@@ -93,6 +101,37 @@ public class RoomScope(DiarizDbContext db) : IRoomScope
             return await FindPersonalRoomIdAsync(userId, ct)
                    ?? throw new InvalidOperationException($"Personal room vanished for user {userId}");
         }
+    }
+
+    public async Task<IReadOnlyList<RoomListEntry>> RoomsForUserAsync(Guid userId, CancellationToken ct = default)
+    {
+        var personalId = await PersonalRoomIdAsync(userId, ct); // mint on demand so a new user still has one room
+
+        var groupIds = await db.UserGroupMembers
+            .Where(m => m.UserId == userId)
+            .Select(m => m.GroupId)
+            .ToListAsync(ct);
+
+        var memberRoomIds = await db.RoomMembers
+            .Where(m => (m.PrincipalType == RoomPrincipalType.User && m.PrincipalId == userId)
+                        || (m.PrincipalType == RoomPrincipalType.Group && groupIds.Contains(m.PrincipalId)))
+            .Select(m => m.RoomId)
+            .ToListAsync(ct);
+
+        var ids = memberRoomIds.Append(personalId).Distinct().ToList();
+        var rooms = await db.Rooms.Where(r => ids.Contains(r.Id)).ToListAsync(ct);
+
+        var result = new List<RoomListEntry>(rooms.Count);
+        foreach (var r in rooms)
+            result.Add(new RoomListEntry(
+                r.Id, r.Name, r.Kind, r.Icon, r.Color,
+                IsPersonal: r.Kind == RoomKind.Personal && r.OwnerUserId == userId,
+                Permissions: await PermissionsAsync(userId, r.Id, ct)));
+
+        return result
+            .OrderByDescending(r => r.IsPersonal)
+            .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     public async Task<RoomPermission> PermissionsAsync(Guid userId, Guid roomId, CancellationToken ct = default)

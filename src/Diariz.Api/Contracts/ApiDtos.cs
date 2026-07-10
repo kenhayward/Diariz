@@ -337,6 +337,12 @@ public record UserProfileDto(
 /// <summary>A user's platform permissions, expanded into booleans so the client never does bit arithmetic.</summary>
 public record PermissionsDto(bool ManageRooms, bool ManageUsers, bool ManagePlatform);
 
+/// <summary>A room the caller belongs to. <paramref name="Permissions"/> is the caller's effective
+/// <see cref="RoomPermission"/> grid as an <b>int</b> bitmask - a [Flags] enum would serialize as "A, B" under
+/// the global string-enum converter and break the web's bit arithmetic (see flags-enum-serializes-as-string).</summary>
+public record RoomListItemDto(
+    Guid Id, string Name, RoomKind Kind, string? Icon, string? Color, bool IsPersonal, int Permissions);
+
 /// <summary>Self-service profile update. Each field is trimmed; blank clears it. Language codes must be
 /// in the supported set (else 400). <paramref name="Theme"/> is "auto" | "light" | "dark" (unknown -> auto).</summary>
 public record UpdateUserProfileRequest(
