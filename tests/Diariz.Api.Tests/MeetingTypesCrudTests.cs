@@ -96,9 +96,16 @@ public class MeetingTypesCrudTests
 
     private static async Task<Guid> SeedType(DiarizDbContext db, Guid? owner)
     {
+        // A personal type lives in its owner's personal room (now the scope); a platform type has RoomId null.
+        Guid? roomId = null;
+        if (owner is { } o)
+        {
+            Users.Ensure(db, o);
+            roomId = await new Diariz.Api.Services.RoomScope(db).PersonalRoomIdAsync(o);
+        }
         var t = new MeetingType
         {
-            Id = Guid.NewGuid(), UserId = owner, GroupName = "G", Title = "T", Icon = "document",
+            Id = Guid.NewGuid(), UserId = owner, RoomId = roomId, GroupName = "G", Title = "T", Icon = "document",
             Color = "#5C6BC0", ContentJson = new MeetingTypeContent([]).Serialize(),
         };
         db.MeetingTypes.Add(t);

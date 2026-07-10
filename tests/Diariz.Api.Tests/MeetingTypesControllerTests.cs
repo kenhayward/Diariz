@@ -20,9 +20,15 @@ public class MeetingTypesControllerTests
         new() { Id = Guid.NewGuid(), Key = key, UserId = null, GroupName = "Standard", Title = key,
                 ContentJson = new MeetingTypeContent([]).Serialize() };
 
-    private static MeetingType Personal(Guid owner, string title) =>
-        new() { Id = Guid.NewGuid(), UserId = owner, GroupName = "Mine", Title = title,
-                ContentJson = new MeetingTypeContent([]).Serialize() };
+    // A personal type lives in its owner's personal room (now the scope). Mint that room so the seeded type is
+    // findable by the room-scoped query.
+    private static MeetingType Personal(DiarizDbContext db, Guid owner, string title)
+    {
+        Users.Ensure(db, owner);
+        var roomId = new Diariz.Api.Services.RoomScope(db).PersonalRoomIdAsync(owner).GetAwaiter().GetResult();
+        return new() { Id = Guid.NewGuid(), UserId = owner, RoomId = roomId, GroupName = "Mine", Title = title,
+                       ContentJson = new MeetingTypeContent([]).Serialize() };
+    }
 
     [Fact]
     public async Task List_returns_platform_types_and_own_but_not_other_users()
@@ -30,7 +36,7 @@ public class MeetingTypesControllerTests
         using var db = TestDb.Create();
         var me = Guid.NewGuid();
         var other = Guid.NewGuid();
-        db.MeetingTypes.AddRange(Platform("general"), Personal(me, "My type"), Personal(other, "Their type"));
+        db.MeetingTypes.AddRange(Platform("general"), Personal(db, me, "My type"), Personal(db, other, "Their type"));
         await db.SaveChangesAsync();
 
         var list = await Build(db, me).List();
@@ -46,7 +52,7 @@ public class MeetingTypesControllerTests
     {
         using var db = TestDb.Create();
         var me = Guid.NewGuid();
-        db.MeetingTypes.AddRange(Platform("general"), Personal(me, "Mine"));
+        db.MeetingTypes.AddRange(Platform("general"), Personal(db, me, "Mine"));
         await db.SaveChangesAsync();
 
         var list = await Build(db, me).List();
