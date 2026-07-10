@@ -42,6 +42,17 @@ public class RecordingsReorderTests
         return rec;
     }
 
+    // Seeds a folder in its owner's personal room (folders are room-scoped now).
+    private static async Task<Section> SeedSection(DiarizDbContext db, Guid owner, string name)
+    {
+        Users.Ensure(db, owner);
+        var roomId = await new RoomScope(db).PersonalRoomIdAsync(owner);
+        var s = new Section { Id = Guid.NewGuid(), UserId = owner, RoomId = roomId, Name = name };
+        db.Sections.Add(s);
+        await db.SaveChangesAsync();
+        return s;
+    }
+
     // The folder a recording sits in, read from its placement in the owner's personal room.
     private static async Task<Guid?> FolderOf(DiarizDbContext db, Guid userId, Guid recordingId)
     {
@@ -72,9 +83,7 @@ public class RecordingsReorderTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        var section = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Work" };
-        db.Sections.Add(section);
-        await db.SaveChangesAsync();
+        var section = await SeedSection(db, userId, "Work");
         var a = await Seed(db, userId);
         var b = await Seed(db, userId);
 
@@ -89,9 +98,7 @@ public class RecordingsReorderTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        var section = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Work" };
-        db.Sections.Add(section);
-        await db.SaveChangesAsync();
+        var section = await SeedSection(db, userId, "Work");
         var a = await Seed(db, userId, section.Id);
 
         await Build(db, userId).Reorder(new ReorderRecordingsRequest(null, [a.Id]));
@@ -119,9 +126,7 @@ public class RecordingsReorderTests
         using var db = TestDb.Create();
         var me = Guid.NewGuid();
         var mine = await Seed(db, me);
-        var foreignSection = new Section { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Theirs" };
-        db.Sections.Add(foreignSection);
-        await db.SaveChangesAsync();
+        var foreignSection = await SeedSection(db, Guid.NewGuid(), "Theirs");
 
         var res = await Build(db, me).Reorder(new ReorderRecordingsRequest(foreignSection.Id, [mine.Id]));
 

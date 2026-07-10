@@ -296,7 +296,8 @@ public class ChatControllerTests
     {
         var me = Guid.NewGuid();
         var (controller, db, chat) = Build(me); // seeds the user row
-        var section = new Section { Id = Guid.NewGuid(), UserId = me, Name = "Q3 Planning" };
+        var meRoom = await new RoomScope(db).PersonalRoomIdAsync(me); // folders are room-scoped now
+        var section = new Section { Id = Guid.NewGuid(), UserId = me, RoomId = meRoom, Name = "Q3 Planning" };
         db.Sections.Add(section);
         db.SectionSummaries.Add(new SectionSummary { Id = Guid.NewGuid(), SectionId = section.Id, Text = "Overall Q3 theme." });
         db.SectionMinutes.Add(new SectionMinutes { Id = Guid.NewGuid(), SectionId = section.Id, Text = "# Minutes\nHire two engineers." });
@@ -320,7 +321,7 @@ public class ChatControllerTests
     public async Task Stream_WithUnownedSection_Returns404()
     {
         var (controller, db, _) = Build(Guid.NewGuid());
-        var theirs = new Section { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Theirs" };
+        var theirs = new Section { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
         db.Sections.Add(theirs);
         await db.SaveChangesAsync();
 

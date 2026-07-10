@@ -732,8 +732,9 @@ public class RecordingsControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
+        Users.Ensure(db, userId); // MoveToSection mints the caller's personal room to scope the section check
         var rec = await SeedRecording(db, userId, versions: 1);
-        var othersSection = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Theirs" };
+        var othersSection = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
         db.Sections.Add(othersSection);
         await db.SaveChangesAsync();
         var controller = Build(db, userId, new FakeJobQueue());

@@ -13,6 +13,8 @@ namespace Diariz.Api.IntegrationTests;
 [Collection(IntegrationCollection.Name)]
 public class SectionPageIntegrationTests(ContainersFixture fx)
 {
+    private static Task<Guid> RoomOf(Diariz.Domain.DiarizDbContext db, Guid owner) => new RoomScope(db).PersonalRoomIdAsync(owner);
+
     private SectionPageController Build(Diariz.Domain.DiarizDbContext db, Guid userId) =>
         new(db, new FakeJobQueue(), new FakeSummarizationSettingsResolver(), new FakeHubContext(), new RoomScope(db))
         { ControllerContext = Http.Context(userId) };
@@ -34,7 +36,7 @@ public class SectionPageIntegrationTests(ContainersFixture fx)
         var sectionId = Guid.NewGuid();
         await using (var db = fx.CreateDbContext())
         {
-            db.Sections.Add(new Section { Id = sectionId, UserId = userId, Name = "F" });
+            db.Sections.Add(new Section { Id = sectionId, UserId = userId, RoomId = await RoomOf(db, userId), Name = "F" });
             db.SectionSummaries.Add(new SectionSummary { Id = Guid.NewGuid(), SectionId = sectionId, Text = "s" });
             db.SectionMinutes.Add(new SectionMinutes { Id = Guid.NewGuid(), SectionId = sectionId, Text = "m" });
             await db.SaveChangesAsync();
@@ -60,7 +62,7 @@ public class SectionPageIntegrationTests(ContainersFixture fx)
         await using (var db = fx.CreateDbContext())
         {
             db.MeetingTypes.Add(new MeetingType { Id = typeId, UserId = userId, Title = "T", ContentJson = "{\"sections\":[]}" });
-            db.Sections.Add(new Section { Id = sectionId, UserId = userId, Name = "F" });
+            db.Sections.Add(new Section { Id = sectionId, UserId = userId, RoomId = await RoomOf(db, userId), Name = "F" });
             db.SectionMinutes.Add(new SectionMinutes { Id = Guid.NewGuid(), SectionId = sectionId, MeetingTypeId = typeId });
             await db.SaveChangesAsync();
         }
@@ -84,8 +86,8 @@ public class SectionPageIntegrationTests(ContainersFixture fx)
         var childId = Guid.NewGuid();
         await using (var db = fx.CreateDbContext())
         {
-            db.Sections.Add(new Section { Id = parentId, UserId = userId, Name = "Parent" });
-            db.Sections.Add(new Section { Id = childId, UserId = userId, Name = "Child", ParentId = parentId });
+            db.Sections.Add(new Section { Id = parentId, UserId = userId, RoomId = await RoomOf(db, userId), Name = "Parent" });
+            db.Sections.Add(new Section { Id = childId, UserId = userId, RoomId = await RoomOf(db, userId), Name = "Child", ParentId = parentId });
             db.SectionSummaries.Add(new SectionSummary { Id = Guid.NewGuid(), SectionId = childId, Text = "s" });
             await db.SaveChangesAsync();
         }
@@ -110,8 +112,8 @@ public class SectionPageIntegrationTests(ContainersFixture fx)
         var recId = Guid.NewGuid();
         await using (var db = fx.CreateDbContext())
         {
-            db.Sections.Add(new Section { Id = parentId, UserId = userId, Name = "P" });
-            db.Sections.Add(new Section { Id = childId, UserId = userId, Name = "C", ParentId = parentId });
+            db.Sections.Add(new Section { Id = parentId, UserId = userId, RoomId = await RoomOf(db, userId), Name = "P" });
+            db.Sections.Add(new Section { Id = childId, UserId = userId, RoomId = await RoomOf(db, userId), Name = "C", ParentId = parentId });
             db.Recordings.Add(new Recording { Id = recId, UserId = userId, Title = "R", BlobKey = "k" });
             db.RecordingActions.Add(new RecordingAction { Id = Guid.NewGuid(), RecordingId = recId, Text = "Do it", Ordinal = 0 });
             var ungroupedId = Guid.NewGuid();

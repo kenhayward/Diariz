@@ -106,17 +106,18 @@ public class RecordingsController : ControllerBase
         var ids = (req.OrderedIds ?? []).ToList();
         if (ids.Count == 0) return NoContent();
 
+        // Position lives on the recording; the folder now lives on its placement in the caller's personal room.
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+
         if (req.SectionId is { } sectionId &&
-            !await _db.Sections.AnyAsync(s => s.Id == sectionId && s.UserId == UserId))
-            return NotFound(); // can't move into a section the caller doesn't own
+            !await _db.Sections.AnyAsync(s => s.Id == sectionId && s.RoomId == roomId))
+            return NotFound(); // can't move into a section that isn't in the caller's room
 
         var recs = await _db.Recordings
             .Where(r => ids.Contains(r.Id) && r.UserId == UserId)
             .ToListAsync();
         if (recs.Count != ids.Count) return NotFound(); // a listed recording isn't the caller's
 
-        // Position lives on the recording; the folder now lives on its placement in the caller's personal room.
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
         var placements = await _db.RoomRecordings
             .Where(p => p.RoomId == roomId && ids.Contains(p.RecordingId))
             .ToDictionaryAsync(p => p.RecordingId);
@@ -933,12 +934,12 @@ public class RecordingsController : ControllerBase
         var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
         if (rec is null) return NotFound();
 
-        if (req.SectionId is { } sectionId
-            && !await _db.Sections.AnyAsync(s => s.Id == sectionId && s.UserId == UserId))
-            return NotFound(); // can't move into a section the caller doesn't own
-
-        // The folder lives on the placement in the caller's personal room (null = ungroup).
+        // The folder lives on the placement in the caller's personal room (null = ungroup). SetSectionAsync
+        // also refuses a section that isn't in that room, so the recording can't be filed into the wrong place.
         var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        if (req.SectionId is { } sectionId
+            && !await _db.Sections.AnyAsync(s => s.Id == sectionId && s.RoomId == roomId))
+            return NotFound(); // can't move into a section that isn't in the caller's room
         if (!await _rooms.SetSectionAsync(roomId, id, req.SectionId)) return NotFound();
         return NoContent();
     }

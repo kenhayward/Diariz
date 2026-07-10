@@ -360,18 +360,19 @@ public class ChatController : ControllerBase
     private async Task<(TranscriptContext Context, List<Guid> RecordingIds)?> LoadFolderContextAsync(
         Guid sectionId, CancellationToken ct)
     {
+        // Folder membership + ownership now come from the caller's personal room, not Section.UserId /
+        // Recording.SectionId.
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId, ct);
         var section = await _db.Sections
             .Include(s => s.Summary)
             .Include(s => s.Minutes)
-            .FirstOrDefaultAsync(s => s.Id == sectionId && s.UserId == UserId, ct);
+            .FirstOrDefaultAsync(s => s.Id == sectionId && s.RoomId == roomId, ct);
         if (section is null) return null;
 
         var childIds = await _db.Sections
-            .Where(s => s.UserId == UserId && s.ParentId == sectionId).Select(s => s.Id).ToListAsync(ct);
+            .Where(s => s.RoomId == roomId && s.ParentId == sectionId).Select(s => s.Id).ToListAsync(ct);
         var allIds = childIds.Append(sectionId).ToList();
 
-        // Folder membership now comes from the placement in the caller's personal room, not Recording.SectionId.
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId, ct);
         var recIds = await _db.RoomRecordings
             .Where(p => p.RoomId == roomId && p.SectionId.HasValue && allIds.Contains(p.SectionId.Value))
             .Select(p => p.RecordingId).ToListAsync(ct);
