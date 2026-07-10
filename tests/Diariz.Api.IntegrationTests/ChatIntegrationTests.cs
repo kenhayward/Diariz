@@ -161,6 +161,8 @@ public class ChatIntegrationTests(ContainersFixture fx)
             });
             seed.Speakers.Add(new Speaker { Id = Guid.NewGuid(), RecordingId = recId, Label = "SPEAKER_00", DisplayName = "Alice" });
             await seed.SaveChangesAsync();
+            // Search is scoped by room placement now - place the recording in the owner's personal room.
+            await new RoomScope(seed).PlaceInMainRoomAsync(recId, user.Id, sectionId: null);
         }
 
         await using var db = fx.CreateDbContext();
@@ -174,7 +176,8 @@ public class ChatIntegrationTests(ContainersFixture fx)
             ],
         };
         var search = new TranscriptSearch(db, new FakeEmbeddingClient(),
-            new FakeEmbeddingSettingsResolver { Config = new EmbeddingRequestConfig("", "", "m", 768, 60, 32) });
+            new FakeEmbeddingSettingsResolver { Config = new EmbeddingRequestConfig("", "", "m", 768, 60, 32) },
+            new RoomScope(db));
         var tool = new Diariz.Api.Tools.WhoSaidThatTool(search);
         var controller = BuildController(db, user.Id, chat, activeTools: [tool]);
         var body = new MemoryStream();

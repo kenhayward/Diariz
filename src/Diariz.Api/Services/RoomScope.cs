@@ -363,8 +363,23 @@ public class RoomScope(DiarizDbContext db) : IRoomScope
 
     public async Task<IReadOnlyList<Guid>> RoomIdsForUserAsync(Guid userId, CancellationToken ct = default)
     {
-        var rooms = await RoomsForUserAsync(userId, ct);
-        return rooms.Select(r => r.Id).ToList();
+        // A read path - do NOT mint a personal room here (unlike RoomsForUserAsync). A user with no room yet
+        // simply has no recordings to see, so search finds nothing rather than throwing on a missing user.
+        var personal = await FindPersonalRoomIdAsync(userId, ct);
+
+        var groupIds = await db.UserGroupMembers
+            .Where(m => m.UserId == userId)
+            .Select(m => m.GroupId)
+            .ToListAsync(ct);
+
+        var ids = await db.RoomMembers
+            .Where(m => (m.PrincipalType == RoomPrincipalType.User && m.PrincipalId == userId)
+                        || (m.PrincipalType == RoomPrincipalType.Group && groupIds.Contains(m.PrincipalId)))
+            .Select(m => m.RoomId)
+            .ToListAsync(ct);
+
+        if (personal is { } p) ids.Add(p);
+        return ids.Distinct().ToList();
     }
 
     public Task<Guid?> SectionIdAsync(Guid roomId, Guid recordingId, CancellationToken ct = default) =>
