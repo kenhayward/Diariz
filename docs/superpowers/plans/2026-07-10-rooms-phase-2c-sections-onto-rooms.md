@@ -2,7 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
-**Goal:** Folders belong to a **room**, not a user. `Section.UserId` becomes `Section.RoomId`; every query that scoped folders by user now scopes by the caller's personal room. The API behaves identically, because the personal room is the only room.
+**Goal:** Folders carry a **room**. `Section.RoomId` is added and the primary folder controller scopes by it.
+
+> **Scope narrowed during execution (see commit `c37ca3a`).** `Section.UserId` has two roles: folder *scoping* and *owner identity* (the SignalR group a folder-summary notification targets; the per-user LLM config the folder processors resolve). 2c roomifies the **scoping** (`SectionsController` + the placement-section-room check) and **keeps `Section.UserId`** for owner identity - dropping it forces owner-lookups through `Room.OwnerUserId`, which only matters once "the owner" stops meaning "the one user" (Phase 4, shared-room membership). The other folder readers keep `UserId` scoping (equivalent while the personal room is the only room) and migrate with the `UserId` retirement in Phase 4. So Tasks 5 (drop `UserId`) and the RoomId FK are **deferred to Phase 4**; 2c ships Tasks 1-4 + docs.
 
 **Architecture:** Add `Section.RoomId` (FK → `Rooms`, cascade), backfill from each section owner's personal room, migrate every `s.UserId == UserId` call site to `s.RoomId == personalRoomId`, then drop `Section.UserId`. Fold in the 2b obligation: a placement's `SectionId` must name a folder in the placement's room (checkable now that sections carry `RoomId`).
 

@@ -556,9 +556,15 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
     recording query starts from — the equivalent of the old `.Where(r => r.UserId == UserId)`, one level up —
     and `RecordingsController`, `SectionPageController`, `ChatController` and `SectionSummaryProcessor` all read
     the folder through it.
-  - **Still ahead (2c-2d):** re-scoping `Section`, `SpeakerProfile`, `ChatSession`, `MeetingType` and the RAG
-    chunk filter onto rooms. Until then, everything resolves to the caller's personal room via
-    `RoomScope.PersonalRoomIdAsync`. See `docs/superpowers/specs/2026-07-10-rooms-design.md`.
+  - **Folders carry a room (2c).** `Section.RoomId` is set on create and backfilled to each folder's owner's
+    personal room; `SectionsController` scopes by it, and `RoomScope.SetSectionAsync` refuses to file a
+    recording under a folder from another room. `Section.UserId` is **kept** as owner identity (the SignalR
+    group folder notifications target, the per-user LLM config the folder processors resolve); dropping it, and
+    the Rooms FK, wait for Phase 4, when "the owner" of a shared-room folder is no longer one user.
+  - **Still ahead:** `SpeakerProfile`, `ChatSession`, `MeetingType` and the RAG chunk filter re-scoped onto
+    rooms (2d), then shared rooms and the `Section.UserId` retirement. Until then, everything resolves to the
+    caller's personal room via `RoomScope.PersonalRoomIdAsync`. See
+    `docs/superpowers/specs/2026-07-10-rooms-design.md`.
 - **Access lifecycle:** a person **requests access** (`UserStatus.Requested`) → an admin **grants** it
   (issues a one-time setup link; emailed via SMTP/MailKit, or shown to the admin as a fallback when SMTP is
   unconfigured) → the user **sets up** their name + password (`Active`). Admins can also add users directly.
