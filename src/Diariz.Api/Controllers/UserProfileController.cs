@@ -22,17 +22,25 @@ public class UserProfileController : ControllerBase
     private readonly DiarizDbContext _db;
     private readonly ITokenService _tokens;
     private readonly IPlatformSettingsService _platform;
+    private readonly IUserPermissions _permissions;
 
     public UserProfileController(
-        UserManager<ApplicationUser> users, DiarizDbContext db, ITokenService tokens, IPlatformSettingsService platform)
+        UserManager<ApplicationUser> users, DiarizDbContext db, ITokenService tokens,
+        IPlatformSettingsService platform, IUserPermissions permissions)
     {
         _users = users;
         _db = db;
         _tokens = tokens;
         _platform = platform;
+        _permissions = permissions;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    private static PermissionsDto ToDto(PlatformPermission p) => new(
+        p.HasFlag(PlatformPermission.ManageRooms),
+        p.HasFlag(PlatformPermission.ManageUsers),
+        p.HasFlag(PlatformPermission.ManagePlatform));
 
     [HttpGet]
     public async Task<ActionResult<UserProfileDto>> Get()
@@ -47,7 +55,8 @@ public class UserProfileController : ControllerBase
             JobTitle: s?.JobTitle, CompanyName: s?.CompanyName, JobDescription: s?.JobDescription,
             CompanyDescription: s?.CompanyDescription, LinkedIn: s?.LinkedIn,
             Theme: ThemeToString(s?.Theme ?? ThemePreference.Auto),
-            ApiAccessEnabled: apiAccessEnabled);
+            ApiAccessEnabled: apiAccessEnabled,
+            Permissions: ToDto(await _permissions.ForAsync(UserId)));
     }
 
     [HttpPut]
@@ -84,7 +93,7 @@ public class UserProfileController : ControllerBase
 
         // Re-issue the token so the updated name claim flows to the client without a re-login. (The new
         // profile fields + theme aren't claims, so they need no token change.)
-        var (token, expires) = _tokens.CreateAccessToken(user, await _users.GetRolesAsync(user));
+        var (token, expires) = _tokens.CreateAccessToken(user);
         return new AuthResponse(token, expires);
     }
 

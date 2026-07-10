@@ -54,9 +54,6 @@ public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAu
             new(ClaimTypes.Name, user.FullName ?? user.Email ?? ""),
             new(ClaimTypes.Email, user.Email ?? ""),
         };
-        foreach (var role in await _users.GetRolesAsync(user))
-            claims.Add(new Claim(ClaimTypes.Role, role));
-
         var identity = new ClaimsIdentity(claims, SchemeName);
         return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName));
     }
