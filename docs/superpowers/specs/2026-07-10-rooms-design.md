@@ -279,6 +279,15 @@ The `"Admin"` policy and the six `User.IsInRole(...)` checks are replaced by a p
 authorization handler that reads the caller's unioned group flags:
 `[Authorize(Policy = "ManageUsers")]`, `"ManagePlatform"`, `"ManageRooms"`.
 
+**Permissions are read from the database per request, not from a JWT claim.** A claim would go stale the
+moment a user is added to or removed from a group, and would keep working until their token expired.
+`TokenService` stops writing role claims; the web reads the caller's permissions from
+`GET /api/user/profile` instead of decoding them out of the token.
+
+A policy requires **any** of the flags it names, so a policy can express "manage users *or* manage
+platform". That matters for `GET /api/platform-settings`, which Administrators read today (the Manage Users
+modal shows the default quota): read is `ManageUsers | ManagePlatform`, write is `ManagePlatform` alone.
+
 **Bootstrap.** A seeded, undeletable `Platform Administrators` group (`IsSystem = true`) holds all
 three flags and contains the seed user. The API refuses to remove its **last** member. This preserves
 today's invariant that the seed platform administrator cannot be deleted or demoted, now that the
@@ -360,8 +369,15 @@ Two EF migrations, one per foundational phase.
 **Migration 1 (Phase 1 - groups):**
 
 1. Create `UserGroups`, `UserGroupMembers`.
-2. Seed `Platform Administrators` (`IsSystem = true`), grant all three flags, and add every current
-   holder of the `Administrator` or `PlatformAdministrator` role.
+2. Seed **two** groups, preserving today's privilege boundary exactly:
+   - `Platform Administrators` (`IsSystem = true`): `ManageRooms | ManageUsers | ManagePlatform`. Members:
+     the current holders of the `PlatformAdministrator` role.
+   - `Administrators`: `ManageRooms | ManageUsers`. Members: the current holders of the `Administrator`
+     role.
+
+   Seeding a single group for both roles would grant every Administrator `ManagePlatform`, and with it
+   backup/restore (`MaintenanceController`) and platform-settings writes - a privilege escalation that
+   today's role check prevents.
 3. Leave the Identity role tables in place but unused. Dropping them is a separate, later chore.
 
 **Migration 2 (Phase 2 - rooms):**
