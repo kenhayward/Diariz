@@ -32,6 +32,21 @@ public interface IRoomScope
     /// they are a member of), personal first, each with the caller's effective permission grid.</summary>
     Task<IReadOnlyList<RoomListEntry>> RoomsForUserAsync(Guid userId, CancellationToken ct = default);
 
+    /// <summary>Create a new Shared room. Personal rooms are minted only by <see cref="PersonalRoomIdAsync"/>.</summary>
+    Task<Guid> CreateSharedRoomAsync(string name, string? description, string? icon, string? color, CancellationToken ct = default);
+
+    /// <summary>Rename/restyle a Shared room. False if it does not exist or is a Personal room (immutable).</summary>
+    Task<bool> UpdateRoomAsync(Guid roomId, string name, string? description, string? icon, string? color, CancellationToken ct = default);
+
+    /// <summary>Delete a Shared room, unsharing (never destroying) its recordings. False for a Personal room.</summary>
+    Task<bool> DeleteRoomAsync(Guid roomId, CancellationToken ct = default);
+
+    /// <summary>Upsert a member's permission grid on a Shared room. False for a Personal room (memberless).</summary>
+    Task<bool> SetMemberAsync(Guid roomId, RoomPrincipalType type, Guid principalId, RoomPermission permissions, CancellationToken ct = default);
+
+    /// <summary>Remove a member from a Shared room. False for a Personal room, or when no such row exists.</summary>
+    Task<bool> RemoveMemberAsync(Guid roomId, RoomPrincipalType type, Guid principalId, CancellationToken ct = default);
+
     Task<RoomPermission> PermissionsAsync(Guid userId, Guid roomId, CancellationToken ct = default);
 
     Task<bool> IsMemberAsync(Guid userId, Guid roomId, CancellationToken ct = default);
@@ -132,6 +147,87 @@ public class RoomScope(DiarizDbContext db) : IRoomScope
             .OrderByDescending(r => r.IsPersonal)
             .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    public async Task<Guid> CreateSharedRoomAsync(
+        string name, string? description, string? icon, string? color, CancellationToken ct = default)
+    {
+        var room = new Room
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Description = description,
+            Icon = icon,
+            Color = color,
+            Kind = RoomKind.Shared,
+        };
+        db.Rooms.Add(room);
+        await db.SaveChangesAsync(ct);
+        return room.Id;
+    }
+
+    public async Task<bool> UpdateRoomAsync(
+        Guid roomId, string name, string? description, string? icon, string? color, CancellationToken ct = default)
+    {
+        var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId, ct);
+        if (room is null || room.Kind == RoomKind.Personal) return false; // personal rooms are immutable
+
+        room.Name = name;
+        room.Description = description;
+        room.Icon = icon;
+        room.Color = color;
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> DeleteRoomAsync(Guid roomId, CancellationToken ct = default)
+    {
+        var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId, ct);
+        if (room is null || room.Kind == RoomKind.Personal) return false; // personal rooms cannot be deleted
+
+        // Remove members + (shared) placements explicitly, so the outcome is the same under the in-memory
+        // provider (no cascade) as under Postgres. A shared room holds only shared placements, so this unshares
+        // its recordings; the recordings themselves are never touched.
+        db.RoomMembers.RemoveRange(db.RoomMembers.Where(m => m.RoomId == roomId));
+        db.RoomRecordings.RemoveRange(db.RoomRecordings.Where(p => p.RoomId == roomId));
+        db.Rooms.Remove(room);
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> SetMemberAsync(
+        Guid roomId, RoomPrincipalType type, Guid principalId, RoomPermission permissions, CancellationToken ct = default)
+    {
+        var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId, ct);
+        if (room is null || room.Kind == RoomKind.Personal) return false; // personal rooms are memberless
+
+        var existing = await db.RoomMembers.FirstOrDefaultAsync(
+            m => m.RoomId == roomId && m.PrincipalType == type && m.PrincipalId == principalId, ct);
+        if (existing is null)
+            db.RoomMembers.Add(new RoomMember
+            {
+                RoomId = roomId, PrincipalType = type, PrincipalId = principalId, Permissions = permissions,
+            });
+        else
+            existing.Permissions = permissions;
+
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> RemoveMemberAsync(
+        Guid roomId, RoomPrincipalType type, Guid principalId, CancellationToken ct = default)
+    {
+        var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId, ct);
+        if (room is null || room.Kind == RoomKind.Personal) return false;
+
+        var existing = await db.RoomMembers.FirstOrDefaultAsync(
+            m => m.RoomId == roomId && m.PrincipalType == type && m.PrincipalId == principalId, ct);
+        if (existing is null) return false;
+
+        db.RoomMembers.Remove(existing);
+        await db.SaveChangesAsync(ct);
+        return true;
     }
 
     public async Task<RoomPermission> PermissionsAsync(Guid userId, Guid roomId, CancellationToken ct = default)
