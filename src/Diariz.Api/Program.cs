@@ -167,6 +167,8 @@ builder.Services.AddSingleton<IAudioStorage, AudioStorage>();
 builder.Services.AddSingleton<IDatabaseBackup>(_ =>
     new PgToolsDatabaseBackup(builder.Configuration.GetConnectionString("Postgres")!));
 builder.Services.AddScoped<ISchemaVersion, EfSchemaVersion>();
+// Platform authority, resolved from the caller's group membership on every request (never from a JWT claim).
+builder.Services.AddScoped<IUserPermissions, UserPermissions>();
 
 // ---- Redis job queue ----
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
