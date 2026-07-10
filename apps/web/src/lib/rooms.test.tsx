@@ -30,11 +30,21 @@ function Harness() {
   );
 }
 
-function renderHarness() {
+const shared: RoomListItem = {
+  id: "s1",
+  name: "Engineering",
+  kind: 1,
+  icon: null,
+  color: "#123456",
+  isPersonal: false,
+  permissions: RoomPermission.CreateRecording,
+};
+
+function renderHarness(path = "/") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[path]}>
         <RoomProvider>
           <Harness />
         </RoomProvider>
@@ -62,6 +72,17 @@ describe("RoomProvider", () => {
 
     await screen.findByText("Ada Lovelace"); // wait for the query to resolve
     expect(screen.getByTestId("create").textContent).toBe("false");
+    expect(screen.getByTestId("manage").textContent).toBe("false");
+  });
+
+  it("picks the room named in the /rooms/:roomId URL, not the personal default", async () => {
+    (api.listRooms as Mock).mockResolvedValue([personal, shared]);
+    renderHarness("/rooms/s1/recordings/abc");
+
+    await screen.findByText("Engineering");
+    expect(screen.getByTestId("personal").textContent).toBe("false");
+    // Engineering grants only CreateRecording, not ManageRoom.
+    expect(screen.getByTestId("create").textContent).toBe("true");
     expect(screen.getByTestId("manage").textContent).toBe("false");
   });
 });

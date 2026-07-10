@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "react-router-dom";
+import { useMatch } from "react-router-dom";
 import { api } from "./api";
 import type { RoomListItem } from "./types";
 
@@ -23,7 +23,9 @@ interface RoomState {
 const RoomContext = createContext<RoomState | null>(null);
 
 export function RoomProvider({ children }: { children: ReactNode }) {
-  const { roomId } = useParams();
+  // useMatch (not useParams) so this works even though RoomProvider sits on the parent "/" route, above the
+  // route that carries :roomId. Matches /rooms/:roomId and any nested detail under it.
+  const roomId = useMatch("/rooms/:roomId/*")?.params.roomId;
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
   const { data: rooms = [], isLoading } = useQuery({ queryKey: ["rooms"], queryFn: api.listRooms });
 

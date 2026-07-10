@@ -72,6 +72,16 @@ export default function App() {
         <Route path="recordings/:id" element={<RecordingDetail />} />
         <Route path="sections/:id" element={<SectionDetail />} />
         <Route path="calendar-event/:eventId" element={<CalendarEventDetail />} />
+        {/* The room lives in the URL. RoomProvider reads :roomId (via useMatch) to pick the current room; the
+            children mirror the legacy ones above, which stay working as the personal-room default while only
+            one room exists. Per-room link rewrites + query-key isolation land in Phase 4, where a real second
+            room makes them observable and testable. */}
+        <Route path="rooms/:roomId">
+          <Route index element={<EmptyDetail />} />
+          <Route path="recordings/:id" element={<RecordingDetail />} />
+          <Route path="sections/:id" element={<SectionDetail />} />
+          <Route path="calendar-event/:eventId" element={<CalendarEventDetail />} />
+        </Route>
       </Route>
     </Routes>
   );
