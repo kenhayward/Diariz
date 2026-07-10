@@ -491,9 +491,9 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   personal token (`dz_api_` + base64url(32), **SHA-256 hash only** stored on `ApiAccessToken`, shown once;
   `ApiTokensController`, `/api/user/api-tokens`, JWT-authed). Auth is a dedicated `"ApiKey"` scheme
   (`ApiKeyAuthenticationHandler`) that resolves the token (`ApiTokenAuthenticator`) and builds a principal with
-  the owner's id **and role claims** — **full session parity**, so ownership checks and admin authorization work
-  exactly as for a JWT. To make it satisfy every `[Authorize]` variant (including `[Authorize(Roles=…)]`, which
-  authenticate with the default scheme), the **default authenticate scheme is a forwarding policy scheme**:
+  the owner's id — **full session parity**, so ownership checks and admin authorization work exactly as for a
+  JWT (the permission policies resolve group membership from the `NameIdentifier` claim that both schemes emit).
+  To make it satisfy every `[Authorize]` variant, the **default authenticate scheme is a forwarding policy scheme**:
   `Bearer dz_api_…` routes to the ApiKey handler, everything else (JWT, or the query-string SignalR/audio/backup
   flows) to JWT. Isolation: a `dz_mcp_` token is rejected on `/api/*` and a `dz_api_` token on `/mcp` (each scheme
   accepts only its own prefix). The feature is **gated by `PlatformSettings.ApiAccessEnabled` (default off)** —
@@ -505,8 +505,27 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   see `OpenApiCuration`), and a signed-in user can browse it via an in-app **Scalar** reference at
   **`/developers/api`** (lazy-loaded route, `@scalar/api-reference-react`), linked from both the Developers and
   Integration tabs.
-- **RBAC:** `Standard` / `Administrator` / `PlatformAdministrator`. The Platform Administrator is the seed
-  user — undeletable, undemotable, non-disable-able.
+- **RBAC (user groups + platform permissions).** Authority comes from **group membership**, not from a role.
+  A `UserGroup` carries a `[Flags] PlatformPermission` (`ManageRooms = 1`, `ManageUsers = 2`,
+  `ManagePlatform = 4`; append-only), users join via `UserGroupMember`, and a caller's effective permissions
+  are the **union** of the flags on every group they belong to. `IUserPermissions` resolves that **from the
+  database on each request** — never from a token claim, which would keep granting authority until it expired,
+  long after the user left the group. `PermissionAuthorizationHandler` backs the policies `ManageRooms`,
+  `ManageUsers`, `ManagePlatform`, and `ReadAdminSettings` (= `ManageUsers` **or** `ManagePlatform`, so an
+  administrator can still read platform settings for the default-quota field). Each policy requires **any** of
+  the flags it names; an anonymous or malformed principal fails closed.
+  - Two groups are seeded: **`Platform Administrators`** (`IsSystem`, all three flags) and **`Administrators`**
+    (`ManageRooms | ManageUsers`, deliberately **not** `ManagePlatform` — that flag confers backup/restore and
+    platform-settings writes). The system group cannot be deleted, renamed, or have its permissions changed,
+    and its **last member cannot be removed**, so a deployment can never be left unadministrable. The seed user
+    is placed in it on every boot.
+  - The old Identity roles (`Standard` / `Administrator` / `PlatformAdministrator`) are **no longer read for
+    authorization**. Existing role holders were moved into the two groups **once**, by the `AddUserGroups`
+    migration (`RoleToGroupBackfill`) — a one-way move, deliberately not a boot-time reconciliation, which
+    would silently re-promote anyone demoted since from their stale `AspNetUserRoles` row. The role tables
+    remain, unused, pending a later chore.
+  - Groups are administered at **`/api/groups`** (`GroupsController`, `ManageUsers`) and in the web
+    **Manage Users → Groups** tab. The web reads the caller's permissions from `GET /api/user/profile`.
 - **Access lifecycle:** a person **requests access** (`UserStatus.Requested`) → an admin **grants** it
   (issues a one-time setup link; emailed via SMTP/MailKit, or shown to the admin as a fallback when SMTP is
   unconfigured) → the user **sets up** their name + password (`Active`). Admins can also add users directly.

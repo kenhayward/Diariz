@@ -41,7 +41,7 @@ public class TokenServiceTests
         var (token, _) = Create().CreateAccessToken(user);
 
         var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
-        Assert.Empty(jwt.Claims.Where(c => c.Type == ClaimTypes.Role));
+        Assert.DoesNotContain(jwt.Claims, c => c.Type == ClaimTypes.Role);
         Assert.Equal("Ada Lovelace", jwt.Claims.First(c => c.Type == "name").Value);
     }
 

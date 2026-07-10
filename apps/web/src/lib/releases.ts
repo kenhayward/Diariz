@@ -31,7 +31,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
 | **API access** | Generate a personal API token (when enabled) to call the REST API as yourself, with a built-in API reference. |
-| **Multi-user & roles** | Standard / Administrator / Platform Administrator with an approval lifecycle, per-user isolation, and Light/Dark/Auto themes. |
+| **Multi-user & groups** | User groups grant platform permissions (manage rooms / users / platform), with an approval lifecycle, per-user isolation, and Light/Dark/Auto themes. |
 | **Admin controls** | Storage quotas, optional audio auto-deletion, a global AI request timeout, and whole-platform backup & restore. |
 
 The interface is localized (English, Spanish, French, German), and languages are community-extensible via simple JSON files.
@@ -50,6 +50,38 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.118.0",
+    date: "2026-07-10",
+    pr: 260,
+    headline: "User groups replace account types",
+    summary:
+      "Account types become user groups. Instead of being a Standard user, an Administrator, or the Platform " +
+      "Administrator, you now belong to groups, and each group grants permissions: manage rooms, manage users, " +
+      "manage platform. Your permissions are whatever your groups add up to. Existing Administrators and " +
+      "Platform Administrators keep exactly the permissions they had - the upgrade moves them into matching " +
+      "groups, and an Administrator still cannot reach backup and restore. Groups and their members are " +
+      "managed in Manage Users, where a new Groups tab lets you create a group, choose what it may do, and " +
+      "pick who is in it. The Platform Administrators group is protected: it cannot be deleted or renamed, " +
+      "its permissions cannot be changed, and its last member cannot be removed, so a deployment can never be " +
+      "left with nobody able to administer it. One practical improvement: permissions are now read fresh on " +
+      "every request rather than baked into your sign-in token, so adding or removing someone from a group " +
+      "takes effect immediately instead of at their next sign-in. This is the groundwork for Rooms - shared " +
+      "spaces - which is why a manage-rooms permission exists before rooms do.",
+    added: [
+      "User groups, each granting any of three platform permissions: manage rooms, manage users, manage platform.",
+      "A Groups tab in Manage Users: create and delete groups, choose their permissions, and edit their members.",
+      "The user list shows the groups each person belongs to, in place of the old account-type column.",
+    ],
+    changed: [
+      "Permissions are resolved on every request instead of being carried in your sign-in token, so a group change applies immediately.",
+      "Existing Administrators and Platform Administrators move into matching groups on upgrade, with identical permissions.",
+      "The Platform Administrators group cannot be deleted, renamed, repermissioned, or emptied.",
+    ],
+    fixed: [
+      "Signing out now clears the cached profile, so the next person to sign in on the same browser no longer briefly sees the previous user's admin menus.",
+    ],
+  },
   {
     version: "0.117.1",
     date: "2026-07-10",

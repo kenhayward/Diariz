@@ -155,9 +155,14 @@ text; URLs are fetched behind SSRF guards).
 transcript, and **merge** several recordings into the earliest one — their transcripts are laid end-to-end
 and their action items are folded in. Audio is concatenated server-side (ffmpeg) for the recordings that
 still have it; recordings whose audio was deleted merge their transcript only (the summary is regenerated).
-- **Multi-user RBAC**: Standard / Administrator / Platform Administrator roles, an access-request →
-admin-grant → account-setup lifecycle (one-time email link, with an in-app fallback when SMTP is
-unconfigured), and admin user management. Each user's data is isolated to them. Light/Dark/Auto theming.
+- **Multi-user RBAC**: authority comes from **user groups**, each carrying platform permissions - manage
+rooms, manage users, manage platform. A user's permissions are the union of their groups', re-read on every
+request, so adding or removing someone from a group takes effect immediately rather than at their next
+sign-in. Two groups ship: **Platform Administrators** (everything; it cannot be deleted and its last member
+cannot be removed) and **Administrators** (manage users and rooms, but not backup/restore or platform
+settings). Administrators manage groups and membership in Manage Users → Groups. Around that sits an
+access-request → admin-grant → account-setup lifecycle (one-time email link, with an in-app fallback when
+SMTP is unconfigured). Each user's data is isolated to them. Light/Dark/Auto theming.
 - **Sign in with Google** (optional): OAuth 2.0 sign-in that reads the user's name, email, and profile
 picture (shown in the account menu). New Google sign-ups still require admin approval, and a Google email
 matching an existing account links to it automatically. Enabled when the operator configures a Google

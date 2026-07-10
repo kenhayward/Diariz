@@ -71,6 +71,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddLlmTimeout` | `PlatformSettings.LlmTimeoutSeconds` (int, NOT NULL, default 120) — the platform-wide per-request timeout applied to every LLM call (the single authority; the HTTP clients have no cap) |
 | `AddSectionSummaryAndMinutes` | `SectionSummaries` + `SectionMinutes` (1:1 with `Section`, cascade) — the folder-level roll-up LLM summary/minutes; `SectionMinutes.MeetingTypeId` (FK, `ON DELETE SET NULL`) is the folder's chosen template |
 | `AddSectionAttachments` | `SectionAttachments` (file/URL supporting documents filed directly on a `Section`, cascade, index `(SectionId, Ordinal)`) — folder-direct attachments, independent of any recording |
+| `AddUserGroups` | `UserGroups` (named permission holders; unique `Name`; `Permissions` int **[Flags]**; `IsSystem`) + `UserGroupMembers` (composite PK `(GroupId, UserId)`, cascade from both) — platform authority via group membership. The migration also **seeds** the two groups and performs a **one-time** move of Identity role holders into them (`RoleToGroupBackfill`); it is deliberately not repeated on boot |
 
 ### Entity-relationship overview
 
@@ -558,6 +559,39 @@ storage discipline as `McpAccessTokens` (hash-only, shown once), but a **separat
 | `LastUsedAt` | timestamptz null | last time the token was presented on an API request |
 
 Indexes: unique `(TokenHash)`, `(UserId)`.
+
+#### `UserGroups`
+
+Platform authority. A user's effective permissions are the **union** of the flags on every group they belong to,
+resolved from the database on each request (never from a token claim).
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | `uuid` | PK |
+| `Name` | `varchar(128)` NOT NULL | **Unique index** (`IX_UserGroups_Name`) |
+| `Description` | `text` null | |
+| `Icon` | `text` null | Icon key from the shared set (unused until Rooms) |
+| `Color` | `text` null | Hex swatch (unused until Rooms) |
+| `Permissions` | `int` NOT NULL | `[Flags] PlatformPermission`: `ManageRooms = 1`, `ManageUsers = 2`, `ManagePlatform = 4`. **Append-only** |
+| `IsSystem` | `bool` NOT NULL | True for the seeded `Platform Administrators`: undeletable, name/permissions immutable, last member cannot be removed |
+
+Seeded: `Platform Administrators` (`IsSystem`, flags `7`) and `Administrators` (flags `3` — **no**
+`ManagePlatform`, which confers backup/restore and platform-settings writes).
+
+#### `UserGroupMembers`
+
+| Column | Type | Notes |
+|---|---|---|
+| `GroupId` | `uuid` | PK part 1. FK → `UserGroups`, **cascade** |
+| `UserId` | `uuid` | PK part 2. FK → `AspNetUsers`, **cascade**; index `IX_UserGroupMembers_UserId` |
+
+Deleting a group removes its memberships and leaves the users; deleting a user removes their memberships and
+leaves the groups.
+
+#### `AspNetUserRoles` (legacy)
+
+Still present and still written by the seeder for the seed user, but **no longer read for authorization**.
+Superseded by `UserGroupMembers`. Dropping the Identity role tables is a later chore.
 
 #### `OpenIddict*` (library-managed)
 `OpenIddictApplications`, `OpenIddictAuthorizations`, `OpenIddictScopes`, `OpenIddictTokens` are created by
