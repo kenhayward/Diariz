@@ -89,9 +89,14 @@ Personal rooms render the owner's avatar (Google picture or initials) rather tha
 `Icon`/`Color` stay null. A unique index on `OwnerUserId` (filtered `WHERE OwnerUserId IS NOT NULL`)
 guarantees one personal room per user, and permits any number of orphaned rooms.
 
-An **orphaned** room is `Kind = Personal` with `OwnerUserId IS NULL`. It has no members, appears in no
-switcher, and is readable only through the shared placements of its recordings. Purging one requires
-`ManageUsers`.
+An **orphaned** room is `Kind = Personal` with `OwnerUserId IS NULL`. It appears in no switcher and is readable
+only through the shared placements of its recordings. Purging one requires `ManageUsers`.
+
+The deleted user's `RoomMember` row **survives** on the orphan: `PrincipalId` points at either `AspNetUsers` or
+`UserGroups`, so it carries no FK and the database cannot cascade. The row is inert - a personal room resolves
+permissions from `OwnerUserId` alone and never consults member rows, and a deleted user's id is never reissued -
+but the user-delete path must sweep it, along with the user's rows in every shared room. That belongs with the
+user-delete rework (orphan-not-cascade, plus the "also delete their recordings" opt-in), not with the schema.
 
 **`UserGroup`** - `Id`, `Name` (unique), `Description?`, `Icon?`, `Color?`, `Permissions`
 (`PlatformPermission` flags), `IsSystem` (bool, true for the seeded Platform Administrators group).

@@ -5,7 +5,10 @@ namespace Diariz.Domain.Entities;
 /// single table keeps that a single query.
 ///
 /// There is no FK on <see cref="PrincipalId"/>: it points at <c>AspNetUsers</c> or <c>UserGroups</c> depending
-/// on <see cref="PrincipalType"/>. Rows are cleaned up by the user/group delete paths, not by the database.</summary>
+/// on <see cref="PrincipalType"/>. The database therefore cannot cascade, and **a deleted user's rows survive**
+/// on their orphaned personal room. They are inert: a personal room resolves permissions from
+/// <c>Room.OwnerUserId</c> alone (see <c>RoomScope</c>) and never consults member rows, and a deleted user's id
+/// is never reissued. Sweeping them belongs with the user-delete rework in a later Rooms phase.</summary>
 public class RoomMember
 {
     public Guid RoomId { get; set; }

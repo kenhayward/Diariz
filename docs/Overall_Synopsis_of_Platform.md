@@ -532,7 +532,9 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   always its recorder's Personal room**, which is what stops a shared room ever holding a recording hostage
   (deleting a shared room can then only unshare, never destroy). Deleting a user **orphans** their Personal room
   (`OwnerUserId` → null) rather than cascading, so recordings they shared into team rooms survive their
-  departure.
+  departure. (Their `RoomMembers` row survives on the orphan — `PrincipalId` has no FK to cascade — but it is
+  inert, because a personal room resolves permissions from `OwnerUserId` alone and a deleted id is never
+  reissued. Sweeping it belongs with the user-delete rework in a later phase.)
   - `RoomMember` carries a `[Flags] RoomPermission` (`ManageRoom = 1`, `CreateRecording = 2`,
     `RemoveOthersRecordings = 4`, `ShareOut = 8`, `ManageContents = 16`, `EditOthersRecordings = 32`;
     append-only) and its principal is a **user or a group**. `RoomScope` (`Services/RoomScope.cs`) resolves a

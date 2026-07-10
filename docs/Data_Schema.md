@@ -606,8 +606,12 @@ one **Personal** room; a recording's main room is always its recorder's Personal
 | `CreatedAt` | `timestamptz` NOT NULL | |
 
 An **orphaned** room is `Kind = 0` with `OwnerUserId IS NULL`: what a deleted user leaves behind. Its recordings
-survive in the shared rooms they were shared into. It has no members and appears in no switcher. Cascading the
-delete instead would destroy recordings that live in other people's rooms.
+survive in the shared rooms they were shared into, and it appears in no switcher. Cascading the delete instead
+would destroy recordings that live in other people's rooms.
+
+The deleted user's `RoomMembers` row **survives** on the orphan (there is no FK to cascade). It is inert: a
+personal room resolves permissions from `OwnerUserId` alone and never consults member rows, and a deleted user's
+id is never reissued. Sweeping these rows belongs with the user-delete rework in a later Rooms phase.
 
 Backfilled once by the `AddRooms` migration: one Personal room per existing user, named after them
 (`FullName` → `Email` → `"Personal"`), with the owner holding every permission (`63`).
@@ -618,7 +622,7 @@ Backfilled once by the `AddRooms` migration: one Personal room per existing user
 |---|---|---|
 | `RoomId` | `uuid` | PK part 1. FK → `Rooms`, **cascade** |
 | `PrincipalType` | `int` | PK part 2. `User = 0`, `Group = 1`. **Append-only** |
-| `PrincipalId` | `uuid` | PK part 3. An `AspNetUsers.Id` or a `UserGroups.Id`, per `PrincipalType`. **No FK** — it points at one of two tables; rows are cleaned up by the user/group delete paths. Index `IX_RoomMembers_PrincipalType_PrincipalId` |
+| `PrincipalId` | `uuid` | PK part 3. An `AspNetUsers.Id` or a `UserGroups.Id`, per `PrincipalType`. **No FK** — it points at one of two tables, so the database cannot cascade. Index `IX_RoomMembers_PrincipalType_PrincipalId` |
 | `Permissions` | `int` NOT NULL | `[Flags] RoomPermission`: `ManageRoom = 1`, `CreateRecording = 2`, `RemoveOthersRecordings = 4`, `ShareOut = 8`, `ManageContents = 16`, `EditOthersRecordings = 32`. **Append-only** |
 
 A caller's effective permissions in a room are the **union** of their own row and the rows of every group they
