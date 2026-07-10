@@ -215,7 +215,16 @@ public record RecordingDetailDto(
     DateTimeOffset? AudioDeletedAt = null,
     /// <summary>Projected date the nightly job will delete this recording's audio (`CreatedAt` + retention days),
     /// or null when auto-delete is off, the recording is protected/ineligible, or the audio is already gone.</summary>
-    DateTimeOffset? AudioScheduledDeletionAt = null);
+    DateTimeOffset? AudioScheduledDeletionAt = null,
+    /// <summary>Who recorded it (the owner) - drives the "Recorded by" line. Null name = a deleted/unknown user.</summary>
+    Guid RecordedByUserId = default,
+    string? RecordedByName = null,
+    /// <summary>The rooms this recording is placed in that the caller can see, main room first.</summary>
+    IReadOnlyList<RecordingRoomDto>? Rooms = null);
+
+/// <summary>A room a recording sits in, for the detail Overview. <paramref name="IsMain"/> marks the recorder's
+/// personal (home) room - the only room a recording can be deleted from.</summary>
+public record RecordingRoomDto(Guid Id, string Name, string? Icon, string? Color, bool IsMain);
 
 /// <summary>Toggle a recording's protection from audio deletion (auto and manual).</summary>
 public record SetAudioProtectionRequest(bool Protected);

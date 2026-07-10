@@ -327,6 +327,21 @@ export interface RecordingDetail {
   calendarLink: CalendarLink | null;
   /// The chosen meeting type driving the minutes template, or null for the General default.
   meetingTypeId?: string | null;
+  /// Who recorded it (the owner), and their display name (null = a deleted/unknown user).
+  recordedByUserId: string;
+  recordedByName: string | null;
+  /// The rooms this recording is placed in that the caller can see, home (main) room first.
+  rooms: RecordingRoom[] | null;
+}
+
+/// A room a recording sits in, for the detail Overview. `isMain` = the recorder's personal (home) room -
+/// the only room it can be deleted from.
+export interface RecordingRoom {
+  id: string;
+  name: string;
+  icon: string | null;
+  color: string | null;
+  isMain: boolean;
 }
 
 export interface AuthResponse {

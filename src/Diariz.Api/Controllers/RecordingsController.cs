@@ -145,9 +145,23 @@ public class RecordingsController : ControllerBase
                 .ThenInclude(t => t.Summary)
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.MeetingMinutes)
-            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+            .FirstOrDefaultAsync(r => r.Id == id);
 
         if (rec is null) return NotFound();
+
+        // Visible to the recorder, or to a member of any room it is placed in. The rooms line lists only the
+        // rooms the caller can actually see (a member should not learn about rooms they are not in).
+        var placements = await _rooms.RoomsForRecordingAsync(id);
+        var visibleRooms = new List<RecordingRoomDto>();
+        foreach (var p in placements)
+            if (await _rooms.IsMemberAsync(UserId, p.RoomId))
+                visibleRooms.Add(new RecordingRoomDto(p.RoomId, p.Name, p.Icon, p.Color, p.IsMainRoom));
+        if (rec.UserId != UserId && visibleRooms.Count == 0) return NotFound();
+
+        var recordedByName = await _db.Users
+            .Where(u => u.Id == rec.UserId)
+            .Select(u => u.FullName ?? u.Email)
+            .FirstOrDefaultAsync();
 
         var names = rec.Speakers.ToDictionary(s => s.Label, s => s.DisplayName);
         var actions = rec.Actions
@@ -188,7 +202,8 @@ public class RecordingsController : ControllerBase
         return new RecordingDetailDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.SizeBytes,
             rec.Status, rec.Error, rec.CreatedAt, rec.MinSpeakers, rec.MaxSpeakers, names, speakers, tDto, sDto,
             mDto, actions, rec.ActionsExtractedAt != null, rec.HasAudio, ToLinkDto(rec.CalendarLink),
-            rec.MeetingTypeId, rec.AudioProtectedAt, rec.AudioDeletedAt, scheduledDeletion);
+            rec.MeetingTypeId, rec.AudioProtectedAt, rec.AudioDeletedAt, scheduledDeletion,
+            rec.UserId, recordedByName, visibleRooms);
     }
 
     private static CalendarLinkDto? ToLinkDto(RecordingCalendarLink? link) => link is null

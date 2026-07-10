@@ -200,6 +200,29 @@ public class RecordingsControllerTests
         Assert.IsType<NotFoundResult>(result.Result);
     }
 
+    /// <summary>Phase 5: the detail carries who recorded it and the rooms it is placed in (home room first).</summary>
+    [Fact]
+    public async Task Get_ReturnsRecordedBy_AndTheRoomsItIsIn()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        await SeedUser(db, owner);
+        var rec = await SeedRecording(db, owner, versions: 1);
+        var scope = new RoomScope(db);
+        await scope.PlaceInMainRoomAsync(rec.Id, owner, sectionId: null);
+        var sharedId = await scope.CreateSharedRoomAsync("Engineering", null, null, null);
+        await scope.ShareIntoRoomAsync(rec.Id, sharedId, owner, sectionId: null);
+        await scope.SetMemberAsync(sharedId, RoomPrincipalType.User, owner, RoomPermission.CreateRecording);
+        var controller = Build(db, owner, new FakeJobQueue());
+
+        var detail = (await controller.Get(rec.Id)).Value!;
+
+        Assert.Equal(owner, detail.RecordedByUserId);
+        Assert.NotNull(detail.Rooms);
+        Assert.True(detail.Rooms![0].IsMain); // personal (home) room first
+        Assert.Contains(detail.Rooms, r => !r.IsMain && r.Name == "Engineering");
+    }
+
     // The "current transcription = highest version" rule depends on a filtered Include
     // (OrderByDescending(Version).Take(1)) that the database translates. The EF in-memory
     // provider does NOT honour the ordering/Take inside a filtered Include (it loads the whole

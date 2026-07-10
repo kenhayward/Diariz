@@ -961,6 +961,37 @@ export default function RecordingDetail() {
                 </dd>
               </>
             )}
+            {rec.recordedByName && (
+              <>
+                <dt className="text-gray-500 dark:text-gray-400">{t("workspace:recordedByLabel")}</dt>
+                <dd className="text-gray-800 dark:text-gray-200">{rec.recordedByName}</dd>
+              </>
+            )}
+            {rec.rooms && rec.rooms.length > 0 && (
+              <>
+                <dt className="text-gray-500 dark:text-gray-400">{t("workspace:roomsLabel")}</dt>
+                <dd className="flex flex-wrap items-center gap-1.5 text-gray-800 dark:text-gray-200">
+                  {rec.rooms.map((room) => (
+                    <span
+                      key={room.id}
+                      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs dark:border-gray-700"
+                    >
+                      {room.color && (
+                        <span
+                          className="h-2 w-2 shrink-0 rounded-full"
+                          style={{ backgroundColor: room.color }}
+                          aria-hidden="true"
+                        />
+                      )}
+                      {room.name}
+                      {room.isMain && (
+                        <span className="text-gray-400 dark:text-gray-500">{t("workspace:roomHomeTag")}</span>
+                      )}
+                    </span>
+                  ))}
+                </dd>
+              </>
+            )}
           </dl>
 
           {/* Linked meeting: full invite details (live, falling back to the stored snapshot) + manage actions. */}
