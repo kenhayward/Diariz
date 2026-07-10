@@ -9,6 +9,7 @@ using Diariz.Api.Services;
 using Diariz.Api.Tools;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
@@ -140,7 +141,20 @@ builder.Services.AddAuthentication(SmartAuthScheme)
         Diariz.Api.Auth.ApiKeyAuthenticationHandler.SchemeName, _ => { });
 builder.Services.AddAuthorization(o =>
 {
+    // Legacy role policy. Superseded by the permission policies below; removed once every controller has
+    // been swapped over (Rooms Phase 1, Task 6). Do not add new usages.
     o.AddPolicy("Admin", p => p.RequireRole(Roles.Administrator, Roles.PlatformAdministrator));
+
+    // Platform authority, resolved from the caller's group membership. Each policy requires ANY of the flags
+    // it names.
+    o.AddPolicy("ManageRooms", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManageRooms)));
+    o.AddPolicy("ManageUsers", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManageUsers)));
+    o.AddPolicy("ManagePlatform", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManagePlatform)));
+    // Reading platform settings: the Manage Users modal shows the default quota, so an Administrator
+    // (ManageUsers, no ManagePlatform) must still be able to GET them. Writes remain ManagePlatform.
+    o.AddPolicy("ReadAdminSettings", p => p.AddRequirements(
+        new PermissionRequirement(PlatformPermission.ManageUsers | PlatformPermission.ManagePlatform)));
+
     // The /mcp endpoint authenticates only with the MCP token scheme (not the browser's JWT).
     o.AddPolicy(Diariz.Api.Auth.McpBearerAuthenticationHandler.SchemeName, p =>
     {
@@ -169,6 +183,7 @@ builder.Services.AddSingleton<IDatabaseBackup>(_ =>
 builder.Services.AddScoped<ISchemaVersion, EfSchemaVersion>();
 // Platform authority, resolved from the caller's group membership on every request (never from a JWT claim).
 builder.Services.AddScoped<IUserPermissions, UserPermissions>();
+builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 
 // ---- Redis job queue ----
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
