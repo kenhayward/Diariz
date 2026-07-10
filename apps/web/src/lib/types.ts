@@ -489,6 +489,34 @@ export const RoomPermission = {
   EditOthersRecordings: 32,
 } as const;
 
+/// RoomPrincipalType - mirror src/Diariz.Domain/Entities/RoomPrincipalType.cs.
+export const RoomPrincipalType = { User: 0, Group: 1 } as const;
+
+/// A room member (a user or a group principal) with its permission bitmask.
+export interface RoomMember {
+  principalType: number;
+  principalId: string;
+  permissions: number;
+}
+
+/// A shared room with its membership, for the Manage Rooms editor.
+export interface RoomDetail {
+  id: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  color: string | null;
+  members: RoomMember[];
+}
+
+/// Create/rename a shared room.
+export interface RoomInput {
+  name: string;
+  description?: string | null;
+  icon?: string | null;
+  color?: string | null;
+}
+
 /// A named collection of users carrying platform permissions. Replaces the old account-type roles. The system
 /// group (Platform Administrators) cannot be deleted, renamed, or have its permissions changed.
 export interface Group {

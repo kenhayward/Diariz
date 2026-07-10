@@ -39,6 +39,9 @@ import type {
   RecordingSource,
   RecordingSummary,
   RoomListItem,
+  RoomDetail,
+  RoomMember,
+  RoomInput,
   SavedChatContext,
   SectionDto,
   SectionDetail,
@@ -247,6 +250,34 @@ export const api = {
   async listRooms(): Promise<RoomListItem[]> {
     const { data } = await http.get<RoomListItem[]>("/api/rooms");
     return data;
+  },
+
+  /// A shared room with its membership (members only), for the Manage Rooms editor.
+  async getRoom(id: string): Promise<RoomDetail> {
+    const { data } = await http.get<RoomDetail>(`/api/rooms/${id}`);
+    return data;
+  },
+
+  async createRoom(input: RoomInput): Promise<{ id: string }> {
+    const { data } = await http.post<{ id: string }>("/api/rooms", input);
+    return data;
+  },
+
+  async updateRoom(id: string, input: RoomInput): Promise<void> {
+    await http.put(`/api/rooms/${id}`, input);
+  },
+
+  async deleteRoom(id: string): Promise<void> {
+    await http.delete(`/api/rooms/${id}`);
+  },
+
+  /// Upsert a member's permission grid on a room.
+  async setRoomMember(id: string, m: RoomMember): Promise<void> {
+    await http.put(`/api/rooms/${id}/members`, m);
+  },
+
+  async removeRoomMember(id: string, principalType: number, principalId: string): Promise<void> {
+    await http.delete(`/api/rooms/${id}/members/${principalType}/${principalId}`);
   },
 
   async getRecording(id: string): Promise<RecordingDetail> {

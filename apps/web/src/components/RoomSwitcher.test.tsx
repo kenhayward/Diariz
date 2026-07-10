@@ -5,7 +5,10 @@ import type { RoomListItem } from "../lib/types";
 
 const navigate = vi.fn();
 vi.mock("react-router-dom", () => ({ useNavigate: () => navigate }));
-vi.mock("../auth", () => ({ useAuth: () => ({ initials: "AL", pictureUrl: null }) }));
+// ManageRoomsModal pulls in react-query + api; stub it so the switcher test stays focused.
+vi.mock("./ManageRoomsModal", () => ({ default: () => <div data-testid="manage-rooms-modal" /> }));
+const authState = { initials: "AL", pictureUrl: null, permissions: { manageRooms: false, manageUsers: false, managePlatform: false } };
+vi.mock("../auth", () => ({ useAuth: () => authState }));
 
 const personal: RoomListItem = {
   id: "p1", name: "Ada Lovelace", kind: 0, icon: null, color: null, isPersonal: true, permissions: 63,
@@ -25,6 +28,7 @@ describe("RoomSwitcher", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     roomsValue = { rooms: [personal, shared], currentRoom: personal };
+    authState.permissions = { manageRooms: false, manageUsers: false, managePlatform: false };
   });
 
   it("shows the current room's name and opens a menu listing every room", () => {
@@ -52,5 +56,20 @@ describe("RoomSwitcher", () => {
     fireEvent.click(screen.getByRole("button", { name: /switch room/i }));
     fireEvent.click(within(screen.getByRole("menu")).getByText("Ada Lovelace"));
     expect(navigate).toHaveBeenCalledTimes(1); // picking the current room does not navigate
+  });
+
+  it("hides Manage Rooms from users without manageRooms", () => {
+    authState.permissions = { manageRooms: false, manageUsers: false, managePlatform: false };
+    renderSwitcher();
+    fireEvent.click(screen.getByRole("button", { name: /switch room/i }));
+    expect(within(screen.getByRole("menu")).queryByText(/manage rooms/i)).toBeNull();
+  });
+
+  it("shows Manage Rooms to holders of manageRooms and opens the modal", () => {
+    authState.permissions = { manageRooms: true, manageUsers: false, managePlatform: false };
+    renderSwitcher();
+    fireEvent.click(screen.getByRole("button", { name: /switch room/i }));
+    fireEvent.click(within(screen.getByRole("menu")).getByText(/manage rooms/i));
+    expect(screen.getByTestId("manage-rooms-modal")).toBeTruthy();
   });
 });

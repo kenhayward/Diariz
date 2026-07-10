@@ -9,7 +9,9 @@ vi.mock("./ChatPanel", () => ({ default: () => <div>CHAT</div> }));
 // The left-panel header is now the RoomSwitcher, which reads the current room and the signed-in user's avatar.
 const room = { id: "p1", name: "Personal", kind: 0, icon: null, color: null, isPersonal: true, permissions: 63 };
 vi.mock("../lib/rooms", () => ({ useRoom: () => ({ rooms: [room], currentRoom: room }) }));
-vi.mock("../auth", () => ({ useAuth: () => ({ initials: "AL", pictureUrl: null }) }));
+vi.mock("../auth", () => ({
+  useAuth: () => ({ initials: "AL", pictureUrl: null, permissions: { manageRooms: false, manageUsers: false, managePlatform: false } }),
+}));
 
 import Workspace from "./Workspace";
 

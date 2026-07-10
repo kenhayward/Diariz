@@ -5,6 +5,7 @@ import { useRoom } from "../lib/rooms";
 import { useAuth } from "../auth";
 import type { RoomListItem } from "../lib/types";
 import Avatar from "./Avatar";
+import ManageRoomsModal from "./ManageRoomsModal";
 
 /// A small icon for a room: the signed-in user's avatar for their Personal room, else a rounded square in the
 /// room's colour bearing its first letter. (The full icon picker lands with Manage Rooms in Phase 4.)
@@ -28,8 +29,10 @@ function RoomIcon({ room }: { room: RoomListItem }) {
 export default function RoomSwitcher({ onCollapse, chevron }: { onCollapse: () => void; chevron: string }) {
   const { t } = useTranslation("workspace");
   const { rooms, currentRoom } = useRoom();
+  const { permissions } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -90,9 +93,28 @@ export default function RoomSwitcher({ onCollapse, chevron }: { onCollapse: () =
                 <span className="truncate">{r.name}</span>
               </button>
             ))}
+            {permissions.manageRooms && (
+              <>
+                <hr className="my-1 border-gray-200 dark:border-gray-700" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setOpen(false);
+                    setManageOpen(true);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-gray-100"
+                >
+                  <span aria-hidden="true">⌂</span>
+                  <span className="truncate">{t("manageRooms")}</span>
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
+
+      {manageOpen && <ManageRoomsModal onClose={() => setManageOpen(false)} />}
 
       <button
         type="button"
