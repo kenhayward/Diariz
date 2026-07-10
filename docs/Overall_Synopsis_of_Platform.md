@@ -547,10 +547,18 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
     remembering to. The filtered unique index on `Rooms.OwnerUserId` makes the race safe. Pre-existing users were
     given rooms **once**, by the `AddRooms` migration (`PersonalRoomBackfill`) — never on boot, or a seeder would
     recreate a room the user had since changed.
-  - **Nothing consumes `RoomScope` yet.** Phases 2b-2d introduce `RoomRecording` (the per-room placement of a
-    recording, whose `SectionId` is the folder *in that room*), then re-scope `Section`, `SpeakerProfile`,
-    `ChatSession`, `MeetingType` and the RAG chunk filter onto rooms. See
-    `docs/superpowers/specs/2026-07-10-rooms-design.md`.
+  - **Recording placement.** A recording's folder is a property of its **`RoomRecording`** placement, not of
+    the recording: `Recording.SectionId` no longer exists. Each recording has exactly one **main** placement,
+    always in its recorder's Personal room (`IsMainRoom`, a filtered-unique invariant), which is what stops a
+    shared room ever holding a recording hostage — deleting a shared room can only unshare, never destroy. The
+    folder lives on `RoomRecording.SectionId` (the folder *within that room*; `ON DELETE SET NULL`, so deleting
+    a folder ungroups the placement). `RoomScope.RecordingsIn(roomId)` is the base queryable every room-scoped
+    recording query starts from — the equivalent of the old `.Where(r => r.UserId == UserId)`, one level up —
+    and `RecordingsController`, `SectionPageController`, `ChatController` and `SectionSummaryProcessor` all read
+    the folder through it.
+  - **Still ahead (2c-2d):** re-scoping `Section`, `SpeakerProfile`, `ChatSession`, `MeetingType` and the RAG
+    chunk filter onto rooms. Until then, everything resolves to the caller's personal room via
+    `RoomScope.PersonalRoomIdAsync`. See `docs/superpowers/specs/2026-07-10-rooms-design.md`.
 - **Access lifecycle:** a person **requests access** (`UserStatus.Requested`) → an admin **grants** it
   (issues a one-time setup link; emailed via SMTP/MailKit, or shown to the admin as a fallback when SMTP is
   unconfigured) → the user **sets up** their name + password (`Active`). Admins can also add users directly.

@@ -51,6 +51,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.118.2",
+    date: "2026-07-10",
+    pr: 262,
+    headline: "Recording placement groundwork",
+    summary:
+      "Another invisible step towards Rooms - shared spaces. Nothing changes for you: your recordings, " +
+      "folders, and folder pages all look and behave exactly as before. Under the hood, the folder a " +
+      "recording sits in is now recorded per-room rather than on the recording itself. That is what will let " +
+      "the same meeting be filed one way in your own space and another way in a shared room, once shared " +
+      "rooms arrive. Every recording is now anchored to the Personal Room of whoever recorded it, which is " +
+      "how a shared room will only ever be able to unshare a recording, never delete it.",
+    changed: [
+      "A recording's folder is now stored per-room rather than on the recording, with no change to how the app looks or works today.",
+    ],
+  },
+  {
     version: "0.118.1",
     date: "2026-07-10",
     pr: 261,
