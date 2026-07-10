@@ -18,8 +18,13 @@ namespace Diariz.Api.Controllers;
 public class SpeakerProfilesController : ControllerBase
 {
     private readonly DiarizDbContext _db;
+    private readonly Services.IRoomScope _rooms;
 
-    public SpeakerProfilesController(DiarizDbContext db) => _db = db;
+    public SpeakerProfilesController(DiarizDbContext db, Services.IRoomScope rooms)
+    {
+        _db = db;
+        _rooms = rooms;
+    }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
@@ -126,6 +131,7 @@ public class SpeakerProfilesController : ControllerBase
         {
             Id = Guid.NewGuid(),
             UserId = UserId,
+            RoomId = await _rooms.PersonalRoomIdAsync(UserId), // populated now; queries flip to it in Phase 4
             Name = name,
             Embedding = speaker.Embedding,
             SampleCount = 1,

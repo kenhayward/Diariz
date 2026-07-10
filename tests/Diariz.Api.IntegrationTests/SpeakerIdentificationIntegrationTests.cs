@@ -193,7 +193,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
     }
 
     private SpeakerProfilesController ProfilesController(Diariz.Domain.DiarizDbContext db, Guid userId) =>
-        new(db) { ControllerContext = Http.Context(userId) };
+        new(db, new RoomScope(db)) { ControllerContext = Http.Context(userId) };
 
     [Fact]
     public async Task RemoveContribution_RecomputesCentroidFromRemaining()

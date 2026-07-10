@@ -20,6 +20,7 @@ public class ChatControllerTests
         FakeChatToolSettingsResolver? toolSettings = null)
     {
         var db = TestDb.Create();
+        Users.Ensure(db, userId); // create paths mint the owner's personal room, which needs a real user row
         var chat = new FakeChatStreamClient();
         var settings = new FakeSummarizationSettingsResolver
         {
@@ -293,8 +294,7 @@ public class ChatControllerTests
     public async Task Stream_WithFolder_LoadsSummaryMinutesAndActionsIntoContext()
     {
         var me = Guid.NewGuid();
-        var (controller, db, chat) = Build(me);
-        db.Users.Add(new ApplicationUser { Id = me, UserName = $"{me}@x.test", Email = $"{me}@x.test" });
+        var (controller, db, chat) = Build(me); // seeds the user row
         var section = new Section { Id = Guid.NewGuid(), UserId = me, Name = "Q3 Planning" };
         db.Sections.Add(section);
         db.SectionSummaries.Add(new SectionSummary { Id = Guid.NewGuid(), SectionId = section.Id, Text = "Overall Q3 theme." });

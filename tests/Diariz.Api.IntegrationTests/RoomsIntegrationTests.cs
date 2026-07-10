@@ -1,3 +1,4 @@
+using Pgvector;
 using Diariz.Api.IntegrationTests.Infrastructure;
 using Diariz.Api.Services;
 using Diariz.Domain;
@@ -205,5 +206,33 @@ public class RoomsIntegrationTests(ContainersFixture fx)
         db.ChangeTracker.Clear(); // the raw UPDATE bypassed the tracker; re-read from the database
         var room = await db.Rooms.Where(r => r.OwnerUserId == userId).Select(r => r.Id).SingleAsync();
         Assert.Equal(room, (await db.Sections.FindAsync(sectionId))!.RoomId);
+    }
+
+    /// <summary>Phase 2d: voiceprints, chats and personal meeting types move into the owner's personal room;
+    /// platform meeting types (UserId null) keep RoomId null.</summary>
+    [Fact]
+    public async Task RoomScopedEntitiesBackfill_MovesThemIntoThePersonalRoom()
+    {
+        await using var db = fx.CreateDbContext();
+        var userId = await NewUserAsync(db, "Ada");
+        var profileId = Guid.NewGuid();
+        var chatId = Guid.NewGuid();
+        var personalTypeId = Guid.NewGuid();
+        var platformTypeId = Guid.NewGuid();
+        db.SpeakerProfiles.Add(new SpeakerProfile { Id = profileId, UserId = userId, Name = "V", Embedding = new Vector(new float[192]), SampleCount = 1 });
+        db.ChatSessions.Add(new ChatSession { Id = chatId, UserId = userId, Title = "C", MessagesJson = "[]" });
+        db.MeetingTypes.Add(new MeetingType { Id = personalTypeId, UserId = userId, Title = "Mine", ContentJson = "{}" });
+        db.MeetingTypes.Add(new MeetingType { Id = platformTypeId, UserId = null, Title = "Platform", ContentJson = "{}", Key = $"k{Guid.NewGuid():N}" });
+        await db.SaveChangesAsync();
+
+        await db.Database.ExecuteSqlRawAsync(RoomScopedEntitiesBackfill.Sql);
+        await db.Database.ExecuteSqlRawAsync(RoomScopedEntitiesBackfill.Sql); // idempotent
+
+        db.ChangeTracker.Clear();
+        var room = await db.Rooms.Where(r => r.OwnerUserId == userId).Select(r => r.Id).SingleAsync();
+        Assert.Equal(room, (await db.SpeakerProfiles.FindAsync(profileId))!.RoomId);
+        Assert.Equal(room, (await db.ChatSessions.FindAsync(chatId))!.RoomId);
+        Assert.Equal(room, (await db.MeetingTypes.FindAsync(personalTypeId))!.RoomId);
+        Assert.Null((await db.MeetingTypes.FindAsync(platformTypeId))!.RoomId);
     }
 }

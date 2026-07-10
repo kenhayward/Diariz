@@ -561,9 +561,12 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
     recording under a folder from another room. `Section.UserId` is **kept** as owner identity (the SignalR
     group folder notifications target, the per-user LLM config the folder processors resolve); dropping it, and
     the Rooms FK, wait for Phase 4, when "the owner" of a shared-room folder is no longer one user.
-  - **Still ahead:** `SpeakerProfile`, `ChatSession`, `MeetingType` and the RAG chunk filter re-scoped onto
-    rooms (2d), then shared rooms and the `Section.UserId` retirement. Until then, everything resolves to the
-    caller's personal room via `RoomScope.PersonalRoomIdAsync`. See
+  - **Voiceprints, chats and meeting types carry a room (2d).** `SpeakerProfile.RoomId`, `ChatSession.RoomId`
+    (both not-null) and `MeetingType.RoomId` (**nullable** - null for Platform types, mirroring their null
+    `UserId`) are set on create and backfilled to each owner's personal room. As with folders they are **plain
+    columns still queried by `UserId`**; the query flip, the Rooms FK and the `UserId` drop wait for Phase 4.
+  - **Still ahead:** the RAG chunk filter re-scoped onto rooms, then shared rooms and the `UserId` retirement.
+    Until then, everything resolves to the caller's personal room via `RoomScope.PersonalRoomIdAsync`. See
     `docs/superpowers/specs/2026-07-10-rooms-design.md`.
 - **Access lifecycle:** a person **requests access** (`UserStatus.Requested`) → an admin **grants** it
   (issues a one-time setup link; emailed via SMTP/MailKit, or shown to the admin as a fallback when SMTP is

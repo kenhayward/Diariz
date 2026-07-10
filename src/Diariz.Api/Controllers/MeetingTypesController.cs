@@ -19,11 +19,13 @@ public class MeetingTypesController : ControllerBase
 {
     private readonly DiarizDbContext _db;
     private readonly IUserPermissions _permissions;
+    private readonly IRoomScope _rooms;
 
-    public MeetingTypesController(DiarizDbContext db, IUserPermissions permissions)
+    public MeetingTypesController(DiarizDbContext db, IUserPermissions permissions, IRoomScope rooms)
     {
         _db = db;
         _permissions = permissions;
+        _rooms = rooms;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -59,6 +61,9 @@ public class MeetingTypesController : ControllerBase
         {
             Id = Guid.NewGuid(),
             UserId = platform ? null : UserId,
+            // Personal types get the owner's room (populated now; scope flips to it in Phase 4); platform types
+            // stay null, mirroring UserId.
+            RoomId = platform ? null : await _rooms.PersonalRoomIdAsync(UserId),
             GroupName = req.GroupName.Trim(),
             Title = req.Title.Trim(),
             Overview = req.Overview?.Trim() ?? string.Empty,

@@ -11,8 +11,11 @@ namespace Diariz.Api.Tests;
 
 public class SpeakerProfilesControllerTests
 {
-    private static SpeakerProfilesController Build(DiarizDbContext db, Guid userId) =>
-        new(db) { ControllerContext = Http.Context(userId) };
+    private static SpeakerProfilesController Build(DiarizDbContext db, Guid userId)
+    {
+        Users.Ensure(db, userId); // create paths mint the owner's personal room, which needs a real user row
+        return new(db, new Diariz.Api.Services.RoomScope(db)) { ControllerContext = Http.Context(userId) };
+    }
 
     private static async Task<Recording> SeedRecording(DiarizDbContext db, Guid userId)
     {

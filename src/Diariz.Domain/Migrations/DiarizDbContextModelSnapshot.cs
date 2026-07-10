@@ -214,6 +214,9 @@ namespace Diariz.Domain.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb");
 
+                    b.Property<Guid>("RoomId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -429,6 +432,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<string>("Overview")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<Guid?>("RoomId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -1093,6 +1099,9 @@ namespace Diariz.Domain.Migrations
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("RoomId")
+                        .HasColumnType("uuid");
 
                     b.Property<int>("SampleCount")
                         .HasColumnType("integer");

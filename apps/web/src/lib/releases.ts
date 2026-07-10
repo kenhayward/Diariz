@@ -54,15 +54,17 @@ export const RELEASES: Release[] = [
     version: "0.118.4",
     date: "2026-07-10",
     pr: 264,
-    headline: "Folders move with rooms",
+    headline: "Folders and your saved data move with rooms",
     summary:
       "Another invisible groundwork step for Rooms - shared spaces. Nothing changes for you: your folders, " +
-      "sub-folders, and the recordings filed in them behave exactly as before. Under the hood, a folder now " +
-      "belongs to a room rather than directly to you, which is what will let a shared room have its own set " +
-      "of folders once shared rooms arrive. A recording can only be filed under a folder that lives in the " +
-      "same room, so nothing can end up in the wrong place.",
+      "sub-folders, recordings, voiceprints, saved chats, and meeting-type templates behave exactly as " +
+      "before. Under the hood, each of these now belongs to a room rather than directly to you, which is " +
+      "what will let a shared room have its own set of folders, voiceprints and templates once shared rooms " +
+      "arrive. A recording can only be filed under a folder that lives in the same room, so nothing can end " +
+      "up in the wrong place.",
     changed: [
-      "A folder now belongs to a room (your personal room, for now), with no change to how folders look or work today.",
+      "Folders now belong to a room (your personal room, for now), with no change to how folders look or work today.",
+      "Voiceprints, saved chats and personal meeting-type templates now belong to a room too - again, your personal room, with no visible change.",
     ],
   },
   {

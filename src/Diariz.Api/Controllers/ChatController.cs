@@ -256,6 +256,7 @@ public class ChatController : ControllerBase
         {
             Id = Guid.NewGuid(),
             UserId = UserId,
+            RoomId = await _rooms.PersonalRoomIdAsync(UserId, ct), // populated now; queries flip to it in Phase 4
             Title = title,
             MessagesJson = JsonSerializer.Serialize(messages, Json),
             ContextJson = JsonSerializer.Serialize(req.Context ?? EmptyContext, Json),

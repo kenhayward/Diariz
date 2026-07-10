@@ -9,6 +9,10 @@ public class SpeakerProfile
 {
     public Guid Id { get; set; }
     public Guid UserId { get; set; }
+
+    /// <summary>The room this voiceprint belongs to (its owner's personal room, for now). Plain column - the FK
+    /// and the UserId retirement land in Phase 4. Members share a room's voiceprints once shared rooms exist.</summary>
+    public Guid RoomId { get; set; }
     public ApplicationUser? User { get; set; }
 
     public string Name { get; set; } = string.Empty;

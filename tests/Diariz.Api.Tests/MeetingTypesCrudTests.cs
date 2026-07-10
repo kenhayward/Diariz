@@ -18,7 +18,8 @@ public class MeetingTypesCrudTests
     private static MeetingTypesController Build(DiarizDbContext db, Guid userId, bool admin = false)
     {
         if (admin) Perms.Grant(db, userId, PlatformPermission.ManagePlatform);
-        return new(db, new UserPermissions(db)) { ControllerContext = Http.Context(userId) };
+        Users.Ensure(db, userId); // create paths mint the owner's personal room, which needs a real user row
+        return new(db, new UserPermissions(db), new Diariz.Api.Services.RoomScope(db)) { ControllerContext = Http.Context(userId) };
     }
 
     private static MeetingTypeContent OneSection() =>

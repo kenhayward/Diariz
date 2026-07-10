@@ -14,6 +14,10 @@ public class MeetingType
 
     /// <summary>Owner of a Personal type; <c>null</c> for a shared Platform type.</summary>
     public Guid? UserId { get; set; }
+
+    /// <summary>The room this template belongs to. Null = a shared Platform template (mirrors UserId null); a
+    /// room id = a room's own template. Plain column - FK and the UserId retirement land in Phase 4.</summary>
+    public Guid? RoomId { get; set; }
     public ApplicationUser? User { get; set; }
 
     /// <summary>Stable slug for the app's seeded standard types (e.g. <c>general</c>, <c>customer</c>), so the
