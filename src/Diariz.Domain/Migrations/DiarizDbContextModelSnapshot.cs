@@ -739,6 +739,69 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("RecordingTags");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.Room", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Color")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Icon")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid?>("OwnerUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasFilter("\"Kind\" = 1");
+
+                    b.HasIndex("OwnerUserId")
+                        .IsUnique()
+                        .HasFilter("\"OwnerUserId\" IS NOT NULL");
+
+                    b.ToTable("Rooms");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.RoomMember", b =>
+                {
+                    b.Property<Guid>("RoomId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("PrincipalType")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PrincipalId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Permissions")
+                        .HasColumnType("integer");
+
+                    b.HasKey("RoomId", "PrincipalType", "PrincipalId");
+
+                    b.HasIndex("PrincipalType", "PrincipalId");
+
+                    b.ToTable("RoomMembers");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.Section", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1762,6 +1825,27 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("Recording");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.Room", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.ApplicationUser", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.RoomMember", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.Room", "Room")
+                        .WithMany("Members")
+                        .HasForeignKey("RoomId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Room");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.Section", b =>
                 {
                     b.HasOne("Diariz.Domain.Entities.Section", "Parent")
@@ -2020,6 +2104,11 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("Tags");
 
                     b.Navigation("Transcriptions");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.Room", b =>
+                {
+                    b.Navigation("Members");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.Section", b =>
