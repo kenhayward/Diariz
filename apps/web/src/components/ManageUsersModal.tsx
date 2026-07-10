@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import GroupsTab from "./GroupsTab";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../auth";
 import { api, apiErrorMessage } from "../lib/api";
@@ -15,6 +16,10 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
   const { email: myEmail } = useAuth();
   const { data: users = [], isLoading } = useQuery({ queryKey: ["admin-users"], queryFn: api.listUsers });
   const { data: platform } = useQuery({ queryKey: ["platform-settings"], queryFn: api.getPlatformSettings });
+  // Group membership is the source of truth for a user's authority, so the user table shows it in place of the
+  // old account-type column.
+  const { data: groups = [] } = useQuery({ queryKey: ["groups"], queryFn: api.listGroups });
+  const [tab, setTab] = useState<"users" | "groups">("users");
   const [error, setError] = useState<string | null>(null);
   const [grantLink, setGrantLink] = useState<string | null>(null);
   const [newEmail, setNewEmail] = useState("");
@@ -27,7 +32,12 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ["admin-users"] });
+  // Promote/demote moves the user in and out of the Administrators group server-side, so the group chips must
+  // refresh alongside the user rows.
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: ["admin-users"] });
+    return qc.invalidateQueries({ queryKey: ["groups"] });
+  };
   const run = (fn: () => Promise<unknown>) => async () => {
     setError(null);
     try {
@@ -83,6 +93,32 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
       >
         {/* Pinned header: title, add-user form, and access requests stay put while the user table scrolls. */}
         <h2 className="mb-3 shrink-0 text-base font-semibold dark:text-gray-100">{t("title")}</h2>
+
+        <div role="tablist" className="mb-3 flex shrink-0 gap-1 border-b dark:border-gray-700">
+          {(["users", "groups"] as const).map((key) => (
+            <button
+              key={key}
+              role="tab"
+              type="button"
+              aria-selected={tab === key}
+              onClick={() => setTab(key)}
+              className={`-mb-px border-b-2 px-3 py-1.5 text-sm ${
+                tab === key
+                  ? "border-blue-600 font-medium text-blue-700 dark:text-blue-300"
+                  : "border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+              }`}
+            >
+              {t(key === "users" ? "usersTab" : "groupsTab")}
+            </button>
+          ))}
+        </div>
+
+        {tab === "groups" ? (
+          <div className="min-h-0 flex-1 overflow-auto">
+            <GroupsTab />
+          </div>
+        ) : (
+        <>
 
         {/* Add a user by name + email — creates the account and emails them a setup link (or shows it below). */}
         <form onSubmit={addUser} className="mb-3 flex shrink-0 flex-wrap items-center gap-2">
@@ -168,6 +204,7 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
                   u={u}
                   isSelf={!!myEmail && u.email === myEmail}
                   maxQuotaBytes={platform?.maxQuotaBytes ?? null}
+                  groupNames={groups.filter((g) => g.memberIds.includes(u.id)).map((g) => g.name)}
                   onPromote={run(() => api.setUserRole(u.id, "Administrator"))}
                   onDemote={run(() => api.setUserRole(u.id, "Standard"))}
                   onSetEnabled={(v) => run(() => api.setUserEnabled(u.id, v))()}
@@ -194,6 +231,8 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
             {t("common:close")}
           </button>
         </div>
+        </>
+        )}
       </div>
     </div>
   );
@@ -219,6 +258,7 @@ function UserRow({
   u,
   isSelf,
   maxQuotaBytes,
+  groupNames,
   onPromote,
   onDemote,
   onSetEnabled,
@@ -228,6 +268,8 @@ function UserRow({
   u: AdminUser;
   isSelf: boolean;
   maxQuotaBytes: number | null;
+  /// Names of the groups this user belongs to, shown in place of the old account type.
+  groupNames: string[];
   onPromote: () => void;
   onDemote: () => void;
   onSetEnabled: (v: boolean) => void;
@@ -261,7 +303,22 @@ function UserRow({
           <div className="truncate text-xs text-gray-500 dark:text-gray-400">{u.email}</div>
         )}
       </td>
-      <td className="py-2 pr-2 text-gray-600 dark:text-gray-300">{u.accountType}</td>
+      <td className="py-2 pr-2">
+        <div className="flex flex-wrap gap-1">
+          {groupNames.length === 0 ? (
+            <span className="text-xs text-gray-400 dark:text-gray-500">-</span>
+          ) : (
+            groupNames.map((name) => (
+              <span
+                key={name}
+                className="rounded bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+              >
+                {name}
+              </span>
+            ))
+          )}
+        </div>
+      </td>
       <td className="py-2 pr-2">
         <StatusPill status={u.status} />
       </td>

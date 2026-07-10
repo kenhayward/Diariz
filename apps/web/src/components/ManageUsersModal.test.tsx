@@ -14,6 +14,12 @@ vi.mock("../lib/api", () => ({
     setUserQuota: vi.fn(),
     deleteUser: vi.fn(),
     getPlatformSettings: vi.fn().mockResolvedValue({ starterQuotaBytes: 5 * 1024 ** 3, maxQuotaBytes: 50 * 1024 ** 3 }),
+    listGroups: vi.fn().mockResolvedValue([]),
+    createGroup: vi.fn(),
+    updateGroup: vi.fn(),
+    deleteGroup: vi.fn(),
+    addGroupMember: vi.fn(),
+    removeGroupMember: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -142,5 +148,38 @@ describe("ManageUsersModal", () => {
     await screen.findByText("a@x.test");
     expect(screen.getByRole("columnheader", { name: /user/i })).toBeTruthy();
     expect(screen.getByRole("columnheader", { name: /storage/i })).toBeTruthy();
+  });
+});
+
+describe("ManageUsersModal groups", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("shows each user's groups instead of an account type", async () => {
+    mock(api.listUsers).mockResolvedValue([u({ id: "u1", email: "a@x.test", accountType: "Administrator" })]);
+    mock(api.listGroups).mockResolvedValue([
+      { id: "g1", name: "Administrators", description: null, icon: null, color: null, permissions: 3, isSystem: false, memberIds: ["u1"] },
+      { id: "g2", name: "Engineering", description: null, icon: null, color: null, permissions: 0, isSystem: false, memberIds: [] },
+    ]);
+
+    render_();
+
+    expect(await screen.findByText("Administrators")).toBeTruthy();
+    // The raw account type must no longer be rendered: group membership is the truth now.
+    expect(screen.queryByText("Administrator")).toBeNull();
+    expect(screen.queryByText("Engineering")).toBeNull(); // not a member
+  });
+
+  it("switches to the Groups tab", async () => {
+    mock(api.listUsers).mockResolvedValue([u({ id: "u1", email: "a@x.test" })]);
+    mock(api.listGroups).mockResolvedValue([
+      { id: "g2", name: "Engineering", description: null, icon: null, color: null, permissions: 1, isSystem: false, memberIds: [] },
+    ]);
+
+    render_();
+    fireEvent.click(await screen.findByRole("tab", { name: /groups/i }));
+
+    await waitFor(() => expect(screen.getByTestId("new-group-form")).toBeTruthy());
+    // The users table is gone while the Groups tab is open.
+    expect(screen.queryByText("a@x.test")).toBeNull();
   });
 });

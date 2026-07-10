@@ -32,5 +32,19 @@
   "delete": "Löschen",
   "statusRequested": "Angefragt",
   "statusAwaitingSetup": "Wartet auf Einrichtung",
-  "statusActive": "Aktiv"
+  "statusActive": "Aktiv",
+  "groupsTab": "Gruppen",
+  "usersTab": "Benutzer",
+  "groupName": "Gruppe",
+  "groupMembers": "Mitglieder",
+  "groupSystem": "System",
+  "groupSystemHint": "Diese Gruppe ist erforderlich. Ihre Berechtigungen können nicht geändert werden und ihr letztes Mitglied kann nicht entfernt werden.",
+  "permManageRooms": "Räume verwalten",
+  "permManageUsers": "Benutzer verwalten",
+  "permManagePlatform": "Plattform verwalten",
+  "deleteGroup": "Löschen",
+  "confirmDeleteGroup": "Gruppe \"{{name}}\" löschen? Die Mitglieder behalten ihre Konten.",
+  "newGroupName": "Name der neuen Gruppe",
+  "addGroup": "Gruppe hinzufügen",
+  "noGroups": "Keine Gruppen"
 }
