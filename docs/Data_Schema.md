@@ -73,6 +73,8 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddSectionAttachments` | `SectionAttachments` (file/URL supporting documents filed directly on a `Section`, cascade, index `(SectionId, Ordinal)`) — folder-direct attachments, independent of any recording |
 | `AddUserGroups` | `UserGroups` (named permission holders; unique `Name`; `Permissions` int **[Flags]**; `IsSystem`) + `UserGroupMembers` (composite PK `(GroupId, UserId)`, cascade from both) — platform authority via group membership. The migration also **seeds** the two groups and performs a **one-time** move of Identity role holders into them (`RoleToGroupBackfill`); it is deliberately not repeated on boot |
 | `AddRooms` | `Rooms` (a workspace; `Kind` int 0=Personal/1=Shared; `OwnerUserId` FK **`ON DELETE SET NULL`** — a deleted user's personal room is **orphaned**, not destroyed; **filtered** unique index on `OwnerUserId WHERE NOT NULL`, **filtered** unique index on `Name WHERE "Kind" = 1`) + `RoomMembers` (composite PK `(RoomId, PrincipalType, PrincipalId)`; the principal is a user **or** a group; `Permissions` int **[Flags]**; cascade from `Rooms`) — the room model. The migration also **backfills**, once, one Personal room per existing user (`PersonalRoomBackfill`) |
+| `AddRoomRecordings` | `RoomRecordings` (the placement of a recording in a room; composite PK `(RoomId, RecordingId)`; `IsMainRoom` with a **filtered** unique index on `RecordingId WHERE "IsMainRoom"` — exactly one main room per recording; `SectionId` = the folder **within that room**, FK `ON DELETE SET NULL`; `SharedByUserId`/`SharedAt` null on the main row, enforced by `CK_RoomRecordings_MainRoomHasNoSharer`; cascade from `Rooms` and `Recordings`; index `(RoomId, SectionId)`). The migration also **backfills**, once, one main placement per recording in its recorder's personal room — carrying the folder it was filed under — minting any missing personal room first (`RecordingPlacementBackfill`) |
+| `DropRecordingSectionId` | Drops `Recordings.SectionId` (and its FK/index). The folder is now a property of the **placement** (`RoomRecordings.SectionId`), not of the recording, so the same recording can sit in different folders in different rooms |
 
 ### Entity-relationship overview
 
@@ -98,7 +100,7 @@ SpeakerProfile (Embedding vector(192), centroid)
          ├─ SpeakerId  → Speaker (cascade)
          └─ RecordingId          (loose Guid, for display; no FK)
 
-Section ──(SetNull)── Recording.SectionId         (deleting a section ungroups its recordings)
+Section ──(SetNull)── RoomRecording.SectionId     (deleting a section ungroups the placement)
 
 PlatformSettings                                  single seeded row (Id = 1)
 ```
@@ -126,7 +128,6 @@ The owned audio recording.
 | `Status` | int | `RecordingStatus`: 0 Uploaded, 1 Queued, 2 Transcribing, 3 Transcribed, 4 Summarized, 5 Failed, 6 Summarizing, 7 Merging |
 | `Error` | text null | last failure message |
 | `MinSpeakers` / `MaxSpeakers` | int null | diarization hints (null = automatic) |
-| `SectionId` | uuid FK → Sections null | null = "Ungrouped"; **SetNull** on section delete |
 | `MeetingTypeId` | uuid FK → MeetingTypes null | chosen minutes template; null = the seeded General default; **SetNull** on type delete |
 | `Position` | int | manual sort order within its group |
 | `ActionsExtractedAt` | timestamptz null | non-null once action extraction has run (drives the by-exception Actions panel) |
@@ -441,7 +442,7 @@ the recordings of itself and those sub-sections (ungroups, not deletes).
 The folder-level LLM roll-ups shown on the section (folder) page - a summary combining the included
 recordings' summaries, and minutes reshaping their minutes through a template. Each is **1:1 with `Section`**
 (cascade), mirroring `Summary`/`MeetingMinutes` (which are per-`Transcription`). Generated asynchronously by
-the `SectionSummaryWorker`/`SectionMinutesWorker`; "included" = recordings whose `SectionId` is the section or
+the `SectionSummaryWorker`/`SectionMinutesWorker`; "included" = recordings whose **placement** (`RoomRecordings.SectionId`) is the section or
 one of its child sections.
 
 | Column | Type | Notes |
@@ -588,6 +589,26 @@ Seeded: `Platform Administrators` (`IsSystem`, flags `7`) and `Administrators` (
 
 Deleting a group removes its memberships and leaves the users; deleting a user removes their memberships and
 leaves the groups.
+
+#### `RoomRecordings`
+
+The placement of a recording in a room. A recording has exactly one **main** placement — always in its
+recorder's Personal room — plus one row per room it has been shared into. The **folder is a property of the
+placement**, so the same recording can sit in different folders in different rooms; that is why
+`Recordings.SectionId` no longer exists.
+
+| Column | Type | Notes |
+|---|---|---|
+| `RoomId` | `uuid` | PK part 1. FK → `Rooms`, **cascade** |
+| `RecordingId` | `uuid` | PK part 2. FK → `Recordings`, **cascade** |
+| `IsMainRoom` | `bool` | True on exactly one row per recording (**filtered** unique index `WHERE "IsMainRoom"`), and that row's room is the personal room of `Recording.UserId`. Because the main room is always personal, deleting a shared room can only ever unshare — never destroy |
+| `SectionId` | `uuid` null | The folder **within this room**. Null = ungrouped. FK → `Sections` **`ON DELETE SET NULL`** (deleting a folder ungroups the placement, never removes it from the room). Index `(RoomId, SectionId)` |
+| `SharedByUserId` | `uuid` null | Null on the main-room row: nobody shared a recording into its own home |
+| `SharedAt` | `timestamptz` null | As above. `CK_RoomRecordings_MainRoomHasNoSharer` enforces that a main placement carries neither |
+
+Backfilled once by the `AddRoomRecordings` migration: one main placement per existing recording, in its
+recorder's personal room, carrying the folder it was filed under. Minting a personal room first for any user
+who lacks one (`RecordingPlacementBackfill`).
 
 #### `Rooms`
 

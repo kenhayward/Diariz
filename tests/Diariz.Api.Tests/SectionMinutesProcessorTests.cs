@@ -16,6 +16,11 @@ public class SectionMinutesProcessorTests
     private static async Task<Section> SeedSection(DiarizDbContext db, Guid userId, Guid? parentId = null,
         Guid? meetingTypeId = null)
     {
+        if (await db.Users.FindAsync(userId) is null)
+        {
+            db.Users.Add(new ApplicationUser { Id = userId, UserName = $"{userId}@x.test", Email = $"{userId}@x.test" });
+            await db.SaveChangesAsync();
+        }
         var s = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Folder", ParentId = parentId };
         db.Sections.Add(s);
         if (meetingTypeId is not null)
@@ -24,11 +29,12 @@ public class SectionMinutesProcessorTests
         return s;
     }
 
+    // Filed under sectionId via its main placement in the owner's personal room (the folder lives there now).
     private static async Task<Recording> SeedRecording(
         DiarizDbContext db, Guid userId, Guid? sectionId, string? name = null, string? minutesText = null,
         bool withSegments = true)
     {
-        var rec = new Recording { Id = Guid.NewGuid(), UserId = userId, Name = name, SectionId = sectionId, BlobKey = "k" };
+        var rec = new Recording { Id = Guid.NewGuid(), UserId = userId, Name = name, BlobKey = "k" };
         var tr = new Transcription { Id = Guid.NewGuid(), RecordingId = rec.Id, Model = "whisperx", Version = 1 };
         db.Recordings.Add(rec);
         db.Transcriptions.Add(tr);
@@ -41,6 +47,7 @@ public class SectionMinutesProcessorTests
         if (minutesText is not null)
             db.MeetingMinutes.Add(new MinutesEntity { Id = Guid.NewGuid(), TranscriptionId = tr.Id, Model = "m", Text = minutesText });
         await db.SaveChangesAsync();
+        await new RoomScope(db).PlaceInMainRoomAsync(rec.Id, userId, sectionId);
         return rec;
     }
 

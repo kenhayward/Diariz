@@ -14,18 +14,24 @@ public class SectionSummaryProcessorTests
 {
     private static async Task<Section> SeedSection(DiarizDbContext db, Guid userId, Guid? parentId = null)
     {
+        if (await db.Users.FindAsync(userId) is null)
+        {
+            db.Users.Add(new ApplicationUser { Id = userId, UserName = $"{userId}@x.test", Email = $"{userId}@x.test" });
+            await db.SaveChangesAsync();
+        }
         var s = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Folder", ParentId = parentId };
         db.Sections.Add(s);
         await db.SaveChangesAsync();
         return s;
     }
 
-    /// <summary>A recording with a current transcription + one segment, optionally pre-loaded with a summary.</summary>
+    /// <summary>A recording with a current transcription + one segment, optionally pre-loaded with a summary.
+    /// Filed under sectionId via its main placement in the owner's personal room (the folder lives there now).</summary>
     private static async Task<Recording> SeedRecording(
         DiarizDbContext db, Guid userId, Guid? sectionId, string? name = null, string? summaryText = null,
         bool withSegments = true)
     {
-        var rec = new Recording { Id = Guid.NewGuid(), UserId = userId, Name = name, SectionId = sectionId, BlobKey = "k" };
+        var rec = new Recording { Id = Guid.NewGuid(), UserId = userId, Name = name, BlobKey = "k" };
         var tr = new Transcription { Id = Guid.NewGuid(), RecordingId = rec.Id, Model = "whisperx", Version = 1 };
         db.Recordings.Add(rec);
         db.Transcriptions.Add(tr);
@@ -38,6 +44,7 @@ public class SectionSummaryProcessorTests
         if (summaryText is not null)
             db.Summaries.Add(new Summary { Id = Guid.NewGuid(), TranscriptionId = tr.Id, Model = "m", Text = summaryText });
         await db.SaveChangesAsync();
+        await new RoomScope(db).PlaceInMainRoomAsync(rec.Id, userId, sectionId);
         return rec;
     }
 

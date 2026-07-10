@@ -63,12 +63,13 @@ public class ChatController : ControllerBase
     private readonly IUrlFetcher _urlFetcher;
     private readonly IChatToolSettingsResolver _toolSettings;
     private readonly IChatToolOrchestrator _orchestrator;
+    private readonly IRoomScope _rooms;
 
     public ChatController(
         DiarizDbContext db, IChatStreamClient chat, ISummarizationSettingsResolver settings,
         IChatContextResolver contextResolver, IAttachmentExtractor extractor,
         IAudioStorage storage, IUrlFetcher urlFetcher,
-        IChatToolSettingsResolver toolSettings, IChatToolOrchestrator orchestrator)
+        IChatToolSettingsResolver toolSettings, IChatToolOrchestrator orchestrator, IRoomScope rooms)
     {
         _db = db;
         _chat = chat;
@@ -79,6 +80,7 @@ public class ChatController : ControllerBase
         _urlFetcher = urlFetcher;
         _toolSettings = toolSettings;
         _orchestrator = orchestrator;
+        _rooms = rooms;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -361,14 +363,17 @@ public class ChatController : ControllerBase
             .Where(s => s.UserId == UserId && s.ParentId == sectionId).Select(s => s.Id).ToListAsync(ct);
         var allIds = childIds.Append(sectionId).ToList();
 
-        var recIds = await _db.Recordings
-            .Where(r => r.UserId == UserId && r.SectionId.HasValue && allIds.Contains(r.SectionId.Value))
-            .Select(r => r.Id).ToListAsync(ct);
+        // Folder membership now comes from the placement in the caller's personal room, not Recording.SectionId.
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId, ct);
+        var recIds = await _db.RoomRecordings
+            .Where(p => p.RoomId == roomId && p.SectionId.HasValue && allIds.Contains(p.SectionId.Value))
+            .Select(p => p.RecordingId).ToListAsync(ct);
 
         var actions = await (
             from a in _db.RecordingActions
             join r in _db.Recordings on a.RecordingId equals r.Id
-            where r.UserId == UserId && r.SectionId.HasValue && allIds.Contains(r.SectionId.Value)
+            join p in _db.RoomRecordings on r.Id equals p.RecordingId
+            where p.RoomId == roomId && p.SectionId.HasValue && allIds.Contains(p.SectionId.Value)
             orderby r.CreatedAt, a.Ordinal
             select new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal)).ToListAsync(ct);
 

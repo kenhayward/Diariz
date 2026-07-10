@@ -25,15 +25,17 @@ public class SectionPageController : ControllerBase
     private readonly IJobQueue _queue;
     private readonly ISummarizationSettingsResolver _summarization;
     private readonly IHubContext<TranscriptionHub> _hub;
+    private readonly IRoomScope _rooms;
 
     public SectionPageController(
         DiarizDbContext db, IJobQueue queue, ISummarizationSettingsResolver summarization,
-        IHubContext<TranscriptionHub> hub)
+        IHubContext<TranscriptionHub> hub, IRoomScope rooms)
     {
         _db = db;
         _queue = queue;
         _summarization = summarization;
         _hub = hub;
+        _rooms = rooms;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -60,8 +62,13 @@ public class SectionPageController : ControllerBase
         if (section is null) return NotFound();
 
         var allIds = await IncludedSectionIdsAsync(id);
-        var recs = _db.Recordings.Where(r =>
-            r.UserId == UserId && r.SectionId.HasValue && allIds.Contains(r.SectionId.Value));
+        // Recordings filed under this folder (or its children) now come from the placement in the caller's
+        // personal room, not from Recording.SectionId.
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var recs = from p in _db.RoomRecordings
+                   where p.RoomId == roomId && p.SectionId.HasValue && allIds.Contains(p.SectionId.Value)
+                   join r in _db.Recordings on p.RecordingId equals r.Id
+                   select r;
 
         var stats = new SectionStatsDto(
             await recs.CountAsync(),
@@ -87,10 +94,12 @@ public class SectionPageController : ControllerBase
     {
         if (!await OwnsSectionAsync(id)) return NotFound();
         var allIds = await IncludedSectionIdsAsync(id);
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
         return await (
             from a in _db.RecordingActions
             join r in _db.Recordings on a.RecordingId equals r.Id
-            where r.UserId == UserId && r.SectionId.HasValue && allIds.Contains(r.SectionId.Value)
+            join p in _db.RoomRecordings on r.Id equals p.RecordingId
+            where p.RoomId == roomId && p.SectionId.HasValue && allIds.Contains(p.SectionId.Value)
             orderby r.CreatedAt descending, a.Ordinal
             select new ActionListItemDto(
                 a.Id, a.RecordingId, r.Name ?? r.Title, a.Text, a.Actor, a.Deadline,
@@ -102,10 +111,12 @@ public class SectionPageController : ControllerBase
     {
         if (!await OwnsSectionAsync(id)) return NotFound();
         var allIds = await IncludedSectionIdsAsync(id);
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
         return await (
             from n in _db.MeetingNotes
             join r in _db.Recordings on n.RecordingId equals r.Id
-            where r.UserId == UserId && r.SectionId.HasValue && allIds.Contains(r.SectionId.Value)
+            join p in _db.RoomRecordings on r.Id equals p.RecordingId
+            where p.RoomId == roomId && p.SectionId.HasValue && allIds.Contains(p.SectionId.Value)
             orderby r.CreatedAt descending, n.Ordinal
             select new SectionNoteListItemDto(
                 n.Id, r.Id, r.Name ?? r.Title, n.Text, n.CapturedAtMs, n.Ordinal, n.CreatedAt)).ToListAsync();
@@ -116,10 +127,12 @@ public class SectionPageController : ControllerBase
     {
         if (!await OwnsSectionAsync(id)) return NotFound();
         var allIds = await IncludedSectionIdsAsync(id);
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
         return await (
             from a in _db.Attachments
             join r in _db.Recordings on a.RecordingId equals r.Id
-            where r.UserId == UserId && r.SectionId.HasValue && allIds.Contains(r.SectionId.Value)
+            join p in _db.RoomRecordings on r.Id equals p.RecordingId
+            where p.RoomId == roomId && p.SectionId.HasValue && allIds.Contains(p.SectionId.Value)
             orderby r.CreatedAt descending, a.Ordinal
             select new SectionAttachmentListItemDto(
                 a.Id, r.Id, r.Name ?? r.Title, a.Kind, a.Name, a.ContentType, a.SizeBytes, a.Url, a.Ordinal))

@@ -1,3 +1,4 @@
+using Diariz.Api.Services;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
 using Diariz.Api.Tests.Infrastructure;
@@ -82,17 +83,22 @@ public class SectionsControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
+        db.Users.Add(new ApplicationUser { Id = userId, UserName = $"{userId}@x.test", Email = $"{userId}@x.test" });
         var section = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Work" };
-        var rec = new Recording { Id = Guid.NewGuid(), UserId = userId, BlobKey = "k", SectionId = section.Id };
+        var rec = new Recording { Id = Guid.NewGuid(), UserId = userId, BlobKey = "k" };
         db.Sections.Add(section);
         db.Recordings.Add(rec);
         await db.SaveChangesAsync();
+        var scope = new RoomScope(db);
+        await scope.PlaceInMainRoomAsync(rec.Id, userId, section.Id); // filed under the folder
 
         var result = await Build(db, userId).Delete(section.Id);
 
         Assert.IsType<NoContentResult>(result);
         Assert.Null(await db.Sections.FindAsync(section.Id));
-        Assert.Null((await db.Recordings.FindAsync(rec.Id))!.SectionId); // moved to Ungrouped
+        // The folder lives on the placement; deleting the section ungroups it (RoomRecording.SectionId -> null).
+        var roomId = await scope.PersonalRoomIdAsync(userId);
+        Assert.Null(await scope.SectionIdAsync(roomId, rec.Id));
     }
 
     [Fact]

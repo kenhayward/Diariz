@@ -30,6 +30,22 @@ public interface IRoomScope
 
     /// <summary>Throws <see cref="RoomForbiddenException"/> unless the caller holds <paramref name="required"/>.</summary>
     Task RequireAsync(Guid userId, Guid roomId, RoomPermission required, CancellationToken ct = default);
+
+    /// <summary>Every recording placed in this room: its main-room recordings plus everything shared into it.
+    /// The base queryable for every room-scoped recording query - the equivalent of today's
+    /// <c>.Where(r => r.UserId == UserId)</c>, one level up.</summary>
+    IQueryable<Recording> RecordingsIn(Guid roomId);
+
+    /// <summary>Create the main placement for a new recording, in its recorder's personal room.</summary>
+    Task PlaceInMainRoomAsync(Guid recordingId, Guid recordedByUserId, Guid? sectionId, CancellationToken ct = default);
+
+    /// <summary>The folder this recording sits in, within this room. Null when ungrouped, or when it is not
+    /// placed in that room at all.</summary>
+    Task<Guid?> SectionIdAsync(Guid roomId, Guid recordingId, CancellationToken ct = default);
+
+    /// <summary>Move the recording to a folder within this room (null = ungroup). False when it is not placed
+    /// in that room.</summary>
+    Task<bool> SetSectionAsync(Guid roomId, Guid recordingId, Guid? sectionId, CancellationToken ct = default);
 }
 
 public class RoomScope(DiarizDbContext db) : IRoomScope
@@ -115,6 +131,46 @@ public class RoomScope(DiarizDbContext db) : IRoomScope
     {
         if (!(await PermissionsAsync(userId, roomId, ct)).HasFlag(required))
             throw new RoomForbiddenException(required);
+    }
+
+    // An explicit join, not `.Select(p => p.Recording!)`: the in-memory test provider does not fix up the
+    // navigation for an untracked query and would yield nulls. Same trap as UserPermissions in Phase 1.
+    public IQueryable<Recording> RecordingsIn(Guid roomId) =>
+        from p in db.RoomRecordings
+        where p.RoomId == roomId
+        join r in db.Recordings on p.RecordingId equals r.Id
+        select r;
+
+    public async Task PlaceInMainRoomAsync(
+        Guid recordingId, Guid recordedByUserId, Guid? sectionId, CancellationToken ct = default)
+    {
+        var roomId = await PersonalRoomIdAsync(recordedByUserId, ct);
+        db.RoomRecordings.Add(new RoomRecording
+        {
+            RoomId = roomId,
+            RecordingId = recordingId,
+            IsMainRoom = true,
+            SectionId = sectionId,
+        });
+        await db.SaveChangesAsync(ct);
+    }
+
+    public Task<Guid?> SectionIdAsync(Guid roomId, Guid recordingId, CancellationToken ct = default) =>
+        db.RoomRecordings
+            .Where(p => p.RoomId == roomId && p.RecordingId == recordingId)
+            .Select(p => p.SectionId)
+            .FirstOrDefaultAsync(ct);
+
+    public async Task<bool> SetSectionAsync(
+        Guid roomId, Guid recordingId, Guid? sectionId, CancellationToken ct = default)
+    {
+        var placement = await db.RoomRecordings
+            .FirstOrDefaultAsync(p => p.RoomId == roomId && p.RecordingId == recordingId, ct);
+        if (placement is null) return false;
+
+        placement.SectionId = sectionId;
+        await db.SaveChangesAsync(ct);
+        return true;
     }
 
     /// <summary>The caller's member rows in a room: their own, plus one per group they belong to.</summary>

@@ -54,9 +54,9 @@ public class Recording
     public int? MinSpeakers { get; set; }
     public int? MaxSpeakers { get; set; }
 
-    /// <summary>Optional user-defined group; null means "Ungrouped".</summary>
-    public Guid? SectionId { get; set; }
-    public Section? Section { get; set; }
+    // The folder a recording is filed under is now a property of its RoomRecording placement (the folder within
+    // a room), not of the recording - the same recording can sit in different folders in different rooms. See
+    // RoomRecording and RoomScope.
 
     /// <summary>Optional meeting type driving the minutes template. Null = the seeded "General Meeting"
     /// default (current behaviour). Persists across re-transcribes. Set to null (SetNull) if the type is deleted.</summary>

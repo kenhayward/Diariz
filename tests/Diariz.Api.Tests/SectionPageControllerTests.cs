@@ -1,4 +1,5 @@
 using Diariz.Api.Contracts;
+using Diariz.Api.Services;
 using Diariz.Api.Controllers;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
@@ -14,28 +15,42 @@ public class SectionPageControllerTests
 {
     private static SectionPageController Build(
         DiarizDbContext db, Guid userId, FakeJobQueue? queue = null, FakeSummarizationSettingsResolver? resolver = null) =>
-        new(db, queue ?? new FakeJobQueue(), resolver ?? new FakeSummarizationSettingsResolver(), new FakeHubContext())
+        new(db, queue ?? new FakeJobQueue(), resolver ?? new FakeSummarizationSettingsResolver(), new FakeHubContext(),
+            new RoomScope(db))
         { ControllerContext = Http.Context(userId) };
 
     private static async Task<Section> Section(DiarizDbContext db, Guid userId, Guid? parentId = null)
     {
+        if (await db.Users.FindAsync(userId) is null)
+        {
+            db.Users.Add(new ApplicationUser { Id = userId, UserName = $"{userId}@x.test", Email = $"{userId}@x.test" });
+            await db.SaveChangesAsync();
+        }
         var s = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = userId, Name = "F", ParentId = parentId };
         db.Sections.Add(s);
         await db.SaveChangesAsync();
         return s;
     }
 
+    // Seeds a recording and its main placement in the owner's personal room, filed under sectionId (null =
+    // ungrouped). The folder lives on the placement now, not on Recording.SectionId.
     private static async Task<Recording> Recording(
         DiarizDbContext db, Guid userId, Guid? sectionId, string? name = null, string title = "Rec",
         long durationMs = 1000, DateTimeOffset? createdAt = null)
     {
+        if (await db.Users.FindAsync(userId) is null)
+        {
+            db.Users.Add(new ApplicationUser { Id = userId, UserName = $"{userId}@x.test", Email = $"{userId}@x.test" });
+            await db.SaveChangesAsync();
+        }
         var rec = new Recording
         {
-            Id = Guid.NewGuid(), UserId = userId, SectionId = sectionId, Name = name, Title = title,
+            Id = Guid.NewGuid(), UserId = userId, Name = name, Title = title,
             DurationMs = durationMs, BlobKey = "k", CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
         };
         db.Recordings.Add(rec);
         await db.SaveChangesAsync();
+        await new RoomScope(db).PlaceInMainRoomAsync(rec.Id, userId, sectionId);
         return rec;
     }
 

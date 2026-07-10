@@ -27,6 +27,7 @@ public class RecordingsController : ControllerBase
     private readonly IEmailSender _email;
     private readonly ISpeakerIdentifier _identifier;
     private readonly UploadOptions _uploads;
+    private readonly IRoomScope _rooms;
     private readonly IExportLocalizer? _exportLocalizer;
     private readonly IGoogleCalendarClient? _calendar;
     private readonly string _defaultModel;
@@ -35,7 +36,7 @@ public class RecordingsController : ControllerBase
         DiarizDbContext db, IAudioStorage storage, IJobQueue queue,
         IHubContext<TranscriptionHub> hub, IConfiguration config,
         ISummarizationSettingsResolver summarization, IEmailSender email, ISpeakerIdentifier identifier,
-        IOptions<UploadOptions> uploads, IExportLocalizer? exportLocalizer = null,
+        IOptions<UploadOptions> uploads, IRoomScope rooms, IExportLocalizer? exportLocalizer = null,
         IGoogleCalendarClient? calendar = null)
     {
         _db = db;
@@ -46,6 +47,7 @@ public class RecordingsController : ControllerBase
         _email = email;
         _identifier = identifier;
         _uploads = uploads.Value;
+        _rooms = rooms;
         _exportLocalizer = exportLocalizer;
         _calendar = calendar;
         _defaultModel = config["Transcription:DefaultModel"] ?? "whisperx-large-v3";
@@ -62,17 +64,39 @@ public class RecordingsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IReadOnlyList<RecordingSummaryDto>> List() =>
-        await _db.Recordings
+    public async Task<IReadOnlyList<RecordingSummaryDto>> List()
+    {
+        // The folder each recording sits in is now a property of its placement in the caller's personal room.
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var folderOf = await _db.RoomRecordings
+            .Where(p => p.RoomId == roomId)
+            .Select(p => new { p.RecordingId, p.SectionId, SectionName = p.Section != null ? p.Section.Name : null })
+            .ToDictionaryAsync(x => x.RecordingId, x => (x.SectionId, x.SectionName));
+
+        // Project server-side (no `folderOf` in the SQL), then splice the folder in memory.
+        var rows = await _db.Recordings
             .Where(r => r.UserId == UserId)
             .OrderBy(r => r.Position)
             .ThenByDescending(r => r.CreatedAt)
-            .Select(r => new RecordingSummaryDto(r.Id, r.Title, r.Name, r.Source, r.DurationMs, r.Status, r.CreatedAt,
-                r.SectionId, r.Section != null ? r.Section.Name : null, r.Actions.Any(), r.AudioDeletedAt == null,
-                r.CalendarLink != null ? r.CalendarLink.EventId : null,
-                r.CalendarLink != null ? r.CalendarLink.Color : null,
-                r.MeetingTypeId))
+            .Select(r => new
+            {
+                r.Id, r.Title, r.Name, r.Source, r.DurationMs, r.Status, r.CreatedAt,
+                HasActions = r.Actions.Any(), HasAudio = r.AudioDeletedAt == null,
+                EventId = r.CalendarLink != null ? r.CalendarLink.EventId : null,
+                Color = r.CalendarLink != null ? r.CalendarLink.Color : null,
+                r.MeetingTypeId,
+            })
             .ToListAsync();
+
+        return rows
+            .Select(r =>
+            {
+                var folder = folderOf.TryGetValue(r.Id, out var f) ? f : (SectionId: (Guid?)null, SectionName: (string?)null);
+                return new RecordingSummaryDto(r.Id, r.Title, r.Name, r.Source, r.DurationMs, r.Status, r.CreatedAt,
+                    folder.SectionId, folder.SectionName, r.HasActions, r.HasAudio, r.EventId, r.Color, r.MeetingTypeId);
+            })
+            .ToList();
+    }
 
     /// <summary>Drag-and-drop: set the section and 0-based position of each listed recording in one
     /// call (used for both within-group sequencing and cross-group moves).</summary>
@@ -91,12 +115,17 @@ public class RecordingsController : ControllerBase
             .ToListAsync();
         if (recs.Count != ids.Count) return NotFound(); // a listed recording isn't the caller's
 
+        // Position lives on the recording; the folder now lives on its placement in the caller's personal room.
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var placements = await _db.RoomRecordings
+            .Where(p => p.RoomId == roomId && ids.Contains(p.RecordingId))
+            .ToDictionaryAsync(p => p.RecordingId);
+
         var byId = recs.ToDictionary(r => r.Id);
         for (var i = 0; i < ids.Count; i++)
         {
-            var rec = byId[ids[i]];
-            rec.SectionId = req.SectionId;
-            rec.Position = i;
+            byId[ids[i]].Position = i;
+            if (placements.TryGetValue(ids[i], out var placement)) placement.SectionId = req.SectionId;
         }
         await _db.SaveChangesAsync();
         return NoContent();
@@ -216,9 +245,13 @@ public class RecordingsController : ControllerBase
         await EnqueueTranscriptionAsync(rec);
         await _db.SaveChangesAsync();
 
+        // The folder is a property of the placement, not the recording: create the main placement in the
+        // uploader's personal room. Ungrouped by default, as SectionId was.
+        await _rooms.PlaceInMainRoomAsync(rec.Id, UserId, sectionId: null);
+
         return CreatedAtAction(nameof(Get), new { id = rec.Id },
             new RecordingSummaryDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.Status, rec.CreatedAt,
-                rec.SectionId, null, false, rec.HasAudio));
+                null, null, false, rec.HasAudio));
     }
 
     [HttpPost("{id:guid}/retranscribe")]
@@ -880,19 +913,13 @@ public class RecordingsController : ControllerBase
         var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
         if (rec is null) return NotFound();
 
-        if (req.SectionId is { } sectionId)
-        {
-            // Only allow moving into a section the caller owns.
-            var owned = await _db.Sections.AnyAsync(s => s.Id == sectionId && s.UserId == UserId);
-            if (!owned) return NotFound();
-            rec.SectionId = sectionId;
-        }
-        else
-        {
-            rec.SectionId = null; // ungroup
-        }
+        if (req.SectionId is { } sectionId
+            && !await _db.Sections.AnyAsync(s => s.Id == sectionId && s.UserId == UserId))
+            return NotFound(); // can't move into a section the caller doesn't own
 
-        await _db.SaveChangesAsync();
+        // The folder lives on the placement in the caller's personal room (null = ungroup).
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        if (!await _rooms.SetSectionAsync(roomId, id, req.SectionId)) return NotFound();
         return NoContent();
     }
 

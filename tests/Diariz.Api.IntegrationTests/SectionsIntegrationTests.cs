@@ -1,3 +1,4 @@
+using Diariz.Api.Services;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
 using Diariz.Api.IntegrationTests.Infrastructure;
@@ -23,9 +24,10 @@ public class SectionsIntegrationTests(ContainersFixture fx)
             var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = "u@x.test" };
             var parent = new Section { Id = Guid.NewGuid(), UserId = user.Id, Name = "Customers" };
             var child = new Section { Id = Guid.NewGuid(), UserId = user.Id, Name = "Acme", ParentId = parent.Id };
-            var rec = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = "k", SectionId = child.Id };
+            var rec = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = "k" };
             db.AddRange(user, parent, child, rec);
             await db.SaveChangesAsync();
+            await new RoomScope(db).PlaceInMainRoomAsync(rec.Id, user.Id, child.Id); // filed under the sub-folder
             (userId, parentId, childId, recId) = (user.Id, parent.Id, child.Id, rec.Id);
         }
 
@@ -35,7 +37,9 @@ public class SectionsIntegrationTests(ContainersFixture fx)
         await using var verify = fx.CreateDbContext();
         Assert.Null(await verify.Sections.FindAsync(parentId));
         Assert.Null(await verify.Sections.FindAsync(childId));         // sub-section cascade-deleted
-        Assert.Null((await verify.Recordings.FindAsync(recId))!.SectionId); // its recording → Ungrouped
+        // The folder lives on the placement; deleting the sub-folder ungroups it (RoomRecording.SectionId -> null).
+        var roomId = await new RoomScope(verify).PersonalRoomIdAsync(userId);
+        Assert.Null(await new RoomScope(verify).SectionIdAsync(roomId, recId));
     }
 
     [Fact]
