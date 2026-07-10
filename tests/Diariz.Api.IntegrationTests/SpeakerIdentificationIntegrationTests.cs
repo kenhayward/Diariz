@@ -34,7 +34,11 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
     }
 
     private static SpeakerIdentifier Identifier(Diariz.Domain.DiarizDbContext db, double threshold = 0.4) =>
-        new(db, Options.Create(new IdentificationOptions { Enabled = true, Threshold = threshold }));
+        new(db, Options.Create(new IdentificationOptions { Enabled = true, Threshold = threshold }), new RoomScope(db));
+
+    // Voiceprints live in their owner's personal room now; mint it so the seeded profile is in scope.
+    private static Task<Guid> RoomOf(Diariz.Domain.DiarizDbContext db, Guid owner) =>
+        new RoomScope(db).PersonalRoomIdAsync(owner);
 
     [Fact]
     public async Task VectorColumns_RoundTrip_OnProfileAndSpeaker()
@@ -48,7 +52,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
         {
             db.SpeakerProfiles.Add(new SpeakerProfile
             {
-                Id = profileId, UserId = user.Id, Name = "Alice",
+                Id = profileId, UserId = user.Id, RoomId = await RoomOf(db, user.Id), Name = "Alice",
                 Embedding = Vec((0, 1f), (5, 0.5f)), SampleCount = 1
             });
             db.Recordings.Add(new Recording { Id = recId, UserId = user.Id, BlobKey = "k" });
@@ -76,8 +80,8 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
 
         await using (var db = fx.CreateDbContext())
         {
-            db.SpeakerProfiles.Add(new SpeakerProfile { Id = aliceId, UserId = user.Id, Name = "Alice", Embedding = Vec((0, 1f)) });
-            db.SpeakerProfiles.Add(new SpeakerProfile { Id = Guid.NewGuid(), UserId = user.Id, Name = "Bob", Embedding = Vec((1, 1f)) });
+            db.SpeakerProfiles.Add(new SpeakerProfile { Id = aliceId, UserId = user.Id, RoomId = await RoomOf(db, user.Id), Name = "Alice", Embedding = Vec((0, 1f)) });
+            db.SpeakerProfiles.Add(new SpeakerProfile { Id = Guid.NewGuid(), UserId = user.Id, RoomId = await RoomOf(db, user.Id), Name = "Bob", Embedding = Vec((1, 1f)) });
             await db.SaveChangesAsync();
         }
 
@@ -97,7 +101,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
         var user = await SeedUser();
         await using (var db = fx.CreateDbContext())
         {
-            db.SpeakerProfiles.Add(new SpeakerProfile { Id = Guid.NewGuid(), UserId = user.Id, Name = "Alice", Embedding = Vec((0, 1f)) });
+            db.SpeakerProfiles.Add(new SpeakerProfile { Id = Guid.NewGuid(), UserId = user.Id, RoomId = await RoomOf(db, user.Id), Name = "Alice", Embedding = Vec((0, 1f)) });
             await db.SaveChangesAsync();
         }
 
@@ -115,7 +119,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
         var other = await SeedUser();
         await using (var db = fx.CreateDbContext())
         {
-            db.SpeakerProfiles.Add(new SpeakerProfile { Id = Guid.NewGuid(), UserId = other.Id, Name = "Theirs", Embedding = Vec((0, 1f)) });
+            db.SpeakerProfiles.Add(new SpeakerProfile { Id = Guid.NewGuid(), UserId = other.Id, RoomId = await RoomOf(db, other.Id), Name = "Theirs", Embedding = Vec((0, 1f)) });
             await db.SaveChangesAsync();
         }
 
@@ -135,7 +139,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
 
         await using (var db = fx.CreateDbContext())
         {
-            db.SpeakerProfiles.Add(new SpeakerProfile { Id = profileId, UserId = user.Id, Name = "Alice", Embedding = Vec((0, 1f)) });
+            db.SpeakerProfiles.Add(new SpeakerProfile { Id = profileId, UserId = user.Id, RoomId = await RoomOf(db, user.Id), Name = "Alice", Embedding = Vec((0, 1f)) });
             db.Recordings.Add(new Recording { Id = recId, UserId = user.Id, BlobKey = "k" });
             db.Speakers.Add(new Speaker { Id = speakerId, RecordingId = recId, Label = "SPEAKER_00", DisplayName = "Alice" });
             db.ProfileContributions.Add(new ProfileContribution
@@ -166,7 +170,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
 
         await using (var db = fx.CreateDbContext())
         {
-            db.SpeakerProfiles.Add(new SpeakerProfile { Id = profileId, UserId = user.Id, Name = "Alice", Embedding = Vec((0, 1f)) });
+            db.SpeakerProfiles.Add(new SpeakerProfile { Id = profileId, UserId = user.Id, RoomId = await RoomOf(db, user.Id), Name = "Alice", Embedding = Vec((0, 1f)) });
             db.Recordings.Add(new Recording { Id = recId, UserId = user.Id, BlobKey = "k" });
             db.Speakers.Add(new Speaker
             {
@@ -208,7 +212,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
         await using (var db = fx.CreateDbContext())
         {
             // Centroid starts as the (normalised) mean of e0 and e1.
-            db.SpeakerProfiles.Add(new SpeakerProfile { Id = profileId, UserId = user.Id, Name = "Alice", SampleCount = 2, Embedding = Vec((0, 1f)) });
+            db.SpeakerProfiles.Add(new SpeakerProfile { Id = profileId, UserId = user.Id, RoomId = await RoomOf(db, user.Id), Name = "Alice", SampleCount = 2, Embedding = Vec((0, 1f)) });
             db.Recordings.Add(new Recording { Id = recId, UserId = user.Id, BlobKey = "k" });
             db.Speakers.AddRange(
                 new Speaker { Id = s1, RecordingId = recId, Label = "SPEAKER_00", DisplayName = "Alice", Embedding = Vec((0, 1f)) },
@@ -246,8 +250,8 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
 
         await using (var db = fx.CreateDbContext())
         {
-            db.SpeakerProfiles.Add(new SpeakerProfile { Id = targetId, UserId = user.Id, Name = "Alice", SampleCount = 1, Embedding = Vec((0, 1f)) });
-            db.SpeakerProfiles.Add(new SpeakerProfile { Id = sourceId, UserId = user.Id, Name = "Allie", SampleCount = 1, Embedding = Vec((1, 1f)) });
+            db.SpeakerProfiles.Add(new SpeakerProfile { Id = targetId, UserId = user.Id, RoomId = await RoomOf(db, user.Id), Name = "Alice", SampleCount = 1, Embedding = Vec((0, 1f)) });
+            db.SpeakerProfiles.Add(new SpeakerProfile { Id = sourceId, UserId = user.Id, RoomId = await RoomOf(db, user.Id), Name = "Allie", SampleCount = 1, Embedding = Vec((1, 1f)) });
             db.Recordings.Add(new Recording { Id = recId, UserId = user.Id, BlobKey = "k" });
             db.Speakers.AddRange(
                 new Speaker { Id = targetSpeaker, RecordingId = recId, Label = "SPEAKER_00", DisplayName = "Alice", ProfileId = targetId, Embedding = Vec((0, 1f)) },
@@ -289,7 +293,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
 
         await using (var db = fx.CreateDbContext())
         {
-            db.SpeakerProfiles.Add(new SpeakerProfile { Id = Guid.NewGuid(), UserId = user.Id, Name = "Alice", Embedding = Vec((0, 1f)) });
+            db.SpeakerProfiles.Add(new SpeakerProfile { Id = Guid.NewGuid(), UserId = user.Id, RoomId = await RoomOf(db, user.Id), Name = "Alice", Embedding = Vec((0, 1f)) });
             db.Recordings.Add(new Recording { Id = recId, UserId = user.Id, BlobKey = "k" });
             db.Speakers.Add(new Speaker
             {

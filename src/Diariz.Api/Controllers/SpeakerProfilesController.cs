@@ -29,19 +29,23 @@ public class SpeakerProfilesController : ControllerBase
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [HttpGet]
-    public async Task<IReadOnlyList<SpeakerProfileDto>> List() =>
-        await _db.SpeakerProfiles
-            .Where(p => p.UserId == UserId)
+    public async Task<IReadOnlyList<SpeakerProfileDto>> List()
+    {
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        return await _db.SpeakerProfiles
+            .Where(p => p.RoomId == roomId)
             .OrderBy(p => p.Name)
             .Select(p => new SpeakerProfileDto(p.Id, p.Name, p.SampleCount))
             .ToListAsync();
+    }
 
     /// <summary>A voiceprint's training contributions (which recording-speakers feed it) and how many
     /// recording-speakers it currently labels.</summary>
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<SpeakerProfileDetailDto>> Get(Guid id)
     {
-        var profile = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == id && p.UserId == UserId);
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var profile = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == id && p.RoomId == roomId);
         if (profile is null) return NotFound();
 
         var identifiedCount = await _db.Speakers.CountAsync(s => s.ProfileId == id);
@@ -97,7 +101,8 @@ public class SpeakerProfilesController : ControllerBase
         var name = req.Name?.Trim() ?? "";
         if (string.IsNullOrWhiteSpace(name)) return BadRequest("A name is required.");
 
-        var profile = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == id && p.UserId == UserId);
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var profile = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == id && p.RoomId == roomId);
         if (profile is null) return NotFound();
 
         profile.Name = name;
@@ -160,7 +165,8 @@ public class SpeakerProfilesController : ControllerBase
     [HttpDelete("{id:guid}/contributions/{contributionId:guid}")]
     public async Task<IActionResult> RemoveContribution(Guid id, Guid contributionId)
     {
-        var profile = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == id && p.UserId == UserId);
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var profile = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == id && p.RoomId == roomId);
         if (profile is null) return NotFound();
 
         var contribution = await _db.ProfileContributions
@@ -185,8 +191,9 @@ public class SpeakerProfilesController : ControllerBase
     {
         if (req.SourceId == id) return BadRequest("Cannot merge a person into itself.");
 
-        var target = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == id && p.UserId == UserId);
-        var source = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == req.SourceId && p.UserId == UserId);
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var target = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == id && p.RoomId == roomId);
+        var source = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == req.SourceId && p.RoomId == roomId);
         if (target is null || source is null) return NotFound();
 
         var targetContribs = await _db.ProfileContributions.Where(c => c.ProfileId == target.Id).ToListAsync();
@@ -210,7 +217,8 @@ public class SpeakerProfilesController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var profile = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == id && p.UserId == UserId);
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var profile = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == id && p.RoomId == roomId);
         if (profile is null) return NotFound();
 
         await UnlinkAndRevertAsync([id]);
@@ -224,7 +232,8 @@ public class SpeakerProfilesController : ControllerBase
     [HttpDelete]
     public async Task<IActionResult> DeleteAll()
     {
-        var profiles = await _db.SpeakerProfiles.Where(p => p.UserId == UserId).ToListAsync();
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var profiles = await _db.SpeakerProfiles.Where(p => p.RoomId == roomId).ToListAsync();
         if (profiles.Count == 0) return NoContent();
 
         await UnlinkAndRevertAsync(profiles.Select(p => p.Id).ToList());

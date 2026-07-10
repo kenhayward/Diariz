@@ -22,19 +22,23 @@ public class SpeakerIdentifier : ISpeakerIdentifier
 {
     private readonly DiarizDbContext _db;
     private readonly IdentificationOptions _opts;
+    private readonly IRoomScope _rooms;
 
-    public SpeakerIdentifier(DiarizDbContext db, IOptions<IdentificationOptions> opts)
+    public SpeakerIdentifier(DiarizDbContext db, IOptions<IdentificationOptions> opts, IRoomScope rooms)
     {
         _db = db;
         _opts = opts.Value;
+        _rooms = rooms;
     }
 
     public async Task<SpeakerMatch?> IdentifyAsync(Guid userId, Vector embedding, CancellationToken ct = default)
     {
         if (!_opts.Enabled) return null;
 
+        // Voiceprints are scoped by the owner's personal room now (members share a room's voiceprints).
+        var roomId = await _rooms.PersonalRoomIdAsync(userId, ct);
         var best = await _db.SpeakerProfiles
-            .Where(p => p.UserId == userId)
+            .Where(p => p.RoomId == roomId)
             .Select(p => new { p.Id, p.Name, Distance = p.Embedding.CosineDistance(embedding) })
             .OrderBy(x => x.Distance)
             .FirstOrDefaultAsync(ct);
