@@ -11,8 +11,28 @@ namespace Diariz.Api.Tests;
 
 public class SectionsControllerTests
 {
-    private static SectionsController Build(DiarizDbContext db, Guid userId) =>
-        new(db) { ControllerContext = Http.Context(userId) };
+    // Ensures the caller exists (RoomScope.PersonalRoomIdAsync needs a real user) and injects the scope.
+    private static SectionsController Build(DiarizDbContext db, Guid userId)
+    {
+        if (db.Users.Find(userId) is null)
+        {
+            db.Users.Add(new ApplicationUser { Id = userId, UserName = $"{userId}@x.test", Email = $"{userId}@x.test" });
+            db.SaveChanges();
+        }
+        return new(db, new RoomScope(db)) { ControllerContext = Http.Context(userId) };
+    }
+
+    // Seeds a section in the owner's personal room (folders are room-scoped now).
+    private static async Task<Section> SeedSection(
+        DiarizDbContext db, Guid userId, string name = "F", Guid? parentId = null, int position = 0)
+    {
+        Build(db, userId); // ensure the user
+        var roomId = await new RoomScope(db).PersonalRoomIdAsync(userId);
+        var s = new Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = name, ParentId = parentId, Position = position };
+        db.Sections.Add(s);
+        await db.SaveChangesAsync();
+        return s;
+    }
 
     [Fact]
     public async Task Create_AddsSection_AndReturnsIt()
@@ -55,9 +75,7 @@ public class SectionsControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        var section = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Old" };
-        db.Sections.Add(section);
-        await db.SaveChangesAsync();
+        var section = await SeedSection(db, userId, "Old");
 
         var result = await Build(db, userId).Rename(section.Id, new RenameSectionRequest("  New  "));
 
@@ -83,10 +101,8 @@ public class SectionsControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        db.Users.Add(new ApplicationUser { Id = userId, UserName = $"{userId}@x.test", Email = $"{userId}@x.test" });
-        var section = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Work" };
+        var section = await SeedSection(db, userId, "Work");
         var rec = new Recording { Id = Guid.NewGuid(), UserId = userId, BlobKey = "k" };
-        db.Sections.Add(section);
         db.Recordings.Add(rec);
         await db.SaveChangesAsync();
         var scope = new RoomScope(db);
@@ -117,12 +133,10 @@ public class SectionsControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        db.Sections.AddRange(
-            new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Zeta", Position = 0 },
-            new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Alpha", Position = 0 },
-            new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Beta", Position = 1 },
-            new Section { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Other" });
-        await db.SaveChangesAsync();
+        await SeedSection(db, userId, "Zeta", position: 0);
+        await SeedSection(db, userId, "Alpha", position: 0);
+        await SeedSection(db, userId, "Beta", position: 1);
+        await SeedSection(db, Guid.NewGuid(), "Other"); // another user's - excluded
 
         var list = await Build(db, userId).List();
 
@@ -137,9 +151,7 @@ public class SectionsControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        var parent = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Customers" };
-        db.Sections.Add(parent);
-        await db.SaveChangesAsync();
+        var parent = await SeedSection(db, userId, "Customers");
 
         var result = await Build(db, userId).Create(new CreateSectionRequest("Acme", parent.Id));
 
@@ -152,10 +164,8 @@ public class SectionsControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        var parent = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Customers" };
-        var child = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Acme", ParentId = parent.Id };
-        db.Sections.AddRange(parent, child);
-        await db.SaveChangesAsync();
+        var parent = await SeedSection(db, userId, "Customers");
+        var child = await SeedSection(db, userId, "Acme", parentId: parent.Id);
 
         var result = await Build(db, userId).Create(new CreateSectionRequest("Project X", child.Id));
 
@@ -179,11 +189,9 @@ public class SectionsControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        var parent = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Customers" };
-        var a = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Acme" };
-        var b = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Beta" };
-        db.Sections.AddRange(parent, a, b);
-        await db.SaveChangesAsync();
+        var parent = await SeedSection(db, userId, "Customers");
+        var a = await SeedSection(db, userId, "Acme");
+        var b = await SeedSection(db, userId, "Beta");
 
         var result = await Build(db, userId).Reorder(new ReorderSectionsRequest(parent.Id, [b.Id, a.Id]));
 
@@ -197,10 +205,8 @@ public class SectionsControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        var parent = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Customers" };
-        var child = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Acme", ParentId = parent.Id };
-        db.Sections.AddRange(parent, child);
-        await db.SaveChangesAsync();
+        var parent = await SeedSection(db, userId, "Customers");
+        var child = await SeedSection(db, userId, "Acme", parentId: parent.Id);
 
         await Build(db, userId).Reorder(new ReorderSectionsRequest(null, [child.Id]));
 
@@ -212,11 +218,9 @@ public class SectionsControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        var parent = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Customers" };
-        var child = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Acme", ParentId = parent.Id };
-        var loose = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Loose" };
-        db.Sections.AddRange(parent, child, loose);
-        await db.SaveChangesAsync();
+        var parent = await SeedSection(db, userId, "Customers");
+        var child = await SeedSection(db, userId, "Acme", parentId: parent.Id);
+        var loose = await SeedSection(db, userId, "Loose");
 
         Assert.IsType<BadRequestObjectResult>(
             await Build(db, userId).Reorder(new ReorderSectionsRequest(child.Id, [loose.Id])));
@@ -227,11 +231,10 @@ public class SectionsControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        var top = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Top" };
-        var hasChild = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "HasChild" };
-        var grandchild = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Kid", ParentId = hasChild.Id };
-        db.Sections.AddRange(top, hasChild, grandchild);
-        await db.SaveChangesAsync();
+        var top = await SeedSection(db, userId, "Top");
+        var hasChild = await SeedSection(db, userId, "HasChild");
+        var grandchild = await SeedSection(db, userId, "Kid", parentId: hasChild.Id);
+        _ = grandchild;
 
         // Moving HasChild under Top would make Kid a third level → rejected.
         Assert.IsType<BadRequestObjectResult>(

@@ -13,7 +13,7 @@ namespace Diariz.Api.IntegrationTests;
 public class SectionsIntegrationTests(ContainersFixture fx)
 {
     private static SectionsController Build(Diariz.Domain.DiarizDbContext db, Guid userId) =>
-        new(db) { ControllerContext = Http.Context(userId) };
+        new(db, new RoomScope(db)) { ControllerContext = Http.Context(userId) };
 
     [Fact]
     public async Task DeletingParent_CascadesToSubSections_AndUngroupsTheirRecordings()
@@ -22,8 +22,10 @@ public class SectionsIntegrationTests(ContainersFixture fx)
         await using (var db = fx.CreateDbContext())
         {
             var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = "u@x.test" };
-            var parent = new Section { Id = Guid.NewGuid(), UserId = user.Id, Name = "Customers" };
-            var child = new Section { Id = Guid.NewGuid(), UserId = user.Id, Name = "Acme", ParentId = parent.Id };
+            var room = new Room { Id = Guid.NewGuid(), Name = $"P {Guid.NewGuid():N}", Kind = RoomKind.Personal, OwnerUserId = user.Id };
+            db.Rooms.Add(room);
+            var parent = new Section { Id = Guid.NewGuid(), UserId = user.Id, RoomId = room.Id, Name = "Customers" };
+            var child = new Section { Id = Guid.NewGuid(), UserId = user.Id, RoomId = room.Id, Name = "Acme", ParentId = parent.Id };
             var rec = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = "k" };
             db.AddRange(user, parent, child, rec);
             await db.SaveChangesAsync();
@@ -49,9 +51,11 @@ public class SectionsIntegrationTests(ContainersFixture fx)
         await using (var db = fx.CreateDbContext())
         {
             var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = "u@x.test" };
-            var parent = new Section { Id = Guid.NewGuid(), UserId = user.Id, Name = "Customers" };
-            var a = new Section { Id = Guid.NewGuid(), UserId = user.Id, Name = "Acme" };
-            var b = new Section { Id = Guid.NewGuid(), UserId = user.Id, Name = "Beta" };
+            var room = new Room { Id = Guid.NewGuid(), Name = $"P {Guid.NewGuid():N}", Kind = RoomKind.Personal, OwnerUserId = user.Id };
+            db.Rooms.Add(room);
+            var parent = new Section { Id = Guid.NewGuid(), UserId = user.Id, RoomId = room.Id, Name = "Customers" };
+            var a = new Section { Id = Guid.NewGuid(), UserId = user.Id, RoomId = room.Id, Name = "Acme" };
+            var b = new Section { Id = Guid.NewGuid(), UserId = user.Id, RoomId = room.Id, Name = "Beta" };
             db.AddRange(user, parent, a, b);
             await db.SaveChangesAsync();
             (userId, parentId, aId, bId) = (user.Id, parent.Id, a.Id, b.Id);
