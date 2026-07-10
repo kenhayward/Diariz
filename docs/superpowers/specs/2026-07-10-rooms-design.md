@@ -39,6 +39,7 @@ without revisiting this document.
 | Deleting a recording | Only from its main room | Sharing grants edit and unshare, never destruction. |
 | Deleting a room | Allowed, with typed confirmation | Since no shared room is a main room, deletion unshares; it can never destroy audio. |
 | Deleting a user | Orphans their Personal Room | Their recordings survive, so shared rooms keep their history. |
+| Where a new recording lands | The folder selected when Record was pressed | In a shared room, the shared placement takes the folder; the main placement stays ungrouped. |
 | Personal Room mutability | Immutable and private | Cannot be renamed, deleted, shared, or gain members. Enforced server-side. |
 | Room transport | Explicit `roomId` in the URL | Visible, linkable, cacheable. Not an ambient header. |
 | Room enforcement | Explicit filter via a `RoomScope` service | Same convention as today's `UserId` filter, one level up. Not EF global query filters. |
@@ -221,11 +222,35 @@ preferred.
 | `DELETE /api/rooms/{roomId}/recordings/{id}` | Unshare. Requires `RemoveOthersRecordings` there, or being the recorder. **Refuses when that row is the main room** (that is a delete, and must be issued from home). |
 | `DELETE /api/recordings/{id}` | Destroy. Only the recorder, only from the main room. Response lists the shared rooms it will vanish from so the UI can confirm. |
 
-**Recording and upload** (`POST /api/rooms/{roomId}/recordings`) requires `CreateRecording` in `roomId`.
-When `roomId` is a shared room the endpoint writes **two** `RoomRecording` rows in one transaction: the
-main placement in the caller's personal room (ungrouped), and the shared placement in `roomId` (in the
-folder the caller currently has open, if any). When `roomId` is the caller's personal room it writes one.
-This is what keeps "no shared room is ever a main room" true by construction rather than by convention.
+**Recording and upload** (`POST /api/rooms/{roomId}/recordings`, body carries an optional `sectionId`)
+requires `CreateRecording` in `roomId`.
+
+- When `roomId` is the caller's **personal room**, it writes one `RoomRecording` row: main placement,
+  `SectionId = sectionId`.
+- When `roomId` is a **shared room**, it writes **two** rows in one transaction: the main placement in the
+  caller's personal room, always **ungrouped** (`SectionId = null`); and the shared placement in `roomId`
+  with `SectionId = sectionId`.
+
+This keeps "no shared room is ever a main room" true by construction rather than by convention.
+
+### Where a new recording lands
+
+The client captures the **selected folder at the moment Record is pressed** (not at upload - a long
+recording can outlive the selection) and sends it as `sectionId`. The same rule applies to the Upload
+button. Three edge cases:
+
+- **What counts as selected.** The section of the current view: the folder page you are on
+  (`/rooms/:roomId/sections/:id`), or the folder containing the recording you have open, or the folder
+  highlighted in the tree. Nothing selected means ungrouped. Sub-folders count, being sections like any
+  other.
+- **The folder is deleted mid-recording.** `SectionId` is validated on upload; a section that no longer
+  exists, or that belongs to another room, is rejected and the recording lands ungrouped rather than
+  failing the upload. Losing audio to a stale folder id would be indefensible.
+- **The room is switched mid-recording.** The captured room and folder win. The recording lands where the
+  user was standing when they pressed Record, which is the only interpretation that matches the button
+  they clicked.
+
+Drag-and-drop upload onto a folder passes that folder's id directly and bypasses the selection rule.
 
 ### Platform authorization
 
@@ -273,6 +298,11 @@ prefer the personal room, else the first readable room.
 **`RoomProvider`** exposes the current room and the caller's effective grid. It drives the UI: Record
 and Upload disable without `CreateRecording`; kebab items hide or disable per permission. Disabled
 controls carry a tooltip explaining *why*.
+
+It also exposes the **selected folder**, which `Recorder` snapshots along with the room when Record is
+pressed and sends with the upload (see "Where a new recording lands"). The Electron tray drives the same
+`Recorder` instance, so a tray-started recording inherits the web app's current selection with no separate
+code path.
 
 **Manage Rooms modal.** Left: rooms with icons and names, plus **New Room** at the bottom, which
 creates `Room 1`, `Room 2`, … ready to edit. Right: name, description (auto-expanding textarea), icon +
@@ -354,7 +384,10 @@ group. Personal-room immutability.
 cannot honour:
 
 - The filtered unique index on `IsMainRoom`, and the invariant that the main row is the recorder's
-  personal room - including after recording into a shared room, which must write exactly two placements.
+  personal room - including after recording into a shared room, which must write exactly two placements:
+  the shared one in the selected folder, the main one ungrouped.
+- Uploading with a `sectionId` that was deleted mid-recording, or that belongs to another room, lands the
+  recording ungrouped instead of failing.
 - FK and cascade behaviour on room delete: placements and room assets go, recordings and audio stay.
 - Deleting a user orphans their personal room (`OwnerUserId` → null) and leaves shared placements intact,
   so another member of the shared room still reads the recording.
@@ -366,8 +399,9 @@ cannot honour:
 
 **Web (`vitest`).** The switcher renders the personal room with an avatar and hides Manage Rooms without
 the permission. Record and Upload disable without `CreateRecording`, with the explanatory tooltip. The
-kebab omits Delete outside the main room and offers Remove from room instead. Deleting a shared recording
-confirms with the room names. The shared room's calendar renders recordings but no calendar events. Query
+kebab omits Delete outside the main room and offers Remove from room instead. Pressing Record with a
+folder selected sends that folder's id, and switching folders mid-recording does not change it. Deleting a
+shared recording confirms with the room names. The shared room's calendar renders recordings but no calendar events. Query
 keys carry the room id, so switching rooms does not show the previous room's recordings.
 
 **Worker (`pytest`).** Unaffected. The callback contract does not change shape; only the API's
