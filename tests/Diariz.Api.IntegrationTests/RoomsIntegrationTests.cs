@@ -1,4 +1,5 @@
 using Diariz.Api.IntegrationTests.Infrastructure;
+using Diariz.Api.Services;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Diariz.Domain.Migrations;
@@ -143,5 +144,44 @@ public class RoomsIntegrationTests(ContainersFixture fx)
                      RoomPermission.ShareOut, RoomPermission.ManageContents, RoomPermission.EditOthersRecordings,
                  })
             Assert.True(member.Permissions.HasFlag(p));
+    }
+
+    /// <summary>Two concurrent first-requests for the same user must yield ONE room. The filtered unique index
+    /// makes the loser's insert fail, and RoomScope re-reads the winner's row. The in-memory provider enforces
+    /// no such index, so this is the only place that `catch (DbUpdateException)` is exercised.</summary>
+    [Fact]
+    public async Task PersonalRoomIdAsync_IsSafeUnderConcurrency()
+    {
+        await using var setup = fx.CreateDbContext();
+        var userId = await NewUserAsync(setup, "Ada Lovelace");
+
+        // Separate DbContexts: two in-flight requests, as ASP.NET would scope them.
+        await using var dbA = fx.CreateDbContext();
+        await using var dbB = fx.CreateDbContext();
+
+        var results = await Task.WhenAll(
+            new RoomScope(dbA).PersonalRoomIdAsync(userId),
+            new RoomScope(dbB).PersonalRoomIdAsync(userId));
+
+        Assert.Equal(results[0], results[1]);
+
+        await using var check = fx.CreateDbContext();
+        Assert.Single(await check.Rooms.Where(r => r.OwnerUserId == userId).ToListAsync());
+        Assert.Single(await check.RoomMembers.Where(m => m.PrincipalId == userId).ToListAsync());
+    }
+
+    /// <summary>A user the migration already gave a room to must not get a second one on first request.</summary>
+    [Fact]
+    public async Task PersonalRoomIdAsync_ReturnsTheRoomTheMigrationBackfilled()
+    {
+        await using var db = fx.CreateDbContext();
+        var userId = await NewUserAsync(db, "Grace Hopper");
+        await db.Database.ExecuteSqlRawAsync(PersonalRoomBackfill.Sql);
+        var backfilled = await db.Rooms.SingleAsync(r => r.OwnerUserId == userId);
+
+        var resolved = await new RoomScope(db).PersonalRoomIdAsync(userId);
+
+        Assert.Equal(backfilled.Id, resolved);
+        Assert.Single(await db.Rooms.Where(r => r.OwnerUserId == userId).ToListAsync());
     }
 }
