@@ -181,6 +181,8 @@ builder.Services.AddScoped<ISchemaVersion, EfSchemaVersion>();
 // Platform authority, resolved from the caller's group membership on every request (never from a JWT claim).
 builder.Services.AddScoped<IUserPermissions, UserPermissions>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
+// Rooms. Nothing consumes this yet - phases 2b-2d wire it into the controllers.
+builder.Services.AddScoped<IRoomScope, RoomScope>();
 
 // ---- Redis job queue ----
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
