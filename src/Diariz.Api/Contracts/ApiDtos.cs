@@ -370,7 +370,10 @@ public record UserSettingsDto(
     string? DefaultApiBase, string? DefaultModel, bool ServerHasApiKey,
     int? ContextWindow, int DefaultContextWindow,
     bool ToolsEnabled, bool DefaultToolsEnabled, IReadOnlyList<ChatToolDto> Tools,
-    bool ReasoningEnabled, string ReasoningEffort, bool DefaultReasoningEnabled, string DefaultReasoningEffort);
+    bool ReasoningEnabled, string ReasoningEffort, bool DefaultReasoningEnabled, string DefaultReasoningEffort,
+    // Where a new recording lands in the user's Personal room. The mode serialises as its enum name
+    // ("SelectedFolder" etc.) via the global string-enum converter, same as MinutesGenerationMode.
+    RecordingPlacementMode PlacementMode, Guid? PlacementSectionId);
 
 /// <summary>A chat tool's state for the settings panel: whether it is on for this user
 /// (<paramref name="Enabled"/>) and its server-side default.</summary>
@@ -385,7 +388,10 @@ public record ChatToolDto(string Name, string Title, string Description, bool En
 public record UpdateUserSettingsRequest(
     string? ApiBase, string? Model, string? ApiKey, int? ContextWindow = null,
     bool? ToolsEnabled = null, IReadOnlyDictionary<string, bool>? ToolOverrides = null,
-    bool? ReasoningEnabled = null, string? ReasoningEffort = null);
+    bool? ReasoningEnabled = null, string? ReasoningEffort = null,
+    // PlacementMode: null leaves the placement preference unchanged; a value sets it (and, unless it is
+    // SpecificFolder, clears PlacementSectionId).
+    RecordingPlacementMode? PlacementMode = null, Guid? PlacementSectionId = null);
 
 // ---- MCP access tokens ----
 /// <summary>A stored MCP token, listed in Preferences. The secret is never returned — only a short display

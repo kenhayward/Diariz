@@ -2,21 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
-import type { SectionDto } from "../lib/types";
-
-/// Flatten sections for the picker: each top-level section, immediately followed by its sub-sections,
-/// which are labelled "Parent › Child" so the hierarchy is clear in a flat list.
-function orderedSections(sections: SectionDto[]): { section: SectionDto; label: string }[] {
-  const tops = sections.filter((s) => !s.parentId).sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.name.localeCompare(b.name));
-  const childrenOf = (id: string) =>
-    sections.filter((s) => s.parentId === id).sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.name.localeCompare(b.name));
-  const out: { section: SectionDto; label: string }[] = [];
-  for (const top of tops) {
-    out.push({ section: top, label: top.name });
-    for (const child of childrenOf(top.id)) out.push({ section: child, label: `${top.name} › ${child.name}` });
-  }
-  return out;
-}
+import { orderedSections } from "../lib/sectionTree";
 
 /// Move a recording into an existing section, ungroup it, or create a new section and move into it.
 export default function MoveToSectionModal({

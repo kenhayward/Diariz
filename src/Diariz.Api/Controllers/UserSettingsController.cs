@@ -55,7 +55,9 @@ public class UserSettingsController : ControllerBase
             ReasoningEnabled: s?.ReasoningEnabled ?? _serverDefaults.ReasoningEnabled,
             ReasoningEffort: NullIfBlank(s?.ReasoningEffort) ?? _serverDefaults.ReasoningEffort,
             DefaultReasoningEnabled: _serverDefaults.ReasoningEnabled,
-            DefaultReasoningEffort: _serverDefaults.ReasoningEffort);
+            DefaultReasoningEffort: _serverDefaults.ReasoningEffort,
+            PlacementMode: s?.RecordingPlacementMode ?? RecordingPlacementMode.SelectedFolder,
+            PlacementSectionId: s?.RecordingPlacementSectionId);
     }
 
     private static string? NullIfBlank(string? v) => string.IsNullOrWhiteSpace(v) ? null : v;
@@ -93,6 +95,15 @@ public class UserSettingsController : ControllerBase
         // per-user level (server default applies).
         if (req.ReasoningEnabled is not null) s.ReasoningEnabled = req.ReasoningEnabled;
         s.ReasoningEffort = Blank(req.ReasoningEffort);
+
+        // Placement: a mode replaces the preference; null leaves it unchanged. The fixed folder only applies in
+        // SpecificFolder mode (cleared otherwise, so a stale id can't resurface if the user flips back).
+        if (req.PlacementMode is { } mode)
+        {
+            s.RecordingPlacementMode = mode;
+            s.RecordingPlacementSectionId =
+                mode == RecordingPlacementMode.SpecificFolder ? req.PlacementSectionId : null;
+        }
 
         await _db.SaveChangesAsync();
         return NoContent();

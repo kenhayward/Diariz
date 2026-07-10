@@ -407,7 +407,13 @@ export interface UserSettings {
   reasoningEffort: string; // "low" | "medium" | "high"
   defaultReasoningEnabled: boolean;
   defaultReasoningEffort: string;
+  /// Where a new recording lands in the user's Personal room (enum name on the wire).
+  placementMode: RecordingPlacementMode;
+  placementSectionId: string | null;
 }
+
+/// Where a new recording lands in the user's Personal room. Mirrors the server enum names.
+export type RecordingPlacementMode = "Ungrouped" | "SelectedFolder" | "SpecificFolder";
 
 /// A stored MCP personal access token (the secret is never returned — only a short display prefix).
 export interface McpToken {
@@ -639,6 +645,9 @@ export interface UpdateUserSettings {
   reasoningEnabled?: boolean;
   /// Reasoning level ("low"|"medium"|"high"); blank clears the per-user override.
   reasoningEffort?: string;
+  /// Where a new recording lands; omit to leave unchanged. A non-SpecificFolder mode clears any fixed folder.
+  placementMode?: RecordingPlacementMode;
+  placementSectionId?: string | null;
 }
 
 // ---- Chat ----

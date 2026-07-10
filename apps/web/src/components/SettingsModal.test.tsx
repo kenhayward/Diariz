@@ -13,6 +13,7 @@ vi.mock("../lib/api", () => ({
     updatePlatformSettings: vi.fn().mockResolvedValue({ starterQuotaBytes: 0, maxQuotaBytes: 0 }),
     runAudioRetention: vi.fn().mockResolvedValue({ deleted: 0 }),
     runTagBackfill: vi.fn().mockResolvedValue({ enqueued: 3 }),
+    listSections: vi.fn().mockResolvedValue([]),
     backupUrl: () => "/api/maintenance/backup?access_token=t",
     restoreBackup: vi.fn().mockResolvedValue(undefined),
   },
@@ -53,6 +54,8 @@ describe("SettingsModal", () => {
       reasoningEffort: "medium",
       defaultReasoningEnabled: false,
       defaultReasoningEffort: "medium",
+      placementMode: "SelectedFolder",
+      placementSectionId: null,
     });
     (api.updateUserSettings as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -91,6 +94,8 @@ describe("SettingsModal", () => {
         toolOverrides: {},
         reasoningEnabled: false,
         reasoningEffort: "medium",
+        placementMode: "SelectedFolder",
+        placementSectionId: null,
       }),
     );
   });
@@ -146,6 +151,8 @@ describe("SettingsModal", () => {
         toolOverrides: {},
         reasoningEnabled: false,
         reasoningEffort: "medium",
+        placementMode: "SelectedFolder",
+        placementSectionId: null,
       }),
     );
   });
@@ -480,5 +487,36 @@ describe("SettingsModal", () => {
 
     expect(api.runAudioRetention).not.toHaveBeenCalled();
     confirm.mockRestore();
+  });
+
+  it("offers the Recordings tab with the three placement modes, defaulting to selected folder", async () => {
+    renderModal();
+    fireEvent.click(await screen.findByRole("tab", { name: /^recordings$/i }));
+
+    const selected = screen.getByRole("radio", { name: /currently selected folder/i }) as HTMLInputElement;
+    expect(selected.checked).toBe(true);
+    // The folder chooser only appears in "specific folder" mode.
+    expect(screen.queryByLabelText(/^folder$/i)).toBeNull();
+    fireEvent.click(screen.getByRole("radio", { name: /specific folder/i }));
+    expect(screen.getByLabelText(/^folder$/i)).toBeTruthy();
+  });
+
+  it("saves a specific-folder placement with the chosen folder", async () => {
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "sec-1", name: "Projects", parentId: null, position: 0 },
+    ]);
+    renderModal();
+    await screen.findByDisplayValue("https://existing/v1"); // settings loaded
+
+    fireEvent.click(screen.getByRole("tab", { name: /^recordings$/i }));
+    fireEvent.click(screen.getByRole("radio", { name: /specific folder/i }));
+    fireEvent.change(await screen.findByLabelText(/^folder$/i), { target: { value: "sec-1" } });
+    fireEvent.click(screen.getByRole("button", { name: /^ok$/i }));
+
+    await waitFor(() =>
+      expect(api.updateUserSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ placementMode: "SpecificFolder", placementSectionId: "sec-1" }),
+      ),
+    );
   });
 });

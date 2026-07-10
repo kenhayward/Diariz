@@ -3,12 +3,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
-import type { MinutesGenerationMode } from "../lib/types";
+import type { MinutesGenerationMode, RecordingPlacementMode } from "../lib/types";
+import { orderedSections } from "../lib/sectionTree";
 import { useAuth } from "../auth";
 import { bytesToGb, gbToBytes } from "../lib/format";
 import MaintenancePanel from "./MaintenancePanel";
 
-type Tab = "ai" | "tools" | "quotas" | "maintenance" | "integration";
+type Tab = "ai" | "tools" | "recordings" | "quotas" | "maintenance" | "integration";
 
 /// Settings modal. Every user gets Model Settings (per-user summarisation/model config) and Chat Tools
 /// (the chat tool-calling switch + per-tool table); the Platform Administrator also gets Storage Quotas
@@ -19,6 +20,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const { isPlatformAdmin } = useAuth();
   const { data } = useQuery({ queryKey: ["user-settings"], queryFn: api.getUserSettings });
+  // Personal-room folders for the "Use a specific folder" chooser (flattened "Parent › Child").
+  const { data: sections = [] } = useQuery({ queryKey: ["sections"], queryFn: api.listSections });
   const { data: platform } = useQuery({
     queryKey: ["platform-settings"],
     queryFn: api.getPlatformSettings,
@@ -37,6 +40,9 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   // Reasoning: on/off + effort level ("low"|"medium"|"high").
   const [reasoningEnabled, setReasoningEnabled] = useState(false);
   const [reasoningEffort, setReasoningEffort] = useState("medium");
+  // Recordings: where a new recording lands in the personal room, and the fixed folder for "specific".
+  const [placementMode, setPlacementMode] = useState<RecordingPlacementMode>("SelectedFolder");
+  const [placementSectionId, setPlacementSectionId] = useState<string | null>(null);
 
   // Storage quotas (GB inputs).
   const [starterGb, setStarterGb] = useState("");
@@ -66,6 +72,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       setToolStates(Object.fromEntries(data.tools.map((tool) => [tool.name, tool.enabled])));
       setReasoningEnabled(data.reasoningEnabled);
       setReasoningEffort(data.reasoningEffort || "medium");
+      setPlacementMode(data.placementMode ?? "SelectedFolder");
+      setPlacementSectionId(data.placementSectionId ?? null);
     }
   }, [data]);
 
@@ -102,6 +110,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         toolOverrides: toolStates,
         reasoningEnabled,
         reasoningEffort,
+        placementMode,
+        placementSectionId: placementMode === "SpecificFolder" ? placementSectionId : null,
       });
       qc.invalidateQueries({ queryKey: ["user-settings"] });
 
@@ -169,6 +179,9 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
             </TabButton>
             <TabButton active={tab === "tools"} onClick={() => setTab("tools")}>
               {t("chatToolsTab")}
+            </TabButton>
+            <TabButton active={tab === "recordings"} onClick={() => setTab("recordings")}>
+              {t("recordingsTab")}
             </TabButton>
             {isPlatformAdmin && (
               <>
@@ -349,6 +362,61 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                     </tbody>
                   </table>
                 </div>
+              )}
+            </div>
+          ) : tab === "recordings" ? (
+            /* Where a new recording lands in your personal room. */
+            <div className="space-y-3">
+              <p className="text-xs text-gray-500 dark:text-gray-400">{t("recordingsIntro")}</p>
+              <fieldset className="space-y-2">
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="placement-mode"
+                    className="mt-0.5"
+                    checked={placementMode === "Ungrouped"}
+                    onChange={() => setPlacementMode("Ungrouped")}
+                  />
+                  <span className="text-gray-700 dark:text-gray-200">{t("placementUngrouped")}</span>
+                </label>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="placement-mode"
+                    className="mt-0.5"
+                    checked={placementMode === "SelectedFolder"}
+                    onChange={() => setPlacementMode("SelectedFolder")}
+                  />
+                  <span className="text-gray-700 dark:text-gray-200">{t("placementSelected")}</span>
+                </label>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="placement-mode"
+                    className="mt-0.5"
+                    checked={placementMode === "SpecificFolder"}
+                    onChange={() => setPlacementMode("SpecificFolder")}
+                  />
+                  <span className="text-gray-700 dark:text-gray-200">{t("placementSpecific")}</span>
+                </label>
+              </fieldset>
+              {placementMode === "SpecificFolder" && (
+                <label className="block text-sm">
+                  <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("placementFolder")}</span>
+                  <select
+                    aria-label={t("placementFolder")}
+                    value={placementSectionId ?? ""}
+                    onChange={(e) => setPlacementSectionId(e.target.value || null)}
+                    className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                  >
+                    <option value="">{t("placementUngroupedOption")}</option>
+                    {orderedSections(sections).map(({ section, label }) => (
+                      <option key={section.id} value={section.id}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               )}
             </div>
           ) : tab === "quotas" ? (
