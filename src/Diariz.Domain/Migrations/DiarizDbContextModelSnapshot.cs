@@ -802,6 +802,42 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("RoomMembers");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.RoomRecording", b =>
+                {
+                    b.Property<Guid>("RoomId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RecordingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsMainRoom")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("SectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("SharedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("SharedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("RoomId", "RecordingId");
+
+                    b.HasIndex("RecordingId")
+                        .IsUnique()
+                        .HasFilter("\"IsMainRoom\"");
+
+                    b.HasIndex("SectionId");
+
+                    b.HasIndex("RoomId", "SectionId");
+
+                    b.ToTable("RoomRecordings", t =>
+                        {
+                            t.HasCheckConstraint("CK_RoomRecordings_MainRoomHasNoSharer", "NOT \"IsMainRoom\" OR (\"SharedByUserId\" IS NULL AND \"SharedAt\" IS NULL)");
+                        });
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.Section", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1844,6 +1880,32 @@ namespace Diariz.Domain.Migrations
                         .IsRequired();
 
                     b.Navigation("Room");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.RoomRecording", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.Recording", "Recording")
+                        .WithMany()
+                        .HasForeignKey("RecordingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Diariz.Domain.Entities.Room", "Room")
+                        .WithMany()
+                        .HasForeignKey("RoomId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Diariz.Domain.Entities.Section", "Section")
+                        .WithMany()
+                        .HasForeignKey("SectionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Recording");
+
+                    b.Navigation("Room");
+
+                    b.Navigation("Section");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.Section", b =>
