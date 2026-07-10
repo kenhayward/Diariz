@@ -77,6 +77,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `DropRecordingSectionId` | Drops `Recordings.SectionId` (and its FK/index). The folder is now a property of the **placement** (`RoomRecordings.SectionId`), not of the recording, so the same recording can sit in different folders in different rooms |
 | `AddSectionRoomId` | `Sections.RoomId` (uuid, indexed `(RoomId, Name)`; a **plain column**, no FK yet - the Rooms FK + the `UserId` drop land with Phase 4). The migration **backfills** each section into its owner's personal room, minting a missing one first (`SectionRoomBackfill`). Folders are now room-scoped; `Section.UserId` is retained as owner identity for now |
 | `AddRoomScopedEntities` | `SpeakerProfiles.RoomId` + `ChatSessions.RoomId` (uuid, not-null) and `MeetingTypes.RoomId` (uuid, **nullable** - null mirrors the platform type's null `UserId`); all **plain columns**, no FK yet (the Rooms FK + the `UserId` drop land with Phase 4). The migration **backfills** each voiceprint, saved chat and personal meeting type into its owner's personal room, minting a missing one first (`RoomScopedEntitiesBackfill`); platform meeting types keep `RoomId` null. These are populated on create but still **queried by `UserId`** for now |
+| `AddRecordingPlacementPreference` | `UserSettings.RecordingPlacementMode` (int, not-null, **default 1** = `SelectedFolder`) + `UserSettings.RecordingPlacementSectionId` (uuid, nullable). Where a new recording is filed in the recorder's personal room; no data backfill (the column default covers existing rows) |
 
 ### Entity-relationship overview
 
@@ -499,6 +500,8 @@ Per-user preferences (1:1 with the user via a **shared primary key** = `UserId`)
 | `JobTitle` / `CompanyName` / `LinkedIn` | varchar(256) null | free-text profile fields |
 | `JobDescription` / `CompanyDescription` | varchar(2048) null | free-text profile fields |
 | `Theme` | int | UI colour theme (`ThemePreference`): `0` = Auto (default), `1` = Light, `2` = Dark. Append-only enum |
+| `RecordingPlacementMode` | int | where a new recording is filed in the user's personal room (`RecordingPlacementMode`): `0` = Ungrouped, `1` = SelectedFolder (default - the folder they had open), `2` = SpecificFolder. Append-only enum |
+| `RecordingPlacementSectionId` | uuid null | the fixed folder for `SpecificFolder` mode; null in the other modes |
 
 Each field falls back to the server `Summarization`/`Chat` defaults when null. The display name lives on
 `AspNetUsers.FullName` (editable via `PUT /api/user/profile`), not here.

@@ -123,6 +123,14 @@ original words (so you can always flip back), and exports/email/chat use them.
 - **Organise** recordings into **sections and sub-sections** (one level of nesting) with drag-and-drop
 ordering and cross-group moves; select a whole group at once to build chat context. Browse them as a
 **list or a calendar** (days with recordings are highlighted; click one to see that day's recordings).
+- **Rooms (early).** A **room switcher** sits above the recordings list. Today it shows a single room - your
+**Personal Room** - which is the private space every user has; shared rooms (workspaces you invite others to)
+come in a later milestone. The room lives in the URL (`/rooms/:roomId`), so switching keeps a clean, linkable
+address.
+- **Where new recordings land.** A **Recordings** tab in Settings chooses how a fresh recording is filed in
+your Personal Room: **Ungrouped**, the **folder you currently have open** (the default), or a **specific
+folder** you pick. When you press Record, the take is filed accordingly the moment it finishes uploading -
+no manual move needed.
 - **Folder pages.** Open any folder (section) as a **first-class page** - the same layout as a recording
 (heading, subheading, toolbar, tabs). The disclosure triangle (enlarged) still collapses/expands; clicking the
 folder **name** opens its page and highlights the folder. **Overview** shows folder stats (transcript count,

@@ -27,7 +27,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Connect Claude (MCP)** | Connect Claude to your own meetings via OAuth (claude.ai) or a personal token (Claude Desktop/Code). |
 | **Translate** | Translate a whole transcript or a single segment, stored as revisions you can flip back. |
 | **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) to a recording or directly to a folder, edit Markdown attachments in place, save a chat conversation as an attachment with /attach, and optionally feed them to chat. |
-| **Organise & merge** | Sections and sub-sections with drag-and-drop; browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
+| **Organise & merge** | Sections and sub-sections with drag-and-drop; a room switcher above the list (your Personal Room for now); choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
 | **API access** | Generate a personal API token (when enabled) to call the REST API as yourself, with a built-in API reference. |
@@ -51,20 +51,25 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
-    version: "0.118.4",
+    version: "0.119.0",
     date: "2026-07-10",
     pr: 264,
-    headline: "Folders and your saved data move with rooms",
+    headline: "Rooms arrive: a room switcher and where new recordings land",
     summary:
-      "Another invisible groundwork step for Rooms - shared spaces. Nothing changes for you: your folders, " +
-      "sub-folders, recordings, voiceprints, saved chats, and meeting-type templates behave exactly as " +
-      "before. Under the hood, each of these now belongs to a room rather than directly to you, which is " +
-      "what will let a shared room have its own set of folders, voiceprints and templates once shared rooms " +
-      "arrive. A recording can only be filed under a folder that lives in the same room, so nothing can end " +
-      "up in the wrong place.",
+      "The first visible step of Rooms - shared spaces. The recordings panel now has a room switcher at the " +
+      "top, showing your Personal Room (there is only one room for now; shared rooms come next). New behind " +
+      "it: a Recordings tab in Settings that decides where a new recording is filed - always Ungrouped, the " +
+      "folder you have open (the default), or a specific folder you choose. When you press Record, the take " +
+      "now lands in that folder automatically instead of always Ungrouped. Under the hood, folders, " +
+      "recordings, voiceprints, saved chats and meeting-type templates all now belong to a room, groundwork " +
+      "that lets a shared room have its own set once shared rooms arrive.",
+    added: [
+      "A room switcher at the top of the recordings panel (your Personal Room for now).",
+      "A Recordings tab in Settings to choose where a new recording is filed: Ungrouped, the selected folder (default), or a specific folder.",
+    ],
     changed: [
-      "Folders now belong to a room (your personal room, for now), with no change to how folders look or work today.",
-      "Voiceprints, saved chats and personal meeting-type templates now belong to a room too - again, your personal room, with no visible change.",
+      "Pressing Record now files the recording into the folder you have open (per the new preference), instead of always Ungrouped.",
+      "Folders, recordings, voiceprints, saved chats and meeting-type templates now belong to a room (your Personal Room, for now), with no change to how they look or work today.",
     ],
   },
   {

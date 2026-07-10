@@ -565,8 +565,26 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
     (both not-null) and `MeetingType.RoomId` (**nullable** - null for Platform types, mirroring their null
     `UserId`) are set on create and backfilled to each owner's personal room. As with folders they are **plain
     columns still queried by `UserId`**; the query flip, the Rooms FK and the `UserId` drop wait for Phase 4.
-  - **Still ahead:** the RAG chunk filter re-scoped onto rooms, then shared rooms and the `UserId` retirement.
-    Until then, everything resolves to the caller's personal room via `RoomScope.PersonalRoomIdAsync`. See
+  - **Rooms surface in the UI (Phase 3).** `GET /api/rooms` (`RoomsController` → `RoomScope.RoomsForUserAsync`)
+    lists the rooms the caller belongs to (today: just their Personal room) with the caller's effective
+    `RoomPermission` grid as an **int bitmask** (`RoomListItemDto.Permissions` - a `[Flags]` enum would serialise
+    as `"A, B"` and break the web's bit arithmetic). The web `RoomProvider` (`apps/web/src/lib/rooms.tsx`, mounted
+    in `WorkspaceLayout`) reads that list, derives the current room from a `/rooms/:roomId` URL segment (via
+    `useMatch`, defaulting to the personal room), and exposes the room, its permission grid (`can(perm)`, failing
+    closed while loading), the folder the user is viewing, and the **resolved placement target** for a new
+    recording. A **room switcher** replaces the old "Meetings" panel header; `Record`/`Upload` disable without
+    `CreateRecording` (always granted in a personal room, so unchanged today). A nested `rooms/:roomId` route
+    group mirrors the four workspace children; the legacy top-level children stay working as the personal-room
+    default. Per-room link rewrites + query-key isolation are no-ops with one room and land in Phase 4.
+  - **Where a new recording lands (Phase 3).** `UserSettings.RecordingPlacementMode`
+    (`Ungrouped`/`SelectedFolder` (default)/`SpecificFolder`) + `RecordingPlacementSectionId`, set in a new
+    **Recordings** Settings tab, decide the folder. `RoomProvider` resolves the mode against the folder the user
+    is viewing; `Recorder` snapshots that target when Record is pressed and passes it as `sectionId` to
+    `POST /api/recordings`, which files the main placement there **only if the folder belongs to the uploader's
+    personal room** (an alien/stale id is ignored, not misfiled).
+  - **Still ahead:** the RAG chunk filter re-scoped onto rooms, then shared rooms (Manage Rooms modal, room
+    creation/membership, cross-room sharing) and the `UserId` retirement. Until then, everything resolves to the
+    caller's personal room via `RoomScope.PersonalRoomIdAsync`. See
     `docs/superpowers/specs/2026-07-10-rooms-design.md`.
 - **Access lifecycle:** a person **requests access** (`UserStatus.Requested`) → an admin **grants** it
   (issues a one-time setup link; emailed via SMTP/MailKit, or shown to the admin as a fallback when SMTP is
