@@ -108,9 +108,10 @@ public class ChatControllerTests
     {
         var me = Guid.NewGuid();
         var (controller, db, _) = Build(me);
-        db.ChatSessions.Add(new ChatSession { Id = Guid.NewGuid(), UserId = me, Title = "Older", UpdatedAt = DateTimeOffset.UtcNow.AddMinutes(-5) });
-        db.ChatSessions.Add(new ChatSession { Id = Guid.NewGuid(), UserId = me, Title = "Newer", UpdatedAt = DateTimeOffset.UtcNow });
-        db.ChatSessions.Add(new ChatSession { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Title = "Someone else" });
+        var meRoom = await new RoomScope(db).PersonalRoomIdAsync(me); // chats are room-scoped now
+        db.ChatSessions.Add(new ChatSession { Id = Guid.NewGuid(), UserId = me, RoomId = meRoom, Title = "Older", UpdatedAt = DateTimeOffset.UtcNow.AddMinutes(-5) });
+        db.ChatSessions.Add(new ChatSession { Id = Guid.NewGuid(), UserId = me, RoomId = meRoom, Title = "Newer", UpdatedAt = DateTimeOffset.UtcNow });
+        db.ChatSessions.Add(new ChatSession { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Title = "Someone else" });
         await db.SaveChangesAsync();
 
         var list = await controller.ListConversations();

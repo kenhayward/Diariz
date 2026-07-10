@@ -228,17 +228,21 @@ public class ChatController : ControllerBase
     // ---- Saved conversations (per-user CRUD) ----
 
     [HttpGet("conversations")]
-    public async Task<IReadOnlyList<ChatConversationSummaryDto>> ListConversations() =>
-        await _db.ChatSessions
-            .Where(c => c.UserId == UserId)
+    public async Task<IReadOnlyList<ChatConversationSummaryDto>> ListConversations()
+    {
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        return await _db.ChatSessions
+            .Where(c => c.RoomId == roomId)
             .OrderByDescending(c => c.UpdatedAt)
             .Select(c => new ChatConversationSummaryDto(c.Id, c.Title, c.UpdatedAt))
             .ToListAsync();
+    }
 
     [HttpGet("conversations/{id:guid}")]
     public async Task<ActionResult<ChatConversationDto>> GetConversation(Guid id)
     {
-        var c = await _db.ChatSessions.FirstOrDefaultAsync(x => x.Id == id && x.UserId == UserId);
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var c = await _db.ChatSessions.FirstOrDefaultAsync(x => x.Id == id && x.RoomId == roomId);
         if (c is null) return NotFound();
         return ToDto(c);
     }
@@ -272,7 +276,8 @@ public class ChatController : ControllerBase
     public async Task<ActionResult<SaveChatConversationResult>> UpdateConversation(
         Guid id, SaveChatConversationRequest req, CancellationToken ct)
     {
-        var c = await _db.ChatSessions.FirstOrDefaultAsync(x => x.Id == id && x.UserId == UserId);
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId, ct);
+        var c = await _db.ChatSessions.FirstOrDefaultAsync(x => x.Id == id && x.RoomId == roomId, ct);
         if (c is null) return NotFound();
 
         var messages = req.Messages ?? [];
@@ -289,7 +294,8 @@ public class ChatController : ControllerBase
     [HttpDelete("conversations/{id:guid}")]
     public async Task<IActionResult> DeleteConversation(Guid id)
     {
-        var c = await _db.ChatSessions.FirstOrDefaultAsync(x => x.Id == id && x.UserId == UserId);
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var c = await _db.ChatSessions.FirstOrDefaultAsync(x => x.Id == id && x.RoomId == roomId);
         if (c is null) return NotFound();
         _db.ChatSessions.Remove(c);
         await _db.SaveChangesAsync();
