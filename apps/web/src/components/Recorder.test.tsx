@@ -15,6 +15,8 @@ vi.mock("../lib/pendingNotes", () => ({
   clearPendingNotes: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../lib/uploadContext", () => ({ useUpload: () => ({ uploadFiles: vi.fn() }) }));
+const setStatus = vi.fn();
+vi.mock("../lib/status", () => ({ useStatus: () => ({ status: null, setStatus }) }));
 vi.mock("../lib/audioSource", () => ({
   getStream: vi.fn(),
   getCombinedStream: vi.fn(),
@@ -117,6 +119,49 @@ describe("Recorder recovery", () => {
     render(<Recorder onUploaded={() => {}} />);
     await screen.findByRole("button", { name: /record/i });
     expect(screen.queryByRole("button", { name: /upload now/i })).toBeNull();
+    expect(screen.queryByTestId("recorder-popover")).toBeNull();
+  });
+
+  // The banners float below the top bar rather than sitting in its flow: the header is a fixed height,
+  // so an in-flow banner grew it and pushed the page down.
+  it("floats the unsaved-recording banner in a popover, out of the top bar's flow", async () => {
+    (loadPendingRecording as Mock).mockResolvedValue(pending);
+    render(<Recorder onUploaded={() => {}} />);
+
+    const popover = await screen.findByTestId("recorder-popover");
+    expect(popover.className).toContain("absolute");
+    expect(within(popover).getByRole("button", { name: /upload now/i })).toBeTruthy();
+  });
+});
+
+describe("Recorder transport controls", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: false });
+    (getStream as Mock).mockResolvedValue(fakeSession);
+  });
+
+  // The transport buttons are icon-only: the glyph carries the meaning, the label lives on aria-label
+  // (and title) so screen readers + hover tooltips still name them.
+  const iconOnly = (btn: HTMLElement) => btn.querySelector("svg") !== null && btn.textContent === "";
+
+  it("renders Record and Upload as icons with accessible names", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    expect(iconOnly(await screen.findByRole("button", { name: /^record$/i }))).toBe(true);
+    expect(iconOnly(screen.getByRole("button", { name: /^upload$/i }))).toBe(true);
+  });
+
+  it("renders Pause, Resume and Stop as icons with accessible names", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /^record$/i }));
+
+    const pause = await screen.findByRole("button", { name: /^pause$/i });
+    expect(iconOnly(pause)).toBe(true);
+    expect(iconOnly(screen.getByRole("button", { name: /^stop$/i }))).toBe(true);
+
+    fireEvent.click(pause);
+    expect(iconOnly(await screen.findByRole("button", { name: /^resume$/i }))).toBe(true);
   });
 });
 
@@ -282,7 +327,34 @@ describe("Recorder source selection", () => {
 
     await waitFor(() => expect(api.upload).toHaveBeenCalled());
     expect((api.upload as Mock).mock.calls[0][3]).toBe("Microphone");
-    expect(screen.getByText(/microphone only/i)).toBeTruthy();
+    // The notice goes to the status bar (amber), not inline in the top bar - an inline line there would
+    // grow the fixed-height header and push it off screen.
+    expect(screen.queryByText(/microphone only/i)).toBeNull();
+    expect(setStatus).toHaveBeenCalledWith(expect.stringMatching(/microphone only/i), "progress", { sticky: true });
+  });
+
+  it("reports a capture failure to the status bar in the error tone", async () => {
+    (getStream as Mock).mockRejectedValue(new Error("boom"));
+    render(<Recorder onUploaded={() => {}} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /^record$/i }));
+
+    await waitFor(() =>
+      expect(setStatus).toHaveBeenCalledWith("audio error", "error", { sticky: true }),
+    );
+    expect(screen.queryByText("audio error")).toBeNull();
+  });
+
+  it("clears its status-bar message once the condition passes", async () => {
+    (getStream as Mock).mockRejectedValueOnce(new Error("boom")).mockResolvedValue(fakeSession);
+    render(<Recorder onUploaded={() => {}} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /^record$/i }));
+    await waitFor(() => expect(setStatus).toHaveBeenCalledWith("audio error", "error", { sticky: true }));
+
+    setStatus.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: /^record$/i }));
+    await waitFor(() => expect(setStatus).toHaveBeenCalledWith(null));
   });
 
   it("closes the audio-settings popover on an outside click", async () => {
@@ -342,7 +414,15 @@ describe("Recorder source selection", () => {
 
     fireEvent.focus(await screen.findByRole("combobox"));
 
-    expect(await screen.findByText(/no microphone detected/i)).toBeTruthy();
+    // The hint shows in the status bar (neutral tone), not inline under the top bar.
+    await waitFor(() =>
+      expect(setStatus).toHaveBeenCalledWith(
+        expect.stringMatching(/no microphone detected/i),
+        "info",
+        { sticky: true },
+      ),
+    );
+    expect(screen.queryByText(/no microphone detected/i)).toBeNull();
   });
 
   it("no longer shows the bespoke 'allow microphone' link", async () => {
