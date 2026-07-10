@@ -11,8 +11,8 @@ import {
   addBlock, removeBlock, updateBlock, moveBlock, moveBlockCrossSection, normalizeBreaks,
   contentError, emptyContent,
 } from "../lib/meetingTypeDraft";
-import { MEETING_TYPE_ICONS } from "./MeetingTypeIcon";
 import MeetingTypeIcon from "./MeetingTypeIcon";
+import IconColorPicker from "./IconColorPicker";
 import KebabMenu from "./KebabMenu";
 
 interface Draft {
@@ -287,29 +287,12 @@ export default function ManageMeetingTypesModal({ onClose }: { onClose: () => vo
                   {/* Icon + background colour. */}
                   <div className="text-sm">
                     <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("workspace:mtFieldIcon")}</span>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={draft.color}
-                        onChange={(e) => patch({ color: e.target.value })}
-                        aria-label={t("workspace:mtFieldColor")}
-                        className="h-8 w-8 shrink-0 cursor-pointer rounded border p-0.5 dark:border-gray-700 dark:bg-gray-800"
-                      />
-                      <div className="flex flex-wrap gap-1">
-                        {MEETING_TYPE_ICONS.map((icon) => (
-                          <button
-                            key={icon}
-                            type="button"
-                            aria-label={icon}
-                            aria-pressed={draft.icon === icon}
-                            onClick={() => patch({ icon })}
-                            className={`rounded p-0.5 ${draft.icon === icon ? "ring-2 ring-indigo-500" : ""}`}
-                          >
-                            <MeetingTypeIcon icon={icon} color={draft.color} size={22} />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                    <IconColorPicker
+                      icon={draft.icon}
+                      color={draft.color}
+                      onChange={patch}
+                      colorLabel={t("workspace:mtFieldColor")}
+                    />
                   </div>
 
                   <label className="block text-sm">

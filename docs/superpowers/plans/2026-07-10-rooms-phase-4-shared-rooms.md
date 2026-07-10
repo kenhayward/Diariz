@@ -73,6 +73,11 @@ Commit: `feat(api): create, edit and delete shared rooms + membership over HTTP`
 
 ## Task 3: user-delete orphans the personal room and sweeps memberships
 
+> **Decision (2026-07-10):** the user chose to **keep today's behaviour** - deleting a user still deletes their
+> recordings. So this task is **just the RoomMember sweep** (shipped); the "recordings survive / UserId nullable
+> / also-delete opt-in" part of the original design is **not** implemented. The personal room still orphans via
+> the existing `OwnerUserId` SetNull FK.
+
 **Files:** `src/Diariz.Api/Controllers/AdminUsersController.cs` (`Delete`, and `Deny`); `src/Diariz.Api/Contracts/ApiDtos.cs` (delete-user options); `tests/Diariz.Api.IntegrationTests/*` (the sweep + orphan needs real Postgres FKs)
 
 - Before `await _users.DeleteAsync(user)`, sweep `RoomMembers WHERE PrincipalType == User AND PrincipalId == id` (load + `RemoveRange`; **not** `ExecuteDelete` - the in-memory provider can't). The personal room already orphans via the `OwnerUserId` SetNull FK - assert it survives with `OwnerUserId == null`.
