@@ -285,6 +285,50 @@ public class RecordingsControllerTests
         Assert.Null(db.RoomRecordings.Single().SectionId);
     }
 
+    /// <summary>Recording into a shared room the caller may record in creates BOTH placements: the always-main
+    /// personal one (ungrouped) and a non-main shared one in the room.</summary>
+    [Fact]
+    public async Task Upload_IntoSharedRoom_CreatesMainPersonalAndSharedPlacements()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var scope = new RoomScope(db);
+        var personalId = await scope.PersonalRoomIdAsync(userId);
+        var roomId = await scope.CreateSharedRoomAsync("Eng", null, null, null);
+        await scope.SetMemberAsync(roomId, RoomPrincipalType.User, userId, RoomPermission.CreateRecording);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.Upload(FakeAudio(Encoding.UTF8.GetBytes("audio")), "Standup", durationMs: 1000, roomId: roomId);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+        var main = db.RoomRecordings.Single(p => p.IsMainRoom);
+        Assert.Equal(personalId, main.RoomId);
+        Assert.Null(main.SectionId); // ungrouped in the personal room, per spec
+        var shared = db.RoomRecordings.Single(p => !p.IsMainRoom);
+        Assert.Equal(roomId, shared.RoomId);
+        Assert.Equal(userId, shared.SharedByUserId);
+    }
+
+    /// <summary>Recording into a room the caller can't record in is a 403, and nothing is stored.</summary>
+    [Fact]
+    public async Task Upload_IntoRoomWithoutCreateRecording_Returns403_AndStoresNothing()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var scope = new RoomScope(db);
+        var roomId = await scope.CreateSharedRoomAsync("Eng", null, null, null); // caller is not a member
+        var storage = new FakeAudioStorage();
+        var controller = Build(db, userId, new FakeJobQueue(), storage);
+
+        var result = await controller.Upload(FakeAudio(Encoding.UTF8.GetBytes("audio")), "Standup", durationMs: 1000, roomId: roomId);
+
+        Assert.Equal(403, ((ObjectResult)result.Result!).StatusCode);
+        Assert.Empty(db.Recordings);
+        Assert.Empty(db.RoomRecordings);
+    }
+
     [Fact]
     public async Task Upload_StoresBlob_PersistsRecording_AndEnqueuesFirstTranscription()
     {

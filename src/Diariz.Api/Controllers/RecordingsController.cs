@@ -199,7 +199,8 @@ public class RecordingsController : ControllerBase
     [RequestSizeLimit(1024L * 1024 * 1024)] // 1 GiB
     public async Task<ActionResult<RecordingSummaryDto>> Upload(
         [FromForm] IFormFile audio, [FromForm] string? title, [FromForm] long durationMs,
-        [FromForm] RecordingSource source = RecordingSource.Microphone, [FromForm] Guid? sectionId = null)
+        [FromForm] RecordingSource source = RecordingSource.Microphone, [FromForm] Guid? sectionId = null,
+        [FromForm] Guid? roomId = null)
     {
         if (audio is null || audio.Length == 0) return BadRequest("Empty audio.");
 
@@ -214,6 +215,14 @@ public class RecordingsController : ControllerBase
         if (used + audio.Length > quota)
             return StatusCode(413,
                 "Storage quota exceeded. Delete some recordings or ask an administrator to raise your quota.");
+
+        // Recording into a shared room: verify the caller may record there before storing anything. The main
+        // placement is still the recorder's personal room; the room gets a second, shared placement below.
+        var personalRoomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var intoSharedRoom = roomId is { } rid && rid != personalRoomId;
+        if (intoSharedRoom &&
+            !(await _rooms.PermissionsAsync(UserId, roomId!.Value)).HasFlag(RoomPermission.CreateRecording))
+            return StatusCode(StatusCodes.Status403Forbidden, "You can't add recordings to that room.");
 
         await using var stream = audio.OpenReadStream();
 
@@ -246,14 +255,19 @@ public class RecordingsController : ControllerBase
         await _db.SaveChangesAsync();
 
         // The folder is a property of the placement, not the recording: create the main placement in the
-        // uploader's personal room. Honour a requested folder only if it belongs to that room; otherwise
-        // ungroup, so a stale or alien section id can never misfile the recording.
-        var personalRoomId = await _rooms.PersonalRoomIdAsync(UserId);
-        var placementSection = sectionId is { } sid
-            && await _db.Sections.AnyAsync(s => s.Id == sid && s.RoomId == personalRoomId)
-            ? sectionId
-            : null;
+        // uploader's personal room. When recording into a shared room the main placement is Ungrouped (the
+        // shared link is ungrouped for now); otherwise honour a requested folder only if it belongs to that
+        // room, so a stale or alien section id can never misfile the recording.
+        var placementSection = intoSharedRoom
+            ? null
+            : sectionId is { } sid && await _db.Sections.AnyAsync(s => s.Id == sid && s.RoomId == personalRoomId)
+                ? sectionId
+                : null;
         await _rooms.PlaceInMainRoomAsync(rec.Id, UserId, placementSection);
+
+        // Recording into a shared room also shares it there (a second, non-main placement).
+        if (intoSharedRoom)
+            await _rooms.ShareIntoRoomAsync(rec.Id, roomId!.Value, UserId, sectionId: null);
 
         return CreatedAtAction(nameof(Get), new { id = rec.Id },
             new RecordingSummaryDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.Status, rec.CreatedAt,

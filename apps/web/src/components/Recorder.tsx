@@ -472,8 +472,15 @@ export default function Recorder({
     }
     if (!wantMic && !wantSystem) return; // nothing selected (Record is disabled, but guard anyway)
 
-    // Snapshot where this take should be filed, per the placement preference, at the moment of Record.
-    pendingSectionRef.current = recordingSectionId;
+    // Snapshot where this take should be filed at the moment of Record. Into a shared room: share it there,
+    // main placement ungrouped. Into the personal room: the placement-preference folder.
+    if (currentRoom && !currentRoom.isPersonal) {
+      pendingRoomRef.current = currentRoom.id;
+      pendingSectionRef.current = null;
+    } else {
+      pendingRoomRef.current = null;
+      pendingSectionRef.current = recordingSectionId;
+    }
     setError(null);
     setNotice(null);
     let coarse: AudioSourceKind = wantMic && wantSystem ? "both" : wantMic ? "mic" : "system";
@@ -588,7 +595,7 @@ export default function Recorder({
     if (userId) await savePendingRecording(rec);
 
     try {
-      const created = await api.upload(blob, title, durationMs, source, pendingSectionRef.current);
+      const created = await api.upload(blob, title, durationMs, source, pendingSectionRef.current, pendingRoomRef.current);
       if (userId) await clearPendingRecording(userId);
       setPending(null);
       // Attach any live notes to the new recording (failure keeps them durable + shows the retry banner).
@@ -645,11 +652,13 @@ export default function Recorder({
   const uploads = useUpload();
   // Recording (and uploading a file) requires CreateRecording in the current room. Always true in a personal
   // room; the gate becomes real once you can be a low-privilege member of a shared room.
-  const { can, recordingSectionId } = useRoom();
+  const { can, recordingSectionId, currentRoom } = useRoom();
   const canRecord = can(RoomPermission.CreateRecording);
-  // The folder a take should land in, snapshotted when Record is pressed (the user may navigate away before
-  // Stop, so we can't read it live at upload time).
+  // The folder + room a take should land in, snapshotted when Record is pressed (the user may navigate away
+  // before Stop, so we can't read them live at upload time). Recording into a shared room shares it there and
+  // keeps the main placement ungrouped in the personal room (so no section then).
   const pendingSectionRef = useRef<string | null>(null);
+  const pendingRoomRef = useRef<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   function onPickFiles(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);

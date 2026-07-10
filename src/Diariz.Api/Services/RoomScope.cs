@@ -62,6 +62,10 @@ public interface IRoomScope
     /// <summary>Create the main placement for a new recording, in its recorder's personal room.</summary>
     Task PlaceInMainRoomAsync(Guid recordingId, Guid recordedByUserId, Guid? sectionId, CancellationToken ct = default);
 
+    /// <summary>Share a recording into a Shared room (a second, non-main placement). Idempotent - a recording
+    /// already placed in the room is left as-is. False if the room is not a Shared room.</summary>
+    Task<bool> ShareIntoRoomAsync(Guid recordingId, Guid roomId, Guid sharedByUserId, Guid? sectionId, CancellationToken ct = default);
+
     /// <summary>The folder this recording sits in, within this room. Null when ungrouped, or when it is not
     /// placed in that room at all.</summary>
     Task<Guid?> SectionIdAsync(Guid roomId, Guid recordingId, CancellationToken ct = default);
@@ -288,6 +292,31 @@ public class RoomScope(DiarizDbContext db) : IRoomScope
             SectionId = sectionId,
         });
         await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<bool> ShareIntoRoomAsync(
+        Guid recordingId, Guid roomId, Guid sharedByUserId, Guid? sectionId, CancellationToken ct = default)
+    {
+        var room = await db.Rooms
+            .Where(r => r.Id == roomId)
+            .Select(r => new { r.Kind })
+            .FirstOrDefaultAsync(ct);
+        if (room is null || room.Kind != RoomKind.Shared) return false; // only Shared rooms take shared placements
+
+        // Idempotent: don't add a second row if it is already placed here.
+        if (await db.RoomRecordings.AnyAsync(p => p.RoomId == roomId && p.RecordingId == recordingId, ct)) return true;
+
+        db.RoomRecordings.Add(new RoomRecording
+        {
+            RoomId = roomId,
+            RecordingId = recordingId,
+            IsMainRoom = false,
+            SectionId = sectionId,
+            SharedByUserId = sharedByUserId,
+            SharedAt = DateTimeOffset.UtcNow,
+        });
+        await db.SaveChangesAsync(ct);
+        return true;
     }
 
     public Task<Guid?> SectionIdAsync(Guid roomId, Guid recordingId, CancellationToken ct = default) =>

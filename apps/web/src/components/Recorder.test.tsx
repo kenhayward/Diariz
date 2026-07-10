@@ -18,11 +18,15 @@ vi.mock("../lib/uploadContext", () => ({ useUpload: () => ({ uploadFiles: vi.fn(
 const setStatus = vi.fn();
 vi.mock("../lib/status", () => ({ useStatus: () => ({ status: null, setStatus }) }));
 // The recorder now consults the current room's permissions + placement. Default: full access, no folder.
-const roomState = { can: (_p: number) => true, recordingSectionId: null as string | null };
+const roomState = {
+  can: (_p: number) => true,
+  recordingSectionId: null as string | null,
+  currentRoom: undefined as { id: string; isPersonal: boolean } | undefined,
+};
 vi.mock("../lib/rooms", () => ({
   useRoom: () => ({
     can: (p: number) => roomState.can(p),
-    currentRoom: undefined,
+    currentRoom: roomState.currentRoom,
     rooms: [],
     permissions: 0,
     selectedSectionId: null,
@@ -95,6 +99,7 @@ const pending = {
 afterEach(() => {
   roomState.can = () => true;
   roomState.recordingSectionId = null;
+  roomState.currentRoom = undefined;
 });
 
 describe("Recorder recovery", () => {
@@ -318,6 +323,22 @@ describe("Recorder source selection", () => {
 
     await waitFor(() => expect(api.upload).toHaveBeenCalled());
     expect((api.upload as Mock).mock.calls[0][4]).toBe("sec-42"); // 5th arg = sectionId
+  });
+
+  it("recording in a shared room shares it there and keeps the main placement ungrouped", async () => {
+    roomState.currentRoom = { id: "room-9", isPersonal: false };
+    roomState.recordingSectionId = "sec-42"; // ignored for a shared room
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.upload as Mock).mockResolvedValue({ id: "r1" });
+    render(<Recorder onUploaded={() => {}} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByText(/●/);
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+    expect((api.upload as Mock).mock.calls[0][4]).toBeNull(); // sectionId - ungrouped in the personal room
+    expect((api.upload as Mock).mock.calls[0][5]).toBe("room-9"); // roomId
   });
 
   it("mixes system audio when a mic is selected and the checkbox is ticked -> source Combined", async () => {

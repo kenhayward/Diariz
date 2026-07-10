@@ -291,6 +291,7 @@ export const api = {
     durationMs: number,
     source: RecordingSource = "Microphone",
     sectionId: string | null = null,
+    roomId: string | null = null,
   ): Promise<RecordingSummary> {
     const form = new FormData();
     const ext = blob.type.includes("wav") ? "wav" : "webm";
@@ -300,6 +301,8 @@ export const api = {
     form.append("source", source);
     // A folder in the recorder's personal room (validated server-side); omitted = ungrouped.
     if (sectionId) form.append("sectionId", sectionId);
+    // A shared room to also share the recording into; omitted = a plain personal recording.
+    if (roomId) form.append("roomId", roomId);
     const { data } = await http.post<RecordingSummary>("/api/recordings", form);
     return data;
   },
