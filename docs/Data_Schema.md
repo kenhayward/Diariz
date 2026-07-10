@@ -72,6 +72,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddSectionSummaryAndMinutes` | `SectionSummaries` + `SectionMinutes` (1:1 with `Section`, cascade) — the folder-level roll-up LLM summary/minutes; `SectionMinutes.MeetingTypeId` (FK, `ON DELETE SET NULL`) is the folder's chosen template |
 | `AddSectionAttachments` | `SectionAttachments` (file/URL supporting documents filed directly on a `Section`, cascade, index `(SectionId, Ordinal)`) — folder-direct attachments, independent of any recording |
 | `AddUserGroups` | `UserGroups` (named permission holders; unique `Name`; `Permissions` int **[Flags]**; `IsSystem`) + `UserGroupMembers` (composite PK `(GroupId, UserId)`, cascade from both) — platform authority via group membership. The migration also **seeds** the two groups and performs a **one-time** move of Identity role holders into them (`RoleToGroupBackfill`); it is deliberately not repeated on boot |
+| `AddRooms` | `Rooms` (a workspace; `Kind` int 0=Personal/1=Shared; `OwnerUserId` FK **`ON DELETE SET NULL`** — a deleted user's personal room is **orphaned**, not destroyed; **filtered** unique index on `OwnerUserId WHERE NOT NULL`, **filtered** unique index on `Name WHERE "Kind" = 1`) + `RoomMembers` (composite PK `(RoomId, PrincipalType, PrincipalId)`; the principal is a user **or** a group; `Permissions` int **[Flags]**; cascade from `Rooms`) — the room model. The migration also **backfills**, once, one Personal room per existing user (`PersonalRoomBackfill`) |
 
 ### Entity-relationship overview
 
@@ -587,6 +588,49 @@ Seeded: `Platform Administrators` (`IsSystem`, flags `7`) and `Administrators` (
 
 Deleting a group removes its memberships and leaves the users; deleting a user removes their memberships and
 leaves the groups.
+
+#### `Rooms`
+
+A workspace: folders, recordings, voiceprints, chats and meeting types all live in one. Every user has exactly
+one **Personal** room; a recording's main room is always its recorder's Personal room.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | `uuid` | PK |
+| `Name` | `varchar(128)` NOT NULL | **Filtered** unique index `WHERE "Kind" = 1` — shared-room names are identifiers, personal-room names are display labels (the owner's name) and two users may share one |
+| `Description` | `text` null | |
+| `Icon` | `text` null | Icon key. Null for personal rooms (the owner's avatar is shown) |
+| `Color` | `text` null | Hex. Null for personal rooms |
+| `Kind` | `int` NOT NULL | `Personal = 0`, `Shared = 1`. **Append-only** |
+| `OwnerUserId` | `uuid` null | Personal rooms only. FK → `AspNetUsers` **`ON DELETE SET NULL`**. **Filtered** unique index `WHERE "OwnerUserId" IS NOT NULL` — one personal room per user, any number of orphans |
+| `CreatedAt` | `timestamptz` NOT NULL | |
+
+An **orphaned** room is `Kind = 0` with `OwnerUserId IS NULL`: what a deleted user leaves behind. Its recordings
+survive in the shared rooms they were shared into, and it appears in no switcher. Cascading the delete instead
+would destroy recordings that live in other people's rooms.
+
+The deleted user's `RoomMembers` row **survives** on the orphan (there is no FK to cascade). It is inert: a
+personal room resolves permissions from `OwnerUserId` alone and never consults member rows, and a deleted user's
+id is never reissued. Sweeping these rows belongs with the user-delete rework in a later Rooms phase.
+
+Backfilled once by the `AddRooms` migration: one Personal room per existing user, named after them
+(`FullName` → `Email` → `"Personal"`), with the owner holding every permission (`63`).
+
+#### `RoomMembers`
+
+| Column | Type | Notes |
+|---|---|---|
+| `RoomId` | `uuid` | PK part 1. FK → `Rooms`, **cascade** |
+| `PrincipalType` | `int` | PK part 2. `User = 0`, `Group = 1`. **Append-only** |
+| `PrincipalId` | `uuid` | PK part 3. An `AspNetUsers.Id` or a `UserGroups.Id`, per `PrincipalType`. **No FK** — it points at one of two tables, so the database cannot cascade. Index `IX_RoomMembers_PrincipalType_PrincipalId` |
+| `Permissions` | `int` NOT NULL | `[Flags] RoomPermission`: `ManageRoom = 1`, `CreateRecording = 2`, `RemoveOthersRecordings = 4`, `ShareOut = 8`, `ManageContents = 16`, `EditOthersRecordings = 32`. **Append-only** |
+
+A caller's effective permissions in a room are the **union** of their own row and the rows of every group they
+belong to, resolved by `RoomScope`. The **owner of a personal room implicitly holds everything** and needs no
+row; a personal room ignores member rows entirely, which is what makes it structurally private.
+
+`RemoveOthersRecordings` cannot destroy a recording. Because a recording's main room is always its recorder's
+Personal room, the permission can only ever unshare it from this room.
 
 #### `AspNetUserRoles` (legacy)
 

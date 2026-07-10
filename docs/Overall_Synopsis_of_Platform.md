@@ -526,6 +526,31 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
     remain, unused, pending a later chore.
   - Groups are administered at **`/api/groups`** (`GroupsController`, `ManageUsers`) and in the web
     **Manage Users → Groups** tab. The web reads the caller's permissions from `GET /api/user/profile`.
+- **Rooms (foundation; not yet wired into any controller).** A **room** is a workspace: folders, recordings,
+  voiceprints, chats and meeting types live in one. Every user has exactly one **Personal room** — immutable and
+  private, named after them, rendering their avatar rather than a stored icon. A recording's **main room is
+  always its recorder's Personal room**, which is what stops a shared room ever holding a recording hostage
+  (deleting a shared room can then only unshare, never destroy). Deleting a user **orphans** their Personal room
+  (`OwnerUserId` → null) rather than cascading, so recordings they shared into team rooms survive their
+  departure. (Their `RoomMembers` row survives on the orphan — `PrincipalId` has no FK to cascade — but it is
+  inert, because a personal room resolves permissions from `OwnerUserId` alone and a deleted id is never
+  reissued. Sweeping it belongs with the user-delete rework in a later phase.)
+  - `RoomMember` carries a `[Flags] RoomPermission` (`ManageRoom = 1`, `CreateRecording = 2`,
+    `RemoveOthersRecordings = 4`, `ShareOut = 8`, `ManageContents = 16`, `EditOthersRecordings = 32`;
+    append-only) and its principal is a **user or a group**. `RoomScope` (`Services/RoomScope.cs`) resolves a
+    caller's effective permissions as the **union** of their own member row and the rows of every group they
+    belong to; the **owner of a personal room implicitly holds everything**, and a personal room ignores member
+    rows entirely. **Membership is row existence, not "holds some permission"** — a member granted nothing can
+    still see the room. Membership is also the **read gate**: a non-member gets **404, not 403**, so a stranger
+    cannot learn that a room exists.
+  - `RoomScope.PersonalRoomIdAsync` **finds-or-creates**, rather than each of the four user-creation sites
+    remembering to. The filtered unique index on `Rooms.OwnerUserId` makes the race safe. Pre-existing users were
+    given rooms **once**, by the `AddRooms` migration (`PersonalRoomBackfill`) — never on boot, or a seeder would
+    recreate a room the user had since changed.
+  - **Nothing consumes `RoomScope` yet.** Phases 2b-2d introduce `RoomRecording` (the per-room placement of a
+    recording, whose `SectionId` is the folder *in that room*), then re-scope `Section`, `SpeakerProfile`,
+    `ChatSession`, `MeetingType` and the RAG chunk filter onto rooms. See
+    `docs/superpowers/specs/2026-07-10-rooms-design.md`.
 - **Access lifecycle:** a person **requests access** (`UserStatus.Requested`) → an admin **grants** it
   (issues a one-time setup link; emailed via SMTP/MailKit, or shown to the admin as a fallback when SMTP is
   unconfigured) → the user **sets up** their name + password (`Active`). Admins can also add users directly.

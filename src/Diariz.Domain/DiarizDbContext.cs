@@ -35,6 +35,8 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<MeetingType> MeetingTypes => Set<MeetingType>();
     public DbSet<UserGroup> UserGroups => Set<UserGroup>();
     public DbSet<UserGroupMember> UserGroupMembers => Set<UserGroupMember>();
+    public DbSet<Room> Rooms => Set<Room>();
+    public DbSet<RoomMember> RoomMembers => Set<RoomMember>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -62,6 +64,25 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 .HasForeignKey(m => m.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
+        // Rooms: the workspace a recording, folder, voiceprint or chat belongs to. Provider-agnostic config
+        // here; the two filtered unique indexes are relational-only and live in the Npgsql block below.
+        builder.Entity<Room>(e =>
+        {
+            e.Property(r => r.Name).HasMaxLength(128).IsRequired();
+            e.HasOne(r => r.Owner).WithMany()
+                .HasForeignKey(r => r.OwnerUserId)
+                // A deleted user ORPHANS their personal room; its recordings survive in shared rooms.
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<RoomMember>(e =>
+        {
+            e.HasKey(m => new { m.RoomId, m.PrincipalType, m.PrincipalId });
+            e.HasOne(m => m.Room).WithMany(r => r.Members)
+                .HasForeignKey(m => m.RoomId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(m => new { m.PrincipalType, m.PrincipalId });
+        });
+
         // The vector column and pgvector extension only exist on Postgres. Under other
         // providers (e.g. the EF in-memory provider used by unit tests) the embedding is
         // unmapped — it is unused before Milestone 3 anyway.
@@ -71,6 +92,23 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         // (e.g. nomic-embed-text = 768). Adjust the migration if a different model is chosen.
         if (isNpgsql)
             builder.HasPostgresExtension("vector");
+
+        // Filtered unique indexes are relational-only, so the in-memory test provider never sees them.
+        if (isNpgsql)
+        {
+            // One personal room per user, and any number of orphaned ones (OwnerUserId null).
+            builder.Entity<Room>()
+                .HasIndex(r => r.OwnerUserId)
+                .IsUnique()
+                .HasFilter("\"OwnerUserId\" IS NOT NULL");
+
+            // Shared room names are identifiers; personal room names are display labels (the owner's name),
+            // and two users may legitimately share a name.
+            builder.Entity<Room>()
+                .HasIndex(r => r.Name)
+                .IsUnique()
+                .HasFilter("\"Kind\" = 1");
+        }
 
         builder.Entity<Recording>(e =>
         {
