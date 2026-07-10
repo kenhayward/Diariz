@@ -6,7 +6,9 @@ import { RoomProvider, useRoom } from "./rooms";
 import { RoomPermission, type RoomListItem } from "./types";
 import { api } from "./api";
 
-vi.mock("./api", () => ({ api: { listRooms: vi.fn() } }));
+vi.mock("./api", () => ({ api: { listRooms: vi.fn(), getUserSettings: vi.fn() } }));
+
+const defaultSettings = { placementMode: "SelectedFolder", placementSectionId: null };
 
 const personal: RoomListItem = {
   id: "p1",
@@ -19,13 +21,14 @@ const personal: RoomListItem = {
 };
 
 function Harness() {
-  const { currentRoom, can } = useRoom();
+  const { currentRoom, can, recordingSectionId } = useRoom();
   return (
     <div>
       <span data-testid="room">{currentRoom?.name ?? "-"}</span>
       <span data-testid="personal">{String(currentRoom?.isPersonal ?? false)}</span>
       <span data-testid="create">{String(can(RoomPermission.CreateRecording))}</span>
       <span data-testid="manage">{String(can(RoomPermission.ManageRoom))}</span>
+      <span data-testid="rec-section">{recordingSectionId ?? "null"}</span>
     </div>
   );
 }
@@ -54,7 +57,10 @@ function renderHarness(path = "/") {
 }
 
 describe("RoomProvider", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (api.getUserSettings as Mock).mockResolvedValue(defaultSettings);
+  });
 
   it("exposes the personal room and its permission grid", async () => {
     (api.listRooms as Mock).mockResolvedValue([personal]);
@@ -84,5 +90,32 @@ describe("RoomProvider", () => {
     // Engineering grants only CreateRecording, not ManageRoom.
     expect(screen.getByTestId("create").textContent).toBe("true");
     expect(screen.getByTestId("manage").textContent).toBe("false");
+  });
+
+  it("resolves recordingSectionId to the viewed folder in SelectedFolder mode", async () => {
+    (api.listRooms as Mock).mockResolvedValue([personal]);
+    (api.getUserSettings as Mock).mockResolvedValue({ placementMode: "SelectedFolder", placementSectionId: null });
+    renderHarness("/sections/sec-9");
+
+    await screen.findByText("Ada Lovelace");
+    expect(screen.getByTestId("rec-section").textContent).toBe("sec-9");
+  });
+
+  it("resolves recordingSectionId to null in Ungrouped mode, even on a folder page", async () => {
+    (api.listRooms as Mock).mockResolvedValue([personal]);
+    (api.getUserSettings as Mock).mockResolvedValue({ placementMode: "Ungrouped", placementSectionId: "sec-x" });
+    renderHarness("/sections/sec-9");
+
+    await screen.findByText("Ada Lovelace");
+    expect(screen.getByTestId("rec-section").textContent).toBe("null");
+  });
+
+  it("resolves recordingSectionId to the fixed folder in SpecificFolder mode", async () => {
+    (api.listRooms as Mock).mockResolvedValue([personal]);
+    (api.getUserSettings as Mock).mockResolvedValue({ placementMode: "SpecificFolder", placementSectionId: "sec-fixed" });
+    renderHarness("/sections/sec-9"); // viewing a different folder; the fixed one wins
+
+    await screen.findByText("Ada Lovelace");
+    expect(screen.getByTestId("rec-section").textContent).toBe("sec-fixed");
   });
 });

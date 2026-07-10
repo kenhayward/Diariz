@@ -17,8 +17,8 @@ vi.mock("../lib/pendingNotes", () => ({
 vi.mock("../lib/uploadContext", () => ({ useUpload: () => ({ uploadFiles: vi.fn() }) }));
 const setStatus = vi.fn();
 vi.mock("../lib/status", () => ({ useStatus: () => ({ status: null, setStatus }) }));
-// The recorder now consults the current room's permissions. Default: full access (a personal room).
-const roomState = { can: (_p: number) => true };
+// The recorder now consults the current room's permissions + placement. Default: full access, no folder.
+const roomState = { can: (_p: number) => true, recordingSectionId: null as string | null };
 vi.mock("../lib/rooms", () => ({
   useRoom: () => ({
     can: (p: number) => roomState.can(p),
@@ -26,7 +26,7 @@ vi.mock("../lib/rooms", () => ({
     rooms: [],
     permissions: 0,
     selectedSectionId: null,
-    setSelectedSectionId: () => {},
+    recordingSectionId: roomState.recordingSectionId,
     isLoading: false,
   }),
 }));
@@ -91,9 +91,10 @@ const pending = {
   createdAt: Date.now(),
 };
 
-// Restore full room access after any test that revokes it, so ordering can't leak the gate.
+// Restore defaults after any test that changes them, so ordering can't leak room state.
 afterEach(() => {
   roomState.can = () => true;
+  roomState.recordingSectionId = null;
 });
 
 describe("Recorder recovery", () => {
@@ -303,6 +304,20 @@ describe("Recorder source selection", () => {
     await waitFor(() => expect(api.upload).toHaveBeenCalled());
     expect((api.upload as Mock).mock.calls[0][3]).toBe("Microphone");
     expect(getCombinedStream).not.toHaveBeenCalled();
+  });
+
+  it("files the recording into the folder resolved at Record time", async () => {
+    roomState.recordingSectionId = "sec-42";
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.upload as Mock).mockResolvedValue({ id: "r1" });
+    render(<Recorder onUploaded={() => {}} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByText(/●/);
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+    expect((api.upload as Mock).mock.calls[0][4]).toBe("sec-42"); // 5th arg = sectionId
   });
 
   it("mixes system audio when a mic is selected and the checkbox is ticked -> source Combined", async () => {

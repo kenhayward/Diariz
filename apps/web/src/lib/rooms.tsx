@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useMatch } from "react-router-dom";
 import { api } from "./api";
@@ -13,10 +13,12 @@ interface RoomState {
   currentRoom: RoomListItem | undefined;
   permissions: number;
   can: (perm: number) => boolean;
-  /// The folder selected in the current room's panel (null = none / Ungrouped). A new recording snapshots this
-  /// when Record is pressed, so it lands where the user was looking.
+  /// The folder the user is currently viewing (a /sections/:id page), or null when not on a folder page.
   selectedSectionId: string | null;
-  setSelectedSectionId: (id: string | null) => void;
+  /// Where a new recording should be filed, resolving the user's placement preference against the folder they
+  /// are viewing: Ungrouped -> null, SpecificFolder -> the configured folder, SelectedFolder -> selectedSectionId.
+  /// The Recorder snapshots this when Record is pressed.
+  recordingSectionId: string | null;
   isLoading: boolean;
 }
 
@@ -26,8 +28,20 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   // useMatch (not useParams) so this works even though RoomProvider sits on the parent "/" route, above the
   // route that carries :roomId. Matches /rooms/:roomId and any nested detail under it.
   const roomId = useMatch("/rooms/:roomId/*")?.params.roomId;
-  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
+  // The folder currently open, from either the legacy or the room-scoped section route.
+  const selectedSectionId =
+    useMatch("/sections/:id")?.params.id ?? useMatch("/rooms/:roomId/sections/:id")?.params.id ?? null;
   const { data: rooms = [], isLoading } = useQuery({ queryKey: ["rooms"], queryFn: api.listRooms });
+  const { data: settings } = useQuery({ queryKey: ["user-settings"], queryFn: api.getUserSettings });
+
+  // Resolve the placement preference. Defaults to "the folder you're viewing" until settings load.
+  const placementMode = settings?.placementMode ?? "SelectedFolder";
+  const recordingSectionId =
+    placementMode === "Ungrouped"
+      ? null
+      : placementMode === "SpecificFolder"
+        ? settings?.placementSectionId ?? null
+        : selectedSectionId;
 
   // Prefer the room named in the URL; else the personal room; else whatever came first.
   const currentRoom = useMemo(() => {
@@ -48,10 +62,10 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       permissions,
       can: (perm) => (permissions & perm) !== 0,
       selectedSectionId,
-      setSelectedSectionId,
+      recordingSectionId,
       isLoading,
     }),
-    [rooms, currentRoom, permissions, selectedSectionId, isLoading],
+    [rooms, currentRoom, permissions, selectedSectionId, recordingSectionId, isLoading],
   );
 
   return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>;

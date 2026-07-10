@@ -251,6 +251,40 @@ public class RecordingsControllerTests
         Assert.Null(placement.SectionId);
     }
 
+    /// <summary>A recording uploaded with a folder in the caller's personal room lands in that folder (the
+    /// placement-preference "record into the selected folder" path).</summary>
+    [Fact]
+    public async Task Upload_WithSectionInPersonalRoom_FilesThePlacementThere()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var roomId = await new RoomScope(db).PersonalRoomIdAsync(userId);
+        var sectionId = Guid.NewGuid();
+        db.Sections.Add(new Section { Id = sectionId, UserId = userId, RoomId = roomId, Name = "Projects" });
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.Upload(FakeAudio(Encoding.UTF8.GetBytes("audio")), "Standup", durationMs: 1000, sectionId: sectionId);
+
+        Assert.Equal(sectionId, db.RoomRecordings.Single().SectionId);
+    }
+
+    /// <summary>A section id that doesn't belong to the caller's personal room is ignored - the recording is
+    /// ungrouped rather than misfiled.</summary>
+    [Fact]
+    public async Task Upload_WithAlienSection_IsIgnored_AndUngrouped()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.Upload(FakeAudio(Encoding.UTF8.GetBytes("audio")), "Standup", durationMs: 1000, sectionId: Guid.NewGuid());
+
+        Assert.Null(db.RoomRecordings.Single().SectionId);
+    }
+
     [Fact]
     public async Task Upload_StoresBlob_PersistsRecording_AndEnqueuesFirstTranscription()
     {

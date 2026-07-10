@@ -199,7 +199,7 @@ public class RecordingsController : ControllerBase
     [RequestSizeLimit(1024L * 1024 * 1024)] // 1 GiB
     public async Task<ActionResult<RecordingSummaryDto>> Upload(
         [FromForm] IFormFile audio, [FromForm] string? title, [FromForm] long durationMs,
-        [FromForm] RecordingSource source = RecordingSource.Microphone)
+        [FromForm] RecordingSource source = RecordingSource.Microphone, [FromForm] Guid? sectionId = null)
     {
         if (audio is null || audio.Length == 0) return BadRequest("Empty audio.");
 
@@ -246,8 +246,14 @@ public class RecordingsController : ControllerBase
         await _db.SaveChangesAsync();
 
         // The folder is a property of the placement, not the recording: create the main placement in the
-        // uploader's personal room. Ungrouped by default, as SectionId was.
-        await _rooms.PlaceInMainRoomAsync(rec.Id, UserId, sectionId: null);
+        // uploader's personal room. Honour a requested folder only if it belongs to that room; otherwise
+        // ungroup, so a stale or alien section id can never misfile the recording.
+        var personalRoomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var placementSection = sectionId is { } sid
+            && await _db.Sections.AnyAsync(s => s.Id == sid && s.RoomId == personalRoomId)
+            ? sectionId
+            : null;
+        await _rooms.PlaceInMainRoomAsync(rec.Id, UserId, placementSection);
 
         return CreatedAtAction(nameof(Get), new { id = rec.Id },
             new RecordingSummaryDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.Status, rec.CreatedAt,

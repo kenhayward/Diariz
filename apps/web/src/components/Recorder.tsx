@@ -472,6 +472,8 @@ export default function Recorder({
     }
     if (!wantMic && !wantSystem) return; // nothing selected (Record is disabled, but guard anyway)
 
+    // Snapshot where this take should be filed, per the placement preference, at the moment of Record.
+    pendingSectionRef.current = recordingSectionId;
     setError(null);
     setNotice(null);
     let coarse: AudioSourceKind = wantMic && wantSystem ? "both" : wantMic ? "mic" : "system";
@@ -586,7 +588,7 @@ export default function Recorder({
     if (userId) await savePendingRecording(rec);
 
     try {
-      const created = await api.upload(blob, title, durationMs, source);
+      const created = await api.upload(blob, title, durationMs, source, pendingSectionRef.current);
       if (userId) await clearPendingRecording(userId);
       setPending(null);
       // Attach any live notes to the new recording (failure keeps them durable + shows the retry banner).
@@ -643,8 +645,11 @@ export default function Recorder({
   const uploads = useUpload();
   // Recording (and uploading a file) requires CreateRecording in the current room. Always true in a personal
   // room; the gate becomes real once you can be a low-privilege member of a shared room.
-  const { can } = useRoom();
+  const { can, recordingSectionId } = useRoom();
   const canRecord = can(RoomPermission.CreateRecording);
+  // The folder a take should land in, snapshotted when Record is pressed (the user may navigate away before
+  // Stop, so we can't read it live at upload time).
+  const pendingSectionRef = useRef<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   function onPickFiles(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);

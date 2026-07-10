@@ -259,6 +259,7 @@ export const api = {
     title: string,
     durationMs: number,
     source: RecordingSource = "Microphone",
+    sectionId: string | null = null,
   ): Promise<RecordingSummary> {
     const form = new FormData();
     const ext = blob.type.includes("wav") ? "wav" : "webm";
@@ -266,6 +267,8 @@ export const api = {
     form.append("title", title);
     form.append("durationMs", String(Math.round(durationMs)));
     form.append("source", source);
+    // A folder in the recorder's personal room (validated server-side); omitted = ungrouped.
+    if (sectionId) form.append("sectionId", sectionId);
     const { data } = await http.post<RecordingSummary>("/api/recordings", form);
     return data;
   },
