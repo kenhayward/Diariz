@@ -51,6 +51,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.118.1",
+    date: "2026-07-10",
+    pr: 261,
+    headline: "Groundwork for Rooms",
+    summary:
+      "Nothing changes for you in this release. It lays the foundation for Rooms - shared spaces you will be " +
+      "able to record into with colleagues. Every account now has a Personal Room in the database, which is " +
+      "where all your recordings already live; you will not see it anywhere yet, because nothing uses it. Two " +
+      "rules are worth knowing now, because they shape what Rooms will do later. A recording always belongs to " +
+      "the Personal Room of whoever recorded it, and is shared into a room from there - so deleting a shared " +
+      "room can only ever unshare recordings, never destroy them. And deleting a user keeps their Personal " +
+      "Room, so the meetings they shared with a team survive after they leave.",
+    added: [
+      "Rooms and room membership exist in the database, with per-room permissions that can be granted to a person or to a group.",
+      "Every existing account was given a Personal Room, named after them, in which they hold every permission.",
+    ],
+  },
+  {
     version: "0.118.0",
     date: "2026-07-10",
     pr: 260,
