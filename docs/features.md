@@ -123,10 +123,16 @@ original words (so you can always flip back), and exports/email/chat use them.
 - **Organise** recordings into **sections and sub-sections** (one level of nesting) with drag-and-drop
 ordering and cross-group moves; select a whole group at once to build chat context. Browse them as a
 **list or a calendar** (days with recordings are highlighted; click one to see that day's recordings).
-- **Rooms (early).** A **room switcher** sits above the recordings list. Today it shows a single room - your
-**Personal Room** - which is the private space every user has; shared rooms (workspaces you invite others to)
-come in a later milestone. The room lives in the URL (`/rooms/:roomId`), so switching keeps a clean, linkable
-address.
+- **Rooms.** Every account has a private **Personal Room** (your existing space). Holders of the
+**manage-rooms** permission can also create **Shared Rooms** - workspaces you invite **users and groups** into,
+each member carrying their own **permission grid** (add recordings, manage contents, remove others' recordings,
+share out, edit others' recordings, manage the room). A **room switcher** sits above the recordings list, and
+**Manage Rooms** (in the switcher) creates, renames, restyles (icon + colour) and deletes rooms and edits their
+membership; deleting a room needs its name typed to confirm. The room lives in the URL (`/rooms/:roomId`), so
+switching keeps a clean, linkable address. **Recording while a shared room is open** files the meeting into that
+room automatically, while the original stays in your Personal Room - so a shared room can only ever **unshare** a
+recording, never delete it. Deleting a user **keeps** their shared recordings and **orphans** their Personal Room
+rather than destroying its history. Voiceprints, saved chats and meeting-type templates are room-scoped too.
 - **Where new recordings land.** A **Recordings** tab in Settings chooses how a fresh recording is filed in
 your Personal Room: **Ungrouped**, the **folder you currently have open** (the default), or a **specific
 folder** you pick. When you press Record, the take is filed accordingly the moment it finishes uploading -

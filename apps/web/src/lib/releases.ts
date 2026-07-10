@@ -27,7 +27,8 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Connect Claude (MCP)** | Connect Claude to your own meetings via OAuth (claude.ai) or a personal token (Claude Desktop/Code). |
 | **Translate** | Translate a whole transcript or a single segment, stored as revisions you can flip back. |
 | **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) to a recording or directly to a folder, edit Markdown attachments in place, save a chat conversation as an attachment with /attach, and optionally feed them to chat. |
-| **Organise & merge** | Sections and sub-sections with drag-and-drop; a room switcher above the list (your Personal Room for now); choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
+| **Rooms** | A private Personal Room per account plus shareable Rooms: invite users and groups with per-member permissions, record straight into a shared room (your Personal Room keeps the original), and manage rooms from the switcher. |
+| **Organise & merge** | Sections and sub-sections with drag-and-drop; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
 | **API access** | Generate a personal API token (when enabled) to call the REST API as yourself, with a built-in API reference. |
@@ -54,22 +55,26 @@ export const RELEASES: Release[] = [
     version: "0.119.0",
     date: "2026-07-10",
     pr: 264,
-    headline: "Rooms arrive: a room switcher and where new recordings land",
+    headline: "Rooms: shared spaces you can invite people into",
     summary:
-      "The first visible step of Rooms - shared spaces. The recordings panel now has a room switcher at the " +
-      "top, showing your Personal Room (there is only one room for now; shared rooms come next). New behind " +
-      "it: a Recordings tab in Settings that decides where a new recording is filed - always Ungrouped, the " +
-      "folder you have open (the default), or a specific folder you choose. When you press Record, the take " +
-      "now lands in that folder automatically instead of always Ungrouped. Under the hood, folders, " +
-      "recordings, voiceprints, saved chats and meeting-type templates all now belong to a room, groundwork " +
-      "that lets a shared room have its own set once shared rooms arrive.",
+      "Rooms arrive. Every account has a private Personal Room (your existing space), and now people who can " +
+      "manage rooms can create Shared Rooms and invite users and groups into them, each member with their own " +
+      "set of permissions (add recordings, manage contents, remove others' recordings, and so on). A room " +
+      "switcher sits at the top of the recordings panel, and Manage Rooms (in the switcher) creates, renames, " +
+      "restyles and deletes rooms and edits who is in them. Recording while you have a shared room open files " +
+      "the meeting into that room automatically, while your own copy stays in your Personal Room - so a shared " +
+      "room can only ever unshare a recording, never delete it. A new Recordings tab in Settings decides where " +
+      "a fresh recording lands in your Personal Room (Ungrouped, the folder you have open, or a specific one). " +
+      "Platform roles are now User Groups, which also carry the room-management permission.",
     added: [
-      "A room switcher at the top of the recordings panel (your Personal Room for now).",
+      "Shared Rooms: create a room, give it an icon and colour, and invite users and groups with per-member permissions.",
+      "A room switcher at the top of the recordings panel, with Manage Rooms for room managers.",
+      "Recording into a shared room shares the meeting there automatically (your Personal Room keeps the original).",
       "A Recordings tab in Settings to choose where a new recording is filed: Ungrouped, the selected folder (default), or a specific folder.",
     ],
     changed: [
       "Pressing Record now files the recording into the folder you have open (per the new preference), instead of always Ungrouped.",
-      "Folders, recordings, voiceprints, saved chats and meeting-type templates now belong to a room (your Personal Room, for now), with no change to how they look or work today.",
+      "Folders, recordings, voiceprints, saved chats and meeting-type templates now belong to a room; deleting a user keeps their shared recordings and orphans their Personal Room rather than destroying its history.",
     ],
   },
   {

@@ -582,9 +582,23 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
     is viewing; `Recorder` snapshots that target when Record is pressed and passes it as `sectionId` to
     `POST /api/recordings`, which files the main placement there **only if the folder belongs to the uploader's
     personal room** (an alien/stale id is ignored, not misfiled).
-  - **Still ahead:** the RAG chunk filter re-scoped onto rooms, then shared rooms (Manage Rooms modal, room
-    creation/membership, cross-room sharing) and the `UserId` retirement. Until then, everything resolves to the
-    caller's personal room via `RoomScope.PersonalRoomIdAsync`. See
+  - **Shared rooms are real (Phase 4).** `RoomsController` (gated by the `ManageRooms` platform policy) creates,
+    renames/restyles and deletes shared rooms and edits their membership (`RoomScope.CreateSharedRoomAsync` /
+    `UpdateRoomAsync` / `DeleteRoomAsync` / `SetMemberAsync` / `RemoveMemberAsync`); the Personal room is immutable
+    and memberless (every write refuses it), and shared-room names are unique. The web **Manage Rooms** modal
+    (reached from the switcher, `ManageRooms` holders only) drives all of this and reuses the shared
+    `IconColorPicker`; a member's grid is the six `RoomPermission` checkboxes, and delete needs the room name typed.
+    **Recording into a shared room** writes a **two-placement transaction**: the always-main placement in the
+    recorder's Personal room (Ungrouped) plus a non-main `RoomRecording` in the shared room
+    (`RoomScope.ShareIntoRoomAsync`, `SharedBy`/`SharedAt`); the upload 403s if the caller can't `CreateRecording`
+    there. **Deleting a user** sweeps their `RoomMember` rows (no FK to cascade them) and orphans their Personal
+    room via the `OwnerUserId` SetNull FK - their shared recordings survive. The **folder / voiceprint / chat /
+    meeting-type queries are all scoped by `RoomId`** now (owner-identity for LLM config + SignalR still resolves
+    to the room's owner). The now-dead `UserId` columns on `Section` / `SpeakerProfile` / `ChatSession` /
+    `MeetingType` are **retained pending a follow-up drop** (harmless; nothing reads them).
+  - **Still ahead (Phase 5):** cross-room *manual* sharing (Share to another room / Remove from room on the
+    recording toolbar), the Rooms + Recorded-by lines on the detail Overview, and the RAG chunk filter re-scoped
+    onto rooms (`TranscriptChunk.UserId` is the last per-user filter still standing, in `TranscriptSearch`). See
     `docs/superpowers/specs/2026-07-10-rooms-design.md`.
 - **Access lifecycle:** a person **requests access** (`UserStatus.Requested`) → an admin **grants** it
   (issues a one-time setup link; emailed via SMTP/MailKit, or shown to the admin as a fallback when SMTP is
