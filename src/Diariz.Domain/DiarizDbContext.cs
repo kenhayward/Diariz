@@ -192,11 +192,17 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         builder.Entity<Section>(e =>
         {
             e.HasIndex(s => new { s.UserId, s.Name });
+            e.HasIndex(s => new { s.RoomId, s.Name });
             e.Property(s => s.Name).HasMaxLength(128);
             // Explicit cascade so deleting a user removes their sections (the FK was only implicit before).
             e.HasOne(s => s.User)
                 .WithMany()
                 .HasForeignKey(s => s.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Folders belong to a room. Deleting a room removes its folders.
+            e.HasOne(s => s.Room)
+                .WithMany()
+                .HasForeignKey(s => s.RoomId)
                 .OnDelete(DeleteBehavior.Cascade);
             // Self-referential parent for one level of nesting. Deleting a parent cascades to its
             // sub-sections; each sub-section's recordings then drop to Ungrouped via the SetNull FK above.
