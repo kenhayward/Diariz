@@ -20,18 +20,33 @@ public class RecordingsReorderTests
         var resolver = new SummarizationSettingsResolver(
             db, Options.Create(new SummarizationOptions()), new FakeApiKeyProtector());
         return new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
-            resolver, new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()))
+            resolver, new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()), new RoomScope(db))
         {
             ControllerContext = Http.Context(userId),
         };
     }
 
+    // Seeds a recording and its main placement (the folder now lives on the placement, not the recording).
+    // Ensures the owner exists first, since PlaceInMainRoomAsync needs it to mint the personal room.
     private static async Task<Recording> Seed(DiarizDbContext db, Guid userId, Guid? sectionId = null)
     {
-        var rec = new Recording { Id = Guid.NewGuid(), UserId = userId, BlobKey = "k", SectionId = sectionId };
+        if (await db.Users.FindAsync(userId) is null)
+        {
+            db.Users.Add(new ApplicationUser { Id = userId, UserName = $"{userId}@x.test", Email = $"{userId}@x.test" });
+            await db.SaveChangesAsync();
+        }
+        var rec = new Recording { Id = Guid.NewGuid(), UserId = userId, BlobKey = "k" };
         db.Recordings.Add(rec);
         await db.SaveChangesAsync();
+        await new RoomScope(db).PlaceInMainRoomAsync(rec.Id, userId, sectionId);
         return rec;
+    }
+
+    // The folder a recording sits in, read from its placement in the owner's personal room.
+    private static async Task<Guid?> FolderOf(DiarizDbContext db, Guid userId, Guid recordingId)
+    {
+        var scope = new RoomScope(db);
+        return await scope.SectionIdAsync(await scope.PersonalRoomIdAsync(userId), recordingId);
     }
 
     [Fact]
@@ -65,8 +80,8 @@ public class RecordingsReorderTests
 
         await Build(db, userId).Reorder(new ReorderRecordingsRequest(section.Id, [a.Id, b.Id]));
 
-        Assert.Equal(section.Id, (await db.Recordings.FindAsync(a.Id))!.SectionId);
-        Assert.Equal(section.Id, (await db.Recordings.FindAsync(b.Id))!.SectionId);
+        Assert.Equal(section.Id, await FolderOf(db, userId, a.Id));
+        Assert.Equal(section.Id, await FolderOf(db, userId, b.Id));
     }
 
     [Fact]
@@ -81,7 +96,7 @@ public class RecordingsReorderTests
 
         await Build(db, userId).Reorder(new ReorderRecordingsRequest(null, [a.Id]));
 
-        Assert.Null((await db.Recordings.FindAsync(a.Id))!.SectionId);
+        Assert.Null(await FolderOf(db, userId, a.Id));
     }
 
     [Fact]

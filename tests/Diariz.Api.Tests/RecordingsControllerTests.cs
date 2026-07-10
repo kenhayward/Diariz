@@ -30,7 +30,7 @@ public class RecordingsControllerTests
             new FakeApiKeyProtector());
         return new RecordingsController(db, storage ?? new FakeAudioStorage(), queue, new FakeHubContext(), config,
             resolver, email ?? new FakeEmailSender(), identifier ?? new FakeSpeakerIdentifier(),
-            Options.Create(uploads ?? new UploadOptions()), exportLocalizer, calendar)
+            Options.Create(uploads ?? new UploadOptions()), new RoomScope(db), exportLocalizer, calendar)
         {
             ControllerContext = Http.Context(userId)
         };
@@ -229,6 +229,26 @@ public class RecordingsControllerTests
             Headers = new HeaderDictionary(),
             ContentType = contentType
         };
+    }
+
+    /// <summary>Uploading creates the recording's main placement in the uploader's personal room, so it appears
+    /// in their list. Before placements existed this was Recording.SectionId, defaulting to null.</summary>
+    [Fact]
+    public async Task Upload_CreatesTheMainPlacement_InThePersonalRoom()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var scope = new RoomScope(db);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.Upload(FakeAudio(Encoding.UTF8.GetBytes("audio")), title: "Standup", durationMs: 1000);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+        var placement = db.RoomRecordings.Single();
+        Assert.Equal(await scope.PersonalRoomIdAsync(userId), placement.RoomId);
+        Assert.True(placement.IsMainRoom);
+        Assert.Null(placement.SectionId);
     }
 
     [Fact]
@@ -583,21 +603,30 @@ public class RecordingsControllerTests
 
     // ---- Move to section ----
 
+    // The folder a recording sits in, read from its placement in the owner's personal room.
+    private static async Task<Guid?> FolderOf(DiarizDbContext db, Guid userId, Guid recordingId)
+    {
+        var scope = new RoomScope(db);
+        return await scope.SectionIdAsync(await scope.PersonalRoomIdAsync(userId), recordingId);
+    }
+
     [Fact]
     public async Task MoveToSection_SetsSectionId_OnOwnedRecordingAndSection()
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
         var rec = await SeedRecording(db, userId, versions: 1);
         var section = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = userId, Name = "Work" };
         db.Sections.Add(section);
         await db.SaveChangesAsync();
+        await new RoomScope(db).PlaceInMainRoomAsync(rec.Id, userId, sectionId: null); // main placement, ungrouped
         var controller = Build(db, userId, new FakeJobQueue());
 
         var result = await controller.MoveToSection(rec.Id, new MoveRecordingRequest(section.Id));
 
         Assert.IsType<NoContentResult>(result);
-        Assert.Equal(section.Id, (await db.Recordings.FindAsync(rec.Id))!.SectionId);
+        Assert.Equal(section.Id, await FolderOf(db, userId, rec.Id));
     }
 
     [Fact]
@@ -605,16 +634,17 @@ public class RecordingsControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
         var section = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = userId, Name = "Work" };
         var rec = await SeedRecording(db, userId, versions: 1);
         db.Sections.Add(section);
-        rec.SectionId = section.Id;
         await db.SaveChangesAsync();
+        await new RoomScope(db).PlaceInMainRoomAsync(rec.Id, userId, section.Id); // placed in the folder
         var controller = Build(db, userId, new FakeJobQueue());
 
         await controller.MoveToSection(rec.Id, new MoveRecordingRequest(null));
 
-        Assert.Null((await db.Recordings.FindAsync(rec.Id))!.SectionId);
+        Assert.Null(await FolderOf(db, userId, rec.Id));
     }
 
     [Fact]
