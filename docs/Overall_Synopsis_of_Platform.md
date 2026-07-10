@@ -596,9 +596,20 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
     meeting-type queries are all scoped by `RoomId`** now (owner-identity for LLM config + SignalR still resolves
     to the room's owner). The now-dead `UserId` columns on `Section` / `SpeakerProfile` / `ChatSession` /
     `MeetingType` are **retained pending a follow-up drop** (harmless; nothing reads them).
-  - **Still ahead (Phase 5):** cross-room *manual* sharing (Share to another room / Remove from room on the
-    recording toolbar), the Rooms + Recorded-by lines on the detail Overview, and the RAG chunk filter re-scoped
-    onto rooms (`TranscriptChunk.UserId` is the last per-user filter still standing, in `TranscriptSearch`). See
+  - **Cross-room sharing + room-scoped search (Phase 5).** `POST /api/recordings/{id}/share` adds a non-main
+    placement (needs `ShareOut` in the source room + `CreateRecording` in the target);
+    `DELETE /api/rooms/{roomId}/recordings/{id}` unshares (the recorder or a holder of `RemoveOthersRecordings`,
+    never the main room). `RecordingsController.Get` is visible to the recorder **or** a member of any room the
+    recording is placed in, and returns its **recorded-by** + the **rooms** the caller can see (home first); the
+    web Overview renders those two lines, and the toolbar/kebab gain **Share to room** / **Remove from room**
+    (Delete hidden outside the home room; its confirm names the shared rooms). **Search now spans rooms:**
+    `TranscriptSearch`'s five arms gate on a `RoomRecordings` semi-join over `RoomScope.RoomIdsForUserAsync`
+    (a non-minting read), so chat + MCP tools find recordings shared into any room the caller belongs to. The
+    filtered vector scan is **not yet benchmarked** on a large corpus; the denormalise-`RoomId`-onto-chunk
+    fallback stays open if it regresses.
+  - **Still ahead:** room-scoped recording **collections** (a `/api/rooms/{roomId}/recordings` list + the web
+    panel/query-keys fetching per current room, so switching to a shared room browses its recordings) and the
+    deferred `UserId` column drop (incl. `TranscriptChunk.UserId`). See
     `docs/superpowers/specs/2026-07-10-rooms-design.md`.
 - **Access lifecycle:** a person **requests access** (`UserStatus.Requested`) → an admin **grants** it
   (issues a one-time setup link; emailed via SMTP/MailKit, or shown to the admin as a fallback when SMTP is
