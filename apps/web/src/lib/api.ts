@@ -38,6 +38,7 @@ import type {
   RecordingDetail,
   RecordingSource,
   RecordingSummary,
+  RoomListItem,
   SavedChatContext,
   SectionDto,
   SectionDetail,
@@ -239,6 +240,12 @@ export const api = {
 
   async listRecordings(): Promise<RecordingSummary[]> {
     const { data } = await http.get<RecordingSummary[]>("/api/recordings");
+    return data;
+  },
+
+  /// The rooms the signed-in user belongs to (today: just their Personal room), personal first.
+  async listRooms(): Promise<RoomListItem[]> {
+    const { data } = await http.get<RoomListItem[]>("/api/rooms");
     return data;
   },
 

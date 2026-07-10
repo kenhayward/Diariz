@@ -460,6 +460,29 @@ export interface Permissions {
   managePlatform: boolean;
 }
 
+/// A room the signed-in user belongs to. `permissions` is the caller's effective RoomPermission grid as a
+/// bitmask (the server sends it as an int precisely so the client can test flags - a string [Flags] value would
+/// arrive as "A, B" and break the arithmetic).
+export interface RoomListItem {
+  id: string;
+  name: string;
+  kind: number; // 0 = Personal, 1 = Shared
+  icon: string | null;
+  color: string | null;
+  isPersonal: boolean;
+  permissions: number;
+}
+
+/// RoomPermission flags - mirror src/Diariz.Domain/Entities/RoomPermission.cs (append-only; keep in sync).
+export const RoomPermission = {
+  ManageRoom: 1,
+  CreateRecording: 2,
+  RemoveOthersRecordings: 4,
+  ShareOut: 8,
+  ManageContents: 16,
+  EditOthersRecordings: 32,
+} as const;
+
 /// A named collection of users carrying platform permissions. Replaces the old account-type roles. The system
 /// group (Platform Administrators) cannot be deleted, renamed, or have its permissions changed.
 export interface Group {
