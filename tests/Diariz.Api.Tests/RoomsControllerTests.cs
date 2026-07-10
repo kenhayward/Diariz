@@ -4,6 +4,7 @@ using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Diariz.Api.Tests;
 
@@ -171,5 +172,66 @@ public class RoomsControllerTests
         var id = (Guid)created.RouteValues!["id"]!;
 
         Assert.IsType<NotFoundResult>(await controller.Get(id)); // caller is not a member
+    }
+
+    // ---- Unshare (Phase 5) ----
+
+    [Fact]
+    public async Task RemoveRecording_Unshares_ForARoomMemberWhoRecordedIt()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var controller = Build(db, me);
+        var scope = new Diariz.Api.Services.RoomScope(db);
+        var recId = Guid.NewGuid();
+        db.Recordings.Add(new Recording { Id = recId, UserId = me, Title = "Standup" });
+        await db.SaveChangesAsync();
+        await scope.PlaceInMainRoomAsync(recId, me, sectionId: null);
+        var roomId = await scope.CreateSharedRoomAsync("Eng", null, null, null);
+        await scope.SetMemberAsync(roomId, RoomPrincipalType.User, me, RoomPermission.CreateRecording);
+        await scope.ShareIntoRoomAsync(recId, roomId, me, sectionId: null);
+
+        Assert.IsType<NoContentResult>(await controller.RemoveRecording(roomId, recId));
+        Assert.False(await db.RoomRecordings.AnyAsync(p => p.RoomId == roomId && p.RecordingId == recId));
+        Assert.True(await db.Recordings.AnyAsync(r => r.Id == recId)); // recording survives
+    }
+
+    [Fact]
+    public async Task RemoveRecording_RefusesTheMainRoom()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var controller = Build(db, me);
+        var scope = new Diariz.Api.Services.RoomScope(db);
+        var recId = Guid.NewGuid();
+        db.Recordings.Add(new Recording { Id = recId, UserId = me, Title = "Standup" });
+        await db.SaveChangesAsync();
+        var personalRoomId = await scope.PersonalRoomIdAsync(me);
+        await scope.PlaceInMainRoomAsync(recId, me, sectionId: null);
+
+        // The home room can't unshare - that would be a delete, from the recording detail.
+        Assert.IsType<BadRequestObjectResult>(await controller.RemoveRecording(personalRoomId, recId));
+        Assert.True(await db.RoomRecordings.AnyAsync(p => p.RoomId == personalRoomId && p.RecordingId == recId));
+    }
+
+    [Fact]
+    public async Task RemoveRecording_403_ForANonRecorderWithoutRemoveOthers()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var other = Guid.NewGuid();
+        Users.Ensure(db, owner);
+        var controller = Build(db, other); // a member, but not the recorder, without RemoveOthersRecordings
+        var scope = new Diariz.Api.Services.RoomScope(db);
+        var recId = Guid.NewGuid();
+        db.Recordings.Add(new Recording { Id = recId, UserId = owner, Title = "Standup" });
+        await db.SaveChangesAsync();
+        await scope.PlaceInMainRoomAsync(recId, owner, sectionId: null);
+        var roomId = await scope.CreateSharedRoomAsync("Eng", null, null, null);
+        await scope.ShareIntoRoomAsync(recId, roomId, owner, sectionId: null);
+        await scope.SetMemberAsync(roomId, RoomPrincipalType.User, other, RoomPermission.CreateRecording); // no RemoveOthers
+
+        Assert.Equal(403, ((ObjectResult)await controller.RemoveRecording(roomId, recId)).StatusCode);
+        Assert.True(await db.RoomRecordings.AnyAsync(p => p.RoomId == roomId && p.RecordingId == recId));
     }
 }

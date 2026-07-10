@@ -229,6 +229,10 @@ public record RecordingRoomDto(Guid Id, string Name, string? Icon, string? Color
 /// <summary>Toggle a recording's protection from audio deletion (auto and manual).</summary>
 public record SetAudioProtectionRequest(bool Protected);
 
+/// <summary>Share a recording from one room into another. Requires <c>ShareOut</c> in <paramref name="FromRoomId"/>
+/// and <c>CreateRecording</c> in <paramref name="ToRoomId"/>. The link lands ungrouped in the target for now.</summary>
+public record ShareRecordingRequest(Guid FromRoomId, Guid ToRoomId);
+
 // ---- Meeting types (minutes templates) ----
 /// <summary>A meeting type (minutes template). <see cref="IsPlatform"/> = a shared, admin-owned type;
 /// <see cref="CanEdit"/> = the caller may edit/delete it (owns a Personal type, or is a Platform Admin for a

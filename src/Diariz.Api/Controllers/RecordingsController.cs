@@ -959,6 +959,23 @@ public class RecordingsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Share a recording from one room into another (a non-main placement). Needs <c>ShareOut</c> in the
+    /// source room and <c>CreateRecording</c> in the target; the link lands ungrouped for now.</summary>
+    [HttpPost("{id:guid}/share")]
+    public async Task<IActionResult> Share(Guid id, ShareRecordingRequest req)
+    {
+        // The recording must actually be placed in the source room (and the caller a member with ShareOut).
+        if (!await _db.RoomRecordings.AnyAsync(p => p.RecordingId == id && p.RoomId == req.FromRoomId))
+            return NotFound();
+        if (!(await _rooms.PermissionsAsync(UserId, req.FromRoomId)).HasFlag(RoomPermission.ShareOut))
+            return StatusCode(StatusCodes.Status403Forbidden, "You can't share recordings out of that room.");
+        if (!(await _rooms.PermissionsAsync(UserId, req.ToRoomId)).HasFlag(RoomPermission.CreateRecording))
+            return StatusCode(StatusCodes.Status403Forbidden, "You can't add recordings to that room.");
+
+        var ok = await _rooms.ShareIntoRoomAsync(id, req.ToRoomId, UserId, sectionId: null);
+        return ok ? NoContent() : BadRequest("That room can't take shared recordings."); // e.g. a personal target
+    }
+
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {

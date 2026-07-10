@@ -101,6 +101,22 @@ public class RoomsController(IRoomScope rooms, DiarizDbContext db) : ControllerB
         return ok ? NoContent() : NotFound();
     }
 
+    /// <summary>Unshare a recording from this room (delete its non-main placement). The recorder, or a member
+    /// holding <c>RemoveOthersRecordings</c>, may do it. Never the main room - that is a delete, from its home.</summary>
+    [HttpDelete("{roomId:guid}/recordings/{recordingId:guid}")]
+    public async Task<IActionResult> RemoveRecording(Guid roomId, Guid recordingId, CancellationToken ct = default)
+    {
+        if (!await rooms.IsMemberAsync(UserId, roomId, ct)) return NotFound(); // don't reveal the room exists
+
+        var isRecorder = await db.Recordings.AnyAsync(r => r.Id == recordingId && r.UserId == UserId, ct);
+        if (!isRecorder &&
+            !(await rooms.PermissionsAsync(UserId, roomId, ct)).HasFlag(RoomPermission.RemoveOthersRecordings))
+            return StatusCode(StatusCodes.Status403Forbidden, "You can't remove others' recordings from this room.");
+
+        var ok = await rooms.RemoveFromRoomAsync(recordingId, roomId, ct);
+        return ok ? NoContent() : BadRequest("That recording isn't shared here (delete it from its home room).");
+    }
+
     private Task<bool> SharedNameTaken(string name, Guid? excludeId, CancellationToken ct) =>
         db.Rooms.AnyAsync(r => r.Kind == RoomKind.Shared && r.Name == name && r.Id != excludeId, ct);
 

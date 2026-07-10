@@ -223,6 +223,46 @@ public class RecordingsControllerTests
         Assert.Contains(detail.Rooms, r => !r.IsMain && r.Name == "Engineering");
     }
 
+    /// <summary>Phase 5: the recorder shares their recording from their personal room (ShareOut is implicit
+    /// there) into a shared room they can record in.</summary>
+    [Fact]
+    public async Task Share_AddsASharedPlacement_InTheTargetRoom()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        await SeedUser(db, owner);
+        var rec = await SeedRecording(db, owner, versions: 1);
+        var scope = new RoomScope(db);
+        var personalRoomId = await scope.PersonalRoomIdAsync(owner);
+        await scope.PlaceInMainRoomAsync(rec.Id, owner, sectionId: null);
+        var target = await scope.CreateSharedRoomAsync("Engineering", null, null, null);
+        await scope.SetMemberAsync(target, RoomPrincipalType.User, owner, RoomPermission.CreateRecording);
+        var controller = Build(db, owner, new FakeJobQueue());
+
+        Assert.IsType<NoContentResult>(await controller.Share(rec.Id, new ShareRecordingRequest(personalRoomId, target)));
+        var shared = db.RoomRecordings.Single(p => p.RoomId == target);
+        Assert.False(shared.IsMainRoom);
+        Assert.Equal(owner, shared.SharedByUserId);
+    }
+
+    /// <summary>Sharing into a room the caller can't record in is a 403.</summary>
+    [Fact]
+    public async Task Share_IntoRoomWithoutCreateRecording_Returns403()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        await SeedUser(db, owner);
+        var rec = await SeedRecording(db, owner, versions: 1);
+        var scope = new RoomScope(db);
+        var personalRoomId = await scope.PersonalRoomIdAsync(owner);
+        await scope.PlaceInMainRoomAsync(rec.Id, owner, sectionId: null);
+        var target = await scope.CreateSharedRoomAsync("Engineering", null, null, null); // owner is not a member
+        var controller = Build(db, owner, new FakeJobQueue());
+
+        Assert.Equal(403, ((ObjectResult)await controller.Share(rec.Id, new ShareRecordingRequest(personalRoomId, target))).StatusCode);
+        Assert.False(db.RoomRecordings.Any(p => p.RoomId == target));
+    }
+
     // The "current transcription = highest version" rule depends on a filtered Include
     // (OrderByDescending(Version).Take(1)) that the database translates. The EF in-memory
     // provider does NOT honour the ordering/Take inside a filtered Include (it loads the whole
