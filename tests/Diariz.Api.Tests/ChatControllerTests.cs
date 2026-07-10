@@ -31,7 +31,7 @@ public class ChatControllerTests
         var orchestrator = new ChatToolOrchestrator(chat);
         var controller = new ChatController(db, chat, settings, ctxResolver, new AttachmentExtractor(),
             storage ?? new FakeAudioStorage(), urlFetcher ?? new FakeUrlFetcher(),
-            toolSettings ?? new FakeChatToolSettingsResolver(), orchestrator)
+            toolSettings ?? new FakeChatToolSettingsResolver(), orchestrator, new RoomScope(db))
         {
             ControllerContext = Http.Context(userId),
         };
@@ -294,14 +294,16 @@ public class ChatControllerTests
     {
         var me = Guid.NewGuid();
         var (controller, db, chat) = Build(me);
+        db.Users.Add(new ApplicationUser { Id = me, UserName = $"{me}@x.test", Email = $"{me}@x.test" });
         var section = new Section { Id = Guid.NewGuid(), UserId = me, Name = "Q3 Planning" };
         db.Sections.Add(section);
         db.SectionSummaries.Add(new SectionSummary { Id = Guid.NewGuid(), SectionId = section.Id, Text = "Overall Q3 theme." });
         db.SectionMinutes.Add(new SectionMinutes { Id = Guid.NewGuid(), SectionId = section.Id, Text = "# Minutes\nHire two engineers." });
-        var rec = new Recording { Id = Guid.NewGuid(), UserId = me, Title = "Kickoff", SectionId = section.Id };
+        var rec = new Recording { Id = Guid.NewGuid(), UserId = me, Title = "Kickoff" };
         db.Recordings.Add(rec);
         db.RecordingActions.Add(new RecordingAction { Id = Guid.NewGuid(), RecordingId = rec.Id, Text = "Draft the roadmap", Ordinal = 0 });
         await db.SaveChangesAsync();
+        await new RoomScope(db).PlaceInMainRoomAsync(rec.Id, me, section.Id); // filed under the folder
 
         controller.ControllerContext.HttpContext.Response.Body = new MemoryStream();
         await controller.Stream(

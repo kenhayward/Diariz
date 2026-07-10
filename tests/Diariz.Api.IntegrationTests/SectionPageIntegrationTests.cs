@@ -1,3 +1,4 @@
+using Diariz.Api.Services;
 using Diariz.Api.Controllers;
 using Diariz.Api.IntegrationTests.Infrastructure;
 using Diariz.Api.Tests.Infrastructure;
@@ -13,7 +14,7 @@ namespace Diariz.Api.IntegrationTests;
 public class SectionPageIntegrationTests(ContainersFixture fx)
 {
     private SectionPageController Build(Diariz.Domain.DiarizDbContext db, Guid userId) =>
-        new(db, new FakeJobQueue(), new FakeSummarizationSettingsResolver(), new FakeHubContext())
+        new(db, new FakeJobQueue(), new FakeSummarizationSettingsResolver(), new FakeHubContext(), new RoomScope(db))
         { ControllerContext = Http.Context(userId) };
 
     /// <summary>Real Postgres enforces the Section/Recording → AspNetUsers FK, so tests seed a real user.</summary>
@@ -111,11 +112,15 @@ public class SectionPageIntegrationTests(ContainersFixture fx)
         {
             db.Sections.Add(new Section { Id = parentId, UserId = userId, Name = "P" });
             db.Sections.Add(new Section { Id = childId, UserId = userId, Name = "C", ParentId = parentId });
-            db.Recordings.Add(new Recording { Id = recId, UserId = userId, SectionId = childId, Title = "R", BlobKey = "k" });
+            db.Recordings.Add(new Recording { Id = recId, UserId = userId, Title = "R", BlobKey = "k" });
             db.RecordingActions.Add(new RecordingAction { Id = Guid.NewGuid(), RecordingId = recId, Text = "Do it", Ordinal = 0 });
-            // An ungrouped recording (null SectionId) must not trip the null-safe filter.
-            db.Recordings.Add(new Recording { Id = Guid.NewGuid(), UserId = userId, SectionId = null, Title = "U", BlobKey = "k" });
+            var ungroupedId = Guid.NewGuid();
+            db.Recordings.Add(new Recording { Id = ungroupedId, UserId = userId, Title = "U", BlobKey = "k" });
             await db.SaveChangesAsync();
+            // The folder lives on the placement now: file R under the child folder, U ungrouped. The ungrouped
+            // (null SectionId) placement must not trip the null-safe filter.
+            await new RoomScope(db).PlaceInMainRoomAsync(recId, userId, childId);
+            await new RoomScope(db).PlaceInMainRoomAsync(ungroupedId, userId, sectionId: null);
         }
 
         await using var db2 = fx.CreateDbContext();

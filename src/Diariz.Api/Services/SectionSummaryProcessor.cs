@@ -80,13 +80,17 @@ public static class SectionSummaryProcessor
             .Where(s => s.UserId == section.UserId && s.ParentId == section.Id)
             .Select(s => s.Id).ToListAsync();
         allIds.Add(section.Id);
-        // `SectionId.HasValue &&` guards the `.Value` so Ungrouped (null-section) recordings don't throw under
-        // the in-memory provider; on Npgsql it translates to a plain `SectionId IN (...)`.
-        return await db.Recordings
-            .Where(r => r.UserId == section.UserId && r.SectionId.HasValue && allIds.Contains(r.SectionId.Value))
-            .OrderBy(r => r.CreatedAt)
-            .Select(r => new RecordingRef(r.Id, r.Name, r.Title))
-            .ToListAsync();
+        // The folder a recording sits in is now a property of its placement in the owner's personal room. Scope
+        // by joining through that room (no RoomScope here - this is a static helper). `SectionId.HasValue &&`
+        // guards the `.Value` so ungrouped placements don't throw under the in-memory provider.
+        return await (
+            from p in db.RoomRecordings
+            join rm in db.Rooms on p.RoomId equals rm.Id
+            join r in db.Recordings on p.RecordingId equals r.Id
+            where rm.OwnerUserId == section.UserId && rm.Kind == RoomKind.Personal
+                  && p.SectionId.HasValue && allIds.Contains(p.SectionId.Value)
+            orderby r.CreatedAt
+            select new RecordingRef(r.Id, r.Name, r.Title)).ToListAsync();
     }
 
     /// <summary>Returns the recording's current-transcription summary text, generating &amp; persisting it on
