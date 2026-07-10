@@ -168,6 +168,11 @@ public class RoomScope(DiarizDbContext db) : IRoomScope
             .FirstOrDefaultAsync(p => p.RoomId == roomId && p.RecordingId == recordingId, ct);
         if (placement is null) return false;
 
+        // A recording can only be filed under a folder in the SAME room as the placement. Trivially true while
+        // sections are personal, but load-bearing once shared rooms have folders.
+        if (sectionId is { } sid && !await db.Sections.AnyAsync(s => s.Id == sid && s.RoomId == roomId, ct))
+            return false;
+
         placement.SectionId = sectionId;
         await db.SaveChangesAsync(ct);
         return true;

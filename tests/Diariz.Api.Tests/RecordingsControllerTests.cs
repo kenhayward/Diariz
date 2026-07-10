@@ -617,7 +617,8 @@ public class RecordingsControllerTests
         var userId = Guid.NewGuid();
         await SeedUser(db, userId);
         var rec = await SeedRecording(db, userId, versions: 1);
-        var section = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = userId, Name = "Work" };
+        var roomId = await new RoomScope(db).PersonalRoomIdAsync(userId);
+        var section = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "Work" };
         db.Sections.Add(section);
         await db.SaveChangesAsync();
         await new RoomScope(db).PlaceInMainRoomAsync(rec.Id, userId, sectionId: null); // main placement, ungrouped
@@ -635,7 +636,8 @@ public class RecordingsControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         await SeedUser(db, userId);
-        var section = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = userId, Name = "Work" };
+        var roomId = await new RoomScope(db).PersonalRoomIdAsync(userId);
+        var section = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "Work" };
         var rec = await SeedRecording(db, userId, versions: 1);
         db.Sections.Add(section);
         await db.SaveChangesAsync();
