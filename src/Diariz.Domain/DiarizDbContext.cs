@@ -33,6 +33,8 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<McpAccessToken> McpAccessTokens => Set<McpAccessToken>();
     public DbSet<ApiAccessToken> ApiAccessTokens => Set<ApiAccessToken>();
     public DbSet<MeetingType> MeetingTypes => Set<MeetingType>();
+    public DbSet<UserGroup> UserGroups => Set<UserGroup>();
+    public DbSet<UserGroupMember> UserGroupMembers => Set<UserGroupMember>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -42,6 +44,23 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         // connector. Provider-agnostic (plain relational columns, no vector) so it stays outside the Npgsql
         // guard below and loads under the in-memory test provider too.
         builder.UseOpenIddict();
+
+        // Platform authority: a user's permissions are the union of the flags on the groups they belong to.
+        // Provider-agnostic (no vector, no Postgres-only types), so it stays outside the Npgsql guard below.
+        builder.Entity<UserGroup>(e =>
+        {
+            e.Property(g => g.Name).HasMaxLength(128).IsRequired();
+            e.HasIndex(g => g.Name).IsUnique();
+        });
+
+        builder.Entity<UserGroupMember>(e =>
+        {
+            e.HasKey(m => new { m.GroupId, m.UserId });
+            e.HasOne(m => m.Group).WithMany(g => g.Members)
+                .HasForeignKey(m => m.GroupId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(m => m.User).WithMany()
+                .HasForeignKey(m => m.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
 
         // The vector column and pgvector extension only exist on Postgres. Under other
         // providers (e.g. the EF in-memory provider used by unit tests) the embedding is
