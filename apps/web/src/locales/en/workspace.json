@@ -342,6 +342,7 @@
   "recUploading": "Uploading…",
   "recUpload": "Upload",
   "recUploadTitle": "Upload audio files to transcribe (or drag them onto the recordings panel)",
+  "recNoPermission": "You do not have permission to add recordings to this room.",
   "errUpload": "Upload failed.",
   "unsavedRecording": "Unsaved recording from {{time}}.",
   "recUploadPending": "Upload now",

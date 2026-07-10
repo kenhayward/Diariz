@@ -342,6 +342,7 @@
   "recUploading": "Importation…",
   "recUpload": "Importer",
   "recUploadTitle": "Importez des fichiers audio à transcrire (ou déposez-les sur le panneau des enregistrements)",
+  "recNoPermission": "Vous n'avez pas la permission d'ajouter des enregistrements à cette salle.",
   "errUpload": "Échec de l'importation.",
   "unsavedRecording": "Enregistrement non sauvegardé du {{time}}.",
   "recUploadPending": "Importer maintenant",

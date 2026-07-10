@@ -26,6 +26,8 @@ import {
 } from "../lib/audioDevices";
 import { connectTrayRecorder, type RecorderState, type TrayBridge } from "../lib/trayRecorder";
 import { useStatus } from "../lib/status";
+import { useRoom } from "../lib/rooms";
+import { RoomPermission } from "../lib/types";
 import type { StatusTone } from "../lib/statusBar";
 import InputLevelMeter from "./InputLevelMeter";
 import { AUDIO_ACCEPT_ATTR } from "../lib/audioFormats";
@@ -639,6 +641,10 @@ export default function Recorder({
   // Upload existing audio files (the "Upload" button). The shared upload queue handles validation,
   // per-file status, and refreshing the list; you can also drag files onto the recordings panel.
   const uploads = useUpload();
+  // Recording (and uploading a file) requires CreateRecording in the current room. Always true in a personal
+  // room; the gate becomes real once you can be a low-privilege member of a shared room.
+  const { can } = useRoom();
+  const canRecord = can(RoomPermission.CreateRecording);
   const fileRef = useRef<HTMLInputElement>(null);
   function onPickFiles(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -822,8 +828,8 @@ export default function Recorder({
         ) : (
           <button
             onClick={() => start()}
-            disabled={busy || (selection.kind === "none" && !systemAudio)}
-            title={busy ? t("recUploading") : t("recRecord")}
+            disabled={busy || (selection.kind === "none" && !systemAudio) || !canRecord}
+            title={!canRecord ? t("recNoPermission") : busy ? t("recUploading") : t("recRecord")}
             aria-label={busy ? t("recUploading") : t("recRecord")}
             className="flex items-center justify-center rounded bg-gray-900 p-2 text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
           >
@@ -834,8 +840,8 @@ export default function Recorder({
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          disabled={recording || busy}
-          title={t("recUploadTitle")}
+          disabled={recording || busy || !canRecord}
+          title={!canRecord ? t("recNoPermission") : t("recUploadTitle")}
           aria-label={t("recUpload")}
           className="flex items-center justify-center rounded border p-2 disabled:opacity-50 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
         >

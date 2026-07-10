@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 
 // A JWT-shaped token whose payload decodes to { sub: "u1" } (used for the per-user pending key).
 const TOKEN = `h.${btoa(JSON.stringify({ sub: "u1" }))}.s`;
@@ -17,6 +17,19 @@ vi.mock("../lib/pendingNotes", () => ({
 vi.mock("../lib/uploadContext", () => ({ useUpload: () => ({ uploadFiles: vi.fn() }) }));
 const setStatus = vi.fn();
 vi.mock("../lib/status", () => ({ useStatus: () => ({ status: null, setStatus }) }));
+// The recorder now consults the current room's permissions. Default: full access (a personal room).
+const roomState = { can: (_p: number) => true };
+vi.mock("../lib/rooms", () => ({
+  useRoom: () => ({
+    can: (p: number) => roomState.can(p),
+    currentRoom: undefined,
+    rooms: [],
+    permissions: 0,
+    selectedSectionId: null,
+    setSelectedSectionId: () => {},
+    isLoading: false,
+  }),
+}));
 vi.mock("../lib/audioSource", () => ({
   getStream: vi.fn(),
   getCombinedStream: vi.fn(),
@@ -77,6 +90,11 @@ const pending = {
   source: "Microphone" as const,
   createdAt: Date.now(),
 };
+
+// Restore full room access after any test that revokes it, so ordering can't leak the gate.
+afterEach(() => {
+  roomState.can = () => true;
+});
 
 describe("Recorder recovery", () => {
   beforeEach(() => {
@@ -162,6 +180,19 @@ describe("Recorder transport controls", () => {
 
     fireEvent.click(pause);
     expect(iconOnly(await screen.findByRole("button", { name: /^resume$/i }))).toBe(true);
+  });
+
+  it("disables Record and Upload without CreateRecording, explaining why", async () => {
+    roomState.can = () => false;
+    render(<Recorder onUploaded={() => {}} />);
+
+    const rec = await screen.findByRole("button", { name: /^record$/i });
+    expect((rec as HTMLButtonElement).disabled).toBe(true);
+    expect(rec.getAttribute("title")).toMatch(/permission/i);
+
+    const upload = screen.getByRole("button", { name: /^upload$/i });
+    expect((upload as HTMLButtonElement).disabled).toBe(true);
+    expect(upload.getAttribute("title")).toMatch(/permission/i);
   });
 });
 

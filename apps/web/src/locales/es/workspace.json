@@ -342,6 +342,7 @@
   "recUploading": "Subiendo…",
   "recUpload": "Subir",
   "recUploadTitle": "Sube archivos de audio para transcribir (o suéltalos en el panel de grabaciones)",
+  "recNoPermission": "No tienes permiso para añadir grabaciones a esta sala.",
   "errUpload": "Error al subir.",
   "unsavedRecording": "Grabación sin guardar del {{time}}.",
   "recUploadPending": "Subir ahora",

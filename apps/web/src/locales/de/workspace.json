@@ -342,6 +342,7 @@
   "recUploading": "Wird hochgeladen…",
   "recUpload": "Hochladen",
   "recUploadTitle": "Audiodateien zum Transkribieren hochladen (oder auf das Aufnahmen-Panel ziehen)",
+  "recNoPermission": "Sie haben keine Berechtigung, Aufnahmen zu diesem Raum hinzuzufügen.",
   "errUpload": "Hochladen fehlgeschlagen.",
   "unsavedRecording": "Nicht gespeicherte Aufnahme vom {{time}}.",
   "recUploadPending": "Jetzt hochladen",
