@@ -37,6 +37,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<UserGroupMember> UserGroupMembers => Set<UserGroupMember>();
     public DbSet<Room> Rooms => Set<Room>();
     public DbSet<RoomMember> RoomMembers => Set<RoomMember>();
+    public DbSet<RoomRecording> RoomRecordings => Set<RoomRecording>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -83,6 +84,21 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.HasIndex(m => new { m.PrincipalType, m.PrincipalId });
         });
 
+        // The placement of a recording in a room. The folder (SectionId) belongs to the placement, so the same
+        // recording can sit in different folders in different rooms.
+        builder.Entity<RoomRecording>(e =>
+        {
+            e.HasKey(p => new { p.RoomId, p.RecordingId });
+            e.HasOne(p => p.Room).WithMany()
+                .HasForeignKey(p => p.RoomId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(p => p.Recording).WithMany()
+                .HasForeignKey(p => p.RecordingId).OnDelete(DeleteBehavior.Cascade);
+            // Deleting a folder ungroups its recordings; it never removes them from the room.
+            e.HasOne(p => p.Section).WithMany()
+                .HasForeignKey(p => p.SectionId).OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(p => new { p.RoomId, p.SectionId });
+        });
+
         // The vector column and pgvector extension only exist on Postgres. Under other
         // providers (e.g. the EF in-memory provider used by unit tests) the embedding is
         // unmapped — it is unused before Milestone 3 anyway.
@@ -108,6 +124,18 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 .HasIndex(r => r.Name)
                 .IsUnique()
                 .HasFilter("\"Kind\" = 1");
+
+            // Exactly one main room per recording. Two would be unrepresentable, not merely wrong.
+            builder.Entity<RoomRecording>()
+                .HasIndex(p => p.RecordingId)
+                .IsUnique()
+                .HasFilter("\"IsMainRoom\"");
+
+            // A main placement is nobody's share: you cannot share a recording into its own home.
+            builder.Entity<RoomRecording>()
+                .ToTable(t => t.HasCheckConstraint(
+                    "CK_RoomRecordings_MainRoomHasNoSharer",
+                    "NOT \"IsMainRoom\" OR (\"SharedByUserId\" IS NULL AND \"SharedAt\" IS NULL)"));
         }
 
         builder.Entity<Recording>(e =>
