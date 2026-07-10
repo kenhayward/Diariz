@@ -199,11 +199,9 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 .WithMany()
                 .HasForeignKey(s => s.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
-            // Folders belong to a room. Deleting a room removes its folders.
-            e.HasOne(s => s.Room)
-                .WithMany()
-                .HasForeignKey(s => s.RoomId)
-                .OnDelete(DeleteBehavior.Cascade);
+            // RoomId is a plain column for now (no FK / navigation): the Rooms FK + cascade land in the phase
+            // that drops UserId, once every fixture sets a room. Until then a bad RoomId can't break section
+            // seeding across the whole suite mid-migration.
             // Self-referential parent for one level of nesting. Deleting a parent cascades to its
             // sub-sections; each sub-section's recordings then drop to Ungrouped via the SetNull FK above.
             e.HasOne(s => s.Parent)

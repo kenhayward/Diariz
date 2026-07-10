@@ -184,4 +184,26 @@ public class RoomsIntegrationTests(ContainersFixture fx)
         Assert.Equal(backfilled.Id, resolved);
         Assert.Single(await db.Rooms.Where(r => r.OwnerUserId == userId).ToListAsync());
     }
+
+    /// <summary>Phase 2c: every section moves into its owner's personal room, minting a missing one first. The
+    /// section is seeded in a throwaway valid room (the RoomId FK forbids an empty Guid); the backfill overwrites
+    /// it with the owner's personal room, keyed on the still-present UserId.</summary>
+    [Fact]
+    public async Task SectionBackfill_PutsEachSectionInItsOwnersPersonalRoom()
+    {
+        await using var db = fx.CreateDbContext();
+        var userId = await NewUserAsync(db, "Ada");
+        var placeholder = new Room { Id = Guid.NewGuid(), Name = $"Placeholder {Guid.NewGuid():N}", Kind = RoomKind.Shared };
+        db.Rooms.Add(placeholder);
+        var sectionId = Guid.NewGuid();
+        db.Sections.Add(new Section { Id = sectionId, UserId = userId, RoomId = placeholder.Id, Name = "F" });
+        await db.SaveChangesAsync();
+
+        await db.Database.ExecuteSqlRawAsync(SectionRoomBackfill.Sql);
+        await db.Database.ExecuteSqlRawAsync(SectionRoomBackfill.Sql); // idempotent
+
+        db.ChangeTracker.Clear(); // the raw UPDATE bypassed the tracker; re-read from the database
+        var room = await db.Rooms.Where(r => r.OwnerUserId == userId).Select(r => r.Id).SingleAsync();
+        Assert.Equal(room, (await db.Sections.FindAsync(sectionId))!.RoomId);
+    }
 }

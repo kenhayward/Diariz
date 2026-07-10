@@ -853,12 +853,17 @@ namespace Diariz.Domain.Migrations
                     b.Property<int>("Position")
                         .HasColumnType("integer");
 
+                    b.Property<Guid>("RoomId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ParentId");
+
+                    b.HasIndex("RoomId", "Name");
 
                     b.HasIndex("UserId", "Name");
 

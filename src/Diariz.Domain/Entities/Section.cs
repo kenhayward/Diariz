@@ -9,9 +9,9 @@ public class Section
     public ApplicationUser? User { get; set; }
 
     /// <summary>The room this folder belongs to. Every folder lives in exactly one room; a user's folders live
-    /// in their personal room. Replaces the old per-user ownership (<see cref="UserId"/> is being retired).</summary>
+    /// in their personal room. Replaces the old per-user ownership (<see cref="UserId"/> is being retired). The
+    /// FK + navigation land in the same phase that drops <see cref="UserId"/>, once every fixture sets a room.</summary>
     public Guid RoomId { get; set; }
-    public Room? Room { get; set; }
 
     public string Name { get; set; } = string.Empty;
 
