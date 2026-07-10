@@ -11,7 +11,7 @@ namespace Diariz.Api.Controllers;
 /// <summary>Platform-wide settings. Any administrator may read them (e.g. to learn the quota ceiling);
 /// only the Platform Administrator may change them.</summary>
 [ApiController]
-[Authorize(Policy = "Admin")]
+[Authorize(Policy = "ReadAdminSettings")]
 [Route("api/platform/settings")]
 public class PlatformSettingsController : ControllerBase
 {
@@ -40,7 +40,7 @@ public class PlatformSettingsController : ControllerBase
     }
 
     [HttpPut]
-    [Authorize(Roles = Roles.PlatformAdministrator)]
+    [Authorize(Policy = "ManagePlatform")]
     public async Task<ActionResult<PlatformSettingsDto>> Update(UpdatePlatformSettingsRequest req)
     {
         if (req.StarterQuotaBytes <= 0 || req.MaxQuotaBytes <= 0)
@@ -70,7 +70,7 @@ public class PlatformSettingsController : ControllerBase
     /// <summary>Run the audio-retention deletion pass immediately (manual trigger), using the persisted
     /// retention window - regardless of the auto-delete toggle. Returns how many recordings had audio deleted.</summary>
     [HttpPost("run-audio-retention")]
-    [Authorize(Roles = Roles.PlatformAdministrator)]
+    [Authorize(Policy = "ManagePlatform")]
     public async Task<AudioRetentionRunResult> RunAudioRetentionNow(CancellationToken ct = default)
     {
         var s = await _settings.GetAsync(ct);
@@ -84,7 +84,7 @@ public class PlatformSettingsController : ControllerBase
     /// Useful when the LLM is configured per-user only, which the startup backfill can't see. Returns how
     /// many jobs were queued, not how many completed.</summary>
     [HttpPost("run-tag-backfill")]
-    [Authorize(Roles = Roles.PlatformAdministrator)]
+    [Authorize(Policy = "ManagePlatform")]
     public async Task<TagBackfillRunResult> RunTagBackfillNow(CancellationToken ct = default)
     {
         var enqueued = await TagBackfill.RunAsync(_db, _queue, _logger, ct);

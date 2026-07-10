@@ -19,7 +19,7 @@ namespace Diariz.Api.Controllers;
 /// or delete themselves (prevents lock-out).
 /// </summary>
 [ApiController]
-[Authorize(Policy = "Admin")]
+[Authorize(Policy = "ManageUsers")]
 [Route("api/admin/users")]
 public class AdminUsersController : ControllerBase
 {
@@ -28,16 +28,18 @@ public class AdminUsersController : ControllerBase
     private readonly DiarizDbContext _db;
     private readonly IPlatformSettingsService _platform;
     private readonly AppPublicOptions _appOpts;
+    private readonly IUserPermissions _permissions;
 
     public AdminUsersController(
         UserManager<ApplicationUser> users, IEmailSender email, DiarizDbContext db,
-        IPlatformSettingsService platform, IOptions<AppPublicOptions> appOpts)
+        IPlatformSettingsService platform, IOptions<AppPublicOptions> appOpts, IUserPermissions permissions)
     {
         _users = users;
         _email = email;
         _db = db;
         _platform = platform;
         _appOpts = appOpts.Value;
+        _permissions = permissions;
     }
 
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -157,9 +159,18 @@ public class AdminUsersController : ControllerBase
         if (await IsPlatformAdmin(user)) return Forbidden("The Platform Administrator's role can't be changed.");
         if (user.Id == CurrentUserId) return Forbidden("You can't change your own role.");
 
-        var current = await _users.GetRolesAsync(user);
-        await _users.RemoveFromRolesAsync(user, current);
-        await _users.AddToRoleAsync(user, req.Role);
+        // Authority now comes from group membership, not Identity roles: promoting means joining the
+        // Administrators group, demoting means leaving it. The Platform Administrators group is never
+        // touched here - the guard above refuses to change a platform admin at all.
+        var admins = await _db.UserGroups.FirstOrDefaultAsync(g => g.Name == Seeder.AdminsGroup);
+        if (admins is null) return Problem("The Administrators group is missing.");
+
+        var member = await _db.UserGroupMembers.FirstOrDefaultAsync(m => m.GroupId == admins.Id && m.UserId == user.Id);
+        if (req.Role == Roles.Administrator && member is null)
+            _db.UserGroupMembers.Add(new UserGroupMember { GroupId = admins.Id, UserId = user.Id });
+        else if (req.Role == Roles.Standard && member is not null)
+            _db.UserGroupMembers.Remove(member);
+        await _db.SaveChangesAsync();
         return NoContent();
     }
 
@@ -189,14 +200,16 @@ public class AdminUsersController : ControllerBase
         return NoContent();
     }
 
-    private async Task<bool> IsPlatformAdmin(ApplicationUser u) =>
-        await _users.IsInRoleAsync(u, Roles.PlatformAdministrator);
+    private Task<bool> IsPlatformAdmin(ApplicationUser u) =>
+        _permissions.HasAsync(u.Id, PlatformPermission.ManagePlatform);
 
+    /// <summary>The account type a user's group membership adds up to. Derived, not stored: ManagePlatform is
+    /// what the Platform Administrator group confers, ManageUsers what Administrators confers.</summary>
     private async Task<string> AccountTypeOf(ApplicationUser u)
     {
-        var roles = await _users.GetRolesAsync(u);
-        if (roles.Contains(Roles.PlatformAdministrator)) return Roles.PlatformAdministrator;
-        if (roles.Contains(Roles.Administrator)) return Roles.Administrator;
+        var perms = await _permissions.ForAsync(u.Id);
+        if (perms.HasFlag(PlatformPermission.ManagePlatform)) return Roles.PlatformAdministrator;
+        if (perms.HasFlag(PlatformPermission.ManageUsers)) return Roles.Administrator;
         return Roles.Standard;
     }
 

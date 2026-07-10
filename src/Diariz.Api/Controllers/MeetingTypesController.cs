@@ -18,11 +18,19 @@ namespace Diariz.Api.Controllers;
 public class MeetingTypesController : ControllerBase
 {
     private readonly DiarizDbContext _db;
+    private readonly IUserPermissions _permissions;
 
-    public MeetingTypesController(DiarizDbContext db) => _db = db;
+    public MeetingTypesController(DiarizDbContext db, IUserPermissions permissions)
+    {
+        _db = db;
+        _permissions = permissions;
+    }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-    private bool IsPlatformAdmin => User.IsInRole(Roles.PlatformAdministrator);
+
+    /// <summary>Platform authority now lives in the caller's group membership, so this is a database read
+    /// rather than a claim check. Awaited once per action and passed down, keeping ToDto synchronous.</summary>
+    private Task<bool> IsPlatformAdminAsync() => _permissions.HasAsync(UserId, PlatformPermission.ManagePlatform);
 
     /// <summary>The Platform types (shared) plus the caller's own Personal types, grouped-ready (ordered by
     /// group then title).</summary>
@@ -34,7 +42,8 @@ public class MeetingTypesController : ControllerBase
             .OrderBy(m => m.GroupName)
             .ThenBy(m => m.Title)
             .ToListAsync();
-        return types.Select(ToDto).ToList();
+        var isPlatformAdmin = await IsPlatformAdminAsync();
+        return types.Select(m => ToDto(m, isPlatformAdmin)).ToList();
     }
 
     /// <summary>Create a meeting type. A normal user always gets a Personal type they own; only a Platform
@@ -44,7 +53,8 @@ public class MeetingTypesController : ControllerBase
     {
         if (Validate(req) is { } error) return BadRequest(error);
 
-        var platform = req.IsPlatform && IsPlatformAdmin;
+        var isPlatformAdmin = await IsPlatformAdminAsync();
+        var platform = req.IsPlatform && isPlatformAdmin;
         var m = new MeetingType
         {
             Id = Guid.NewGuid(),
@@ -58,7 +68,7 @@ public class MeetingTypesController : ControllerBase
         };
         _db.MeetingTypes.Add(m);
         await _db.SaveChangesAsync();
-        return Ok(ToDto(m));
+        return Ok(ToDto(m, isPlatformAdmin));
     }
 
     /// <summary>Replace a meeting type's fields and template atomically. A Platform type needs a Platform
@@ -68,7 +78,8 @@ public class MeetingTypesController : ControllerBase
     {
         var m = await _db.MeetingTypes.FirstOrDefaultAsync(x => x.Id == id);
         if (m is null || (m.UserId is not null && m.UserId != UserId)) return NotFound();
-        if (m.UserId is null && !IsPlatformAdmin) return Forbidden("Only a Platform Administrator can edit a shared type.");
+        var isPlatformAdmin = await IsPlatformAdminAsync();
+        if (m.UserId is null && !isPlatformAdmin) return Forbidden("Only a Platform Administrator can edit a shared type.");
         if (Validate(req) is { } error) return BadRequest(error);
 
         m.GroupName = req.GroupName.Trim();
@@ -79,7 +90,7 @@ public class MeetingTypesController : ControllerBase
         m.ContentJson = req.Content.Serialize();
         m.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync();
-        return Ok(ToDto(m));
+        return Ok(ToDto(m, isPlatformAdmin));
     }
 
     [HttpDelete("{id:guid}")]
@@ -87,7 +98,8 @@ public class MeetingTypesController : ControllerBase
     {
         var m = await _db.MeetingTypes.FirstOrDefaultAsync(x => x.Id == id);
         if (m is null || (m.UserId is not null && m.UserId != UserId)) return NotFound();
-        if (m.UserId is null && !IsPlatformAdmin) return Forbidden("Only a Platform Administrator can delete a shared type.");
+        if (m.UserId is null && !await IsPlatformAdminAsync())
+            return Forbidden("Only a Platform Administrator can delete a shared type.");
 
         // Recordings that used it fall back to the General default (FK is ON DELETE SET NULL).
         _db.MeetingTypes.Remove(m);
@@ -111,10 +123,10 @@ public class MeetingTypesController : ControllerBase
 
     private ObjectResult Forbidden(string message) => StatusCode(StatusCodes.Status403Forbidden, message);
 
-    private MeetingTypeDto ToDto(MeetingType m)
+    private MeetingTypeDto ToDto(MeetingType m, bool isPlatformAdmin)
     {
         var isPlatform = m.UserId is null;
-        var canEdit = isPlatform ? IsPlatformAdmin : m.UserId == UserId;
+        var canEdit = isPlatform ? isPlatformAdmin : m.UserId == UserId;
         return new MeetingTypeDto(
             m.Id, isPlatform, canEdit, m.GroupName, m.Title, m.Overview, m.Icon, m.Color,
             MeetingTypeContent.Parse(m.ContentJson), m.Key == MeetingType.GeneralKey);

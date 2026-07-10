@@ -79,8 +79,9 @@ builder.Services.AddIdentityCore<ApplicationUser>(o =>
 // The default authenticate scheme is a forwarding policy scheme: a `Bearer dz_api_…` personal API token
 // routes to the ApiKey handler, everything else (a JWT bearer, or no Authorization header for the
 // SignalR/audio/backup query-string flows) routes to JWT. This makes a personal API key satisfy every
-// [Authorize] variant - including [Authorize(Roles=…)] endpoints, which authenticate with the default
-// scheme. Named schemes (e.g. the Mcp policy on /mcp) select their own scheme and are unaffected.
+// [Authorize] variant - including the permission policies, which resolve the caller's group membership from
+// the NameIdentifier claim that both schemes emit. Named schemes (e.g. the Mcp policy on /mcp) select their
+// own scheme and are unaffected.
 const string SmartAuthScheme = "smart";
 builder.Services.AddAuthentication(SmartAuthScheme)
     .AddPolicyScheme(SmartAuthScheme, SmartAuthScheme, o =>
@@ -141,10 +142,6 @@ builder.Services.AddAuthentication(SmartAuthScheme)
         Diariz.Api.Auth.ApiKeyAuthenticationHandler.SchemeName, _ => { });
 builder.Services.AddAuthorization(o =>
 {
-    // Legacy role policy. Superseded by the permission policies below; removed once every controller has
-    // been swapped over (Rooms Phase 1, Task 6). Do not add new usages.
-    o.AddPolicy("Admin", p => p.RequireRole(Roles.Administrator, Roles.PlatformAdministrator));
-
     // Platform authority, resolved from the caller's group membership. Each policy requires ANY of the flags
     // it names.
     o.AddPolicy("ManageRooms", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManageRooms)));
@@ -449,11 +446,11 @@ await using (var scope = app.Services.CreateAsyncScope())
     await db.Database.MigrateAsync();
     await sp.GetRequiredService<IAudioStorage>().EnsureBucketAsync();
     await Seeder.SeedRolesAsync(sp);
-    await Seeder.SeedDefaultUserAsync(sp, app.Configuration);
-    // Groups after the seed user, so the platform admin's role row exists to be migrated. Both are
-    // idempotent, so this also backfills a deployment that predates groups.
-    await Seeder.SeedGroupsAsync(db);
-    await Seeder.MigrateRolesToGroupsAsync(db);
+    var seedUserId = await Seeder.SeedDefaultUserAsync(sp, app.Configuration);
+    // Groups exist with their flags, and the seed user is always a Platform Administrator. Existing role
+    // holders were moved into groups once, by the AddUserGroups migration - never on boot, or a demoted user
+    // would be silently re-promoted from their stale AspNetUserRoles row.
+    await Seeder.SeedPlatformAuthorityAsync(db, seedUserId);
     await MeetingTypeSeeder.SeedAsync(db);
 }
 

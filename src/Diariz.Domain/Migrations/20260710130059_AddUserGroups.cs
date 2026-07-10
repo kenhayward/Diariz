@@ -62,6 +62,10 @@ namespace Diariz.Domain.Migrations
                 table: "UserGroups",
                 column: "Name",
                 unique: true);
+
+            // Seed the two groups and move existing Identity role holders into them. Runs exactly once per
+            // database - that is the point; see RoleToGroupBackfill - so a later demotion is never undone.
+            migrationBuilder.Sql(RoleToGroupBackfill.Sql);
         }
 
         /// <inheritdoc />

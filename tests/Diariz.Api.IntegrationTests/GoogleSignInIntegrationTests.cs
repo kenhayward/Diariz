@@ -112,10 +112,12 @@ public class GoogleSignInIntegrationTests(ContainersFixture fx)
         var admin = new ApplicationUser { UserName = $"adm-{Guid.NewGuid():N}@x.test", Email = $"adm-{Guid.NewGuid():N}@x.test" };
         await users.CreateAsync(admin);
         await users.AddToRoleAsync(admin, Roles.Administrator);
+        Perms.Grant(db, admin.Id, Perms.Administrator); // authority is group membership, not a role claim
         var adminCtrl = new AdminUsersController(users, new FakeEmailSender { Sent = false }, db, platform,
-            Options.Create(new AppPublicOptions { PublicUrl = "http://localhost:8081" }))
+            Options.Create(new AppPublicOptions { PublicUrl = "http://localhost:8081" }),
+            new UserPermissions(db))
         {
-            ControllerContext = Http.Context(admin.Id, [Roles.Administrator]),
+            ControllerContext = Http.Context(admin.Id),
         };
 
         var grant = (await adminCtrl.Grant(pending!.Id)).Value!;

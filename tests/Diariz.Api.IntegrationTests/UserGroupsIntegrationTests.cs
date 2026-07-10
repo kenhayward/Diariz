@@ -2,6 +2,7 @@ using Diariz.Api.IntegrationTests.Infrastructure;
 using Diariz.Domain;
 using Diariz.Api.Services;
 using Diariz.Domain.Entities;
+using Diariz.Domain.Migrations;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -95,20 +96,16 @@ public class UserGroupsIntegrationTests(ContainersFixture fx)
     }
 
     /// <summary>The privilege boundary this whole phase must preserve: an Administrator lands in the
-    /// Administrators group, NOT in Platform Administrators, so they never gain backup/restore.</summary>
+    /// Administrators group, NOT in Platform Administrators, so they never gain backup/restore. Exercises the
+    /// migration's backfill SQL, which is what actually runs against an upgrading deployment.</summary>
     [Fact]
-    public async Task MigrateRoles_MovesAdministratorToAdministrators_WithoutManagePlatform()
+    public async Task Backfill_MovesAdministratorToAdministrators_WithoutManagePlatform()
     {
         await using var db = fx.CreateDbContext();
         await Seeder.SeedGroupsAsync(db);
-        await EnsureRoleAsync(db, Roles.Administrator);
+        var userId = await UserWithRoleAsync(db, Roles.Administrator);
 
-        var adminRoleId = (await db.Roles.SingleAsync(r => r.Name == Roles.Administrator)).Id;
-        var userId = await NewUserAsync(db);
-        db.UserRoles.Add(new IdentityUserRole<Guid> { UserId = userId, RoleId = adminRoleId });
-        await db.SaveChangesAsync();
-
-        await Seeder.MigrateRolesToGroupsAsync(db);
+        await db.Database.ExecuteSqlRawAsync(RoleToGroupBackfill.Sql);
 
         var perms = await new UserPermissions(db).ForAsync(userId);
         Assert.True(perms.HasFlag(PlatformPermission.ManageUsers));
@@ -117,29 +114,71 @@ public class UserGroupsIntegrationTests(ContainersFixture fx)
     }
 
     [Fact]
-    public async Task MigrateRoles_MovesPlatformAdministrator_AndIsIdempotent()
+    public async Task Backfill_MovesPlatformAdministrator_AndDoesNotDuplicate()
     {
         await using var db = fx.CreateDbContext();
         await Seeder.SeedGroupsAsync(db);
-        await EnsureRoleAsync(db, Roles.PlatformAdministrator);
+        var userId = await UserWithRoleAsync(db, Roles.PlatformAdministrator);
 
-        var roleId = (await db.Roles.SingleAsync(r => r.Name == Roles.PlatformAdministrator)).Id;
-        var userId = await NewUserAsync(db);
-        db.UserRoles.Add(new IdentityUserRole<Guid> { UserId = userId, RoleId = roleId });
-        await db.SaveChangesAsync();
-
-        await Seeder.MigrateRolesToGroupsAsync(db);
-        await Seeder.MigrateRolesToGroupsAsync(db); // twice: must not duplicate the membership
+        await db.Database.ExecuteSqlRawAsync(RoleToGroupBackfill.Sql);
+        await db.Database.ExecuteSqlRawAsync(RoleToGroupBackfill.Sql); // ON CONFLICT DO NOTHING
 
         var group = await db.UserGroups.SingleAsync(g => g.Name == Seeder.PlatformAdminsGroup);
         Assert.Single(await db.UserGroupMembers.Where(m => m.GroupId == group.Id && m.UserId == userId).ToListAsync());
         Assert.True((await new UserPermissions(db).ForAsync(userId)).HasFlag(PlatformPermission.ManagePlatform));
     }
 
-    private static async Task EnsureRoleAsync(DiarizDbContext db, string name)
+    /// <summary>Regression: demoting an Administrator must STICK across a restart. The backfill is a one-way
+    /// move that runs once per database (inside the migration). If it were re-run on every boot, it would see
+    /// the still-present legacy AspNetUserRoles row and silently re-promote the user.</summary>
+    [Fact]
+    public async Task Demotion_IsNotUndoneByStartupSeeding()
     {
-        if (await db.Roles.AnyAsync(r => r.Name == name)) return;
-        db.Roles.Add(new IdentityRole<Guid>(name) { Id = Guid.NewGuid(), NormalizedName = name.ToUpperInvariant() });
+        await using var db = fx.CreateDbContext();
+        await Seeder.SeedGroupsAsync(db);
+        var userId = await UserWithRoleAsync(db, Roles.Administrator); // legacy role row, as after an upgrade
+        await db.Database.ExecuteSqlRawAsync(RoleToGroupBackfill.Sql);
+
+        // The admin demotes them (AdminUsersController.SetRole removes the group membership).
+        var admins = await db.UserGroups.SingleAsync(g => g.Name == Seeder.AdminsGroup);
+        db.UserGroupMembers.Remove(
+            await db.UserGroupMembers.SingleAsync(m => m.GroupId == admins.Id && m.UserId == userId));
         await db.SaveChangesAsync();
+
+        // Now restart the server: everything Program.cs runs at boot for platform authority.
+        await Seeder.SeedPlatformAuthorityAsync(db, seedUserId: null);
+
+        Assert.Equal(PlatformPermission.None, await new UserPermissions(db).ForAsync(userId));
+    }
+
+    [Fact]
+    public async Task SeedPlatformAuthority_PutsTheSeedUserInPlatformAdministrators()
+    {
+        await using var db = fx.CreateDbContext();
+        var seedUserId = await NewUserAsync(db);
+
+        await Seeder.SeedPlatformAuthorityAsync(db, seedUserId);
+        await Seeder.SeedPlatformAuthorityAsync(db, seedUserId); // idempotent
+
+        var group = await db.UserGroups.SingleAsync(g => g.Name == Seeder.PlatformAdminsGroup);
+        Assert.Single(await db.UserGroupMembers.Where(m => m.GroupId == group.Id && m.UserId == seedUserId).ToListAsync());
+        Assert.True((await new UserPermissions(db).ForAsync(seedUserId)).HasFlag(PlatformPermission.ManagePlatform));
+    }
+
+    private static async Task<Guid> UserWithRoleAsync(DiarizDbContext db, string roleName)
+    {
+        if (!await db.Roles.AnyAsync(r => r.Name == roleName))
+        {
+            db.Roles.Add(new IdentityRole<Guid>(roleName)
+            {
+                Id = Guid.NewGuid(), NormalizedName = roleName.ToUpperInvariant(),
+            });
+            await db.SaveChangesAsync();
+        }
+        var roleId = (await db.Roles.SingleAsync(r => r.Name == roleName)).Id;
+        var userId = await NewUserAsync(db);
+        db.UserRoles.Add(new IdentityUserRole<Guid> { UserId = userId, RoleId = roleId });
+        await db.SaveChangesAsync();
+        return userId;
     }
 }

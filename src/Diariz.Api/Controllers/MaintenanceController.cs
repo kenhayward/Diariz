@@ -13,7 +13,7 @@ namespace Diariz.Api.Controllers;
 /// entry per stored blob. The Data-Protection keyring is deliberately NOT included, so after restoring on a
 /// different instance the encrypted per-user LLM API keys can't be decrypted (users re-enter them).</summary>
 [ApiController]
-[Authorize(Roles = Roles.PlatformAdministrator)]
+[Authorize(Policy = "ManagePlatform")]
 [Route("api/maintenance")]
 public class MaintenanceController : ControllerBase
 {

@@ -25,9 +25,12 @@ public class MaintenanceControllerTests
     [Fact]
     public void Controller_IsGatedToPlatformAdministrator()
     {
+        // Backup/restore requires ManagePlatform, which only the Platform Administrators group confers.
+        // An Administrator (ManageRooms | ManageUsers) must never reach it.
         var attr = typeof(MaintenanceController).GetCustomAttribute<AuthorizeAttribute>();
         Assert.NotNull(attr);
-        Assert.Equal(Roles.PlatformAdministrator, attr!.Roles);
+        Assert.Equal("ManagePlatform", attr!.Policy);
+        Assert.Null(attr.Roles);
     }
 
     [Fact]

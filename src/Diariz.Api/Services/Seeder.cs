@@ -22,8 +22,9 @@ public static class Seeder
     }
 
     /// <summary>Find-or-create the seed user and enforce that it is the active, enabled Platform
-    /// Administrator (backfills users created before this feature).</summary>
-    public static async Task SeedDefaultUserAsync(IServiceProvider sp, IConfiguration config)
+    /// Administrator (backfills users created before this feature). Returns its id, or null when seeding was
+    /// skipped or failed, so the caller can guarantee the Platform Administrators group is never empty.</summary>
+    public static async Task<Guid?> SeedDefaultUserAsync(IServiceProvider sp, IConfiguration config)
     {
         var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Seed");
         var email = config["Seed:Email"];
@@ -32,7 +33,7 @@ public static class Seeder
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
         {
             logger.LogWarning("Seed skipped: Seed:Email / Seed:Password not configured.");
-            return;
+            return null;
         }
 
         var users = sp.GetRequiredService<UserManager<ApplicationUser>>();
@@ -45,7 +46,7 @@ public static class Seeder
             {
                 logger.LogError("Seed user {Email} creation FAILED: {Errors}", email,
                     string.Join("; ", result.Errors.Select(e => e.Description)));
-                return;
+                return null;
             }
             logger.LogInformation("Seed user {Email} created.", email);
         }
@@ -60,6 +61,8 @@ public static class Seeder
 
         if (!await users.IsInRoleAsync(user, Roles.PlatformAdministrator))
             await users.AddToRoleAsync(user, Roles.PlatformAdministrator);
+
+        return user.Id;
     }
 
     /// <summary>The two seeded groups, mirroring the roles they replace.</summary>
@@ -95,26 +98,23 @@ public static class Seeder
         }
     }
 
-    /// <summary>One-way move of Identity role holders into the seeded groups. Idempotent: a user already in
-    /// the group is skipped. The roles remain in the database, unused, until a later chore removes them.</summary>
-    public static async Task MigrateRolesToGroupsAsync(DiarizDbContext db)
+    /// <summary>Everything the API does at boot to keep platform authority sound: both groups exist with their
+    /// flags, and the seed user is a Platform Administrator (mirroring the role SeedDefaultUserAsync grants).
+    ///
+    /// It deliberately does NOT reconcile Identity roles into groups. That move happens exactly once per
+    /// database, in the AddUserGroups migration (see <see cref="Migrations.RoleToGroupBackfill"/>). Doing it on
+    /// every boot would silently re-promote any user demoted since, because their legacy AspNetUserRoles row
+    /// still names them an Administrator.</summary>
+    public static async Task SeedPlatformAuthorityAsync(DiarizDbContext db, Guid? seedUserId)
     {
-        await Move(db, Roles.PlatformAdministrator, PlatformAdminsGroup);
-        await Move(db, Roles.Administrator, AdminsGroup);
-        await db.SaveChangesAsync();
+        await SeedGroupsAsync(db);
+        if (seedUserId is not { } userId) return;
 
-        static async Task Move(DiarizDbContext db, string roleName, string groupName)
+        var group = await db.UserGroups.FirstAsync(g => g.Name == PlatformAdminsGroup);
+        if (!await db.UserGroupMembers.AnyAsync(m => m.GroupId == group.Id && m.UserId == userId))
         {
-            var group = await db.UserGroups.FirstOrDefaultAsync(g => g.Name == groupName);
-            var role = await db.Roles.FirstOrDefaultAsync(r => r.Name == roleName);
-            if (group is null || role is null) return;
-
-            var holders = await db.UserRoles.Where(ur => ur.RoleId == role.Id).Select(ur => ur.UserId).ToListAsync();
-            var existing = await db.UserGroupMembers.Where(m => m.GroupId == group.Id)
-                .Select(m => m.UserId).ToListAsync();
-
-            foreach (var userId in holders.Except(existing))
-                db.UserGroupMembers.Add(new UserGroupMember { GroupId = group.Id, UserId = userId });
+            db.UserGroupMembers.Add(new UserGroupMember { GroupId = group.Id, UserId = userId });
+            await db.SaveChangesAsync();
         }
     }
 }
