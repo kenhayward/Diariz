@@ -6,6 +6,11 @@ import { vi } from "vitest";
 vi.mock("./RecordingsPanel", () => ({ default: () => <div>LIST</div> }));
 vi.mock("./ChatPanel", () => ({ default: () => <div>CHAT</div> }));
 
+// The left-panel header is now the RoomSwitcher, which reads the current room and the signed-in user's avatar.
+const room = { id: "p1", name: "Personal", kind: 0, icon: null, color: null, isPersonal: true, permissions: 63 };
+vi.mock("../lib/rooms", () => ({ useRoom: () => ({ rooms: [room], currentRoom: room }) }));
+vi.mock("../auth", () => ({ useAuth: () => ({ initials: "AL", pictureUrl: null }) }));
+
 import Workspace from "./Workspace";
 
 function renderWorkspace(initial = "/") {
@@ -44,9 +49,9 @@ describe("Workspace", () => {
 
   it("collapses the left panel and persists the choice", () => {
     renderWorkspace();
-    fireEvent.click(screen.getByRole("button", { name: /collapse meetings panel/i }));
+    fireEvent.click(screen.getByRole("button", { name: /collapse personal panel/i }));
     expect(screen.queryByText("LIST")).toBeNull();
-    expect(screen.getByRole("button", { name: /expand meetings panel/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /expand personal panel/i })).toBeTruthy();
     expect(localStorage.getItem("diariz.panels.left")).toBe("false");
   });
 
