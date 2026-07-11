@@ -92,11 +92,12 @@ guarantees one personal room per user, and permits any number of orphaned rooms.
 An **orphaned** room is `Kind = Personal` with `OwnerUserId IS NULL`. It appears in no switcher and is readable
 only through the shared placements of its recordings. Purging one requires `ManageUsers`.
 
-The deleted user's `RoomMember` row **survives** on the orphan: `PrincipalId` points at either `AspNetUsers` or
-`UserGroups`, so it carries no FK and the database cannot cascade. The row is inert - a personal room resolves
-permissions from `OwnerUserId` alone and never consults member rows, and a deleted user's id is never reissued -
-but the user-delete path must sweep it, along with the user's rows in every shared room. That belongs with the
-user-delete rework (orphan-not-cascade, plus the "also delete their recordings" opt-in), not with the schema.
+`RoomMember.PrincipalId` points at either `AspNetUsers` or `UserGroups`, so it carries no FK and the database
+cannot cascade. Deleting a user or a group therefore **sweeps** its `RoomMember` rows explicitly
+(`AdminUsersController.Delete` / `GroupsController.Delete`, before the principal is removed), so no stale row
+survives on the orphaned personal room or in any shared room the principal belonged to. (The broader user-delete rework - orphan-not-cascade for recordings, plus the "also delete their
+recordings" opt-in - is still ahead; the membership sweep landed early because a stale row becomes a live grant
+once shared rooms have members.)
 
 **`UserGroup`** - `Id`, `Name` (unique), `Description?`, `Icon?`, `Color?`, `Permissions`
 (`PlatformPermission` flags), `IsSystem` (bool, true for the seeded Platform Administrators group).

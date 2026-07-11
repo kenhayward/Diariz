@@ -638,9 +638,11 @@ An **orphaned** room is `Kind = 0` with `OwnerUserId IS NULL`: what a deleted us
 survive in the shared rooms they were shared into, and it appears in no switcher. Cascading the delete instead
 would destroy recordings that live in other people's rooms.
 
-The deleted user's `RoomMembers` row **survives** on the orphan (there is no FK to cascade). It is inert: a
-personal room resolves permissions from `OwnerUserId` alone and never consults member rows, and a deleted user's
-id is never reissued. Sweeping these rows belongs with the user-delete rework in a later Rooms phase.
+`RoomMembers.PrincipalId` carries no FK (it points at either `AspNetUsers` or `UserGroups`), so the database
+cannot cascade. Deleting a user (`AdminUsersController.Delete`) therefore **sweeps** their `RoomMembers` rows
+explicitly, and deleting a group (`GroupsController.Delete`) sweeps its own, before the principal is removed.
+Without the sweep a stale row would survive: inert on an orphaned personal room, but a live grant in a shared
+room once those have members.
 
 Backfilled once by the `AddRooms` migration: one Personal room per existing user, named after them
 (`FullName` → `Email` → `"Personal"`), with the owner holding every permission (`63`).
