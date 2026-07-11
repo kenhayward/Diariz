@@ -118,17 +118,19 @@ public class MaintenanceController : ControllerBase
                 manifest = await JsonSerializer.DeserializeAsync<BackupManifest>(ms, JsonOpts, ct);
             if (manifest is null) return BadRequest("Invalid backup: manifest.json is unreadable.");
 
-            // pg_restore brings the dump's schema, which must match the running code.
+            // Decide whether this backup can be applied here: same Format epoch, and a same-or-older
+            // (forward-migratable) schema. An older ancestor is rolled forward after the dump loads.
             var current = await _schema.CurrentAsync(ct);
-            if (!string.IsNullOrEmpty(current) && manifest.MigrationId != current)
-                return BadRequest(
-                    $"This backup was taken on a different schema version ({manifest.MigrationId}); this " +
-                    $"instance is at {current}. Restore is only supported on a matching version.");
+            var (ok, needMigrate, error) = EvaluateCompatibility(manifest, current, _schema.KnownMigrations);
+            if (!ok) return BadRequest(error);
 
             var dumpEntry = zip.GetEntry(DumpEntry);
             if (dumpEntry is null) return BadRequest("Invalid backup: database.dump is missing.");
             await using (var ds = dumpEntry.Open())
                 await _backup.RestoreFromAsync(ds, ct);
+
+            // The dump landed the backup's (older) schema + __EFMigrationsHistory; roll it up to this build.
+            if (needMigrate) await _schema.MigrateToCurrentAsync(ct);
 
             // Replace the object store: wipe what's there, then upload the archive's objects.
             var existing = new List<string>();
@@ -152,9 +154,44 @@ public class MaintenanceController : ControllerBase
                 }
                 finally { if (System.IO.File.Exists(objTemp)) System.IO.File.Delete(objTemp); }
             }
-            return Ok(new { restored = true });
+            return Ok(new
+            {
+                restored = true,
+                migratedFrom = manifest.MigrationId,
+                migratedTo = current,
+                restartRecommended = needMigrate,
+            });
         }
         finally { if (System.IO.File.Exists(archive)) System.IO.File.Delete(archive); }
+    }
+
+    /// <summary>Decide whether a backup can be restored onto the running instance. Returns whether to accept,
+    /// whether a forward-migration is needed afterwards, and (on rejection) a message. Same <see cref="CurrentFormat"/>
+    /// is required; within it, the backup's migration must be this build's current one or an earlier ancestor
+    /// (newer/unknown schemas are refused - there are no down-migrations). Skipped when there is no migration
+    /// history (the in-memory test provider).</summary>
+    private static (bool Ok, bool Migrate, string? Error) EvaluateCompatibility(
+        BackupManifest manifest, string current, IReadOnlyList<string> known)
+    {
+        if (string.IsNullOrEmpty(current)) return (true, false, null);
+
+        if (manifest.Format != CurrentFormat)
+            return (false, false, manifest.Format < CurrentFormat
+                ? $"This backup (format {manifest.Format}) predates a breaking change; this instance is format " +
+                  $"{CurrentFormat}. It can't be restored on this version."
+                : $"This backup is from a newer app (format {manifest.Format}); upgrade this instance before restoring.");
+
+        if (manifest.MigrationId == current) return (true, false, null); // identical schema
+
+        var list = known as IList<string> ?? known.ToList();
+        int idxBackup = list.IndexOf(manifest.MigrationId);
+        int idxCurrent = list.IndexOf(current);
+        if (idxBackup < 0)
+            return (false, false, $"This backup's schema version ({manifest.MigrationId}) is not recognised by this build.");
+        if (idxCurrent < 0 || idxBackup > idxCurrent)
+            return (false, false,
+                $"This backup ({manifest.MigrationId}) is newer than this instance ({current}); upgrade the app first.");
+        return (true, true, null); // older ancestor - restore, then migrate forward
     }
 
     /// <summary>A reasonable content-type from the key's extension. Serving uses the DB's stored content-type
