@@ -13,7 +13,7 @@ import { recordingMenu } from "./recordingMenu";
 import { isProcessing, statusLabel } from "../lib/recordingStatus";
 import { copyRichLink, transcriptUrl } from "../lib/clipboard";
 import { useSelection } from "../lib/selection";
-import { useRoom } from "../lib/rooms";
+import { useRoom, useRoomBasePath } from "../lib/rooms";
 import { useActiveRecordingId } from "../lib/useActiveRecordingId";
 import { formatDuration } from "../lib/format";
 import { computeReorder } from "../lib/reorder";
@@ -116,15 +116,15 @@ export default function RecordingsPanel() {
     selection.setSelectMode(false);
     setTab(next);
   }
-  // Actions + Tags don't exist in a shared room; fall back to the list if a shared room is opened on one.
-  useEffect(() => {
-    if (!isPersonalRoom && (tab === "actions" || tab === "tags")) setTab("list");
-  }, [isPersonalRoom, tab]);
+  // Actions + Tags are scoped to the room being viewed: the personal library (roomId omitted) or a shared
+  // room's shared recordings. `aggRoomId` is undefined for the personal room so those endpoints keep their
+  // owner-scoped path.
+  const aggRoomId = isPersonalRoom ? undefined : roomId;
 
-  // Actions tab: all actions across the library, filtered by person + hide-complete, with one open editor.
+  // Actions tab: all actions in the current room, filtered by person + hide-complete, with one open editor.
   const { data: allActions = [] } = useQuery({
-    queryKey: ["actions", "all"],
-    queryFn: api.listAllActions,
+    queryKey: ["actions", "all", aggRoomId ?? null],
+    queryFn: () => api.listAllActions(aggRoomId),
     enabled: tab === "actions",
   });
   const [personFilter, setPersonFilter] = useState<string | null>(null);
@@ -138,8 +138,8 @@ export default function RecordingsPanel() {
   // Tags tab: the aggregated cloud + a single selected tag filtering the recordings list below it. The
   // selection is shared with the expanded modal so the panel always mirrors what was picked there.
   const { data: tags = [] } = useQuery({
-    queryKey: ["tags"],
-    queryFn: api.listTags,
+    queryKey: ["tags", aggRoomId ?? null],
+    queryFn: () => api.listTags(aggRoomId),
     enabled: tab === "tags",
   });
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -385,7 +385,7 @@ export default function RecordingsPanel() {
         <ListToolbar recordings={recordings} listMode={tab === "list"} allowFolders={isPersonalRoom} onError={setOpError} />
       )}
       <div className="flex min-h-0 flex-1">
-        <TabStrip tab={tab} onSelect={selectTab} showAggregations={isPersonalRoom} />
+        <TabStrip tab={tab} onSelect={selectTab} />
         {tab === "list" ? (
           // min-w-0 lets this flex child shrink to the panel width so long recording names truncate
           // instead of forcing the column wider than the panel.
@@ -599,12 +599,9 @@ export function TagCountSlider({
 function TabStrip({
   tab,
   onSelect,
-  showAggregations,
 }: {
   tab: PanelTab;
   onSelect: (t: PanelTab) => void;
-  // Actions + Tags aggregate your whole personal library, so they only show for the Personal room.
-  showAggregations: boolean;
 }) {
   const { t } = useTranslation("workspace");
   const item = (key: PanelTab, label: string) => (
@@ -625,8 +622,8 @@ function TabStrip({
     <div className="flex w-7 shrink-0 flex-col items-stretch border-r bg-gray-50 dark:border-gray-800 dark:bg-gray-950/40">
       {item("list", t("tabList"))}
       {item("calendar", t("tabCalendar"))}
-      {showAggregations && item("actions", t("tabActions"))}
-      {showAggregations && item("tags", t("tabTags"))}
+      {item("actions", t("tabActions"))}
+      {item("tags", t("tabTags"))}
     </div>
   );
 }
@@ -1221,6 +1218,7 @@ export function RecordingRow({
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const basePath = useRoomBasePath();
   const activeRecordingId = useActiveRecordingId();
   const [renaming, setRenaming] = useState(false);
   const [moving, setMoving] = useState(false);
@@ -1269,7 +1267,7 @@ export function RecordingRow({
       await api.deleteRecording(r.id);
       // If the deleted recording is the one open in the detail panel, leave it — otherwise its transcript
       // stays on screen and any further action targets a now-missing recording.
-      if (activeRecordingId === r.id) navigate("/");
+      if (activeRecordingId === r.id) navigate(basePath || "/");
       refresh();
       qc.invalidateQueries({ queryKey: ["user-storage"] });
     }),
@@ -1320,7 +1318,7 @@ export function RecordingRow({
           <RenameForm initial={r.name ?? ""} onSave={saveName} onCancel={() => setRenaming(false)} />
         ) : (
           <NavLink
-            to={`/recordings/${r.id}`}
+            to={`${basePath}/recordings/${r.id}`}
             draggable={false}
             onClick={() => onNavigate?.()}
             // Single-line row: name + right-aligned duration. Source + date (and the full, untruncated name)

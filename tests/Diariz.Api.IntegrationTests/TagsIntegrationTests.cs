@@ -70,7 +70,7 @@ public class TagsIntegrationTests(ContainersFixture fx)
 
         await using (var db = fx.CreateDbContext())
         {
-            var controller = new TagsController(db) { ControllerContext = Http.Context(userId) };
+            var controller = new TagsController(db, new Diariz.Api.Services.RoomScope(db)) { ControllerContext = Http.Context(userId) };
             var entry = Assert.Single((await controller.List()).Value!);
             Assert.Equal("Roadmap", entry.Tag);
             Assert.Equal(2, entry.Count); // the other user's recording is excluded
@@ -86,7 +86,7 @@ public class TagsIntegrationTests(ContainersFixture fx)
 
         await using (var db = fx.CreateDbContext())
         {
-            var controller = new TagsController(db) { ControllerContext = Http.Context(userId) };
+            var controller = new TagsController(db, new Diariz.Api.Services.RoomScope(db)) { ControllerContext = Http.Context(userId) };
             var entry = Assert.Single((await controller.List()).Value!);
             Assert.Equal(1, entry.Count);
             Assert.Equal(keepId, Assert.Single(entry.RecordingIds));

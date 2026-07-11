@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Diariz.Api.Contracts;
+using Diariz.Api.Services;
 using Diariz.Domain;
+using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -19,19 +21,36 @@ namespace Diariz.Api.Controllers;
 public class TagsController : ControllerBase
 {
     private readonly DiarizDbContext _db;
-    public TagsController(DiarizDbContext db) => _db = db;
+    private readonly IRoomScope _rooms;
+    public TagsController(DiarizDbContext db, IRoomScope rooms)
+    {
+        _db = db;
+        _rooms = rooms;
+    }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    /// <summary>All the caller's tags, aggregated case-insensitively (display = the most frequent casing),
-    /// sorted by summed weight descending then tag text.</summary>
+    /// <summary>The aggregated tag cloud, case-insensitive (display = the most frequent casing), sorted by
+    /// summed weight descending then tag text. With no <paramref name="roomId"/> it covers the caller's own
+    /// library; with one it covers the recordings placed in that room (membership is the read gate - a
+    /// non-member 404s).</summary>
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<TagCloudEntryDto>>> List()
+    public async Task<ActionResult<IReadOnlyList<TagCloudEntryDto>>> List([FromQuery] Guid? roomId = null)
     {
+        IQueryable<Recording> recs;
+        if (roomId is { } rid)
+        {
+            if (!await _rooms.IsMemberAsync(UserId, rid)) return NotFound();
+            recs = _rooms.RecordingsIn(rid);
+        }
+        else
+        {
+            recs = _db.Recordings.Where(r => r.UserId == UserId);
+        }
+
         var rows = await (
             from t in _db.RecordingTags
-            join r in _db.Recordings on t.RecordingId equals r.Id
-            where r.UserId == UserId
+            join r in recs on t.RecordingId equals r.Id
             select new { t.Tag, t.Weight, t.RecordingId }).ToListAsync();
 
         var entries = rows

@@ -8,7 +8,7 @@ namespace Diariz.Api.Tests;
 public class TagsControllerTests
 {
     private static TagsController Build(DiarizDbContext db, Guid userId) =>
-        new(db) { ControllerContext = Http.Context(userId) };
+        new(db, new Diariz.Api.Services.RoomScope(db)) { ControllerContext = Http.Context(userId) };
 
     private static Recording AddRecording(DiarizDbContext db, Guid userId)
     {
@@ -22,6 +22,41 @@ public class TagsControllerTests
         {
             Id = Guid.NewGuid(), RecordingId = recId, Tag = tag, Weight = weight, Ordinal = ordinal,
         });
+
+    [Fact]
+    public async Task List_ByRoom_AggregatesOnlyTheRoomsRecordings_ForAMember()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var owner = Guid.NewGuid();
+        Users.Ensure(db, me);
+        Users.Ensure(db, owner);
+        var scope = new Diariz.Api.Services.RoomScope(db);
+
+        var shared = AddRecording(db, owner); // shared into the room
+        var mine = AddRecording(db, me);       // my personal recording, not in the room
+        AddTag(db, shared.Id, "Roadmap", 0.8);
+        AddTag(db, mine.Id, "Personal", 0.9);
+        await db.SaveChangesAsync();
+        await scope.PlaceInMainRoomAsync(shared.Id, owner, sectionId: null);
+        await scope.PlaceInMainRoomAsync(mine.Id, me, sectionId: null);
+        var roomId = await scope.CreateSharedRoomAsync("Eng", null, null, null);
+        await scope.SetMemberAsync(roomId, RoomPrincipalType.User, me, RoomPermission.CreateRecording);
+        await scope.ShareIntoRoomAsync(shared.Id, roomId, owner, sectionId: null);
+
+        var list = (await Build(db, me).List(roomId)).Value!;
+        Assert.Equal("Roadmap", Assert.Single(list).Tag);
+    }
+
+    [Fact]
+    public async Task List_ByRoom_404_ForANonMember()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var roomId = await new Diariz.Api.Services.RoomScope(db).CreateSharedRoomAsync("Eng", null, null, null);
+        var result = await Build(db, me).List(roomId);
+        Assert.IsType<Microsoft.AspNetCore.Mvc.NotFoundResult>(result.Result);
+    }
 
     [Fact]
     public async Task List_AggregatesAcrossRecordings_SummingWeights_WithRecordingIds()

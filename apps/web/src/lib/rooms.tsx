@@ -76,3 +76,13 @@ export function useRoom(): RoomState {
   if (!ctx) throw new Error("useRoom must be used within RoomProvider");
   return ctx;
 }
+
+/// The URL prefix that keeps navigation inside the current room: "/rooms/:id" for a shared room, "" for the
+/// personal room (its detail routes are the top-level ones). Links must use this so opening a recording in a
+/// shared room stays in that room instead of falling back to the personal room (whose URL has no :roomId).
+/// Reads the context directly (not via useRoom) so a row rendered outside a RoomProvider - e.g. in an isolated
+/// test - falls back to the top-level route rather than throwing.
+export function useRoomBasePath(): string {
+  const room = useContext(RoomContext)?.currentRoom;
+  return room && !room.isPersonal ? `/rooms/${room.id}` : "";
+}
