@@ -12,8 +12,8 @@ import type { RecordingSummary } from "../lib/types";
 /// recordings + sections queries and renders this section's node from the tree.
 export default function FolderRecordingList({ sectionId }: { sectionId: string }) {
   const { t, i18n } = useTranslation("workspace");
-  const { data: recordings } = useQuery({ queryKey: ["recordings"], queryFn: api.listRecordings });
-  const { data: sections } = useQuery({ queryKey: ["sections"], queryFn: api.listSections });
+  const { data: recordings } = useQuery({ queryKey: ["recordings"], queryFn: () => api.listRecordings() });
+  const { data: sections } = useQuery({ queryKey: ["sections"], queryFn: () => api.listSections() });
 
   const node = useMemo(() => {
     if (!recordings || !sections) return null;

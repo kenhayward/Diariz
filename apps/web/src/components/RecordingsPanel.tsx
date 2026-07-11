@@ -13,6 +13,7 @@ import { recordingMenu } from "./recordingMenu";
 import { isProcessing, statusLabel } from "../lib/recordingStatus";
 import { copyRichLink, transcriptUrl } from "../lib/clipboard";
 import { useSelection } from "../lib/selection";
+import { useRoom } from "../lib/rooms";
 import { useActiveRecordingId } from "../lib/useActiveRecordingId";
 import { formatDuration } from "../lib/format";
 import { computeReorder } from "../lib/reorder";
@@ -74,11 +75,19 @@ export function showStatusBadge(status: RecordingStatus): boolean {
 export default function RecordingsPanel() {
   const { t, i18n } = useTranslation("workspace");
   const qc = useQueryClient();
+  // The room being browsed (the switcher's current room). The recordings + folders lists are scoped to it;
+  // the personal room keeps its folders/drag-drop, a shared room shows the recordings shared into it.
+  const { currentRoom } = useRoom();
+  const roomId = currentRoom?.id;
+  const isPersonalRoom = currentRoom?.isPersonal ?? true;
   const { data: recordings = [], isLoading } = useQuery({
-    queryKey: ["recordings"],
-    queryFn: api.listRecordings,
+    queryKey: ["recordings", roomId],
+    queryFn: () => api.listRecordings(roomId),
   });
-  const { data: sections = [] } = useQuery({ queryKey: ["sections"], queryFn: api.listSections });
+  const { data: sections = [] } = useQuery({
+    queryKey: ["sections", roomId],
+    queryFn: () => api.listSections(roomId),
+  });
 
   useEffect(() => {
     const hub = createHub(() => {
@@ -107,6 +116,10 @@ export default function RecordingsPanel() {
     selection.setSelectMode(false);
     setTab(next);
   }
+  // Actions + Tags don't exist in a shared room; fall back to the list if a shared room is opened on one.
+  useEffect(() => {
+    if (!isPersonalRoom && (tab === "actions" || tab === "tags")) setTab("list");
+  }, [isPersonalRoom, tab]);
 
   // Actions tab: all actions across the library, filtered by person + hide-complete, with one open editor.
   const { data: allActions = [] } = useQuery({
@@ -166,7 +179,8 @@ export default function RecordingsPanel() {
       const { timeMin, timeMax } = visibleGridRange(month.year, month.month);
       return api.getCalendarEvents(timeMin, timeMax);
     },
-    enabled: calendarConnected,
+    // A shared room shows only its recordings on the calendar - no personal Google-event overlay.
+    enabled: calendarConnected && isPersonalRoom,
     staleTime: 5 * 60_000,
     retry: false,
   });
@@ -195,9 +209,10 @@ export default function RecordingsPanel() {
     });
   }
 
-  /// Apply a drag-and-drop: set the dragged recording's group + order, then refresh.
+  /// Apply a drag-and-drop: set the dragged recording's group + order, then refresh. Reorder + folders are a
+  /// personal-room concept (the reorder endpoint targets it); a shared room's list is a read-only placement view.
   async function drop(sectionId: string | null, groupIds: string[], draggedId: string, beforeId: string | null) {
-    if (!draggedId) return;
+    if (!draggedId || !isPersonalRoom) return;
     await api.reorderRecordings(sectionId, computeReorder(groupIds, draggedId, beforeId));
     qc.invalidateQueries({ queryKey: ["recordings"] });
   }
@@ -367,10 +382,10 @@ export default function RecordingsPanel() {
           onError={setOpError}
         />
       ) : (
-        <ListToolbar recordings={recordings} listMode={tab === "list"} onError={setOpError} />
+        <ListToolbar recordings={recordings} listMode={tab === "list"} allowFolders={isPersonalRoom} onError={setOpError} />
       )}
       <div className="flex min-h-0 flex-1">
-        <TabStrip tab={tab} onSelect={selectTab} />
+        <TabStrip tab={tab} onSelect={selectTab} showAggregations={isPersonalRoom} />
         {tab === "list" ? (
           // min-w-0 lets this flex child shrink to the panel width so long recording names truncate
           // instead of forcing the column wider than the panel.
@@ -581,7 +596,16 @@ export function TagCountSlider({
 }
 
 /// Vertical List / Calendar / Actions tabs, sitting to the left of the panel's scroll area (below the toolbar).
-function TabStrip({ tab, onSelect }: { tab: PanelTab; onSelect: (t: PanelTab) => void }) {
+function TabStrip({
+  tab,
+  onSelect,
+  showAggregations,
+}: {
+  tab: PanelTab;
+  onSelect: (t: PanelTab) => void;
+  // Actions + Tags aggregate your whole personal library, so they only show for the Personal room.
+  showAggregations: boolean;
+}) {
   const { t } = useTranslation("workspace");
   const item = (key: PanelTab, label: string) => (
     <button
@@ -601,8 +625,8 @@ function TabStrip({ tab, onSelect }: { tab: PanelTab; onSelect: (t: PanelTab) =>
     <div className="flex w-7 shrink-0 flex-col items-stretch border-r bg-gray-50 dark:border-gray-800 dark:bg-gray-950/40">
       {item("list", t("tabList"))}
       {item("calendar", t("tabCalendar"))}
-      {item("actions", t("tabActions"))}
-      {item("tags", t("tabTags"))}
+      {showAggregations && item("actions", t("tabActions"))}
+      {showAggregations && item("tags", t("tabTags"))}
     </div>
   );
 }
@@ -612,10 +636,13 @@ function TabStrip({ tab, onSelect }: { tab: PanelTab; onSelect: (t: PanelTab) =>
 function ListToolbar({
   recordings,
   listMode,
+  allowFolders,
   onError,
 }: {
   recordings: RecordingSummary[];
   listMode: boolean;
+  // Folders are a personal-room concept; a shared room's list has none, so New section is hidden there.
+  allowFolders: boolean;
   onError: (msg: string | null) => void;
 }) {
   const { t } = useTranslation("workspace");
@@ -697,7 +724,9 @@ function ListToolbar({
       ) : (
         <div className="flex items-center gap-0.5">
           {/* New Section / Select / bulk actions apply to the List tab only; Refresh works in both. */}
-          <ToolbarButton label={t("newSection")} onClick={() => setOpen(true)} disabled={!listMode} icon={<FolderPlusIcon />} />
+          {allowFolders && (
+            <ToolbarButton label={t("newSection")} onClick={() => setOpen(true)} disabled={!listMode} icon={<FolderPlusIcon />} />
+          )}
           <ToolbarButton
             label={selectMode ? t("doneSelecting") : t("selectRecordings")}
             onClick={() => setSelectMode(!selectMode)}

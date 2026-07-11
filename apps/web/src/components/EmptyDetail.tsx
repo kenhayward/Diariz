@@ -8,7 +8,7 @@ import { useTour } from "../lib/tour";
 /// "pick a recording" nudge. `-m-6` bleeds past the panel's padding so the image fills the area.
 export default function EmptyDetail() {
   const { t } = useTranslation("workspace");
-  const { data: recordings = [] } = useQuery({ queryKey: ["recordings"], queryFn: api.listRecordings });
+  const { data: recordings = [] } = useQuery({ queryKey: ["recordings"], queryFn: () => api.listRecordings() });
   const tour = useTour();
   const isNew = recordings.length === 0;
 
