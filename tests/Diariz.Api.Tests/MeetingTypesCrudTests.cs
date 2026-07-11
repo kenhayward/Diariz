@@ -18,7 +18,8 @@ public class MeetingTypesCrudTests
     private static MeetingTypesController Build(DiarizDbContext db, Guid userId, bool admin = false)
     {
         if (admin) Perms.Grant(db, userId, PlatformPermission.ManagePlatform);
-        return new(db, new UserPermissions(db)) { ControllerContext = Http.Context(userId) };
+        Users.Ensure(db, userId); // create paths mint the owner's personal room, which needs a real user row
+        return new(db, new UserPermissions(db), new Diariz.Api.Services.RoomScope(db)) { ControllerContext = Http.Context(userId) };
     }
 
     private static MeetingTypeContent OneSection() =>
@@ -95,9 +96,16 @@ public class MeetingTypesCrudTests
 
     private static async Task<Guid> SeedType(DiarizDbContext db, Guid? owner)
     {
+        // A personal type lives in its owner's personal room (now the scope); a platform type has RoomId null.
+        Guid? roomId = null;
+        if (owner is { } o)
+        {
+            Users.Ensure(db, o);
+            roomId = await new Diariz.Api.Services.RoomScope(db).PersonalRoomIdAsync(o);
+        }
         var t = new MeetingType
         {
-            Id = Guid.NewGuid(), UserId = owner, GroupName = "G", Title = "T", Icon = "document",
+            Id = Guid.NewGuid(), UserId = owner, RoomId = roomId, GroupName = "G", Title = "T", Icon = "document",
             Color = "#5C6BC0", ContentJson = new MeetingTypeContent([]).Serialize(),
         };
         db.MeetingTypes.Add(t);

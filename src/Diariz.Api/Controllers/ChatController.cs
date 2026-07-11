@@ -228,17 +228,21 @@ public class ChatController : ControllerBase
     // ---- Saved conversations (per-user CRUD) ----
 
     [HttpGet("conversations")]
-    public async Task<IReadOnlyList<ChatConversationSummaryDto>> ListConversations() =>
-        await _db.ChatSessions
-            .Where(c => c.UserId == UserId)
+    public async Task<IReadOnlyList<ChatConversationSummaryDto>> ListConversations()
+    {
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        return await _db.ChatSessions
+            .Where(c => c.RoomId == roomId)
             .OrderByDescending(c => c.UpdatedAt)
             .Select(c => new ChatConversationSummaryDto(c.Id, c.Title, c.UpdatedAt))
             .ToListAsync();
+    }
 
     [HttpGet("conversations/{id:guid}")]
     public async Task<ActionResult<ChatConversationDto>> GetConversation(Guid id)
     {
-        var c = await _db.ChatSessions.FirstOrDefaultAsync(x => x.Id == id && x.UserId == UserId);
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var c = await _db.ChatSessions.FirstOrDefaultAsync(x => x.Id == id && x.RoomId == roomId);
         if (c is null) return NotFound();
         return ToDto(c);
     }
@@ -256,6 +260,7 @@ public class ChatController : ControllerBase
         {
             Id = Guid.NewGuid(),
             UserId = UserId,
+            RoomId = await _rooms.PersonalRoomIdAsync(UserId, ct), // populated now; queries flip to it in Phase 4
             Title = title,
             MessagesJson = JsonSerializer.Serialize(messages, Json),
             ContextJson = JsonSerializer.Serialize(req.Context ?? EmptyContext, Json),
@@ -271,7 +276,8 @@ public class ChatController : ControllerBase
     public async Task<ActionResult<SaveChatConversationResult>> UpdateConversation(
         Guid id, SaveChatConversationRequest req, CancellationToken ct)
     {
-        var c = await _db.ChatSessions.FirstOrDefaultAsync(x => x.Id == id && x.UserId == UserId);
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId, ct);
+        var c = await _db.ChatSessions.FirstOrDefaultAsync(x => x.Id == id && x.RoomId == roomId, ct);
         if (c is null) return NotFound();
 
         var messages = req.Messages ?? [];
@@ -288,7 +294,8 @@ public class ChatController : ControllerBase
     [HttpDelete("conversations/{id:guid}")]
     public async Task<IActionResult> DeleteConversation(Guid id)
     {
-        var c = await _db.ChatSessions.FirstOrDefaultAsync(x => x.Id == id && x.UserId == UserId);
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var c = await _db.ChatSessions.FirstOrDefaultAsync(x => x.Id == id && x.RoomId == roomId);
         if (c is null) return NotFound();
         _db.ChatSessions.Remove(c);
         await _db.SaveChangesAsync();
@@ -353,18 +360,19 @@ public class ChatController : ControllerBase
     private async Task<(TranscriptContext Context, List<Guid> RecordingIds)?> LoadFolderContextAsync(
         Guid sectionId, CancellationToken ct)
     {
+        // Folder membership + ownership now come from the caller's personal room, not Section.UserId /
+        // Recording.SectionId.
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId, ct);
         var section = await _db.Sections
             .Include(s => s.Summary)
             .Include(s => s.Minutes)
-            .FirstOrDefaultAsync(s => s.Id == sectionId && s.UserId == UserId, ct);
+            .FirstOrDefaultAsync(s => s.Id == sectionId && s.RoomId == roomId, ct);
         if (section is null) return null;
 
         var childIds = await _db.Sections
-            .Where(s => s.UserId == UserId && s.ParentId == sectionId).Select(s => s.Id).ToListAsync(ct);
+            .Where(s => s.RoomId == roomId && s.ParentId == sectionId).Select(s => s.Id).ToListAsync(ct);
         var allIds = childIds.Append(sectionId).ToList();
 
-        // Folder membership now comes from the placement in the caller's personal room, not Recording.SectionId.
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId, ct);
         var recIds = await _db.RoomRecordings
             .Where(p => p.RoomId == roomId && p.SectionId.HasValue && allIds.Contains(p.SectionId.Value))
             .Select(p => p.RecordingId).ToListAsync(ct);

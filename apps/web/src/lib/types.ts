@@ -327,6 +327,21 @@ export interface RecordingDetail {
   calendarLink: CalendarLink | null;
   /// The chosen meeting type driving the minutes template, or null for the General default.
   meetingTypeId?: string | null;
+  /// Who recorded it (the owner), and their display name (null = a deleted/unknown user).
+  recordedByUserId: string;
+  recordedByName: string | null;
+  /// The rooms this recording is placed in that the caller can see, home (main) room first.
+  rooms: RecordingRoom[] | null;
+}
+
+/// A room a recording sits in, for the detail Overview. `isMain` = the recorder's personal (home) room -
+/// the only room it can be deleted from.
+export interface RecordingRoom {
+  id: string;
+  name: string;
+  icon: string | null;
+  color: string | null;
+  isMain: boolean;
 }
 
 export interface AuthResponse {
@@ -407,7 +422,13 @@ export interface UserSettings {
   reasoningEffort: string; // "low" | "medium" | "high"
   defaultReasoningEnabled: boolean;
   defaultReasoningEffort: string;
+  /// Where a new recording lands in the user's Personal room (enum name on the wire).
+  placementMode: RecordingPlacementMode;
+  placementSectionId: string | null;
 }
+
+/// Where a new recording lands in the user's Personal room. Mirrors the server enum names.
+export type RecordingPlacementMode = "Ungrouped" | "SelectedFolder" | "SpecificFolder";
 
 /// A stored MCP personal access token (the secret is never returned — only a short display prefix).
 export interface McpToken {
@@ -458,6 +479,57 @@ export interface Permissions {
   manageRooms: boolean;
   manageUsers: boolean;
   managePlatform: boolean;
+}
+
+/// A room the signed-in user belongs to. `permissions` is the caller's effective RoomPermission grid as a
+/// bitmask (the server sends it as an int precisely so the client can test flags - a string [Flags] value would
+/// arrive as "A, B" and break the arithmetic).
+export interface RoomListItem {
+  id: string;
+  name: string;
+  kind: number; // 0 = Personal, 1 = Shared
+  icon: string | null;
+  color: string | null;
+  isPersonal: boolean;
+  permissions: number;
+}
+
+/// RoomPermission flags - mirror src/Diariz.Domain/Entities/RoomPermission.cs (append-only; keep in sync).
+export const RoomPermission = {
+  ManageRoom: 1,
+  CreateRecording: 2,
+  RemoveOthersRecordings: 4,
+  ShareOut: 8,
+  ManageContents: 16,
+  EditOthersRecordings: 32,
+} as const;
+
+/// RoomPrincipalType - mirror src/Diariz.Domain/Entities/RoomPrincipalType.cs.
+export const RoomPrincipalType = { User: 0, Group: 1 } as const;
+
+/// A room member (a user or a group principal) with its permission bitmask.
+export interface RoomMember {
+  principalType: number;
+  principalId: string;
+  permissions: number;
+}
+
+/// A shared room with its membership, for the Manage Rooms editor.
+export interface RoomDetail {
+  id: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  color: string | null;
+  members: RoomMember[];
+}
+
+/// Create/rename a shared room.
+export interface RoomInput {
+  name: string;
+  description?: string | null;
+  icon?: string | null;
+  color?: string | null;
 }
 
 /// A named collection of users carrying platform permissions. Replaces the old account-type roles. The system
@@ -616,6 +688,9 @@ export interface UpdateUserSettings {
   reasoningEnabled?: boolean;
   /// Reasoning level ("low"|"medium"|"high"); blank clears the per-user override.
   reasoningEffort?: string;
+  /// Where a new recording lands; omit to leave unchanged. A non-SpecificFolder mode clears any fixed folder.
+  placementMode?: RecordingPlacementMode;
+  placementSectionId?: string | null;
 }
 
 // ---- Chat ----

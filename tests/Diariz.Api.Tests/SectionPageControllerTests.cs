@@ -26,7 +26,8 @@ public class SectionPageControllerTests
             db.Users.Add(new ApplicationUser { Id = userId, UserName = $"{userId}@x.test", Email = $"{userId}@x.test" });
             await db.SaveChangesAsync();
         }
-        var s = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = userId, Name = "F", ParentId = parentId };
+        var roomId = await new RoomScope(db).PersonalRoomIdAsync(userId); // folders are room-scoped now
+        var s = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "F", ParentId = parentId };
         db.Sections.Add(s);
         await db.SaveChangesAsync();
         return s;
@@ -93,7 +94,9 @@ public class SectionPageControllerTests
     {
         using var db = TestDb.Create();
         var section = await Section(db, Guid.NewGuid());
-        Assert.IsType<NotFoundResult>((await Build(db, Guid.NewGuid()).Get(section.Id)).Result);
+        var caller = Guid.NewGuid();
+        Users.Ensure(db, caller); // the caller's personal room is minted when scoping the query
+        Assert.IsType<NotFoundResult>((await Build(db, caller).Get(section.Id)).Result);
     }
 
     [Fact]
@@ -179,7 +182,7 @@ public class SectionPageControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var section = await Section(db, userId);
-        var othersType = new MeetingType { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Title = "Theirs" };
+        var othersType = new MeetingType { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Title = "Theirs" };
         db.MeetingTypes.Add(othersType);
         await db.SaveChangesAsync();
         var queue = new FakeJobQueue();
@@ -190,7 +193,7 @@ public class SectionPageControllerTests
         Assert.Empty(queue.SectionMinutesEnqueued);
 
         // Own valid type (null = General) → enqueues + persists the chosen id.
-        var mine = new MeetingType { Id = Guid.NewGuid(), UserId = userId, Title = "Mine" };
+        var mine = new MeetingType { Id = Guid.NewGuid(), UserId = userId, RoomId = await new RoomScope(db).PersonalRoomIdAsync(userId), Title = "Mine" };
         db.MeetingTypes.Add(mine);
         await db.SaveChangesAsync();
 

@@ -13,6 +13,11 @@ export interface RecordingMenuHandlers {
   /// that predate the feature get minutes without opening the (absent) minutes panel.
   onGenerateMinutes?: () => void;
   onMove: () => void;
+  /// Optional (detail page only): share this recording into another room.
+  onShare?: () => void;
+  /// Optional (detail page only): remove this recording from the room being viewed (unshare). Shown only when
+  /// viewing it in a shared room it is placed in - never the home room.
+  onRemoveFromRoom?: () => void;
   /// Optional (detail page only): extract action items from the transcript with the LLM.
   onExtractActions?: () => void;
   /// Optional (detail page only): re-run speaker identification against current voiceprints.
@@ -38,6 +43,9 @@ export interface RecordingMenuHandlers {
   /// Optional (detail page only): email the transcript to the signed-in user.
   onEmailTranscript?: () => void;
   onDelete: () => void;
+  /// Whether Delete may appear. A recording can only be destroyed from its home (main) room, so the detail page
+  /// passes false when viewing it in a shared room. Undefined (the list surface) shows Delete as before.
+  canDelete?: boolean;
   /// Transcript-dependent actions are disabled until a transcript exists.
   hasTranscript: boolean;
   /// Whether the audio is still present. Audio-dependent actions (re-transcribe, re-identify, play,
@@ -76,6 +84,10 @@ export function recordingMenu(h: RecordingMenuHandlers, t: TFunction): KebabActi
       ? [{ label: t("recordings:translateTo", { language: h.translateLabel }), onClick: h.onTranslate, disabled: !h.hasTranscript }]
       : []),
     { label: t("recordings:moveToSection"), onClick: h.onMove },
+    ...(h.onShare ? [{ label: t("recordings:shareToRoom"), onClick: h.onShare }] : []),
+    ...(h.onRemoveFromRoom
+      ? [{ label: t("recordings:removeFromRoom"), danger: true, onClick: h.onRemoveFromRoom }]
+      : []),
     ...(h.onPlay && h.hasAudio ? [{ label: t("recordings:play"), onClick: h.onPlay }] : []),
     { label: t("recordings:downloadTranscript"), onClick: h.onDownloadTranscript, disabled: !h.hasTranscript },
     ...(h.onEmailTranscript
@@ -93,6 +105,8 @@ export function recordingMenu(h: RecordingMenuHandlers, t: TFunction): KebabActi
     ...(h.hasAudio && !h.isAudioProtected
       ? [{ label: t("recordings:deleteAudio"), danger: true, onClick: h.onDeleteAudio, disabled: h.isProcessing }]
       : []),
-    { label: t("recordings:delete"), danger: true, onClick: h.onDelete, disabled: h.isProcessing },
+    ...(h.canDelete === false
+      ? []
+      : [{ label: t("recordings:delete"), danger: true, onClick: h.onDelete, disabled: h.isProcessing }]),
   ];
 }

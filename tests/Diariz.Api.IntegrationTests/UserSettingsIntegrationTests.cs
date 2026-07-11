@@ -89,4 +89,43 @@ public class UserSettingsIntegrationTests(ContainersFixture fx)
         await using var verify = fx.CreateDbContext();
         Assert.False(await verify.UserSettings.AnyAsync(s => s.UserId == userId));
     }
+
+    /// <summary>Phase 3: the placement preference round-trips through real Postgres, and a settings row created
+    /// without touching it defaults to SelectedFolder (the migration's column default).</summary>
+    [Fact]
+    public async Task RecordingPlacement_RoundTrips_AndDefaultsToSelectedFolder()
+    {
+        var userId = await SeedUser();
+        var sectionId = Guid.NewGuid();
+
+        await using (var db = fx.CreateDbContext())
+        {
+            db.UserSettings.Add(new UserSettings
+            {
+                UserId = userId,
+                RecordingPlacementMode = RecordingPlacementMode.SpecificFolder,
+                RecordingPlacementSectionId = sectionId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await using (var verify = fx.CreateDbContext())
+        {
+            var stored = await verify.UserSettings.SingleAsync(s => s.UserId == userId);
+            Assert.Equal(RecordingPlacementMode.SpecificFolder, stored.RecordingPlacementMode);
+            Assert.Equal(sectionId, stored.RecordingPlacementSectionId);
+        }
+
+        // A row inserted with the DB default (raw SQL bypasses the model default) is SelectedFolder.
+        var otherUser = await SeedUser();
+        await using (var db = fx.CreateDbContext())
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                """INSERT INTO "UserSettings" ("UserId") VALUES ({0})""", otherUser);
+            db.ChangeTracker.Clear();
+            var stored = await db.UserSettings.SingleAsync(s => s.UserId == otherUser);
+            Assert.Equal(RecordingPlacementMode.SelectedFolder, stored.RecordingPlacementMode);
+            Assert.Null(stored.RecordingPlacementSectionId);
+        }
+    }
 }

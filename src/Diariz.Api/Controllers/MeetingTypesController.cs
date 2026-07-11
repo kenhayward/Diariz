@@ -19,11 +19,13 @@ public class MeetingTypesController : ControllerBase
 {
     private readonly DiarizDbContext _db;
     private readonly IUserPermissions _permissions;
+    private readonly IRoomScope _rooms;
 
-    public MeetingTypesController(DiarizDbContext db, IUserPermissions permissions)
+    public MeetingTypesController(DiarizDbContext db, IUserPermissions permissions, IRoomScope rooms)
     {
         _db = db;
         _permissions = permissions;
+        _rooms = rooms;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -37,13 +39,14 @@ public class MeetingTypesController : ControllerBase
     [HttpGet]
     public async Task<IReadOnlyList<MeetingTypeDto>> List()
     {
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
         var types = await _db.MeetingTypes
-            .Where(m => m.UserId == null || m.UserId == UserId)
+            .Where(m => m.RoomId == null || m.RoomId == roomId)
             .OrderBy(m => m.GroupName)
             .ThenBy(m => m.Title)
             .ToListAsync();
         var isPlatformAdmin = await IsPlatformAdminAsync();
-        return types.Select(m => ToDto(m, isPlatformAdmin)).ToList();
+        return types.Select(m => ToDto(m, isPlatformAdmin, roomId)).ToList();
     }
 
     /// <summary>Create a meeting type. A normal user always gets a Personal type they own; only a Platform
@@ -58,7 +61,9 @@ public class MeetingTypesController : ControllerBase
         var m = new MeetingType
         {
             Id = Guid.NewGuid(),
-            UserId = platform ? null : UserId,
+            UserId = platform ? null : UserId, // still written until the UserId column is dropped
+            // Personal types get the owner's room (now the scope); platform types stay null.
+            RoomId = platform ? null : await _rooms.PersonalRoomIdAsync(UserId),
             GroupName = req.GroupName.Trim(),
             Title = req.Title.Trim(),
             Overview = req.Overview?.Trim() ?? string.Empty,
@@ -68,7 +73,7 @@ public class MeetingTypesController : ControllerBase
         };
         _db.MeetingTypes.Add(m);
         await _db.SaveChangesAsync();
-        return Ok(ToDto(m, isPlatformAdmin));
+        return Ok(ToDto(m, isPlatformAdmin, m.RoomId ?? Guid.Empty));
     }
 
     /// <summary>Replace a meeting type's fields and template atomically. A Platform type needs a Platform
@@ -76,10 +81,11 @@ public class MeetingTypesController : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<MeetingTypeDto>> Update(Guid id, MeetingTypeRequest req)
     {
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
         var m = await _db.MeetingTypes.FirstOrDefaultAsync(x => x.Id == id);
-        if (m is null || (m.UserId is not null && m.UserId != UserId)) return NotFound();
+        if (m is null || (m.RoomId is not null && m.RoomId != roomId)) return NotFound();
         var isPlatformAdmin = await IsPlatformAdminAsync();
-        if (m.UserId is null && !isPlatformAdmin) return Forbidden("Only a Platform Administrator can edit a shared type.");
+        if (m.RoomId is null && !isPlatformAdmin) return Forbidden("Only a Platform Administrator can edit a shared type.");
         if (Validate(req) is { } error) return BadRequest(error);
 
         m.GroupName = req.GroupName.Trim();
@@ -90,15 +96,16 @@ public class MeetingTypesController : ControllerBase
         m.ContentJson = req.Content.Serialize();
         m.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync();
-        return Ok(ToDto(m, isPlatformAdmin));
+        return Ok(ToDto(m, isPlatformAdmin, roomId));
     }
 
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
         var m = await _db.MeetingTypes.FirstOrDefaultAsync(x => x.Id == id);
-        if (m is null || (m.UserId is not null && m.UserId != UserId)) return NotFound();
-        if (m.UserId is null && !await IsPlatformAdminAsync())
+        if (m is null || (m.RoomId is not null && m.RoomId != roomId)) return NotFound();
+        if (m.RoomId is null && !await IsPlatformAdminAsync())
             return Forbidden("Only a Platform Administrator can delete a shared type.");
 
         // Recordings that used it fall back to the General default (FK is ON DELETE SET NULL).
@@ -123,10 +130,10 @@ public class MeetingTypesController : ControllerBase
 
     private ObjectResult Forbidden(string message) => StatusCode(StatusCodes.Status403Forbidden, message);
 
-    private MeetingTypeDto ToDto(MeetingType m, bool isPlatformAdmin)
+    private MeetingTypeDto ToDto(MeetingType m, bool isPlatformAdmin, Guid roomId)
     {
-        var isPlatform = m.UserId is null;
-        var canEdit = isPlatform ? isPlatformAdmin : m.UserId == UserId;
+        var isPlatform = m.RoomId is null;
+        var canEdit = isPlatform ? isPlatformAdmin : m.RoomId == roomId;
         return new MeetingTypeDto(
             m.Id, isPlatform, canEdit, m.GroupName, m.Title, m.Overview, m.Icon, m.Color,
             MeetingTypeContent.Parse(m.ContentJson), m.Key == MeetingType.GeneralKey);

@@ -106,17 +106,18 @@ public class RecordingsController : ControllerBase
         var ids = (req.OrderedIds ?? []).ToList();
         if (ids.Count == 0) return NoContent();
 
+        // Position lives on the recording; the folder now lives on its placement in the caller's personal room.
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+
         if (req.SectionId is { } sectionId &&
-            !await _db.Sections.AnyAsync(s => s.Id == sectionId && s.UserId == UserId))
-            return NotFound(); // can't move into a section the caller doesn't own
+            !await _db.Sections.AnyAsync(s => s.Id == sectionId && s.RoomId == roomId))
+            return NotFound(); // can't move into a section that isn't in the caller's room
 
         var recs = await _db.Recordings
             .Where(r => ids.Contains(r.Id) && r.UserId == UserId)
             .ToListAsync();
         if (recs.Count != ids.Count) return NotFound(); // a listed recording isn't the caller's
 
-        // Position lives on the recording; the folder now lives on its placement in the caller's personal room.
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
         var placements = await _db.RoomRecordings
             .Where(p => p.RoomId == roomId && ids.Contains(p.RecordingId))
             .ToDictionaryAsync(p => p.RecordingId);
@@ -144,9 +145,23 @@ public class RecordingsController : ControllerBase
                 .ThenInclude(t => t.Summary)
             .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
                 .ThenInclude(t => t.MeetingMinutes)
-            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
+            .FirstOrDefaultAsync(r => r.Id == id);
 
         if (rec is null) return NotFound();
+
+        // Visible to the recorder, or to a member of any room it is placed in. The rooms line lists only the
+        // rooms the caller can actually see (a member should not learn about rooms they are not in).
+        var placements = await _rooms.RoomsForRecordingAsync(id);
+        var visibleRooms = new List<RecordingRoomDto>();
+        foreach (var p in placements)
+            if (await _rooms.IsMemberAsync(UserId, p.RoomId))
+                visibleRooms.Add(new RecordingRoomDto(p.RoomId, p.Name, p.Icon, p.Color, p.IsMainRoom));
+        if (rec.UserId != UserId && visibleRooms.Count == 0) return NotFound();
+
+        var recordedByName = await _db.Users
+            .Where(u => u.Id == rec.UserId)
+            .Select(u => u.FullName ?? u.Email)
+            .FirstOrDefaultAsync();
 
         var names = rec.Speakers.ToDictionary(s => s.Label, s => s.DisplayName);
         var actions = rec.Actions
@@ -187,7 +202,8 @@ public class RecordingsController : ControllerBase
         return new RecordingDetailDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.SizeBytes,
             rec.Status, rec.Error, rec.CreatedAt, rec.MinSpeakers, rec.MaxSpeakers, names, speakers, tDto, sDto,
             mDto, actions, rec.ActionsExtractedAt != null, rec.HasAudio, ToLinkDto(rec.CalendarLink),
-            rec.MeetingTypeId, rec.AudioProtectedAt, rec.AudioDeletedAt, scheduledDeletion);
+            rec.MeetingTypeId, rec.AudioProtectedAt, rec.AudioDeletedAt, scheduledDeletion,
+            rec.UserId, recordedByName, visibleRooms);
     }
 
     private static CalendarLinkDto? ToLinkDto(RecordingCalendarLink? link) => link is null
@@ -199,7 +215,8 @@ public class RecordingsController : ControllerBase
     [RequestSizeLimit(1024L * 1024 * 1024)] // 1 GiB
     public async Task<ActionResult<RecordingSummaryDto>> Upload(
         [FromForm] IFormFile audio, [FromForm] string? title, [FromForm] long durationMs,
-        [FromForm] RecordingSource source = RecordingSource.Microphone)
+        [FromForm] RecordingSource source = RecordingSource.Microphone, [FromForm] Guid? sectionId = null,
+        [FromForm] Guid? roomId = null)
     {
         if (audio is null || audio.Length == 0) return BadRequest("Empty audio.");
 
@@ -214,6 +231,14 @@ public class RecordingsController : ControllerBase
         if (used + audio.Length > quota)
             return StatusCode(413,
                 "Storage quota exceeded. Delete some recordings or ask an administrator to raise your quota.");
+
+        // Recording into a shared room: verify the caller may record there before storing anything. The main
+        // placement is still the recorder's personal room; the room gets a second, shared placement below.
+        var personalRoomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var intoSharedRoom = roomId is { } rid && rid != personalRoomId;
+        if (intoSharedRoom &&
+            !(await _rooms.PermissionsAsync(UserId, roomId!.Value)).HasFlag(RoomPermission.CreateRecording))
+            return StatusCode(StatusCodes.Status403Forbidden, "You can't add recordings to that room.");
 
         await using var stream = audio.OpenReadStream();
 
@@ -246,8 +271,19 @@ public class RecordingsController : ControllerBase
         await _db.SaveChangesAsync();
 
         // The folder is a property of the placement, not the recording: create the main placement in the
-        // uploader's personal room. Ungrouped by default, as SectionId was.
-        await _rooms.PlaceInMainRoomAsync(rec.Id, UserId, sectionId: null);
+        // uploader's personal room. When recording into a shared room the main placement is Ungrouped (the
+        // shared link is ungrouped for now); otherwise honour a requested folder only if it belongs to that
+        // room, so a stale or alien section id can never misfile the recording.
+        var placementSection = intoSharedRoom
+            ? null
+            : sectionId is { } sid && await _db.Sections.AnyAsync(s => s.Id == sid && s.RoomId == personalRoomId)
+                ? sectionId
+                : null;
+        await _rooms.PlaceInMainRoomAsync(rec.Id, UserId, placementSection);
+
+        // Recording into a shared room also shares it there (a second, non-main placement).
+        if (intoSharedRoom)
+            await _rooms.ShareIntoRoomAsync(rec.Id, roomId!.Value, UserId, sectionId: null);
 
         return CreatedAtAction(nameof(Get), new { id = rec.Id },
             new RecordingSummaryDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.Status, rec.CreatedAt,
@@ -913,14 +949,31 @@ public class RecordingsController : ControllerBase
         var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
         if (rec is null) return NotFound();
 
-        if (req.SectionId is { } sectionId
-            && !await _db.Sections.AnyAsync(s => s.Id == sectionId && s.UserId == UserId))
-            return NotFound(); // can't move into a section the caller doesn't own
-
-        // The folder lives on the placement in the caller's personal room (null = ungroup).
+        // The folder lives on the placement in the caller's personal room (null = ungroup). SetSectionAsync
+        // also refuses a section that isn't in that room, so the recording can't be filed into the wrong place.
         var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        if (req.SectionId is { } sectionId
+            && !await _db.Sections.AnyAsync(s => s.Id == sectionId && s.RoomId == roomId))
+            return NotFound(); // can't move into a section that isn't in the caller's room
         if (!await _rooms.SetSectionAsync(roomId, id, req.SectionId)) return NotFound();
         return NoContent();
+    }
+
+    /// <summary>Share a recording from one room into another (a non-main placement). Needs <c>ShareOut</c> in the
+    /// source room and <c>CreateRecording</c> in the target; the link lands ungrouped for now.</summary>
+    [HttpPost("{id:guid}/share")]
+    public async Task<IActionResult> Share(Guid id, ShareRecordingRequest req)
+    {
+        // The recording must actually be placed in the source room (and the caller a member with ShareOut).
+        if (!await _db.RoomRecordings.AnyAsync(p => p.RecordingId == id && p.RoomId == req.FromRoomId))
+            return NotFound();
+        if (!(await _rooms.PermissionsAsync(UserId, req.FromRoomId)).HasFlag(RoomPermission.ShareOut))
+            return StatusCode(StatusCodes.Status403Forbidden, "You can't share recordings out of that room.");
+        if (!(await _rooms.PermissionsAsync(UserId, req.ToRoomId)).HasFlag(RoomPermission.CreateRecording))
+            return StatusCode(StatusCodes.Status403Forbidden, "You can't add recordings to that room.");
+
+        var ok = await _rooms.ShareIntoRoomAsync(id, req.ToRoomId, UserId, sectionId: null);
+        return ok ? NoContent() : BadRequest("That room can't take shared recordings."); // e.g. a personal target
     }
 
     [HttpDelete("{id:guid}")]

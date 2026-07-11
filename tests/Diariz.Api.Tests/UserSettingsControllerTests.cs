@@ -186,4 +186,46 @@ public class UserSettingsControllerTests
         Assert.Null(bobDto.ApiBase);
         Assert.False(bobDto.HasApiKey);
     }
+
+    [Fact]
+    public async Task Get_NoSettings_DefaultsPlacementToSelectedFolder()
+    {
+        using var db = TestDb.Create();
+        var dto = await Build(db, Guid.NewGuid()).Get();
+        Assert.Equal(Diariz.Domain.Entities.RecordingPlacementMode.SelectedFolder, dto.PlacementMode);
+        Assert.Null(dto.PlacementSectionId);
+    }
+
+    [Fact]
+    public async Task Put_SpecificFolder_PersistsTheChosenFolder()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var sectionId = Guid.NewGuid();
+
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(null, null, null,
+            PlacementMode: Diariz.Domain.Entities.RecordingPlacementMode.SpecificFolder, PlacementSectionId: sectionId));
+
+        var dto = await Build(db, userId).Get();
+        Assert.Equal(Diariz.Domain.Entities.RecordingPlacementMode.SpecificFolder, dto.PlacementMode);
+        Assert.Equal(sectionId, dto.PlacementSectionId);
+    }
+
+    [Fact]
+    public async Task Put_NonSpecificMode_ClearsAnyFixedFolder()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var sectionId = Guid.NewGuid();
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(null, null, null,
+            PlacementMode: Diariz.Domain.Entities.RecordingPlacementMode.SpecificFolder, PlacementSectionId: sectionId));
+
+        // Flipping to SelectedFolder must drop the stale fixed folder.
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(null, null, null,
+            PlacementMode: Diariz.Domain.Entities.RecordingPlacementMode.SelectedFolder, PlacementSectionId: sectionId));
+
+        var dto = await Build(db, userId).Get();
+        Assert.Equal(Diariz.Domain.Entities.RecordingPlacementMode.SelectedFolder, dto.PlacementMode);
+        Assert.Null(dto.PlacementSectionId);
+    }
 }

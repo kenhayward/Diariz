@@ -556,9 +556,61 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
     recording query starts from — the equivalent of the old `.Where(r => r.UserId == UserId)`, one level up —
     and `RecordingsController`, `SectionPageController`, `ChatController` and `SectionSummaryProcessor` all read
     the folder through it.
-  - **Still ahead (2c-2d):** re-scoping `Section`, `SpeakerProfile`, `ChatSession`, `MeetingType` and the RAG
-    chunk filter onto rooms. Until then, everything resolves to the caller's personal room via
-    `RoomScope.PersonalRoomIdAsync`. See `docs/superpowers/specs/2026-07-10-rooms-design.md`.
+  - **Folders carry a room (2c).** `Section.RoomId` is set on create and backfilled to each folder's owner's
+    personal room; `SectionsController` scopes by it, and `RoomScope.SetSectionAsync` refuses to file a
+    recording under a folder from another room. `Section.UserId` is **kept** as owner identity (the SignalR
+    group folder notifications target, the per-user LLM config the folder processors resolve); dropping it, and
+    the Rooms FK, wait for Phase 4, when "the owner" of a shared-room folder is no longer one user.
+  - **Voiceprints, chats and meeting types carry a room (2d).** `SpeakerProfile.RoomId`, `ChatSession.RoomId`
+    (both not-null) and `MeetingType.RoomId` (**nullable** - null for Platform types, mirroring their null
+    `UserId`) are set on create and backfilled to each owner's personal room. As with folders they are **plain
+    columns still queried by `UserId`**; the query flip, the Rooms FK and the `UserId` drop wait for Phase 4.
+  - **Rooms surface in the UI (Phase 3).** `GET /api/rooms` (`RoomsController` → `RoomScope.RoomsForUserAsync`)
+    lists the rooms the caller belongs to (today: just their Personal room) with the caller's effective
+    `RoomPermission` grid as an **int bitmask** (`RoomListItemDto.Permissions` - a `[Flags]` enum would serialise
+    as `"A, B"` and break the web's bit arithmetic). The web `RoomProvider` (`apps/web/src/lib/rooms.tsx`, mounted
+    in `WorkspaceLayout`) reads that list, derives the current room from a `/rooms/:roomId` URL segment (via
+    `useMatch`, defaulting to the personal room), and exposes the room, its permission grid (`can(perm)`, failing
+    closed while loading), the folder the user is viewing, and the **resolved placement target** for a new
+    recording. A **room switcher** replaces the old "Meetings" panel header; `Record`/`Upload` disable without
+    `CreateRecording` (always granted in a personal room, so unchanged today). A nested `rooms/:roomId` route
+    group mirrors the four workspace children; the legacy top-level children stay working as the personal-room
+    default. Per-room link rewrites + query-key isolation are no-ops with one room and land in Phase 4.
+  - **Where a new recording lands (Phase 3).** `UserSettings.RecordingPlacementMode`
+    (`Ungrouped`/`SelectedFolder` (default)/`SpecificFolder`) + `RecordingPlacementSectionId`, set in a new
+    **Recordings** Settings tab, decide the folder. `RoomProvider` resolves the mode against the folder the user
+    is viewing; `Recorder` snapshots that target when Record is pressed and passes it as `sectionId` to
+    `POST /api/recordings`, which files the main placement there **only if the folder belongs to the uploader's
+    personal room** (an alien/stale id is ignored, not misfiled).
+  - **Shared rooms are real (Phase 4).** `RoomsController` (gated by the `ManageRooms` platform policy) creates,
+    renames/restyles and deletes shared rooms and edits their membership (`RoomScope.CreateSharedRoomAsync` /
+    `UpdateRoomAsync` / `DeleteRoomAsync` / `SetMemberAsync` / `RemoveMemberAsync`); the Personal room is immutable
+    and memberless (every write refuses it), and shared-room names are unique. The web **Manage Rooms** modal
+    (reached from the switcher, `ManageRooms` holders only) drives all of this and reuses the shared
+    `IconColorPicker`; a member's grid is the six `RoomPermission` checkboxes, and delete needs the room name typed.
+    **Recording into a shared room** writes a **two-placement transaction**: the always-main placement in the
+    recorder's Personal room (Ungrouped) plus a non-main `RoomRecording` in the shared room
+    (`RoomScope.ShareIntoRoomAsync`, `SharedBy`/`SharedAt`); the upload 403s if the caller can't `CreateRecording`
+    there. **Deleting a user** sweeps their `RoomMember` rows (no FK to cascade them) and orphans their Personal
+    room via the `OwnerUserId` SetNull FK - their shared recordings survive. The **folder / voiceprint / chat /
+    meeting-type queries are all scoped by `RoomId`** now (owner-identity for LLM config + SignalR still resolves
+    to the room's owner). The now-dead `UserId` columns on `Section` / `SpeakerProfile` / `ChatSession` /
+    `MeetingType` are **retained pending a follow-up drop** (harmless; nothing reads them).
+  - **Cross-room sharing + room-scoped search (Phase 5).** `POST /api/recordings/{id}/share` adds a non-main
+    placement (needs `ShareOut` in the source room + `CreateRecording` in the target);
+    `DELETE /api/rooms/{roomId}/recordings/{id}` unshares (the recorder or a holder of `RemoveOthersRecordings`,
+    never the main room). `RecordingsController.Get` is visible to the recorder **or** a member of any room the
+    recording is placed in, and returns its **recorded-by** + the **rooms** the caller can see (home first); the
+    web Overview renders those two lines, and the toolbar/kebab gain **Share to room** / **Remove from room**
+    (Delete hidden outside the home room; its confirm names the shared rooms). **Search now spans rooms:**
+    `TranscriptSearch`'s five arms gate on a `RoomRecordings` semi-join over `RoomScope.RoomIdsForUserAsync`
+    (a non-minting read), so chat + MCP tools find recordings shared into any room the caller belongs to. The
+    filtered vector scan is **not yet benchmarked** on a large corpus; the denormalise-`RoomId`-onto-chunk
+    fallback stays open if it regresses.
+  - **Still ahead:** room-scoped recording **collections** (a `/api/rooms/{roomId}/recordings` list + the web
+    panel/query-keys fetching per current room, so switching to a shared room browses its recordings) and the
+    deferred `UserId` column drop (incl. `TranscriptChunk.UserId`). See
+    `docs/superpowers/specs/2026-07-10-rooms-design.md`.
 - **Access lifecycle:** a person **requests access** (`UserStatus.Requested`) → an admin **grants** it
   (issues a one-time setup link; emailed via SMTP/MailKit, or shown to the admin as a fallback when SMTP is
   unconfigured) → the user **sets up** their name + password (`Active`). Admins can also add users directly.

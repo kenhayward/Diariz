@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 
 // A JWT-shaped token whose payload decodes to { sub: "u1" } (used for the per-user pending key).
 const TOKEN = `h.${btoa(JSON.stringify({ sub: "u1" }))}.s`;
@@ -17,6 +17,23 @@ vi.mock("../lib/pendingNotes", () => ({
 vi.mock("../lib/uploadContext", () => ({ useUpload: () => ({ uploadFiles: vi.fn() }) }));
 const setStatus = vi.fn();
 vi.mock("../lib/status", () => ({ useStatus: () => ({ status: null, setStatus }) }));
+// The recorder now consults the current room's permissions + placement. Default: full access, no folder.
+const roomState = {
+  can: (_p: number) => true,
+  recordingSectionId: null as string | null,
+  currentRoom: undefined as { id: string; isPersonal: boolean } | undefined,
+};
+vi.mock("../lib/rooms", () => ({
+  useRoom: () => ({
+    can: (p: number) => roomState.can(p),
+    currentRoom: roomState.currentRoom,
+    rooms: [],
+    permissions: 0,
+    selectedSectionId: null,
+    recordingSectionId: roomState.recordingSectionId,
+    isLoading: false,
+  }),
+}));
 vi.mock("../lib/audioSource", () => ({
   getStream: vi.fn(),
   getCombinedStream: vi.fn(),
@@ -77,6 +94,13 @@ const pending = {
   source: "Microphone" as const,
   createdAt: Date.now(),
 };
+
+// Restore defaults after any test that changes them, so ordering can't leak room state.
+afterEach(() => {
+  roomState.can = () => true;
+  roomState.recordingSectionId = null;
+  roomState.currentRoom = undefined;
+});
 
 describe("Recorder recovery", () => {
   beforeEach(() => {
@@ -162,6 +186,19 @@ describe("Recorder transport controls", () => {
 
     fireEvent.click(pause);
     expect(iconOnly(await screen.findByRole("button", { name: /^resume$/i }))).toBe(true);
+  });
+
+  it("disables Record and Upload without CreateRecording, explaining why", async () => {
+    roomState.can = () => false;
+    render(<Recorder onUploaded={() => {}} />);
+
+    const rec = await screen.findByRole("button", { name: /^record$/i });
+    expect((rec as HTMLButtonElement).disabled).toBe(true);
+    expect(rec.getAttribute("title")).toMatch(/permission/i);
+
+    const upload = screen.getByRole("button", { name: /^upload$/i });
+    expect((upload as HTMLButtonElement).disabled).toBe(true);
+    expect(upload.getAttribute("title")).toMatch(/permission/i);
   });
 });
 
@@ -272,6 +309,36 @@ describe("Recorder source selection", () => {
     await waitFor(() => expect(api.upload).toHaveBeenCalled());
     expect((api.upload as Mock).mock.calls[0][3]).toBe("Microphone");
     expect(getCombinedStream).not.toHaveBeenCalled();
+  });
+
+  it("files the recording into the folder resolved at Record time", async () => {
+    roomState.recordingSectionId = "sec-42";
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.upload as Mock).mockResolvedValue({ id: "r1" });
+    render(<Recorder onUploaded={() => {}} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByText(/●/);
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+    expect((api.upload as Mock).mock.calls[0][4]).toBe("sec-42"); // 5th arg = sectionId
+  });
+
+  it("recording in a shared room shares it there and keeps the main placement ungrouped", async () => {
+    roomState.currentRoom = { id: "room-9", isPersonal: false };
+    roomState.recordingSectionId = "sec-42"; // ignored for a shared room
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.upload as Mock).mockResolvedValue({ id: "r1" });
+    render(<Recorder onUploaded={() => {}} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByText(/●/);
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+    expect((api.upload as Mock).mock.calls[0][4]).toBeNull(); // sectionId - ungrouped in the personal room
+    expect((api.upload as Mock).mock.calls[0][5]).toBe("room-9"); // roomId
   });
 
   it("mixes system audio when a mic is selected and the checkbox is ticked -> source Combined", async () => {

@@ -11,8 +11,18 @@ namespace Diariz.Api.Tests;
 
 public class SpeakerProfilesControllerTests
 {
-    private static SpeakerProfilesController Build(DiarizDbContext db, Guid userId) =>
-        new(db) { ControllerContext = Http.Context(userId) };
+    private static SpeakerProfilesController Build(DiarizDbContext db, Guid userId)
+    {
+        Users.Ensure(db, userId); // create paths mint the owner's personal room, which needs a real user row
+        return new(db, new Diariz.Api.Services.RoomScope(db)) { ControllerContext = Http.Context(userId) };
+    }
+
+    // Voiceprints are scoped by their owner's personal room now; mint it so a seeded profile is findable.
+    private static Guid RoomOf(DiarizDbContext db, Guid owner)
+    {
+        Users.Ensure(db, owner);
+        return new Diariz.Api.Services.RoomScope(db).PersonalRoomIdAsync(owner).GetAwaiter().GetResult();
+    }
 
     private static async Task<Recording> SeedRecording(DiarizDbContext db, Guid userId)
     {
@@ -29,8 +39,8 @@ public class SpeakerProfilesControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        db.SpeakerProfiles.Add(new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Alice", SampleCount = 2 });
-        db.SpeakerProfiles.Add(new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Someone else" });
+        db.SpeakerProfiles.Add(new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice", SampleCount = 2 });
+        db.SpeakerProfiles.Add(new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Someone else" });
         await db.SaveChangesAsync();
         var controller = Build(db, userId);
 
@@ -136,7 +146,7 @@ public class SpeakerProfilesControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var rec = await SeedRecording(db, userId);
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Alice" };
+        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice" };
         db.SpeakerProfiles.Add(profile);
         // One auto-identified speaker (revert) and one manually-renamed-then-assigned speaker (keep name).
         var auto = new Speaker
@@ -177,7 +187,7 @@ public class SpeakerProfilesControllerTests
     public async Task Delete_OnAnotherUsersProfile_ReturnsNotFound()
     {
         using var db = TestDb.Create();
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Theirs" };
+        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
         db.SpeakerProfiles.Add(profile);
         await db.SaveChangesAsync();
         var controller = Build(db, Guid.NewGuid());
@@ -196,7 +206,7 @@ public class SpeakerProfilesControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var rec = await SeedRecording(db, userId);
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Alice" };
+        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice" };
         db.SpeakerProfiles.Add(profile);
         db.Speakers.Add(new Speaker
         {
@@ -218,7 +228,7 @@ public class SpeakerProfilesControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Alice" };
+        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice" };
         db.SpeakerProfiles.Add(profile);
         await db.SaveChangesAsync();
         var controller = Build(db, userId);
@@ -230,7 +240,7 @@ public class SpeakerProfilesControllerTests
     public async Task Rename_OnAnotherUsersProfile_ReturnsNotFound()
     {
         using var db = TestDb.Create();
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Theirs" };
+        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
         db.SpeakerProfiles.Add(profile);
         await db.SaveChangesAsync();
         var controller = Build(db, Guid.NewGuid());
@@ -247,7 +257,7 @@ public class SpeakerProfilesControllerTests
         var userId = Guid.NewGuid();
         var rec = await SeedRecording(db, userId);
         rec.Name = "Team Sync";
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Alice", SampleCount = 1 };
+        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice", SampleCount = 1 };
         db.SpeakerProfiles.Add(profile);
         var speaker = new Speaker
         {
@@ -282,7 +292,7 @@ public class SpeakerProfilesControllerTests
     public async Task Get_OnAnotherUsersProfile_ReturnsNotFound()
     {
         using var db = TestDb.Create();
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Theirs" };
+        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
         db.SpeakerProfiles.Add(profile);
         await db.SaveChangesAsync();
         var controller = Build(db, Guid.NewGuid());
@@ -298,7 +308,7 @@ public class SpeakerProfilesControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var rec = await SeedRecording(db, userId);
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Alice", SampleCount = 2 };
+        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice", SampleCount = 2 };
         db.SpeakerProfiles.Add(profile);
         var c1 = new ProfileContribution { Id = Guid.NewGuid(), ProfileId = profile.Id, SpeakerId = Guid.NewGuid(), RecordingId = rec.Id };
         var c2 = new ProfileContribution { Id = Guid.NewGuid(), ProfileId = profile.Id, SpeakerId = Guid.NewGuid(), RecordingId = rec.Id };
@@ -319,7 +329,7 @@ public class SpeakerProfilesControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var rec = await SeedRecording(db, userId);
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Alice", SampleCount = 1 };
+        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice", SampleCount = 1 };
         db.SpeakerProfiles.Add(profile);
         var only = new ProfileContribution { Id = Guid.NewGuid(), ProfileId = profile.Id, SpeakerId = Guid.NewGuid(), RecordingId = rec.Id };
         db.ProfileContributions.Add(only);
@@ -336,7 +346,7 @@ public class SpeakerProfilesControllerTests
     public async Task RemoveContribution_OnAnotherUsersProfile_ReturnsNotFound()
     {
         using var db = TestDb.Create();
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Theirs" };
+        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
         db.SpeakerProfiles.Add(profile);
         await db.SaveChangesAsync();
         var controller = Build(db, Guid.NewGuid());
@@ -352,8 +362,8 @@ public class SpeakerProfilesControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var rec = await SeedRecording(db, userId);
-        var target = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Alice", SampleCount = 1 };
-        var source = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Allie", SampleCount = 1 };
+        var target = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice", SampleCount = 1 };
+        var source = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Allie", SampleCount = 1 };
         db.SpeakerProfiles.AddRange(target, source);
         db.ProfileContributions.AddRange(
             new ProfileContribution { Id = Guid.NewGuid(), ProfileId = target.Id, SpeakerId = Guid.NewGuid(), RecordingId = rec.Id },
@@ -383,7 +393,7 @@ public class SpeakerProfilesControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Alice" };
+        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice" };
         db.SpeakerProfiles.Add(profile);
         await db.SaveChangesAsync();
         var controller = Build(db, userId);
@@ -396,8 +406,8 @@ public class SpeakerProfilesControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        var target = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Alice" };
-        var othersSource = new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Theirs" };
+        var target = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice" };
+        var othersSource = new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
         db.SpeakerProfiles.AddRange(target, othersSource);
         await db.SaveChangesAsync();
         var controller = Build(db, userId);
@@ -414,14 +424,14 @@ public class SpeakerProfilesControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var rec = await SeedRecording(db, userId);
-        var a = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Alice" };
-        var b = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Bob" };
+        var a = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice" };
+        var b = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Bob" };
         db.SpeakerProfiles.AddRange(a, b);
         db.Speakers.AddRange(
             new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Alice", ProfileId = a.Id, IdentifiedAuto = true },
             new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_01", DisplayName = "Bob", ProfileId = b.Id, IdentifiedAuto = false });
         // Another user's profile must be untouched.
-        db.SpeakerProfiles.Add(new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Theirs" });
+        db.SpeakerProfiles.Add(new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" });
         await db.SaveChangesAsync();
         var controller = Build(db, userId);
 

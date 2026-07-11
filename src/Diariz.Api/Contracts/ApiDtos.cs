@@ -215,10 +215,23 @@ public record RecordingDetailDto(
     DateTimeOffset? AudioDeletedAt = null,
     /// <summary>Projected date the nightly job will delete this recording's audio (`CreatedAt` + retention days),
     /// or null when auto-delete is off, the recording is protected/ineligible, or the audio is already gone.</summary>
-    DateTimeOffset? AudioScheduledDeletionAt = null);
+    DateTimeOffset? AudioScheduledDeletionAt = null,
+    /// <summary>Who recorded it (the owner) - drives the "Recorded by" line. Null name = a deleted/unknown user.</summary>
+    Guid RecordedByUserId = default,
+    string? RecordedByName = null,
+    /// <summary>The rooms this recording is placed in that the caller can see, main room first.</summary>
+    IReadOnlyList<RecordingRoomDto>? Rooms = null);
+
+/// <summary>A room a recording sits in, for the detail Overview. <paramref name="IsMain"/> marks the recorder's
+/// personal (home) room - the only room a recording can be deleted from.</summary>
+public record RecordingRoomDto(Guid Id, string Name, string? Icon, string? Color, bool IsMain);
 
 /// <summary>Toggle a recording's protection from audio deletion (auto and manual).</summary>
 public record SetAudioProtectionRequest(bool Protected);
+
+/// <summary>Share a recording from one room into another. Requires <c>ShareOut</c> in <paramref name="FromRoomId"/>
+/// and <c>CreateRecording</c> in <paramref name="ToRoomId"/>. The link lands ungrouped in the target for now.</summary>
+public record ShareRecordingRequest(Guid FromRoomId, Guid ToRoomId);
 
 // ---- Meeting types (minutes templates) ----
 /// <summary>A meeting type (minutes template). <see cref="IsPlatform"/> = a shared, admin-owned type;
@@ -337,6 +350,26 @@ public record UserProfileDto(
 /// <summary>A user's platform permissions, expanded into booleans so the client never does bit arithmetic.</summary>
 public record PermissionsDto(bool ManageRooms, bool ManageUsers, bool ManagePlatform);
 
+/// <summary>A room the caller belongs to. <paramref name="Permissions"/> is the caller's effective
+/// <see cref="RoomPermission"/> grid as an <b>int</b> bitmask - a [Flags] enum would serialize as "A, B" under
+/// the global string-enum converter and break the web's bit arithmetic (see flags-enum-serializes-as-string).</summary>
+public record RoomListItemDto(
+    Guid Id, string Name, RoomKind Kind, string? Icon, string? Color, bool IsPersonal, int Permissions);
+
+/// <summary>Create/rename a shared room. Name is required and unique among shared rooms.</summary>
+public record RoomInput(string Name, string? Description, string? Icon, string? Color);
+
+/// <summary>A room member for the Manage Rooms editor: a user or group principal + its permission grid as an
+/// <b>int</b> bitmask (a [Flags] enum would serialise as "A, B" and break the web's bit arithmetic).</summary>
+public record RoomMemberDto(RoomPrincipalType PrincipalType, Guid PrincipalId, int Permissions);
+
+/// <summary>Upsert a member's permission grid on a room.</summary>
+public record RoomMemberInput(RoomPrincipalType PrincipalType, Guid PrincipalId, int Permissions);
+
+/// <summary>A shared room with its membership, for the Manage Rooms editor.</summary>
+public record RoomDetailDto(
+    Guid Id, string Name, string? Description, string? Icon, string? Color, IReadOnlyList<RoomMemberDto> Members);
+
 /// <summary>Self-service profile update. Each field is trimmed; blank clears it. Language codes must be
 /// in the supported set (else 400). <paramref name="Theme"/> is "auto" | "light" | "dark" (unknown -> auto).</summary>
 public record UpdateUserProfileRequest(
@@ -364,7 +397,10 @@ public record UserSettingsDto(
     string? DefaultApiBase, string? DefaultModel, bool ServerHasApiKey,
     int? ContextWindow, int DefaultContextWindow,
     bool ToolsEnabled, bool DefaultToolsEnabled, IReadOnlyList<ChatToolDto> Tools,
-    bool ReasoningEnabled, string ReasoningEffort, bool DefaultReasoningEnabled, string DefaultReasoningEffort);
+    bool ReasoningEnabled, string ReasoningEffort, bool DefaultReasoningEnabled, string DefaultReasoningEffort,
+    // Where a new recording lands in the user's Personal room. The mode serialises as its enum name
+    // ("SelectedFolder" etc.) via the global string-enum converter, same as MinutesGenerationMode.
+    RecordingPlacementMode PlacementMode, Guid? PlacementSectionId);
 
 /// <summary>A chat tool's state for the settings panel: whether it is on for this user
 /// (<paramref name="Enabled"/>) and its server-side default.</summary>
@@ -379,7 +415,10 @@ public record ChatToolDto(string Name, string Title, string Description, bool En
 public record UpdateUserSettingsRequest(
     string? ApiBase, string? Model, string? ApiKey, int? ContextWindow = null,
     bool? ToolsEnabled = null, IReadOnlyDictionary<string, bool>? ToolOverrides = null,
-    bool? ReasoningEnabled = null, string? ReasoningEffort = null);
+    bool? ReasoningEnabled = null, string? ReasoningEffort = null,
+    // PlacementMode: null leaves the placement preference unchanged; a value sets it (and, unless it is
+    // SpecificFolder, clears PlacementSectionId).
+    RecordingPlacementMode? PlacementMode = null, Guid? PlacementSectionId = null);
 
 // ---- MCP access tokens ----
 /// <summary>A stored MCP token, listed in Preferences. The secret is never returned — only a short display

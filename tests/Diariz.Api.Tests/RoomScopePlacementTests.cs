@@ -59,7 +59,7 @@ public class RoomScopePlacementTests
         var userId = await NewUserAsync(db);
         var sut = new RoomScope(db);
         var roomId = await sut.PersonalRoomIdAsync(userId);
-        var section = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Q3" };
+        var section = new Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "Q3" };
         db.Sections.Add(section);
         await db.SaveChangesAsync();
         var recId = await NewRecordingAsync(db, userId);
@@ -80,7 +80,7 @@ public class RoomScopePlacementTests
         var userId = await NewUserAsync(db);
         var sut = new RoomScope(db);
         var roomId = await sut.PersonalRoomIdAsync(userId);
-        var section = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Q3" };
+        var section = new Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "Q3" };
         db.Sections.Add(section);
         await db.SaveChangesAsync();
         var recId = await NewRecordingAsync(db, userId);
@@ -97,7 +97,7 @@ public class RoomScopePlacementTests
         var userId = await NewUserAsync(db);
         var sut = new RoomScope(db);
         var roomId = await sut.PersonalRoomIdAsync(userId);
-        var section = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Q3" };
+        var section = new Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "Q3" };
         db.Sections.Add(section);
         await db.SaveChangesAsync();
         var recId = await NewRecordingAsync(db, userId);
