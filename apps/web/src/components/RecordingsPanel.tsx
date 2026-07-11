@@ -13,7 +13,7 @@ import { recordingMenu } from "./recordingMenu";
 import { isProcessing, statusLabel } from "../lib/recordingStatus";
 import { copyRichLink, transcriptUrl } from "../lib/clipboard";
 import { useSelection } from "../lib/selection";
-import { useRoom, useRoomBasePath } from "../lib/rooms";
+import { useRoom, useRoomBasePath, useSharedRoomId } from "../lib/rooms";
 import { useActiveRecordingId } from "../lib/useActiveRecordingId";
 import { formatDuration } from "../lib/format";
 import { computeReorder } from "../lib/reorder";
@@ -31,6 +31,7 @@ import TagCloud from "./TagCloud";
 import TagCloudModal from "./TagCloudModal";
 import type { UploadItem } from "../lib/uploadQueue";
 import type { ActionListItem, CalendarEvent, RecordingStatus, RecordingSource, RecordingSummary } from "../lib/types";
+import { RoomPermission } from "../lib/types";
 
 const dragHasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types ?? []).includes("Files");
 
@@ -77,9 +78,12 @@ export default function RecordingsPanel() {
   const qc = useQueryClient();
   // The room being browsed (the switcher's current room). The recordings + folders lists are scoped to it;
   // the personal room keeps its folders/drag-drop, a shared room shows the recordings shared into it.
-  const { currentRoom } = useRoom();
+  const { currentRoom, can } = useRoom();
   const roomId = currentRoom?.id;
   const isPersonalRoom = currentRoom?.isPersonal ?? true;
+  // Folders are per-room now: show/allow them when the caller can manage this room's contents (the personal
+  // room's owner always can). aggRoomId is the room to scope section writes to (undefined = personal default).
+  const canManageContents = can(RoomPermission.ManageContents);
   const { data: recordings = [], isLoading } = useQuery({
     queryKey: ["recordings", roomId],
     queryFn: () => api.listRecordings(roomId),
@@ -382,7 +386,13 @@ export default function RecordingsPanel() {
           onError={setOpError}
         />
       ) : (
-        <ListToolbar recordings={recordings} listMode={tab === "list"} allowFolders={isPersonalRoom} onError={setOpError} />
+        <ListToolbar
+          recordings={recordings}
+          listMode={tab === "list"}
+          allowFolders={canManageContents}
+          roomId={aggRoomId}
+          onError={setOpError}
+        />
       )}
       <div className="flex min-h-0 flex-1">
         <TabStrip tab={tab} onSelect={selectTab} />
@@ -634,12 +644,15 @@ function ListToolbar({
   recordings,
   listMode,
   allowFolders,
+  roomId,
   onError,
 }: {
   recordings: RecordingSummary[];
   listMode: boolean;
-  // Folders are a personal-room concept; a shared room's list has none, so New section is hidden there.
+  // Shown when the caller can manage the current room's contents (folders are per-room).
   allowFolders: boolean;
+  // The room to create sections in (a shared room, or undefined for the personal room).
+  roomId?: string | null;
   onError: (msg: string | null) => void;
 }) {
   const { t } = useTranslation("workspace");
@@ -655,11 +668,13 @@ function ListToolbar({
     if (!n) return;
     setBusy(true);
     try {
-      await api.createSection(n);
+      await api.createSection(n, null, roomId);
       qc.invalidateQueries({ queryKey: ["sections"] });
       qc.invalidateQueries({ queryKey: ["recordings"] });
       setName("");
       setOpen(false);
+    } catch (e) {
+      onError(apiErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -1023,9 +1038,11 @@ function SectionHeading({
 }) {
   const { t } = useTranslation("workspace");
   const qc = useQueryClient();
+  const basePath = useRoomBasePath();
+  const sharedRoomId = useSharedRoomId();
   const [renaming, setRenaming] = useState(false);
   // Highlight the row when its folder page is open (the "selected folder" state).
-  const active = useMatch("/sections/:id")?.params.id === id;
+  const active = useMatch(`${basePath}/sections/:id`)?.params.id === id;
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["recordings"] });
     qc.invalidateQueries({ queryKey: ["sections"] });
@@ -1051,7 +1068,7 @@ function SectionHeading({
             onClick: async () => {
               const sub = window.prompt(t("newSubSectionPlaceholder", { parent: name }))?.trim();
               if (!sub) return;
-              await api.createSection(sub, id);
+              await api.createSection(sub, id, sharedRoomId);
               refresh();
             },
           },
@@ -1097,7 +1114,7 @@ function SectionHeading({
       {renaming ? (
         <SectionRenameForm initial={name} onSave={save} onCancel={() => setRenaming(false)} />
       ) : (
-        <GroupHeadingButton name={name} count={count} collapsed={collapsed} onToggle={onToggle} to={`/sections/${id}`} />
+        <GroupHeadingButton name={name} count={count} collapsed={collapsed} onToggle={onToggle} to={`${basePath}/sections/${id}`} />
       )}
       <KebabMenu actions={actions} label={t("sectionActions")} />
     </div>
@@ -1219,6 +1236,7 @@ export function RecordingRow({
   const qc = useQueryClient();
   const navigate = useNavigate();
   const basePath = useRoomBasePath();
+  const sharedRoomId = useSharedRoomId();
   const activeRecordingId = useActiveRecordingId();
   const [renaming, setRenaming] = useState(false);
   const [moving, setMoving] = useState(false);
@@ -1353,7 +1371,7 @@ export function RecordingRow({
       </div>
       {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
       {moving && (
-        <MoveToSectionModal recordingId={r.id} currentSectionId={r.sectionId} onClose={() => setMoving(false)} />
+        <MoveToSectionModal recordingId={r.id} currentSectionId={r.sectionId} roomId={sharedRoomId} onClose={() => setMoving(false)} />
       )}
       {downloading && <DownloadTranscriptModal recordingId={r.id} onClose={() => setDownloading(false)} />}
     </li>

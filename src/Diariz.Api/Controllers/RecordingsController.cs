@@ -948,15 +948,18 @@ public class RecordingsController : ControllerBase
     [HttpPut("{id:guid}/section")]
     public async Task<IActionResult> MoveToSection(Guid id, MoveRecordingRequest req)
     {
-        var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
-        if (rec is null) return NotFound();
+        // The folder lives on the placement in the room being viewed (its personal room by default; null section
+        // = ungroup). Filing needs ManageContents in that room; the personal-room owner holds it, so a plain
+        // personal move is unchanged. A non-member 404s; a member without the permission gets 403.
+        var roomId = req.RoomId ?? await _rooms.PersonalRoomIdAsync(UserId);
+        if (!await _rooms.IsMemberAsync(UserId, roomId)) return NotFound();
+        if (!(await _rooms.PermissionsAsync(UserId, roomId)).HasFlag(RoomPermission.ManageContents)) return Forbid();
 
-        // The folder lives on the placement in the caller's personal room (null = ungroup). SetSectionAsync
-        // also refuses a section that isn't in that room, so the recording can't be filed into the wrong place.
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        // The recording must actually be placed in this room, and the target section must live in it.
+        if (!await _db.RoomRecordings.AnyAsync(p => p.RecordingId == id && p.RoomId == roomId)) return NotFound();
         if (req.SectionId is { } sectionId
             && !await _db.Sections.AnyAsync(s => s.Id == sectionId && s.RoomId == roomId))
-            return NotFound(); // can't move into a section that isn't in the caller's room
+            return NotFound();
         if (!await _rooms.SetSectionAsync(roomId, id, req.SectionId)) return NotFound();
         return NoContent();
     }

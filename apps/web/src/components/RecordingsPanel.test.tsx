@@ -9,11 +9,16 @@ vi.mock("../lib/signalr", () => ({
   createHub: () => ({ start: () => Promise.resolve(), stop: () => Promise.resolve(), on: () => {} }),
 }));
 // The panel scopes its lists to the current room; stub the personal room (full features shown).
-const roomStub = { currentRoom: { id: "p1", isPersonal: true } as { id: string; isPersonal: boolean } };
+const roomStub = {
+  currentRoom: { id: "p1", isPersonal: true } as { id: string; isPersonal: boolean },
+  canManageContents: true,
+};
 vi.mock("../lib/rooms", () => ({
-  useRoom: () => roomStub,
+  useRoom: () => ({ ...roomStub, can: () => roomStub.canManageContents }),
   useRoomBasePath: () =>
     roomStub.currentRoom && !roomStub.currentRoom.isPersonal ? `/rooms/${roomStub.currentRoom.id}` : "",
+  useSharedRoomId: () =>
+    roomStub.currentRoom && !roomStub.currentRoom.isPersonal ? roomStub.currentRoom.id : undefined,
 }));
 
 vi.mock("../lib/api", () => ({
@@ -93,13 +98,14 @@ describe("RecordingsPanel", () => {
     vi.clearAllMocks();
     localStorage.clear(); // collapse state persists to localStorage
     roomStub.currentRoom = { id: "p1", isPersonal: true };
+    roomStub.canManageContents = true;
     (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([]); // reset between tests (impl persists)
     (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([rec]);
     (api.summarize as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.deleteRecording as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   });
 
-  it("browses the current room: fetches its recordings, keeps Actions/Tags (room-scoped), hides New section in a shared room", async () => {
+  it("browses the current room: fetches its recordings and keeps Actions/Tags (room-scoped) in a shared room", async () => {
     roomStub.currentRoom = { id: "eng-room", isPersonal: false };
     renderList();
 
@@ -109,8 +115,28 @@ describe("RecordingsPanel", () => {
     // Actions + Tags now show in a shared room too, scoped to that room's shared recordings.
     expect(screen.getByRole("button", { name: /^tags$/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Actions", pressed: false })).toBeTruthy();
-    // Folders are still personal-only: no "New section".
+  });
+
+  it("shows New section in a shared room when the caller can manage its contents, hides it otherwise", async () => {
+    roomStub.currentRoom = { id: "eng-room", isPersonal: false };
+    roomStub.canManageContents = true;
+    const { unmount } = renderList();
+    expect(await screen.findByRole("button", { name: /new section/i })).toBeTruthy();
+    unmount();
+
+    roomStub.canManageContents = false;
+    renderList();
+    await screen.findByText("Weekly Standup");
     expect(screen.queryByRole("button", { name: /new section/i })).toBeNull();
+  });
+
+  it("creates a section scoped to the current shared room", async () => {
+    roomStub.currentRoom = { id: "eng-room", isPersonal: false };
+    renderList();
+    fireEvent.click(await screen.findByRole("button", { name: /new section/i }));
+    fireEvent.change(screen.getByPlaceholderText(/section name/i), { target: { value: "Topics" } });
+    fireEvent.submit(screen.getByPlaceholderText(/section name/i));
+    await waitFor(() => expect(api.createSection).toHaveBeenCalledWith("Topics", null, "eng-room"));
   });
 
   it("scopes the Actions + Tags tabs to a shared room's recordings", async () => {
@@ -255,7 +281,7 @@ describe("RecordingsPanel", () => {
     fireEvent.change(screen.getByPlaceholderText(/new section name/i), { target: { value: "Therapy" } });
     fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
 
-    await waitFor(() => expect(api.createSection).toHaveBeenCalledWith("Therapy"));
+    await waitFor(() => expect(api.createSection).toHaveBeenCalledWith("Therapy", null, undefined));
   });
 
   it("shows a section heading even when it has no recordings yet", async () => {

@@ -130,9 +130,10 @@ share out, edit others' recordings, manage the room). A **room switcher** sits a
 **Manage Rooms** (in the switcher) creates, renames, restyles (icon + colour) and deletes rooms and edits their
 membership; deleting a room needs its name typed to confirm. The room lives in the URL (`/rooms/:roomId`), so
 switching keeps a clean, linkable address - and **browses that room**: picking a Shared Room shows the recordings
-shared into it (a flat list; folders, drag-reorder and the personal Google-Calendar overlay are Personal-Room
-features and stay there). The **List, Calendar, Actions and Tags** tabs all work in a Shared Room too, each scoped
-to the recordings shared into that room. **Recording or uploading a file while a shared room is open** files the
+shared into it. A Shared Room has its **own folder structure**: members with **manage-contents** can create
+sections and sub-sections in it and file recordings into them (via the recording's Move-to-folder action);
+drag-reorder and the personal Google-Calendar overlay stay Personal-Room features. The **List, Calendar, Actions
+and Tags** tabs all work in a Shared Room too, each scoped to the recordings shared into that room. **Recording or uploading a file while a shared room is open** files the
 meeting into that room automatically, while the original stays in your Personal Room - so a shared room can only ever **unshare** a
 recording, never delete it. You can also **Share to room** an existing recording (or **Remove from room**) from
 its toolbar; the recording's Overview shows a **Rooms** line (home room first) and a **Recorded by** line, and

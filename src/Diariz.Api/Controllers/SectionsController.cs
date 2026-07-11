@@ -25,6 +25,19 @@ public class SectionsController : ControllerBase
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
+    /// <summary>Resolve the room a section op targets (its own room by default) and check the caller may manage
+    /// its contents. Returns the room id, or an error result: 404 for a non-member (room existence stays
+    /// private), 403 for a member lacking <see cref="RoomPermission.ManageContents"/>. The personal room's
+    /// owner holds every permission, so the personal-room behaviour is unchanged.</summary>
+    private async Task<(Guid RoomId, ActionResult? Error)> AuthorizeManage(Guid? roomIdArg, CancellationToken ct)
+    {
+        var roomId = roomIdArg ?? await _rooms.PersonalRoomIdAsync(UserId, ct);
+        if (!await _rooms.IsMemberAsync(UserId, roomId, ct)) return (roomId, NotFound());
+        if (!(await _rooms.PermissionsAsync(UserId, roomId, ct)).HasFlag(RoomPermission.ManageContents))
+            return (roomId, Forbid());
+        return (roomId, null);
+    }
+
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<SectionDto>>> List([FromQuery] Guid? roomId = null)
     {
@@ -41,12 +54,13 @@ public class SectionsController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult<SectionDto>> Create(CreateSectionRequest req)
+    public async Task<ActionResult<SectionDto>> Create(CreateSectionRequest req, CancellationToken ct = default)
     {
         var name = req.Name?.Trim();
         if (string.IsNullOrEmpty(name)) return BadRequest("Section name is required.");
 
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var (roomId, error) = await AuthorizeManage(req.RoomId, ct);
+        if (error is not null) return error;
 
         // A sub-section's parent must be in the caller's room and must itself be top-level (two-level cap).
         if (req.ParentId is { } parentId)
@@ -72,12 +86,13 @@ public class SectionsController : ControllerBase
     /// one call (reorder among siblings and/or reparent). Rejects moves that would nest more than one level
     /// deep — either targeting a parent that itself has a parent, or moving a section that has children.</summary>
     [HttpPut("reorder")]
-    public async Task<IActionResult> Reorder(ReorderSectionsRequest req)
+    public async Task<IActionResult> Reorder(ReorderSectionsRequest req, CancellationToken ct = default)
     {
         var ids = (req.OrderedIds ?? []).ToList();
         if (ids.Count == 0) return NoContent();
 
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var (roomId, error) = await AuthorizeManage(req.RoomId, ct);
+        if (error is not null) return error;
 
         if (req.ParentId is { } parentId)
         {
@@ -110,14 +125,15 @@ public class SectionsController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
-    public async Task<IActionResult> Rename(Guid id, RenameSectionRequest req)
+    public async Task<IActionResult> Rename(Guid id, RenameSectionRequest req, CancellationToken ct = default)
     {
         var name = req.Name?.Trim();
         if (string.IsNullOrEmpty(name)) return BadRequest("Section name is required.");
 
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        var section = await _db.Sections.FirstOrDefaultAsync(s => s.Id == id && s.RoomId == roomId);
+        var section = await _db.Sections.FirstOrDefaultAsync(s => s.Id == id, ct);
         if (section is null) return NotFound();
+        var (_, error) = await AuthorizeManage(section.RoomId, ct);
+        if (error is not null) return error;
 
         section.Name = name;
         await _db.SaveChangesAsync();
@@ -125,11 +141,12 @@ public class SectionsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id)
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct = default)
     {
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        var section = await _db.Sections.FirstOrDefaultAsync(s => s.Id == id && s.RoomId == roomId);
+        var section = await _db.Sections.FirstOrDefaultAsync(s => s.Id == id, ct);
         if (section is null) return NotFound();
+        var (_, error) = await AuthorizeManage(section.RoomId, ct);
+        if (error is not null) return error;
 
         // The placement FK is ON DELETE SET NULL, so the section's recordings drop back to "Ungrouped".
         _db.Sections.Remove(section);

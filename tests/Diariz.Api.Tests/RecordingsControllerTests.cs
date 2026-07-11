@@ -842,12 +842,57 @@ public class RecordingsControllerTests
     public async Task MoveToSection_AnotherUsersRecording_ReturnsNotFound()
     {
         using var db = TestDb.Create();
-        var rec = await SeedRecording(db, Guid.NewGuid(), versions: 1);
-        var controller = Build(db, userId: Guid.NewGuid(), new FakeJobQueue());
+        var me = Guid.NewGuid();
+        await SeedUser(db, me);
+        var rec = await SeedRecording(db, Guid.NewGuid(), versions: 1); // owned by someone else, not placed in my room
+        var controller = Build(db, me, new FakeJobQueue());
 
         var result = await controller.MoveToSection(rec.Id, new MoveRecordingRequest(null));
 
         Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task MoveToSection_IntoASharedRoomSection_FilesThePlacementThere()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await SeedUser(db, me);
+        var scope = new RoomScope(db);
+        var rec = await SeedRecording(db, me, versions: 1);
+        await scope.PlaceInMainRoomAsync(rec.Id, me, sectionId: null);
+        var roomId = await scope.CreateSharedRoomAsync("Eng", null, null, null);
+        await scope.SetMemberAsync(roomId, RoomPrincipalType.User, me,
+            RoomPermission.ManageContents | RoomPermission.CreateRecording);
+        await scope.ShareIntoRoomAsync(rec.Id, roomId, me, sectionId: null);
+        var section = new Section { Id = Guid.NewGuid(), UserId = me, RoomId = roomId, Name = "Topics" };
+        db.Sections.Add(section);
+        await db.SaveChangesAsync();
+        var controller = Build(db, me, new FakeJobQueue());
+
+        var result = await controller.MoveToSection(rec.Id, new MoveRecordingRequest(section.Id, RoomId: roomId));
+
+        Assert.IsType<NoContentResult>(result);
+        var placement = await db.RoomRecordings.SingleAsync(p => p.RecordingId == rec.Id && p.RoomId == roomId);
+        Assert.Equal(section.Id, placement.SectionId); // filed in the shared room, not the personal one
+    }
+
+    [Fact]
+    public async Task MoveToSection_InSharedRoom_WithoutManageContents_Is403()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        await SeedUser(db, me);
+        var scope = new RoomScope(db);
+        var rec = await SeedRecording(db, me, versions: 1);
+        await scope.PlaceInMainRoomAsync(rec.Id, me, sectionId: null);
+        var roomId = await scope.CreateSharedRoomAsync("Eng", null, null, null);
+        await scope.SetMemberAsync(roomId, RoomPrincipalType.User, me, RoomPermission.CreateRecording); // no ManageContents
+        await scope.ShareIntoRoomAsync(rec.Id, roomId, me, sectionId: null);
+        var controller = Build(db, me, new FakeJobQueue());
+
+        var result = await controller.MoveToSection(rec.Id, new MoveRecordingRequest(null, RoomId: roomId));
+        Assert.IsType<ForbidResult>(result);
     }
 
     // ---- Update segment ----

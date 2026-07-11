@@ -52,6 +52,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.123.0",
+    date: "2026-07-11",
+    pr: 272,
+    headline: "Folders in shared rooms",
+    summary:
+      "Shared Rooms now have their own folder structure. A member who can manage a room's contents sees the " +
+      "New section button on the room's toolbar and can create sections and sub-sections in it, then file " +
+      "recordings into them from a recording's Move-to-folder action. Each room's folders are its own - the " +
+      "structure you build in a shared room is separate from your Personal Room. Drag-and-drop reordering " +
+      "stays a Personal-Room feature for now.",
+    added: [
+      "Create sections and sub-sections inside a Shared Room (for members with the manage-contents permission).",
+      "Move a recording into a Shared Room's section via its Move-to-folder action.",
+    ],
+  },
+  {
     version: "0.122.1",
     date: "2026-07-11",
     pr: 271,
