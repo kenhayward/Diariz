@@ -63,14 +63,14 @@ public record StorageUsageDto(long UsedBytes, long QuotaBytes, long TotalTranscr
 /// <summary>A user section. <c>ParentId</c> is null for a top-level section, or the id of the parent
 /// section for a sub-section (one level of nesting). <c>Position</c> is the manual order among siblings.</summary>
 public record SectionDto(Guid Id, string Name, Guid? ParentId, int Position);
-public record CreateSectionRequest(string Name, Guid? ParentId = null);
+public record CreateSectionRequest(string Name, Guid? ParentId = null, Guid? RoomId = null);
 public record RenameSectionRequest(string Name);
-public record MoveRecordingRequest(Guid? SectionId);
+public record MoveRecordingRequest(Guid? SectionId, Guid? RoomId = null);
 /// <summary>Reorder/move: set each listed recording's section and position (0..n-1) in one call.</summary>
 public record ReorderRecordingsRequest(Guid? SectionId, IReadOnlyList<Guid> OrderedIds);
 /// <summary>Reorder/reparent sections: set each listed section's parent and position (0..n-1) in one
 /// call. <c>ParentId</c> null = top level. Reparenting under a section that itself has a parent is rejected.</summary>
-public record ReorderSectionsRequest(Guid? ParentId, IReadOnlyList<Guid> OrderedIds);
+public record ReorderSectionsRequest(Guid? ParentId, IReadOnlyList<Guid> OrderedIds, Guid? RoomId = null);
 
 // ---- Section (folder) page ----
 /// <summary>High-level folder stats aggregated across a section and its child sections.</summary>

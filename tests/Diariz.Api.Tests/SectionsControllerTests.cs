@@ -48,6 +48,54 @@ public class SectionsControllerTests
     }
 
     [Fact]
+    public async Task Create_InSharedRoom_WithManageContents_ScopesToThatRoom()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        Build(db, me); // ensure the user
+        var scope = new RoomScope(db);
+        var roomId = await scope.CreateSharedRoomAsync("Eng", null, null, null);
+        await scope.SetMemberAsync(roomId, RoomPrincipalType.User, me, RoomPermission.ManageContents);
+
+        var result = await Build(db, me).Create(new CreateSectionRequest("Topics", RoomId: roomId));
+
+        var dto = Assert.IsType<SectionDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        var stored = await db.Sections.SingleAsync(s => s.Id == dto.Id);
+        Assert.Equal(roomId, stored.RoomId);
+
+        // And a subsection nests under it, still in the room.
+        var sub = await Build(db, me).Create(new CreateSectionRequest("Sub", ParentId: dto.Id, RoomId: roomId));
+        var subDto = Assert.IsType<SectionDto>(Assert.IsType<OkObjectResult>(sub.Result).Value);
+        Assert.Equal(dto.Id, subDto.ParentId);
+    }
+
+    [Fact]
+    public async Task Create_InSharedRoom_WithoutManageContents_Is403()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        Build(db, me);
+        var scope = new RoomScope(db);
+        var roomId = await scope.CreateSharedRoomAsync("Eng", null, null, null);
+        await scope.SetMemberAsync(roomId, RoomPrincipalType.User, me, RoomPermission.CreateRecording); // no ManageContents
+
+        var result = await Build(db, me).Create(new CreateSectionRequest("Topics", RoomId: roomId));
+        Assert.IsType<ForbidResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Create_InRoom_TheCallerIsNotAMemberOf_Is404()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        Build(db, me);
+        var roomId = await new RoomScope(db).CreateSharedRoomAsync("Eng", null, null, null); // never joined
+
+        var result = await Build(db, me).Create(new CreateSectionRequest("Topics", RoomId: roomId));
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    [Fact]
     public async Task Create_SameName_ReturnsExisting_WithoutDuplicating()
     {
         using var db = TestDb.Create();

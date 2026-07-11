@@ -694,9 +694,10 @@ export const api = {
     return data;
   },
 
-  /// Create a section. Pass `parentId` to create a sub-section (one level of nesting).
-  async createSection(name: string, parentId: string | null = null): Promise<SectionDto> {
-    const { data } = await http.post<SectionDto>("/api/sections", { name, parentId });
+  /// Create a section in the given room (its personal room by default). Pass `parentId` for a sub-section
+  /// (one level of nesting). Shared rooms need the ManageContents permission (enforced server-side).
+  async createSection(name: string, parentId: string | null = null, roomId?: string | null): Promise<SectionDto> {
+    const { data } = await http.post<SectionDto>("/api/sections", { name, parentId, roomId: roomId ?? null });
     return data;
   },
 
@@ -709,8 +710,8 @@ export const api = {
   },
 
   /// Set the parent + 0-based order of each listed section in one call (drag-and-drop reorder/reparent).
-  async reorderSections(parentId: string | null, orderedIds: string[]): Promise<void> {
-    await http.put("/api/sections/reorder", { parentId, orderedIds });
+  async reorderSections(parentId: string | null, orderedIds: string[], roomId?: string | null): Promise<void> {
+    await http.put("/api/sections/reorder", { parentId, orderedIds, roomId: roomId ?? null });
   },
 
   // ---- Folder (section) page ----
@@ -786,8 +787,9 @@ export const api = {
     await http.put(`/api/sections/${id}/minutes`, { text });
   },
 
-  async moveRecording(id: string, sectionId: string | null): Promise<void> {
-    await http.put(`/api/recordings/${id}/section`, { sectionId });
+  /// File a recording into a section of the given room (its personal room by default; null section = ungroup).
+  async moveRecording(id: string, sectionId: string | null, roomId?: string | null): Promise<void> {
+    await http.put(`/api/recordings/${id}/section`, { sectionId, roomId: roomId ?? null });
   },
 
   /// Set the section + 0-based order of each listed recording in one call (drag-and-drop).

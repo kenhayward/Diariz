@@ -8,15 +8,21 @@ import { orderedSections } from "../lib/sectionTree";
 export default function MoveToSectionModal({
   recordingId,
   currentSectionId,
+  roomId,
   onClose,
 }: {
   recordingId: string;
   currentSectionId?: string | null; // undefined = unknown (mark nothing)
+  /// The room whose folder structure this moves within - a shared room, or undefined for the personal room.
+  roomId?: string | null;
   onClose: () => void;
 }) {
   const { t } = useTranslation("workspace");
   const qc = useQueryClient();
-  const { data: sections = [] } = useQuery({ queryKey: ["sections"], queryFn: () => api.listSections() });
+  const { data: sections = [] } = useQuery({
+    queryKey: ["sections", roomId ?? null],
+    queryFn: () => api.listSections(roomId),
+  });
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +37,7 @@ export default function MoveToSectionModal({
     setBusy(true);
     setError(null);
     try {
-      await api.moveRecording(recordingId, sectionId);
+      await api.moveRecording(recordingId, sectionId, roomId);
       qc.invalidateQueries({ queryKey: ["recordings"] });
       onClose();
     } catch (e) {
@@ -46,8 +52,8 @@ export default function MoveToSectionModal({
     setBusy(true);
     setError(null);
     try {
-      const section = await api.createSection(name);
-      await api.moveRecording(recordingId, section.id);
+      const section = await api.createSection(name, null, roomId);
+      await api.moveRecording(recordingId, section.id, roomId);
       qc.invalidateQueries({ queryKey: ["recordings"] });
       qc.invalidateQueries({ queryKey: ["sections"] });
       onClose();

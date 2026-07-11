@@ -1515,7 +1515,13 @@ export default function RecordingDetail() {
         />
       )}
 
-      {moving && <MoveToSectionModal recordingId={id} onClose={() => setMoving(false)} />}
+      {moving && (
+        <MoveToSectionModal
+          recordingId={id}
+          roomId={currentRoom && !currentRoom.isPersonal ? currentRoom.id : undefined}
+          onClose={() => setMoving(false)}
+        />
+      )}
       {sharing && homeRoom && (
         <ShareToRoomModal
           recordingId={id}

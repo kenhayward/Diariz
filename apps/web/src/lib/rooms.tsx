@@ -86,3 +86,11 @@ export function useRoomBasePath(): string {
   const room = useContext(RoomContext)?.currentRoom;
   return room && !room.isPersonal ? `/rooms/${room.id}` : "";
 }
+
+/// The current room's id when it is a shared room, else undefined (the personal room is the server default).
+/// For scoping section/placement writes to the room being viewed. Reads the context directly so it is safe
+/// outside a RoomProvider (returns undefined).
+export function useSharedRoomId(): string | undefined {
+  const room = useContext(RoomContext)?.currentRoom;
+  return room && !room.isPersonal ? room.id : undefined;
+}

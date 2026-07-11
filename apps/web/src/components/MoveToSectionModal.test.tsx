@@ -33,13 +33,13 @@ describe("MoveToSectionModal", () => {
   it("moves to an existing section", async () => {
     renderModal(null);
     fireEvent.click(await screen.findByRole("button", { name: /work/i }));
-    await waitFor(() => expect(api.moveRecording).toHaveBeenCalledWith("rec-1", "sec-1"));
+    await waitFor(() => expect(api.moveRecording).toHaveBeenCalledWith("rec-1", "sec-1", undefined));
   });
 
   it("ungroups the recording", async () => {
     renderModal("sec-1");
     fireEvent.click(await screen.findByRole("button", { name: /ungrouped/i }));
-    await waitFor(() => expect(api.moveRecording).toHaveBeenCalledWith("rec-1", null));
+    await waitFor(() => expect(api.moveRecording).toHaveBeenCalledWith("rec-1", null, undefined));
   });
 
   it("creates a new section and moves into it", async () => {
@@ -48,7 +48,19 @@ describe("MoveToSectionModal", () => {
     fireEvent.change(screen.getByLabelText(/new section name/i), { target: { value: "Ideas" } });
     fireEvent.click(screen.getByRole("button", { name: /create.*move/i }));
 
-    await waitFor(() => expect(api.createSection).toHaveBeenCalledWith("Ideas"));
-    await waitFor(() => expect(api.moveRecording).toHaveBeenCalledWith("rec-1", "sec-new"));
+    await waitFor(() => expect(api.createSection).toHaveBeenCalledWith("Ideas", null, undefined));
+    await waitFor(() => expect(api.moveRecording).toHaveBeenCalledWith("rec-1", "sec-new", undefined));
+  });
+
+  it("scopes the move and section creation to a shared room", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MoveToSectionModal recordingId="rec-1" currentSectionId={null} roomId="eng-room" onClose={() => {}} />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /work/i }));
+    await waitFor(() => expect(api.moveRecording).toHaveBeenCalledWith("rec-1", "sec-1", "eng-room"));
+    expect(api.listSections).toHaveBeenCalledWith("eng-room");
   });
 });
