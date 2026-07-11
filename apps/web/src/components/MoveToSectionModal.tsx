@@ -16,7 +16,7 @@ export default function MoveToSectionModal({
 }) {
   const { t } = useTranslation("workspace");
   const qc = useQueryClient();
-  const { data: sections = [] } = useQuery({ queryKey: ["sections"], queryFn: api.listSections });
+  const { data: sections = [] } = useQuery({ queryKey: ["sections"], queryFn: () => api.listSections() });
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

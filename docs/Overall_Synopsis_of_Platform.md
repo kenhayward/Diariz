@@ -607,9 +607,15 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
     (a non-minting read), so chat + MCP tools find recordings shared into any room the caller belongs to. The
     filtered vector scan is **not yet benchmarked** on a large corpus; the denormalise-`RoomId`-onto-chunk
     fallback stays open if it regresses.
-  - **Still ahead:** room-scoped recording **collections** (a `/api/rooms/{roomId}/recordings` list + the web
-    panel/query-keys fetching per current room, so switching to a shared room browses its recordings) and the
-    deferred `UserId` column drop (incl. `TranscriptChunk.UserId`). See
+  - **Room-scoped recording collections (Phase 6).** `GET /api/recordings` and `/api/sections` take an optional
+    `roomId` (default = the caller's personal room), membership-gated (404 for non-members); the recordings come
+    from `RoomScope.RecordingsIn(room)` with folders from that room's placements (`PlaceInMainRoomAsync` is now
+    idempotent). The web `RecordingsPanel` reads `useRoom()` and fetches `["recordings", roomId]` /
+    `["sections", roomId]`, so switching the switcher to a shared room browses the recordings shared into it - a
+    flat list with folders, drag-reorder, the personal Google-calendar overlay and the Actions/Tags aggregation
+    tabs hidden (they belong to the Personal room). The Personal room is unchanged.
+  - **Still ahead:** the deferred `UserId` column drop on the room-scoped entities (incl.
+    `TranscriptChunk.UserId`) - non-breaking, left in place by decision. See
     `docs/superpowers/specs/2026-07-10-rooms-design.md`.
 - **Access lifecycle:** a person **requests access** (`UserStatus.Requested`) → an admin **grants** it
   (issues a one-time setup link; emailed via SMTP/MailKit, or shown to the admin as a fallback when SMTP is

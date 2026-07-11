@@ -72,6 +72,7 @@ public class RecordingsControllerTests
 
     private static async Task<Recording> SeedRecording(DiarizDbContext db, Guid userId, params int[] versions)
     {
+        Users.Ensure(db, userId);
         var rec = new Recording
         {
             Id = Guid.NewGuid(),
@@ -83,6 +84,8 @@ public class RecordingsControllerTests
         foreach (var v in versions)
             db.Transcriptions.Add(new Transcription { Id = Guid.NewGuid(), RecordingId = rec.Id, Model = "m", Version = v });
         await db.SaveChangesAsync();
+        // The recordings list is room-scoped now, so give it its main placement in the owner's personal room.
+        await new RoomScope(db).PlaceInMainRoomAsync(rec.Id, userId, sectionId: null);
         return rec;
     }
 
@@ -198,6 +201,33 @@ public class RecordingsControllerTests
         var result = await controller.Get(rec.Id);
 
         Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    /// <summary>Phase 6: List(?roomId=) browses a room's recordings. A recording shared into a room shows up
+    /// when a member lists that room; a non-member 404s.</summary>
+    [Fact]
+    public async Task List_ByRoom_ShowsRecordingsSharedIntoThatRoom()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var member = Guid.NewGuid();
+        await SeedUser(db, owner);
+        Users.Ensure(db, member);
+        var rec = await SeedRecording(db, owner, versions: 1); // placed in owner's personal room
+        var scope = new RoomScope(db);
+        var roomId = await scope.CreateSharedRoomAsync("Engineering", null, null, null);
+        await scope.SetMemberAsync(roomId, RoomPrincipalType.User, member, RoomPermission.CreateRecording);
+        await scope.ShareIntoRoomAsync(rec.Id, roomId, owner, sectionId: null);
+
+        // The member lists the shared room and sees the shared recording.
+        var list = (await Build(db, member, new FakeJobQueue()).List(roomId)).Value!;
+        Assert.Single(list, r => r.Id == rec.Id);
+
+        // A stranger who isn't a member 404s.
+        Users.Ensure(db, Guid.NewGuid());
+        var stranger = Guid.NewGuid();
+        Users.Ensure(db, stranger);
+        Assert.IsType<NotFoundResult>((await Build(db, stranger, new FakeJobQueue()).List(roomId)).Result);
     }
 
     /// <summary>Phase 5: the detail carries who recorded it and the rooms it is placed in (home room first).</summary>
@@ -1718,9 +1748,11 @@ public class RecordingsControllerTests
 
     private static async Task<Recording> SeedRecordingAt(DiarizDbContext db, Guid userId, DateTimeOffset createdAt, long durationMs)
     {
+        Users.Ensure(db, userId);
         var rec = new Recording { Id = Guid.NewGuid(), UserId = userId, BlobKey = "k", CreatedAt = createdAt, DurationMs = durationMs };
         db.Recordings.Add(rec);
         await db.SaveChangesAsync();
+        await new RoomScope(db).PlaceInMainRoomAsync(rec.Id, userId, sectionId: null); // list is room-scoped now
         return rec;
     }
 
@@ -1880,7 +1912,7 @@ public class RecordingsControllerTests
         Assert.Equal("evt1", detail.CalendarLink!.EventId);
         Assert.Equal("team@group.calendar.google.com", detail.CalendarLink.CalendarId);
 
-        var list = await controller.List();
+        var list = (await controller.List()).Value!;
         var summary = Assert.Single(list);
         Assert.Equal("evt1", summary.CalendarEventId);
         Assert.Equal("#0B8043", summary.CalendarColor);

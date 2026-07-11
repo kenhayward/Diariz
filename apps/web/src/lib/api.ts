@@ -241,8 +241,11 @@ export const api = {
     await http.delete(`/api/admin/users/${id}`);
   },
 
-  async listRecordings(): Promise<RecordingSummary[]> {
-    const { data } = await http.get<RecordingSummary[]>("/api/recordings");
+  /// The recordings of a room (its personal room by default) - the room being browsed in the switcher.
+  async listRecordings(roomId?: string | null): Promise<RecordingSummary[]> {
+    const { data } = await http.get<RecordingSummary[]>("/api/recordings", {
+      params: roomId ? { roomId } : undefined,
+    });
     return data;
   },
 
@@ -677,8 +680,10 @@ export const api = {
     await http.delete("/api/speaker-profiles");
   },
 
-  async listSections(): Promise<SectionDto[]> {
-    const { data } = await http.get<SectionDto[]>("/api/sections");
+  async listSections(roomId?: string | null): Promise<SectionDto[]> {
+    const { data } = await http.get<SectionDto[]>("/api/sections", {
+      params: roomId ? { roomId } : undefined,
+    });
     return data;
   },
 

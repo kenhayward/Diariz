@@ -138,7 +138,7 @@ public class SectionsControllerTests
         await SeedSection(db, userId, "Beta", position: 1);
         await SeedSection(db, Guid.NewGuid(), "Other"); // another user's - excluded
 
-        var list = await Build(db, userId).List();
+        var list = (await Build(db, userId).List()).Value!;
 
         // Position first (so Beta@1 sorts after the @0 pair), Name as the tiebreak within a position.
         Assert.Equal(["Alpha", "Zeta", "Beta"], list.Select(s => s.Name));
