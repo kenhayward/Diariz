@@ -27,7 +27,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Connect Claude (MCP)** | Connect Claude to your own meetings via OAuth (claude.ai) or a personal token (Claude Desktop/Code). |
 | **Translate** | Translate a whole transcript or a single segment, stored as revisions you can flip back. |
 | **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) to a recording or directly to a folder, edit Markdown attachments in place, save a chat conversation as an attachment with /attach, and optionally feed them to chat. |
-| **Rooms** | A private Personal Room per account plus shareable Rooms: invite users and groups with per-member permissions, record or share recordings into a room (your Personal Room keeps the original), and search across every room you belong to. Manage rooms from the switcher. |
+| **Rooms** | A private Personal Room per account plus shareable Rooms: invite users and groups with per-member permissions. Each Shared Room has its **own folder structure** (sections/sub-sections, drag-and-drop, per-room order) and its own List/Calendar/Actions/Tags scoped to it; record or upload files straight into a room (your Personal Room keeps the original), and search + chat over every room you belong to. Your Google Calendar and its linking stay personal. Manage rooms from the switcher. |
 | **Organise & merge** | Sections and sub-sections with drag-and-drop; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
@@ -51,6 +51,21 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.124.1",
+    date: "2026-07-11",
+    pr: 274,
+    headline: "Calendar stays personal in shared rooms",
+    summary:
+      "Your Google Calendar is a personal feature, so it no longer leaks into shared rooms. A shared room's " +
+      "Calendar view now shows only the recordings shared into that room, not your personal calendar events. " +
+      "And when you open a recording while in a shared room, its linked meeting details are hidden and no " +
+      "calendar linking is offered (or auto-applied) - your Personal Room still shows all of it as before.",
+    fixed: [
+      "A shared room's Calendar view no longer shows your personal Google Calendar events (recordings only).",
+      "Opening a recording in a shared room no longer shows its linked meeting or offers calendar linking; auto-linking is skipped there too.",
+    ],
+  },
   {
     version: "0.124.0",
     date: "2026-07-11",

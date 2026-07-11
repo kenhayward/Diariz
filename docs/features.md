@@ -133,7 +133,9 @@ switching keeps a clean, linkable address - and **browses that room**: picking a
 shared into it. A Shared Room has its **own folder structure**: members with **manage-contents** can create
 sections and sub-sections in it, file recordings into them (via the recording's Move-to-folder action or by
 **drag-and-drop**), and **drag to reorder** recordings within a section - each room keeps its own order, separate
-from your Personal Room. The personal Google-Calendar overlay stays a Personal-Room feature. The **List, Calendar, Actions
+from your Personal Room. **Your Google Calendar stays personal**: a Shared Room's Calendar tab shows only its
+recordings (no personal-event overlay), and a recording opened inside a Shared Room hides its linked meeting and
+offers no calendar linking. The **List, Calendar, Actions
 and Tags** tabs all work in a Shared Room too, each scoped to the recordings shared into that room. **Recording or uploading a file while a shared room is open** files the
 meeting into that room automatically, while the original stays in your Personal Room - so a shared room can only ever **unshare** a
 recording, never delete it. You can also **Share to room** an existing recording (or **Remove from room**) from
