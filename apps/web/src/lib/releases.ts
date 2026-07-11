@@ -52,6 +52,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.120.0",
+    date: "2026-07-11",
+    pr: 265,
+    headline: "Browse a shared room's recordings",
+    summary:
+      "The room switcher now actually browses. Pick a Shared Room and the recordings panel shows the meetings " +
+      "shared into it, instead of your Personal Room's list. A shared room shows a simple flat list - the " +
+      "folders, drag-to-reorder, the personal Google-calendar overlay, and the Actions and Tags tabs (which " +
+      "roll up your whole personal library) belong to your Personal Room and are hidden while you are in a " +
+      "shared room. Your Personal Room is unchanged.",
+    added: [
+      "Switching the room switcher to a Shared Room browses the recordings shared into that room.",
+    ],
+    changed: [
+      "The recordings panel is now scoped to the room you are viewing; a shared room shows a flat list without folders or the personal Calendar/Actions/Tags views.",
+    ],
+  },
+  {
     version: "0.119.0",
     date: "2026-07-10",
     pr: 264,
