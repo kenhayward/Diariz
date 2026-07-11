@@ -1,6 +1,10 @@
 using System.Diagnostics;
 using Diariz.Api.IntegrationTests.Infrastructure;
 using Diariz.Api.Services;
+using Diariz.Domain;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 
 namespace Diariz.Api.IntegrationTests;
@@ -50,6 +54,59 @@ public class DatabaseBackupIntegrationTests(ContainersFixture fx)
                 $"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{probeDb}';");
             await Exec(admin.ConnectionString, $"DROP DATABASE IF EXISTS \"{probeDb}\"");
         }
+    }
+
+    [Fact]
+    public async Task MigrateToCurrent_FromAnEarlierMigration_RollsForwardKeepingData()
+    {
+        // A throwaway database, migrated only to the baseline, then rolled forward via the production
+        // primitive (EfSchemaVersion.MigrateToCurrentAsync) - the second half of an older-backup restore.
+        var admin = new NpgsqlConnectionStringBuilder(fx.PostgresConnectionString);
+        var probeDb = $"probe_{Guid.NewGuid():N}";
+        await Exec(admin.ConnectionString, $"CREATE DATABASE \"{probeDb}\"");
+        var probe = new NpgsqlConnectionStringBuilder(fx.PostgresConnectionString) { Database = probeDb };
+        try
+        {
+            var options = new DbContextOptionsBuilder<DiarizDbContext>()
+                .UseNpgsql(probe.ConnectionString, o => o.UseVector())
+                .Options;
+            await using var db = new DiarizDbContext(options);
+
+            var all = db.Database.GetMigrations().ToList();
+            Assert.True(all.Count > 1, "need at least two migrations to prove a forward roll");
+            var baseline = all.First();
+
+            // Migrate to the baseline only.
+            await db.GetService<IMigrator>().MigrateAsync(baseline);
+            Assert.Equal(baseline, (await db.Database.GetAppliedMigrationsAsync()).Last());
+
+            // A marker row in a table outside the EF model - it must survive the roll-forward untouched.
+            await Exec(probe.ConnectionString,
+                "CREATE TABLE probe_marker (id int primary key, note text); INSERT INTO probe_marker VALUES (1, 'keep');");
+
+            // A column added by a later migration is absent at the baseline...
+            Assert.Equal(0L, await ColumnCount(probe.ConnectionString, "UserSettings", "RecordingPlacementMode"));
+
+            // Roll forward to the latest schema via the production primitive.
+            await new EfSchemaVersion(db).MigrateToCurrentAsync();
+
+            Assert.Equal(all.Last(), (await db.Database.GetAppliedMigrationsAsync()).Last()); // now at latest
+            Assert.Equal(1L, await ColumnCount(probe.ConnectionString, "UserSettings", "RecordingPlacementMode")); // added
+            Assert.Equal("keep", await Scalar(probe.ConnectionString, "SELECT note FROM probe_marker WHERE id = 1")); // data kept
+        }
+        finally
+        {
+            await Exec(admin.ConnectionString,
+                $"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{probeDb}';");
+            await Exec(admin.ConnectionString, $"DROP DATABASE IF EXISTS \"{probeDb}\"");
+        }
+    }
+
+    private static async Task<long> ColumnCount(string connectionString, string table, string column)
+    {
+        var n = await Scalar(connectionString,
+            $"SELECT count(*) FROM information_schema.columns WHERE table_name = '{table}' AND column_name = '{column}'");
+        return Convert.ToInt64(n);
     }
 
     private static async Task Exec(string connectionString, string sql)
