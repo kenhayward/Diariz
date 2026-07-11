@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import type { CalendarEvent, CalendarAttendee } from "../lib/types";
 import { formatLongDate, formatTimeHm } from "../lib/format";
+import LinkifiedText from "./LinkifiedText";
 
 /// Localised label for a Google attendee response status; falls back to the raw value.
 const RESP_KEY: Record<string, string> = {
@@ -66,7 +67,9 @@ export default function CalendarEventDetails({
             <dt className="text-gray-500 dark:text-gray-400">{t("workspace:calWhere")}</dt>
             {/* A long unbroken value (e.g. a Zoom join URL) must break mid-token, or it forces the 1fr grid
                 track wider than the panel. min-w-0 lets the track shrink; overflow-wrap:anywhere does the break. */}
-            <dd className="min-w-0 [overflow-wrap:anywhere] text-gray-800 dark:text-gray-200">{event.location}</dd>
+            <dd className="min-w-0 [overflow-wrap:anywhere] text-gray-800 dark:text-gray-200">
+              <LinkifiedText text={event.location} />
+            </dd>
           </>
         )}
         {organizer && (
@@ -105,8 +108,8 @@ export default function CalendarEventDetails({
           <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
             {t("workspace:calDescription")}
           </div>
-          <p className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words text-gray-700 dark:text-gray-300">
-            {event.description}
+          <p className="max-h-48 overflow-y-auto whitespace-pre-wrap [overflow-wrap:anywhere] text-gray-700 dark:text-gray-300">
+            <LinkifiedText text={event.description} />
           </p>
         </div>
       )}

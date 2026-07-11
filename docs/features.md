@@ -195,7 +195,8 @@ OAuth client. It works in the web app and in the **desktop app** (the desktop cl
 system browser and returns you to the app, since Google blocks sign-in inside embedded windows). A Google-linked user can opt in
 (Preferences → Google) to let Diariz **read their Google Calendar** (read-only) so a recording is **linked to
 the meeting it belongs to** (auto-saved on open, or picked by hand when the times don't line up), its Overview
-shows the meeting's **full details** (time, location, organiser, attendees, description), and the **Calendar
+shows the meeting's **full details** (time, location, organiser, attendees, description) with any **URLs in the
+location/description rendered as clickable links** (so you can join a Zoom/Meet call straight from the app), and the **Calendar
 tab overlays their meetings** (a linked recording and its meeting show as one row; a meeting with no recording
 opens a preview you can link a recording to) — a revocable grant. They can also **choose which of their Google
 calendars** to consider (Preferences → Google Account); only the selected calendars are used for matching and

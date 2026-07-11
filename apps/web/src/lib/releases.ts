@@ -52,6 +52,18 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.125.0",
+    date: "2026-07-11",
+    pr: 276,
+    headline: "Clickable links in calendar invites",
+    summary:
+      "URLs in a linked meeting's location and description are now clickable links (opening in a new tab), so " +
+      "you can join a Zoom/Meet call straight from a recording's Overview instead of copying the address.",
+    added: [
+      "Meeting-invite locations and descriptions render embedded URLs as clickable links (new tab).",
+    ],
+  },
+  {
     version: "0.124.2",
     date: "2026-07-11",
     pr: 275,
