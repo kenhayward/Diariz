@@ -44,8 +44,9 @@ public class SectionPageController : ControllerBase
     /// to count as "included" in this folder.</summary>
     private async Task<List<Guid>> IncludedSectionIdsAsync(Guid sectionId)
     {
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
         var ids = await _db.Sections
-            .Where(s => s.UserId == UserId && s.ParentId == sectionId).Select(s => s.Id).ToListAsync();
+            .Where(s => s.RoomId == roomId && s.ParentId == sectionId).Select(s => s.Id).ToListAsync();
         ids.Add(sectionId);
         return ids;
     }
@@ -55,16 +56,16 @@ public class SectionPageController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<SectionDetailDto>> Get(Guid id)
     {
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
         var section = await _db.Sections
             .Include(s => s.Summary)
             .Include(s => s.Minutes)
-            .FirstOrDefaultAsync(s => s.Id == id && s.UserId == UserId);
+            .FirstOrDefaultAsync(s => s.Id == id && s.RoomId == roomId);
         if (section is null) return NotFound();
 
         var allIds = await IncludedSectionIdsAsync(id);
         // Recordings filed under this folder (or its children) now come from the placement in the caller's
         // personal room, not from Recording.SectionId.
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
         var recs = from p in _db.RoomRecordings
                    where p.RoomId == roomId && p.SectionId.HasValue && allIds.Contains(p.SectionId.Value)
                    join r in _db.Recordings on p.RecordingId equals r.Id
@@ -144,8 +145,9 @@ public class SectionPageController : ControllerBase
     [HttpPost("{id:guid}/summary/generate")]
     public async Task<IActionResult> GenerateSummary(Guid id)
     {
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
         var section = await _db.Sections.Include(s => s.Summary)
-            .FirstOrDefaultAsync(s => s.Id == id && s.UserId == UserId);
+            .FirstOrDefaultAsync(s => s.Id == id && s.RoomId == roomId);
         if (section is null) return NotFound();
 
         var cfg = await _summarization.ResolveAsync(UserId);
@@ -167,8 +169,9 @@ public class SectionPageController : ControllerBase
     [HttpPut("{id:guid}/summary")]
     public async Task<IActionResult> UpdateSummary(Guid id, UpdateSummaryRequest req)
     {
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
         var section = await _db.Sections.Include(s => s.Summary)
-            .FirstOrDefaultAsync(s => s.Id == id && s.UserId == UserId);
+            .FirstOrDefaultAsync(s => s.Id == id && s.RoomId == roomId);
         if (section is null) return NotFound();
 
         var summary = await UpsertSummaryAsync(section);
@@ -187,13 +190,14 @@ public class SectionPageController : ControllerBase
     [HttpPost("{id:guid}/minutes/generate")]
     public async Task<IActionResult> GenerateMinutes(Guid id, ApplyMeetingTypeRequest req)
     {
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
         var section = await _db.Sections.Include(s => s.Minutes)
-            .FirstOrDefaultAsync(s => s.Id == id && s.UserId == UserId);
+            .FirstOrDefaultAsync(s => s.Id == id && s.RoomId == roomId);
         if (section is null) return NotFound();
 
         // A chosen type must be the caller's own Personal type or a shared Platform type.
         if (req.MeetingTypeId is { } typeId &&
-            !await _db.MeetingTypes.AnyAsync(t => t.Id == typeId && (t.UserId == null || t.UserId == UserId)))
+            !await _db.MeetingTypes.AnyAsync(t => t.Id == typeId && (t.RoomId == null || t.RoomId == roomId)))
             return NotFound();
 
         var cfg = await _summarization.ResolveAsync(UserId);
@@ -216,8 +220,9 @@ public class SectionPageController : ControllerBase
     [HttpPut("{id:guid}/minutes")]
     public async Task<IActionResult> UpdateMinutes(Guid id, UpdateMeetingMinutesRequest req)
     {
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
         var section = await _db.Sections.Include(s => s.Minutes)
-            .FirstOrDefaultAsync(s => s.Id == id && s.UserId == UserId);
+            .FirstOrDefaultAsync(s => s.Id == id && s.RoomId == roomId);
         if (section is null) return NotFound();
 
         var minutes = await UpsertMinutesAsync(section);
@@ -233,8 +238,11 @@ public class SectionPageController : ControllerBase
 
     // ---- helpers ----
 
-    private Task<bool> OwnsSectionAsync(Guid id) =>
-        _db.Sections.AnyAsync(s => s.Id == id && s.UserId == UserId);
+    private async Task<bool> OwnsSectionAsync(Guid id)
+    {
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        return await _db.Sections.AnyAsync(s => s.Id == id && s.RoomId == roomId);
+    }
 
     private async Task<SectionSummary> UpsertSummaryAsync(Section section)
     {

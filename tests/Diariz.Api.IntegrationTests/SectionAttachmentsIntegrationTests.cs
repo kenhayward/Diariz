@@ -17,9 +17,12 @@ namespace Diariz.Api.IntegrationTests;
 [Collection(IntegrationCollection.Name)]
 public class SectionAttachmentsIntegrationTests(ContainersFixture fx)
 {
+    private static Task<Guid> RoomOf(Diariz.Domain.DiarizDbContext db, Guid owner) => new RoomScope(db).PersonalRoomIdAsync(owner);
+
     private static SectionAttachmentsController Build(
         Diariz.Domain.DiarizDbContext db, Guid userId, FakeAudioStorage storage) =>
-        new(db, storage, new StorageUsage(db), Options.Create(new AttachmentOptions { MaxBytes = 50L * 1024 * 1024 }))
+        new(db, storage, new StorageUsage(db), Options.Create(new AttachmentOptions { MaxBytes = 50L * 1024 * 1024 }),
+            new RoomScope(db))
         { ControllerContext = Http.Context(userId) };
 
     private async Task<Guid> SeedUser(long quota = 1_000_000)
@@ -42,7 +45,7 @@ public class SectionAttachmentsIntegrationTests(ContainersFixture fx)
         var sectionId = Guid.NewGuid();
         await using (var db = fx.CreateDbContext())
         {
-            db.Sections.Add(new Section { Id = sectionId, UserId = userId, Name = "F" });
+            db.Sections.Add(new Section { Id = sectionId, UserId = userId, RoomId = await RoomOf(db, userId), Name = "F" });
             await db.SaveChangesAsync();
         }
 
@@ -65,7 +68,7 @@ public class SectionAttachmentsIntegrationTests(ContainersFixture fx)
         var sectionId = Guid.NewGuid();
         await using (var db = fx.CreateDbContext())
         {
-            db.Sections.Add(new Section { Id = sectionId, UserId = userId, Name = "F" });
+            db.Sections.Add(new Section { Id = sectionId, UserId = userId, RoomId = await RoomOf(db, userId), Name = "F" });
             db.SectionAttachments.Add(new SectionAttachment
             {
                 Id = Guid.NewGuid(), SectionId = sectionId, Kind = AttachmentKind.File, Name = "a.md",
@@ -92,7 +95,7 @@ public class SectionAttachmentsIntegrationTests(ContainersFixture fx)
         var rec = new Recording { Id = Guid.NewGuid(), UserId = userId, Title = "R", BlobKey = "k", SizeBytes = 100 };
         rec.Attachments.Add(new Attachment { Id = Guid.NewGuid(), Kind = AttachmentKind.File, Name = "r.pdf", SizeBytes = 20 });
         db.Recordings.Add(rec);
-        var section = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "F" };
+        var section = new Section { Id = Guid.NewGuid(), UserId = userId, RoomId = await RoomOf(db, userId), Name = "F" };
         section.Attachments.Add(new SectionAttachment { Id = Guid.NewGuid(), Kind = AttachmentKind.File, Name = "s.md", SizeBytes = 7 });
         db.Sections.Add(section);
         await db.SaveChangesAsync();

@@ -356,4 +356,35 @@ public class AdminUsersControllerTests
 
         Assert.Equal(403, StatusOf(await Build(host, admin.Id).Delete(admin.Id)));
     }
+
+    /// <summary>Phase 4: deleting a user sweeps their RoomMember rows (which carry no FK, so the database can't
+    /// cascade them) while leaving other members' rows in the same room untouched.</summary>
+    [Fact]
+    public async Task Delete_SweepsTheUsersRoomMemberships()
+    {
+        using var host = new IdentityTestHost();
+        await host.SeedRolesAsync();
+        var admin = await Seed(host, "admin@x.test", Roles.Administrator);
+        var target = await Seed(host, "t@x.test", Roles.Standard);
+        var other = await Seed(host, "o@x.test", Roles.Standard);
+
+        var roomId = Guid.NewGuid();
+        host.Db.Rooms.Add(new Room { Id = roomId, Name = "Eng", Kind = RoomKind.Shared });
+        host.Db.RoomMembers.Add(new RoomMember
+        {
+            RoomId = roomId, PrincipalType = RoomPrincipalType.User, PrincipalId = target.Id,
+            Permissions = RoomPermission.CreateRecording,
+        });
+        host.Db.RoomMembers.Add(new RoomMember
+        {
+            RoomId = roomId, PrincipalType = RoomPrincipalType.User, PrincipalId = other.Id,
+            Permissions = RoomPermission.CreateRecording,
+        });
+        await host.Db.SaveChangesAsync();
+
+        Assert.IsType<NoContentResult>(await Build(host, admin.Id).Delete(target.Id));
+
+        Assert.False(await host.Db.RoomMembers.AnyAsync(m => m.PrincipalId == target.Id));
+        Assert.True(await host.Db.RoomMembers.AnyAsync(m => m.PrincipalId == other.Id)); // untouched
+    }
 }

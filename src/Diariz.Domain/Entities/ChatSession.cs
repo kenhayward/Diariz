@@ -7,6 +7,10 @@ public class ChatSession
 {
     public Guid Id { get; set; }
     public Guid UserId { get; set; }
+
+    /// <summary>The room this saved chat belongs to (its owner's personal room, for now). Plain column - FK and
+    /// UserId retirement land in Phase 4.</summary>
+    public Guid RoomId { get; set; }
     public ApplicationUser? User { get; set; }
 
     /// <summary>Short title (LLM-generated on save, falling back to the first user message).</summary>

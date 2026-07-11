@@ -33,7 +33,7 @@ public class HybridSearchIntegrationTests(ContainersFixture fx)
                 : new EmbeddingRequestConfig("http://emb.test/v1", "k", "m", Dim, 60, 32),   // enabled
         };
         var client = new FakeEmbeddingClient { Vectors = queryVector is null ? [] : [queryVector] };
-        return new TranscriptSearch(db, client, resolver);
+        return new TranscriptSearch(db, client, resolver, new RoomScope(db));
     }
 
     private async Task<(Guid userId, Guid recId, Guid trId)> SeedRecording(Guid? user = null)
@@ -50,6 +50,8 @@ public class HybridSearchIntegrationTests(ContainersFixture fx)
         db.Recordings.Add(rec);
         db.Transcriptions.Add(tr);
         await db.SaveChangesAsync();
+        // Search is scoped by room placement now - give the recording its main placement in the owner's room.
+        await new RoomScope(db).PlaceInMainRoomAsync(rec.Id, userId, sectionId: null);
         return (userId, rec.Id, tr.Id);
     }
 
@@ -89,7 +91,7 @@ public class HybridSearchIntegrationTests(ContainersFixture fx)
         var resolver = new FakeEmbeddingSettingsResolver(); // default config carries the nomic prefixes
 
         await using var db = fx.CreateDbContext();
-        await new TranscriptSearch(db, client, resolver).SearchAsync(userId, "budget worries", null, null, 20);
+        await new TranscriptSearch(db, client, resolver, new RoomScope(db)).SearchAsync(userId, "budget worries", null, null, 20);
 
         var input = Assert.Single(client.LastInputs!);
         Assert.Equal("search_query: budget worries", input); // nomic query prefix applied

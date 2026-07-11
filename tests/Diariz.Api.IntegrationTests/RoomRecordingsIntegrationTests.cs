@@ -1,3 +1,4 @@
+using Diariz.Api.Services;
 using Diariz.Api.IntegrationTests.Infrastructure;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
@@ -170,5 +171,29 @@ public class RoomRecordingsIntegrationTests(ContainersFixture fx)
             .SingleAsync();
 
         Assert.Equal(0, count);
+    }
+
+    /// <summary>Phase 2c obligation: now that sections carry a RoomId, a placement can only be filed under a
+    /// folder in the SAME room. SetSectionAsync rejects a section from another room.</summary>
+    [Fact]
+    public async Task SetSection_RejectsASectionFromAnotherRoom()
+    {
+        await using var db = fx.CreateDbContext();
+        var userId = await NewUserAsync(db);
+        var recId = await NewRecordingAsync(db, userId);
+        var room = await PersonalRoomAsync(db, userId);
+        db.RoomRecordings.Add(new RoomRecording { RoomId = room, RecordingId = recId, IsMainRoom = true });
+        var otherRoom = new Room { Id = Guid.NewGuid(), Name = $"Other {Guid.NewGuid():N}", Kind = RoomKind.Shared };
+        db.Rooms.Add(otherRoom);
+        db.Sections.Add(new Section { Id = Guid.NewGuid(), UserId = userId, RoomId = otherRoom.Id, Name = "X" });
+        var foreignSectionId = db.ChangeTracker.Entries<Section>().Single().Entity.Id;
+        await db.SaveChangesAsync();
+
+        Assert.False(await new RoomScope(db).SetSectionAsync(room, recId, foreignSectionId));
+        // A section in the right room still works.
+        db.Sections.Add(new Section { Id = Guid.NewGuid(), UserId = userId, RoomId = room, Name = "Y" });
+        await db.SaveChangesAsync();
+        var ownSectionId = await db.Sections.Where(s => s.RoomId == room).Select(s => s.Id).SingleAsync();
+        Assert.True(await new RoomScope(db).SetSectionAsync(room, recId, ownSectionId));
     }
 }

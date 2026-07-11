@@ -18,7 +18,7 @@ public class TranscriptSearchIntegrationTests(ContainersFixture fx)
         new(db, new FakeEmbeddingClient(), new FakeEmbeddingSettingsResolver
         {
             Config = new EmbeddingRequestConfig("", "", "nomic-embed-text", 768, 60, 32),
-        });
+        }, new RoomScope(db));
 
     private static readonly DateTimeOffset June1 = new(2026, 6, 1, 9, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset June10 = new(2026, 6, 10, 9, 0, 0, TimeSpan.Zero);
@@ -60,6 +60,8 @@ public class TranscriptSearchIntegrationTests(ContainersFixture fx)
             });
 
         await db.SaveChangesAsync();
+        // Search is scoped by room placement now, so give the recording its main placement in the owner's room.
+        await new RoomScope(db).PlaceInMainRoomAsync(rec.Id, userId, sectionId: null);
         return rec.Id;
     }
 
@@ -105,6 +107,33 @@ public class TranscriptSearchIntegrationTests(ContainersFixture fx)
 
         await using var db = fx.CreateDbContext();
         Assert.Empty(await MakeSearch(db).SearchAsync(other, "password", null, null, 20));
+    }
+
+    /// <summary>Phase 5: a recording shared into a room the searcher belongs to becomes searchable for them; a
+    /// stranger who is in none of its rooms still finds nothing.</summary>
+    [Fact]
+    public async Task SearchAsync_FindsRecordingsSharedIntoTheSearchersRooms()
+    {
+        var owner = Guid.NewGuid();
+        var member = Guid.NewGuid();
+        var recId = await SeedRecording(owner, "Launch", June1, ("SPEAKER_00", "Alice", "The launch date is confirmed."));
+
+        await using (var db = fx.CreateDbContext())
+        {
+            if (!await db.Users.AnyAsync(u => u.Id == member))
+            {
+                db.Users.Add(new ApplicationUser { Id = member, UserName = $"{member}@x.test", Email = $"{member}@x.test" });
+                await db.SaveChangesAsync();
+            }
+            var scope = new RoomScope(db);
+            var roomId = await scope.CreateSharedRoomAsync("Engineering", null, null, null);
+            await scope.SetMemberAsync(roomId, RoomPrincipalType.User, member, RoomPermission.CreateRecording);
+            await scope.ShareIntoRoomAsync(recId, roomId, owner, sectionId: null);
+        }
+
+        await using var verify = fx.CreateDbContext();
+        Assert.NotEmpty(await MakeSearch(verify).SearchAsync(member, "launch date", null, null, 20)); // shared in
+        Assert.Empty(await MakeSearch(verify).SearchAsync(Guid.NewGuid(), "launch date", null, null, 20)); // stranger
     }
 
     [Fact]

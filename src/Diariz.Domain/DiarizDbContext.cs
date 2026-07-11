@@ -192,12 +192,16 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         builder.Entity<Section>(e =>
         {
             e.HasIndex(s => new { s.UserId, s.Name });
+            e.HasIndex(s => new { s.RoomId, s.Name });
             e.Property(s => s.Name).HasMaxLength(128);
             // Explicit cascade so deleting a user removes their sections (the FK was only implicit before).
             e.HasOne(s => s.User)
                 .WithMany()
                 .HasForeignKey(s => s.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+            // RoomId is a plain column for now (no FK / navigation): the Rooms FK + cascade land in the phase
+            // that drops UserId, once every fixture sets a room. Until then a bad RoomId can't break section
+            // seeding across the whole suite mid-migration.
             // Self-referential parent for one level of nesting. Deleting a parent cascades to its
             // sub-sections; each sub-section's recordings then drop to Ungrouped via the SetNull FK above.
             e.HasOne(s => s.Parent)
@@ -405,6 +409,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.Property(s => s.SummaryModel).HasMaxLength(256);
             e.Property(s => s.GoogleCalendarGranted).HasDefaultValue(false);
             e.Property(s => s.Theme).HasDefaultValue(ThemePreference.Auto);
+            e.Property(s => s.RecordingPlacementMode).HasDefaultValue(RecordingPlacementMode.SelectedFolder);
             e.Property(s => s.JobTitle).HasMaxLength(256);
             e.Property(s => s.CompanyName).HasMaxLength(256);
             e.Property(s => s.LinkedIn).HasMaxLength(256);

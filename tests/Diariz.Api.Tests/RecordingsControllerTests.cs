@@ -200,6 +200,69 @@ public class RecordingsControllerTests
         Assert.IsType<NotFoundResult>(result.Result);
     }
 
+    /// <summary>Phase 5: the detail carries who recorded it and the rooms it is placed in (home room first).</summary>
+    [Fact]
+    public async Task Get_ReturnsRecordedBy_AndTheRoomsItIsIn()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        await SeedUser(db, owner);
+        var rec = await SeedRecording(db, owner, versions: 1);
+        var scope = new RoomScope(db);
+        await scope.PlaceInMainRoomAsync(rec.Id, owner, sectionId: null);
+        var sharedId = await scope.CreateSharedRoomAsync("Engineering", null, null, null);
+        await scope.ShareIntoRoomAsync(rec.Id, sharedId, owner, sectionId: null);
+        await scope.SetMemberAsync(sharedId, RoomPrincipalType.User, owner, RoomPermission.CreateRecording);
+        var controller = Build(db, owner, new FakeJobQueue());
+
+        var detail = (await controller.Get(rec.Id)).Value!;
+
+        Assert.Equal(owner, detail.RecordedByUserId);
+        Assert.NotNull(detail.Rooms);
+        Assert.True(detail.Rooms![0].IsMain); // personal (home) room first
+        Assert.Contains(detail.Rooms, r => !r.IsMain && r.Name == "Engineering");
+    }
+
+    /// <summary>Phase 5: the recorder shares their recording from their personal room (ShareOut is implicit
+    /// there) into a shared room they can record in.</summary>
+    [Fact]
+    public async Task Share_AddsASharedPlacement_InTheTargetRoom()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        await SeedUser(db, owner);
+        var rec = await SeedRecording(db, owner, versions: 1);
+        var scope = new RoomScope(db);
+        var personalRoomId = await scope.PersonalRoomIdAsync(owner);
+        await scope.PlaceInMainRoomAsync(rec.Id, owner, sectionId: null);
+        var target = await scope.CreateSharedRoomAsync("Engineering", null, null, null);
+        await scope.SetMemberAsync(target, RoomPrincipalType.User, owner, RoomPermission.CreateRecording);
+        var controller = Build(db, owner, new FakeJobQueue());
+
+        Assert.IsType<NoContentResult>(await controller.Share(rec.Id, new ShareRecordingRequest(personalRoomId, target)));
+        var shared = db.RoomRecordings.Single(p => p.RoomId == target);
+        Assert.False(shared.IsMainRoom);
+        Assert.Equal(owner, shared.SharedByUserId);
+    }
+
+    /// <summary>Sharing into a room the caller can't record in is a 403.</summary>
+    [Fact]
+    public async Task Share_IntoRoomWithoutCreateRecording_Returns403()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        await SeedUser(db, owner);
+        var rec = await SeedRecording(db, owner, versions: 1);
+        var scope = new RoomScope(db);
+        var personalRoomId = await scope.PersonalRoomIdAsync(owner);
+        await scope.PlaceInMainRoomAsync(rec.Id, owner, sectionId: null);
+        var target = await scope.CreateSharedRoomAsync("Engineering", null, null, null); // owner is not a member
+        var controller = Build(db, owner, new FakeJobQueue());
+
+        Assert.Equal(403, ((ObjectResult)await controller.Share(rec.Id, new ShareRecordingRequest(personalRoomId, target))).StatusCode);
+        Assert.False(db.RoomRecordings.Any(p => p.RoomId == target));
+    }
+
     // The "current transcription = highest version" rule depends on a filtered Include
     // (OrderByDescending(Version).Take(1)) that the database translates. The EF in-memory
     // provider does NOT honour the ordering/Take inside a filtered Include (it loads the whole
@@ -249,6 +312,84 @@ public class RecordingsControllerTests
         Assert.Equal(await scope.PersonalRoomIdAsync(userId), placement.RoomId);
         Assert.True(placement.IsMainRoom);
         Assert.Null(placement.SectionId);
+    }
+
+    /// <summary>A recording uploaded with a folder in the caller's personal room lands in that folder (the
+    /// placement-preference "record into the selected folder" path).</summary>
+    [Fact]
+    public async Task Upload_WithSectionInPersonalRoom_FilesThePlacementThere()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var roomId = await new RoomScope(db).PersonalRoomIdAsync(userId);
+        var sectionId = Guid.NewGuid();
+        db.Sections.Add(new Section { Id = sectionId, UserId = userId, RoomId = roomId, Name = "Projects" });
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.Upload(FakeAudio(Encoding.UTF8.GetBytes("audio")), "Standup", durationMs: 1000, sectionId: sectionId);
+
+        Assert.Equal(sectionId, db.RoomRecordings.Single().SectionId);
+    }
+
+    /// <summary>A section id that doesn't belong to the caller's personal room is ignored - the recording is
+    /// ungrouped rather than misfiled.</summary>
+    [Fact]
+    public async Task Upload_WithAlienSection_IsIgnored_AndUngrouped()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.Upload(FakeAudio(Encoding.UTF8.GetBytes("audio")), "Standup", durationMs: 1000, sectionId: Guid.NewGuid());
+
+        Assert.Null(db.RoomRecordings.Single().SectionId);
+    }
+
+    /// <summary>Recording into a shared room the caller may record in creates BOTH placements: the always-main
+    /// personal one (ungrouped) and a non-main shared one in the room.</summary>
+    [Fact]
+    public async Task Upload_IntoSharedRoom_CreatesMainPersonalAndSharedPlacements()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var scope = new RoomScope(db);
+        var personalId = await scope.PersonalRoomIdAsync(userId);
+        var roomId = await scope.CreateSharedRoomAsync("Eng", null, null, null);
+        await scope.SetMemberAsync(roomId, RoomPrincipalType.User, userId, RoomPermission.CreateRecording);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.Upload(FakeAudio(Encoding.UTF8.GetBytes("audio")), "Standup", durationMs: 1000, roomId: roomId);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+        var main = db.RoomRecordings.Single(p => p.IsMainRoom);
+        Assert.Equal(personalId, main.RoomId);
+        Assert.Null(main.SectionId); // ungrouped in the personal room, per spec
+        var shared = db.RoomRecordings.Single(p => !p.IsMainRoom);
+        Assert.Equal(roomId, shared.RoomId);
+        Assert.Equal(userId, shared.SharedByUserId);
+    }
+
+    /// <summary>Recording into a room the caller can't record in is a 403, and nothing is stored.</summary>
+    [Fact]
+    public async Task Upload_IntoRoomWithoutCreateRecording_Returns403_AndStoresNothing()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var scope = new RoomScope(db);
+        var roomId = await scope.CreateSharedRoomAsync("Eng", null, null, null); // caller is not a member
+        var storage = new FakeAudioStorage();
+        var controller = Build(db, userId, new FakeJobQueue(), storage);
+
+        var result = await controller.Upload(FakeAudio(Encoding.UTF8.GetBytes("audio")), "Standup", durationMs: 1000, roomId: roomId);
+
+        Assert.Equal(403, ((ObjectResult)result.Result!).StatusCode);
+        Assert.Empty(db.Recordings);
+        Assert.Empty(db.RoomRecordings);
     }
 
     [Fact]
@@ -617,7 +758,8 @@ public class RecordingsControllerTests
         var userId = Guid.NewGuid();
         await SeedUser(db, userId);
         var rec = await SeedRecording(db, userId, versions: 1);
-        var section = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = userId, Name = "Work" };
+        var roomId = await new RoomScope(db).PersonalRoomIdAsync(userId);
+        var section = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "Work" };
         db.Sections.Add(section);
         await db.SaveChangesAsync();
         await new RoomScope(db).PlaceInMainRoomAsync(rec.Id, userId, sectionId: null); // main placement, ungrouped
@@ -635,7 +777,8 @@ public class RecordingsControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         await SeedUser(db, userId);
-        var section = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = userId, Name = "Work" };
+        var roomId = await new RoomScope(db).PersonalRoomIdAsync(userId);
+        var section = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "Work" };
         var rec = await SeedRecording(db, userId, versions: 1);
         db.Sections.Add(section);
         await db.SaveChangesAsync();
@@ -652,8 +795,9 @@ public class RecordingsControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
+        Users.Ensure(db, userId); // MoveToSection mints the caller's personal room to scope the section check
         var rec = await SeedRecording(db, userId, versions: 1);
-        var othersSection = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Theirs" };
+        var othersSection = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
         db.Sections.Add(othersSection);
         await db.SaveChangesAsync();
         var controller = Build(db, userId, new FakeJobQueue());

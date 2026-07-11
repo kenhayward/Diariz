@@ -75,16 +75,29 @@ public sealed class TranscriptSearch : ITranscriptSearch
     private const string CurrentVersion =
         "t.\"Version\" = (SELECT MAX(t2.\"Version\") FROM \"Transcriptions\" t2 WHERE t2.\"RecordingId\" = r.\"Id\")";
 
+    /// <summary>The read gate: a recording is visible when it is placed in one of the caller's rooms (their
+    /// personal room plus any shared room they belong to). Replaces the old <c>r."UserId" = @userId</c> so a
+    /// recording shared into a room the searcher is in is searchable. Needs <c>@roomIds uuid[]</c>.</summary>
+    private const string RecordingInCallersRooms =
+        "EXISTS (SELECT 1 FROM \"RoomRecordings\" rr WHERE rr.\"RecordingId\" = r.\"Id\" AND rr.\"RoomId\" = ANY(@roomIds))";
+
+    /// <summary>The same gate keyed on a chunk's recording (the semantic arm joins on <c>c."RecordingId"</c>).</summary>
+    private const string ChunkInCallersRooms =
+        "EXISTS (SELECT 1 FROM \"RoomRecordings\" rr WHERE rr.\"RecordingId\" = c.\"RecordingId\" AND rr.\"RoomId\" = ANY(@roomIds))";
+
     private readonly DiarizDbContext _db;
     private readonly IEmbeddingClient _embeddings;
     private readonly IEmbeddingSettingsResolver _embeddingSettings;
+    private readonly IRoomScope _rooms;
 
     public TranscriptSearch(
-        DiarizDbContext db, IEmbeddingClient embeddings, IEmbeddingSettingsResolver embeddingSettings)
+        DiarizDbContext db, IEmbeddingClient embeddings, IEmbeddingSettingsResolver embeddingSettings,
+        IRoomScope rooms)
     {
         _db = db;
         _embeddings = embeddings;
         _embeddingSettings = embeddingSettings;
+        _rooms = rooms;
     }
 
     public async Task<IReadOnlyList<TranscriptHit>> SearchAsync(
@@ -96,19 +109,20 @@ public sealed class TranscriptSearch : ITranscriptSearch
         limit = Math.Clamp(limit, 1, MaxLimit);
         var scope = recordingScope is { Count: > 0 } ? recordingScope.Distinct().ToArray() : null;
         var hasSpeaker = !string.IsNullOrWhiteSpace(speakerName);
+        var roomIds = (await _rooms.RoomIdsForUserAsync(userId, ct)).ToArray();
 
-        var lexical = await LexicalSearchAsync(userId, phrase, speakerName, scope, limit, hasSpeaker, ct);
+        var lexical = await LexicalSearchAsync(roomIds, phrase, speakerName, scope, limit, hasSpeaker, ct);
 
         // Semantic arm: only when embeddings are on and no speaker filter (a chunk spans multiple speakers, so
         // speaker-scoped queries stay lexical). Any failure degrades gracefully to lexical-only.
-        var semantic = hasSpeaker ? [] : await SemanticSearchAsync(userId, phrase, scope, limit, ct);
+        var semantic = hasSpeaker ? [] : await SemanticSearchAsync(userId, roomIds, phrase, scope, limit, ct);
 
         // Off / no semantic hits → return today's exact lexical result (unchanged scores + order).
         return semantic.Count == 0 ? lexical : SearchFusion.Fuse(lexical, semantic, limit);
     }
 
     private async Task<IReadOnlyList<TranscriptHit>> LexicalSearchAsync(
-        Guid userId, string phrase, string? speakerName, Guid[]? scope, int limit, bool hasSpeaker,
+        Guid[] roomIds, string phrase, string? speakerName, Guid[]? scope, int limit, bool hasSpeaker,
         CancellationToken ct)
     {
         var sql = new StringBuilder();
@@ -120,7 +134,7 @@ public sealed class TranscriptSearch : ITranscriptSearch
             "JOIN \"Transcriptions\" t ON t.\"Id\" = s.\"TranscriptionId\" " +
             "JOIN \"Recordings\" r ON r.\"Id\" = t.\"RecordingId\" " +
             "LEFT JOIN \"Speakers\" sp ON sp.\"RecordingId\" = r.\"Id\" AND sp.\"Label\" = s.\"SpeakerLabel\" " +
-            "WHERE r.\"UserId\" = @userId AND " + CurrentVersion +
+            "WHERE " + RecordingInCallersRooms + " AND " + CurrentVersion +
             " AND COALESCE(s.\"Revised\", s.\"Original\") %> @phrase");
         if (scope is not null) sql.Append(" AND r.\"Id\" = ANY(@scope)");
         if (hasSpeaker) sql.Append(" AND sp.\"DisplayName\" %> @speaker");
@@ -129,7 +143,7 @@ public sealed class TranscriptSearch : ITranscriptSearch
         return await RunAsync(ct, async cmd =>
         {
             cmd.CommandText = sql.ToString();
-            Add(cmd, "userId", userId);
+            Add(cmd, "roomIds", roomIds);
             Add(cmd, "phrase", phrase);
             Add(cmd, "limit", limit);
             if (scope is not null) Add(cmd, "scope", scope);
@@ -150,7 +164,7 @@ public sealed class TranscriptSearch : ITranscriptSearch
     /// (<c>&lt;=&gt;</c>), owner-scoped and optionally restricted to <paramref name="scope"/>. Returns [] (and the
     /// caller falls back to lexical-only) when embeddings are unconfigured or the query embedding fails.</summary>
     private async Task<IReadOnlyList<TranscriptHit>> SemanticSearchAsync(
-        Guid userId, string phrase, Guid[]? scope, int limit, CancellationToken ct)
+        Guid userId, Guid[] roomIds, string phrase, Guid[]? scope, int limit, CancellationToken ct)
     {
         var cfg = await _embeddingSettings.ResolveAsync(userId, ct);
         if (!cfg.Enabled) return [];
@@ -176,14 +190,14 @@ public sealed class TranscriptSearch : ITranscriptSearch
             "c.\"SpeakerLabels\", c.\"Text\", 1 - (c.\"Embedding\" <=> @qvec::vector) AS sim " +
             "FROM \"TranscriptChunks\" c " +
             "JOIN \"Recordings\" r ON r.\"Id\" = c.\"RecordingId\" " +
-            "WHERE c.\"UserId\" = @userId AND c.\"Embedding\" IS NOT NULL");
+            "WHERE " + ChunkInCallersRooms + " AND c.\"Embedding\" IS NOT NULL");
         if (scope is not null) sql.Append(" AND c.\"RecordingId\" = ANY(@scope)");
         sql.Append(" ORDER BY c.\"Embedding\" <=> @qvec::vector LIMIT @limit");
 
         return await RunAsync(ct, async cmd =>
         {
             cmd.CommandText = sql.ToString();
-            Add(cmd, "userId", userId);
+            Add(cmd, "roomIds", roomIds);
             Add(cmd, "qvec", queryLiteral);
             Add(cmd, "limit", limit);
             if (scope is not null) Add(cmd, "scope", scope);
@@ -207,6 +221,7 @@ public sealed class TranscriptSearch : ITranscriptSearch
         var hasContains = !string.IsNullOrWhiteSpace(contains);
         var hasName = !string.IsNullOrWhiteSpace(name);
         var hasSpeaker = !string.IsNullOrWhiteSpace(speaker);
+        var roomIds = (await _rooms.RoomIdsForUserAsync(userId, ct)).ToArray();
 
         var sql = new StringBuilder();
         sql.Append("SELECT r.\"Id\", COALESCE(r.\"Name\", r.\"Title\"), r.\"CreatedAt\", r.\"Source\", r.\"DurationMs\"");
@@ -221,7 +236,7 @@ public sealed class TranscriptSearch : ITranscriptSearch
                 "WHERE t.\"RecordingId\" = r.\"Id\" AND " + CurrentVersion +
                 " AND COALESCE(s.\"Revised\", s.\"Original\") %> @contains " +
                 "ORDER BY sim DESC LIMIT 1) best ON TRUE");
-        sql.Append(" WHERE r.\"UserId\" = @userId");
+        sql.Append(" WHERE " + RecordingInCallersRooms);
         if (from is not null) sql.Append(" AND r.\"CreatedAt\" >= @from");
         if (to is not null) sql.Append(" AND r.\"CreatedAt\" <= @to");
         if (hasName) sql.Append(" AND COALESCE(r.\"Name\", r.\"Title\") ILIKE @nameLike");
@@ -237,7 +252,7 @@ public sealed class TranscriptSearch : ITranscriptSearch
         var rows = await RunAsync(ct, async cmd =>
         {
             cmd.CommandText = sql.ToString();
-            Add(cmd, "userId", userId);
+            Add(cmd, "roomIds", roomIds);
             Add(cmd, "limit", limit);
             if (from is not null) Add(cmd, "from", from.Value);
             if (to is not null) Add(cmd, "to", to.Value);
@@ -282,6 +297,7 @@ public sealed class TranscriptSearch : ITranscriptSearch
         if (phrase.Length == 0) return [];
         var scope = recordingScope is { Count: > 0 } ? recordingScope.Distinct().ToArray() : null;
         var hasSpeaker = !string.IsNullOrWhiteSpace(speakerName);
+        var roomIds = (await _rooms.RoomIdsForUserAsync(userId, ct)).ToArray();
 
         // Same lexical match as SearchAsync (the %> trigram operator) - so "mention" stays consistent with
         // search - but COUNT(*) grouped by speaker with NO LIMIT: an exact, truthful count.
@@ -292,7 +308,7 @@ public sealed class TranscriptSearch : ITranscriptSearch
             "JOIN \"Transcriptions\" t ON t.\"Id\" = s.\"TranscriptionId\" " +
             "JOIN \"Recordings\" r ON r.\"Id\" = t.\"RecordingId\" " +
             "LEFT JOIN \"Speakers\" sp ON sp.\"RecordingId\" = r.\"Id\" AND sp.\"Label\" = s.\"SpeakerLabel\" " +
-            "WHERE r.\"UserId\" = @userId AND " + CurrentVersion +
+            "WHERE " + RecordingInCallersRooms + " AND " + CurrentVersion +
             " AND COALESCE(s.\"Revised\", s.\"Original\") %> @phrase");
         if (scope is not null) sql.Append(" AND r.\"Id\" = ANY(@scope)");
         if (hasSpeaker) sql.Append(" AND sp.\"DisplayName\" %> @speaker");
@@ -301,7 +317,7 @@ public sealed class TranscriptSearch : ITranscriptSearch
         return await RunAsync(ct, async cmd =>
         {
             cmd.CommandText = sql.ToString();
-            Add(cmd, "userId", userId);
+            Add(cmd, "roomIds", roomIds);
             Add(cmd, "phrase", phrase);
             if (scope is not null) Add(cmd, "scope", scope);
             if (hasSpeaker) Add(cmd, "speaker", speakerName!.Trim());
@@ -318,6 +334,7 @@ public sealed class TranscriptSearch : ITranscriptSearch
         Guid userId, IReadOnlyList<Guid>? recordingScope, CancellationToken ct = default)
     {
         var scope = recordingScope is { Count: > 0 } ? recordingScope.Distinct().ToArray() : null;
+        var roomIds = (await _rooms.RoomIdsForUserAsync(userId, ct)).ToArray();
 
         // Sum segment durations of the current transcription per speaker over ALL in-scope recordings - no cap,
         // so the totals and percentages the tool computes are correct regardless of library size.
@@ -329,14 +346,14 @@ public sealed class TranscriptSearch : ITranscriptSearch
             "JOIN \"Transcriptions\" t ON t.\"Id\" = s.\"TranscriptionId\" " +
             "JOIN \"Recordings\" r ON r.\"Id\" = t.\"RecordingId\" " +
             "LEFT JOIN \"Speakers\" sp ON sp.\"RecordingId\" = r.\"Id\" AND sp.\"Label\" = s.\"SpeakerLabel\" " +
-            "WHERE r.\"UserId\" = @userId AND " + CurrentVersion);
+            "WHERE " + RecordingInCallersRooms + " AND " + CurrentVersion);
         if (scope is not null) sql.Append(" AND r.\"Id\" = ANY(@scope)");
         sql.Append(" GROUP BY who ORDER BY ms DESC");
 
         return await RunAsync(ct, async cmd =>
         {
             cmd.CommandText = sql.ToString();
-            Add(cmd, "userId", userId);
+            Add(cmd, "roomIds", roomIds);
             if (scope is not null) Add(cmd, "scope", scope);
 
             var rows = new List<SpeakerDuration>();

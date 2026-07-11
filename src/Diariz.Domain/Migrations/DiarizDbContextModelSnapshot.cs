@@ -214,6 +214,9 @@ namespace Diariz.Domain.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb");
 
+                    b.Property<Guid>("RoomId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -429,6 +432,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<string>("Overview")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<Guid?>("RoomId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -853,12 +859,17 @@ namespace Diariz.Domain.Migrations
                     b.Property<int>("Position")
                         .HasColumnType("integer");
 
+                    b.Property<Guid>("RoomId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ParentId");
+
+                    b.HasIndex("RoomId", "Name");
 
                     b.HasIndex("UserId", "Name");
 
@@ -1088,6 +1099,9 @@ namespace Diariz.Domain.Migrations
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("RoomId")
+                        .HasColumnType("uuid");
 
                     b.Property<int>("SampleCount")
                         .HasColumnType("integer");
@@ -1322,6 +1336,14 @@ namespace Diariz.Domain.Migrations
 
                     b.Property<bool?>("ReasoningEnabled")
                         .HasColumnType("boolean");
+
+                    b.Property<int>("RecordingPlacementMode")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<Guid?>("RecordingPlacementSectionId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("SummaryApiBase")
                         .HasMaxLength(512)

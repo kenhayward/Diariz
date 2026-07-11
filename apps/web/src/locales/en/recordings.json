@@ -9,6 +9,8 @@
   "reidentifySpeakers": "Re-identify speakers",
   "translateTo": "Translate to {{language}}",
   "moveToSection": "Move to section…",
+  "shareToRoom": "Share to room…",
+  "removeFromRoom": "Remove from room",
   "moveToSectionShort": "Move to section",
   "play": "Play",
   "downloadTranscript": "Download transcript",

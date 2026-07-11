@@ -9,6 +9,8 @@
   "reidentifySpeakers": "Sprecher neu identifizieren",
   "translateTo": "Übersetzen nach {{language}}",
   "moveToSection": "In Abschnitt verschieben…",
+  "shareToRoom": "In Raum teilen…",
+  "removeFromRoom": "Aus Raum entfernen",
   "moveToSectionShort": "In Abschnitt verschieben",
   "play": "Abspielen",
   "downloadTranscript": "Transkription herunterladen",

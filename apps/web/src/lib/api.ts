@@ -38,6 +38,10 @@ import type {
   RecordingDetail,
   RecordingSource,
   RecordingSummary,
+  RoomListItem,
+  RoomDetail,
+  RoomMember,
+  RoomInput,
   SavedChatContext,
   SectionDto,
   SectionDetail,
@@ -242,6 +246,50 @@ export const api = {
     return data;
   },
 
+  /// The rooms the signed-in user belongs to (today: just their Personal room), personal first.
+  async listRooms(): Promise<RoomListItem[]> {
+    const { data } = await http.get<RoomListItem[]>("/api/rooms");
+    return data;
+  },
+
+  /// A shared room with its membership (members only), for the Manage Rooms editor.
+  async getRoom(id: string): Promise<RoomDetail> {
+    const { data } = await http.get<RoomDetail>(`/api/rooms/${id}`);
+    return data;
+  },
+
+  async createRoom(input: RoomInput): Promise<{ id: string }> {
+    const { data } = await http.post<{ id: string }>("/api/rooms", input);
+    return data;
+  },
+
+  async updateRoom(id: string, input: RoomInput): Promise<void> {
+    await http.put(`/api/rooms/${id}`, input);
+  },
+
+  async deleteRoom(id: string): Promise<void> {
+    await http.delete(`/api/rooms/${id}`);
+  },
+
+  /// Upsert a member's permission grid on a room.
+  async setRoomMember(id: string, m: RoomMember): Promise<void> {
+    await http.put(`/api/rooms/${id}/members`, m);
+  },
+
+  async removeRoomMember(id: string, principalType: number, principalId: string): Promise<void> {
+    await http.delete(`/api/rooms/${id}/members/${principalType}/${principalId}`);
+  },
+
+  /// Share a recording from one room into another (a non-main placement in the target).
+  async shareRecordingToRoom(id: string, fromRoomId: string, toRoomId: string): Promise<void> {
+    await http.post(`/api/recordings/${id}/share`, { fromRoomId, toRoomId });
+  },
+
+  /// Unshare a recording from a room (never its home room).
+  async removeRecordingFromRoom(roomId: string, id: string): Promise<void> {
+    await http.delete(`/api/rooms/${roomId}/recordings/${id}`);
+  },
+
   async getRecording(id: string): Promise<RecordingDetail> {
     const { data } = await http.get<RecordingDetail>(`/api/recordings/${id}`);
     return data;
@@ -252,6 +300,8 @@ export const api = {
     title: string,
     durationMs: number,
     source: RecordingSource = "Microphone",
+    sectionId: string | null = null,
+    roomId: string | null = null,
   ): Promise<RecordingSummary> {
     const form = new FormData();
     const ext = blob.type.includes("wav") ? "wav" : "webm";
@@ -259,6 +309,10 @@ export const api = {
     form.append("title", title);
     form.append("durationMs", String(Math.round(durationMs)));
     form.append("source", source);
+    // A folder in the recorder's personal room (validated server-side); omitted = ungrouped.
+    if (sectionId) form.append("sectionId", sectionId);
+    // A shared room to also share the recording into; omitted = a plain personal recording.
+    if (roomId) form.append("roomId", roomId);
     const { data } = await http.post<RecordingSummary>("/api/recordings", form);
     return data;
   },

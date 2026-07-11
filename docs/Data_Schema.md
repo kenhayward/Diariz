@@ -75,6 +75,9 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddRooms` | `Rooms` (a workspace; `Kind` int 0=Personal/1=Shared; `OwnerUserId` FK **`ON DELETE SET NULL`** — a deleted user's personal room is **orphaned**, not destroyed; **filtered** unique index on `OwnerUserId WHERE NOT NULL`, **filtered** unique index on `Name WHERE "Kind" = 1`) + `RoomMembers` (composite PK `(RoomId, PrincipalType, PrincipalId)`; the principal is a user **or** a group; `Permissions` int **[Flags]**; cascade from `Rooms`) — the room model. The migration also **backfills**, once, one Personal room per existing user (`PersonalRoomBackfill`) |
 | `AddRoomRecordings` | `RoomRecordings` (the placement of a recording in a room; composite PK `(RoomId, RecordingId)`; `IsMainRoom` with a **filtered** unique index on `RecordingId WHERE "IsMainRoom"` — exactly one main room per recording; `SectionId` = the folder **within that room**, FK `ON DELETE SET NULL`; `SharedByUserId`/`SharedAt` null on the main row, enforced by `CK_RoomRecordings_MainRoomHasNoSharer`; cascade from `Rooms` and `Recordings`; index `(RoomId, SectionId)`). The migration also **backfills**, once, one main placement per recording in its recorder's personal room — carrying the folder it was filed under — minting any missing personal room first (`RecordingPlacementBackfill`) |
 | `DropRecordingSectionId` | Drops `Recordings.SectionId` (and its FK/index). The folder is now a property of the **placement** (`RoomRecordings.SectionId`), not of the recording, so the same recording can sit in different folders in different rooms |
+| `AddSectionRoomId` | `Sections.RoomId` (uuid, indexed `(RoomId, Name)`; a **plain column**, no FK yet - the Rooms FK + the `UserId` drop land with Phase 4). The migration **backfills** each section into its owner's personal room, minting a missing one first (`SectionRoomBackfill`). Folders are now room-scoped; `Section.UserId` is retained as owner identity for now |
+| `AddRoomScopedEntities` | `SpeakerProfiles.RoomId` + `ChatSessions.RoomId` (uuid, not-null) and `MeetingTypes.RoomId` (uuid, **nullable** - null mirrors the platform type's null `UserId`); all **plain columns**, no FK yet (the Rooms FK + the `UserId` drop land with Phase 4). The migration **backfills** each voiceprint, saved chat and personal meeting type into its owner's personal room, minting a missing one first (`RoomScopedEntitiesBackfill`); platform meeting types keep `RoomId` null. These are populated on create but still **queried by `UserId`** for now |
+| `AddRecordingPlacementPreference` | `UserSettings.RecordingPlacementMode` (int, not-null, **default 1** = `SelectedFolder`) + `UserSettings.RecordingPlacementSectionId` (uuid, nullable). Where a new recording is filed in the recorder's personal room; no data backfill (the column default covers existing rows) |
 
 ### Entity-relationship overview
 
@@ -364,6 +367,7 @@ block, otherwise a paragraph break). It lives inside the existing `ContentJson` 
 |---|---|---|
 | `Id` | uuid PK | |
 | `UserId` | uuid FK → AspNetUsers null | **null = Platform** (shared); non-null = a Personal type. Indexed; **cascade** delete with the user |
+| `RoomId` | uuid null | the owning room (a Personal type's owner personal room; **null for Platform types**, mirroring `UserId`). Plain column, no FK yet (Phase 4); populated on create, still queried by `UserId` for now |
 | `Key` | varchar(64) null | stable slug for the seeded standards (**unique**; multiple NULLs for user-created types); null for user types |
 | `GroupName` | varchar(128) | grouping label in the picker |
 | `Title` | varchar(256) | |
@@ -400,6 +404,7 @@ An enrolled person's voiceprint (per user). Biometric data — GDPR-erasable.
 |---|---|---|
 | `Id` | uuid PK | |
 | `UserId` | uuid FK → AspNetUsers | cascade |
+| `RoomId` | uuid not-null | the owner's personal room. Plain column, no FK yet (Phase 4); populated on create, still queried by `UserId` for now |
 | `Name` | varchar(256) | |
 | `Embedding` | **vector(192)** | centroid = L2-normalised mean of contribution snapshots; Postgres-only |
 | `SampleCount` | int | number of contributing speakers averaged in |
@@ -465,6 +470,7 @@ Saved chat conversations; stateless server (thread + context stored as JSON).
 |---|---|---|
 | `Id` | uuid PK | |
 | `UserId` | uuid FK → AspNetUsers | cascade |
+| `RoomId` | uuid not-null | the owner's personal room. Plain column, no FK yet (Phase 4); populated on create, still queried by `UserId` for now |
 | `Title` | varchar(256) | LLM-generated on save, falls back to the first user message |
 | `MessagesJson` | **jsonb** | array of `{ role, content }` turns (`text` under the in-memory provider) |
 | `ContextJson` | **jsonb** | `{ recordingIds, attachmentName?, attachmentText? }` |
@@ -494,6 +500,8 @@ Per-user preferences (1:1 with the user via a **shared primary key** = `UserId`)
 | `JobTitle` / `CompanyName` / `LinkedIn` | varchar(256) null | free-text profile fields |
 | `JobDescription` / `CompanyDescription` | varchar(2048) null | free-text profile fields |
 | `Theme` | int | UI colour theme (`ThemePreference`): `0` = Auto (default), `1` = Light, `2` = Dark. Append-only enum |
+| `RecordingPlacementMode` | int | where a new recording is filed in the user's personal room (`RecordingPlacementMode`): `0` = Ungrouped, `1` = SelectedFolder (default - the folder they had open), `2` = SpecificFolder. Append-only enum |
+| `RecordingPlacementSectionId` | uuid null | the fixed folder for `SpecificFolder` mode; null in the other modes |
 
 Each field falls back to the server `Summarization`/`Chat` defaults when null. The display name lives on
 `AspNetUsers.FullName` (editable via `PUT /api/user/profile`), not here.

@@ -20,6 +20,7 @@ public class ChatControllerTests
         FakeChatToolSettingsResolver? toolSettings = null)
     {
         var db = TestDb.Create();
+        Users.Ensure(db, userId); // create paths mint the owner's personal room, which needs a real user row
         var chat = new FakeChatStreamClient();
         var settings = new FakeSummarizationSettingsResolver
         {
@@ -107,9 +108,10 @@ public class ChatControllerTests
     {
         var me = Guid.NewGuid();
         var (controller, db, _) = Build(me);
-        db.ChatSessions.Add(new ChatSession { Id = Guid.NewGuid(), UserId = me, Title = "Older", UpdatedAt = DateTimeOffset.UtcNow.AddMinutes(-5) });
-        db.ChatSessions.Add(new ChatSession { Id = Guid.NewGuid(), UserId = me, Title = "Newer", UpdatedAt = DateTimeOffset.UtcNow });
-        db.ChatSessions.Add(new ChatSession { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Title = "Someone else" });
+        var meRoom = await new RoomScope(db).PersonalRoomIdAsync(me); // chats are room-scoped now
+        db.ChatSessions.Add(new ChatSession { Id = Guid.NewGuid(), UserId = me, RoomId = meRoom, Title = "Older", UpdatedAt = DateTimeOffset.UtcNow.AddMinutes(-5) });
+        db.ChatSessions.Add(new ChatSession { Id = Guid.NewGuid(), UserId = me, RoomId = meRoom, Title = "Newer", UpdatedAt = DateTimeOffset.UtcNow });
+        db.ChatSessions.Add(new ChatSession { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Title = "Someone else" });
         await db.SaveChangesAsync();
 
         var list = await controller.ListConversations();
@@ -293,9 +295,9 @@ public class ChatControllerTests
     public async Task Stream_WithFolder_LoadsSummaryMinutesAndActionsIntoContext()
     {
         var me = Guid.NewGuid();
-        var (controller, db, chat) = Build(me);
-        db.Users.Add(new ApplicationUser { Id = me, UserName = $"{me}@x.test", Email = $"{me}@x.test" });
-        var section = new Section { Id = Guid.NewGuid(), UserId = me, Name = "Q3 Planning" };
+        var (controller, db, chat) = Build(me); // seeds the user row
+        var meRoom = await new RoomScope(db).PersonalRoomIdAsync(me); // folders are room-scoped now
+        var section = new Section { Id = Guid.NewGuid(), UserId = me, RoomId = meRoom, Name = "Q3 Planning" };
         db.Sections.Add(section);
         db.SectionSummaries.Add(new SectionSummary { Id = Guid.NewGuid(), SectionId = section.Id, Text = "Overall Q3 theme." });
         db.SectionMinutes.Add(new SectionMinutes { Id = Guid.NewGuid(), SectionId = section.Id, Text = "# Minutes\nHire two engineers." });
@@ -319,7 +321,7 @@ public class ChatControllerTests
     public async Task Stream_WithUnownedSection_Returns404()
     {
         var (controller, db, _) = Build(Guid.NewGuid());
-        var theirs = new Section { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Theirs" };
+        var theirs = new Section { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
         db.Sections.Add(theirs);
         await db.SaveChangesAsync();
 

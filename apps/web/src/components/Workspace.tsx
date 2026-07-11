@@ -3,7 +3,9 @@ import { useTranslation } from "react-i18next";
 import { Outlet } from "react-router-dom";
 import RecordingsPanel from "./RecordingsPanel";
 import ChatPanel from "./ChatPanel";
+import RoomSwitcher from "./RoomSwitcher";
 import { SelectionProvider } from "../lib/selection";
+import { useRoom } from "../lib/rooms";
 import { useResizableWidth } from "../lib/useResizableWidth";
 
 function usePersistedBool(key: string, fallback: boolean): [boolean, (v: boolean) => void] {
@@ -28,6 +30,7 @@ const RIGHT_MAX = 640;
 /// Left and right panels collapse to a thin rail; the right panel is also drag-resizable.
 export default function Workspace() {
   const { t } = useTranslation("workspace");
+  const { currentRoom } = useRoom();
   const [leftOpen, setLeftOpen] = usePersistedBool("diariz.panels.left", true);
   const [rightOpen, setRightOpen] = usePersistedBool("diariz.panels.right", false);
   const { width: leftWidth, startResize: startLeftResize } = useResizableWidth("diariz.panels.leftWidth", {
@@ -68,7 +71,7 @@ export default function Workspace() {
             style={{ width: leftWidth }}
             className="flex shrink-0 flex-col border-r bg-white dark:border-gray-700 dark:bg-gray-900"
           >
-            <PanelHeader title={t("panelMeetings")} onCollapse={() => setLeftOpen(false)} chevron="◀" />
+            <RoomSwitcher onCollapse={() => setLeftOpen(false)} chevron="◀" />
             <div className="min-h-0 flex-1 overflow-y-auto">
               <RecordingsPanel />
             </div>
@@ -82,7 +85,7 @@ export default function Workspace() {
           />
         </>
       ) : (
-        <CollapsedRail label={t("panelMeetings")} onExpand={() => setLeftOpen(true)} chevron="▶" tour="recordings" />
+        <CollapsedRail label={currentRoom?.name ?? t("panelMeetings")} onExpand={() => setLeftOpen(true)} chevron="▶" tour="recordings" />
       )}
 
       <main data-tour="detail" className="min-w-0 flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950">

@@ -196,8 +196,26 @@ public class AdminUsersController : ControllerBase
         if (user is null) return NotFound();
         if (await IsPlatformAdmin(user)) return Forbidden("The Platform Administrator can't be deleted.");
         if (user.Id == CurrentUserId) return Forbidden("You can't delete your own account.");
-        await _users.DeleteAsync(user); // cascades the user's recordings/sections/chat
+
+        // Sweep the user's RoomMember rows first. PrincipalId carries no FK (it points at either a user or a
+        // group), so the database cannot cascade them; left behind they would be inert but stale orphans. The
+        // user's own Personal room orphans automatically via the OwnerUserId SetNull FK.
+        await SweepRoomMembershipsAsync(user.Id);
+
+        await _users.DeleteAsync(user);
         return NoContent();
+    }
+
+    /// <summary>Remove every RoomMember row that names this user as its principal (their own membership in every
+    /// shared room). Load + RemoveRange rather than ExecuteDelete - the in-memory test provider supports it.</summary>
+    private async Task SweepRoomMembershipsAsync(Guid userId)
+    {
+        var rows = await _db.RoomMembers
+            .Where(m => m.PrincipalType == RoomPrincipalType.User && m.PrincipalId == userId)
+            .ToListAsync();
+        if (rows.Count == 0) return;
+        _db.RoomMembers.RemoveRange(rows);
+        await _db.SaveChangesAsync();
     }
 
     private Task<bool> IsPlatformAdmin(ApplicationUser u) =>

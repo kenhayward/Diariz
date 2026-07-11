@@ -28,20 +28,26 @@ public class SectionAttachmentsController : ControllerBase
     private readonly IAudioStorage _storage;
     private readonly IStorageUsage _usage;
     private readonly AttachmentOptions _options;
+    private readonly IRoomScope _rooms;
 
     public SectionAttachmentsController(
-        DiarizDbContext db, IAudioStorage storage, IStorageUsage usage, IOptions<AttachmentOptions> options)
+        DiarizDbContext db, IAudioStorage storage, IStorageUsage usage, IOptions<AttachmentOptions> options,
+        IRoomScope rooms)
     {
         _db = db;
         _storage = storage;
         _usage = usage;
         _options = options.Value;
+        _rooms = rooms;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    private Task<bool> OwnsAsync(Guid sectionId) =>
-        _db.Sections.AnyAsync(s => s.Id == sectionId && s.UserId == UserId);
+    private async Task<bool> OwnsAsync(Guid sectionId)
+    {
+        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        return await _db.Sections.AnyAsync(s => s.Id == sectionId && s.RoomId == roomId);
+    }
 
     private static AttachmentDto ToDto(SectionAttachment a) =>
         new(a.Id, a.Kind, a.Name, a.ContentType, a.SizeBytes, a.Url, a.Ordinal);

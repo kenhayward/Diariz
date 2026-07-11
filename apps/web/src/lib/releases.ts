@@ -27,7 +27,8 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Connect Claude (MCP)** | Connect Claude to your own meetings via OAuth (claude.ai) or a personal token (Claude Desktop/Code). |
 | **Translate** | Translate a whole transcript or a single segment, stored as revisions you can flip back. |
 | **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) to a recording or directly to a folder, edit Markdown attachments in place, save a chat conversation as an attachment with /attach, and optionally feed them to chat. |
-| **Organise & merge** | Sections and sub-sections with drag-and-drop; browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
+| **Rooms** | A private Personal Room per account plus shareable Rooms: invite users and groups with per-member permissions, record or share recordings into a room (your Personal Room keeps the original), and search across every room you belong to. Manage rooms from the switcher. |
+| **Organise & merge** | Sections and sub-sections with drag-and-drop; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
 | **API access** | Generate a personal API token (when enabled) to call the REST API as yourself, with a built-in API reference. |
@@ -50,6 +51,34 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.119.0",
+    date: "2026-07-10",
+    pr: 264,
+    headline: "Rooms: shared spaces you can invite people into",
+    summary:
+      "Rooms arrive. Every account has a private Personal Room (your existing space), and now people who can " +
+      "manage rooms can create Shared Rooms and invite users and groups into them, each member with their own " +
+      "set of permissions (add recordings, manage contents, remove others' recordings, and so on). A room " +
+      "switcher sits at the top of the recordings panel, and Manage Rooms (in the switcher) creates, renames, " +
+      "restyles and deletes rooms and edits who is in them. Recording while you have a shared room open files " +
+      "the meeting into that room automatically, while your own copy stays in your Personal Room - so a shared " +
+      "room can only ever unshare a recording, never delete it. A new Recordings tab in Settings decides where " +
+      "a fresh recording lands in your Personal Room (Ungrouped, the folder you have open, or a specific one). " +
+      "Platform roles are now User Groups, which also carry the room-management permission.",
+    added: [
+      "Shared Rooms: create a room, give it an icon and colour, and invite users and groups with per-member permissions.",
+      "A room switcher at the top of the recordings panel, with Manage Rooms for room managers.",
+      "Recording into a shared room shares the meeting there automatically (your Personal Room keeps the original).",
+      "Share to room and Remove from room on a recording, a Rooms + Recorded-by line on its Overview, and a delete that names the shared rooms it will vanish from.",
+      "Chat and the Claude (MCP) tools now search across every room you belong to, so a meeting shared into a room you are in is findable.",
+      "A Recordings tab in Settings to choose where a new recording is filed: Ungrouped, the selected folder (default), or a specific folder.",
+    ],
+    changed: [
+      "Pressing Record now files the recording into the folder you have open (per the new preference), instead of always Ungrouped.",
+      "Folders, recordings, voiceprints, saved chats and meeting-type templates now belong to a room; deleting a user keeps their shared recordings and orphans their Personal Room rather than destroying its history.",
+    ],
+  },
   {
     version: "0.118.2",
     date: "2026-07-10",

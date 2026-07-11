@@ -18,7 +18,7 @@ public class SectionAttachmentsControllerTests
     private static SectionAttachmentsController Build(
         DiarizDbContext db, Guid userId, FakeAudioStorage? storage = null, long maxBytes = 50L * 1024 * 1024) =>
         new(db, storage ?? new FakeAudioStorage(), new StorageUsage(db),
-            Options.Create(new AttachmentOptions { MaxBytes = maxBytes }))
+            Options.Create(new AttachmentOptions { MaxBytes = maxBytes }), new Diariz.Api.Services.RoomScope(db))
         {
             ControllerContext = Http.Context(userId),
         };
@@ -26,7 +26,9 @@ public class SectionAttachmentsControllerTests
     private static async Task<Section> Seed(DiarizDbContext db, Guid userId, long quota = 1_000_000)
     {
         db.Users.Add(new ApplicationUser { Id = userId, UserName = $"{userId}@x.test", Email = $"{userId}@x.test", QuotaBytes = quota });
-        var section = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Folder" };
+        await db.SaveChangesAsync();
+        var roomId = await new Diariz.Api.Services.RoomScope(db).PersonalRoomIdAsync(userId); // folders are room-scoped now
+        var section = new Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "Folder" };
         db.Sections.Add(section);
         await db.SaveChangesAsync();
         return section;
@@ -98,7 +100,9 @@ public class SectionAttachmentsControllerTests
     {
         using var db = TestDb.Create();
         var section = await Seed(db, Guid.NewGuid());
-        var controller = Build(db, userId: Guid.NewGuid());
+        var caller = Guid.NewGuid();
+        Users.Ensure(db, caller); // the caller's personal room is minted when scoping the ownership check
+        var controller = Build(db, caller);
 
         Assert.IsType<NotFoundResult>((await controller.List(section.Id)).Result);
         Assert.IsType<NotFoundResult>(
