@@ -54,6 +54,13 @@ public class RoomsController(IRoomScope rooms, DiarizDbContext db) : ControllerB
         if (await SharedNameTaken(name, null, ct)) return Conflict("A room with that name already exists.");
 
         var id = await rooms.CreateSharedRoomAsync(name, Trim(input.Description), Trim(input.Icon), Trim(input.Color), ct);
+
+        // The creator joins as a full member, so the room appears in their switcher/list and they can manage it
+        // (a shared room resolves permissions from member rows, not an owner - unlike a personal room).
+        await rooms.SetMemberAsync(id, RoomPrincipalType.User, UserId,
+            RoomPermission.ManageRoom | RoomPermission.CreateRecording | RoomPermission.RemoveOthersRecordings |
+            RoomPermission.ShareOut | RoomPermission.ManageContents | RoomPermission.EditOthersRecordings, ct);
+
         return CreatedAtAction(nameof(Get), new { id }, new { id });
     }
 

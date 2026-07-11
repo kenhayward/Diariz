@@ -52,6 +52,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.120.2",
+    date: "2026-07-11",
+    pr: 266,
+    headline: "Fix creating a new room, and tidy the room switcher header",
+    summary:
+      "Creating a Shared Room from Manage Rooms works again. The creator is now added to the room as a full " +
+      "member, so the new room shows up in your own list and switcher and you can manage it right away - " +
+      "previously a new room was created but stayed invisible, and clicking New Room again failed with a name " +
+      "conflict. The room switcher header also got a smaller icon so longer room names have room to breathe " +
+      "before they truncate.",
+    fixed: [
+      "New Room in Manage Rooms now adds you as a member, so the room appears in your list and a second New Room no longer errors.",
+    ],
+    changed: [
+      "The room switcher header uses a smaller room icon and gives the room name more width before it truncates.",
+    ],
+  },
+  {
     version: "0.120.1",
     date: "2026-07-11",
     pr: 263,

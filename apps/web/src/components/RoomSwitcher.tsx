@@ -9,12 +9,13 @@ import ManageRoomsModal from "./ManageRoomsModal";
 
 /// A small icon for a room: the signed-in user's avatar for their Personal room, else a rounded square in the
 /// room's colour bearing its first letter. (The full icon picker lands with Manage Rooms in Phase 4.)
-function RoomIcon({ room }: { room: RoomListItem }) {
+function RoomIcon({ room, size = "sm" }: { room: RoomListItem; size?: "xs" | "sm" }) {
   const { initials, pictureUrl } = useAuth();
-  if (room.isPersonal) return <Avatar initials={initials} pictureUrl={pictureUrl} />;
+  if (room.isPersonal) return <Avatar initials={initials} pictureUrl={pictureUrl} size={size} />;
+  const box = size === "xs" ? "h-6 w-6 text-[10px]" : "h-8 w-8 text-xs";
   return (
     <span
-      className="flex h-8 w-8 items-center justify-center rounded-md text-xs font-medium text-white"
+      className={`flex ${box} items-center justify-center rounded-md font-medium text-white`}
       style={{ backgroundColor: room.color ?? "#6b7280" }}
       aria-hidden="true"
     >
@@ -57,18 +58,18 @@ export default function RoomSwitcher({ onCollapse, chevron }: { onCollapse: () =
   }
 
   return (
-    <div className="flex h-9 shrink-0 items-center justify-between border-b px-2 dark:border-gray-700">
-      <div className="relative min-w-0" ref={ref}>
+    <div className="flex h-9 shrink-0 items-center justify-between gap-1 border-b px-2 dark:border-gray-700">
+      <div className="relative min-w-0 flex-1" ref={ref}>
         <button
           type="button"
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={t("switchRoom")}
           onClick={() => setOpen((v) => !v)}
-          className="flex min-w-0 items-center gap-1.5 rounded px-1 py-0.5 hover:bg-gray-100 dark:hover:bg-gray-800"
+          className="flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5 hover:bg-gray-100 dark:hover:bg-gray-800"
         >
-          {currentRoom && <RoomIcon room={currentRoom} />}
-          <span className="max-w-[9rem] truncate text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+          {currentRoom && <RoomIcon room={currentRoom} size="xs" />}
+          <span className="min-w-0 flex-1 truncate text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
             {currentRoom?.name ?? ""}
           </span>
           <span aria-hidden="true" className="text-[10px] text-gray-400">

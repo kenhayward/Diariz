@@ -43,23 +43,40 @@ export default function ManageRoomsModal({ onClose }: { onClose: () => void }) {
   }, [shared, selectedId]);
 
   const onError = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
+  const [creating, setCreating] = useState(false);
 
-  const create = useMutation({
-    mutationFn: (name: string) => api.createRoom({ name }),
-    onSuccess: (r) => {
-      setSelectedId(r.id);
-      void qc.invalidateQueries({ queryKey: ["rooms"] });
-    },
-    onError,
-  });
-
-  function onNewRoom() {
+  async function onNewRoom() {
+    if (creating) return; // guard double-clicks (two "Room N" creates would collide)
     setError(null);
-    // A free "Room N" name the server will accept (names are unique among shared rooms).
+    setCreating(true);
+    // Start past the names we can see, but the switcher list is member-scoped: the server may already have
+    // a "Room N" we are not a member of (409). Bump the number and retry until it accepts one.
     const existing = new Set(shared.map((r) => r.name));
     let n = shared.length + 1;
     while (existing.has(`Room ${n}`)) n++;
-    create.mutate(`Room ${n}`);
+    try {
+      let lastError: unknown;
+      for (let attempt = 0; attempt < 100; attempt++) {
+        try {
+          const r = await api.createRoom({ name: `Room ${n}` });
+          setSelectedId(r.id);
+          await qc.invalidateQueries({ queryKey: ["rooms"] });
+          return;
+        } catch (e) {
+          lastError = e;
+          if ((e as { response?: { status?: number } })?.response?.status === 409) {
+            n++;
+            continue;
+          }
+          throw e;
+        }
+      }
+      onError(lastError); // exhausted (not expected in practice)
+    } catch (e) {
+      onError(e);
+    } finally {
+      setCreating(false);
+    }
   }
 
   return (
@@ -113,7 +130,8 @@ export default function ManageRoomsModal({ onClose }: { onClose: () => void }) {
             <button
               type="button"
               onClick={onNewRoom}
-              className="m-2 rounded border px-2 py-1.5 text-sm dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
+              disabled={creating}
+              className="m-2 rounded border px-2 py-1.5 text-sm disabled:opacity-50 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
             >
               {t("rmNew")}
             </button>

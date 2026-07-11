@@ -67,6 +67,22 @@ describe("ManageRoomsModal", () => {
     await waitFor(() => expect(api.createRoom).toHaveBeenCalled());
   });
 
+  it("retries with the next number when the server already has that room name (409)", async () => {
+    // The member-scoped list is empty, but the server has an orphan "Room 2" (a room we're not in) → 409,
+    // then "Room 3" succeeds.
+    (api.listRooms as Mock).mockResolvedValue([personal]); // no shared rooms visible → first try is "Room 1"
+    (api.createRoom as Mock)
+      .mockRejectedValueOnce({ response: { status: 409 } })
+      .mockResolvedValueOnce({ id: "r2" });
+    renderModal();
+    await screen.findByRole("button", { name: /new room/i });
+    fireEvent.click(screen.getByRole("button", { name: /new room/i }));
+
+    await waitFor(() => expect(api.createRoom).toHaveBeenCalledTimes(2));
+    expect((api.createRoom as Mock).mock.calls[0][0]).toEqual({ name: "Room 1" });
+    expect((api.createRoom as Mock).mock.calls[1][0]).toEqual({ name: "Room 2" });
+  });
+
   it("adds a member with default CreateRecording", async () => {
     renderModal();
     fireEvent.click(await screen.findByRole("button", { name: "Engineering" }));
