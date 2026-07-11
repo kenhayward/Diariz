@@ -78,6 +78,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddSectionRoomId` | `Sections.RoomId` (uuid, indexed `(RoomId, Name)`; a **plain column**, no FK yet - the Rooms FK + the `UserId` drop land with Phase 4). The migration **backfills** each section into its owner's personal room, minting a missing one first (`SectionRoomBackfill`). Folders are now room-scoped; `Section.UserId` is retained as owner identity for now |
 | `AddRoomScopedEntities` | `SpeakerProfiles.RoomId` + `ChatSessions.RoomId` (uuid, not-null) and `MeetingTypes.RoomId` (uuid, **nullable** - null mirrors the platform type's null `UserId`); all **plain columns**, no FK yet (the Rooms FK + the `UserId` drop land with Phase 4). The migration **backfills** each voiceprint, saved chat and personal meeting type into its owner's personal room, minting a missing one first (`RoomScopedEntitiesBackfill`); platform meeting types keep `RoomId` null. These are populated on create but still **queried by `UserId`** for now |
 | `AddRecordingPlacementPreference` | `UserSettings.RecordingPlacementMode` (int, not-null, **default 1** = `SelectedFolder`) + `UserSettings.RecordingPlacementSectionId` (uuid, nullable). Where a new recording is filed in the recorder's personal room; no data backfill (the column default covers existing rows) |
+| `AddRoomRecordingPosition` | `RoomRecordings.Position` (int, not-null, **default 0**). Per-room sort order of a recording within its room, so a recording can be ordered differently in two rooms; supersedes the now-dead global `Recording.Position`. **Backfills** once, copying `Recording.Position` onto each **main** placement (`RoomRecordingPositionBackfill`); shared placements keep 0 |
 
 ### Entity-relationship overview
 
@@ -613,6 +614,7 @@ placement**, so the same recording can sit in different folders in different roo
 | `SectionId` | `uuid` null | The folder **within this room**. Null = ungrouped. FK → `Sections` **`ON DELETE SET NULL`** (deleting a folder ungroups the placement, never removes it from the room). Index `(RoomId, SectionId)` |
 | `SharedByUserId` | `uuid` null | Null on the main-room row: nobody shared a recording into its own home |
 | `SharedAt` | `timestamptz` null | As above. `CK_RoomRecordings_MainRoomHasNoSharer` enforces that a main placement carries neither |
+| `Position` | `int` | Manual sort order of the recording **within this room** (lower = higher; ties → newest-first by `Recording.CreatedAt`). Per-placement, so a recording can be ordered differently in two rooms. Default 0; supersedes the now-dead global `Recording.Position`. Written by `PUT /api/recordings/reorder`; read by `GET /api/recordings` ordering |
 
 Backfilled once by the `AddRoomRecordings` migration: one main placement per existing recording, in its
 recorder's personal room, carrying the folder it was filed under. Minting a personal room first for any user

@@ -149,6 +149,40 @@ public class RoomRecordingsIntegrationTests(ContainersFixture fx)
         Assert.Empty(await db.RoomRecordings.Where(p => p.RecordingId == recId).ToListAsync());
     }
 
+    /// <summary>The position backfill copies each recording's legacy global order onto its MAIN placement;
+    /// shared placements keep 0. Unlike the frozen RecordingPlacementBackfill, this SQL reads Recordings.Position
+    /// (not the dropped SectionId), so it stays executable against the migrated schema and is tested directly.</summary>
+    [Fact]
+    public async Task PositionBackfill_CopiesToMainPlacement_LeavesSharedAtZero()
+    {
+        await using (var db = fx.CreateDbContext())
+        {
+            var userId = await NewUserAsync(db);
+            var recId = await NewRecordingAsync(db, userId);
+            (await db.Recordings.FindAsync(recId))!.Position = 7; // the legacy global order
+            await db.SaveChangesAsync();
+            var main = await PersonalRoomAsync(db, userId);
+            var shared = new Room { Id = Guid.NewGuid(), Name = $"Shared {Guid.NewGuid():N}", Kind = RoomKind.Shared };
+            db.Rooms.Add(shared);
+            await db.SaveChangesAsync();
+            db.RoomRecordings.Add(new RoomRecording { RoomId = main, RecordingId = recId, IsMainRoom = true });
+            db.RoomRecordings.Add(new RoomRecording
+            {
+                RoomId = shared.Id, RecordingId = recId, IsMainRoom = false,
+                SharedByUserId = userId, SharedAt = DateTimeOffset.UtcNow,
+            });
+            await db.SaveChangesAsync();
+
+            await db.Database.ExecuteSqlRawAsync(RoomRecordingPositionBackfill.Sql);
+
+            // Fresh context: the raw UPDATE bypassed the change tracker.
+            await using var db2 = fx.CreateDbContext();
+            var placements = await db2.RoomRecordings.Where(p => p.RecordingId == recId).ToListAsync();
+            Assert.Equal(7, placements.Single(p => p.IsMainRoom).Position);
+            Assert.Equal(0, placements.Single(p => !p.IsMainRoom).Position);
+        }
+    }
+
     // The two backfill tests that ran RecordingPlacementBackfill.Sql directly were removed here: that SQL reads
     // Recordings.SectionId, which this phase's DropRecordingSectionId migration removes, so it can no longer be
     // executed against the fully-migrated test schema. The backfill is a one-shot migration - its logic is

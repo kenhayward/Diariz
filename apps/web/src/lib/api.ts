@@ -793,8 +793,8 @@ export const api = {
   },
 
   /// Set the section + 0-based order of each listed recording in one call (drag-and-drop).
-  async reorderRecordings(sectionId: string | null, orderedIds: string[]): Promise<void> {
-    await http.put("/api/recordings/reorder", { sectionId, orderedIds });
+  async reorderRecordings(sectionId: string | null, orderedIds: string[], roomId?: string | null): Promise<void> {
+    await http.put("/api/recordings/reorder", { sectionId, orderedIds, roomId: roomId ?? null });
   },
 
   async renameRecording(id: string, name: string | null): Promise<void> {

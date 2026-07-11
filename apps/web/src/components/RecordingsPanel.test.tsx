@@ -619,7 +619,7 @@ describe("RecordingsPanel", () => {
     fireEvent.drop(header, {
       dataTransfer: { getData: (type: string) => (type === "application/x-diariz-section" ? "loose" : "") },
     });
-    await waitFor(() => expect(api.reorderSections).toHaveBeenCalledWith("cust", ["loose"]));
+    await waitFor(() => expect(api.reorderSections).toHaveBeenCalledWith("cust", ["loose"], undefined));
   });
 
   it("surfaces an error when merging fails", async () => {
@@ -651,6 +651,37 @@ describe("RecordingsPanel", () => {
     // Drop "b" onto "a" → b is inserted before a within the (ungrouped) group.
     fireEvent.drop(target, { dataTransfer: { getData: () => "b" } });
 
-    await waitFor(() => expect(api.reorderRecordings).toHaveBeenCalledWith(null, ["b", "a"]));
+    await waitFor(() => expect(api.reorderRecordings).toHaveBeenCalledWith(null, ["b", "a"], undefined));
+  });
+
+  it("reorders within a shared room's group, scoped to that room", async () => {
+    roomStub.currentRoom = { id: "eng-room", isPersonal: false };
+    roomStub.canManageContents = true;
+    (api.reorderRecordings as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...rec, id: "a", name: "First" },
+      { ...rec, id: "b", name: "Second" },
+    ]);
+    renderList();
+
+    const target = (await screen.findByText("First")).closest("li")!;
+    fireEvent.drop(target, { dataTransfer: { getData: () => "b" } });
+
+    await waitFor(() => expect(api.reorderRecordings).toHaveBeenCalledWith(null, ["b", "a"], "eng-room"));
+  });
+
+  it("does not reorder in a shared room when the caller cannot manage its contents", async () => {
+    roomStub.currentRoom = { id: "eng-room", isPersonal: false };
+    roomStub.canManageContents = false;
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...rec, id: "a", name: "First" },
+      { ...rec, id: "b", name: "Second" },
+    ]);
+    renderList();
+
+    const target = (await screen.findByText("First")).closest("li")!;
+    fireEvent.drop(target, { dataTransfer: { getData: () => "b" } });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(api.reorderRecordings).not.toHaveBeenCalled();
   });
 });

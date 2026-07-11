@@ -76,11 +76,14 @@ public class RecordingsController : ControllerBase
             .Select(p => new { p.RecordingId, p.SectionId, SectionName = p.Section != null ? p.Section.Name : null })
             .ToDictionaryAsync(x => x.RecordingId, x => (x.SectionId, x.SectionName));
 
-        // Recordings placed in this room (main + shared). Project server-side, then splice the folder in memory.
-        var rows = await _rooms.RecordingsIn(room)
-            .OrderBy(r => r.Position)
-            .ThenByDescending(r => r.CreatedAt)
-            .Select(r => new
+        // Recordings placed in this room (main + shared), ordered by the placement's per-room position (ties:
+        // newest first). Project server-side, then splice the folder in memory.
+        var rows = await (
+            from p in _db.RoomRecordings
+            where p.RoomId == room
+            join r in _db.Recordings on p.RecordingId equals r.Id
+            orderby p.Position, r.CreatedAt descending
+            select new
             {
                 r.Id, r.Title, r.Name, r.Source, r.DurationMs, r.Status, r.CreatedAt,
                 HasActions = r.Actions.Any(), HasAudio = r.AudioDeletedAt == null,
@@ -100,35 +103,36 @@ public class RecordingsController : ControllerBase
             .ToList();
     }
 
-    /// <summary>Drag-and-drop: set the section and 0-based position of each listed recording in one
-    /// call (used for both within-group sequencing and cross-group moves).</summary>
+    /// <summary>Drag-and-drop within a room: set the section + 0-based position of each listed recording in one
+    /// call (both within-group sequencing and cross-group moves). Order and folder are per-placement, so this
+    /// only touches the placements in <paramref name="req"/>'s room (the caller's personal room by default).
+    /// Needs <c>ManageContents</c> in that room; the personal-room owner holds it, so personal reorder is
+    /// unchanged. A non-member 404s; a member without the permission gets 403.</summary>
     [HttpPut("reorder")]
     public async Task<IActionResult> Reorder(ReorderRecordingsRequest req)
     {
         var ids = (req.OrderedIds ?? []).ToList();
         if (ids.Count == 0) return NoContent();
 
-        // Position lives on the recording; the folder now lives on its placement in the caller's personal room.
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var roomId = req.RoomId ?? await _rooms.PersonalRoomIdAsync(UserId);
+        if (!await _rooms.IsMemberAsync(UserId, roomId)) return NotFound();
+        if (!(await _rooms.PermissionsAsync(UserId, roomId)).HasFlag(RoomPermission.ManageContents)) return Forbid();
 
         if (req.SectionId is { } sectionId &&
             !await _db.Sections.AnyAsync(s => s.Id == sectionId && s.RoomId == roomId))
-            return NotFound(); // can't move into a section that isn't in the caller's room
+            return NotFound(); // can't move into a section that isn't in this room
 
-        var recs = await _db.Recordings
-            .Where(r => ids.Contains(r.Id) && r.UserId == UserId)
-            .ToListAsync();
-        if (recs.Count != ids.Count) return NotFound(); // a listed recording isn't the caller's
-
+        // Every listed recording must actually be placed in this room; order + folder live on the placement.
         var placements = await _db.RoomRecordings
             .Where(p => p.RoomId == roomId && ids.Contains(p.RecordingId))
             .ToDictionaryAsync(p => p.RecordingId);
+        if (placements.Count != ids.Count) return NotFound();
 
-        var byId = recs.ToDictionary(r => r.Id);
         for (var i = 0; i < ids.Count; i++)
         {
-            byId[ids[i]].Position = i;
-            if (placements.TryGetValue(ids[i], out var placement)) placement.SectionId = req.SectionId;
+            var placement = placements[ids[i]];
+            placement.Position = i;
+            placement.SectionId = req.SectionId;
         }
         await _db.SaveChangesAsync();
         return NoContent();
