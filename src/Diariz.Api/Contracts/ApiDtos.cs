@@ -217,8 +217,11 @@ public record RecordingDetailDto(
     /// <summary>Projected date the nightly job will delete this recording's audio (`CreatedAt` + retention days),
     /// or null when auto-delete is off, the recording is protected/ineligible, or the audio is already gone.</summary>
     DateTimeOffset? AudioScheduledDeletionAt = null,
-    /// <summary>Who recorded it (the owner) - drives the "Recorded by" line. Null name = a deleted/unknown user.</summary>
-    Guid RecordedByUserId = default,
+    /// <summary>Who recorded it (the owner) - drives the "Recorded by" line. Null name = a deleted/unknown user.
+    /// Nullable purely so it can carry a default: a non-nullable struct with a default value crashes the OpenAPI
+    /// schema exporter (same reason the admin surface with its <c>TimeOnly</c> field is excluded); in practice it
+    /// is always set to the recorder's id.</summary>
+    Guid? RecordedByUserId = null,
     string? RecordedByName = null,
     /// <summary>The rooms this recording is placed in that the caller can see, main room first.</summary>
     IReadOnlyList<RecordingRoomDto>? Rooms = null);

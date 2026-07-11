@@ -6,6 +6,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- The Microsoft.AspNetCore.OpenApi source generator (used by the OpenAPI smoke test's AddOpenApi call)
+         emits interceptors; enable its namespace so the generated file compiles. -->
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Microsoft.AspNetCore.OpenApi.Generated</InterceptorsNamespaces>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,6 +20,8 @@
     </PackageReference>
     <!-- In-memory EF provider for fast, Docker-free DB tests. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.*" />
+    <!-- In-process TestServer, for the OpenAPI-document generation smoke test (no infra needed). -->
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.*" />
   </ItemGroup>
 
   <!-- Binary fixtures (e.g. a tiny PDF) copied next to the test assembly. -->

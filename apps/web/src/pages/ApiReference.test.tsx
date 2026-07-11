@@ -32,4 +32,13 @@ describe("ApiReference", () => {
     await waitFor(() => expect(api.getOpenApiDocument).toHaveBeenCalled());
     expect(await screen.findByText("HAS_SPEC")).toBeTruthy();
   });
+
+  it("shows an error with a retry instead of a blank page when the document fails to load", async () => {
+    (api.getOpenApiDocument as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("500"));
+    renderIt();
+    // No Scalar, but a clear error message + a Retry button (not a blank screen).
+    expect(await screen.findByText(/couldn't be loaded/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /retry/i })).toBeTruthy();
+    expect(screen.queryByTestId("scalar")).toBeNull();
+  });
 });
