@@ -52,6 +52,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.121.0",
+    date: "2026-07-11",
+    pr: 268,
+    headline: "Restore a backup from an older compatible app version",
+    summary:
+      "Platform backup restore no longer requires the backup to be from the exact same app version. A backup " +
+      "taken on an older but compatible schema can now be restored, and its data is automatically upgraded to " +
+      "the current version as part of the restore. Backups from a newer app, or from before a flagged " +
+      "breaking change, are still refused with a clear message. When an older backup is upgraded during " +
+      "restore, the Maintenance screen reports what happened and suggests restarting the app to finish.",
+    added: [
+      "Restore accepts backups from older, forward-compatible app versions and migrates their data up to the current schema.",
+    ],
+    changed: [
+      "The restore compatibility check is now an epoch fence plus a same-or-older schema check, instead of an exact version match; the Maintenance screen shows the upgrade result and a restart hint.",
+    ],
+  },
+  {
     version: "0.120.3",
     date: "2026-07-11",
     pr: 267,

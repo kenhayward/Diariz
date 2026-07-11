@@ -841,13 +841,19 @@ openai-whisper backend is slower than faster-whisper but accuracy is unchanged (
 ## Platform backup & restore
 
 `MaintenanceController` (Platform-Administrator only) exports/imports the **whole platform** as one `.zip`:
-a `manifest.json` (app version, the last-applied EF migration id, createdAt), a `database.dump`
-(`pg_dump --format=custom`), and one `objects/<key>` entry per object-store blob (audio + attachments). The
-API image therefore ships the **PostgreSQL client tools** (`pg_dump`/`pg_restore`). `GET /api/maintenance/backup`
-streams the zip straight to the response (token via `access_token`, like the audio endpoint); `POST
-/api/maintenance/restore` takes the raw zip body, **refuses a manifest whose migration id ≠ the running
-schema** (a `pg_restore --clean` brings the dump's schema, which must match the code), runs the restore, then
-wipes and re-uploads the bucket. Restore is **destructive** (replaces all data; the admin is signed out).
+a `manifest.json` (a `Format` compatibility epoch, app version, the last-applied EF migration id, createdAt), a
+`database.dump` (`pg_dump --format=custom`), and one `objects/<key>` entry per object-store blob (audio +
+attachments). The API image therefore ships the **PostgreSQL client tools** (`pg_dump`/`pg_restore`). `GET
+/api/maintenance/backup` streams the zip straight to the response (token via `access_token`, like the audio
+endpoint); `POST /api/maintenance/restore` takes the raw zip body and gates on compatibility: the backup's
+`Format` must equal the running instance's `CurrentFormat`, and its migration id must be the current one **or
+an earlier ancestor** (newer/unknown schemas are refused - there are no down-migrations). It then runs
+`pg_restore --clean`, and if the backup was an **older ancestor**, calls `MigrateToCurrentAsync` to roll the
+restored schema up to the running code (the response reports `migratedFrom`/`migratedTo`/`restartRecommended`);
+finally it wipes and re-uploads the bucket. `Format` is the human-controlled breaking-change fence - bump it in
+the same PR as any migration that is not forward-restore-safe. Restore is **destructive** (replaces all data;
+on a same-version restore the admin is signed out, on a forward-migrated restore they are kept on the page with
+a restart hint).
 The Data-Protection **keyring is not included** — after restoring on a different instance, encrypted per-user
 LLM API keys can't be decrypted (users re-enter them); everything else is faithful. The `pg_dump`/`pg_restore`
 shell-out is behind `IDatabaseBackup` so the archive/object orchestration is unit-tested; the real round-trip

@@ -215,6 +215,13 @@ dotnet ef migrations add <Name> --project src/Diariz.Domain --startup-project sr
 ```
 `DiarizDbContextFactory` exists for design-time tooling.
 
+**Backup-restore compatibility:** platform restore accepts backups from older, forward-compatible schema
+versions and migrates their data up to the current schema (see the backup/restore section in
+`docs/Overall_Synopsis_of_Platform.md`). So if a new migration is **not** forward-restore-safe (a destructive
+column drop/rename, a pgvector dimension change, a semantic data reshape that an older dump can't survive),
+**bump `MaintenanceController.CurrentFormat` in the same PR** - that fence hard-rejects older backups instead
+of silently corrupting them.
+
 ### Worker (Python)
 ```bash
 cd src/Diariz.Worker
