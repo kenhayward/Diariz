@@ -5,13 +5,25 @@ import { useAuth } from "../auth";
 import { api } from "../lib/api";
 import Avatar from "./Avatar";
 import ProfileSection from "./ProfileSection";
+import AiSettingsSection from "./AiSettingsSection";
+import ChatToolsSection from "./ChatToolsSection";
+import RecordingsSection from "./RecordingsSection";
 import GoogleAccountSection from "./GoogleAccountSection";
 import CalendarFeedsSection from "./CalendarFeedsSection";
 import McpAccessSection from "./McpAccessSection";
 import DeveloperAccessSection from "./DeveloperAccessSection";
 import VoicePrintsSection from "./VoicePrintsSection";
 
-export type PreferencesTab = "profile" | "google" | "feeds" | "claude" | "developers" | "voiceprints";
+export type PreferencesTab =
+  | "profile"
+  | "ai"
+  | "tools"
+  | "recordings"
+  | "google"
+  | "feeds"
+  | "claude"
+  | "developers"
+  | "voiceprints";
 
 /// Personal preferences, organised as a vertical-tabbed modal (a left nav headed by the user's avatar/name,
 /// with a content panel on the right). Each tab self-saves; the footer only closes. Sized to 60vw x 80vh and,
@@ -37,6 +49,9 @@ export default function PreferencesModal({
 
   const tabs: { id: PreferencesTab; label: string }[] = [
     { id: "profile", label: t("tabProfile") },
+    { id: "ai", label: t("aiSettings") },
+    { id: "tools", label: t("chatToolsTab") },
+    { id: "recordings", label: t("recordingsTab") },
     { id: "google", label: t("tabGoogleAccount") },
     { id: "feeds", label: t("tabCalendarFeeds") },
     { id: "claude", label: t("tabClaudeAccess") },
@@ -88,6 +103,9 @@ export default function PreferencesModal({
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-5">
             {tab === "profile" && <ProfileSection />}
+            {tab === "ai" && <AiSettingsSection />}
+            {tab === "tools" && <ChatToolsSection />}
+            {tab === "recordings" && <RecordingsSection />}
             {tab === "google" && <GoogleAccountSection />}
             {tab === "feeds" && <CalendarFeedsSection />}
             {tab === "claude" && <McpAccessSection />}

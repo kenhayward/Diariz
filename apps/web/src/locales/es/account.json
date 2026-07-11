@@ -109,6 +109,8 @@
   "apiAccessEnabledLabel": "Habilitar el acceso a la API para usuarios",
   "apiAccessEnabledHelp": "Permite que los usuarios generen tokens personales y llamen a la API de Diariz. Desactivado por defecto.",
   "settingsTitle": "Configuración",
+  "platformAiTab": "IA",
+  "platformAiIntro": "Configuración de generación de IA para toda la plataforma, aplicada a todos los usuarios.",
   "aiSettings": "Configuración del modelo",
   "chatToolsTab": "Herramientas del chat",
   "recordingsTab": "Grabaciones",

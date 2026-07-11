@@ -109,6 +109,8 @@
   "apiAccessEnabledLabel": "Activer l'accès à l'API pour les utilisateurs",
   "apiAccessEnabledHelp": "Permet aux utilisateurs de générer des jetons personnels et d'appeler l'API Diariz. Désactivé par défaut.",
   "settingsTitle": "Paramètres",
+  "platformAiTab": "IA",
+  "platformAiIntro": "Paramètres de génération IA à l'échelle de la plateforme, appliqués à tous les utilisateurs.",
   "aiSettings": "Paramètres du modèle",
   "chatToolsTab": "Outils du chat",
   "recordingsTab": "Enregistrements",
