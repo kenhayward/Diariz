@@ -167,11 +167,25 @@ public class RoomsControllerTests
     public async Task Get_HidesARoomTheCallerIsNotAMemberOf()
     {
         using var db = TestDb.Create();
-        var controller = Build(db, Guid.NewGuid());
-        var created = (CreatedAtActionResult)await controller.Create(new RoomInput("Eng", null, null, null));
+        // The creator joins as a member, so view the room as a DIFFERENT user who never joined it.
+        var created = (CreatedAtActionResult)await Build(db, Guid.NewGuid()).Create(new RoomInput("Eng", null, null, null));
         var id = (Guid)created.RouteValues!["id"]!;
 
-        Assert.IsType<NotFoundResult>(await controller.Get(id)); // caller is not a member
+        Assert.IsType<NotFoundResult>(await Build(db, Guid.NewGuid()).Get(id)); // a non-member
+    }
+
+    [Fact]
+    public async Task Create_AddsTheCreatorAsAMember_SoTheRoomAppearsInTheirList()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var controller = Build(db, me);
+        await controller.Create(new RoomInput("Engineering", null, null, null));
+
+        // The room shows up in the creator's own list (they were made a member).
+        var result = Assert.IsType<OkObjectResult>(await controller.List());
+        var rooms = Assert.IsAssignableFrom<IEnumerable<RoomListItemDto>>(result.Value);
+        Assert.Contains(rooms, r => !r.IsPersonal && r.Name == "Engineering");
     }
 
     // ---- Unshare (Phase 5) ----

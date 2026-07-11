@@ -10,10 +10,10 @@ export default function Avatar({
 }: {
   initials: string;
   pictureUrl?: string | null;
-  size?: "sm" | "lg";
+  size?: "xs" | "sm" | "lg";
 }) {
   const [failed, setFailed] = useState(false);
-  const box = size === "lg" ? "h-16 w-16 text-lg" : "h-8 w-8 text-xs";
+  const box = size === "lg" ? "h-16 w-16 text-lg" : size === "xs" ? "h-6 w-6 text-[10px]" : "h-8 w-8 text-xs";
 
   if (pictureUrl && !failed) {
     return (
