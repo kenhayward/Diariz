@@ -52,6 +52,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.125.1",
+    date: "2026-07-11",
+    pr: 277,
+    headline: "Fix missing future events on the Calendar",
+    summary:
+      "On a busy calendar, later events in the month (all your future dates) could be missing from the Calendar " +
+      "tab. Google returns events one page at a time, earliest first, and the app only read the first page - so " +
+      "once a calendar had more than a page of events in the visible month, everything after that was dropped. " +
+      "The app now reads every page, so all events in the month show.",
+    fixed: [
+      "Calendar events past the first page (e.g. future dates on a busy calendar) are no longer dropped - the app now pages through the whole month.",
+    ],
+  },
+  {
     version: "0.125.0",
     date: "2026-07-11",
     pr: 276,

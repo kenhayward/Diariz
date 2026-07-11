@@ -223,6 +223,26 @@ public class GoogleCalendarClientTests
     }
 
     [Fact]
+    public async Task ListEventsAsync_PagesThroughNextPageToken_SoLaterEventsAreNotDropped()
+    {
+        const string calList = "{ \"items\": [ { \"id\": \"primary\", \"summary\": \"Me\", \"primary\": true, \"selected\": true } ] }";
+        // Page 1 (early event) carries a nextPageToken; page 2 (a later/future event) closes the window.
+        const string page1 = "{ \"nextPageToken\": \"tok2\", \"items\": [ { \"id\": \"early\", \"start\": { \"dateTime\": \"2026-07-11T09:00:00Z\" }, \"end\": { \"dateTime\": \"2026-07-11T09:30:00Z\" } } ] }";
+        const string page2 = "{ \"items\": [ { \"id\": \"future\", \"start\": { \"dateTime\": \"2026-07-13T09:00:00Z\" }, \"end\": { \"dateTime\": \"2026-07-13T09:30:00Z\" } } ] }";
+        var handler = new RoutingHandler(req =>
+        {
+            if (IsCalendarList(req)) return (HttpStatusCode.OK, calList);
+            return req.RequestUri!.Query.Contains("pageToken=tok2") ? (HttpStatusCode.OK, page2) : (HttpStatusCode.OK, page1);
+        });
+        var client = new GoogleCalendarClient(new HttpClient(handler), new StubTokenProvider("tok"), new StubSelectionStore());
+
+        var events = (await client.ListEventsAsync(Guid.NewGuid(), At("2026-06-28T00:00:00Z"), At("2026-08-02T00:00:00Z")))!;
+
+        // Both pages are merged (ordered by start): the future event on the 2nd page must not be lost.
+        Assert.Equal(["early", "future"], events.Select(e => e.Id));
+    }
+
+    [Fact]
     public async Task ListEventsAsync_MergesSelectedCalendars_TaggedWithColour_SkippingUnselected()
     {
         const string calList = """
