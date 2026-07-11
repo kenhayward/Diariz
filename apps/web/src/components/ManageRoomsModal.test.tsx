@@ -94,6 +94,38 @@ describe("ManageRoomsModal", () => {
     );
   });
 
+  it("shows each shared room in the left list with its icon", async () => {
+    renderModal();
+    const roomButton = await screen.findByRole("button", { name: "Engineering" });
+    // Engineering has icon "users" -> the badge renders an SVG glyph, not just the first letter.
+    expect(roomButton.querySelector("svg")).toBeTruthy();
+  });
+
+  it("shows member names (server-resolved) with a user/group glyph, not raw ids", async () => {
+    (api.getRoom as Mock).mockResolvedValue({
+      id: "r1", name: "Engineering", description: null, icon: "users", color: "#123456",
+      members: [
+        { principalType: 0, principalId: "u-guid-1", permissions: 2, displayName: "Grace Hopper" },
+        { principalType: 1, principalId: "g-guid-1", permissions: 2, displayName: "Editors" },
+      ],
+    });
+    renderModal();
+    fireEvent.click(await screen.findByRole("button", { name: "Engineering" }));
+
+    expect(await screen.findByText("Grace Hopper")).toBeTruthy();
+    expect(screen.getByText("Editors")).toBeTruthy();
+    expect(screen.queryByText("u-guid-1")).toBeNull(); // never the raw id
+    expect(screen.getByText("👥")).toBeTruthy(); // the group is marked with the two-person glyph
+  });
+
+  it("marks add-member options with a user/group glyph", async () => {
+    renderModal();
+    fireEvent.click(await screen.findByRole("button", { name: "Engineering" }));
+    await screen.findByDisplayValue("Engineering");
+    // Grace is a user -> her option carries the single-person glyph.
+    expect(screen.getByText(/👤\s*Grace/)).toBeTruthy();
+  });
+
   it("requires the room name typed before delete is enabled", async () => {
     renderModal();
     fireEvent.click(await screen.findByRole("button", { name: "Engineering" }));

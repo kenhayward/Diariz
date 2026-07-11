@@ -5,23 +5,15 @@ import { useRoom } from "../lib/rooms";
 import { useAuth } from "../auth";
 import type { RoomListItem } from "../lib/types";
 import Avatar from "./Avatar";
+import RoomBadge from "./RoomBadge";
 import ManageRoomsModal from "./ManageRoomsModal";
 
-/// A small icon for a room: the signed-in user's avatar for their Personal room, else a rounded square in the
-/// room's colour bearing its first letter. (The full icon picker lands with Manage Rooms in Phase 4.)
+/// A small icon for a room: the signed-in user's avatar for their Personal room, else the shared room's chosen
+/// icon (or a colour swatch with its first letter when none was picked).
 function RoomIcon({ room, size = "sm" }: { room: RoomListItem; size?: "xs" | "sm" }) {
   const { initials, pictureUrl } = useAuth();
   if (room.isPersonal) return <Avatar initials={initials} pictureUrl={pictureUrl} size={size} />;
-  const box = size === "xs" ? "h-6 w-6 text-[10px]" : "h-8 w-8 text-xs";
-  return (
-    <span
-      className={`flex ${box} items-center justify-center rounded-md font-medium text-white`}
-      style={{ backgroundColor: room.color ?? "#6b7280" }}
-      aria-hidden="true"
-    >
-      {room.name.trim().charAt(0).toUpperCase() || "?"}
-    </span>
-  );
+  return <RoomBadge icon={room.icon} color={room.color} name={room.name} size={size} />;
 }
 
 /// The left-panel header: a room switcher (current room's icon + name, a dropdown of the rooms the user belongs

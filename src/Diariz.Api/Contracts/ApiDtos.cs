@@ -360,8 +360,10 @@ public record RoomListItemDto(
 public record RoomInput(string Name, string? Description, string? Icon, string? Color);
 
 /// <summary>A room member for the Manage Rooms editor: a user or group principal + its permission grid as an
-/// <b>int</b> bitmask (a [Flags] enum would serialise as "A, B" and break the web's bit arithmetic).</summary>
-public record RoomMemberDto(RoomPrincipalType PrincipalType, Guid PrincipalId, int Permissions);
+/// <b>int</b> bitmask (a [Flags] enum would serialise as "A, B" and break the web's bit arithmetic).
+/// <paramref name="DisplayName"/> is the resolved user/group name (server-side, so a ManageRooms holder who
+/// can't list all platform users still sees names, not raw ids); null if the principal no longer exists.</summary>
+public record RoomMemberDto(RoomPrincipalType PrincipalType, Guid PrincipalId, int Permissions, string? DisplayName = null);
 
 /// <summary>Upsert a member's permission grid on a room.</summary>
 public record RoomMemberInput(RoomPrincipalType PrincipalType, Guid PrincipalId, int Permissions);

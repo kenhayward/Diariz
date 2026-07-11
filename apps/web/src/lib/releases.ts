@@ -52,6 +52,25 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.121.1",
+    date: "2026-07-11",
+    pr: 269,
+    headline: "Rooms polish: member names, room icons, user/group markers",
+    summary:
+      "Several fixes to the Rooms UI. Room members now show their name instead of a raw id (resolved on the " +
+      "server, so it works even for room managers who can't see the full user list). The Manage Rooms list " +
+      "and the room switcher now show each shared room's chosen icon, not just its first letter. And the " +
+      "member list and the add-member picker mark each entry with a single-person or two-person glyph so you " +
+      "can tell users and groups apart.",
+    fixed: [
+      "Room members show their resolved name instead of a raw id.",
+      "A shared room's chosen icon now appears in the room switcher and the Manage Rooms list, instead of just its first letter.",
+    ],
+    changed: [
+      "The member list and the add-member picker mark each row with a user (single) or group (two-person) glyph.",
+    ],
+  },
+  {
     version: "0.121.0",
     date: "2026-07-11",
     pr: 268,
