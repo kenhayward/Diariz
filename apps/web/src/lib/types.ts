@@ -522,6 +522,15 @@ export interface RoomMember {
   principalType: number;
   principalId: string;
   permissions: number;
+  /// The resolved user/group name (server-side), or null if the principal no longer exists.
+  displayName: string | null;
+}
+
+/// The write payload for upserting a member's permissions (no server-resolved fields).
+export interface RoomMemberInput {
+  principalType: number;
+  principalId: string;
+  permissions: number;
 }
 
 /// A shared room with its membership, for the Manage Rooms editor.

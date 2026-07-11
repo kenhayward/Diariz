@@ -164,6 +164,28 @@ public class RoomsControllerTests
     }
 
     [Fact]
+    public async Task Get_ResolvesMemberDisplayNames_ForUsersAndGroups()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var controller = Build(db, me);
+        var created = (CreatedAtActionResult)await controller.Create(new RoomInput("Eng", null, null, null));
+        var id = (Guid)created.RouteValues!["id"]!;
+
+        var alice = Guid.NewGuid();
+        db.Users.Add(new ApplicationUser { Id = alice, UserName = "alice@x.test", Email = "alice@x.test", FullName = "Alice Smith" });
+        var groupId = Guid.NewGuid();
+        db.UserGroups.Add(new UserGroup { Id = groupId, Name = "Editors" });
+        await db.SaveChangesAsync();
+        await controller.SetMember(id, new RoomMemberInput(RoomPrincipalType.User, alice, (int)RoomPermission.CreateRecording));
+        await controller.SetMember(id, new RoomMemberInput(RoomPrincipalType.Group, groupId, (int)RoomPermission.CreateRecording));
+
+        var detail = Assert.IsType<RoomDetailDto>(Assert.IsType<OkObjectResult>(await controller.Get(id)).Value);
+        Assert.Equal("Alice Smith", detail.Members.Single(m => m.PrincipalId == alice).DisplayName);
+        Assert.Equal("Editors", detail.Members.Single(m => m.PrincipalId == groupId).DisplayName);
+    }
+
+    [Fact]
     public async Task Get_HidesARoomTheCallerIsNotAMemberOf()
     {
         using var db = TestDb.Create();

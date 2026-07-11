@@ -58,6 +58,14 @@ describe("RoomSwitcher", () => {
     expect(navigate).toHaveBeenCalledTimes(1); // picking the current room does not navigate
   });
 
+  it("shows a shared room's chosen icon on the trigger, not just its first letter", () => {
+    const withIcon: RoomListItem = { ...shared, icon: "star", name: "Engineering" };
+    roomsValue = { rooms: [personal, withIcon], currentRoom: withIcon };
+    renderSwitcher();
+    // The trigger renders the room badge; with an icon set that badge is an SVG glyph.
+    expect(screen.getByRole("button", { name: /switch room/i }).querySelector("svg")).toBeTruthy();
+  });
+
   it("hides Manage Rooms from users without manageRooms", () => {
     authState.permissions = { manageRooms: false, manageUsers: false, managePlatform: false };
     renderSwitcher();

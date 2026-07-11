@@ -4,6 +4,11 @@ import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
 import { RoomPermission, RoomPrincipalType, type RoomDetail } from "../lib/types";
 import IconColorPicker from "./IconColorPicker";
+import RoomBadge from "./RoomBadge";
+
+/// A glyph marking a principal as a single user or a group, so the member list and the add-member picker are
+/// legible at a glance: one silhouette for a user, two for a group.
+const principalGlyph = (type: number) => (type === RoomPrincipalType.Group ? "👥" : "👤");
 
 /// The room permission bits, mirrored from the server enum. Append-only: never renumber.
 const ROOM_PERMISSION_BITS = [
@@ -116,13 +121,14 @@ export default function ManageRoomsModal({ onClose }: { onClose: () => void }) {
                   <button
                     type="button"
                     onClick={() => setSelectedId(r.id)}
-                    className={`w-full truncate rounded px-2 py-1.5 text-left text-sm ${
+                    className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm ${
                       selectedId === r.id
                         ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200"
                         : "hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
                     }`}
                   >
-                    {r.name}
+                    <RoomBadge icon={r.icon} color={r.color} name={r.name} size="xs" />
+                    <span className="truncate">{r.name}</span>
                   </button>
                 </li>
               ))}
@@ -283,7 +289,10 @@ function RoomEditor({
           {room.members.map((m) => (
             <div key={memberKey(m.principalType, m.principalId)} className="rounded border p-2 dark:border-gray-700">
               <div className="mb-1 flex items-center justify-between">
-                <span className="text-sm dark:text-gray-100">{nameOf(m.principalType, m.principalId)}</span>
+                <span className="flex items-center gap-1.5 text-sm dark:text-gray-100">
+                  <span aria-hidden="true">{principalGlyph(m.principalType)}</span>
+                  <span>{m.displayName || nameOf(m.principalType, m.principalId)}</span>
+                </span>
                 <button
                   type="button"
                   onClick={() => removeMember.mutate({ type: m.principalType, id: m.principalId })}
@@ -331,7 +340,7 @@ function RoomEditor({
             <option value="">{t("rmAddMember")}</option>
             {addable.map((c) => (
               <option key={memberKey(c.type, c.id)} value={memberKey(c.type, c.id)}>
-                {c.label}
+                {principalGlyph(c.type)}  {c.label}
               </option>
             ))}
           </select>

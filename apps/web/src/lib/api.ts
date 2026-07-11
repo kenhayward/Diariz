@@ -40,7 +40,7 @@ import type {
   RecordingSummary,
   RoomListItem,
   RoomDetail,
-  RoomMember,
+  RoomMemberInput,
   RoomInput,
   SavedChatContext,
   SectionDto,
@@ -276,7 +276,7 @@ export const api = {
   },
 
   /// Upsert a member's permission grid on a room.
-  async setRoomMember(id: string, m: RoomMember): Promise<void> {
+  async setRoomMember(id: string, m: RoomMemberInput): Promise<void> {
     await http.put(`/api/rooms/${id}/members`, m);
   },
 

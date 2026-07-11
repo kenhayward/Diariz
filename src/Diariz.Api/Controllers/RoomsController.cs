@@ -37,10 +37,24 @@ public class RoomsController(IRoomScope rooms, DiarizDbContext db) : ControllerB
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == id, ct);
         if (room is null) return NotFound();
 
-        var members = await db.RoomMembers
-            .Where(m => m.RoomId == id)
-            .Select(m => new RoomMemberDto(m.PrincipalType, m.PrincipalId, (int)m.Permissions))
-            .ToListAsync(ct);
+        var memberRows = await db.RoomMembers.Where(m => m.RoomId == id).ToListAsync(ct);
+
+        // Resolve display names server-side: a member's PrincipalId is a user or a group id (no FK, so we
+        // look it up by type). Doing it here means a ManageRooms holder who can't list all platform users
+        // still sees names rather than raw guids.
+        var userIds = memberRows.Where(m => m.PrincipalType == RoomPrincipalType.User).Select(m => m.PrincipalId).ToList();
+        var groupIds = memberRows.Where(m => m.PrincipalType == RoomPrincipalType.Group).Select(m => m.PrincipalId).ToList();
+        var userNames = await db.Users.Where(u => userIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.FullName ?? u.Email ?? u.UserName, ct);
+        var groupNames = await db.UserGroups.Where(g => groupIds.Contains(g.Id))
+            .ToDictionaryAsync(g => g.Id, g => (string?)g.Name, ct);
+
+        var members = memberRows
+            .Select(m => new RoomMemberDto(m.PrincipalType, m.PrincipalId, (int)m.Permissions,
+                m.PrincipalType == RoomPrincipalType.User
+                    ? userNames.GetValueOrDefault(m.PrincipalId)
+                    : groupNames.GetValueOrDefault(m.PrincipalId)))
+            .ToList();
 
         return Ok(new RoomDetailDto(room.Id, room.Name, room.Description, room.Icon, room.Color, members));
     }
