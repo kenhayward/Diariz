@@ -173,6 +173,8 @@
   "restoreButton": "Wiederherstellen",
   "restoring": "Wird wiederhergestellt… {{percent}} %",
   "restoreSuccess": "Wiederherstellung abgeschlossen. Du wirst abgemeldet…",
+  "restoreMigrated": "Ein älteres Backup wurde wiederhergestellt und seine Daten auf die aktuelle Version aktualisiert ({{from}} bis {{to}}).",
+  "restoreRestartHint": "Starte die App neu, um die Aktualisierung abzuschließen.",
   "restoreFailed": "Wiederherstellung fehlgeschlagen.",
   "releaseNotes": "Versionshinweise",
   "resizeReleaseList": "Versionsliste in der Größe ändern",

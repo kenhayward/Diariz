@@ -173,6 +173,8 @@
   "restoreButton": "Restore",
   "restoring": "Restoring… {{percent}}%",
   "restoreSuccess": "Restore complete. Signing you out…",
+  "restoreMigrated": "Restored an older backup and upgraded its data to the current version ({{from}} to {{to}}).",
+  "restoreRestartHint": "Restart the app to finish applying the upgrade.",
   "restoreFailed": "Restore failed.",
   "releaseNotes": "Release Notes",
   "resizeReleaseList": "Resize release list",

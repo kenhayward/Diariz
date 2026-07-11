@@ -173,6 +173,8 @@
   "restoreButton": "Restaurar",
   "restoring": "Restaurando… {{percent}} %",
   "restoreSuccess": "Restauración completada. Cerrando tu sesión…",
+  "restoreMigrated": "Se restauró una copia de seguridad anterior y sus datos se actualizaron a la versión actual ({{from}} a {{to}}).",
+  "restoreRestartHint": "Reinicia la aplicación para terminar de aplicar la actualización.",
   "restoreFailed": "Error al restaurar.",
   "releaseNotes": "Notas de la versión",
   "resizeReleaseList": "Cambiar el tamaño de la lista de versiones",
