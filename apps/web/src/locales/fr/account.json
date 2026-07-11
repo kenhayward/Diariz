@@ -173,6 +173,8 @@
   "restoreButton": "Restaurer",
   "restoring": "Restauration… {{percent}} %",
   "restoreSuccess": "Restauration terminée. Déconnexion…",
+  "restoreMigrated": "Une sauvegarde plus ancienne a été restaurée et ses données mises à niveau vers la version actuelle ({{from}} à {{to}}).",
+  "restoreRestartHint": "Redémarrez l'application pour terminer la mise à niveau.",
   "restoreFailed": "Échec de la restauration.",
   "releaseNotes": "Notes de version",
   "resizeReleaseList": "Redimensionner la liste des versions",

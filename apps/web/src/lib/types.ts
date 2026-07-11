@@ -430,6 +430,16 @@ export interface UserSettings {
 /// Where a new recording lands in the user's Personal room. Mirrors the server enum names.
 export type RecordingPlacementMode = "Ungrouped" | "SelectedFolder" | "SpecificFolder";
 
+/// The outcome of a platform restore. When the backup was from an older (forward-compatible) schema, its
+/// data is migrated up to the current version - `migratedFrom` !== `migratedTo` then, and a process restart
+/// is recommended so pooled connections / background workers rebuild.
+export interface RestoreResult {
+  restored: boolean;
+  migratedFrom: string;
+  migratedTo: string;
+  restartRecommended: boolean;
+}
+
 /// A stored MCP personal access token (the secret is never returned — only a short display prefix).
 export interface McpToken {
   id: string;

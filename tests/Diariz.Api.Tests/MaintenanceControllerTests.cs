@@ -53,6 +53,7 @@ public class MaintenanceControllerTests
 
         var manifest = JsonSerializer.Deserialize<BackupManifest>(ReadEntry(zip, "manifest.json"), JsonOpts)!;
         Assert.Equal(Migration, manifest.MigrationId);
+        Assert.Equal(MaintenanceController.CurrentFormat, manifest.Format); // the compatibility epoch
         Assert.False(manifest.IncludesKeyring);
         Assert.Equal("diariz", manifest.App);
 
@@ -100,6 +101,98 @@ public class MaintenanceControllerTests
         Assert.True(storage.Objects.ContainsKey("keep/x.webm"));  // object store untouched
     }
 
+    // ---- Cross-version compatibility (Format epoch + migration ancestor check) ----
+
+    private static readonly string[] History = ["m1", "m2", "m3"];
+
+    [Fact]
+    public async Task Restore_SameVersion_RestoresWithoutMigratingForward()
+    {
+        var backup = new FakeDatabaseBackup();
+        var schema = Schema("m3", History);
+        var result = await BuildForRestore(new FakeAudioStorage(), backup, BuildArchive("m3", "D", new()), schema).Restore();
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.True(backup.RestoreCalled);
+        Assert.False(schema.Migrated); // identical schema - no roll-forward
+    }
+
+    [Fact]
+    public async Task Restore_OlderAncestor_RestoresThenMigratesForward()
+    {
+        var backup = new FakeDatabaseBackup();
+        var schema = Schema("m3", History);
+        var result = await BuildForRestore(new FakeAudioStorage(), backup, BuildArchive("m1", "D", new()), schema).Restore();
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.True(backup.RestoreCalled);
+        Assert.True(schema.Migrated); // rolled m1 -> m3
+    }
+
+    [Fact]
+    public async Task Restore_NewerMigration_IsRejected()
+    {
+        var storage = new FakeAudioStorage();
+        storage.Objects["keep/x"] = Encoding.UTF8.GetBytes("KEEP");
+        var backup = new FakeDatabaseBackup();
+        var schema = Schema("m2", History); // this instance is behind the backup
+        var result = await BuildForRestore(storage, backup, BuildArchive("m3", "D", new()), schema).Restore();
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.False(backup.RestoreCalled);
+        Assert.False(schema.Migrated);
+        Assert.True(storage.Objects.ContainsKey("keep/x"));
+    }
+
+    [Fact]
+    public async Task Restore_UnknownMigration_IsRejected()
+    {
+        var backup = new FakeDatabaseBackup();
+        var schema = Schema("m3", History);
+        var result = await BuildForRestore(new FakeAudioStorage(), backup, BuildArchive("m9-divergent", "D", new()), schema).Restore();
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.False(backup.RestoreCalled);
+    }
+
+    [Fact]
+    public async Task Restore_OlderFormat_IsRejected()
+    {
+        var backup = new FakeDatabaseBackup();
+        var schema = Schema("m1", History);
+        var archive = BuildArchive("m1", "D", new(), format: MaintenanceController.CurrentFormat - 1);
+        var result = await BuildForRestore(new FakeAudioStorage(), backup, archive, schema).Restore();
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.False(backup.RestoreCalled);
+    }
+
+    [Fact]
+    public async Task Restore_NewerFormat_IsRejected()
+    {
+        var backup = new FakeDatabaseBackup();
+        var schema = Schema("m1", History);
+        var archive = BuildArchive("m1", "D", new(), format: MaintenanceController.CurrentFormat + 1);
+        var result = await BuildForRestore(new FakeAudioStorage(), backup, archive, schema).Restore();
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.False(backup.RestoreCalled);
+    }
+
+    [Fact]
+    public async Task Restore_OlderAncestor_ReportsTheRollForward()
+    {
+        var backup = new FakeDatabaseBackup();
+        var schema = Schema("m3", History);
+        var result = await BuildForRestore(new FakeAudioStorage(), backup, BuildArchive("m1", "D", new()), schema).Restore();
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var json = JsonSerializer.Serialize(ok.Value);
+        Assert.Contains("\"migratedFrom\":\"m1\"", json);
+        Assert.Contains("\"migratedTo\":\"m3\"", json);
+        Assert.Contains("\"restartRecommended\":true", json);
+    }
+
     [Fact]
     public async Task Restore_RejectsArchiveMissingTheDump()
     {
@@ -119,12 +212,19 @@ public class MaintenanceControllerTests
 
     // ---- helpers ----
 
-    private static MaintenanceController BuildForRestore(FakeAudioStorage storage, FakeDatabaseBackup backup, Stream body)
+    private static MaintenanceController BuildForRestore(
+        FakeAudioStorage storage, FakeDatabaseBackup backup, Stream body, FakeSchemaVersion? schema = null)
     {
         var ctx = Http.Context(Guid.NewGuid(), [Roles.PlatformAdministrator]);
         ctx.HttpContext.Request.Body = body;
-        return new MaintenanceController(storage, backup, new FakeSchemaVersion(Migration)) { ControllerContext = ctx };
+        return new MaintenanceController(storage, backup, schema ?? new FakeSchemaVersion(Migration))
+        {
+            ControllerContext = ctx,
+        };
     }
+
+    private static FakeSchemaVersion Schema(string current, params string[] known) =>
+        new(current) { Known = known.Length == 0 ? new() { current } : known.ToList() };
 
     private static byte[] ReadEntry(ZipArchive zip, string name)
     {
@@ -142,14 +242,15 @@ public class MaintenanceControllerTests
         s.Write(bytes);
     }
 
-    private static MemoryStream BuildArchive(string migration, string dump, Dictionary<string, string> objects)
+    private static MemoryStream BuildArchive(
+        string migration, string dump, Dictionary<string, string> objects, int format = MaintenanceController.CurrentFormat)
     {
         var ms = new MemoryStream();
         using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
         {
             WriteEntry(zip, "manifest.json",
                 JsonSerializer.SerializeToUtf8Bytes(
-                    new BackupManifest(1, "diariz", "0.0.0", migration, DateTimeOffset.UtcNow, false), JsonOpts));
+                    new BackupManifest(format, "diariz", "0.0.0", migration, DateTimeOffset.UtcNow, false), JsonOpts));
             WriteEntry(zip, "database.dump", Encoding.UTF8.GetBytes(dump));
             foreach (var (key, value) in objects)
                 WriteEntry(zip, "objects/" + key, Encoding.UTF8.GetBytes(value));

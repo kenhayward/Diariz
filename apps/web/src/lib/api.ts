@@ -54,6 +54,7 @@ import type {
   SpeakerProfileDetail,
   Group,
   UpdateUserProfile,
+  RestoreResult,
   UpdateUserSettings,
   UserProfile,
   UserSettings,
@@ -509,13 +510,14 @@ export const api = {
 
   /// Upload a backup archive to restore the whole platform (destructive). Streams the file as the raw
   /// request body; `onProgress` receives 0–100.
-  async restoreBackup(file: File, onProgress?: (percent: number) => void): Promise<void> {
-    await http.post("/api/maintenance/restore", file, {
+  async restoreBackup(file: File, onProgress?: (percent: number) => void): Promise<RestoreResult> {
+    const { data } = await http.post<RestoreResult>("/api/maintenance/restore", file, {
       headers: { "Content-Type": "application/zip" },
       onUploadProgress: (e) => {
         if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100));
       },
     });
+    return data;
   },
 
   /// Translate the whole transcript (segments + summary + actions) into `language` (BCP-47), or the

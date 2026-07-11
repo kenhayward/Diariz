@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
+import type { RestoreResult } from "../lib/types";
 import { useAuth } from "../auth";
 
 /// Platform-Administrator-only Maintenance tab content: download a full backup (Postgres + all object-store
@@ -15,6 +16,7 @@ export default function MaintenancePanel() {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [result, setResult] = useState<RestoreResult | null>(null);
   // Tag backfill (manual one-shot): queue tag extraction for every never-tagged recording.
   const [tagRunBusy, setTagRunBusy] = useState(false);
   const [tagRunMsg, setTagRunMsg] = useState<string | null>(null);
@@ -39,13 +41,18 @@ export default function MaintenancePanel() {
     setBusy(true);
     setProgress(0);
     try {
-      await api.restoreBackup(file, setProgress);
+      const res = await api.restoreBackup(file, setProgress);
+      setResult(res);
       setDone(true);
-      // The database and session were replaced — sign out and reload to a clean state.
-      setTimeout(() => {
-        logout();
-        window.location.reload();
-      }, 1500);
+      // A forward-migrated restore left the schema matching the running code, so the session is still valid -
+      // we keep the admin on the page to read the "restart the app" hint. A same-version restore replaced the
+      // database + session wholesale, so sign out and reload to a clean state.
+      if (!res.restartRecommended) {
+        setTimeout(() => {
+          logout();
+          window.location.reload();
+        }, 1500);
+      }
     } catch (e) {
       setError(apiErrorMessage(e, t("restoreFailed")));
       setBusy(false);
@@ -109,7 +116,19 @@ export default function MaintenancePanel() {
           <span>{t("restoreConfirm")}</span>
         </label>
         {busy && <p className="text-xs text-gray-500 dark:text-gray-400">{t("restoring", { percent: progress })}</p>}
-        {done && <p className="text-xs text-green-600 dark:text-green-400">{t("restoreSuccess")}</p>}
+        {done && !result?.restartRecommended && (
+          <p className="text-xs text-green-600 dark:text-green-400">{t("restoreSuccess")}</p>
+        )}
+        {done && result?.restartRecommended && (
+          <>
+            <p className="text-xs text-green-600 dark:text-green-400">
+              {t("restoreMigrated", { from: result.migratedFrom, to: result.migratedTo })}
+            </p>
+            <p className="rounded bg-amber-50 p-2 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+              {t("restoreRestartHint")}
+            </p>
+          </>
+        )}
         {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
         <button
           type="button"
