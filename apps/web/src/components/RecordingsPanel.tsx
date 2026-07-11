@@ -213,11 +213,11 @@ export default function RecordingsPanel() {
     });
   }
 
-  /// Apply a drag-and-drop: set the dragged recording's group + order, then refresh. Reorder + folders are a
-  /// personal-room concept (the reorder endpoint targets it); a shared room's list is a read-only placement view.
+  /// Apply a drag-and-drop: set the dragged recording's group + order within the current room, then refresh.
+  /// Order and folders are per-room, so this needs manage-contents (the personal-room owner always has it).
   async function drop(sectionId: string | null, groupIds: string[], draggedId: string, beforeId: string | null) {
-    if (!draggedId || !isPersonalRoom) return;
-    await api.reorderRecordings(sectionId, computeReorder(groupIds, draggedId, beforeId));
+    if (!draggedId || !canManageContents) return;
+    await api.reorderRecordings(sectionId, computeReorder(groupIds, draggedId, beforeId), aggRoomId);
     qc.invalidateQueries({ queryKey: ["recordings"] });
   }
 
@@ -237,13 +237,13 @@ export default function RecordingsPanel() {
   function dropSectionBefore(targetId: string, draggedId: string) {
     if (!draggedId || draggedId === targetId) return;
     const payload = reorderBeforeSection(sections, draggedId, targetId);
-    if (payload) runSection(() => api.reorderSections(payload.parentId, payload.orderedIds));
+    if (payload) runSection(() => api.reorderSections(payload.parentId, payload.orderedIds, aggRoomId));
   }
   /// Drop a section into a top-level section's body (nest it) or onto the Ungrouped bar (promote to top).
   function nestSection(parentId: string | null, draggedId: string) {
     if (!draggedId || draggedId === parentId) return;
     const payload = appendSectionUnder(sections, draggedId, parentId);
-    runSection(() => api.reorderSections(payload.parentId, payload.orderedIds));
+    runSection(() => api.reorderSections(payload.parentId, payload.orderedIds, aggRoomId));
   }
 
   // Drag audio files anywhere onto the panel to upload them (distinct from the reorder DnD, which uses

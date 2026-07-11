@@ -52,6 +52,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.124.0",
+    date: "2026-07-11",
+    pr: 273,
+    headline: "Drag-and-drop recordings in shared rooms",
+    summary:
+      "Drag-and-drop of recordings now works inside a Shared Room (it was Personal-Room only). A member who " +
+      "can manage a room's contents can drag a recording into a section and drag to reorder recordings within " +
+      "a section. Each room keeps its own order - arranging recordings in a shared room does not change your " +
+      "Personal Room, and the same recording can sit in a different order in two rooms. Also fixes a bug where " +
+      "dragging a folder heading to reorder it in a shared room affected your personal folders instead.",
+    added: [
+      "Drag a recording into a section, and drag to reorder recordings within a section, in a Shared Room (for members with the manage-contents permission).",
+    ],
+    fixed: [
+      "Reordering a folder by dragging its heading in a Shared Room now reorders that room's folders, not your personal ones.",
+    ],
+  },
+  {
     version: "0.123.0",
     date: "2026-07-11",
     pr: 272,

@@ -60,6 +60,13 @@ public class RecordingsReorderTests
         return await scope.SectionIdAsync(await scope.PersonalRoomIdAsync(userId), recordingId);
     }
 
+    // The per-room sort position of a recording, read from its placement in the given room.
+    private static async Task<int> PositionOf(DiarizDbContext db, Guid roomId, Guid recordingId) =>
+        (await db.RoomRecordings.SingleAsync(p => p.RoomId == roomId && p.RecordingId == recordingId)).Position;
+
+    private static Task<int> PositionInPersonal(DiarizDbContext db, Guid userId, Guid recordingId) =>
+        PositionOf(db, new RoomScope(db).PersonalRoomIdAsync(userId).Result, recordingId);
+
     [Fact]
     public async Task Reorder_SetsPositionsInOrder()
     {
@@ -73,9 +80,11 @@ public class RecordingsReorderTests
         var res = await Build(db, userId).Reorder(new ReorderRecordingsRequest(null, [c.Id, a.Id, b.Id]));
 
         Assert.IsType<NoContentResult>(res);
-        Assert.Equal(0, (await db.Recordings.FindAsync(c.Id))!.Position);
-        Assert.Equal(1, (await db.Recordings.FindAsync(a.Id))!.Position);
-        Assert.Equal(2, (await db.Recordings.FindAsync(b.Id))!.Position);
+        // Order lives on the placement now, not the recording.
+        Assert.Equal(0, await PositionInPersonal(db, userId, c.Id));
+        Assert.Equal(1, await PositionInPersonal(db, userId, a.Id));
+        Assert.Equal(2, await PositionInPersonal(db, userId, b.Id));
+        Assert.Equal(0, (await db.Recordings.FindAsync(c.Id))!.Position); // global Position untouched (dead)
     }
 
     [Fact]
@@ -114,10 +123,11 @@ public class RecordingsReorderTests
         var mine = await Seed(db, me);
         var theirs = await Seed(db, Guid.NewGuid());
 
+        // theirs isn't placed in my room, so the payload doesn't fully resolve here → 404, nothing changed.
         var res = await Build(db, me).Reorder(new ReorderRecordingsRequest(null, [mine.Id, theirs.Id]));
 
         Assert.IsType<NotFoundResult>(res);
-        Assert.Equal(0, (await db.Recordings.FindAsync(mine.Id))!.Position); // untouched
+        Assert.Equal(0, await PositionInPersonal(db, me, mine.Id)); // untouched
     }
 
     [Fact]
@@ -145,5 +155,61 @@ public class RecordingsReorderTests
         var list = (await Build(db, userId).List()).Value!;
 
         Assert.Equal([b.Id, a.Id], list.Select(r => r.Id));
+    }
+
+    // ---- Shared-room reorder (per-placement order + permission gate) ----
+
+    // A shared room the member holds `perm` in, with `recIds` shared into it (owned by their recorder).
+    private static async Task<Guid> SharedRoomWith(DiarizDbContext db, Guid member, RoomPermission perm, params Guid[] recIds)
+    {
+        var scope = new RoomScope(db);
+        var roomId = await scope.CreateSharedRoomAsync("Eng", null, null, null);
+        await scope.SetMemberAsync(roomId, RoomPrincipalType.User, member, perm);
+        foreach (var id in recIds)
+            await scope.ShareIntoRoomAsync(id, roomId, member, sectionId: null);
+        return roomId;
+    }
+
+    [Fact]
+    public async Task Reorder_InSharedRoom_OrdersThePlacementsThere_IndependentlyOfPersonal()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var a = await Seed(db, me);
+        var b = await Seed(db, me);
+        var roomId = await SharedRoomWith(db, me, RoomPermission.ManageContents | RoomPermission.CreateRecording, a.Id, b.Id);
+
+        // Personal order: a, b. Shared-room order: b, a.
+        await Build(db, me).Reorder(new ReorderRecordingsRequest(null, [a.Id, b.Id]));
+        await Build(db, me).Reorder(new ReorderRecordingsRequest(null, [b.Id, a.Id], RoomId: roomId));
+
+        Assert.Equal(0, await PositionInPersonal(db, me, a.Id)); // personal unchanged
+        Assert.Equal(1, await PositionInPersonal(db, me, b.Id));
+        Assert.Equal(0, await PositionOf(db, roomId, b.Id));     // room has its own order
+        Assert.Equal(1, await PositionOf(db, roomId, a.Id));
+    }
+
+    [Fact]
+    public async Task Reorder_InSharedRoom_WithoutManageContents_Is403()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var a = await Seed(db, me);
+        var roomId = await SharedRoomWith(db, me, RoomPermission.CreateRecording, a.Id); // no ManageContents
+
+        var res = await Build(db, me).Reorder(new ReorderRecordingsRequest(null, [a.Id], RoomId: roomId));
+        Assert.IsType<ForbidResult>(res);
+    }
+
+    [Fact]
+    public async Task Reorder_InRoom_TheCallerIsNotAMemberOf_Is404()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        Users.Ensure(db, me);
+        var roomId = await new RoomScope(db).CreateSharedRoomAsync("Eng", null, null, null); // never joined
+
+        var res = await Build(db, me).Reorder(new ReorderRecordingsRequest(null, [Guid.NewGuid()], RoomId: roomId));
+        Assert.IsType<NotFoundResult>(res);
     }
 }

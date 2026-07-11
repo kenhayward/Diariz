@@ -814,6 +814,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<bool>("IsMainRoom")
                         .HasColumnType("boolean");
 
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
                     b.Property<Guid?>("SectionId")
                         .HasColumnType("uuid");
 

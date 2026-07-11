@@ -25,6 +25,11 @@ public class RoomRecording
     public Guid? SectionId { get; set; }
     public Section? Section { get; set; }
 
+    /// <summary>Manual sort order WITHIN THIS ROOM (lower = higher in the list); ties fall back to newest-first
+    /// by <c>Recording.CreatedAt</c>. Per-placement, so the same recording can be ordered differently in two
+    /// rooms. Supersedes the now-dead global <c>Recording.Position</c> - order the room list by this.</summary>
+    public int Position { get; set; }
+
     /// <summary>Null on the main-room row: nobody shared a recording into its own home.</summary>
     public Guid? SharedByUserId { get; set; }
     public DateTimeOffset? SharedAt { get; set; }
