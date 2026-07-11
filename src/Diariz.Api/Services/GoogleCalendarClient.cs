@@ -175,25 +175,40 @@ public class GoogleCalendarClient : IGoogleCalendarClient
     private async Task<List<CalendarEvent>> ListRawEventsAsync(
         string access, string calendarId, DateTimeOffset timeMin, DateTimeOffset timeMax, CancellationToken ct)
     {
-        // singleEvents expands recurring series into instances; RFC-3339 bounds keep the window tight.
-        var url = QueryHelpers.AddQueryString($"{CalendarsBase}/{Uri.EscapeDataString(calendarId)}/events", new Dictionary<string, string?>
+        // Page through the whole window. Google caps each response at `maxResults`; a busy calendar easily
+        // exceeds it, and `orderBy=startTime` returns the EARLIEST first - so without following nextPageToken
+        // the later (future) events were silently dropped. singleEvents expands recurring series into instances.
+        var results = new List<CalendarEvent>();
+        string? pageToken = null;
+        for (var page = 0; page < 20; page++) // safety cap: 20 x 250 = 5000 events per calendar per window
         {
-            ["singleEvents"] = "true",
-            ["orderBy"] = "startTime",
-            ["maxResults"] = "50",
-            ["timeMin"] = timeMin.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
-            ["timeMax"] = timeMax.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
-        });
-        using var req = new HttpRequestMessage(HttpMethod.Get, url);
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", access);
+            var query = new Dictionary<string, string?>
+            {
+                ["singleEvents"] = "true",
+                ["orderBy"] = "startTime",
+                ["maxResults"] = "250",
+                ["timeMin"] = timeMin.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                ["timeMax"] = timeMax.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            };
+            if (pageToken is not null) query["pageToken"] = pageToken;
+            var url = QueryHelpers.AddQueryString($"{CalendarsBase}/{Uri.EscapeDataString(calendarId)}/events", query);
 
-        using var resp = await _http.SendAsync(req, ct);
-        if (!resp.IsSuccessStatusCode)
-        {
-            var body = await resp.Content.ReadAsStringAsync(ct);
-            throw new InvalidOperationException($"Calendar events failed ({(int)resp.StatusCode}): {Truncate(body, 500)}");
+            using var req = new HttpRequestMessage(HttpMethod.Get, url);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", access);
+
+            using var resp = await _http.SendAsync(req, ct);
+            if (!resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadAsStringAsync(ct);
+                throw new InvalidOperationException($"Calendar events failed ({(int)resp.StatusCode}): {Truncate(body, 500)}");
+            }
+
+            var (events, next) = ParseEventsPage(await resp.Content.ReadAsStringAsync(ct));
+            results.AddRange(events);
+            if (string.IsNullOrEmpty(next)) break;
+            pageToken = next;
         }
-        return ParseEvents(await resp.Content.ReadAsStringAsync(ct));
+        return results;
     }
 
     /// <summary>GET one event from a specific calendar, or null if it isn't there (404/410) or that calendar
@@ -212,17 +227,23 @@ public class GoogleCalendarClient : IGoogleCalendarClient
 
     /// <summary>Project Google's events list into <see cref="CalendarEvent"/>s. Skips events without a
     /// parseable start/end. Handles both timed (<c>dateTime</c>) and all-day (<c>date</c>) events.</summary>
-    public static List<CalendarEvent> ParseEvents(string json)
+    public static List<CalendarEvent> ParseEvents(string json) => ParseEventsPage(json).Events;
+
+    /// <summary>Parse one events-list page into its events plus the <c>nextPageToken</c> (null on the last page)
+    /// so the caller can page through a large window. Pure, for unit tests.</summary>
+    public static (List<CalendarEvent> Events, string? NextPageToken) ParseEventsPage(string json)
     {
         var events = new List<CalendarEvent>();
         using var doc = JsonDocument.Parse(json);
-        if (!doc.RootElement.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
-            return events;
+        if (doc.RootElement.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
+            foreach (var item in items.EnumerateArray())
+                if (ParseEvent(item) is { } e)
+                    events.Add(e);
 
-        foreach (var item in items.EnumerateArray())
-            if (ParseEvent(item) is { } e)
-                events.Add(e);
-        return events;
+        var next = doc.RootElement.TryGetProperty("nextPageToken", out var t) && t.ValueKind == JsonValueKind.String
+            ? t.GetString()
+            : null;
+        return (events, next);
     }
 
     /// <summary>Project a single Google event object into a <see cref="CalendarEvent"/> (rich fields included),
