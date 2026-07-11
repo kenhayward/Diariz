@@ -52,6 +52,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.122.1",
+    date: "2026-07-11",
+    pr: 271,
+    headline: "Room icons on the recording overview + share, with a share confirmation",
+    summary:
+      "The recording overview's Rooms line and the Share-to-room picker now show each room's chosen icon on " +
+      "its colour, instead of a plain coloured dot. Sharing a recording into a room now pops a short " +
+      "confirmation toast (e.g. \"Weekly meeting shared to Podcasts.\").",
+    changed: [
+      "The Rooms line on a recording and the Share-to-room list show each room's icon badge, not just a colour dot.",
+    ],
+    added: [
+      "A confirmation toast appears after sharing a recording into a room.",
+    ],
+  },
+  {
     version: "0.122.0",
     date: "2026-07-11",
     pr: 270,

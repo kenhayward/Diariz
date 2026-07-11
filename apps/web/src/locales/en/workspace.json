@@ -37,6 +37,7 @@
   "confirmDeleteShared": "Delete \"{{name}}\"? It is shared into: {{rooms}}. It will vanish from those rooms too. This cannot be undone.",
   "confirmRemoveFromRoom": "Remove this recording from \"{{room}}\"? It stays in your Personal Room; only this room's copy is removed.",
   "shareToRoomTitle": "Share to a room",
+  "sharedToRoom": "{{recording}} shared to {{room}}.",
   "shareNoRooms": "No rooms you can add recordings to.",
   "confirmDeleteAudio": "Delete the audio for \"{{name}}\"? The transcript is kept and its storage is freed; this can't be undone.",
   "confirmDeleteAudioBulk_one": "Delete the audio for {{count}} recording? Their transcripts are kept and storage is freed; this can't be undone.",

@@ -37,6 +37,7 @@
   "confirmDeleteShared": "Supprimer « {{name}} » ? Partagé dans : {{rooms}}. Il disparaîtra aussi de ces salles. Cette action est irréversible.",
   "confirmRemoveFromRoom": "Retirer cet enregistrement de « {{room}} » ? Il reste dans votre salle personnelle ; seule la copie de cette salle est retirée.",
   "shareToRoomTitle": "Partager dans une salle",
+  "sharedToRoom": "{{recording}} partagé dans {{room}}.",
   "shareNoRooms": "Aucune salle à laquelle vous pouvez ajouter des enregistrements.",
   "confirmDeleteAudio": "Supprimer l'audio de « {{name}} » ? La transcription est conservée et son stockage est libéré ; cette action est irréversible.",
   "confirmDeleteAudioBulk_one": "Supprimer l'audio de {{count}} enregistrement ? Les transcriptions sont conservées et le stockage est libéré ; cette action est irréversible.",
