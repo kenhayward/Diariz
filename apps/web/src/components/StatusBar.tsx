@@ -16,7 +16,7 @@ export default function StatusBar() {
   const { t, i18n } = useTranslation(["account", "workspace"]);
   const { status } = useStatus();
   const { busy, items } = useUpload();
-  const { data: recordings = [] } = useQuery({ queryKey: ["recordings"], queryFn: api.listRecordings });
+  const { data: recordings = [] } = useQuery({ queryKey: ["recordings"], queryFn: () => api.listRecordings() });
   const { data: storage } = useQuery({ queryKey: ["user-storage"], queryFn: api.getUserStorage });
 
   // Left message: explicit push > uploads in flight > derived pipeline > nothing.

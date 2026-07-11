@@ -64,18 +64,20 @@ public class RecordingsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IReadOnlyList<RecordingSummaryDto>> List()
+    public async Task<ActionResult<IReadOnlyList<RecordingSummaryDto>>> List([FromQuery] Guid? roomId = null)
     {
-        // The folder each recording sits in is now a property of its placement in the caller's personal room.
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        // The recordings of the room being viewed (its personal room by default). A folder is a property of the
+        // placement in THAT room. Membership is the read gate - a non-member 404s rather than learning it exists.
+        var room = roomId ?? await _rooms.PersonalRoomIdAsync(UserId);
+        if (!await _rooms.IsMemberAsync(UserId, room)) return NotFound();
+
         var folderOf = await _db.RoomRecordings
-            .Where(p => p.RoomId == roomId)
+            .Where(p => p.RoomId == room)
             .Select(p => new { p.RecordingId, p.SectionId, SectionName = p.Section != null ? p.Section.Name : null })
             .ToDictionaryAsync(x => x.RecordingId, x => (x.SectionId, x.SectionName));
 
-        // Project server-side (no `folderOf` in the SQL), then splice the folder in memory.
-        var rows = await _db.Recordings
-            .Where(r => r.UserId == UserId)
+        // Recordings placed in this room (main + shared). Project server-side, then splice the folder in memory.
+        var rows = await _rooms.RecordingsIn(room)
             .OrderBy(r => r.Position)
             .ThenByDescending(r => r.CreatedAt)
             .Select(r => new

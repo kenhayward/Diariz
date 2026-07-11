@@ -8,6 +8,9 @@ import type { RecordingSummary } from "../lib/types";
 vi.mock("../lib/signalr", () => ({
   createHub: () => ({ start: () => Promise.resolve(), stop: () => Promise.resolve(), on: () => {} }),
 }));
+// The panel scopes its lists to the current room; stub the personal room (full features shown).
+const roomStub = { currentRoom: { id: "p1", isPersonal: true } as { id: string; isPersonal: boolean } };
+vi.mock("../lib/rooms", () => ({ useRoom: () => roomStub }));
 
 vi.mock("../lib/api", () => ({
   api: {
@@ -85,10 +88,23 @@ describe("RecordingsPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear(); // collapse state persists to localStorage
+    roomStub.currentRoom = { id: "p1", isPersonal: true };
     (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([]); // reset between tests (impl persists)
     (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([rec]);
     (api.summarize as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.deleteRecording as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+  });
+
+  it("browses the current room: fetches its recordings and hides personal-only tabs + New section in a shared room", async () => {
+    roomStub.currentRoom = { id: "eng-room", isPersonal: false };
+    renderList();
+
+    expect(await screen.findByText("Weekly Standup")).toBeTruthy();
+    // The list is fetched for the shared room.
+    expect(api.listRecordings).toHaveBeenCalledWith("eng-room");
+    // Actions/Tags aggregate the personal library, so they're hidden; New section (folders) is gone too.
+    expect(screen.queryByRole("button", { name: /^tags$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /new section/i })).toBeNull();
   });
 
   it("collapses and expands a group when its header is clicked", async () => {

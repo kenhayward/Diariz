@@ -129,7 +129,9 @@ each member carrying their own **permission grid** (add recordings, manage conte
 share out, edit others' recordings, manage the room). A **room switcher** sits above the recordings list, and
 **Manage Rooms** (in the switcher) creates, renames, restyles (icon + colour) and deletes rooms and edits their
 membership; deleting a room needs its name typed to confirm. The room lives in the URL (`/rooms/:roomId`), so
-switching keeps a clean, linkable address. **Recording while a shared room is open** files the meeting into that
+switching keeps a clean, linkable address - and **browses that room**: picking a Shared Room shows the recordings
+shared into it (a flat list; folders, drag-reorder, the personal Calendar overlay and the Actions/Tags aggregation
+tabs are Personal-Room features and stay there). **Recording while a shared room is open** files the meeting into that
 room automatically, while the original stays in your Personal Room - so a shared room can only ever **unshare** a
 recording, never delete it. You can also **Share to room** an existing recording (or **Remove from room**) from
 its toolbar; the recording's Overview shows a **Rooms** line (home room first) and a **Recorded by** line, and

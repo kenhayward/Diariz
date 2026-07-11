@@ -346,11 +346,13 @@ public class RecordingsControllerIntegrationTests(ContainersFixture fx)
                 HtmlLink = "https://cal/evt42", LinkedManually = true,
             });
             await db.SaveChangesAsync();
+            // The recordings list is room-scoped now - place the recording in the owner's personal room.
+            await new RoomScope(db).PlaceInMainRoomAsync(rec.Id, user.Id, sectionId: null);
             (userId, recId) = (user.Id, rec.Id);
         }
 
         await using var db2 = fx.CreateDbContext();
-        var list = await Build(db2, userId).List();
+        var list = (await Build(db2, userId).List()).Value!;
         Assert.Equal("evt42", list.Single(r => r.Id == recId).CalendarEventId);
 
         var dto = Assert.IsType<RecordingDetailDto>((await Build(db2, userId).Get(recId)).Value);

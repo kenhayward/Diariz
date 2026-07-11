@@ -21,7 +21,7 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const { isPlatformAdmin } = useAuth();
   const { data } = useQuery({ queryKey: ["user-settings"], queryFn: api.getUserSettings });
   // Personal-room folders for the "Use a specific folder" chooser (flattened "Parent › Child").
-  const { data: sections = [] } = useQuery({ queryKey: ["sections"], queryFn: api.listSections });
+  const { data: sections = [] } = useQuery({ queryKey: ["sections"], queryFn: () => api.listSections() });
   const { data: platform } = useQuery({
     queryKey: ["platform-settings"],
     queryFn: api.getPlatformSettings,

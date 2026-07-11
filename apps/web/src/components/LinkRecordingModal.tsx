@@ -29,7 +29,7 @@ export default function LinkRecordingModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const { data: recordings = [] } = useQuery({ queryKey: ["recordings"], queryFn: api.listRecordings });
+  const { data: recordings = [] } = useQuery({ queryKey: ["recordings"], queryFn: () => api.listRecordings() });
 
   const shown = useMemo(() => {
     const q = filter.trim().toLowerCase();
