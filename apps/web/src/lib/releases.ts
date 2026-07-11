@@ -52,6 +52,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.124.2",
+    date: "2026-07-11",
+    pr: 275,
+    headline: "Fix the blank in-app API reference",
+    summary:
+      "The API reference page (Settings - Integration - View API reference) was blank. The published OpenAPI " +
+      "document failed to generate server-side because a recording's response carried a non-nullable id field " +
+      "with a default value, which crashes the schema exporter - so the whole document 500'd and the page " +
+      "rendered nothing. Fixed the field, and the page now shows a clear error with a Retry instead of a blank " +
+      "screen if the document ever fails again.",
+    fixed: [
+      "The in-app API reference now loads (the OpenAPI document was failing to generate).",
+      "The API reference shows a loading state and an error-with-retry instead of a blank page on failure.",
+    ],
+  },
+  {
     version: "0.124.1",
     date: "2026-07-11",
     pr: 274,

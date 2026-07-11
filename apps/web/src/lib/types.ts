@@ -328,7 +328,7 @@ export interface RecordingDetail {
   /// The chosen meeting type driving the minutes template, or null for the General default.
   meetingTypeId?: string | null;
   /// Who recorded it (the owner), and their display name (null = a deleted/unknown user).
-  recordedByUserId: string;
+  recordedByUserId: string | null;
   recordedByName: string | null;
   /// The rooms this recording is placed in that the caller can see, home (main) room first.
   rooms: RecordingRoom[] | null;
