@@ -510,6 +510,25 @@ describe("RecordingsPanel", () => {
     expect((screen.getByRole("button", { name: /refresh/i }) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it("shows only recordings on the calendar in a shared room (no Google-event overlay)", async () => {
+    roomStub.currentRoom = { id: "eng-room", isPersonal: false };
+    localStorage.setItem("diariz.recordings.tab", "calendar");
+    const today = new Date();
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true }); // connected
+    (api.getCalendarEvents as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "e1", summary: "Standup", start: today.toISOString(), end: today.toISOString() },
+    ]);
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...rec, id: "today", name: "Today call", createdAt: today.toISOString() },
+    ]);
+    renderList();
+
+    expect(await screen.findByText("Today call")).toBeTruthy(); // the room's recording shows
+    // The personal Google overlay is never fetched or offered in a shared room.
+    expect(api.getCalendarEvents).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /refresh events/i })).toBeNull();
+  });
+
   it("Tags tab shows the cloud; picking a tag filters the list below", async () => {
     (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
       { ...rec, id: "a", name: "Budget call" },

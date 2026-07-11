@@ -119,12 +119,19 @@ export default function RecordingDetail() {
   const { data: profile } = useQuery({ queryKey: ["user-profile"], queryFn: api.getProfile });
   const { data: languages = [] } = useQuery({ queryKey: ["languages"], queryFn: fetchLanguages });
   const nativeLang = languages.find((l) => l.code === profile?.nativeLanguage) ?? null;
+
+  // The room being viewed. Calendar is a personal-only concept: in a shared room we hide any linked event and
+  // never link (auto or manual), and skip the calendar fetches entirely. (Above the early return below so it
+  // stays a top-level hook.)
+  const { currentRoom } = useRoom();
+  const inSharedRoom = Boolean(currentRoom && !currentRoom.isPersonal);
+
   // If the user has connected Google Calendar, find the meeting this recording overlaps (the suggestion
-  // that seeds the auto-saved link and the "Suggested meeting" prompt).
+  // that seeds the auto-saved link and the "Suggested meeting" prompt). Personal room only.
   const { data: calendarMatch } = useQuery({
     queryKey: ["calendar-match", id],
     queryFn: () => api.getCalendarMatch(id),
-    enabled: Boolean(id) && profile?.googleCalendar === true,
+    enabled: Boolean(id) && !inSharedRoom && profile?.googleCalendar === true,
     retry: false,
   });
   // The full, live details of the linked event (attendees/description/location) for the Overview. Falls
@@ -133,16 +140,17 @@ export default function RecordingDetail() {
   const { data: linkedEvent } = useQuery({
     queryKey: ["calendar-event", linkedEventId],
     queryFn: () => api.getCalendarEvent(linkedEventId!),
-    enabled: Boolean(linkedEventId),
+    enabled: Boolean(linkedEventId) && !inSharedRoom,
     retry: false,
   });
   const [linkModalOpen, setLinkModalOpen] = useState(false);
 
   // Auto-save the best time-overlap match the first time an unlinked recording is opened, so the calendar
-  // icon + Overview details appear with no clicks. Manual links and existing links are never touched.
+  // icon + Overview details appear with no clicks. Manual links and existing links are never touched, and it
+  // never fires while viewing a shared room (calendar is personal-only).
   const autoLinkedRef = useRef(false);
   useEffect(() => {
-    if (!id || !rec || profile?.googleCalendar !== true) return;
+    if (!id || !rec || inSharedRoom || profile?.googleCalendar !== true) return;
     if (rec.calendarLink || !calendarMatch || autoLinkedRef.current) return;
     autoLinkedRef.current = true;
     api
@@ -152,7 +160,7 @@ export default function RecordingDetail() {
       .catch(() => {
         autoLinkedRef.current = false; // let a later render retry (e.g. the event became reachable)
       });
-  }, [id, rec, profile, calendarMatch, qc]);
+  }, [id, rec, inSharedRoom, profile, calendarMatch, qc]);
 
   async function unlinkMeeting() {
     if (!id) return;
@@ -875,7 +883,6 @@ export default function RecordingDetail() {
 
   // Room context for sharing: the recording's home (main) room, the rooms it is in, and whether the room
   // currently being viewed is a shared placement (which enables Remove-from-room and hides Delete).
-  const { currentRoom } = useRoom();
   const homeRoom = rec.rooms?.find((r) => r.isMain);
   const inRoomIds = (rec.rooms ?? []).map((r) => r.id);
   const viewingSharedPlacement = Boolean(
@@ -1017,8 +1024,9 @@ export default function RecordingDetail() {
             )}
           </dl>
 
-          {/* Linked meeting: full invite details (live, falling back to the stored snapshot) + manage actions. */}
-          {rec.calendarLink && (
+          {/* Linked meeting: full invite details (live, falling back to the stored snapshot) + manage actions.
+              Calendar is personal-only, so it is hidden while viewing the recording in a shared room. */}
+          {rec.calendarLink && !inSharedRoom && (
             <div className="mb-4 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
               <CalendarEventDetails
                 showTitle
@@ -1051,8 +1059,9 @@ export default function RecordingDetail() {
             </div>
           )}
 
-          {/* Unlinked but Calendar connected: accept the suggestion (if any) or browse to link one by hand. */}
-          {!rec.calendarLink && profile?.googleCalendar === true && (
+          {/* Unlinked but Calendar connected: accept the suggestion (if any) or browse to link one by hand.
+              Not offered in a shared room - calendar linking is personal-only. */}
+          {!rec.calendarLink && !inSharedRoom && profile?.googleCalendar === true && (
             <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
               {calendarMatch && (
                 <>

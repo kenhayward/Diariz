@@ -52,6 +52,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.124.1",
+    date: "2026-07-11",
+    pr: 274,
+    headline: "Calendar stays personal in shared rooms",
+    summary:
+      "Your Google Calendar is a personal feature, so it no longer leaks into shared rooms. A shared room's " +
+      "Calendar view now shows only the recordings shared into that room, not your personal calendar events. " +
+      "And when you open a recording while in a shared room, its linked meeting details are hidden and no " +
+      "calendar linking is offered (or auto-applied) - your Personal Room still shows all of it as before.",
+    fixed: [
+      "A shared room's Calendar view no longer shows your personal Google Calendar events (recordings only).",
+      "Opening a recording in a shared room no longer shows its linked meeting or offers calendar linking; auto-linking is skipped there too.",
+    ],
+  },
+  {
     version: "0.124.0",
     date: "2026-07-11",
     pr: 273,

@@ -18,8 +18,13 @@ vi.mock("../lib/signalr", () => ({
 
 // The transcript weaves the current user's notes in, so the page reads useAuth for the note "speaker".
 vi.mock("../auth", () => ({ useAuth: () => ({ fullName: "Test User", email: "t@x.test" }) }));
-// RecordingDetail reads the current room to gate Share / Remove-from-room / Delete; stub it (no room context).
-vi.mock("../lib/rooms", () => ({ useRoom: () => ({ rooms: [], currentRoom: undefined }) }));
+// RecordingDetail reads the current room to gate Share / Remove-from-room / Delete + the calendar surface;
+// mutable so a test can view the recording inside a shared room.
+const roomState: {
+  rooms: unknown[];
+  currentRoom: { id: string; name: string; isPersonal: boolean } | undefined;
+} = { rooms: [], currentRoom: undefined };
+vi.mock("../lib/rooms", () => ({ useRoom: () => roomState }));
 
 vi.mock("../lib/api", () => ({
   api: {
@@ -128,6 +133,7 @@ const openTab = (name: RegExp) => fireEvent.click(screen.getByRole("tab", { name
 describe("RecordingDetail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    roomState.currentRoom = undefined; // default: personal-room context
     localStorage.clear(); // the selected tab persists in localStorage — reset between tests
     (api.retranscribe as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.summarize as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
@@ -192,6 +198,34 @@ describe("RecordingDetail", () => {
     expect(screen.getByRole("button", { name: /unlink meeting/i })).toBeTruthy();
     // Already linked → the auto-save must not fire.
     expect(api.putCalendarLink).not.toHaveBeenCalled();
+  });
+
+  it("hides the linked meeting on the Overview while viewing in a shared room (calendar is personal-only)", async () => {
+    roomState.currentRoom = { id: "eng-room", name: "Podcasts", isPersonal: false };
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true });
+    renderPage({
+      ...base,
+      calendarLink: { eventId: "evt1", calendarId: "primary", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt, htmlLink: "https://cal/evt1", linkedManually: false },
+    });
+    await loaded();
+
+    expect(screen.queryByRole("link", { name: "Quarterly Planning" })).toBeNull(); // block hidden
+    expect(screen.queryByRole("button", { name: /change meeting/i })).toBeNull();
+    expect(api.getCalendarEvent).not.toHaveBeenCalled(); // no calendar fetch in a shared room
+  });
+
+  it("does not link (auto or manual) while viewing an unlinked recording in a shared room", async () => {
+    roomState.currentRoom = { id: "eng-room", name: "Podcasts", isPersonal: false };
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true });
+    (api.getCalendarMatch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt, htmlLink: "https://cal/evt1", calendarId: "team@g",
+    });
+    renderPage(base); // unlinked
+    await loaded();
+
+    expect(api.getCalendarMatch).not.toHaveBeenCalled(); // suggestion not even fetched
+    expect(api.putCalendarLink).not.toHaveBeenCalled(); // no auto-link
+    expect(screen.queryByRole("button", { name: /link.*meeting|link a meeting/i })).toBeNull();
   });
 
   it("unlinks the meeting when Unlink is clicked", async () => {

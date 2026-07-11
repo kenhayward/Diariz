@@ -177,7 +177,7 @@ export default function RecordingsPanel() {
   // Keyed by month, so navigating months auto-refetches; a short staleTime avoids refetch churn on focus.
   const { data: profile } = useQuery({ queryKey: ["user-profile"], queryFn: api.getProfile });
   const calendarConnected = profile?.googleCalendar === true;
-  const { data: events = [], isFetching: eventsFetching } = useQuery({
+  const { data: calendarEvents = [], isFetching: eventsFetching } = useQuery({
     queryKey: ["calendar-events", month.year, month.month],
     queryFn: () => {
       const { timeMin, timeMax } = visibleGridRange(month.year, month.month);
@@ -188,6 +188,10 @@ export default function RecordingsPanel() {
     staleTime: 5 * 60_000,
     retry: false,
   });
+  // The Google overlay is personal-only. Force events empty in a shared room (the disabled query still holds
+  // the last personal-room data in cache - the key is room-agnostic - so gate the derived value, not just the fetch).
+  const showCalendarOverlay = calendarConnected && isPersonalRoom;
+  const events = isPersonalRoom ? calendarEvents : [];
   const eventKeys = useMemo(() => eventDayKeys(events), [events]);
   const selectedItems = selectedDay ? dayItems(recordings, events, selectedDay) : [];
   function stepMonth(delta: number) {
@@ -451,13 +455,13 @@ export default function RecordingsPanel() {
                 year={month.year}
                 month={month.month}
                 daysWithRecordings={dayKeys}
-                daysWithEvents={calendarConnected ? eventKeys : undefined}
+                daysWithEvents={showCalendarOverlay ? eventKeys : undefined}
                 selectedKey={selectedDay}
                 onSelect={setSelectedDay}
                 onPrev={() => stepMonth(-1)}
                 onNext={() => stepMonth(1)}
               />
-              {calendarConnected && (
+              {showCalendarOverlay && (
                 <div className="flex items-center justify-end px-2 pb-1">
                   <button
                     type="button"
@@ -474,7 +478,7 @@ export default function RecordingsPanel() {
             <div ref={dayScrollRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
               {selectedItems.length === 0 ? (
                 <p className="p-4 text-sm text-gray-500 dark:text-gray-400">
-                  {calendarConnected ? t("calDayEmpty") : t("calNoRecordings")}
+                  {showCalendarOverlay ? t("calDayEmpty") : t("calNoRecordings")}
                 </p>
               ) : (
                 <ul className="divide-y dark:divide-gray-800">
