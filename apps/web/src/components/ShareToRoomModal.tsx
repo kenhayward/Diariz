@@ -3,23 +3,28 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import { useRoom } from "../lib/rooms";
+import { useToast } from "../lib/toast";
 import { RoomPermission } from "../lib/types";
+import RoomBadge from "./RoomBadge";
 
 /// Pick a shared room to share this recording into. Lists the rooms the caller can add recordings to (holds
 /// CreateRecording), excluding the ones the recording is already in. The link lands ungrouped in the target.
 export default function ShareToRoomModal({
   recordingId,
+  recordingName,
   fromRoomId,
   alreadyInRoomIds,
   onClose,
 }: {
   recordingId: string;
+  recordingName: string;
   fromRoomId: string;
   alreadyInRoomIds: string[];
   onClose: () => void;
 }) {
   const { t } = useTranslation("workspace");
   const { rooms } = useRoom();
+  const { showToast } = useToast();
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
 
@@ -29,8 +34,10 @@ export default function ShareToRoomModal({
 
   const share = useMutation({
     mutationFn: (toRoomId: string) => api.shareRecordingToRoom(recordingId, fromRoomId, toRoomId),
-    onSuccess: () => {
+    onSuccess: (_data, toRoomId) => {
+      const room = targets.find((r) => r.id === toRoomId);
       void qc.invalidateQueries({ queryKey: ["recording", recordingId] });
+      showToast(t("sharedToRoom", { recording: recordingName, room: room?.name ?? "" }));
       onClose();
     },
     onError: (e) => setError(apiErrorMessage(e)),
@@ -58,13 +65,7 @@ export default function ShareToRoomModal({
                   onClick={() => share.mutate(r.id)}
                   className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-gray-100 disabled:opacity-50 dark:text-gray-100 dark:hover:bg-gray-800"
                 >
-                  {r.color && (
-                    <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: r.color }}
-                      aria-hidden="true"
-                    />
-                  )}
+                  <RoomBadge icon={r.icon} color={r.color} name={r.name} size="xs" />
                   <span className="truncate">{r.name}</span>
                 </button>
               </li>

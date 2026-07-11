@@ -37,6 +37,7 @@
   "confirmDeleteShared": "„{{name}}“ löschen? Geteilt in: {{rooms}}. Es verschwindet auch aus diesen Räumen. Dies kann nicht rückgängig gemacht werden.",
   "confirmRemoveFromRoom": "Diese Aufnahme aus „{{room}}“ entfernen? Sie bleibt in Ihrem persönlichen Raum; nur die Kopie dieses Raums wird entfernt.",
   "shareToRoomTitle": "In einen Raum teilen",
+  "sharedToRoom": "{{recording}} in {{room}} geteilt.",
   "shareNoRooms": "Keine Räume, zu denen Sie Aufnahmen hinzufügen können.",
   "confirmDeleteAudio": "Das Audio von „{{name}}“ löschen? Die Transkription bleibt erhalten und der Speicher wird freigegeben; dies kann nicht rückgängig gemacht werden.",
   "confirmDeleteAudioBulk_one": "Das Audio von {{count}} Aufnahme löschen? Die Transkriptionen bleiben erhalten und Speicher wird freigegeben; dies kann nicht rückgängig gemacht werden.",

@@ -12,6 +12,7 @@ import ActionsTable from "../components/ActionsTable";
 import DetailTabs, { type DetailTab } from "../components/DetailTabs";
 import MoveToSectionModal from "../components/MoveToSectionModal";
 import ShareToRoomModal from "../components/ShareToRoomModal";
+import RoomBadge from "../components/RoomBadge";
 import { useRoom } from "../lib/rooms";
 import DownloadTranscriptModal from "../components/DownloadTranscriptModal";
 import SummaryEditModal from "../components/SummaryEditModal";
@@ -1002,15 +1003,9 @@ export default function RecordingDetail() {
                   {rec.rooms.map((room) => (
                     <span
                       key={room.id}
-                      className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs dark:border-gray-700"
+                      className="inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-1 pr-2 text-xs dark:border-gray-700"
                     >
-                      {room.color && (
-                        <span
-                          className="h-2 w-2 shrink-0 rounded-full"
-                          style={{ backgroundColor: room.color }}
-                          aria-hidden="true"
-                        />
-                      )}
+                      <RoomBadge icon={room.icon} color={room.color} name={room.name} size="2xs" />
                       {room.name}
                       {room.isMain && (
                         <span className="text-gray-400 dark:text-gray-500">{t("workspace:roomHomeTag")}</span>
@@ -1524,6 +1519,7 @@ export default function RecordingDetail() {
       {sharing && homeRoom && (
         <ShareToRoomModal
           recordingId={id}
+          recordingName={rec.name ?? rec.title}
           fromRoomId={homeRoom.id}
           alreadyInRoomIds={inRoomIds}
           onClose={() => setSharing(false)}
