@@ -24,6 +24,12 @@ public class MaintenanceController : ControllerBase
     private const string ManifestEntry = "manifest.json";
     private const string DumpEntry = "database.dump";
     private const string ObjectPrefix = "objects/";
+
+    /// <summary>Backup archive compatibility epoch. Bump ONLY when a migration is not forward-restore-safe
+    /// (a destructive drop/rename, a pgvector dimension change, a semantic data reshape); a mismatch is
+    /// hard-rejected on restore. Within one Format, the migration ancestor check governs which older
+    /// backups can be rolled forward.</summary>
+    public const int CurrentFormat = 1;
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
     public MaintenanceController(IAudioStorage storage, IDatabaseBackup backup, ISchemaVersion schema)
@@ -39,7 +45,7 @@ public class MaintenanceController : ControllerBase
     public async Task<IActionResult> Backup(CancellationToken ct = default)
     {
         var manifest = new BackupManifest(
-            Format: 1,
+            Format: CurrentFormat,
             App: "diariz",
             Version: typeof(MaintenanceController).Assembly.GetName().Version?.ToString() ?? "0.0.0",
             MigrationId: await _schema.CurrentAsync(ct),

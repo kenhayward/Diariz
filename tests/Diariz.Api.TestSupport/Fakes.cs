@@ -572,7 +572,14 @@ public sealed class FakeDatabaseBackup : IDatabaseBackup
 public sealed class FakeSchemaVersion(string current = "20260615111923_InitialCreate") : ISchemaVersion
 {
     public string Current { get; set; } = current;
+    /// <summary>The ordered migration list this "build" knows. Defaults to just the baseline.</summary>
+    public List<string> Known { get; set; } = new() { current };
+    /// <summary>Set true when <see cref="MigrateToCurrentAsync"/> is called - lets tests assert a forward-migrate ran.</summary>
+    public bool Migrated { get; private set; }
+
     public Task<string> CurrentAsync(CancellationToken ct = default) => Task.FromResult(Current);
+    public IReadOnlyList<string> KnownMigrations => Known;
+    public Task MigrateToCurrentAsync(CancellationToken ct = default) { Migrated = true; return Task.CompletedTask; }
 }
 
 /// <summary>Stub URL fetcher: returns canned text per URL (or null for "blocked/unreachable").</summary>

@@ -5,18 +5,29 @@ using Npgsql;
 
 namespace Diariz.Api.Services;
 
-/// <summary>The current database schema version (the last applied EF migration). Stamped into a backup's
-/// manifest and checked on restore — a `pg_restore` brings the dump's schema, which must match the running
-/// code. Abstracted so the controller is testable on the in-memory provider (which has no migrations).</summary>
+/// <summary>The database's schema state, for stamping backups and gating restore. Abstracted so the
+/// controller is testable on the in-memory provider (which has no migrations).</summary>
 public interface ISchemaVersion
 {
+    /// <summary>The last applied EF migration (empty on the in-memory provider).</summary>
     Task<string> CurrentAsync(CancellationToken ct = default);
+
+    /// <summary>Every migration this build knows, in dependency order (compile-time list, no DB hit).</summary>
+    IReadOnlyList<string> KnownMigrations { get; }
+
+    /// <summary>Apply any pending migrations, bringing the database up to this build's latest schema. Used
+    /// after restoring an older, forward-compatible backup to roll its schema up to the running code.</summary>
+    Task MigrateToCurrentAsync(CancellationToken ct = default);
 }
 
 public class EfSchemaVersion(DiarizDbContext db) : ISchemaVersion
 {
     public async Task<string> CurrentAsync(CancellationToken ct = default) =>
         (await db.Database.GetAppliedMigrationsAsync(ct)).LastOrDefault() ?? "";
+
+    public IReadOnlyList<string> KnownMigrations => db.Database.GetMigrations().ToList();
+
+    public Task MigrateToCurrentAsync(CancellationToken ct = default) => db.Database.MigrateAsync(ct);
 }
 
 /// <summary>Faithful Postgres dump/restore for the platform backup. Abstracted so the controller's

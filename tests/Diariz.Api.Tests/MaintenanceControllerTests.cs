@@ -53,6 +53,7 @@ public class MaintenanceControllerTests
 
         var manifest = JsonSerializer.Deserialize<BackupManifest>(ReadEntry(zip, "manifest.json"), JsonOpts)!;
         Assert.Equal(Migration, manifest.MigrationId);
+        Assert.Equal(MaintenanceController.CurrentFormat, manifest.Format); // the compatibility epoch
         Assert.False(manifest.IncludesKeyring);
         Assert.Equal("diariz", manifest.App);
 
