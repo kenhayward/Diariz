@@ -8,6 +8,9 @@ vi.mock("../auth", () => ({
 vi.mock("../lib/api", () => ({ api: { getProfile: vi.fn() } }));
 // Isolate the shell: each tab's content is a simple marker.
 vi.mock("./ProfileSection", () => ({ default: () => <div>PROFILE_SECTION</div> }));
+vi.mock("./AiSettingsSection", () => ({ default: () => <div>AI_SECTION</div> }));
+vi.mock("./ChatToolsSection", () => ({ default: () => <div>TOOLS_SECTION</div> }));
+vi.mock("./RecordingsSection", () => ({ default: () => <div>RECORDINGS_SECTION</div> }));
 vi.mock("./GoogleAccountSection", () => ({ default: () => <div>GOOGLE_SECTION</div> }));
 vi.mock("./CalendarFeedsSection", () => ({ default: () => <div>FEEDS_SECTION</div> }));
 vi.mock("./McpAccessSection", () => ({ default: () => <div>CLAUDE_SECTION</div> }));
@@ -39,6 +42,19 @@ describe("PreferencesModal", () => {
     for (const name of [/profile/i, /google account/i, /calendar feeds/i, /claude access/i, /voice prints/i])
       expect(screen.getByRole("tab", { name })).toBeTruthy();
     expect(screen.getByText("PROFILE_SECTION")).toBeTruthy();
+  });
+
+  it("carries the personal settings tabs moved out of Settings (Model Settings, Chat Tools, Recordings)", () => {
+    renderModal();
+    for (const name of [/model settings/i, /chat tools/i, /^recordings$/i])
+      expect(screen.getByRole("tab", { name })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: /model settings/i }));
+    expect(screen.getByText("AI_SECTION")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: /chat tools/i }));
+    expect(screen.getByText("TOOLS_SECTION")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: /^recordings$/i }));
+    expect(screen.getByText("RECORDINGS_SECTION")).toBeTruthy();
   });
 
   it("hides the Developers tab when API access is disabled, shows it when enabled", async () => {

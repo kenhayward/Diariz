@@ -175,6 +175,47 @@ public class UserSettingsControllerTests
     }
 
     [Fact]
+    public async Task Put_NullTextFields_LeaveExistingUnchanged()
+    {
+        // The three personal settings tabs now save independently (each PUTs only its own fields), so an
+        // update that omits apiBase/model/reasoningEffort (they arrive as null) must leave them untouched -
+        // not clear them. "" still clears; null now means "leave unchanged".
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(
+            "https://keep/v1", "keep-model", "sk-keep", ReasoningEffort: "high"));
+
+        // A recordings-only save: everything else null.
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(null, null, null,
+            PlacementMode: Diariz.Domain.Entities.RecordingPlacementMode.Ungrouped));
+
+        var dto = await Build(db, userId).Get();
+        Assert.Equal("https://keep/v1", dto.ApiBase);
+        Assert.Equal("keep-model", dto.Model);
+        Assert.Equal("high", dto.ReasoningEffort);
+        Assert.True(dto.HasApiKey);
+        Assert.Equal(Diariz.Domain.Entities.RecordingPlacementMode.Ungrouped, dto.PlacementMode);
+    }
+
+    [Fact]
+    public async Task Put_EmptyTextFields_ClearThem()
+    {
+        // Clearing is still possible - the Model Settings tab sends "" (not null) to drop an override.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(
+            "https://x/v1", "m", null, ReasoningEffort: "high"));
+
+        await Build(db, userId).Update(new UpdateUserSettingsRequest("", "", null, ReasoningEffort: ""));
+
+        var dto = await Build(db, userId).Get();
+        Assert.Null(dto.ApiBase);
+        Assert.Null(dto.Model);
+        // Effort falls back to the server default (empty override cleared).
+        Assert.Equal("medium", dto.ReasoningEffort);
+    }
+
+    [Fact]
     public async Task Settings_AreScopedPerUser()
     {
         using var db = TestDb.Create();

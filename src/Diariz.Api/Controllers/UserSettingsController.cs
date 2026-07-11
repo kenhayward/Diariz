@@ -72,15 +72,19 @@ public class UserSettingsController : ControllerBase
             _db.UserSettings.Add(s);
         }
 
-        s.SummaryApiBase = Blank(req.ApiBase);
-        s.SummaryModel = Blank(req.Model);
+        // Text fields are tri-state: null leaves them unchanged (a settings tab that doesn't own the field
+        // omits it), "" (or whitespace) clears the override, a value sets it. The personal settings tabs now
+        // save independently, so a partial PUT must never wipe another tab's fields.
+        if (req.ApiBase is not null) s.SummaryApiBase = Blank(req.ApiBase);
+        if (req.Model is not null) s.SummaryModel = Blank(req.Model);
 
         // Tri-state key: null leaves it unchanged, empty clears it, anything else replaces it.
         if (req.ApiKey is not null)
             s.SummaryApiKeyEncrypted = req.ApiKey.Length == 0 ? null : _protector.Protect(req.ApiKey);
 
-        // Context window: a positive value sets the override; null/<=0 clears it (server default applies).
-        s.ChatContextWindow = req.ContextWindow is > 0 ? req.ContextWindow : null;
+        // Context window: null leaves it unchanged; a positive value sets the override; <=0 clears it.
+        if (req.ContextWindow is not null)
+            s.ChatContextWindow = req.ContextWindow > 0 ? req.ContextWindow : null;
 
         // Tool calling: a value sets the master override; null leaves it unchanged.
         if (req.ToolsEnabled is not null) s.ChatToolsEnabled = req.ToolsEnabled;
@@ -94,7 +98,7 @@ public class UserSettingsController : ControllerBase
         // Reasoning: a value sets the master override (null leaves it unchanged); a blank effort clears the
         // per-user level (server default applies).
         if (req.ReasoningEnabled is not null) s.ReasoningEnabled = req.ReasoningEnabled;
-        s.ReasoningEffort = Blank(req.ReasoningEffort);
+        if (req.ReasoningEffort is not null) s.ReasoningEffort = Blank(req.ReasoningEffort);
 
         // Placement: a mode replaces the preference; null leaves it unchanged. The fixed folder only applies in
         // SpecificFolder mode (cleared otherwise, so a stale id can't resurface if the user flips back).

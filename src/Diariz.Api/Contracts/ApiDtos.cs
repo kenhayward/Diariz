@@ -406,12 +406,15 @@ public record UserSettingsDto(
 /// (<paramref name="Enabled"/>) and its server-side default.</summary>
 public record ChatToolDto(string Name, string Title, string Description, bool Enabled, bool DefaultEnabled);
 
-/// <summary>Update request. ApiKey is tri-state: null = leave unchanged, "" = clear, value = set.
-/// ContextWindow: null/&lt;=0 clears the per-user override (falls back to the server default).
+/// <summary>Update request. The text fields are tri-state: null = leave unchanged, "" = clear the override
+/// (falls back to the server default), a value = set. This lets the personal settings tabs (Model Settings,
+/// Chat Tools, Recordings) save independently, each PUTting only the fields it owns without wiping the others.
+/// So: ApiBase / Model / ReasoningEffort / ApiKey all follow that tri-state.
+/// ContextWindow: null leaves it unchanged; &lt;=0 clears the per-user override; a positive value sets it.
 /// ToolsEnabled: null leaves the master switch unchanged; a value sets the per-user override.
 /// ToolOverrides: null leaves the per-tool overrides unchanged; a map (possibly empty) replaces them.
-/// ReasoningEnabled: null leaves the override unchanged; a value sets it. ReasoningEffort: blank clears
-/// the per-user override (falls back to the server default), a value sets it.</summary>
+/// ReasoningEnabled: null leaves the override unchanged; a value sets it.
+/// PlacementMode: null leaves the placement unchanged; a value sets it.</summary>
 public record UpdateUserSettingsRequest(
     string? ApiBase, string? Model, string? ApiKey, int? ContextWindow = null,
     bool? ToolsEnabled = null, IReadOnlyDictionary<string, bool>? ToolOverrides = null,

@@ -14,7 +14,7 @@ import AboutModal from "./AboutModal";
 
 export default function UserMenu() {
   const { t } = useTranslation("account");
-  const { initials, pictureUrl, email, fullName, isAdmin, logout } = useAuth();
+  const { initials, pictureUrl, email, fullName, isAdmin, isPlatformAdmin, logout } = useAuth();
   const tour = useTour();
   const { data: storage } = useQuery({ queryKey: ["user-storage"], queryFn: api.getUserStorage });
   const [open, setOpen] = useState(false);
@@ -94,17 +94,19 @@ export default function UserMenu() {
           >
             {t("preferences")}
           </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              setSettingsOpen(true);
-            }}
-            className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
-          >
-            {t("settings")}
-          </button>
+          {isPlatformAdmin && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                setSettingsOpen(true);
+              }}
+              className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
+            >
+              {t("settings")}
+            </button>
+          )}
           {isAdmin && (
             <button
               type="button"

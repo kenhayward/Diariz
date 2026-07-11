@@ -109,6 +109,8 @@
   "apiAccessEnabledLabel": "API-Zugriff für Benutzer aktivieren",
   "apiAccessEnabledHelp": "Ermöglicht Benutzern, persönliche API-Tokens zu erstellen und die Diariz-API aufzurufen. Standardmäßig deaktiviert.",
   "settingsTitle": "Einstellungen",
+  "platformAiTab": "KI",
+  "platformAiIntro": "Plattformweite KI-Generierungseinstellungen, die für alle Benutzer gelten.",
   "aiSettings": "Modelleinstellungen",
   "chatToolsTab": "Chat-Tools",
   "recordingsTab": "Aufnahmen",

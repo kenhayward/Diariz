@@ -4,16 +4,27 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const logout = vi.fn();
 
-// Mutable so individual tests can flip isAdmin.
-const authState: { initials: string; email: string; fullName: string | null; isAdmin: boolean; logout: () => void } = {
-  initials: "JD", email: "jane.doe@x.com", fullName: "Jane Doe", isAdmin: false, logout,
+// Mutable so individual tests can flip isAdmin / isPlatformAdmin.
+const authState: {
+  initials: string;
+  email: string;
+  fullName: string | null;
+  isAdmin: boolean;
+  isPlatformAdmin: boolean;
+  logout: () => void;
+} = {
+  initials: "JD", email: "jane.doe@x.com", fullName: "Jane Doe", isAdmin: false, isPlatformAdmin: false, logout,
 };
 
 vi.mock("../auth", () => ({ useAuth: () => authState }));
 vi.mock("../lib/api", () => ({
   api: {
-    getUserSettings: vi.fn().mockResolvedValue({ apiBase: null, model: null, hasApiKey: false }),
-    updateUserSettings: vi.fn(),
+    getPlatformSettings: vi.fn().mockResolvedValue({
+      starterQuotaBytes: 5 * 1024 ** 3, maxQuotaBytes: 50 * 1024 ** 3, minutesGenerationMode: "SingleCall",
+      autoDeleteAudioEnabled: false, audioRetentionDays: 30, audioDeletionTimeOfDay: "03:00:00",
+      apiAccessEnabled: false, llmTimeoutSeconds: 120,
+    }),
+    updatePlatformSettings: vi.fn(),
     listUsers: vi.fn().mockResolvedValue([]),
     getUserStorage: vi.fn().mockResolvedValue({ usedBytes: 1024 ** 3, quotaBytes: 5 * 1024 ** 3, totalTranscriptionMs: 3_661_000 }),
   },
@@ -35,6 +46,7 @@ describe("UserMenu", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authState.isAdmin = false;
+    authState.isPlatformAdmin = false;
   });
 
   it("hides Manage Users for non-admins and shows it for admins", () => {
@@ -48,7 +60,7 @@ describe("UserMenu", () => {
     expect(screen.getByRole("menuitem", { name: /manage users/i })).toBeTruthy();
   });
 
-  it("shows the initials and opens a menu with the user's name, Settings and Sign Out", () => {
+  it("shows the initials and opens a menu with the user's name, Preferences and Sign Out", () => {
     renderMenu();
     expect(screen.getByText("JD")).toBeTruthy();
 
@@ -56,8 +68,19 @@ describe("UserMenu", () => {
     // The name is shown instead of the email.
     expect(screen.getByText("Jane Doe")).toBeTruthy();
     expect(screen.queryByText("jane.doe@x.com")).toBeNull();
-    expect(screen.getByRole("menuitem", { name: /settings/i })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /preferences/i })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /sign out/i })).toBeTruthy();
+  });
+
+  it("hides Settings for non-platform-admins and shows it for platform admins", () => {
+    renderMenu();
+    fireEvent.click(screen.getByRole("button", { name: /account/i }));
+    expect(screen.queryByRole("menuitem", { name: /settings/i })).toBeNull();
+
+    authState.isPlatformAdmin = true;
+    renderMenu();
+    fireEvent.click(screen.getAllByRole("button", { name: /account/i })[1]);
+    expect(screen.getByRole("menuitem", { name: /settings/i })).toBeTruthy();
   });
 
   it("no longer shows the People item or the theme picker (moved into Preferences)", () => {
@@ -96,7 +119,8 @@ describe("UserMenu", () => {
     expect(logout).toHaveBeenCalled();
   });
 
-  it("Settings opens the modal", () => {
+  it("Settings opens the modal for a platform admin", () => {
+    authState.isPlatformAdmin = true;
     renderMenu();
     fireEvent.click(screen.getByRole("button", { name: /account/i }));
     fireEvent.click(screen.getByRole("menuitem", { name: /settings/i }));

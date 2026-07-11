@@ -674,8 +674,10 @@ export interface UpdateUserProfile {
 }
 
 export interface UpdateUserSettings {
-  apiBase: string | null;
-  model: string | null;
+  /// Tri-state (like the others below): omit/null = leave unchanged, "" = clear the override, value = set.
+  /// The personal settings tabs save independently, so each sends only the fields it owns.
+  apiBase?: string | null;
+  model?: string | null;
   /// Tri-state: undefined/null = leave unchanged, "" = clear, value = set.
   apiKey?: string | null;
   /// Context-window override; null/0 clears it (falls back to the server default).

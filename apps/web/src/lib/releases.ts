@@ -52,6 +52,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.120.3",
+    date: "2026-07-11",
+    pr: 267,
+    headline: "Personal settings move to Preferences; Settings is admin-only",
+    summary:
+      "Settings and Preferences are now cleanly split. Your personal settings - Model Settings (your AI " +
+      "endpoint/model/key and reasoning), Chat Tools, and Recordings (where new recordings are filed) - move " +
+      "into Preferences alongside your profile, where they belong; each saves on its own. The Settings menu " +
+      "is now only for Platform Administrators and holds the platform-wide controls (AI generation policy, " +
+      "storage quotas, maintenance, and integration). Nothing you had configured changes - the options just " +
+      "live in a more logical place.",
+    changed: [
+      "Model Settings, Chat Tools, and Recordings are now tabs in Preferences (each with its own Save) instead of in Settings.",
+      "The Settings menu item is now shown only to Platform Administrators; it carries the platform-wide AI, storage, maintenance, and integration controls.",
+    ],
+  },
+  {
     version: "0.120.2",
     date: "2026-07-11",
     pr: 266,
