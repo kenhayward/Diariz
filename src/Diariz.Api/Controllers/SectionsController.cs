@@ -26,11 +26,14 @@ public class SectionsController : ControllerBase
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [HttpGet]
-    public async Task<IReadOnlyList<SectionDto>> List()
+    public async Task<ActionResult<IReadOnlyList<SectionDto>>> List([FromQuery] Guid? roomId = null)
     {
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        // The folders of the room being viewed (its personal room by default). Members only.
+        var room = roomId ?? await _rooms.PersonalRoomIdAsync(UserId);
+        if (!await _rooms.IsMemberAsync(UserId, room)) return NotFound();
+
         return await _db.Sections
-            .Where(s => s.RoomId == roomId)
+            .Where(s => s.RoomId == room)
             .OrderBy(s => s.Position)
             .ThenBy(s => s.Name) // stable tiebreak (and preserves the old alphabetical order for legacy rows)
             .Select(s => new SectionDto(s.Id, s.Name, s.ParentId, s.Position))

@@ -66,7 +66,7 @@ public class SectionsIntegrationTests(ContainersFixture fx)
                 await Build(db, userId).Reorder(new ReorderSectionsRequest(parentId, [bId, aId])));
 
         await using var verify = fx.CreateDbContext();
-        var list = await Build(verify, userId).List();
+        var list = (await Build(verify, userId).List()).Value!;
         var subs = list.Where(s => s.ParentId == parentId).OrderBy(s => s.Position).Select(s => s.Id).ToList();
         Assert.Equal([bId, aId], subs); // reparented under Customers, in the requested order
     }

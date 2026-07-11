@@ -299,13 +299,19 @@ public class RoomScope(DiarizDbContext db) : IRoomScope
         Guid recordingId, Guid recordedByUserId, Guid? sectionId, CancellationToken ct = default)
     {
         var roomId = await PersonalRoomIdAsync(recordedByUserId, ct);
-        db.RoomRecordings.Add(new RoomRecording
-        {
-            RoomId = roomId,
-            RecordingId = recordingId,
-            IsMainRoom = true,
-            SectionId = sectionId,
-        });
+        // Idempotent: a recording has exactly one main placement, so a repeat call updates its folder rather
+        // than minting a second main row (which the filtered-unique index would reject anyway).
+        var existing = await db.RoomRecordings.FirstOrDefaultAsync(p => p.RecordingId == recordingId && p.IsMainRoom, ct);
+        if (existing is not null)
+            existing.SectionId = sectionId;
+        else
+            db.RoomRecordings.Add(new RoomRecording
+            {
+                RoomId = roomId,
+                RecordingId = recordingId,
+                IsMainRoom = true,
+                SectionId = sectionId,
+            });
         await db.SaveChangesAsync(ct);
     }
 

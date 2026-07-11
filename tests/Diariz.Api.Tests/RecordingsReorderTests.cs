@@ -142,7 +142,7 @@ public class RecordingsReorderTests
         var b = await Seed(db, userId);
         await Build(db, userId).Reorder(new ReorderRecordingsRequest(null, [b.Id, a.Id])); // b first
 
-        var list = await Build(db, userId).List();
+        var list = (await Build(db, userId).List()).Value!;
 
         Assert.Equal([b.Id, a.Id], list.Select(r => r.Id));
     }
