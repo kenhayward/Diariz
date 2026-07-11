@@ -12,7 +12,7 @@ namespace Diariz.Api.IntegrationTests;
 public class ActionsIntegrationTests(ContainersFixture fx)
 {
     private static ActionsController Build(Diariz.Domain.DiarizDbContext db, Guid userId) =>
-        new(db) { ControllerContext = Http.Context(userId) };
+        new(db, new Diariz.Api.Services.RoomScope(db)) { ControllerContext = Http.Context(userId) };
 
     [Fact]
     public async Task List_And_Complete_AcrossRecordings_RoundTripThroughRealDb()

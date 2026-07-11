@@ -64,7 +64,9 @@ export default function CalendarEventDetails({
         {event.location && (
           <>
             <dt className="text-gray-500 dark:text-gray-400">{t("workspace:calWhere")}</dt>
-            <dd className="break-words text-gray-800 dark:text-gray-200">{event.location}</dd>
+            {/* A long unbroken value (e.g. a Zoom join URL) must break mid-token, or it forces the 1fr grid
+                track wider than the panel. min-w-0 lets the track shrink; overflow-wrap:anywhere does the break. */}
+            <dd className="min-w-0 [overflow-wrap:anywhere] text-gray-800 dark:text-gray-200">{event.location}</dd>
           </>
         )}
         {organizer && (

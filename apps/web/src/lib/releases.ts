@@ -52,6 +52,26 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.122.0",
+    date: "2026-07-11",
+    pr: 270,
+    headline: "Shared-room recordings, uploads, and Actions/Tags fixes",
+    summary:
+      "A batch of Rooms and recordings fixes. Opening a recording from a shared room now stays in that room " +
+      "instead of snapping the left panel back to your Personal Room. Uploading an audio file while a shared " +
+      "room is open now files it into that room (like recording does), so it shows up in the room's list. The " +
+      "Actions and Tags tabs now work in a shared room too, each scoped to that room's shared recordings. And " +
+      "a long meeting location (like a Zoom join link) no longer overflows the recording overview panel.",
+    added: [
+      "The Actions and Tags tabs now appear in a shared room, scoped to the recordings shared into it.",
+    ],
+    fixed: [
+      "Opening a recording while browsing a shared room keeps you in that room instead of switching back to your Personal Room.",
+      "Uploading an audio file while a shared room is open shares it into that room, so it appears in the room's list.",
+      "A long, unbroken meeting location (e.g. a Zoom URL) now wraps inside the overview panel instead of overflowing it.",
+    ],
+  },
+  {
     version: "0.121.1",
     date: "2026-07-11",
     pr: 269,

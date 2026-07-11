@@ -11,7 +11,7 @@ namespace Diariz.Api.Tests;
 public class ActionsControllerTests
 {
     private static ActionsController Build(DiarizDbContext db, Guid userId) =>
-        new(db) { ControllerContext = Http.Context(userId) };
+        new(db, new Diariz.Api.Services.RoomScope(db)) { ControllerContext = Http.Context(userId) };
 
     private static Recording AddRecording(DiarizDbContext db, Guid userId, string title, string? name = null)
     {
@@ -43,6 +43,43 @@ public class ActionsControllerTests
         Assert.Contains(dtos, d => d.Text == "A1" && d.RecordingName == "Daily standup");
         Assert.Contains(dtos, d => d.Text == "A2" && d.RecordingName == "Planning");
         Assert.All(dtos, d => Assert.False(d.Completed));
+    }
+
+    [Fact]
+    public async Task List_ByRoom_ReturnsActionsSharedIntoThatRoom_ExcludesPersonalOnes()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var owner = Guid.NewGuid();
+        Users.Ensure(db, me);
+        Users.Ensure(db, owner);
+        var scope = new Diariz.Api.Services.RoomScope(db);
+
+        var shared = AddRecording(db, owner, "Team sync"); // another user's recording, shared into the room
+        var mine = AddRecording(db, me, "Personal");        // my own recording, NOT in the room
+        db.RecordingActions.AddRange(
+            new RecordingAction { Id = Guid.NewGuid(), RecordingId = shared.Id, Text = "Shared action", Ordinal = 0 },
+            new RecordingAction { Id = Guid.NewGuid(), RecordingId = mine.Id, Text = "Personal action", Ordinal = 0 });
+        await db.SaveChangesAsync();
+        await scope.PlaceInMainRoomAsync(shared.Id, owner, sectionId: null);
+        await scope.PlaceInMainRoomAsync(mine.Id, me, sectionId: null);
+        var roomId = await scope.CreateSharedRoomAsync("Eng", null, null, null);
+        await scope.SetMemberAsync(roomId, RoomPrincipalType.User, me, RoomPermission.CreateRecording);
+        await scope.ShareIntoRoomAsync(shared.Id, roomId, owner, sectionId: null);
+
+        var dtos = (await Build(db, me).List(roomId)).Value!;
+        Assert.Contains(dtos, d => d.Text == "Shared action");
+        Assert.DoesNotContain(dtos, d => d.Text == "Personal action");
+    }
+
+    [Fact]
+    public async Task List_ByRoom_404_ForANonMember()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var roomId = await new Diariz.Api.Services.RoomScope(db).CreateSharedRoomAsync("Eng", null, null, null);
+        var result = await Build(db, me).List(roomId); // never joined
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Fact]

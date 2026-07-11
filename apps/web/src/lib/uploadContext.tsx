@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "./api";
 import { titleFromFilename } from "./audioFormats";
 import { runUploadBatch, type UploadItem } from "./uploadQueue";
+import { useRoom } from "./rooms";
 
 interface UploadContextValue {
   items: UploadItem[];
@@ -25,17 +26,21 @@ const UploadContext = createContext<UploadContextValue>({
 /// Shares one upload queue across the top bar's Upload button and the recordings panel's drop zone.
 export function UploadProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
+  const { currentRoom } = useRoom();
   const [items, setItems] = useState<UploadItem[]>([]);
   const [busy, setBusy] = useState(false);
 
   const uploadFiles = useCallback(
     (files: File[]) => {
       if (files.length === 0) return;
+      // Snapshot the room at drop time: uploading while in a shared room shares the file into it (like
+      // recording does); a personal-room upload is a plain personal recording.
+      const roomId = currentRoom && !currentRoom.isPersonal ? currentRoom.id : null;
       setBusy(true);
       void runUploadBatch(files, {
         upload: async (file) => {
           try {
-            await api.uploadFile(file, titleFromFilename(file.name));
+            await api.uploadFile(file, titleFromFilename(file.name), roomId);
           } catch (e) {
             throw new Error(apiErrorMessage(e, "Upload failed."));
           }
@@ -44,7 +49,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         onSuccess: () => qc.invalidateQueries({ queryKey: ["recordings"] }),
       }).finally(() => setBusy(false));
     },
-    [qc],
+    [qc, currentRoom],
   );
 
   const clearFinished = useCallback(

@@ -323,12 +323,15 @@ export const api = {
 
   /// Upload an existing audio file for transcription (the "Upload" button). The worker backfills the
   /// duration, so we send 0; the server validates the file's actual bytes + size.
-  async uploadFile(file: File, title: string): Promise<RecordingSummary> {
+  async uploadFile(file: File, title: string, roomId: string | null = null): Promise<RecordingSummary> {
     const form = new FormData();
     form.append("audio", file, file.name);
     form.append("title", title);
     form.append("durationMs", "0");
     form.append("source", "Upload");
+    // When uploading while viewing a shared room, also share the recording into it (the main placement stays
+    // in the uploader's personal room); omitted for a plain personal upload.
+    if (roomId) form.append("roomId", roomId);
     const { data } = await http.post<RecordingSummary>("/api/recordings", form);
     return data;
   },
@@ -620,15 +623,17 @@ export const api = {
     await http.delete(`/api/calendar/events/${encodeURIComponent(calendarId)}/${encodeURIComponent(eventId)}/notes/${noteId}`);
   },
 
-  /// Every action across the user's recordings (the "Actions" tab), each tagged with its source recording.
-  async listAllActions(): Promise<ActionListItem[]> {
-    const { data } = await http.get<ActionListItem[]>(`/api/actions`);
+  /// Every action across the recordings the user can see (the "Actions" tab). With a roomId it is scoped to
+  /// that shared room's recordings; without one, the user's own library.
+  async listAllActions(roomId?: string | null): Promise<ActionListItem[]> {
+    const { data } = await http.get<ActionListItem[]>(`/api/actions`, { params: roomId ? { roomId } : undefined });
     return data;
   },
 
-  /// The aggregated tag cloud across the user's recordings (the "Tags" tab), weight-descending.
-  async listTags(): Promise<TagCloudEntry[]> {
-    const { data } = await http.get<TagCloudEntry[]>("/api/tags");
+  /// The aggregated tag cloud (the "Tags" tab), weight-descending. With a roomId it is scoped to that shared
+  /// room's recordings; without one, the user's own library.
+  async listTags(roomId?: string | null): Promise<TagCloudEntry[]> {
+    const { data } = await http.get<TagCloudEntry[]>("/api/tags", { params: roomId ? { roomId } : undefined });
     return data;
   },
 

@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Diariz.Api.Contracts;
+using Diariz.Api.Services;
 using Diariz.Domain;
+using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -17,19 +19,36 @@ namespace Diariz.Api.Controllers;
 public class ActionsController : ControllerBase
 {
     private readonly DiarizDbContext _db;
-    public ActionsController(DiarizDbContext db) => _db = db;
+    private readonly IRoomScope _rooms;
+    public ActionsController(DiarizDbContext db, IRoomScope rooms)
+    {
+        _db = db;
+        _rooms = rooms;
+    }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    /// <summary>Every action on the caller's recordings — newest recording first, then by ordinal — each
-    /// tagged with its source recording (id + display name) so the UI can link back to the transcript.</summary>
+    /// <summary>Every action on the recordings the caller can see — newest recording first, then by ordinal —
+    /// each tagged with its source recording (id + display name) so the UI can link back to the transcript.
+    /// With no <paramref name="roomId"/> this is the caller's own library; with one it is the recordings placed
+    /// in that room (membership is the read gate - a non-member 404s).</summary>
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<ActionListItemDto>>> List()
+    public async Task<ActionResult<IReadOnlyList<ActionListItemDto>>> List([FromQuery] Guid? roomId = null)
     {
+        IQueryable<Recording> recs;
+        if (roomId is { } rid)
+        {
+            if (!await _rooms.IsMemberAsync(UserId, rid)) return NotFound();
+            recs = _rooms.RecordingsIn(rid);
+        }
+        else
+        {
+            recs = _db.Recordings.Where(r => r.UserId == UserId);
+        }
+
         var actions = await (
             from a in _db.RecordingActions
-            join r in _db.Recordings on a.RecordingId equals r.Id
-            where r.UserId == UserId
+            join r in recs on a.RecordingId equals r.Id
             orderby r.CreatedAt descending, a.Ordinal
             select new ActionListItemDto(
                 a.Id, a.RecordingId, r.Name ?? r.Title, a.Text, a.Actor, a.Deadline,

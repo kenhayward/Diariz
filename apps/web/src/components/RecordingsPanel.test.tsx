@@ -10,7 +10,11 @@ vi.mock("../lib/signalr", () => ({
 }));
 // The panel scopes its lists to the current room; stub the personal room (full features shown).
 const roomStub = { currentRoom: { id: "p1", isPersonal: true } as { id: string; isPersonal: boolean } };
-vi.mock("../lib/rooms", () => ({ useRoom: () => roomStub }));
+vi.mock("../lib/rooms", () => ({
+  useRoom: () => roomStub,
+  useRoomBasePath: () =>
+    roomStub.currentRoom && !roomStub.currentRoom.isPersonal ? `/rooms/${roomStub.currentRoom.id}` : "",
+}));
 
 vi.mock("../lib/api", () => ({
   api: {
@@ -95,16 +99,53 @@ describe("RecordingsPanel", () => {
     (api.deleteRecording as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   });
 
-  it("browses the current room: fetches its recordings and hides personal-only tabs + New section in a shared room", async () => {
+  it("browses the current room: fetches its recordings, keeps Actions/Tags (room-scoped), hides New section in a shared room", async () => {
     roomStub.currentRoom = { id: "eng-room", isPersonal: false };
     renderList();
 
     expect(await screen.findByText("Weekly Standup")).toBeTruthy();
     // The list is fetched for the shared room.
     expect(api.listRecordings).toHaveBeenCalledWith("eng-room");
-    // Actions/Tags aggregate the personal library, so they're hidden; New section (folders) is gone too.
-    expect(screen.queryByRole("button", { name: /^tags$/i })).toBeNull();
+    // Actions + Tags now show in a shared room too, scoped to that room's shared recordings.
+    expect(screen.getByRole("button", { name: /^tags$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Actions", pressed: false })).toBeTruthy();
+    // Folders are still personal-only: no "New section".
     expect(screen.queryByRole("button", { name: /new section/i })).toBeNull();
+  });
+
+  it("scopes the Actions + Tags tabs to a shared room's recordings", async () => {
+    roomStub.currentRoom = { id: "eng-room", isPersonal: false };
+    renderList();
+    await screen.findByText("Weekly Standup");
+
+    fireEvent.click(screen.getByRole("button", { name: "Actions", pressed: false }));
+    await waitFor(() => expect(api.listAllActions).toHaveBeenCalledWith("eng-room"));
+
+    fireEvent.click(screen.getByRole("button", { name: /^tags$/i }));
+    await waitFor(() => expect(api.listTags).toHaveBeenCalledWith("eng-room"));
+  });
+
+  it("keeps Actions + Tags owner-scoped (no roomId) in the personal room", async () => {
+    roomStub.currentRoom = { id: "p1", isPersonal: true };
+    renderList();
+    await screen.findByText("Weekly Standup");
+
+    fireEvent.click(screen.getByRole("button", { name: "Actions", pressed: false }));
+    await waitFor(() => expect(api.listAllActions).toHaveBeenCalledWith(undefined));
+  });
+
+  it("keeps the room in a recording link so opening one stays in the shared room", async () => {
+    roomStub.currentRoom = { id: "eng-room", isPersonal: false };
+    renderList();
+    const link = await screen.findByRole("link", { name: /Weekly Standup/i });
+    expect(link.getAttribute("href")).toBe("/rooms/eng-room/recordings/rec-1");
+  });
+
+  it("links a personal recording to the top-level route (no room prefix)", async () => {
+    roomStub.currentRoom = { id: "p1", isPersonal: true };
+    renderList();
+    const link = await screen.findByRole("link", { name: /Weekly Standup/i });
+    expect(link.getAttribute("href")).toBe("/recordings/rec-1");
   });
 
   it("collapses and expands a group when its header is clicked", async () => {
