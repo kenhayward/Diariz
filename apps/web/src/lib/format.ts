@@ -74,3 +74,27 @@ export function bytesToGb(bytes: number): number {
 export function gbToBytes(gb: number): number {
   return Math.round(gb * BYTES_PER_GB);
 }
+
+const RELATIVE_UNITS: { unit: Intl.RelativeTimeFormatUnit; ms: number }[] = [
+  { unit: "year", ms: 365 * 24 * 3600 * 1000 },
+  { unit: "month", ms: 30 * 24 * 3600 * 1000 },
+  { unit: "week", ms: 7 * 24 * 3600 * 1000 },
+  { unit: "day", ms: 24 * 3600 * 1000 },
+  { unit: "hour", ms: 3600 * 1000 },
+  { unit: "minute", ms: 60 * 1000 },
+  { unit: "second", ms: 1000 },
+];
+
+/// A locale-aware relative time string ("3 hours ago", "now") via `Intl.RelativeTimeFormat`, used for the
+/// Formulas results list ("Generated {{time}} from the ... formula"). Picks the largest whole unit that
+/// fits the gap to `now` (defaults to the real clock; a fixed `now` is passed in tests for determinism).
+export function formatRelativeTime(iso: string, locale?: string, now: Date = new Date()): string {
+  const diffMs = now.getTime() - new Date(iso).getTime();
+  const rtf = new Intl.RelativeTimeFormat(locale || undefined, { numeric: "auto" });
+  for (const { unit, ms } of RELATIVE_UNITS) {
+    if (Math.abs(diffMs) >= ms || unit === "second") {
+      return rtf.format(-Math.round(diffMs / ms), unit);
+    }
+  }
+  return rtf.format(0, "second");
+}

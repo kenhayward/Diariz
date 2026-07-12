@@ -148,6 +148,7 @@ builder.Services.AddAuthorization(o =>
     o.AddPolicy("ManageRooms", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManageRooms)));
     o.AddPolicy("ManageUsers", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManageUsers)));
     o.AddPolicy("ManagePlatform", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManagePlatform)));
+    o.AddPolicy("ManageFormulas", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManageFormulas)));
     // Reading platform settings: the Manage Users modal shows the default quota, so an Administrator
     // (ManageUsers, no ManagePlatform) must still be able to GET them. Writes remain ManagePlatform.
     o.AddPolicy("ReadAdminSettings", p => p.AddRequirements(
@@ -241,6 +242,7 @@ builder.Services.AddHttpClient<IActionsClient, ActionsClient>(NoHttpTimeout);
 builder.Services.AddHttpClient<ITranslationClient, TranslationClient>(NoHttpTimeout);
 builder.Services.AddScoped<ISummarizationSettingsResolver, SummarizationSettingsResolver>();
 builder.Services.AddHostedService<SummarizationWorker>();
+builder.Services.AddScoped<IFormulaRunner, FormulaRunner>();
 
 // ---- Meeting minutes (shares the per-user summarisation config; its own stream + consumer) ----
 builder.Services.AddHttpClient<IMeetingMinutesClient, MeetingMinutesClient>(NoHttpTimeout);
@@ -455,6 +457,7 @@ await using (var scope = app.Services.CreateAsyncScope())
     // holders were moved into groups once, by the AddUserGroups migration - never on boot, or a demoted user
     // would be silently re-promoted from their stale AspNetUserRoles row.
     await Seeder.SeedPlatformAuthorityAsync(db, seedUserId);
+    await Seeder.SeedFormulasAsync(db);
     await MeetingTypeSeeder.SeedAsync(db);
 }
 

@@ -75,9 +75,10 @@ public static class Seeder
     public static async Task SeedGroupsAsync(DiarizDbContext db)
     {
         await EnsureGroup(db, PlatformAdminsGroup, isSystem: true,
-            PlatformPermission.ManageRooms | PlatformPermission.ManageUsers | PlatformPermission.ManagePlatform);
+            PlatformPermission.ManageRooms | PlatformPermission.ManageUsers | PlatformPermission.ManagePlatform
+                | PlatformPermission.ManageFormulas);
         await EnsureGroup(db, AdminsGroup, isSystem: false,
-            PlatformPermission.ManageRooms | PlatformPermission.ManageUsers);
+            PlatformPermission.ManageRooms | PlatformPermission.ManageUsers | PlatformPermission.ManageFormulas);
         await db.SaveChangesAsync();
 
         static async Task EnsureGroup(DiarizDbContext db, string name, bool isSystem, PlatformPermission perms)
@@ -115,6 +116,89 @@ public static class Seeder
         {
             db.UserGroupMembers.Add(new UserGroupMember { GroupId = group.Id, UserId = userId });
             await db.SaveChangesAsync();
+        }
+    }
+
+    /// <summary>Seed the Diariz-provided starter formulas. Create-only: if a formula with the same
+    /// Name already exists (there is no separate key column, so Name is the stable identity for seeds)
+    /// it is left untouched, so an admin's edit to a built-in's prompt survives a reboot - mirroring
+    /// the EnsureGroup pattern in <see cref="SeedGroupsAsync"/>.</summary>
+    public static async Task SeedFormulasAsync(DiarizDbContext db)
+    {
+        await EnsureFormula(db, "Follow-up email",
+            "Draft a follow-up email summarising the meeting and next steps.",
+            """
+            Write a concise, professional follow-up email in Markdown based on the meeting context provided.
+
+            Structure it as:
+            - A brief greeting
+            - A 2-4 sentence recap of what the meeting covered
+            - A bulleted list of the agreed actions, each with its owner
+            - A short closing line
+
+            Keep the tone warm but businesslike, and do not invent actions or owners that are not
+            supported by the context.
+            """,
+            FormulaContext.Transcript | FormulaContext.Summary | FormulaContext.Actions);
+
+        await EnsureFormula(db, "Meeting recap",
+            "A short shareable recap of the meeting.",
+            """
+            Write a crisp Markdown recap of the meeting based on the context provided.
+
+            Start with a one-line TL;DR, then 3-6 bullet points covering the highlights. Keep each
+            bullet to a single sentence and favor concrete outcomes over general description.
+            """,
+            FormulaContext.Transcript | FormulaContext.Summary);
+
+        await EnsureFormula(db, "Decisions & risks",
+            "Extract the decisions made and the risks or open questions raised.",
+            """
+            Read the meeting context provided and produce two Markdown sections:
+
+            ## Decisions
+            A bulleted list of the concrete decisions that were made.
+
+            ## Risks & open questions
+            A bulleted list of the risks, concerns, or unresolved questions that were raised.
+
+            If either section has nothing to report, write "None identified" under that heading
+            instead of leaving it empty.
+            """,
+            FormulaContext.Transcript | FormulaContext.Minutes | FormulaContext.Actions);
+
+        await EnsureFormula(db, "Tone & sentiment read",
+            "A read on the emotional tone and sentiment of the meeting.",
+            """
+            Read the transcript provided and assess the overall tone and sentiment of the meeting in
+            a few short Markdown paragraphs.
+
+            Cover the general mood, any notable shifts in tone over the course of the conversation, and
+            any moments of tension, disagreement, or enthusiasm. Be measured and avoid over-claiming -
+            note where the tone is ambiguous rather than forcing a conclusion.
+            """,
+            FormulaContext.Transcript);
+
+        await db.SaveChangesAsync();
+
+        static async Task EnsureFormula(DiarizDbContext db, string name, string description, string prompt,
+            FormulaContext context)
+        {
+            var exists = await db.Formulas.AnyAsync(f => f.Name == name);
+            if (exists) return; // create-only: never overwrite an admin's edit to a built-in.
+
+            db.Formulas.Add(new Formula
+            {
+                Id = Guid.NewGuid(),
+                Scope = FormulaScope.Diariz,
+                OwnerUserId = null,
+                Name = name,
+                Description = description,
+                Prompt = prompt,
+                Context = context,
+                Enabled = true,
+                IsBuiltIn = true,
+            });
         }
     }
 }

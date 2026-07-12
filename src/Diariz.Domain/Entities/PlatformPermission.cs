@@ -16,4 +16,7 @@ public enum PlatformPermission
 
     /// <summary>Read and write platform settings, and run maintenance (backup / restore).</summary>
     ManagePlatform = 4,
+
+    /// <summary>Create, edit and delete formulas.</summary>
+    ManageFormulas = 8,
 }

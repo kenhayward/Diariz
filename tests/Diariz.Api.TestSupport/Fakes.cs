@@ -2,6 +2,7 @@ using System.Net;
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
 using Diariz.Api.Services;
+using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.SignalR;
 
 namespace Diariz.Api.Tests.Infrastructure;
@@ -614,6 +615,28 @@ public sealed class FakeDesktopAuthCodeStore : IDesktopAuthCodeStore
         if (code is not null && _codes.Remove(code, out var ticket))
             return Task.FromResult<DesktopAuthTicket?>(ticket);
         return Task.FromResult<DesktopAuthTicket?>(null);
+    }
+}
+
+/// <summary>Stub <see cref="IFormulaRunner"/> — returns a canned <see cref="FormulaResult"/> or throws a
+/// preset exception, and records the arguments it was called with, so <c>FormulasController.Run</c> can be
+/// unit-tested without the LLM/context-assembly pipeline.</summary>
+public sealed class FakeFormulaRunner : IFormulaRunner
+{
+    public FormulaResult Result { get; set; } = new()
+    {
+        Id = Guid.NewGuid(), RecordingId = Guid.NewGuid(), Name = "Result", Text = "Generated text.",
+    };
+    public Exception? ThrowOnCall { get; set; }
+    public int Calls { get; private set; }
+    public (Guid UserId, Guid RecordingId, Guid FormulaId)? LastCall { get; private set; }
+
+    public Task<FormulaResult> RunAsync(Guid userId, Guid recordingId, Guid formulaId, CancellationToken ct = default)
+    {
+        Calls++;
+        LastCall = (userId, recordingId, formulaId);
+        if (ThrowOnCall is not null) throw ThrowOnCall;
+        return Task.FromResult(Result);
     }
 }
 

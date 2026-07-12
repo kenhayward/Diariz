@@ -10,6 +10,7 @@ const PERMISSION_BITS = [
   { bit: 1, key: "permManageRooms" },
   { bit: 2, key: "permManageUsers" },
   { bit: 4, key: "permManagePlatform" },
+  { bit: 8, key: "permManageFormulas" },
 ] as const;
 
 /// Groups administration: create a group, choose what it may do, and pick its members.

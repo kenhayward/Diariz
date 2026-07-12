@@ -30,6 +30,10 @@ import CalendarLinkModal from "../components/CalendarLinkModal";
 import PreferencesModal from "../components/PreferencesModal";
 import SpeakerAssign from "../components/SpeakerAssign";
 import ToolbarButton, { iconProps } from "../components/ToolbarButton";
+import FormulasToolbar from "../components/FormulasToolbar";
+import FormulasManager from "../components/FormulasManager";
+import FormulaRunModal from "../components/FormulaRunModal";
+import FormulaResultEditModal from "../components/FormulaResultEditModal";
 import { recordingMenu } from "../components/recordingMenu";
 import { copyRichLink, transcriptUrl } from "../lib/clipboard";
 import { segmentIndexAtMs, parseMatchTimes } from "../lib/transcriptNav";
@@ -37,7 +41,7 @@ import { speakerRanges, selectedRanges, rangeAt, nextRangeStart, type PlayRange 
 import { formatBytes, formatDate, formatDuration, formatLongDate, formatTimeHm, formatDurationHm } from "../lib/format";
 import { hasRevisions, segmentText } from "../lib/transcriptView";
 import { fetchLanguages } from "../lib/languages";
-import type { MeetingNote, SegmentDto, SpeakerInfo, SpeakerProfile } from "../lib/types";
+import type { MeetingNote, SegmentDto, SpeakerInfo, SpeakerProfile, FormulaResult } from "../lib/types";
 
 // Feather-style icons for the panel toolbars and the per-speaker play control.
 const RefreshIcon = (
@@ -107,6 +111,12 @@ export default function RecordingDetail() {
   const { data: attachments = [] } = useQuery({
     queryKey: ["attachments", id],
     queryFn: () => api.listAttachments(id),
+    enabled: Boolean(id),
+  });
+  // Generated formula results (the Formulas tab).
+  const { data: formulaResults = [] } = useQuery({
+    queryKey: ["formula-results", id],
+    queryFn: () => api.listFormulaResults(id),
     enabled: Boolean(id),
   });
   // The user's own note lines (the Notes tab). Sparse trigger phrases that will steer the minutes (PR 3).
@@ -200,6 +210,14 @@ export default function RecordingDetail() {
   // Segment Select mode (local to this recording — distinct from the recordings/actions shared selection).
   const [selectMode, setSelectMode] = useState(false);
   const [selectedSegIds, setSelectedSegIds] = useState<Set<string>>(new Set());
+  // Formulas tab: single-selected result id, shared between FormulasManager (the tab content) and
+  // FormulasToolbar (a sibling passed to the tab's `toolbar` slot) - lifted here since neither is a
+  // descendant of the other. See the transcript segment select-mode above for the same pattern.
+  const [selectedFormulaResultId, setSelectedFormulaResultId] = useState<string | null>(null);
+  const [formulaRunOpen, setFormulaRunOpen] = useState(false);
+  const [editingFormulaResult, setEditingFormulaResult] = useState<FormulaResult | null>(null);
+  // "Manage formulas" (in FormulaRunModal's footer) opens Preferences on the Formulas tab.
+  const [managingFormulas, setManagingFormulas] = useState(false);
   // Mini player (the small header progress bar): current time + play/pause state of the shared <audio>.
   const [audioCur, setAudioCur] = useState(0);
   const [audioPaused, setAudioPaused] = useState(true);
@@ -207,6 +225,7 @@ export default function RecordingDetail() {
   useEffect(() => {
     setSelectMode(false);
     setSelectedSegIds(new Set());
+    setSelectedFormulaResultId(null);
   }, [id]);
 
   // Active detail tab, persisted globally (like the left "Meetings" panel) so it survives reloads and
@@ -526,6 +545,49 @@ export default function RecordingDetail() {
     qc.invalidateQueries({ queryKey: ["attachments", id] });
     qc.invalidateQueries({ queryKey: ["user-storage"] }); // attachment bytes count toward quota
   };
+
+  const refreshFormulas = () => qc.invalidateQueries({ queryKey: ["formula-results", id] });
+
+  async function downloadFormulaResult() {
+    if (!selectedFormulaResultId) return;
+    setActionError(null);
+    try {
+      await api.downloadFormulaResult(id, selectedFormulaResultId);
+    } catch (e) {
+      setActionError(apiErrorMessage(e, t("workspace:errDownloadFormulaResult")));
+    }
+  }
+
+  async function emailFormulaResult() {
+    if (!selectedFormulaResultId) return;
+    setActionError(null);
+    setActionInfo(null);
+    try {
+      await api.emailFormulaResult(id, selectedFormulaResultId);
+      setActionInfo(t("workspace:emailedFormulaResult"));
+    } catch (e) {
+      setActionError(apiErrorMessage(e, t("workspace:errEmailFormulaResult")));
+    }
+  }
+
+  async function deleteFormulaResult() {
+    const result = formulaResults.find((r) => r.id === selectedFormulaResultId);
+    if (!result) return;
+    if (!window.confirm(t("workspace:confirmDeleteFormulaResult", { name: result.name }))) return;
+    setActionError(null);
+    try {
+      await api.deleteFormulaResult(id, result.id);
+      setSelectedFormulaResultId(null);
+      refreshFormulas();
+    } catch (e) {
+      setActionError(apiErrorMessage(e, t("workspace:errDeleteFormulaResult")));
+    }
+  }
+
+  function openFormulaResult() {
+    const result = formulaResults.find((r) => r.id === selectedFormulaResultId);
+    if (result) setEditingFormulaResult(result);
+  }
 
   // Files dropped anywhere on the detail page are attached to this recording.
   async function onDropFiles(e: React.DragEvent) {
@@ -1398,6 +1460,27 @@ export default function RecordingDetail() {
       label: t("workspace:detailTabAttachments"),
       content: <AttachmentsManager recordingId={id} attachments={attachments} onChange={refreshAttachments} />,
     },
+    {
+      key: "formulas",
+      label: t("workspace:detailTabFormulas"),
+      toolbar: (
+        <FormulasToolbar
+          selectedId={selectedFormulaResultId}
+          onRun={() => setFormulaRunOpen(true)}
+          onOpen={openFormulaResult}
+          onDownload={downloadFormulaResult}
+          onEmail={emailFormulaResult}
+          onDelete={deleteFormulaResult}
+        />
+      ),
+      content: (
+        <FormulasManager
+          results={formulaResults}
+          selectedId={selectedFormulaResultId}
+          onSelect={setSelectedFormulaResultId}
+        />
+      ),
+    },
   ];
 
   return (
@@ -1544,6 +1627,34 @@ export default function RecordingDetail() {
       {peopleOpen && <PreferencesModal initialTab="voiceprints" onClose={() => setPeopleOpen(false)} />}
       {linkModalOpen && (
         <CalendarLinkModal recordingId={id} aroundDate={rec.createdAt} onClose={() => setLinkModalOpen(false)} />
+      )}
+
+      {formulaRunOpen && (
+        <FormulaRunModal
+          recordingId={id}
+          onClose={() => setFormulaRunOpen(false)}
+          onRun={(result) => {
+            refreshFormulas();
+            setSelectedFormulaResultId(result.id);
+          }}
+          onError={(msg) => setActionError(msg)}
+          onManageFormulas={() => {
+            setFormulaRunOpen(false);
+            setManagingFormulas(true);
+          }}
+        />
+      )}
+      {editingFormulaResult && (
+        <FormulaResultEditModal
+          name={editingFormulaResult.name}
+          load={() => api.getFormulaResultText(id, editingFormulaResult.id)}
+          save={(md) => api.updateFormulaResult(id, editingFormulaResult.id, md).then(() => undefined)}
+          onSaved={refreshFormulas}
+          onClose={() => setEditingFormulaResult(null)}
+        />
+      )}
+      {managingFormulas && (
+        <PreferencesModal initialTab="formulas" onClose={() => setManagingFormulas(false)} />
       )}
 
       {retranscribeOpen && (
