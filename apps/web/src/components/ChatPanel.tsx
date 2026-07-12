@@ -29,6 +29,13 @@ import {
   type CommandInfo,
 } from "../lib/chatCommands";
 import type { AttachmentDraft, ChatConversationSummary, ChatTurn, ChatUsage } from "../lib/types";
+import { pickDictationEngine, appendTranscript } from "../lib/dictation";
+import {
+  hasSpeechRecognition,
+  createSpeechEngine,
+  createServerEngine,
+  type DictationEngine,
+} from "../lib/dictationEngine";
 import ContextDial from "./ContextDial";
 import PickRecordingModal from "./PickRecordingModal";
 
@@ -93,6 +100,55 @@ export default function ChatPanel() {
 
   const [attachment, setAttachment] = useState<{ name: string; text: string; chars: number } | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  // Voice dictation: the mic button toggles listening; finalized speech is appended to `input`, interim
+  // speech shows as a live preview above the box. Engine is chosen once from capabilities.
+  const [dictating, setDictating] = useState(false);
+  const [interim, setInterim] = useState("");
+  const dictationRef = useRef<DictationEngine | null>(null);
+
+  const dictationEngineKind = pickDictationEngine({
+    hasSpeechRecognition: hasSpeechRecognition(),
+    hasServerStt: settings?.dictationServerAvailable ?? false,
+  });
+
+  function stopDictation() {
+    dictationRef.current?.stop();
+    dictationRef.current = null;
+    setDictating(false);
+    setInterim("");
+  }
+
+  async function startDictation() {
+    if (dictationEngineKind === "none") return;
+    const engine =
+      dictationEngineKind === "speech"
+        ? createSpeechEngine()
+        : createServerEngine((blob) => api.transcribeChat(blob));
+    dictationRef.current = engine;
+    setInterim("");
+    setDictating(true);
+    setError(null);
+    await engine.start({
+      onInterim: (text) => setInterim(text),
+      onFinal: (text) => {
+        setInterim("");
+        setInput((cur) => appendTranscript(cur, text));
+      },
+      onError: (message) => {
+        setError(message || t("dictateFailed"));
+        stopDictation();
+      },
+    });
+  }
+
+  function toggleDictation() {
+    if (dictating) stopDictation();
+    else void startDictation();
+  }
+
+  // Stop dictation if the component unmounts while listening (releases the mic + AudioContext).
+  useEffect(() => () => dictationRef.current?.stop(), []);
 
   const [savedList, setSavedList] = useState<ChatConversationSummary[]>([]);
   const [listOpen, setListOpen] = useState(false);
@@ -791,6 +847,11 @@ export default function ChatPanel() {
           </div>
         )}
 
+        {/* Live dictation preview (interim words before they finalize). */}
+        {dictating && interim && (
+          <p className="mt-2 px-1 text-xs italic text-gray-400 dark:text-gray-500">{interim}</p>
+        )}
+
         {/* Input */}
         <div className="mt-2 flex items-end gap-2">
           <textarea
@@ -811,6 +872,26 @@ export default function ChatPanel() {
             aria-label={t("messageAria")}
             className="min-h-0 flex-1 resize-none rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           />
+
+          {/* Mic (dictation) toggle - hidden when no engine is available, disabled while a reply streams. */}
+          {dictationEngineKind !== "none" && (
+            <button
+              type="button"
+              onClick={toggleDictation}
+              disabled={streaming}
+              aria-label={dictating ? t("dictateStop") : t("dictateStart")}
+              title={dictating ? t("dictateStop") : t("dictateStart")}
+              aria-pressed={dictating}
+              className={
+                dictating
+                  ? "flex items-center justify-center rounded bg-red-600 p-2 text-white disabled:opacity-50"
+                  : "flex items-center justify-center rounded border p-2 text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+              }
+            >
+              {dictating ? <StopSquareIcon /> : <MicIcon />}
+            </button>
+          )}
+
           {streaming ? (
             <button
               type="button"
@@ -824,9 +905,11 @@ export default function ChatPanel() {
               type="button"
               onClick={send}
               disabled={!input.trim()}
-              className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+              aria-label={t("send")}
+              title={t("send")}
+              className="flex items-center justify-center rounded bg-blue-600 p-2 text-white disabled:opacity-50"
             >
-              {t("send")}
+              <SendIcon />
             </button>
           )}
         </div>
@@ -897,5 +980,21 @@ const SaveIcon = () => (
 const TrashIcon = () => (
   <svg {...iconProps}>
     <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+  </svg>
+);
+const MicIcon = () => (
+  <svg {...iconProps}>
+    <rect x="9" y="2" width="6" height="11" rx="3" />
+    <path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8" />
+  </svg>
+);
+const StopSquareIcon = () => (
+  <svg {...iconProps}>
+    <rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" />
+  </svg>
+);
+const SendIcon = () => (
+  <svg {...iconProps}>
+    <path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" />
   </svg>
 );
