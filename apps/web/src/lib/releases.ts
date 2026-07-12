@@ -56,7 +56,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.128.0",
     date: "2026-07-12",
-    pr: 282,
+    pr: 283,
     headline: "Run saved prompts over a recording with Formulas",
     summary:
       "Formulas let you save a prompt plus a chosen context (transcript, notes, summary, minutes, action items) " +
