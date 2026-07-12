@@ -94,6 +94,7 @@
     "add_as_attachment": "enregistrer une note",
     "get_transcript": "obtenir la transcription",
     "get_meeting_minutes": "obtenir le compte rendu",
-    "get_recording_details": "détails de l'enregistrement"
+    "get_recording_details": "détails de l'enregistrement",
+    "run_formula": "exécuter la formule"
   }
 }

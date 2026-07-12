@@ -94,6 +94,7 @@
     "add_as_attachment": "Notiz speichern",
     "get_transcript": "Transkript abrufen",
     "get_meeting_minutes": "Protokoll abrufen",
-    "get_recording_details": "Aufnahmedetails"
+    "get_recording_details": "Aufnahmedetails",
+    "run_formula": "Formel ausführen"
   }
 }

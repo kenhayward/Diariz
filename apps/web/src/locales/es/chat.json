@@ -94,6 +94,7 @@
     "add_as_attachment": "guardar nota",
     "get_transcript": "obtener transcripción",
     "get_meeting_minutes": "obtener acta",
-    "get_recording_details": "detalles de la grabación"
+    "get_recording_details": "detalles de la grabación",
+    "run_formula": "ejecutar fórmula"
   }
 }

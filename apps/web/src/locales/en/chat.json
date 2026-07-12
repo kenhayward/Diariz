@@ -94,6 +94,7 @@
     "add_as_attachment": "save note",
     "get_transcript": "get transcript",
     "get_meeting_minutes": "get minutes",
-    "get_recording_details": "recording details"
+    "get_recording_details": "recording details",
+    "run_formula": "run formula"
   }
 }
