@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Formula">
+  <title>Formula</title>
+  <path d="M9.5 3h5"/>
+  <path d="M10.5 3v5.4l-4.6 8.3A1.8 1.8 0 0 0 7.5 19.5h9a1.8 1.8 0 0 0 1.6-2.8L13.5 8.4V3"/>
+  <path d="M8.2 14h7.6"/>
+  <path d="M18.5 3l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5z" fill="currentColor" stroke="none"/>
+  <path d="M5.5 6.2l.35.95.95.35-.95.35-.35.95-.35-.95-.95-.35.95-.35z" fill="currentColor" stroke="none"/>
+</svg>
