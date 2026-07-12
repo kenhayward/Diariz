@@ -522,3 +522,9 @@ public record SetFormulaEnabledRequest(bool Enabled);
 /// recording's results stays cheap.</summary>
 public record FormulaResultDto(
     Guid Id, Guid RecordingId, string Name, Guid? CreatedByUserId, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+
+/// <summary>A formula result's generated Markdown body, fetched separately from the list/summary DTO.</summary>
+public record FormulaResultTextDto(string Text);
+
+/// <summary>Edits a formula result's Markdown body.</summary>
+public record UpdateFormulaResultRequest(string Text);
