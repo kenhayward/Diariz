@@ -56,7 +56,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.129.0",
     date: "2026-07-12",
-    pr: 285,
+    pr: 284,
     headline: "Run Formulas from chat and from Claude (MCP)",
     summary:
       "You can now run a formula straight from the chat box by typing /formula <name> (it runs on the recording " +
