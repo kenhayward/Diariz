@@ -16,6 +16,9 @@ vi.mock("../lib/api", () => ({
     createChatConversation: vi.fn(),
     updateChatConversation: vi.fn(),
     deleteChatConversation: vi.fn(),
+    listFormulas: vi.fn(),
+    runFormula: vi.fn(),
+    getFormulaResultText: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -258,5 +261,62 @@ describe("ChatPanel", () => {
         expect.anything(),
       ),
     );
+  });
+
+  describe("/formula command", () => {
+    const formula = {
+      id: "f1", scope: "Personal", ownerUserId: "u1", name: "Follow-up email",
+      description: null, prompt: "Draft a follow-up.", context: 1, enabled: true, isBuiltIn: false,
+    };
+
+    beforeEach(() => {
+      mock(api.listFormulas).mockResolvedValue([formula]);
+      mock(api.runFormula).mockResolvedValue({
+        id: "res-1", recordingId: "rec-1", name: "Follow-up email",
+        createdByUserId: "u1", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z",
+      });
+      mock(api.getFormulaResultText).mockResolvedValue("**Thanks for joining.**");
+    });
+
+    it("runs the matching formula on the open recording and shows the markdown result", async () => {
+      renderPanel("/recordings/rec-1");
+      await ask("/formula Follow-up email");
+
+      await waitFor(() => expect(api.runFormula).toHaveBeenCalledWith("rec-1", "f1"));
+      expect(api.getFormulaResultText).toHaveBeenCalledWith("rec-1", "res-1");
+      await waitFor(() => expect(screen.getByText(/Thanks for joining/)).toBeTruthy());
+    });
+
+    it("does not send the command text to the model", async () => {
+      renderPanel("/recordings/rec-1");
+      await ask("/formula Follow-up email");
+
+      await waitFor(() => expect(api.runFormula).toHaveBeenCalled());
+      expect(api.chatStream).not.toHaveBeenCalled();
+    });
+
+    it("shows a message and skips the lookup when no recording is open", async () => {
+      renderPanel("/sections/sec-1");
+      await ask("/formula Follow-up email");
+
+      expect(await screen.findByText(/open a recording first/i)).toBeTruthy();
+      expect(api.listFormulas).not.toHaveBeenCalled();
+    });
+
+    it("shows a not-found message when no formula matches the name", async () => {
+      renderPanel("/recordings/rec-1");
+      await ask("/formula Nonexistent");
+
+      expect(await screen.findByText(/no formula named/i)).toBeTruthy();
+      expect(api.runFormula).not.toHaveBeenCalled();
+    });
+
+    it("does not run bare /formula with no name (sends it as a normal message instead)", async () => {
+      renderPanel("/recordings/rec-1");
+      await ask("/formula");
+
+      await waitFor(() => expect(api.chatStream).toHaveBeenCalled());
+      expect(api.listFormulas).not.toHaveBeenCalled();
+    });
   });
 });

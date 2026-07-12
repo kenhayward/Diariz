@@ -16,11 +16,22 @@ export function parseChatCommand(input: string): ChatCommand | null {
   return (COMMANDS as string[]).includes(name) ? (name as ChatCommand) : null;
 }
 
-/// One command in the autocomplete/help list.
+/// One command in the autocomplete/help list. `cmd` is null for a display-only entry - a command that takes
+/// an argument and performs its own async action (e.g. "/formula <name>") rather than a bare, argument-less
+/// `ChatCommand` runnable via `runSlash`.
 export interface CommandInfo {
-  cmd: ChatCommand;
+  cmd: ChatCommand | null;
   command: string; // "/tools"
   description: string;
+}
+
+/// Parse "/formula <name>" into the trimmed formula name, or null when there's no name (a bare "/formula") or
+/// the input isn't the formula command at all. Case-insensitive on the command itself. Unlike `parseChatCommand`
+/// this command takes an argument and runs an async lookup, so it's handled as its own client-side path rather
+/// than folded into the `ChatCommand` union.
+export function parseRunFormula(input: string): string | null {
+  const m = input.trim().match(/^\/formula\s+(.+)$/i);
+  return m ? m[1].trim() : null;
 }
 
 /// Commands whose name starts with the typed input — used to drive the autocomplete popup. Returns [] unless
