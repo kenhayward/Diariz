@@ -478,6 +478,9 @@ public record ChatStreamRequest(
 /// <summary>Extracted attachment text returned to the client (held and resent with each turn).</summary>
 public record ChatAttachmentDto(string Name, int Chars, string Text);
 
+/// <summary>The recognised text for one dictation utterance.</summary>
+public record ChatTranscriptionDto(string Text);
+
 public record ChatConversationSummaryDto(Guid Id, string Title, DateTimeOffset UpdatedAt);
 
 public record ChatConversationDto(

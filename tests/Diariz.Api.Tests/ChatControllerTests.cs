@@ -32,7 +32,8 @@ public class ChatControllerTests
         var orchestrator = new ChatToolOrchestrator(chat);
         var controller = new ChatController(db, chat, settings, ctxResolver, new AttachmentExtractor(),
             storage ?? new FakeAudioStorage(), urlFetcher ?? new FakeUrlFetcher(),
-            toolSettings ?? new FakeChatToolSettingsResolver(), orchestrator, new RoomScope(db))
+            toolSettings ?? new FakeChatToolSettingsResolver(), orchestrator, new RoomScope(db),
+            null!, Options.Create(new DictationOptions()))
         {
             ControllerContext = Http.Context(userId),
         };
