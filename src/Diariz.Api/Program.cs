@@ -457,6 +457,7 @@ await using (var scope = app.Services.CreateAsyncScope())
     // holders were moved into groups once, by the AddUserGroups migration - never on boot, or a demoted user
     // would be silently re-promoted from their stale AspNetUserRoles row.
     await Seeder.SeedPlatformAuthorityAsync(db, seedUserId);
+    await Seeder.SeedFormulasAsync(db);
     await MeetingTypeSeeder.SeedAsync(db);
 }
 
