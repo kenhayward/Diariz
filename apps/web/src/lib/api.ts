@@ -22,6 +22,9 @@ import type {
   ChatConversationSummary,
   ChatTurn,
   ChatUsage,
+  Formula,
+  FormulaResult,
+  FormulaScope,
   GrantResult,
   Language,
   McpToken,
@@ -1126,6 +1129,83 @@ export const api = {
     document.body.appendChild(a);
     a.click();
     a.remove();
+  },
+
+  // ---- Formulas ----
+
+  /// The caller's own Personal formulas plus every enabled Platform/Diariz formula.
+  async listFormulas(): Promise<Formula[]> {
+    const { data } = await http.get<Formula[]>("/api/formulas");
+    return data;
+  },
+
+  async createFormula(body: {
+    scope: FormulaScope;
+    name: string;
+    description?: string | null;
+    prompt: string;
+    context: number;
+  }): Promise<Formula> {
+    const { data } = await http.post<Formula>("/api/formulas", body);
+    return data;
+  },
+
+  /// Partial update: omitted fields are left unchanged.
+  async updateFormula(
+    id: string,
+    body: { name?: string; description?: string | null; prompt?: string; context?: number },
+  ): Promise<Formula> {
+    const { data } = await http.put<Formula>(`/api/formulas/${id}`, body);
+    return data;
+  },
+
+  async deleteFormula(id: string): Promise<void> {
+    await http.delete(`/api/formulas/${id}`);
+  },
+
+  /// Enable/disable a Platform/Diariz formula (Personal formulas are always available).
+  async setFormulaEnabled(id: string, enabled: boolean): Promise<void> {
+    await http.put(`/api/formulas/${id}/enabled`, { enabled });
+  },
+
+  /// Run a formula over a recording and return the persisted result.
+  async runFormula(recordingId: string, formulaId: string): Promise<FormulaResult> {
+    const { data } = await http.post<FormulaResult>(`/api/recordings/${recordingId}/formulas/${formulaId}/run`);
+    return data;
+  },
+
+  // ---- Formula results (per recording) ----
+
+  async listFormulaResults(recordingId: string): Promise<FormulaResult[]> {
+    const { data } = await http.get<FormulaResult[]>(`/api/recordings/${recordingId}/formula-results`);
+    return data;
+  },
+
+  /// Fetch a formula result's generated Markdown body (fetched separately so listing stays cheap).
+  async getFormulaResultText(recordingId: string, id: string): Promise<string> {
+    const { data } = await http.get<{ text: string }>(`/api/recordings/${recordingId}/formula-results/${id}`);
+    return data.text;
+  },
+
+  async updateFormulaResult(recordingId: string, id: string, text: string): Promise<FormulaResult> {
+    const { data } = await http.put<FormulaResult>(`/api/recordings/${recordingId}/formula-results/${id}`, { text });
+    return data;
+  },
+
+  async deleteFormulaResult(recordingId: string, id: string): Promise<void> {
+    await http.delete(`/api/recordings/${recordingId}/formula-results/${id}`);
+  },
+
+  /// Email a formula result's Markdown to the signed-in user's own registered address.
+  async emailFormulaResult(recordingId: string, id: string): Promise<void> {
+    await http.post(`/api/recordings/${recordingId}/formula-results/${id}/email`);
+  },
+
+  async downloadFormulaResult(recordingId: string, id: string): Promise<void> {
+    const res = await http.get(`/api/recordings/${recordingId}/formula-results/${id}/download`, {
+      responseType: "blob",
+    });
+    triggerBlobDownload(res.data as Blob, filenameFromHeaders(res.headers, "formula-result.md"));
   },
 };
 
