@@ -357,6 +357,40 @@ default timeout for its header phase and relies on client-disconnect for cancell
   **system prompt** grounds questions in the user's own meetings and (with tools) tells the model to search the
   transcripts before saying it doesn't know. With tools off, chat is the same single-pass stream as before.
   Tools run inside the API (no worker) — server-redeploy only.
+- **Formulas (sync, no job queue).** A **`Formula`** is a saved prompt + a chosen context (`FormulaContext`, a
+  `[Flags]` combination of `Transcript`/`Notes`/`Attachments`/`Summary`/`Minutes`/`Actions`), run over a
+  recording to produce a **`FormulaResult`** — a persisted Markdown document (`Name`, `Text`, `Ordinal` for
+  display order). A `Formula` has a **`FormulaScope`**: `Personal` (owned by one user, `OwnerUserId` set,
+  always usable by its owner, cascade-deleted with the user), `Platform` (shared, admin-managed), or `Diariz`
+  (shared, seeded built-ins, `IsBuiltIn = true`, can never be deleted). `Platform`/`Diariz` formulas carry an
+  `Enabled` flag gating their availability. `FormulaResult.FormulaId` is **`ON DELETE SET NULL`** (a result
+  survives its source formula being deleted) and `CreatedByUserId` is likewise nullable/`SET NULL` (a result
+  survives its author's account being deleted); `FormulaResult` itself cascades with its `Recording`.
+  **`Services/Seeder.SeedFormulasAsync`** insert-if-missing-by-name seeds four `Diariz`-scope starter formulas
+  on startup: *Follow-up email*, *Meeting recap*, *Decisions & risks*, and *Tone & sentiment read*.
+  Formulas run **synchronously, with no Redis stream** — `IFormulaRunner`/`FormulaRunner` mirrors the one-off
+  LLM calls already used for chat-title generation rather than the async summarise/minutes/actions pipeline:
+  it resolves the caller's per-user-or-server LLM config via the same `ISummarizationSettingsResolver`, loads
+  only the recording data the formula's context flags require (so a Summary-only formula never pulls the full
+  segment list), builds a single context blob (`FormulaContextBuilder`, a pure formatter), and streams one
+  completion through **`IChatStreamClient`** (the same streaming client chat uses) inside a per-request timeout
+  derived from the resolved config — then persists the result and returns it in the same HTTP response. A
+  formula's own LLM-timeout expiry is distinguished from a genuine client disconnect by checking whether the
+  *outer* cancellation token (vs. the runner's linked/timeout token) fired, mapping the former to a clean abort
+  and the latter to **504**.
+  Endpoints: **`FormulasController`** at `api/formulas` is Formula CRUD (`GET` = the caller's own Personal
+  formulas ∪ every enabled Platform/Diariz formula; `POST`/`PUT`/`DELETE`/`PUT .../enabled`) plus
+  **`POST api/recordings/{id}/formulas/{formulaId}/run`** (executes `IFormulaRunner` and returns the
+  `FormulaResult`); **`FormulaResultsController`** at `api/recordings/{id}/formula-results` covers listing,
+  reading, hand-editing, deleting, emailing (to the caller's own registered address, mirroring the meeting-minutes
+  email), and downloading a result as a `.md` file. Write access to a `Personal` formula requires ownership (a
+  non-owned Personal formula 404s rather than 403ing, so its existence isn't leaked); write access to a
+  `Platform`/`Diariz` formula requires the new **`ManageFormulas`** platform permission (granted through a user
+  group, alongside `ManageRooms`/`ManageUsers`); running any formula a user can see is always allowed. A web
+  **Formulas tab** on the recording page runs formulas and lists/opens/edits/downloads/emails their results; a
+  **Preferences → Formulas** panel manages Personal formulas. **Not yet built (later phases):** a chat/MCP
+  `run_formula` tool so Claude/in-app chat can trigger a formula, and an admin popup for bulk-managing
+  Platform/Diariz formulas (today that's done directly through the CRUD endpoints/UI above).
 
 ## Meeting notes (the user's own notes)
 

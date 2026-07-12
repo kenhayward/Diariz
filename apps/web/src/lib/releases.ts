@@ -22,6 +22,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Action items** | Auto-extracted with owner and deadline, tracked across every meeting with completion and a person filter, linking back to the transcript. |
 | **Tag cloud** | Every meeting is auto-tagged with weighted topics; a Tags tab shows a weighted cloud and the meetings behind each tag. |
 | **Chat over transcripts** | Stream answers over one meeting, a folder (its summary/minutes/actions), several selected, or all meetings - context inferred from what you're viewing - via your OpenAI-compatible model, with attachments and saved conversations. |
+| **Formulas** | Save a prompt + a context and run it over a recording to generate a Markdown document you can edit, download, or email. |
 | **Search** | Keyword search across your library, upgraded to semantic (meaning-based) search when an embeddings endpoint is configured. |
 | **Chat tools** | The assistant searches your library with built-in tools (who-said-what, attendees, talk time, summaries, email-to-self) and links to the exact segment. |
 | **Voice dictation** | Speak your chat questions - transcribed into the chat box in Chrome/Edge or via a server speech-to-text endpoint. |
@@ -52,6 +53,24 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.128.0",
+    date: "2026-07-12",
+    pr: 282,
+    headline: "Run saved prompts over a recording with Formulas",
+    summary:
+      "Formulas let you save a prompt plus a chosen context (transcript, notes, summary, minutes, action items) " +
+      "and run it over any recording to generate a named Markdown Result you can open, edit, download, or email - " +
+      "all from a new Formulas tab on the recording. There are three kinds: Diariz-provided starter formulas " +
+      "(Follow-up email, Meeting recap, Decisions & risks, Tone & sentiment read), Platform-wide formulas shared " +
+      "with everyone, and your own Personal formulas managed in Preferences. Admins get a new 'Manage formulas' " +
+      "permission to create, edit, and enable or disable the shared ones.",
+    added: [
+      "Formulas: save a prompt + context and run it over a recording to generate a Markdown Result (open, edit, download, or email it) from a new Formulas tab.",
+      "Personal formulas you create in Preferences, plus built-in Diariz starter formulas and Platform-wide formulas.",
+      "A new Manage Formulas admin permission (granted via user groups).",
+    ],
+  },
   {
     version: "0.127.0",
     date: "2026-07-12",
