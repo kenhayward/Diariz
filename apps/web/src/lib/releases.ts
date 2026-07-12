@@ -53,6 +53,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.126.1",
+    date: "2026-07-12",
+    pr: 279,
+    headline: "Wider Preferences window",
+    summary:
+      "The Preferences window is now wider (80% of the screen instead of 60%), with the extra space going to " +
+      "the settings panel on the right. This makes the content easier to read on monitors below 4K, where the " +
+      "panel was previously cramped.",
+    fixed: [
+      "Preferences window widened to 80% of the page (up from 60%) so the settings panel is easier to read on sub-4K displays.",
+    ],
+  },
+  {
     version: "0.126.0",
     date: "2026-07-12",
     pr: 278,

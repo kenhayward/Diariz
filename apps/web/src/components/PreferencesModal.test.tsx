@@ -80,10 +80,10 @@ describe("PreferencesModal", () => {
     expect(screen.getByRole("tab", { name: /google account/i }).getAttribute("aria-selected")).toBe("true");
   });
 
-  it("is sized to 60vw x 80vh", () => {
+  it("is sized to 80vw x 80vh", () => {
     renderModal();
     const dialog = screen.getByRole("dialog", { name: /preferences/i });
-    expect(dialog.className).toContain("w-[60vw]");
+    expect(dialog.className).toContain("w-[80vw]");
     expect(dialog.className).toContain("h-[80vh]");
   });
 
