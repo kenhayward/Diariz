@@ -75,9 +75,10 @@ public static class Seeder
     public static async Task SeedGroupsAsync(DiarizDbContext db)
     {
         await EnsureGroup(db, PlatformAdminsGroup, isSystem: true,
-            PlatformPermission.ManageRooms | PlatformPermission.ManageUsers | PlatformPermission.ManagePlatform);
+            PlatformPermission.ManageRooms | PlatformPermission.ManageUsers | PlatformPermission.ManagePlatform
+                | PlatformPermission.ManageFormulas);
         await EnsureGroup(db, AdminsGroup, isSystem: false,
-            PlatformPermission.ManageRooms | PlatformPermission.ManageUsers);
+            PlatformPermission.ManageRooms | PlatformPermission.ManageUsers | PlatformPermission.ManageFormulas);
         await db.SaveChangesAsync();
 
         static async Task EnsureGroup(DiarizDbContext db, string name, bool isSystem, PlatformPermission perms)

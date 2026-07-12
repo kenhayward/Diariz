@@ -148,6 +148,7 @@ builder.Services.AddAuthorization(o =>
     o.AddPolicy("ManageRooms", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManageRooms)));
     o.AddPolicy("ManageUsers", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManageUsers)));
     o.AddPolicy("ManagePlatform", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManagePlatform)));
+    o.AddPolicy("ManageFormulas", p => p.AddRequirements(new PermissionRequirement(PlatformPermission.ManageFormulas)));
     // Reading platform settings: the Manage Users modal shows the default quota, so an Administrator
     // (ManageUsers, no ManagePlatform) must still be able to GET them. Writes remain ManagePlatform.
     o.AddPolicy("ReadAdminSettings", p => p.AddRequirements(

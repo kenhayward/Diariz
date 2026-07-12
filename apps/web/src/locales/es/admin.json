@@ -69,6 +69,7 @@
   "rmPermEditOthers": "Editar grabaciones de otros",
   "permManageUsers": "Gestionar usuarios",
   "permManagePlatform": "Gestionar plataforma",
+  "permManageFormulas": "Gestionar fórmulas",
   "deleteGroup": "Eliminar",
   "confirmDeleteGroup": "¿Eliminar el grupo \"{{name}}\"? Sus miembros conservan sus cuentas.",
   "newGroupName": "Nombre del nuevo grupo",
