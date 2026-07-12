@@ -250,8 +250,21 @@ public class ChatController : ControllerBase
             _dictationOptions.TimeoutSeconds);
 
         await using var stream = file.OpenReadStream();
-        var text = await _dictation.TranscribeAsync(config, stream, file.ContentType, file.FileName, ct);
-        return Ok(new ChatTranscriptionDto(text));
+        try
+        {
+            var text = await _dictation.TranscribeAsync(config, stream, file.ContentType, file.FileName, ct);
+            return Ok(new ChatTranscriptionDto(text));
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw; // genuine client abort - let the framework handle it
+        }
+        catch (Exception)
+        {
+            // A downstream STT failure (service down, bad model, timeout, malformed response) - report a
+            // clean 502 so the dictation UI can show an actionable message instead of a bare 500.
+            return StatusCode(StatusCodes.Status502BadGateway, "The transcription service could not be reached.");
+        }
     }
 
     // ---- Saved conversations (per-user CRUD) ----

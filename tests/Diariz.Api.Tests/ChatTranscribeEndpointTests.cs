@@ -1,3 +1,4 @@
+using System.Net.Http;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
@@ -15,9 +16,27 @@ public class ChatTranscribeEndpointTests
     {
         private readonly string _text;
         public FakeDictationClient(string text) => _text = text;
+
+        public DictationRequestConfig? LastConfig { get; private set; }
+        public string? LastContentType { get; private set; }
+        public string? LastFileName { get; private set; }
+
         public Task<string> TranscribeAsync(
             DictationRequestConfig config, Stream audio, string contentType, string fileName,
-            CancellationToken ct = default) => Task.FromResult(_text);
+            CancellationToken ct = default)
+        {
+            LastConfig = config;
+            LastContentType = contentType;
+            LastFileName = fileName;
+            return Task.FromResult(_text);
+        }
+    }
+
+    private sealed class ThrowingDictationClient : IDictationClient
+    {
+        public Task<string> TranscribeAsync(
+            DictationRequestConfig config, Stream audio, string contentType, string fileName,
+            CancellationToken ct = default) => throw new HttpRequestException("stt down");
     }
 
     private static ChatController BuildController(IDictationClient dictation, DictationOptions opts, Guid userId)
@@ -43,8 +62,9 @@ public class ChatTranscribeEndpointTests
     [Fact]
     public async Task Transcribe_ReturnsText_WhenConfigured()
     {
+        var fake = new FakeDictationClient("Hello world.");
         var controller = BuildController(
-            new FakeDictationClient("Hello world."),
+            fake,
             new DictationOptions { ApiBase = "http://stt.test/v1", Model = "whisper-1" },
             Guid.NewGuid());
 
@@ -52,6 +72,25 @@ public class ChatTranscribeEndpointTests
 
         var dto = Assert.IsType<ChatTranscriptionDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
         Assert.Equal("Hello world.", dto.Text);
+
+        // The action must assemble the request config from the server options and pass the upload metadata through.
+        Assert.Equal("http://stt.test/v1", fake.LastConfig!.ApiBase);
+        Assert.Equal("whisper-1", fake.LastConfig.Model);
+        Assert.Equal("audio/webm", fake.LastContentType);
+    }
+
+    [Fact]
+    public async Task Transcribe_Returns502_WhenTranscriptionFails()
+    {
+        var controller = BuildController(
+            new ThrowingDictationClient(),
+            new DictationOptions { ApiBase = "http://stt.test/v1" },
+            Guid.NewGuid());
+
+        var result = await controller.Transcribe(WebmFile(), CancellationToken.None);
+
+        var obj = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status502BadGateway, obj.StatusCode);
     }
 
     [Fact]
