@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   formatBytes, storagePercent, bytesToGb, gbToBytes, formatDuration,
-  formatLongDate, formatTimeHm, formatDurationHm,
+  formatLongDate, formatTimeHm, formatDurationHm, formatRelativeTime,
 } from "./format";
 
 describe("formatDuration", () => {
@@ -91,5 +91,29 @@ describe("GB conversion", () => {
   it("round-trips whole gigabytes", () => {
     expect(gbToBytes(5)).toBe(5 * 1024 ** 3);
     expect(bytesToGb(5 * 1024 ** 3)).toBe(5);
+  });
+});
+
+describe("formatRelativeTime", () => {
+  const now = new Date(2026, 2, 23, 12, 0, 0);
+
+  it("formats seconds/minutes/hours/days in the past", () => {
+    expect(formatRelativeTime(new Date(2026, 2, 23, 11, 59, 30).toISOString(), "en", now)).toBe("30 seconds ago");
+    expect(formatRelativeTime(new Date(2026, 2, 23, 11, 55, 0).toISOString(), "en", now)).toBe("5 minutes ago");
+    expect(formatRelativeTime(new Date(2026, 2, 23, 9, 0, 0).toISOString(), "en", now)).toBe("3 hours ago");
+    expect(formatRelativeTime(new Date(2026, 2, 20, 12, 0, 0).toISOString(), "en", now)).toBe("3 days ago");
+  });
+
+  it("reads as now for sub-second differences", () => {
+    expect(formatRelativeTime(now.toISOString(), "en", now)).toBe("now");
+  });
+
+  it("uses the locale's natural wording for non-English locales", () => {
+    const out = formatRelativeTime(new Date(2026, 2, 23, 9, 0, 0).toISOString(), "de", now);
+    expect(out.toLowerCase()).toContain("stunden");
+  });
+
+  it("defaults to the browser locale when none is passed", () => {
+    expect(formatRelativeTime(new Date(2026, 2, 23, 9, 0, 0).toISOString(), undefined, now)).toContain("3");
   });
 });
