@@ -3,10 +3,11 @@ import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import { FormulaContextBits, type Formula } from "../lib/types";
 
+// Attachments (FormulaContextBits.Attachments) is intentionally omitted until attachment extraction
+// ships in a later phase - FormulaContextBuilder ignores the flag today, so surfacing it would be a no-op.
 const CONTEXT_OPTIONS: { bit: number; key: string }[] = [
   { bit: FormulaContextBits.Transcript, key: "contextTranscript" },
   { bit: FormulaContextBits.Notes, key: "contextNotes" },
-  { bit: FormulaContextBits.Attachments, key: "contextAttachments" },
   { bit: FormulaContextBits.Summary, key: "contextSummary" },
   { bit: FormulaContextBits.Minutes, key: "contextMinutes" },
   { bit: FormulaContextBits.Actions, key: "contextActions" },

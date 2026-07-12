@@ -38,9 +38,11 @@ describe("FormulaEditModal", () => {
     expect(screen.getByLabelText(/^description$/i)).toBeTruthy();
     expect(screen.getByLabelText(/^prompt$/i)).toBeTruthy();
     expect(screen.getByText(/markdown supported/i)).toBeTruthy();
-    for (const label of [/transcript/i, /notes/i, /attachments/i, /summary/i, /minutes/i, /actions/i]) {
+    for (const label of [/transcript/i, /notes/i, /summary/i, /minutes/i, /actions/i]) {
       expect(screen.getByLabelText(label)).toBeTruthy();
     }
+    // Attachments is intentionally not surfaced yet (its context flag is a no-op in Phase 1).
+    expect(screen.queryByLabelText(/attachments/i)).toBeNull();
   });
 
   it("disables Save until name and prompt are filled", () => {
@@ -84,10 +86,10 @@ describe("FormulaEditModal", () => {
     expect(screen.getByDisplayValue("Old prompt")).toBeTruthy();
     expect((screen.getByLabelText(/transcript/i) as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText(/notes/i) as HTMLInputElement).checked).toBe(true);
-    expect((screen.getByLabelText(/attachments/i) as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText(/summary/i) as HTMLInputElement).checked).toBe(false);
 
     fireEvent.change(screen.getByDisplayValue("Existing"), { target: { value: "Renamed" } });
-    fireEvent.click(screen.getByLabelText(/attachments/i)); // add bit 4 -> 3 + 4 = 7
+    fireEvent.click(screen.getByLabelText(/summary/i)); // add bit 8 -> 3 + 8 = 11
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(() =>
@@ -95,7 +97,7 @@ describe("FormulaEditModal", () => {
         name: "Renamed",
         description: "Desc",
         prompt: "Old prompt",
-        context: 7,
+        context: 11,
       }),
     );
     expect(onSaved).toHaveBeenCalled();
