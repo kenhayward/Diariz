@@ -22,7 +22,7 @@ namespace Diariz.Domain.Migrations
                     Description = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: true),
                     Prompt = table.Column<string>(type: "text", nullable: false),
                     Context = table.Column<int>(type: "integer", nullable: false),
-                    Enabled = table.Column<bool>(type: "boolean", nullable: false),
+                    Enabled = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
                     IsBuiltIn = table.Column<bool>(type: "boolean", nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     UpdatedAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
@@ -35,7 +35,7 @@ namespace Diariz.Domain.Migrations
                         column: x => x.OwnerUserId,
                         principalTable: "AspNetUsers",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -44,7 +44,7 @@ namespace Diariz.Domain.Migrations
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     RecordingId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CreatedByUserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CreatedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
                     FormulaId = table.Column<Guid>(type: "uuid", nullable: true),
                     Name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     Text = table.Column<string>(type: "text", nullable: false),
@@ -60,7 +60,7 @@ namespace Diariz.Domain.Migrations
                         column: x => x.CreatedByUserId,
                         principalTable: "AspNetUsers",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
+                        onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
                         name: "FK_FormulaResults_Formulas_FormulaId",
                         column: x => x.FormulaId,

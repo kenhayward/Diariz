@@ -281,14 +281,14 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         {
             e.Property(f => f.Name).HasMaxLength(256);
             e.Property(f => f.Description).HasMaxLength(1024);
-            // Owner is Restrict, not Cascade: FormulaResult already cascades from Recording, and having a
-            // second cascade path to the same table (via User -> Formula -> FormulaResult, once results
-            // gain their own owner link) risks a multiple-cascade-path conflict. A user with personal
-            // formulas must be handled explicitly (e.g. reassign/delete) rather than cascading silently.
+            e.Property(f => f.Enabled).HasDefaultValue(true);
+            // Cascade: a Personal formula belongs to its owner, so deleting the account deletes it. Platform/
+            // Diariz formulas have a null OwnerUserId and are unaffected. This is the only cascade path from
+            // User to Formula, so there is no conflict.
             e.HasOne(f => f.Owner)
                 .WithMany()
                 .HasForeignKey(f => f.OwnerUserId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // The Markdown document produced by running a Formula over a recording. Cascades with the recording;
@@ -305,12 +305,14 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 .WithMany()
                 .HasForeignKey(r => r.FormulaId)
                 .OnDelete(DeleteBehavior.SetNull);
-            // Restrict avoids a second cascade path from User to Recording's FormulaResults (User ->
-            // Recording -> FormulaResult already cascades transitively via Recording's own User FK).
+            // SetNull, not Cascade: a result authored by user A can live on user B's shared recording. If A's
+            // account is deleted we keep B's document and merely drop the attribution (CreatedByUserId is
+            // nullable). Postgres permits multiple cascade paths, so this is a deliberate retention choice,
+            // not a workaround for a path conflict.
             e.HasOne(r => r.CreatedBy)
                 .WithMany()
                 .HasForeignKey(r => r.CreatedByUserId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<ApplicationUser>(e =>

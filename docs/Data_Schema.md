@@ -79,7 +79,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddRoomScopedEntities` | `SpeakerProfiles.RoomId` + `ChatSessions.RoomId` (uuid, not-null) and `MeetingTypes.RoomId` (uuid, **nullable** - null mirrors the platform type's null `UserId`); all **plain columns**, no FK yet (the Rooms FK + the `UserId` drop land with Phase 4). The migration **backfills** each voiceprint, saved chat and personal meeting type into its owner's personal room, minting a missing one first (`RoomScopedEntitiesBackfill`); platform meeting types keep `RoomId` null. These are populated on create but still **queried by `UserId`** for now |
 | `AddRecordingPlacementPreference` | `UserSettings.RecordingPlacementMode` (int, not-null, **default 1** = `SelectedFolder`) + `UserSettings.RecordingPlacementSectionId` (uuid, nullable). Where a new recording is filed in the recorder's personal room; no data backfill (the column default covers existing rows) |
 | `AddRoomRecordingPosition` | `RoomRecordings.Position` (int, not-null, **default 0**). Per-room sort order of a recording within its room, so a recording can be ordered differently in two rooms; supersedes the now-dead global `Recording.Position`. **Backfills** once, copying `Recording.Position` onto each **main** placement (`RoomRecordingPositionBackfill`); shared placements keep 0 |
-| `AddFormulas` | `Formulas` (a saved prompt + chosen context; `Scope` int 0=Personal/1=Platform/2=Diariz; `OwnerUserId` FK `ON DELETE RESTRICT`, set only for Personal; `Context` int **[Flags]**; `IsBuiltIn` blocks delete) + `FormulaResults` (the generated Markdown per recording; cascade on `Recording`, `ON DELETE SET NULL` on `Formula`, `ON DELETE RESTRICT` on `CreatedByUserId`, index `(RecordingId, Ordinal)`) — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddFormulas` | `Formulas` (a saved prompt + chosen context; `Scope` int 0=Personal/1=Platform/2=Diariz; `OwnerUserId` FK `ON DELETE CASCADE`, set only for Personal - a user's personal formulas die with the account; `Context` int **[Flags]**; `Enabled` bool default true; `IsBuiltIn` blocks delete) + `FormulaResults` (the generated Markdown per recording; cascade on `Recording`, `ON DELETE SET NULL` on `Formula`, nullable `CreatedByUserId` `ON DELETE SET NULL` - the document survives its author's account deletion with attribution dropped, index `(RecordingId, Ordinal)`) — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
 
@@ -109,12 +109,14 @@ Section ──(SetNull)── RoomRecording.SectionId     (deleting a section un
 
 PlatformSettings                                  single seeded row (Id = 1)
 
-Formula (OwnerUserId FK Restrict, null for Platform/Diariz scope)
+ApplicationUser
+ └─1:n─ Formula (cascade)                          OwnerUserId (Personal scope only; null for Platform/Diariz)
+Formula
  └─1:n─ FormulaResult (via FormulaId, SetNull)     survives its Formula being deleted
 Recording
  └─1:n─ FormulaResult (cascade)                    RecordingId
 ApplicationUser
- └─1:n─ FormulaResult (Restrict)                   CreatedByUserId
+ └─1:n─ FormulaResult (SetNull)                    CreatedByUserId (nullable; doc survives author deletion)
 ```
 
 ### Tables in detail
@@ -296,12 +298,12 @@ admin-managed, no owner), or `Diariz` (seeded, `IsBuiltIn = true`, cannot be del
 |---|---|---|
 | `Id` | uuid PK | |
 | `Scope` | int | `Personal`=0, `Platform`=1, `Diariz`=2 (append-only) |
-| `OwnerUserId` | uuid FK → AspNetUsers, null | set only for `Personal`; **`ON DELETE RESTRICT`** |
+| `OwnerUserId` | uuid FK → AspNetUsers, null | set only for `Personal`; **`ON DELETE CASCADE`** (a user's personal formulas die with the account); null for Platform/Diariz |
 | `Name` | varchar(256) | |
 | `Description` | varchar(1024) null | |
 | `Prompt` | text | |
 | `Context` | int **[Flags]** | which parts of the recording the run may see: `Transcript`=1, `Notes`=2, `Attachments`=4, `Summary`=8, `Minutes`=16, `Actions`=32 (append-only) |
-| `Enabled` | bool, default true | Platform/Diariz availability toggle |
+| `Enabled` | bool, **DB default true** | Platform/Diariz availability toggle |
 | `IsBuiltIn` | bool, default false | Diariz-seeded; blocks delete |
 | `CreatedAt` / `UpdatedAt` | timestamptz | |
 
@@ -314,7 +316,7 @@ The Markdown document produced by running a `Formula` over a recording. Many per
 |---|---|---|
 | `Id` | uuid PK | |
 | `RecordingId` | uuid FK → Recordings | **cascade** |
-| `CreatedByUserId` | uuid FK → AspNetUsers | **`ON DELETE RESTRICT`** |
+| `CreatedByUserId` | uuid FK → AspNetUsers, null | **`ON DELETE SET NULL`** — a result can live on another user's shared recording, so the document survives its author's account deletion with attribution dropped |
 | `FormulaId` | uuid FK → Formulas, null | **`ON DELETE SET NULL`** — the result survives its source formula being deleted |
 | `Name` | varchar(256) | formula name snapshot, so a later formula rename/delete doesn't relabel past results |
 | `Text` | text | generated Markdown body |

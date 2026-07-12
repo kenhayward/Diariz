@@ -5,8 +5,9 @@ using Microsoft.EntityFrameworkCore;
 namespace Diariz.Api.IntegrationTests;
 
 /// <summary>Real-Postgres checks for the Formula / FormulaResult model: round-trip persistence, cascade
-/// from Recording (deleting the recording removes its results), and SET NULL from Formula (deleting the
-/// formula orphans - but does not delete - its results).</summary>
+/// from Recording (deleting the recording removes its results), SET NULL from Formula (deleting the
+/// formula orphans - but does not delete - its results), Cascade of a Personal formula with its owner,
+/// and SET NULL of a result's creator when the author's account is deleted (the document survives).</summary>
 [Collection(IntegrationCollection.Name)]
 public class FormulasIntegrationTests(ContainersFixture fx)
 {
@@ -19,6 +20,15 @@ public class FormulasIntegrationTests(ContainersFixture fx)
         db.Recordings.Add(rec);
         await db.SaveChangesAsync();
         return (user.Id, rec.Id);
+    }
+
+    private async Task<Guid> SeedUser()
+    {
+        await using var db = fx.CreateDbContext();
+        var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = $"{Guid.NewGuid()}@x.test" };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        return user.Id;
     }
 
     [Fact]
@@ -142,5 +152,55 @@ public class FormulasIntegrationTests(ContainersFixture fx)
         var result = await verify.FormulaResults.FindAsync(resultId);
         Assert.NotNull(result);
         Assert.Null(result!.FormulaId);
+    }
+
+    [Fact]
+    public async Task DeletingUser_CascadesTheirPersonalFormula_ButKeepsResultsOnOthersRecordings()
+    {
+        // Author A owns a Personal formula and authored a result on user B's recording.
+        var (userB, recB) = await SeedUserAndRecording();
+        var userA = await SeedUser();
+        var personalFormulaId = Guid.NewGuid();
+        var resultId = Guid.NewGuid();
+
+        await using (var db = fx.CreateDbContext())
+        {
+            db.Formulas.Add(new Formula
+            {
+                Id = personalFormulaId,
+                Scope = FormulaScope.Personal,
+                OwnerUserId = userA,
+                Name = "A's Formula",
+                Prompt = "Do a thing.",
+                Context = FormulaContext.Transcript,
+            });
+            db.FormulaResults.Add(new FormulaResult
+            {
+                Id = resultId,
+                RecordingId = recB,
+                CreatedByUserId = userA,
+                FormulaId = null,
+                Name = "A's Formula",
+                Text = "A's output on B's recording",
+                Ordinal = 0,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // Deleting A must not violate a FK: their personal formula cascades away, but the document on B's
+        // recording survives with its attribution dropped.
+        await using (var db = fx.CreateDbContext())
+        {
+            db.Users.Remove((await db.Users.FindAsync(userA))!);
+            await db.SaveChangesAsync();
+        }
+
+        await using var verify = fx.CreateDbContext();
+        Assert.False(await verify.Formulas.AnyAsync(f => f.Id == personalFormulaId));
+        var result = await verify.FormulaResults.FindAsync(resultId);
+        Assert.NotNull(result);
+        Assert.Null(result!.CreatedByUserId);
+        Assert.Equal(recB, result.RecordingId);
+        Assert.Equal("A's output on B's recording", result.Text);
     }
 }

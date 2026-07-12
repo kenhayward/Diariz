@@ -252,7 +252,9 @@ namespace Diariz.Domain.Migrations
                         .HasColumnType("character varying(1024)");
 
                     b.Property<bool>("Enabled")
-                        .HasColumnType("boolean");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.Property<bool>("IsBuiltIn")
                         .HasColumnType("boolean");
@@ -291,7 +293,7 @@ namespace Diariz.Domain.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("CreatedByUserId")
+                    b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("FormulaId")
@@ -1839,7 +1841,7 @@ namespace Diariz.Domain.Migrations
                     b.HasOne("Diariz.Domain.Entities.ApplicationUser", "Owner")
                         .WithMany()
                         .HasForeignKey("OwnerUserId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Owner");
                 });
@@ -1849,8 +1851,7 @@ namespace Diariz.Domain.Migrations
                     b.HasOne("Diariz.Domain.Entities.ApplicationUser", "CreatedBy")
                         .WithMany()
                         .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("Diariz.Domain.Entities.Formula", "Formula")
                         .WithMany()

@@ -6,7 +6,7 @@ public class FormulaResult
     public Guid Id { get; set; }
     public Guid RecordingId { get; set; }
     public Recording? Recording { get; set; }
-    public Guid CreatedByUserId { get; set; }
+    public Guid? CreatedByUserId { get; set; }     // dropped (SET NULL) if the author's account is deleted
     public ApplicationUser? CreatedBy { get; set; }
     public Guid? FormulaId { get; set; }           // SET NULL if the formula is later deleted
     public Formula? Formula { get; set; }
