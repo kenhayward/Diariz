@@ -300,3 +300,21 @@ public class IdentificationOptions
     /// calibrate per docs/Speaker_Identification_and_Verification.md (false-accepts attach a wrong identity).</summary>
     public double Threshold { get; set; } = 0.4;
 }
+
+/// <summary>OpenAI-compatible speech-to-text endpoint used for chat voice dictation - the server-fallback
+/// path for environments where the browser SpeechRecognition API is unavailable (the Electron desktop
+/// shell, Safari, Firefox). Empty <see cref="ApiBase"/> disables the server path; the browser API is still
+/// used where present. This is deliberately server-level only (dictation is infrastructure, not a per-user
+/// bring-your-own-key concern like summarisation).</summary>
+public class DictationOptions
+{
+    public const string Section = "Dictation";
+    /// <summary>Base URL of the OpenAI-compatible API, e.g. http://whisper:8000/v1. Empty disables the server path.</summary>
+    public string ApiBase { get; set; } = "";
+    public string ApiKey { get; set; } = "";
+    public string Model { get; set; } = "whisper-1";
+    public int TimeoutSeconds { get; set; } = 30;
+
+    /// <summary>True when an STT endpoint is configured; otherwise the transcribe endpoint returns 400.</summary>
+    public bool Enabled => !string.IsNullOrWhiteSpace(ApiBase);
+}

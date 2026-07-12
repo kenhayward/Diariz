@@ -33,6 +33,7 @@ builder.Services.Configure<EmbeddingOptions>(builder.Configuration.GetSection(Em
 builder.Services.Configure<SectionSummaryOptions>(builder.Configuration.GetSection(SectionSummaryOptions.Section));
 builder.Services.Configure<SectionMinutesOptions>(builder.Configuration.GetSection(SectionMinutesOptions.Section));
 builder.Services.Configure<ChatOptions>(builder.Configuration.GetSection(ChatOptions.Section));
+builder.Services.Configure<DictationOptions>(builder.Configuration.GetSection(DictationOptions.Section));
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.Section));
 builder.Services.Configure<AppPublicOptions>(builder.Configuration.GetSection(AppPublicOptions.Section));
 builder.Services.Configure<IdentificationOptions>(builder.Configuration.GetSection(IdentificationOptions.Section));
