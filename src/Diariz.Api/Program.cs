@@ -242,6 +242,7 @@ builder.Services.AddHttpClient<IActionsClient, ActionsClient>(NoHttpTimeout);
 builder.Services.AddHttpClient<ITranslationClient, TranslationClient>(NoHttpTimeout);
 builder.Services.AddScoped<ISummarizationSettingsResolver, SummarizationSettingsResolver>();
 builder.Services.AddHostedService<SummarizationWorker>();
+builder.Services.AddScoped<IFormulaRunner, FormulaRunner>();
 
 // ---- Meeting minutes (shares the per-user summarisation config; its own stream + consumer) ----
 builder.Services.AddHttpClient<IMeetingMinutesClient, MeetingMinutesClient>(NoHttpTimeout);
