@@ -609,6 +609,37 @@ describe("RecordingDetail", () => {
     await waitFor(() => expect(api.deleteAttachment).toHaveBeenCalledWith("rec-123", "a1"));
   });
 
+  it("selects a formula result and deletes it from the toolbar", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    (api.deleteFormulaResult as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (api.listFormulaResults as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "fr1", recordingId: "rec-123", name: "Action Items", createdByUserId: "u1", createdAt: base.createdAt, updatedAt: base.createdAt },
+    ]);
+    renderPage(base);
+    await loaded();
+    openTab(/formulas/i);
+
+    // Delete is disabled until a result is selected; selecting the row enables it and wires the id through.
+    expect((screen.getByRole("button", { name: /^delete$/i }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(await screen.findByText("Action Items"));
+    fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+    await waitFor(() => expect(api.deleteFormulaResult).toHaveBeenCalledWith("rec-123", "fr1"));
+  });
+
+  it("downloads the selected formula result from the toolbar", async () => {
+    (api.downloadFormulaResult as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (api.listFormulaResults as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "fr1", recordingId: "rec-123", name: "Action Items", createdByUserId: "u1", createdAt: base.createdAt, updatedAt: base.createdAt },
+    ]);
+    renderPage(base);
+    await loaded();
+    openTab(/formulas/i);
+
+    fireEvent.click(await screen.findByText("Action Items"));
+    fireEvent.click(screen.getByRole("button", { name: /^download$/i }));
+    await waitFor(() => expect(api.downloadFormulaResult).toHaveBeenCalledWith("rec-123", "fr1"));
+  });
+
   it("shows the Notes tab, lists notes, and adds one on Enter", async () => {
     (api.listNotes as ReturnType<typeof vi.fn>).mockResolvedValue([
       { id: "n1", text: "Comp expectations", capturedAtMs: 61_000, ordinal: 0, createdAt: base.createdAt },

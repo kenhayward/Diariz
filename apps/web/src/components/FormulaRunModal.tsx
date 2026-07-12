@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
@@ -33,6 +33,16 @@ export default function FormulaRunModal({
   });
   const [query, setQuery] = useState("");
   const [running, setRunning] = useState<string | null>(null);
+  // A run failure (400 not-configured / 502 / 504 / generic) is shown INLINE here - the page-level banner
+  // sits under this modal's backdrop, so delegating there alone would leave the user with no feedback.
+  const [runError, setRunError] = useState<string | null>(null);
+
+  // Escape closes the picker (it also closes on a backdrop click). Mirrors EditActionModal/CalendarLinkModal.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const q = query.trim().toLowerCase();
   const filtered = q
@@ -56,12 +66,15 @@ export default function FormulaRunModal({
 
   async function run(formula: Formula) {
     setRunning(formula.id);
+    setRunError(null);
     try {
       const result = await api.runFormula(recordingId, formula.id);
       onRun(result);
       onClose();
     } catch (e) {
-      onError(apiErrorMessage(e, t("workspace:errRunFormula")));
+      const msg = apiErrorMessage(e, t("workspace:errRunFormula"));
+      setRunError(msg); // shown inline (visible above the backdrop); the modal stays open for a retry
+      onError(msg); // also surface it on the page banner for consistency with other actions
     } finally {
       setRunning(null);
     }
@@ -85,6 +98,12 @@ export default function FormulaRunModal({
           placeholder={t("workspace:formulaSearchPlaceholder")}
           className="mb-3 w-full rounded border px-2 py-1.5 text-sm outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
         />
+
+        {runError && (
+          <p className="mb-3 rounded bg-red-50 p-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">
+            {runError}
+          </p>
+        )}
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {isLoading ? (

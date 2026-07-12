@@ -85,14 +85,24 @@ describe("FormulaRunModal", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("surfaces a run error via the parent's error handler and keeps the modal open", async () => {
+  it("shows a run error inline and keeps the modal open so the user can retry", async () => {
     (api.listFormulas as ReturnType<typeof vi.fn>).mockResolvedValue([formula({ id: "f1", name: "Action Items" })]);
     (api.runFormula as ReturnType<typeof vi.fn>).mockRejectedValue({ response: { data: "Formulas need an AI endpoint" } });
-    const { onError, onClose } = renderModal();
+    const { onClose } = renderModal();
     await screen.findByText("Action Items");
     fireEvent.click(screen.getByText("Action Items"));
-    await waitFor(() => expect(onError).toHaveBeenCalledWith("Formulas need an AI endpoint"));
+    // The error is rendered inline inside the modal (not just delegated to the parent banner, which sits
+    // under the modal backdrop and would be invisible).
+    expect(await screen.findByText("Formulas need an AI endpoint")).toBeTruthy();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("closes on Escape", async () => {
+    (api.listFormulas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    const { onClose } = renderModal();
+    await screen.findByText(/manage formulas/i);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalled();
   });
 
   it("shows the Manage formulas link", async () => {
