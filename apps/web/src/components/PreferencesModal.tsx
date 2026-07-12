@@ -26,8 +26,9 @@ export type PreferencesTab =
   | "voiceprints";
 
 /// Personal preferences, organised as a vertical-tabbed modal (a left nav headed by the user's avatar/name,
-/// with a content panel on the right). Each tab self-saves; the footer only closes. Sized to 60vw x 80vh and,
-/// like the Settings modal, does not close on a backdrop click (Escape still closes).
+/// with a content panel on the right). Each tab self-saves; the footer only closes. Sized to 80vw x 80vh
+/// (the left nav is a fixed width, so the extra width goes to the right content panel - easier to read on
+/// sub-4K monitors) and, like the Settings modal, does not close on a backdrop click (Escape still closes).
 export default function PreferencesModal({
   onClose,
   initialTab = "profile",
@@ -65,7 +66,7 @@ export default function PreferencesModal({
       <div
         role="dialog"
         aria-label={t("preferencesTitle")}
-        className="flex h-[80vh] w-[60vw] min-w-[40rem] overflow-hidden rounded-lg border bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900"
+        className="flex h-[80vh] w-[80vw] min-w-[40rem] overflow-hidden rounded-lg border bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900"
       >
         {/* Left nav: avatar + name, a separator, then the vertical tab list. */}
         <div className="flex w-56 shrink-0 flex-col border-r bg-gray-50 dark:border-gray-700 dark:bg-gray-950/40">
