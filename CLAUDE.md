@@ -103,6 +103,11 @@ Keep test output pristine — a passing run has no errors or warnings.
 
 ## Versioning & release notes (required)
 
+**`main` is branch-protected: every change lands through a Pull Request that passes CI - never commit or
+push to `main` directly, and never merge locally.** So the **default way to finish any branch is to push it
+and open a PR** (`git push -u origin <branch>` + `gh pr create`), not a local merge - do this without asking
+unless the user says otherwise. Each PR must satisfy the release + docs rules below before it can merge.
+
 **Every PR ships exactly one release: bump the version and add one release-notes entry.** The scheme
 is **Major.Minor.Build** (currently `0.x`).
 
@@ -154,6 +159,23 @@ is **Major.Minor.Build** (currently `0.x`).
   are picked up by installed desktop apps automatically. A lockstep version bump to `apps/desktop/package.json`
   alone does **not** require a desktop release (desktop version numbers may skip). Docs/CI-only PRs need
   neither — say so.
+
+- **Release checklist (run this for every user-facing PR).** Update all of these **in lockstep, in the same
+  PR** (details for each are in the bullets above):
+  1. `version.json` **and** its three mirrors (`apps/web/package.json`, `apps/desktop/package.json`,
+     `src/Diariz.Api/Diariz.Api.csproj`).
+  2. The `RELEASES[0]` entry in `apps/web/src/lib/releases.ts` (must equal `version.json`).
+  3. The About-box **`CAPABILITIES`** table row in `releases.ts` (on a scope change) + `AboutModal.tsx`
+     disclaimers (on a new third-party library/model).
+  4. The **README Features** table row.
+  5. The **`docs/features.md`** prose bullet - the canonical full feature list; **always** update it alongside
+     the README Features row, never one without the other.
+  6. **`docs/Overall_Synopsis_of_Platform.md`** whenever architecture, a cross-boundary contract, an external
+     dependency, an endpoint/port, or a deployment detail changes.
+  7. `docs/Data_Schema.md` whenever schema/storage changes (see the schema bullet above).
+
+  A pure bug-fix / cosmetic PR still does 1-2; it only touches 3-7 when the corresponding thing actually
+  changed. A **docs/CI-only PR** skips 1-3 (no version bump) but keeps 4-7 accurate - say so in the PR.
 
 The About box (account menu → About) and the `/release-notes` page render from this data.
 
