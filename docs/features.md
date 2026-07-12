@@ -111,6 +111,17 @@ action items / summaries / attendees / talk time / …, plus email-to-self) to a
 transcripts. Per-user and secure: tokens are shown once and stored only as a **SHA-256 hash**, work only for
 your own recordings, and both **tokens and web connections are revocable** any time in the same Preferences
 section.
+- **Formulas: run a saved prompt over a recording.** A **Formula** is a saved prompt plus a chosen **context**
+(any mix of transcript, notes, summary, minutes, and action items) that you run over a recording to generate a
+named **Markdown Result** — open it, edit it in the same rich editor as minutes, download it as `.md`, or email
+it to yourself. Formulas come in three scopes: Diariz-provided **starter formulas** seeded on every install
+(Follow-up email, Meeting recap, Decisions & risks, Tone & sentiment read), **Platform-wide** formulas shared
+with everyone, and your own **Personal** formulas — create and edit these in **Preferences → Formulas**. A new
+recording-level **Formulas tab** lists every formula you can use, runs one synchronously against your
+configured LLM, and keeps every past result for that recording. Creating, editing, deleting, or enabling/
+disabling a Platform or Diariz formula requires the new **Manage Formulas** permission (granted via a user
+group), while your Personal formulas are always yours to manage. *(Later phases: a chat/MCP `run_formula` tool
+so Claude and in-app chat can trigger a formula, and an admin popup for bulk-managing shared formulas.)*
 - **Extract action items** (Action / Actor / Deadline) with that same LLM — **automatically as part of the
 transcription pipeline**, into an editable table in an always-available **Action items** panel (collapsed by
 default, with a refresh button to re-extract). The automatic pass runs once and never overwrites actions

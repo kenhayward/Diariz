@@ -13,12 +13,14 @@ import CalendarFeedsSection from "./CalendarFeedsSection";
 import McpAccessSection from "./McpAccessSection";
 import DeveloperAccessSection from "./DeveloperAccessSection";
 import VoicePrintsSection from "./VoicePrintsSection";
+import FormulasSection from "./FormulasSection";
 
 export type PreferencesTab =
   | "profile"
   | "ai"
   | "tools"
   | "recordings"
+  | "formulas"
   | "google"
   | "feeds"
   | "claude"
@@ -53,6 +55,7 @@ export default function PreferencesModal({
     { id: "ai", label: t("aiSettings") },
     { id: "tools", label: t("chatToolsTab") },
     { id: "recordings", label: t("recordingsTab") },
+    { id: "formulas", label: t("tabFormulas") },
     { id: "google", label: t("tabGoogleAccount") },
     { id: "feeds", label: t("tabCalendarFeeds") },
     { id: "claude", label: t("tabClaudeAccess") },
@@ -107,6 +110,7 @@ export default function PreferencesModal({
             {tab === "ai" && <AiSettingsSection />}
             {tab === "tools" && <ChatToolsSection />}
             {tab === "recordings" && <RecordingsSection />}
+            {tab === "formulas" && <FormulasSection />}
             {tab === "google" && <GoogleAccountSection />}
             {tab === "feeds" && <CalendarFeedsSection />}
             {tab === "claude" && <McpAccessSection />}

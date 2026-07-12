@@ -1,0 +1,257 @@
+using Diariz.Api.IntegrationTests.Infrastructure;
+using Diariz.Api.Services;
+using Diariz.Api.Tests.Infrastructure;
+using Diariz.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
+
+namespace Diariz.Api.IntegrationTests;
+
+/// <summary>Real-Postgres checks for the Formula / FormulaResult model: round-trip persistence, cascade
+/// from Recording (deleting the recording removes its results), SET NULL from Formula (deleting the
+/// formula orphans - but does not delete - its results), Cascade of a Personal formula with its owner,
+/// and SET NULL of a result's creator when the author's account is deleted (the document survives).</summary>
+[Collection(IntegrationCollection.Name)]
+public class FormulasIntegrationTests(ContainersFixture fx)
+{
+    private async Task<(Guid userId, Guid recId)> SeedUserAndRecording()
+    {
+        await using var db = fx.CreateDbContext();
+        var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = $"{Guid.NewGuid()}@x.test" };
+        var rec = new Recording { Id = Guid.NewGuid(), UserId = user.Id, Title = "R", BlobKey = "k" };
+        db.Users.Add(user);
+        db.Recordings.Add(rec);
+        await db.SaveChangesAsync();
+        return (user.Id, rec.Id);
+    }
+
+    private async Task<Guid> SeedUser()
+    {
+        await using var db = fx.CreateDbContext();
+        var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = $"{Guid.NewGuid()}@x.test" };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        return user.Id;
+    }
+
+    [Fact]
+    public async Task RunAsync_WithTwoTranscriptionVersions_UsesHighestVersionSegments()
+    {
+        // The in-memory provider ignores OrderByDescending/Take inside a filtered Include (CLAUDE.md caveat),
+        // so the "current = highest-version transcription" rule in FormulaRunner.LoadRecordingAsync can only be
+        // verified against real Postgres - mirrors how RecordingsController.Get's highest-version rule is tested.
+        var (userId, recId) = await SeedUserAndRecording();
+
+        await using (var db = fx.CreateDbContext())
+        {
+            var v1 = new Transcription { Id = Guid.NewGuid(), RecordingId = recId, Model = "whisperx", Version = 1 };
+            var v2 = new Transcription { Id = Guid.NewGuid(), RecordingId = recId, Model = "whisperx", Version = 2 };
+            db.Transcriptions.AddRange(v1, v2);
+            db.Segments.Add(new Segment
+            {
+                Id = Guid.NewGuid(), TranscriptionId = v1.Id, SpeakerLabel = "SPEAKER_00",
+                StartMs = 0, EndMs = 1000, Original = "OLD-VERSION-ONE-TEXT", Ordinal = 0,
+            });
+            db.Segments.Add(new Segment
+            {
+                Id = Guid.NewGuid(), TranscriptionId = v2.Id, SpeakerLabel = "SPEAKER_00",
+                StartMs = 0, EndMs = 1000, Original = "NEW-VERSION-TWO-TEXT", Ordinal = 0,
+            });
+            db.Formulas.Add(new Formula
+            {
+                Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = userId,
+                Name = "Recap", Prompt = "Recap the transcript.", Context = FormulaContext.Transcript, Enabled = true,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        Guid formulaId;
+        await using (var read = fx.CreateDbContext())
+            formulaId = (await read.Formulas.FirstAsync(f => f.OwnerUserId == userId)).Id;
+
+        var chat = new FakeChatStreamClient { Tokens = ["done"] };
+        await using (var db = fx.CreateDbContext())
+        {
+            var runner = new FormulaRunner(db, chat, new FakeSummarizationSettingsResolver());
+            await runner.RunAsync(userId, recId, formulaId);
+        }
+
+        // The user message must carry the Version 2 segment text, never Version 1's.
+        Assert.NotNull(chat.LastMessages);
+        var userMessage = chat.LastMessages!.Single(m => m.Role == "user").Content;
+        Assert.Contains("NEW-VERSION-TWO-TEXT", userMessage);
+        Assert.DoesNotContain("OLD-VERSION-ONE-TEXT", userMessage);
+    }
+
+    [Fact]
+    public async Task Formula_And_FormulaResult_RoundTrip()
+    {
+        var (user, rec) = await SeedUserAndRecording();
+        var formulaId = Guid.NewGuid();
+        var resultId = Guid.NewGuid();
+
+        await using (var db = fx.CreateDbContext())
+        {
+            db.Formulas.Add(new Formula
+            {
+                Id = formulaId,
+                Scope = FormulaScope.Personal,
+                OwnerUserId = user,
+                Name = "Action Items",
+                Description = "Extract action items",
+                Prompt = "List all action items from the transcript.",
+                Context = FormulaContext.Transcript | FormulaContext.Notes,
+                Enabled = true,
+                IsBuiltIn = false,
+            });
+            db.FormulaResults.Add(new FormulaResult
+            {
+                Id = resultId,
+                RecordingId = rec,
+                CreatedByUserId = user,
+                FormulaId = formulaId,
+                Name = "Action Items",
+                Text = "- Do the thing",
+                Ordinal = 0,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await using (var verify = fx.CreateDbContext())
+        {
+            var formula = await verify.Formulas.FindAsync(formulaId);
+            Assert.NotNull(formula);
+            Assert.Equal(FormulaScope.Personal, formula!.Scope);
+            Assert.Equal(FormulaContext.Transcript | FormulaContext.Notes, formula.Context);
+            Assert.Equal(user, formula.OwnerUserId);
+
+            var result = await verify.FormulaResults.FindAsync(resultId);
+            Assert.NotNull(result);
+            Assert.Equal(rec, result!.RecordingId);
+            Assert.Equal(formulaId, result.FormulaId);
+            Assert.Equal("- Do the thing", result.Text);
+        }
+    }
+
+    [Fact]
+    public async Task DeletingRecording_CascadesItsFormulaResults()
+    {
+        var (user, rec) = await SeedUserAndRecording();
+        var resultId = Guid.NewGuid();
+
+        await using (var db = fx.CreateDbContext())
+        {
+            db.FormulaResults.Add(new FormulaResult
+            {
+                Id = resultId,
+                RecordingId = rec,
+                CreatedByUserId = user,
+                FormulaId = null,
+                Name = "Summary",
+                Text = "text",
+                Ordinal = 0,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = fx.CreateDbContext())
+        {
+            db.Recordings.Remove((await db.Recordings.FindAsync(rec))!);
+            await db.SaveChangesAsync();
+        }
+
+        await using var verify = fx.CreateDbContext();
+        Assert.False(await verify.FormulaResults.AnyAsync(r => r.Id == resultId));
+    }
+
+    [Fact]
+    public async Task DeletingFormula_SetsFormulaIdNull_OnItsResults()
+    {
+        var (user, rec) = await SeedUserAndRecording();
+        var formulaId = Guid.NewGuid();
+        var resultId = Guid.NewGuid();
+
+        await using (var db = fx.CreateDbContext())
+        {
+            db.Formulas.Add(new Formula
+            {
+                Id = formulaId,
+                Scope = FormulaScope.Platform,
+                Name = "Minutes",
+                Prompt = "Summarize.",
+                Context = FormulaContext.Transcript,
+            });
+            db.FormulaResults.Add(new FormulaResult
+            {
+                Id = resultId,
+                RecordingId = rec,
+                CreatedByUserId = user,
+                FormulaId = formulaId,
+                Name = "Minutes",
+                Text = "text",
+                Ordinal = 0,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = fx.CreateDbContext())
+        {
+            db.Formulas.Remove((await db.Formulas.FindAsync(formulaId))!);
+            await db.SaveChangesAsync();
+        }
+
+        await using var verify = fx.CreateDbContext();
+        var result = await verify.FormulaResults.FindAsync(resultId);
+        Assert.NotNull(result);
+        Assert.Null(result!.FormulaId);
+    }
+
+    [Fact]
+    public async Task DeletingUser_CascadesTheirPersonalFormula_ButKeepsResultsOnOthersRecordings()
+    {
+        // Author A owns a Personal formula and authored a result on user B's recording.
+        var (userB, recB) = await SeedUserAndRecording();
+        var userA = await SeedUser();
+        var personalFormulaId = Guid.NewGuid();
+        var resultId = Guid.NewGuid();
+
+        await using (var db = fx.CreateDbContext())
+        {
+            db.Formulas.Add(new Formula
+            {
+                Id = personalFormulaId,
+                Scope = FormulaScope.Personal,
+                OwnerUserId = userA,
+                Name = "A's Formula",
+                Prompt = "Do a thing.",
+                Context = FormulaContext.Transcript,
+            });
+            db.FormulaResults.Add(new FormulaResult
+            {
+                Id = resultId,
+                RecordingId = recB,
+                CreatedByUserId = userA,
+                FormulaId = null,
+                Name = "A's Formula",
+                Text = "A's output on B's recording",
+                Ordinal = 0,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // Deleting A must not violate a FK: their personal formula cascades away, but the document on B's
+        // recording survives with its attribution dropped.
+        await using (var db = fx.CreateDbContext())
+        {
+            db.Users.Remove((await db.Users.FindAsync(userA))!);
+            await db.SaveChangesAsync();
+        }
+
+        await using var verify = fx.CreateDbContext();
+        Assert.False(await verify.Formulas.AnyAsync(f => f.Id == personalFormulaId));
+        var result = await verify.FormulaResults.FindAsync(resultId);
+        Assert.NotNull(result);
+        Assert.Null(result!.CreatedByUserId);
+        Assert.Equal(recB, result.RecordingId);
+        Assert.Equal("A's output on B's recording", result.Text);
+    }
+}

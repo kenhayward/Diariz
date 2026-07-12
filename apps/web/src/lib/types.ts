@@ -768,3 +768,44 @@ export interface AttachmentDraft {
   content: string;
   recordings: { id: string; title: string }[];
 }
+
+// ---- Formulas ----
+
+/// A formula's sharing scope: Personal (owned by its creator), Platform (shared, admin-managed), or Diariz
+/// (seeded built-in, admin-toggleable but never deletable).
+export type FormulaScope = "Personal" | "Platform" | "Diariz";
+
+/// A saved prompt + context. `context` is the FormulaContext [Flags] bit value as a plain number - NOT the
+/// enum name (see CLAUDE.md's "Flags enum serializes as string" gotcha).
+export interface Formula {
+  id: string;
+  scope: FormulaScope;
+  ownerUserId: string | null;
+  name: string;
+  description: string | null;
+  prompt: string;
+  context: number;
+  enabled: boolean;
+  isBuiltIn: boolean;
+}
+
+/// A formula's saved output on a recording. `name`/timestamps only - the generated Markdown body is fetched
+/// separately via `getFormulaResultText`.
+export interface FormulaResult {
+  id: string;
+  recordingId: string;
+  name: string;
+  createdByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/// FormulaContext bit flags - mirror src/Diariz.Domain/Entities/FormulaContext.cs (append-only; keep in sync).
+export const FormulaContextBits = {
+  Transcript: 1,
+  Notes: 2,
+  Attachments: 4,
+  Summary: 8,
+  Minutes: 16,
+  Actions: 32,
+} as const;

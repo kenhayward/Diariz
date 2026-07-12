@@ -11,6 +11,7 @@ vi.mock("./ProfileSection", () => ({ default: () => <div>PROFILE_SECTION</div> }
 vi.mock("./AiSettingsSection", () => ({ default: () => <div>AI_SECTION</div> }));
 vi.mock("./ChatToolsSection", () => ({ default: () => <div>TOOLS_SECTION</div> }));
 vi.mock("./RecordingsSection", () => ({ default: () => <div>RECORDINGS_SECTION</div> }));
+vi.mock("./FormulasSection", () => ({ default: () => <div>FORMULAS_SECTION</div> }));
 vi.mock("./GoogleAccountSection", () => ({ default: () => <div>GOOGLE_SECTION</div> }));
 vi.mock("./CalendarFeedsSection", () => ({ default: () => <div>FEEDS_SECTION</div> }));
 vi.mock("./McpAccessSection", () => ({ default: () => <div>CLAUDE_SECTION</div> }));
@@ -55,6 +56,12 @@ describe("PreferencesModal", () => {
     expect(screen.getByText("TOOLS_SECTION")).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: /^recordings$/i }));
     expect(screen.getByText("RECORDINGS_SECTION")).toBeTruthy();
+  });
+
+  it("has a Formulas tab that shows the Formulas section and honours initialTab", () => {
+    renderModal({ initialTab: "formulas" });
+    expect(screen.getByRole("tab", { name: /formulas/i }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByText("FORMULAS_SECTION")).toBeTruthy();
   });
 
   it("hides the Developers tab when API access is disabled, shows it when enabled", async () => {
