@@ -388,9 +388,15 @@ default timeout for its header phase and relies on client-disconnect for cancell
   `Platform`/`Diariz` formula requires the new **`ManageFormulas`** platform permission (granted through a user
   group, alongside `ManageRooms`/`ManageUsers`); running any formula a user can see is always allowed. A web
   **Formulas tab** on the recording page runs formulas and lists/opens/edits/downloads/emails their results; a
-  **Preferences → Formulas** panel manages Personal formulas. **Not yet built (later phases):** a chat/MCP
-  `run_formula` tool so Claude/in-app chat can trigger a formula, and an admin popup for bulk-managing
-  Platform/Diariz formulas (today that's done directly through the CRUD endpoints/UI above).
+  **Preferences → Formulas** panel manages Personal formulas. A **`run_formula`** chat tool
+  (`src/Diariz.Api/Tools/RunFormulaTool.cs`) resolves a formula by name plus a recording (by id, name, or the
+  in-chat selection, via the shared `RecordingArg` resolver), calls `IFormulaRunner`, and returns the Markdown
+  result; it's a regular chat tool, so it's exposed over MCP automatically (it is not listed in
+  `McpToolProjection.ExcludedToolNames`), letting Claude (Desktop/Code/the claude.ai web connector) run a
+  user's formulas. There's also a deterministic **`/formula <name>`** client slash command in the chat panel
+  that runs a formula on the open recording directly, without going through the LLM. **Not yet built (later
+  phase):** an admin popup for bulk-managing Platform/Diariz formulas (today that's done directly through the
+  CRUD endpoints/UI above).
 
 ## Meeting notes (the user's own notes)
 

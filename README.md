@@ -28,11 +28,11 @@ At a glance - see **[docs/features.md](docs/features.md)** for the full detail o
 | **Action items** | Auto-extracted with owner and deadline into an editable table, tracked across every meeting with completion, a person filter, and links back to the transcript. |
 | **Tag cloud** | Every meeting auto-tagged with weighted topics; a Tags tab shows a weighted cloud and lists the meetings behind each tag, with an expanded modal view. |
 | **Chat over transcripts** | Stream answers over one meeting, a folder (its summary/minutes/actions), several selected, or all meetings (context inferred from what you're viewing) via an OpenAI-compatible LLM; context dial, file attachments, saved conversations, and slash commands. |
-| **Formulas** | Save a prompt and a chosen context, then run it over any recording to generate a named Markdown document (follow-up email, recap, and more) you can edit, download, or email. Built-in, platform-wide, and personal. |
+| **Formulas** | Save a prompt and a chosen context, then run it over any recording to generate a named Markdown document (follow-up email, recap, and more) you can edit, download, or email. Built-in, platform-wide, and personal; run one with `/formula <name>` in chat or ask Claude via MCP. |
 | **Search** | Keyword search across your library, upgraded to semantic (RAG - hybrid vector + trigram) when an embeddings endpoint is configured. |
 | **Chat tools** | The assistant calls built-in tools (who-said-what, search, attendees, talk time, summaries, email-to-self, and more) and links answers to the exact segment. |
 | **Voice dictation in chat** | Dictate chat questions by voice - browser speech recognition, or a server STT endpoint on the desktop app. |
-| **Connect Claude (MCP)** | An in-process MCP server lets Claude connect to your own meetings via OAuth (claude.ai) or a personal token (Claude Desktop/Code). |
+| **Connect Claude (MCP)** | An in-process MCP server lets Claude connect to your own meetings via OAuth (claude.ai) or a personal token (Claude Desktop/Code), including a `run_formula` tool to trigger your saved Formulas. |
 | **User API access** | When a Platform Administrator enables it, generate a personal API token to call the REST API as yourself, with a built-in API reference. |
 | **Translate** | Translate a whole transcript (segments, summary, actions) or a single segment; stored as revisions you can flip back. |
 | **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) to a recording or directly to a folder, edit Markdown attachments in place, save a chat conversation with /attach, and optionally feed them to chat. |

@@ -54,6 +54,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.129.0",
+    date: "2026-07-12",
+    pr: 285,
+    headline: "Run Formulas from chat and from Claude (MCP)",
+    summary:
+      "You can now run a formula straight from the chat box by typing /formula <name> (it runs on the recording " +
+      "you have open and shows the result inline), and Claude can run your formulas through the MCP connector " +
+      "via a new run_formula tool. Builds on the Formulas feature added in 0.128.0.",
+    added: [
+      "Type /formula <name> in chat to run a saved formula on the open recording and see the Markdown result inline.",
+      "A run_formula chat tool, exposed over MCP, so Claude (Desktop/Code/web connector) can run your formulas.",
+    ],
+  },
+  {
     version: "0.128.0",
     date: "2026-07-12",
     pr: 283,
