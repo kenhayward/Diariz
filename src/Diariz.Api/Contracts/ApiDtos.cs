@@ -406,7 +406,9 @@ public record UserSettingsDto(
     bool ReasoningEnabled, string ReasoningEffort, bool DefaultReasoningEnabled, string DefaultReasoningEffort,
     // Where a new recording lands in the user's Personal room. The mode serialises as its enum name
     // ("SelectedFolder" etc.) via the global string-enum converter, same as MinutesGenerationMode.
-    RecordingPlacementMode PlacementMode, Guid? PlacementSectionId);
+    RecordingPlacementMode PlacementMode, Guid? PlacementSectionId,
+    // True when the server has an STT endpoint configured (the dictation server-fallback path is available).
+    bool DictationServerAvailable);
 
 /// <summary>A chat tool's state for the settings panel: whether it is on for this user
 /// (<paramref name="Enabled"/>) and its server-side default.</summary>
