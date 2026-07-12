@@ -269,4 +269,22 @@ public class UserSettingsControllerTests
         Assert.Equal(Diariz.Domain.Entities.RecordingPlacementMode.SelectedFolder, dto.PlacementMode);
         Assert.Null(dto.PlacementSectionId);
     }
+
+    [Fact]
+    public async Task Get_ReportsDictationAvailable_WhenSttEndpointConfigured()
+    {
+        using var db = TestDb.Create();
+        var dto = await Build(db, Guid.NewGuid(), dictation: new DictationOptions { ApiBase = "http://stt.test/v1" }).Get();
+
+        Assert.True(dto.DictationServerAvailable);
+    }
+
+    [Fact]
+    public async Task Get_ReportsDictationUnavailable_WhenNoSttEndpoint()
+    {
+        using var db = TestDb.Create();
+        var dto = await Build(db, Guid.NewGuid()).Get(); // default DictationOptions has an empty ApiBase
+
+        Assert.False(dto.DictationServerAvailable);
+    }
 }

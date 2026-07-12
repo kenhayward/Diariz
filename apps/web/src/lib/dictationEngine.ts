@@ -20,9 +20,16 @@ export interface DictationEngine {
   stop(): void;
 }
 
-/** Whether the browser exposes the SpeechRecognition API. */
+/** Whether the browser exposes a *working* SpeechRecognition API. Electron (the desktop shell) exposes the
+ * constructor but every call fails there (no bundled Google backend), so we treat it as absent and fall back
+ * to the server path - the whole point of having a server engine for the desktop app. */
 export function hasSpeechRecognition(win: Window = window): boolean {
-  const w = win as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown };
+  const w = win as unknown as {
+    SpeechRecognition?: unknown;
+    webkitSpeechRecognition?: unknown;
+    diariz?: { isElectron?: boolean };
+  };
+  if (w.diariz?.isElectron) return false;
   return Boolean(w.SpeechRecognition || w.webkitSpeechRecognition);
 }
 

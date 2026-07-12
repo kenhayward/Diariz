@@ -463,6 +463,7 @@ export default function ChatPanel() {
   }
 
   function send() {
+    stopDictation(); // sending ends any active dictation so it can't keep appending to the cleared box
     const prompt = input.trim();
     if (!prompt || streaming) return;
 
