@@ -154,9 +154,6 @@ export default function FormulaRunModal({
         <div className="mt-3 flex items-center justify-between border-t pt-3 dark:border-gray-700">
           <button
             type="button"
-            // TODO Task 9: wire this to open Preferences on the Formulas tab once it exists
-            // (PreferencesModal initialTab="formulas") - not reachable in Phase 1 since that tab doesn't
-            // exist yet, so this stays an optional callback the parent can wire up.
             onClick={() => onManageFormulas?.()}
             className="text-sm text-blue-600 hover:underline dark:text-blue-400"
           >

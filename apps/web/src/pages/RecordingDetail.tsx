@@ -216,8 +216,7 @@ export default function RecordingDetail() {
   const [selectedFormulaResultId, setSelectedFormulaResultId] = useState<string | null>(null);
   const [formulaRunOpen, setFormulaRunOpen] = useState(false);
   const [editingFormulaResult, setEditingFormulaResult] = useState<FormulaResult | null>(null);
-  // "Manage formulas" (in FormulaRunModal's footer) opens Preferences - see the render below for why it
-  // can't yet target the Formulas tab specifically.
+  // "Manage formulas" (in FormulaRunModal's footer) opens Preferences on the Formulas tab.
   const [managingFormulas, setManagingFormulas] = useState(false);
   // Mini player (the small header progress bar): current time + play/pause state of the shared <audio>.
   const [audioCur, setAudioCur] = useState(0);
@@ -1654,9 +1653,9 @@ export default function RecordingDetail() {
           onClose={() => setEditingFormulaResult(null)}
         />
       )}
-      {/* TODO Task 9: pass initialTab="formulas" once PreferencesModal grows that tab (mirrors the
-          "voiceprints" PreferencesModal above) - not valid yet, so this opens on the default tab. */}
-      {managingFormulas && <PreferencesModal onClose={() => setManagingFormulas(false)} />}
+      {managingFormulas && (
+        <PreferencesModal initialTab="formulas" onClose={() => setManagingFormulas(false)} />
+      )}
 
       {retranscribeOpen && (
         <RetranscribeModal

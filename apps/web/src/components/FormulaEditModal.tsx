@@ -1,0 +1,148 @@
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { api, apiErrorMessage } from "../lib/api";
+import { FormulaContextBits, type Formula } from "../lib/types";
+
+const CONTEXT_OPTIONS: { bit: number; key: string }[] = [
+  { bit: FormulaContextBits.Transcript, key: "contextTranscript" },
+  { bit: FormulaContextBits.Notes, key: "contextNotes" },
+  { bit: FormulaContextBits.Attachments, key: "contextAttachments" },
+  { bit: FormulaContextBits.Summary, key: "contextSummary" },
+  { bit: FormulaContextBits.Minutes, key: "contextMinutes" },
+  { bit: FormulaContextBits.Actions, key: "contextActions" },
+];
+
+/// Create/edit a Personal formula (Preferences -> Formulas). Mirrors EditActionModal's form-as-dialog
+/// convention: backdrop click + Escape both close, Save is disabled until the required fields (name,
+/// prompt) are filled. Context is a [Flags] bitmask - each checkbox XORs its bit (see FormulaContextBits).
+/// When `formula` is omitted a new Personal formula is created; otherwise the given formula is updated.
+export default function FormulaEditModal({
+  formula,
+  onClose,
+  onSaved,
+}: {
+  formula?: Formula | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { t } = useTranslation("account");
+  const [name, setName] = useState(formula?.name ?? "");
+  const [description, setDescription] = useState(formula?.description ?? "");
+  const [prompt, setPrompt] = useState(formula?.prompt ?? "");
+  const [context, setContext] = useState(formula?.context ?? 0);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  function toggle(bit: number) {
+    setContext((c) => c ^ bit);
+  }
+
+  const canSave = !!name.trim() && !!prompt.trim();
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canSave) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (formula) {
+        await api.updateFormula(formula.id, {
+          name: name.trim(),
+          description: description.trim() || null,
+          prompt: prompt.trim(),
+          context,
+        });
+      } else {
+        await api.createFormula({
+          scope: "Personal",
+          name: name.trim(),
+          description: description.trim() || null,
+          prompt: prompt.trim(),
+          context,
+        });
+      }
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError(apiErrorMessage(err));
+      setBusy(false);
+    }
+  }
+
+  const field = "w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100";
+  const labelSpan = "mb-1 block text-gray-600 dark:text-gray-300";
+  const title = formula ? t("editFormulaTitle") : t("newFormulaTitle");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <form
+        role="dialog"
+        aria-label={title}
+        className="flex max-h-[85vh] w-full max-w-lg flex-col space-y-3 overflow-y-auto rounded-lg border bg-white p-4 shadow-xl dark:border-gray-700 dark:bg-gray-900"
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={save}
+      >
+        <h2 className="text-base font-semibold dark:text-gray-100">{title}</h2>
+
+        <label className="block text-sm">
+          <span className={labelSpan}>{t("formulaName")}</span>
+          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} className={field} />
+        </label>
+
+        <label className="block text-sm">
+          <span className={labelSpan}>{t("formulaDescription")}</span>
+          <input value={description} onChange={(e) => setDescription(e.target.value)} className={field} />
+        </label>
+
+        <label className="block text-sm">
+          <span className={labelSpan}>{t("formulaPrompt")}</span>
+          <textarea
+            rows={6}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            className={`${field} font-mono`}
+          />
+        </label>
+        <p className="text-xs text-gray-400 dark:text-gray-500">{t("formulaPromptHint")}</p>
+
+        <div>
+          <span className={`text-sm ${labelSpan}`}>{t("formulaContext")}</span>
+          <p className="mb-2 text-xs text-gray-400 dark:text-gray-500">{t("formulaContextHint")}</p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {CONTEXT_OPTIONS.map((opt) => (
+              <label key={opt.bit} className="flex items-center gap-2 text-sm dark:text-gray-200">
+                <input type="checkbox" checked={(context & opt.bit) !== 0} onChange={() => toggle(opt.bit)} />
+                <span>{t(opt.key)}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+
+        <div className="flex justify-end gap-2 border-t pt-3 dark:border-gray-700">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+          >
+            {t("common:cancel")}
+          </button>
+          <button
+            type="submit"
+            disabled={busy || !canSave}
+            className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {t("common:save")}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
