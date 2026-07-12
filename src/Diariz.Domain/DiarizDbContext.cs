@@ -38,6 +38,8 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<Room> Rooms => Set<Room>();
     public DbSet<RoomMember> RoomMembers => Set<RoomMember>();
     public DbSet<RoomRecording> RoomRecordings => Set<RoomRecording>();
+    public DbSet<Formula> Formulas => Set<Formula>();
+    public DbSet<FormulaResult> FormulaResults => Set<FormulaResult>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -270,6 +272,45 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         {
             e.HasIndex(a => new { a.SectionId, a.Ordinal });
             e.Property(a => a.Name).HasMaxLength(512);
+        });
+
+        // Saved prompt + chosen context, run over a recording to produce a Markdown result. Personal formulas
+        // have an OwnerUserId; Platform/Diariz scopes have none. Provider-agnostic (plain columns), so it
+        // stays outside the Npgsql guard and loads under the in-memory test provider too.
+        builder.Entity<Formula>(e =>
+        {
+            e.Property(f => f.Name).HasMaxLength(256);
+            e.Property(f => f.Description).HasMaxLength(1024);
+            // Owner is Restrict, not Cascade: FormulaResult already cascades from Recording, and having a
+            // second cascade path to the same table (via User -> Formula -> FormulaResult, once results
+            // gain their own owner link) risks a multiple-cascade-path conflict. A user with personal
+            // formulas must be handled explicitly (e.g. reassign/delete) rather than cascading silently.
+            e.HasOne(f => f.Owner)
+                .WithMany()
+                .HasForeignKey(f => f.OwnerUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // The Markdown document produced by running a Formula over a recording. Cascades with the recording;
+        // SET NULL (not deleted) when its source Formula is later removed. Provider-agnostic (plain columns).
+        builder.Entity<FormulaResult>(e =>
+        {
+            e.HasIndex(r => new { r.RecordingId, r.Ordinal });
+            e.Property(r => r.Name).HasMaxLength(256);
+            e.HasOne(r => r.Recording)
+                .WithMany()
+                .HasForeignKey(r => r.RecordingId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(r => r.Formula)
+                .WithMany()
+                .HasForeignKey(r => r.FormulaId)
+                .OnDelete(DeleteBehavior.SetNull);
+            // Restrict avoids a second cascade path from User to Recording's FormulaResults (User ->
+            // Recording -> FormulaResult already cascades transitively via Recording's own User FK).
+            e.HasOne(r => r.CreatedBy)
+                .WithMany()
+                .HasForeignKey(r => r.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<ApplicationUser>(e =>
