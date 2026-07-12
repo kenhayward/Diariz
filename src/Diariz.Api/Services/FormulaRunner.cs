@@ -67,6 +67,10 @@ public class FormulaRunner : IFormulaRunner
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(cfg.TimeoutSeconds));
 
+        // A TimeoutSeconds expiry surfaces here as an OperationCanceledException with the OUTER `ct` still
+        // uncancelled (only the linked source fired). The calling controller (added in the next task)
+        // distinguishes a timeout from a genuine client disconnect by testing `!ct.IsCancellationRequested`:
+        // outer-ct-cancelled = client went away (let it propagate); otherwise = LLM timeout (map to 504).
         var sb = new StringBuilder();
         await foreach (var token in _chat.StreamAsync(cfg, messages, cts.Token))
             sb.Append(token);
@@ -103,16 +107,20 @@ public class FormulaRunner : IFormulaRunner
         }
     }
 
-    /// <summary>Loads the recording's highest-version transcription (segments + speakers always; summary /
-    /// minutes / actions / notes only when the formula's Context flags actually need them), scoped to the
-    /// caller via <see cref="AccessibleBy"/>.</summary>
+    /// <summary>Loads the recording, scoped to the caller via <see cref="AccessibleBy"/>. Every include is
+    /// gated on the formula's Context flags so a Summary-only formula doesn't drag the full segment list into
+    /// memory: Segments + Speakers only when Transcript is set, Summary/Minutes/Actions each behind their own
+    /// flag. The highest-version Transcription itself is always loaded (Summary/Minutes hang off it).</summary>
     private async Task<Recording?> LoadRecordingAsync(
         Guid userId, Guid recordingId, FormulaContext flags, CancellationToken ct)
     {
-        IQueryable<Recording> query = _db.Recordings
-            .Include(r => r.Speakers)
-            .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
-                .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal));
+        IQueryable<Recording> query = _db.Recordings;
+
+        if (flags.HasFlag(FormulaContext.Transcript))
+            query = query
+                .Include(r => r.Speakers)
+                .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                    .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal));
 
         if (flags.HasFlag(FormulaContext.Summary))
             query = query.Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
@@ -160,6 +168,10 @@ public class FormulaRunner : IFormulaRunner
             .Select(n => n.Text)
             .ToListAsync(ct);
 
+    /// <summary>The next display ordinal for this recording's results (max+1). <c>(RecordingId, Ordinal)</c>
+    /// is intentionally NOT a unique index: Ordinal is display-order only, so a rare collision from two
+    /// concurrent runs on the same recording is benign - it would nudge list ordering, never correctness -
+    /// and doesn't warrant a lock or retry in Phase 1.</summary>
     private async Task<int> NextOrdinalAsync(Guid recordingId, CancellationToken ct)
     {
         var max = await _db.FormulaResults

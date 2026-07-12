@@ -22,6 +22,11 @@ public static class FormulaContextBuilder
     /// <see cref="ChatContextBuilder.DefaultCharBudget"/>).</summary>
     public const int DefaultCharBudget = 48_000;
 
+    /// <summary>Returned when the selected sections yield no content (nothing flagged, or every flagged
+    /// section is empty). Mirrors <see cref="ChatContextBuilder"/>'s "No transcript context was provided..."
+    /// guard so the model never receives an empty user message.</summary>
+    public const string EmptyContextFallback = "No context was available for this recording.";
+
     public static string Build(FormulaContext flags, FormulaContextData data, int charBudget = DefaultCharBudget)
     {
         var sb = new StringBuilder();
@@ -54,6 +59,7 @@ public static class FormulaContextBuilder
         // TODO Phase: attachments extraction
 
         var body = sb.ToString().Trim();
+        if (body.Length == 0) return EmptyContextFallback;
         if (body.Length > charBudget) body = body[..charBudget] + "\n[context truncated]";
         return body;
     }

@@ -1,4 +1,6 @@
 using Diariz.Api.IntegrationTests.Infrastructure;
+using Diariz.Api.Services;
+using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,6 +31,55 @@ public class FormulasIntegrationTests(ContainersFixture fx)
         db.Users.Add(user);
         await db.SaveChangesAsync();
         return user.Id;
+    }
+
+    [Fact]
+    public async Task RunAsync_WithTwoTranscriptionVersions_UsesHighestVersionSegments()
+    {
+        // The in-memory provider ignores OrderByDescending/Take inside a filtered Include (CLAUDE.md caveat),
+        // so the "current = highest-version transcription" rule in FormulaRunner.LoadRecordingAsync can only be
+        // verified against real Postgres - mirrors how RecordingsController.Get's highest-version rule is tested.
+        var (userId, recId) = await SeedUserAndRecording();
+
+        await using (var db = fx.CreateDbContext())
+        {
+            var v1 = new Transcription { Id = Guid.NewGuid(), RecordingId = recId, Model = "whisperx", Version = 1 };
+            var v2 = new Transcription { Id = Guid.NewGuid(), RecordingId = recId, Model = "whisperx", Version = 2 };
+            db.Transcriptions.AddRange(v1, v2);
+            db.Segments.Add(new Segment
+            {
+                Id = Guid.NewGuid(), TranscriptionId = v1.Id, SpeakerLabel = "SPEAKER_00",
+                StartMs = 0, EndMs = 1000, Original = "OLD-VERSION-ONE-TEXT", Ordinal = 0,
+            });
+            db.Segments.Add(new Segment
+            {
+                Id = Guid.NewGuid(), TranscriptionId = v2.Id, SpeakerLabel = "SPEAKER_00",
+                StartMs = 0, EndMs = 1000, Original = "NEW-VERSION-TWO-TEXT", Ordinal = 0,
+            });
+            db.Formulas.Add(new Formula
+            {
+                Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = userId,
+                Name = "Recap", Prompt = "Recap the transcript.", Context = FormulaContext.Transcript, Enabled = true,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        Guid formulaId;
+        await using (var read = fx.CreateDbContext())
+            formulaId = (await read.Formulas.FirstAsync(f => f.OwnerUserId == userId)).Id;
+
+        var chat = new FakeChatStreamClient { Tokens = ["done"] };
+        await using (var db = fx.CreateDbContext())
+        {
+            var runner = new FormulaRunner(db, chat, new FakeSummarizationSettingsResolver());
+            await runner.RunAsync(userId, recId, formulaId);
+        }
+
+        // The user message must carry the Version 2 segment text, never Version 1's.
+        Assert.NotNull(chat.LastMessages);
+        var userMessage = chat.LastMessages!.Single(m => m.Role == "user").Content;
+        Assert.Contains("NEW-VERSION-TWO-TEXT", userMessage);
+        Assert.DoesNotContain("OLD-VERSION-ONE-TEXT", userMessage);
     }
 
     [Fact]
