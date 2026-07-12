@@ -236,6 +236,7 @@ builder.Services.AddScoped<ISpeakerIdentifier, SpeakerIdentifier>();
 // otherwise a configured timeout above 100s was silently capped and slow local models timed out.
 static void NoHttpTimeout(HttpClient c) => c.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
 builder.Services.AddHttpClient<ISummarizationClient, SummarizationClient>(NoHttpTimeout);
+builder.Services.AddHttpClient<IDictationClient, DictationClient>(NoHttpTimeout);
 builder.Services.AddHttpClient<IActionsClient, ActionsClient>(NoHttpTimeout);
 builder.Services.AddHttpClient<ITranslationClient, TranslationClient>(NoHttpTimeout);
 builder.Services.AddScoped<ISummarizationSettingsResolver, SummarizationSettingsResolver>();
