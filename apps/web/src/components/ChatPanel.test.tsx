@@ -318,5 +318,33 @@ describe("ChatPanel", () => {
       await waitFor(() => expect(api.chatStream).toHaveBeenCalled());
       expect(api.listFormulas).not.toHaveBeenCalled();
     });
+
+    it("asks the user to be specific when several formulas match and no name is exact", async () => {
+      mock(api.listFormulas).mockResolvedValue([
+        formula, // "Follow-up email"
+        { ...formula, id: "f2", name: "Follow-up call" },
+      ]);
+      renderPanel("/recordings/rec-1");
+      await ask("/formula follow");
+
+      // Both matches are listed so the user can pick one, and nothing is run.
+      expect(await screen.findByText(/Follow-up email, Follow-up call/)).toBeTruthy();
+      expect(api.runFormula).not.toHaveBeenCalled();
+    });
+
+    it("shows the error and stays usable when the run fails", async () => {
+      mock(api.runFormula).mockRejectedValue(new Error("boom"));
+      renderPanel("/recordings/rec-1");
+      await ask("/formula Follow-up email");
+
+      await waitFor(() => expect(api.runFormula).toHaveBeenCalledWith("rec-1", "f1"));
+      // apiErrorMessage is mocked to String(e), so the Error's message surfaces in the command output.
+      expect(await screen.findByText(/boom/)).toBeTruthy();
+      // The input is still usable (not stuck streaming) - a fresh message can be typed and sent.
+      const box = screen.getByLabelText("Chat message") as HTMLTextAreaElement;
+      expect(box.disabled).toBe(false);
+      await ask("A normal question");
+      await waitFor(() => expect(api.chatStream).toHaveBeenCalled());
+    });
   });
 });

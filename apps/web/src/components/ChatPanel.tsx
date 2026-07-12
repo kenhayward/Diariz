@@ -309,7 +309,6 @@ export default function ChatPanel() {
   /// tool). Never sent to the model - resolved entirely against the REST API.
   async function runFormulaCommand(name: string) {
     setInput("");
-    if (streaming) return;
     if (!activeId) {
       setCommandOutput(t("cmdFormulaNoRecording"));
       return;
