@@ -493,3 +493,32 @@ public record SaveChatConversationRequest(
     IReadOnlyList<ChatTurnDto> Messages, SavedChatContextDto Context);
 
 public record SaveChatConversationResult(Guid Id, string Title);
+
+// ---- Formulas ----
+
+/// <summary>A saved prompt + context, as listed for the caller: their own Personal formulas plus every
+/// enabled Platform/Diariz formula. <paramref name="Scope"/> serialises as the enum name ("Personal" /
+/// "Platform" / "Diariz") via the global string-enum converter. <paramref name="Context"/> is the
+/// [Flags] bit value exposed as a plain int - NOT the enum itself, which the global converter would
+/// otherwise render as a comma-separated string the web can't do bit arithmetic on (see CLAUDE.md's
+/// "Flags enum serializes as string" gotcha).</summary>
+public record FormulaDto(
+    Guid Id, string Scope, Guid? OwnerUserId, string Name, string? Description, string Prompt,
+    int Context, bool Enabled, bool IsBuiltIn);
+
+/// <summary>Create request. <paramref name="Scope"/> is parsed to <see cref="FormulaScope"/>;
+/// <paramref name="Context"/> is the [Flags] bit value as an int.</summary>
+public record CreateFormulaRequest(string Scope, string Name, string? Description, string Prompt, int Context);
+
+/// <summary>Partial update: null leaves a field unchanged, mirroring the tri-state pattern used by
+/// <see cref="UpdateUserSettingsRequest"/> (a value replaces it - none of these fields need a separate
+/// "clear" state, unlike the optional overrides in user settings).</summary>
+public record UpdateFormulaRequest(string? Name, string? Description, string? Prompt, int? Context);
+
+public record SetFormulaEnabledRequest(bool Enabled);
+
+/// <summary>List/summary shape for a recording's formula results. The generated Markdown <c>Text</c> is
+/// deliberately NOT included here - it's fetched separately via a dedicated text endpoint so listing a
+/// recording's results stays cheap.</summary>
+public record FormulaResultDto(
+    Guid Id, Guid RecordingId, string Name, Guid? CreatedByUserId, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
