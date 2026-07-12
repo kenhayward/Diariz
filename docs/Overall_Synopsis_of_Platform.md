@@ -301,6 +301,16 @@ default timeout for its header phase and relies on client-disconnect for cancell
   save to **`ChatSession`** rows (thread + context stored as `jsonb`, including a folder chat's `SectionId`
   so reopening it resumes the folder context), so the server stays stateless between turns — each request
   resends the full history and context.
+- **Voice dictation (chat input).** The chat box's microphone button dictates a chat question by voice. In
+  Chrome/Edge browser tabs it uses the browser's built-in **Web Speech API** entirely client-side (no server
+  call). Elsewhere (the desktop app, Safari, Firefox) it falls back to `POST /api/chat/transcribe`: a
+  **JWT-authenticated** endpoint that forwards one recorded audio utterance to an OpenAI-compatible
+  `/audio/transcriptions` endpoint and returns the transcribed text - it **persists nothing** (no recording,
+  no transcript row). This is a **server-level-only** config, separate from the per-user summarisation
+  settings: a new `Dictation` options section (`ApiBase`/`ApiKey`/`Model`/`TimeoutSeconds`) is optional, and
+  an empty `ApiBase` disables the server-fallback path (the browser Web Speech path still works in
+  Chrome/Edge regardless). The endpoint returns **400** when no `Dictation:ApiBase` is configured and **502**
+  when the configured speech-to-text service is unreachable.
 - **Chat tool calling (built-in transcript tools).** When a user enables tools (master switch + per-tool list,
   resolved by **`ChatToolSettingsResolver`** — user override ?? server `Chat:ToolsEnabled` / `Chat:DisabledTools`),
   the chat turn runs as a bounded **agentic loop** (`ChatToolOrchestrator`, ≤5 rounds): it offers the enabled

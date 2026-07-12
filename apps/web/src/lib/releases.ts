@@ -24,6 +24,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Chat over transcripts** | Stream answers over one meeting, a folder (its summary/minutes/actions), several selected, or all meetings - context inferred from what you're viewing - via your OpenAI-compatible model, with attachments and saved conversations. |
 | **Search** | Keyword search across your library, upgraded to semantic (meaning-based) search when an embeddings endpoint is configured. |
 | **Chat tools** | The assistant searches your library with built-in tools (who-said-what, attendees, talk time, summaries, email-to-self) and links to the exact segment. |
+| **Voice dictation** | Speak your chat questions - transcribed into the chat box in Chrome/Edge or via a server speech-to-text endpoint. |
 | **Connect Claude (MCP)** | Connect Claude to your own meetings via OAuth (claude.ai) or a personal token (Claude Desktop/Code). |
 | **Translate** | Translate a whole transcript or a single segment, stored as revisions you can flip back. |
 | **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) to a recording or directly to a folder, edit Markdown attachments in place, save a chat conversation as an attachment with /attach, and optionally feed them to chat. |
@@ -51,6 +52,22 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.126.0",
+    date: "2026-07-12",
+    pr: 278,
+    headline: "Dictate chat messages with your voice",
+    summary:
+      "The chat box now has a microphone button. Click it to dictate your question by voice and it is " +
+      "transcribed into the input box near-real-time - review and edit before you send. In Chrome and Edge " +
+      "tabs it uses the browser's built-in speech recognition; elsewhere (the desktop app, Safari, Firefox) it " +
+      "uses your server's speech-to-text endpoint when one is configured. The send button is now a compact " +
+      "icon so the panel stays the same size.",
+    added: [
+      "Voice dictation in the chat box: a mic button that toggles to a stop icon while listening and transcribes speech into the input on each pause.",
+    ],
+    changed: ["The chat send button is now an icon (paper plane) instead of text."],
+  },
   {
     version: "0.125.1",
     date: "2026-07-11",

@@ -30,6 +30,7 @@ At a glance - see **[docs/features.md](docs/features.md)** for the full detail o
 | **Chat over transcripts** | Stream answers over one meeting, a folder (its summary/minutes/actions), several selected, or all meetings (context inferred from what you're viewing) via an OpenAI-compatible LLM; context dial, file attachments, saved conversations, and slash commands. |
 | **Search** | Keyword search across your library, upgraded to semantic (RAG - hybrid vector + trigram) when an embeddings endpoint is configured. |
 | **Chat tools** | The assistant calls built-in tools (who-said-what, search, attendees, talk time, summaries, email-to-self, and more) and links answers to the exact segment. |
+| **Voice dictation in chat** | Dictate chat questions by voice - browser speech recognition, or a server STT endpoint on the desktop app. |
 | **Connect Claude (MCP)** | An in-process MCP server lets Claude connect to your own meetings via OAuth (claude.ai) or a personal token (Claude Desktop/Code). |
 | **User API access** | When a Platform Administrator enables it, generate a personal API token to call the REST API as yourself, with a built-in API reference. |
 | **Translate** | Translate a whole transcript (segments, summary, actions) or a single segment; stored as revisions you can flip back. |
