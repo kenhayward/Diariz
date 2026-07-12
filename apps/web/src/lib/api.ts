@@ -1057,6 +1057,13 @@ export const api = {
     return data;
   },
 
+  async transcribeChat(blob: Blob): Promise<string> {
+    const form = new FormData();
+    form.append("file", blob, "utterance.webm");
+    const { data } = await http.post<{ text: string }>("/api/chat/transcribe", form);
+    return data.text;
+  },
+
   async listChatConversations(): Promise<ChatConversationSummary[]> {
     const { data } = await http.get<ChatConversationSummary[]>("/api/chat/conversations");
     return data;

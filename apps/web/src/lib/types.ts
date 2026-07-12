@@ -425,6 +425,8 @@ export interface UserSettings {
   /// Where a new recording lands in the user's Personal room (enum name on the wire).
   placementMode: RecordingPlacementMode;
   placementSectionId: string | null;
+  /// True when the server has an STT endpoint configured (dictation server-fallback path is available).
+  dictationServerAvailable: boolean;
 }
 
 /// Where a new recording lands in the user's Personal room. Mirrors the server enum names.

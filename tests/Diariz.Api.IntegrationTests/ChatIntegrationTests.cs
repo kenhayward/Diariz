@@ -35,7 +35,8 @@ public class ChatIntegrationTests(ContainersFixture fx)
             db, streamClient, settings,
             new ChatContextResolver(db, Options.Create(new ChatOptions { ContextLength = 50000 })),
             new AttachmentExtractor(), new FakeAudioStorage(), new FakeUrlFetcher(),
-            toolSettings, new ChatToolOrchestrator(streamClient), new RoomScope(db))
+            toolSettings, new ChatToolOrchestrator(streamClient), new RoomScope(db),
+            null!, Options.Create(new DictationOptions()))
         {
             ControllerContext = Http.Context(userId),
         };

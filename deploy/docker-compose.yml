@@ -84,6 +84,11 @@ services:
       # Reasoning models: send reasoning_effort on LLM requests. Off by default; per-user overridable in Settings.
       Summarization__ReasoningEnabled: ${SUMMARY_REASONING_ENABLED:-false}
       Summarization__ReasoningEffort: ${SUMMARY_REASONING_EFFORT:-medium}
+      # Chat voice dictation (server fallback for desktop/Safari/Firefox). Empty ApiBase disables it.
+      Dictation__ApiBase: ${DICTATION_API_BASE:-}
+      Dictation__ApiKey: ${DICTATION_API_KEY:-}
+      Dictation__Model: ${DICTATION_MODEL:-whisper-1}
+      Dictation__TimeoutSeconds: ${DICTATION_TIMEOUT_SECONDS:-30}
       # Semantic search (RAG) embeddings. Empty ApiBase reuses the owner's summarisation endpoint; empty
       # everywhere keeps search lexical. Model + dimension are server-pinned (must match the vector(768) column).
       Embedding__ApiBase: ${EMBED_API_BASE:-}

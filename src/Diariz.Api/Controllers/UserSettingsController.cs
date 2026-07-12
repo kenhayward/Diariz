@@ -20,16 +20,19 @@ public class UserSettingsController : ControllerBase
     private readonly SummarizationOptions _serverDefaults;
     private readonly ChatOptions _chatDefaults;
     private readonly IChatToolSettingsResolver _toolSettings;
+    private readonly DictationOptions _dictationDefaults;
 
     public UserSettingsController(
         DiarizDbContext db, IApiKeyProtector protector, IOptions<SummarizationOptions> serverDefaults,
-        IOptions<ChatOptions> chatDefaults, IChatToolSettingsResolver toolSettings)
+        IOptions<ChatOptions> chatDefaults, IChatToolSettingsResolver toolSettings,
+        IOptions<DictationOptions> dictationDefaults)
     {
         _db = db;
         _protector = protector;
         _serverDefaults = serverDefaults.Value;
         _chatDefaults = chatDefaults.Value;
         _toolSettings = toolSettings;
+        _dictationDefaults = dictationDefaults.Value;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -57,7 +60,8 @@ public class UserSettingsController : ControllerBase
             DefaultReasoningEnabled: _serverDefaults.ReasoningEnabled,
             DefaultReasoningEffort: _serverDefaults.ReasoningEffort,
             PlacementMode: s?.RecordingPlacementMode ?? RecordingPlacementMode.SelectedFolder,
-            PlacementSectionId: s?.RecordingPlacementSectionId);
+            PlacementSectionId: s?.RecordingPlacementSectionId,
+            DictationServerAvailable: _dictationDefaults.Enabled);
     }
 
     private static string? NullIfBlank(string? v) => string.IsNullOrWhiteSpace(v) ? null : v;

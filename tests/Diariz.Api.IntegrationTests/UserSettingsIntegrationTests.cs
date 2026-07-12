@@ -23,7 +23,8 @@ public class UserSettingsIntegrationTests(ContainersFixture fx)
         var chat = new ChatOptions();
         var resolver = new ChatToolSettingsResolver(
             db, new Diariz.Api.Tools.ChatToolRegistry([]), Options.Create(chat));
-        return new(db, Protector, Options.Create(new SummarizationOptions()), Options.Create(chat), resolver)
+        return new(db, Protector, Options.Create(new SummarizationOptions()), Options.Create(chat), resolver,
+            Options.Create(new DictationOptions()))
         { ControllerContext = Http.Context(userId) };
     }
 

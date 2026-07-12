@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Services;
 using Diariz.Api.Tools;
@@ -12,6 +13,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Controllers;
 
@@ -64,12 +66,15 @@ public class ChatController : ControllerBase
     private readonly IChatToolSettingsResolver _toolSettings;
     private readonly IChatToolOrchestrator _orchestrator;
     private readonly IRoomScope _rooms;
+    private readonly IDictationClient _dictation;
+    private readonly DictationOptions _dictationOptions;
 
     public ChatController(
         DiarizDbContext db, IChatStreamClient chat, ISummarizationSettingsResolver settings,
         IChatContextResolver contextResolver, IAttachmentExtractor extractor,
         IAudioStorage storage, IUrlFetcher urlFetcher,
-        IChatToolSettingsResolver toolSettings, IChatToolOrchestrator orchestrator, IRoomScope rooms)
+        IChatToolSettingsResolver toolSettings, IChatToolOrchestrator orchestrator, IRoomScope rooms,
+        IDictationClient dictation, IOptions<DictationOptions> dictationOptions)
     {
         _db = db;
         _chat = chat;
@@ -81,6 +86,8 @@ public class ChatController : ControllerBase
         _toolSettings = toolSettings;
         _orchestrator = orchestrator;
         _rooms = rooms;
+        _dictation = dictation;
+        _dictationOptions = dictationOptions.Value;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -222,6 +229,41 @@ public class ChatController : ControllerBase
         catch (ArgumentException ex)
         {
             return BadRequest(ex.Message);
+        }
+    }
+
+    // ---- Voice dictation (server fallback path) ----
+
+    /// <summary>Transcribe one short audio utterance for chat voice dictation. Server-level STT config
+    /// (<see cref="DictationOptions"/>); returns 400 when no STT endpoint is configured. Persists nothing.</summary>
+    [HttpPost("transcribe")]
+    [RequestSizeLimit(10L * 1024 * 1024)] // 10 MiB - a single dictation utterance is small
+    public async Task<ActionResult<ChatTranscriptionDto>> Transcribe(
+        [FromForm] IFormFile? file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0) return BadRequest("An audio file is required.");
+        if (!_dictationOptions.Enabled)
+            return BadRequest("Voice dictation is not configured on this server.");
+
+        var config = new DictationRequestConfig(
+            _dictationOptions.ApiBase, _dictationOptions.ApiKey, _dictationOptions.Model,
+            _dictationOptions.TimeoutSeconds);
+
+        await using var stream = file.OpenReadStream();
+        try
+        {
+            var text = await _dictation.TranscribeAsync(config, stream, file.ContentType, file.FileName, ct);
+            return Ok(new ChatTranscriptionDto(text));
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw; // genuine client abort - let the framework handle it
+        }
+        catch (Exception)
+        {
+            // A downstream STT failure (service down, bad model, timeout, malformed response) - report a
+            // clean 502 so the dictation UI can show an actionable message instead of a bare 500.
+            return StatusCode(StatusCodes.Status502BadGateway, "The transcription service could not be reached.");
         }
     }
 

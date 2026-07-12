@@ -98,6 +98,10 @@ recording and jump to the exact segment. Fuzzy search is backed by a Postgres `p
 brief grey "Tool call: …" line shows while a tool runs. Chat also has **slash commands** — `/tools`, `/help`,
 `/clear`, `/context`, `/save`, `/load`, `/copy`, `/retry` — handled in the browser and never sent to the model
 (type `/` for an autocomplete popup).
+- **Voice dictation in chat.** The chat input has a microphone button that transcribes your speech into the
+  box near-real-time (transcribing on each pause), so you can dictate a question and edit it before sending.
+  In Chrome/Edge browser tabs it uses the built-in Web Speech API; in the desktop app and other browsers it
+  falls back to an OpenAI-compatible speech-to-text endpoint configured on the server (Dictation settings).
 - **Connect Claude to your transcripts (MCP server)** — Diariz hosts a **Model Context Protocol** server at
 `/mcp`, so you can connect **Claude** directly to *your own* meetings, two ways: **sign in from the Claude
 website** (add Diariz as a custom connector and approve it on a consent screen — an **OAuth 2.1** flow, nothing

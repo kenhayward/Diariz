@@ -14,13 +14,13 @@ public class UserSettingsControllerTests
 {
     private static UserSettingsController Build(
         DiarizDbContext db, Guid userId, SummarizationOptions? server = null, ChatOptions? chat = null,
-        IEnumerable<Diariz.Api.Tools.IChatTool>? tools = null)
+        IEnumerable<Diariz.Api.Tools.IChatTool>? tools = null, DictationOptions? dictation = null)
     {
         var chatOpts = chat ?? new ChatOptions();
         var registry = new Diariz.Api.Tools.ChatToolRegistry(tools ?? []);
         var toolResolver = new ChatToolSettingsResolver(db, registry, Options.Create(chatOpts));
         return new(db, new FakeApiKeyProtector(), Options.Create(server ?? new SummarizationOptions()),
-            Options.Create(chatOpts), toolResolver)
+            Options.Create(chatOpts), toolResolver, Options.Create(dictation ?? new DictationOptions()))
         {
             ControllerContext = Http.Context(userId),
         };
@@ -268,5 +268,23 @@ public class UserSettingsControllerTests
         var dto = await Build(db, userId).Get();
         Assert.Equal(Diariz.Domain.Entities.RecordingPlacementMode.SelectedFolder, dto.PlacementMode);
         Assert.Null(dto.PlacementSectionId);
+    }
+
+    [Fact]
+    public async Task Get_ReportsDictationAvailable_WhenSttEndpointConfigured()
+    {
+        using var db = TestDb.Create();
+        var dto = await Build(db, Guid.NewGuid(), dictation: new DictationOptions { ApiBase = "http://stt.test/v1" }).Get();
+
+        Assert.True(dto.DictationServerAvailable);
+    }
+
+    [Fact]
+    public async Task Get_ReportsDictationUnavailable_WhenNoSttEndpoint()
+    {
+        using var db = TestDb.Create();
+        var dto = await Build(db, Guid.NewGuid()).Get(); // default DictationOptions has an empty ApiBase
+
+        Assert.False(dto.DictationServerAvailable);
     }
 }
