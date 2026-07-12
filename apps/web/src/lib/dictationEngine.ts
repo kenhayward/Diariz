@@ -4,7 +4,7 @@
 import { getStream, listInputDevices } from "./audioSource";
 import { resolvePersistedSource, DEFAULT_CONSTRAINTS } from "./audioDevices";
 import type { AudioConstraints, PersistedSource, SourceSelection } from "./audioDevices";
-import { rms, normalizeLevel, nextSilenceMs } from "./audioLevel";
+import { rms, normalizeLevel, nextSilenceMs, SILENCE_LEVEL } from "./audioLevel";
 
 export interface DictationCallbacks {
   /** Live, not-yet-final text (browser path only) - shown as a preview, replaced on the next final/interim. */
@@ -123,7 +123,7 @@ export function createServerEngine(
   let stopped = false;
   let sending = false;
 
-  function flushAndSend(_cb: DictationCallbacks) {
+  function flushAndSend() {
     const r = recorder;
     if (!r || r.state === "inactive") return;
     // onstop assembles the blob and POSTs it, then restarts for the next utterance.
@@ -141,56 +141,71 @@ export function createServerEngine(
         return;
       }
 
-      const stream = session.stream;
-      const Ctx = (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext })
-        .AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!Ctx) { cb.onError("Web Audio is unavailable."); return; }
-
-      ctx = new Ctx();
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      ctx.createMediaStreamSource(stream).connect(analyser);
-      const buf = new Uint8Array(analyser.fftSize);
-
-      let last: number | null = null;
-      let silentMs = 0;
-      let spokeMs = 0;
-
-      const startRecorder = () => {
-        chunks = [];
-        recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
-        recorder.ondataavailable = (e) => e.data.size > 0 && chunks.push(e.data);
-        recorder.onstop = () => {
-          const blob = new Blob(chunks, { type: "audio/webm" });
-          if (!stopped) startRecorder(); // ready for the next utterance immediately
-          if (spokeMs >= MIN_SPEECH_MS && blob.size > 0 && !sending) {
-            sending = true;
-            transcribe(blob)
-              .then((text) => { if (text.trim()) cb.onFinal(text); })
-              .catch((e) => cb.onError((e as { message?: string })?.message ?? "Transcription failed."))
-              .finally(() => { sending = false; });
-          }
-          spokeMs = 0;
-        };
-        recorder.start(250);
-      };
-      startRecorder();
-
-      const tick = (now: number) => {
-        analyser.getByteTimeDomainData(buf);
-        const level = normalizeLevel(rms(buf));
-        const dt = last == null ? 0 : now - last;
-        last = now;
-        if (level >= 0.05) { spokeMs += dt; silentMs = 0; }
-        else { silentMs = nextSilenceMs(silentMs, level, dt); }
-        // Boundary: we have real speech AND a sustained pause AND we're not mid-send.
-        if (spokeMs >= MIN_SPEECH_MS && silentMs >= PAUSE_MS && !sending) {
-          silentMs = 0;
-          flushAndSend(cb);
+      try {
+        const stream = session.stream;
+        const Ctx = (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext })
+          .AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (!Ctx) {
+          session.stop();
+          session = null;
+          cb.onError("Web Audio is unavailable.");
+          return;
         }
+
+        ctx = new Ctx();
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        ctx.createMediaStreamSource(stream).connect(analyser);
+        const buf = new Uint8Array(analyser.fftSize);
+
+        let last: number | null = null;
+        let silentMs = 0;
+        let spokeMs = 0;
+
+        const startRecorder = () => {
+          chunks = [];
+          recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+          recorder.ondataavailable = (e) => e.data.size > 0 && chunks.push(e.data);
+          recorder.onstop = () => {
+            const blob = new Blob(chunks, { type: "audio/webm" });
+            if (!stopped) startRecorder(); // ready for the next utterance immediately
+            if (!stopped && spokeMs >= MIN_SPEECH_MS && blob.size > 0 && !sending) {
+              sending = true;
+              transcribe(blob)
+                .then((text) => { if (!stopped && text.trim()) cb.onFinal(text); })
+                .catch((e) => cb.onError((e as { message?: string })?.message ?? "Transcription failed."))
+                .finally(() => { sending = false; });
+            }
+            spokeMs = 0;
+          };
+          recorder.start(250);
+        };
+        startRecorder();
+
+        const tick = (now: number) => {
+          analyser.getByteTimeDomainData(buf);
+          const level = normalizeLevel(rms(buf));
+          const dt = last == null ? 0 : now - last;
+          last = now;
+          if (level >= SILENCE_LEVEL) { spokeMs += dt; silentMs = 0; }
+          else { silentMs = nextSilenceMs(silentMs, level, dt); }
+          // Boundary: we have real speech AND a sustained pause AND we're not mid-send.
+          if (spokeMs >= MIN_SPEECH_MS && silentMs >= PAUSE_MS && !sending) {
+            silentMs = 0;
+            flushAndSend();
+          }
+          raf = requestAnimationFrame(tick);
+        };
         raf = requestAnimationFrame(tick);
-      };
-      raf = requestAnimationFrame(tick);
+      } catch (e) {
+        cancelAnimationFrame(raf);
+        try { recorder?.stop(); } catch { /* inactive */ }
+        recorder = null;
+        session?.stop();
+        session = null;
+        if (ctx) { void ctx.close(); ctx = null; }
+        cb.onError((e as { message?: string })?.message ?? "Could not start dictation.");
+      }
     },
     stop() {
       stopped = true;
