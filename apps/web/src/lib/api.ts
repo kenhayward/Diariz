@@ -202,10 +202,6 @@ export const api = {
     await http.post(`/api/admin/users/${id}/deny`);
   },
 
-  async setUserRole(id: string, role: "Standard" | "Administrator"): Promise<void> {
-    await http.put(`/api/admin/users/${id}/role`, { role });
-  },
-
   // ---- Groups (platform permissions) ----
 
   async listGroups(): Promise<Group[]> {
