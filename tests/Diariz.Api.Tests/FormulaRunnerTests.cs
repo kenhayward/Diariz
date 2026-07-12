@@ -94,8 +94,10 @@ public class FormulaRunnerTests
     }
 
     [Fact]
-    public async Task RunAsync_PersonalFormulaOwnedByAnotherUser_ThrowsFormulaAccessException()
+    public async Task RunAsync_PersonalFormulaOwnedByAnotherUser_ThrowsFormulaNotFoundException()
     {
+        // A non-owned Personal formula is treated as "not found" rather than "access denied" so its very
+        // existence isn't leaked - a disabled Platform/Diariz formula (public knowledge) still throws Access.
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var otherUserId = Guid.NewGuid();
@@ -111,7 +113,7 @@ public class FormulaRunnerTests
 
         var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeSummarizationSettingsResolver());
 
-        await Assert.ThrowsAsync<FormulaAccessException>(() => runner.RunAsync(userId, rec.Id, formula.Id));
+        await Assert.ThrowsAsync<FormulaNotFoundException>(() => runner.RunAsync(userId, rec.Id, formula.Id));
     }
 
     [Fact]

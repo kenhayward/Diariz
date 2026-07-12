@@ -84,6 +84,20 @@ public class FormulasControllerTests
         Assert.Null(dto.OwnerUserId);
     }
 
+    [Fact]
+    public async Task Create_ContextOutOfRange_Returns400()
+    {
+        using var db = TestDb.Create();
+        var controller = Build(db, Guid.NewGuid());
+
+        // 64 sets a bit above the highest valid FormulaContext flag (Actions = 32; valid mask = 63).
+        var result = await controller.Create(new CreateFormulaRequest(
+            "Personal", "My Formula", null, "Summarize.", 64));
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal("Invalid context.", badRequest.Value);
+    }
+
     // ---- Update ----
 
     [Fact]
@@ -115,6 +129,54 @@ public class FormulasControllerTests
 
         var dto = Assert.IsType<FormulaDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
         Assert.Equal("New Name", dto.Name);
+    }
+
+    [Fact]
+    public async Task Update_PlatformFormula_WithoutManageFormulas_Returns403()
+    {
+        using var db = TestDb.Create();
+        var formula = Platform();
+        db.Formulas.Add(formula);
+        await db.SaveChangesAsync();
+
+        var controller = Build(db, Guid.NewGuid());
+        var result = await controller.Update(formula.Id, new UpdateFormulaRequest("New Name", null, null, null));
+
+        var status = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(403, status.StatusCode);
+    }
+
+    [Fact]
+    public async Task Update_PlatformFormula_WithManageFormulas_Ok()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        Perms.Grant(db, userId, PlatformPermission.ManageFormulas);
+        var formula = Platform();
+        db.Formulas.Add(formula);
+        await db.SaveChangesAsync();
+
+        var controller = Build(db, userId);
+        var result = await controller.Update(formula.Id, new UpdateFormulaRequest("New Name", null, null, null));
+
+        var dto = Assert.IsType<FormulaDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal("New Name", dto.Name);
+    }
+
+    [Fact]
+    public async Task Update_ContextOutOfRange_Returns400()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var formula = Personal(owner);
+        db.Formulas.Add(formula);
+        await db.SaveChangesAsync();
+
+        var controller = Build(db, owner);
+        var result = await controller.Update(formula.Id, new UpdateFormulaRequest(null, null, null, 64));
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal("Invalid context.", badRequest.Value);
     }
 
     // ---- Delete ----
@@ -152,6 +214,54 @@ public class FormulasControllerTests
         Assert.False(db.Formulas.Any(f => f.Id == formula.Id));
     }
 
+    [Fact]
+    public async Task Delete_PersonalOwnedBySomeoneElse_Returns404()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var formula = Personal(owner);
+        db.Formulas.Add(formula);
+        await db.SaveChangesAsync();
+
+        var controller = Build(db, Guid.NewGuid());
+        var result = await controller.Delete(formula.Id);
+
+        Assert.IsType<NotFoundResult>(result);
+        Assert.True(db.Formulas.Any(f => f.Id == formula.Id)); // not deleted, existence not leaked
+    }
+
+    [Fact]
+    public async Task Delete_PlatformFormula_WithoutManageFormulas_Returns403()
+    {
+        using var db = TestDb.Create();
+        var formula = Platform();
+        db.Formulas.Add(formula);
+        await db.SaveChangesAsync();
+
+        var controller = Build(db, Guid.NewGuid());
+        var result = await controller.Delete(formula.Id);
+
+        var status = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(403, status.StatusCode);
+    }
+
+    [Fact]
+    public async Task Delete_PlatformFormula_WithManageFormulas_Returns204()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        Perms.Grant(db, userId, PlatformPermission.ManageFormulas);
+        var formula = Platform();
+        db.Formulas.Add(formula);
+        await db.SaveChangesAsync();
+
+        var controller = Build(db, userId);
+        var result = await controller.Delete(formula.Id);
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.False(db.Formulas.Any(f => f.Id == formula.Id));
+    }
+
     // ---- Enable/disable ----
 
     [Fact]
@@ -168,6 +278,23 @@ public class FormulasControllerTests
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result);
         Assert.Equal("Personal formulas are always available.", badRequest.Value);
+    }
+
+    [Fact]
+    public async Task SetEnabled_PersonalOwnedBySomeoneElse_Returns404_NotBadRequest()
+    {
+        // The 400 "always available" hint would otherwise let a caller distinguish another user's Personal
+        // formula from a non-existent one - a non-owned Personal formula must 404 first, like Update/Delete.
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var formula = Personal(owner);
+        db.Formulas.Add(formula);
+        await db.SaveChangesAsync();
+
+        var controller = Build(db, Guid.NewGuid());
+        var result = await controller.SetEnabled(formula.Id, new SetFormulaEnabledRequest(false));
+
+        Assert.IsType<NotFoundResult>(result);
     }
 
     [Fact]
@@ -320,5 +447,19 @@ public class FormulasControllerTests
 
         var status = Assert.IsType<ObjectResult>(result.Result);
         Assert.Equal(504, status.StatusCode);
+    }
+
+    [Fact]
+    public async Task Run_ClientAbort_PropagatesOperationCanceled_NotTurnedInto504()
+    {
+        // When the request's own token is already cancelled, an OperationCanceledException is a genuine client
+        // abort and must propagate (the `when (ct.IsCancellationRequested)` rethrow branch), not become a 504.
+        using var db = TestDb.Create();
+        var runner = new FakeFormulaRunner { ThrowOnCall = new OperationCanceledException("aborted") };
+        var controller = Build(db, Guid.NewGuid(), runner);
+        var cancelled = new CancellationToken(canceled: true);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => controller.Run(Guid.NewGuid(), Guid.NewGuid(), cancelled));
     }
 }

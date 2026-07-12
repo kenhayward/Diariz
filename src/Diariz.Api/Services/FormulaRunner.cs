@@ -92,14 +92,17 @@ public class FormulaRunner : IFormulaRunner
     }
 
     /// <summary>Phase 1 run-access: a Personal formula may only be run by its owner; a Platform/Diariz
-    /// formula must be enabled. (Access to the *recording* is checked separately, in
-    /// <see cref="LoadRecordingAsync"/>, before this ever runs.)</summary>
+    /// formula must be enabled. A non-owned Personal formula throws <see cref="FormulaNotFoundException"/>
+    /// (not Access) so its very existence isn't leaked - consistent with the CRUD controller's 404s; a
+    /// disabled Platform/Diariz formula is public knowledge, so it stays <see cref="FormulaAccessException"/>.
+    /// (Access to the *recording* is checked separately, in <see cref="LoadRecordingAsync"/>, before this
+    /// ever runs.)</summary>
     private static void EnsureCanRun(Formula formula, Guid userId)
     {
         if (formula.Scope == FormulaScope.Personal)
         {
             if (formula.OwnerUserId != userId)
-                throw new FormulaAccessException("You may not run this formula.");
+                throw new FormulaNotFoundException("Formula not found.");
         }
         else if (!formula.Enabled)
         {

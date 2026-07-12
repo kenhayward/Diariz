@@ -29,9 +29,18 @@ public class FormulasController : ControllerBase
         _runner = runner;
     }
 
+    /// <summary>The union of every defined <see cref="FormulaContext"/> flag (None + Transcript..Actions = 63).
+    /// Any bit set outside this mask is an invalid context - rejected on create/update so a client can't persist
+    /// a value the context builder would never honour.</summary>
+    private const int ValidContextMask =
+        (int)(FormulaContext.Transcript | FormulaContext.Notes | FormulaContext.Attachments
+            | FormulaContext.Summary | FormulaContext.Minutes | FormulaContext.Actions);
+
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     private Task<bool> CanManageFormulasAsync() => _permissions.HasAsync(UserId, PlatformPermission.ManageFormulas);
+
+    private static bool IsValidContext(int context) => (context & ~ValidContextMask) == 0;
 
     /// <summary>The caller's own Personal formulas plus every enabled Platform/Diariz formula.</summary>
     [HttpGet]
@@ -53,6 +62,8 @@ public class FormulasController : ControllerBase
     {
         if (!Enum.TryParse<FormulaScope>(req.Scope, out var scope) || !Enum.IsDefined(scope))
             return BadRequest("Unknown scope.");
+        if (!IsValidContext(req.Context))
+            return BadRequest("Invalid context.");
 
         if (scope != FormulaScope.Personal && !await CanManageFormulasAsync())
             return Forbidden("Only a Formulas Administrator can create a shared formula.");
@@ -91,6 +102,9 @@ public class FormulasController : ControllerBase
         {
             return Forbidden("Only a Formulas Administrator can edit a shared formula.");
         }
+
+        if (req.Context is not null && !IsValidContext(req.Context.Value))
+            return BadRequest("Invalid context.");
 
         if (req.Name is not null) formula.Name = req.Name;
         if (req.Description is not null) formula.Description = req.Description;
@@ -134,8 +148,14 @@ public class FormulasController : ControllerBase
     {
         var formula = await _db.Formulas.FirstOrDefaultAsync(f => f.Id == id);
         if (formula is null) return NotFound();
+        // A non-owned Personal formula 404s BEFORE the "always available" 400, so the 400 hint can't be used
+        // to distinguish another user's Personal formula from one that doesn't exist (leak-avoidance, same as
+        // Update/Delete).
         if (formula.Scope == FormulaScope.Personal)
+        {
+            if (formula.OwnerUserId != UserId) return NotFound();
             return BadRequest("Personal formulas are always available.");
+        }
         if (!await CanManageFormulasAsync())
             return Forbidden("Only a Formulas Administrator can enable or disable a shared formula.");
 
