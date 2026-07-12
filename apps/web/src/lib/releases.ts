@@ -53,6 +53,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.127.0",
+    date: "2026-07-12",
+    pr: 281,
+    headline: "Cleaner admin Users & Groups management",
+    summary:
+      "The admin Manage Users / Groups window is easier to use: it keeps the same size when you switch tabs, " +
+      "shows the Close button on both tabs, and no longer closes if you click outside it (use Close or Escape). " +
+      "Managing a group's members is now a dedicated popup that lists the group's current members and lets you " +
+      "add people by typing a name or email - so it stays fast even with hundreds of users, instead of showing " +
+      "every user as a checkbox. The confusing 'Make admin' button is gone: a user's admin rights are shown and " +
+      "managed through their group membership.",
+    changed: [
+      "Manage Users / Groups keeps a fixed size across tabs, shows Close on both tabs, and only closes via Close or Escape (not a backdrop click).",
+      "Group membership is managed in a dedicated popup with a type-to-add search (current members + add by name or email), replacing the list of every user as checkboxes.",
+      "Removed the redundant 'Make admin' button; admin rights are managed via the Administrators group, shown in each user's Groups.",
+    ],
+  },
+  {
     version: "0.126.1",
     date: "2026-07-12",
     pr: 279,

@@ -9,7 +9,6 @@ vi.mock("../lib/api", () => ({
     addUser: vi.fn(),
     grantUser: vi.fn(),
     denyUser: vi.fn(),
-    setUserRole: vi.fn(),
     setUserEnabled: vi.fn(),
     setUserQuota: vi.fn(),
     deleteUser: vi.fn(),
@@ -81,11 +80,40 @@ describe("ManageUsersModal", () => {
     expect(screen.getAllByText("Google")).toHaveLength(1); // exactly the one linked user
   });
 
-  it("promotes a standard user", async () => {
+  it("has no Make Admin button (admin rights are managed via group membership)", async () => {
     mock(api.listUsers).mockResolvedValue([u({ id: "s1", email: "std@x.test", accountType: "Standard" })]);
     render_();
-    fireEvent.click(await screen.findByRole("button", { name: /make admin/i }));
-    await waitFor(() => expect(api.setUserRole).toHaveBeenCalledWith("s1", "Administrator"));
+    await screen.findByText("std@x.test");
+    expect(screen.queryByRole("button", { name: /make admin/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /make standard/i })).toBeNull();
+  });
+
+  it("shows the Close button on both the Users and Groups tabs", async () => {
+    mock(api.listUsers).mockResolvedValue([u({ id: "u1", email: "a@x.test" })]);
+    render_();
+    await screen.findByText("a@x.test");
+    expect(screen.getByRole("button", { name: /close/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: /groups/i }));
+    expect(screen.getByRole("button", { name: /close/i })).toBeTruthy();
+  });
+
+  it("closes on Escape and the Close button, but not on a backdrop click", async () => {
+    const onClose = vi.fn();
+    mock(api.listUsers).mockResolvedValue([u({ id: "u1", email: "a@x.test" })]);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { container } = render(
+      <QueryClientProvider client={qc}><ManageUsersModal onClose={onClose} /></QueryClientProvider>,
+    );
+    await screen.findByText("a@x.test");
+
+    fireEvent.click(container.firstChild as Element); // the backdrop overlay - must NOT close
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /close/i }));
+    expect(onClose).toHaveBeenCalledTimes(2);
   });
 
   it("edits a user's storage quota (GB → bytes)", async () => {

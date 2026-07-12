@@ -100,15 +100,21 @@ describe("GroupsTab", () => {
     await waitFor(() => expect(api.createGroup).toHaveBeenCalledWith(expect.objectContaining({ name: "Support" })));
   });
 
-  it("adds and removes a member", async () => {
+  it("opens the members dialog to add and remove members", async () => {
+    // Engineering (g2) starts with Dev Person (u2) as a member for this test.
+    (api.listGroups as Mock).mockResolvedValue([systemGroup, { ...ordinary, memberIds: ["u2"] }]);
     renderTab();
+
+    // The member-count button opens the per-group members dialog (not an inline list of every user).
     fireEvent.click(await screen.findByTestId("members-g2"));
 
+    // Remove the current member.
     fireEvent.click(await screen.findByTestId("member-g2-u2"));
-    await waitFor(() => expect(api.addGroupMember).toHaveBeenCalledWith("g2", "u2"));
+    await waitFor(() => expect(api.removeGroupMember).toHaveBeenCalledWith("g2", "u2"));
 
-    fireEvent.click(screen.getByTestId("members-g1"));
-    fireEvent.click(await screen.findByTestId("member-g1-u1"));
-    await waitFor(() => expect(api.removeGroupMember).toHaveBeenCalledWith("g1", "u1"));
+    // Add another user via the type-ahead (excludes current members; matches by name).
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "plat" } });
+    fireEvent.click(await screen.findByRole("option", { name: /Plat Admin/ }));
+    await waitFor(() => expect(api.addGroupMember).toHaveBeenCalledWith("g2", "u1"));
   });
 });

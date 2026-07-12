@@ -27,7 +27,11 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    // Escape closes - but defer to a nested dialog (the group-members popup) when one is open so Escape
+    // dismisses that first, not the whole modal.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !document.querySelector("[data-nested-dialog]")) onClose();
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
@@ -84,14 +88,14 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
   const others = users.filter((u) => u.status !== "Requested");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      {/* Fixed height so switching tabs never resizes the modal; does NOT close on a backdrop click
+          (Close button or Escape only) - prevents accidental dismissal mid-edit. */}
       <div
         role="dialog"
         aria-label={t("title")}
-        className="flex max-h-[85vh] w-full max-w-4xl flex-col rounded-lg border bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900"
-        onClick={(e) => e.stopPropagation()}
+        className="flex h-[85vh] w-full max-w-4xl flex-col rounded-lg border bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900"
       >
-        {/* Pinned header: title, add-user form, and access requests stay put while the user table scrolls. */}
         <h2 className="mb-3 shrink-0 text-base font-semibold dark:text-gray-100">{t("title")}</h2>
 
         <div role="tablist" className="mb-3 flex shrink-0 gap-1 border-b dark:border-gray-700">
@@ -113,6 +117,8 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
           ))}
         </div>
 
+        {/* Shared scrolling body between the fixed header/tabs and the shared footer. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {tab === "groups" ? (
           <div className="min-h-0 flex-1 overflow-auto">
             <GroupsTab />
@@ -205,8 +211,6 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
                   isSelf={!!myEmail && u.email === myEmail}
                   maxQuotaBytes={platform?.maxQuotaBytes ?? null}
                   groupNames={groups.filter((g) => g.memberIds.includes(u.id)).map((g) => g.name)}
-                  onPromote={run(() => api.setUserRole(u.id, "Administrator"))}
-                  onDemote={run(() => api.setUserRole(u.id, "Standard"))}
                   onSetEnabled={(v) => run(() => api.setUserEnabled(u.id, v))()}
                   onSetQuota={(bytes) => run(async () => {
                     await api.setUserQuota(u.id, bytes);
@@ -223,16 +227,19 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
           </table>
         </div>
 
-        <div className="mt-4 flex shrink-0 justify-end">
+        </>
+        )}
+        </div>
+
+        {/* Shared footer: a modal-wide Close in the same place on both tabs. */}
+        <div className="mt-3 flex shrink-0 border-t pt-3 dark:border-gray-700">
           <button
             onClick={onClose}
-            className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+            className="w-full rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
           >
             {t("common:close")}
           </button>
         </div>
-        </>
-        )}
       </div>
     </div>
   );
@@ -259,8 +266,6 @@ function UserRow({
   isSelf,
   maxQuotaBytes,
   groupNames,
-  onPromote,
-  onDemote,
   onSetEnabled,
   onSetQuota,
   onDelete,
@@ -270,8 +275,6 @@ function UserRow({
   maxQuotaBytes: number | null;
   /// Names of the groups this user belongs to, shown in place of the old account type.
   groupNames: string[];
-  onPromote: () => void;
-  onDemote: () => void;
   onSetEnabled: (v: boolean) => void;
   onSetQuota: (bytes: number) => void;
   onDelete: () => void;
@@ -370,15 +373,8 @@ function UserRow({
       <td className="py-2">
         {!protectedRow && (
           <span className="flex flex-wrap gap-1.5">
-            {u.accountType === "Standard" ? (
-              <button onClick={onPromote} className="rounded border px-2 py-1 text-xs dark:border-gray-700">
-                {t("makeAdmin")}
-              </button>
-            ) : (
-              <button onClick={onDemote} className="rounded border px-2 py-1 text-xs dark:border-gray-700">
-                {t("makeStandard")}
-              </button>
-            )}
+            {/* Admin rights are managed via group membership (the Groups tab), not a per-user toggle; each
+                user's groups are shown in the Type column, so there is no Make Admin button here. */}
             <button
               onClick={() => onSetEnabled(!u.isEnabled)}
               className="rounded border px-2 py-1 text-xs dark:border-gray-700"

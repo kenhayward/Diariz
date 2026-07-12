@@ -1,8 +1,9 @@
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
 import type { Group } from "../lib/types";
+import GroupMembersModal from "./GroupMembersModal";
 
 /// The PlatformPermission bits, mirrored from the server enum. Append-only: never renumber.
 const PERMISSION_BITS = [
@@ -20,9 +21,10 @@ export default function GroupsTab() {
   const { t } = useTranslation("admin");
   const qc = useQueryClient();
   const { data: groups = [] } = useQuery({ queryKey: ["groups"], queryFn: api.listGroups });
-  const { data: users = [] } = useQuery({ queryKey: ["admin-users"], queryFn: api.listUsers });
   const [newName, setNewName] = useState("");
-  const [expanded, setExpanded] = useState<string | null>(null);
+  // The group whose membership dialog is open (null = closed). Membership is managed in a focused popup so it
+  // scales past ~100 users, rather than the old inline list of every user as checkboxes.
+  const [membersGroup, setMembersGroup] = useState<Group | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["groups"] });
@@ -49,25 +51,8 @@ export default function GroupsTab() {
     onSuccess: invalidate,
     onError,
   });
-  const addMember = useMutation({
-    mutationFn: ({ id, userId }: { id: string; userId: string }) => api.addGroupMember(id, userId),
-    onSuccess: invalidate,
-    onError,
-  });
-  const removeMember = useMutation({
-    mutationFn: ({ id, userId }: { id: string; userId: string }) => api.removeGroupMember(id, userId),
-    onSuccess: invalidate,
-    onError,
-  });
-
   function togglePermission(group: Group, bit: number) {
     update.mutate({ id: group.id, group: { ...group, permissions: group.permissions ^ bit } });
-  }
-
-  function toggleMember(group: Group, userId: string) {
-    setError(null);
-    if (group.memberIds.includes(userId)) removeMember.mutate({ id: group.id, userId });
-    else addMember.mutate({ id: group.id, userId });
   }
 
   function onDelete(group: Group) {
@@ -92,8 +77,7 @@ export default function GroupsTab() {
         </thead>
         <tbody>
           {groups.map((g) => (
-            <Fragment key={g.id}>
-              <tr className="border-t align-middle dark:border-gray-700 dark:text-gray-200">
+              <tr key={g.id} className="border-t align-middle dark:border-gray-700 dark:text-gray-200">
                 <td className="py-2 pr-2">
                   <span className="font-medium">{g.name}</span>
                   {g.isSystem && (
@@ -118,7 +102,8 @@ export default function GroupsTab() {
                   <button
                     type="button"
                     data-testid={`members-${g.id}`}
-                    onClick={() => setExpanded(expanded === g.id ? null : g.id)}
+                    onClick={() => setMembersGroup(g)}
+                    title={t("manageMembers")}
                     className="rounded border px-2 py-0.5 text-xs dark:border-gray-700 dark:hover:bg-gray-800"
                   >
                     {g.memberIds.length}
@@ -137,29 +122,6 @@ export default function GroupsTab() {
                   )}
                 </td>
               </tr>
-              {expanded === g.id && (
-                <tr className="border-t dark:border-gray-700">
-                  <td colSpan={PERMISSION_BITS.length + 3} className="bg-gray-50 px-2 py-2 dark:bg-gray-800/40">
-                    <div className="flex flex-wrap gap-x-4 gap-y-1">
-                      {users.map((u) => (
-                        <label key={u.id} className="flex items-center gap-1.5 text-xs dark:text-gray-200">
-                          <input
-                            type="checkbox"
-                            data-testid={`member-${g.id}-${u.id}`}
-                            checked={g.memberIds.includes(u.id)}
-                            onChange={() => toggleMember(g, u.id)}
-                          />
-                          <span>{u.fullName || u.email}</span>
-                        </label>
-                      ))}
-                    </div>
-                    {g.isSystem && (
-                      <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">{t("groupSystemHint")}</p>
-                    )}
-                  </td>
-                </tr>
-              )}
-            </Fragment>
           ))}
         </tbody>
       </table>
@@ -188,6 +150,10 @@ export default function GroupsTab() {
           {t("addGroup")}
         </button>
       </form>
+
+      {membersGroup && (
+        <GroupMembersModal group={membersGroup} onClose={() => setMembersGroup(null)} />
+      )}
     </div>
   );
 }
