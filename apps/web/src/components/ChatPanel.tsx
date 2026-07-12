@@ -120,6 +120,7 @@ export default function ChatPanel() {
   }
 
   async function startDictation() {
+    if (dictationRef.current) return; // already dictating - don't start a second engine
     if (dictationEngineKind === "none") return;
     const engine =
       dictationEngineKind === "speech"
@@ -847,9 +848,12 @@ export default function ChatPanel() {
           </div>
         )}
 
-        {/* Live dictation preview (interim words before they finalize). */}
-        {dictating && interim && (
-          <p className="mt-2 px-1 text-xs italic text-gray-400 dark:text-gray-500">{interim}</p>
+        {/* Live dictation feedback: interim words on the browser path, else a plain "Listening…" (the
+            server path only returns text on each pause, so it has no interim stream). */}
+        {dictating && (
+          <p className="mt-2 px-1 text-xs italic text-gray-400 dark:text-gray-500">
+            {interim || t("dictateHearing")}
+          </p>
         )}
 
         {/* Input */}
