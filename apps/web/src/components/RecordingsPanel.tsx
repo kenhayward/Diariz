@@ -14,7 +14,7 @@ import { isProcessing, statusLabel } from "../lib/recordingStatus";
 import { copyRichLink, transcriptUrl } from "../lib/clipboard";
 import { useSelection } from "../lib/selection";
 import { useRoom, useRoomBasePath, useSharedRoomId } from "../lib/rooms";
-import { useActiveRecordingId } from "../lib/useActiveRecordingId";
+import { useActiveRecordingId } from "../lib/activeRoute";
 import { formatDuration } from "../lib/format";
 import { computeReorder } from "../lib/reorder";
 import { useDragAutoScroll } from "../lib/dragAutoScroll";

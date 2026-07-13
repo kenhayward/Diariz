@@ -54,6 +54,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.133.3",
+    date: "2026-07-13",
+    pr: 299,
+    headline: "Fix: chat is room-aware in a shared room",
+    summary:
+      "In a shared room, the chat panel behaved as if you were in your Personal Room: it didn't recognise the transcript or folder you had open (so \"current\" context sent nothing), and clicking a citation in an answer - or reopening a saved folder conversation - dropped you back into your Personal Room. Chat now reads the room-scoped page you're viewing and keeps every transcript jump inside the room. The sidebar's active-row highlight now follows shared-room recordings too.",
+    fixed: [
+      "Chat now detects the open recording or folder in a shared room, so the \"current\" context includes it instead of sending nothing.",
+      "Clicking a transcript citation in a chat answer now opens it within the shared room instead of switching you to your Personal Room.",
+      "Reopening a saved folder conversation now reopens the folder inside the shared room.",
+      "The sidebar list now highlights the active recording when it is opened under a shared room.",
+    ],
+  },
+  {
     version: "0.133.2",
     date: "2026-07-13",
     pr: 298,
