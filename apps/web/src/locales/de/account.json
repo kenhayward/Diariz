@@ -42,6 +42,8 @@
   "contextSummary": "Zusammenfassung",
   "contextMinutes": "Protokoll",
   "contextActions": "Aktionen",
+  "formulaShared": "Diese Formel teilen",
+  "formulaSharedHint": "Andere können diese Formel finden und hinzufügen. Sie können sie ausführen, aber nicht bearbeiten, und deine späteren Änderungen gelten auch für sie.",
   "jobTitle": "Berufsbezeichnung",
   "companyName": "Firmenname",
   "jobDescription": "Tätigkeitsbeschreibung",

@@ -42,6 +42,8 @@
   "contextSummary": "Resumen",
   "contextMinutes": "Acta",
   "contextActions": "Acciones",
+  "formulaShared": "Compartir esta fórmula",
+  "formulaSharedHint": "Otras personas pueden encontrar y añadir esta fórmula. Pueden ejecutarla pero no editarla, y tus cambios posteriores también se aplican a ellas.",
   "jobTitle": "Puesto de trabajo",
   "companyName": "Nombre de la empresa",
   "jobDescription": "Descripción del puesto",
