@@ -23,6 +23,13 @@ public interface IFormulaRunner
     /// loads the formula + the recording's context, enforces run-access, calls the resolved LLM synchronously,
     /// and persists (and returns) the resulting <see cref="FormulaResult"/>.</summary>
     Task<FormulaResult> RunAsync(Guid userId, Guid recordingId, Guid formulaId, CancellationToken ct = default);
+
+    /// <summary>Runs the shared pre-flight guards for a recording formula-run - load formula (404 if missing),
+    /// recording access (404), subscription/run-access (<see cref="EnsureCanRun"/> 404/403), and LLM config
+    /// (<see cref="FormulaNotConfiguredException"/> 400) - and returns the resolved <see cref="Formula"/> on
+    /// success. Shared by the synchronous tool path (<see cref="RunAsync"/>) and the async controller, which
+    /// enqueues a job instead of running inline.</summary>
+    Task<Formula> ValidateRecordingRunAsync(Guid userId, Guid recordingId, Guid formulaId, CancellationToken ct = default);
 }
 
 /// <summary>Synchronous run pipeline for a Formula: mirrors the one-off LLM calls in
@@ -42,7 +49,10 @@ public class FormulaRunner : IFormulaRunner
         _settings = settings;
     }
 
-    public async Task<FormulaResult> RunAsync(Guid userId, Guid recordingId, Guid formulaId, CancellationToken ct = default)
+    /// <summary>The shared pre-flight guards, in the order the controller and the tool path both rely on:
+    /// load formula (404) -> recording access (404) -> subscription/run-access (404/403) -> LLM config (400).
+    /// Returns the resolved <see cref="Formula"/> so the caller doesn't re-load it.</summary>
+    public async Task<Formula> ValidateRecordingRunAsync(Guid userId, Guid recordingId, Guid formulaId, CancellationToken ct = default)
     {
         var formula = await _db.Formulas.FirstOrDefaultAsync(f => f.Id == formulaId, ct);
         if (formula is null) throw new FormulaNotFoundException("Formula not found.");
@@ -59,6 +69,14 @@ public class FormulaRunner : IFormulaRunner
         var cfg = await _settings.ResolveAsync(userId, ct);
         if (!cfg.Enabled)
             throw new FormulaNotConfiguredException("No LLM endpoint is configured for this user or server.");
+
+        return formula;
+    }
+
+    public async Task<FormulaResult> RunAsync(Guid userId, Guid recordingId, Guid formulaId, CancellationToken ct = default)
+    {
+        var formula = await ValidateRecordingRunAsync(userId, recordingId, formulaId, ct);
+        var cfg = await _settings.ResolveAsync(userId, ct);
 
         // Reuse the shared context/LLM primitives (also driving the async FormulaRunProcessor). Ownership was
         // already enforced above by IsRecordingAccessibleAsync, so re-loading the context here (no ownership

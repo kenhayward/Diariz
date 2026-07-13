@@ -1,10 +1,12 @@
 using System.Security.Claims;
 using Diariz.Api.Contracts;
+using Diariz.Api.Hubs;
 using Diariz.Api.Services;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace Diariz.Api.Controllers;
@@ -21,12 +23,17 @@ public class FormulasController : ControllerBase
     private readonly DiarizDbContext _db;
     private readonly IUserPermissions _permissions;
     private readonly IFormulaRunner _runner;
+    private readonly IJobQueue _queue;
+    private readonly IHubContext<TranscriptionHub> _hub;
 
-    public FormulasController(DiarizDbContext db, IUserPermissions permissions, IFormulaRunner runner)
+    public FormulasController(DiarizDbContext db, IUserPermissions permissions, IFormulaRunner runner,
+        IJobQueue queue, IHubContext<TranscriptionHub> hub)
     {
         _db = db;
         _permissions = permissions;
         _runner = runner;
+        _queue = queue;
+        _hub = hub;
     }
 
     /// <summary>The union of every defined <see cref="FormulaContext"/> flag (None + Transcript..Actions = 63).
@@ -266,17 +273,20 @@ public class FormulasController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>Runs a formula over a recording and returns the persisted result. Lives on an absolute
-    /// route under <c>api/recordings</c> so the URL reads naturally while the rest of this controller's
-    /// CRUD stays under <c>api/formulas</c>.</summary>
+    /// <summary>Kicks off an async formula run over a recording: validates run-access (the same guards the
+    /// synchronous tool path uses, via <see cref="IFormulaRunner.ValidateRecordingRunAsync"/>), creates a
+    /// pending <c>Generating</c> result row, enqueues a background job (<see cref="FormulaRunJob"/>), and
+    /// returns <c>202 Accepted</c> with the pending result. The <c>FormulaRunWorker</c> flips the row to
+    /// Ready/Failed and notifies the browser over SignalR. Lives on an absolute route under
+    /// <c>api/recordings</c> so the URL reads naturally while the rest of this controller's CRUD stays under
+    /// <c>api/formulas</c>.</summary>
     [HttpPost("~/api/recordings/{recordingId:guid}/formulas/{formulaId:guid}/run")]
     public async Task<ActionResult<FormulaResultDto>> Run(Guid recordingId, Guid formulaId, CancellationToken ct)
     {
+        Formula formula;
         try
         {
-            var result = await _runner.RunAsync(UserId, recordingId, formulaId, ct);
-            var origins = await FormulaResultOrigins.ResolveAsync(_db, new[] { result }, ct);
-            return Ok(ToResultDto(result, origins[result.Id]));
+            formula = await _runner.ValidateRecordingRunAsync(UserId, recordingId, formulaId, ct);
         }
         catch (FormulaNotFoundException)
         {
@@ -290,19 +300,27 @@ public class FormulasController : ControllerBase
         {
             return BadRequest("Formulas need an AI endpoint. Set one in Settings.");
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+
+        var ordinal = (await _db.FormulaResults.Where(r => r.RecordingId == recordingId)
+            .Select(r => (int?)r.Ordinal).MaxAsync(ct) ?? -1) + 1;
+        var result = new FormulaResult
         {
-            throw; // genuine client abort - let the framework handle it
-        }
-        catch (OperationCanceledException)
-        {
-            // The runner's own LLM-call timeout expired (outer ct is NOT cancelled - see FormulaRunner.RunAsync).
-            return StatusCode(StatusCodes.Status504GatewayTimeout, "The formula timed out.");
-        }
-        catch (HttpRequestException)
-        {
-            return StatusCode(StatusCodes.Status502BadGateway, "The AI service could not be reached.");
-        }
+            Id = Guid.NewGuid(),
+            RecordingId = recordingId,
+            CreatedByUserId = UserId,
+            FormulaId = formula.Id,
+            Name = formula.Name,
+            Ordinal = ordinal,
+            Status = FormulaRunStatus.Generating,
+        };
+        _db.FormulaResults.Add(result);
+        await _db.SaveChangesAsync(ct);
+
+        await _queue.EnqueueFormulaRunAsync(new FormulaRunJob(recordingId, null, result.Id, formula.Id, UserId), ct);
+        await _hub.NotifyFormulaStatusAsync(UserId, recordingId, null, result.Id, FormulaRunStatus.Generating.ToString());
+
+        var origins = await FormulaResultOrigins.ResolveAsync(_db, new[] { result }, ct);
+        return Accepted(ToResultDto(result, origins[result.Id]));
     }
 
     private ObjectResult Forbidden(string message) => StatusCode(StatusCodes.Status403Forbidden, message);
@@ -312,5 +330,6 @@ public class FormulasController : ControllerBase
         (int)f.Context, f.Enabled, f.IsBuiltIn, f.Shared);
 
     private static FormulaResultDto ToResultDto(FormulaResult r, FormulaResultOriginDto origin) => new(
-        r.Id, r.RecordingId, r.Name, r.CreatedByUserId, r.CreatedAt, r.UpdatedAt, origin);
+        r.Id, r.RecordingId, r.Name, r.CreatedByUserId, r.CreatedAt, r.UpdatedAt, origin,
+        r.Status.ToString(), r.Error);
 }

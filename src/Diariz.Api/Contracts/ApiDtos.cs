@@ -523,10 +523,12 @@ public record SetFormulaEnabledRequest(bool Enabled);
 
 /// <summary>List/summary shape for a recording's formula results. The generated Markdown <c>Text</c> is
 /// deliberately NOT included here - it's fetched separately via a dedicated text endpoint so listing a
-/// recording's results stays cheap.</summary>
+/// recording's results stays cheap. <c>Status</c> is a <c>FormulaRunStatus</c> name (Generating/Ready/Failed)
+/// so the UI can show a pending/failed row from an async run; <c>Error</c> carries the failure reason.</summary>
 public record FormulaResultDto(
     Guid Id, Guid RecordingId, string Name, Guid? CreatedByUserId,
-    DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, FormulaResultOriginDto Origin);
+    DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, FormulaResultOriginDto Origin,
+    string Status, string? Error);
 
 /// <summary>Where a formula result came from, for the runs-list icon. Kind: "diariz" | "platform" |
 /// "personal". Diariz/Platform are "official" (no person - the UI shows the Diariz logo); "personal" carries

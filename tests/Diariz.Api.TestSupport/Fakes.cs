@@ -634,6 +634,9 @@ public sealed class FakeFormulaRunner : IFormulaRunner
     {
         Id = Guid.NewGuid(), RecordingId = Guid.NewGuid(), Name = "Result", Text = "Generated text.",
     };
+    /// <summary>The formula <see cref="ValidateRecordingRunAsync"/> returns on the success path (the async
+    /// controller reads its Id/Name to seed the pending result row).</summary>
+    public Formula ValidatedFormula { get; set; } = new() { Id = Guid.NewGuid(), Name = "Result" };
     public Exception? ThrowOnCall { get; set; }
     public int Calls { get; private set; }
     public (Guid UserId, Guid RecordingId, Guid FormulaId)? LastCall { get; private set; }
@@ -644,6 +647,14 @@ public sealed class FakeFormulaRunner : IFormulaRunner
         LastCall = (userId, recordingId, formulaId);
         if (ThrowOnCall is not null) throw ThrowOnCall;
         return Task.FromResult(Result);
+    }
+
+    public Task<Formula> ValidateRecordingRunAsync(Guid userId, Guid recordingId, Guid formulaId, CancellationToken ct = default)
+    {
+        Calls++;
+        LastCall = (userId, recordingId, formulaId);
+        if (ThrowOnCall is not null) throw ThrowOnCall;
+        return Task.FromResult(ValidatedFormula);
     }
 }
 
