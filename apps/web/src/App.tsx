@@ -15,6 +15,7 @@ import CalendarEventDetail from "./pages/CalendarEventDetail";
 // Lazy-loaded: the Scalar API reference is a large bundle, only needed on /developers/api.
 const ApiReference = lazy(() => import("./pages/ApiReference"));
 import WorkspaceLayout from "./components/WorkspaceLayout";
+import RouteErrorBoundary from "./components/RouteErrorBoundary";
 import EmptyDetail from "./components/EmptyDetail";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -64,7 +65,11 @@ export default function App() {
         path="/"
         element={
           <RequireAuth>
-            <WorkspaceLayout />
+            {/* A crash anywhere in the workspace (a panel, a provider, a routed page) shows a message
+                instead of unmounting the whole app to a blank screen. See issue #289. */}
+            <RouteErrorBoundary>
+              <WorkspaceLayout />
+            </RouteErrorBoundary>
           </RequireAuth>
         }
       >

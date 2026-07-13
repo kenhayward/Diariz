@@ -39,6 +39,9 @@ export default defineConfig({
     __BUILD_COMMIT__: JSON.stringify(buildCommit()),
   },
   build: {
+    // Ship source maps so a production stack trace maps back to real files/lines (minified names like `ao`
+    // are undebuggable otherwise). Fine for an AGPL/open-source app; the .map files are separate downloads.
+    sourcemap: true,
     // The whole SPA is one bundle loaded once (and cached by the desktop shell); ~1.7 MB is expected, so
     // don't warn on it. Revisit with code-splitting if it grows a lot.
     chunkSizeWarningLimit: 1800,

@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Outlet, useLocation } from "react-router-dom";
-import ErrorBoundary from "./ErrorBoundary";
+import { Outlet } from "react-router-dom";
+import RouteErrorBoundary from "./RouteErrorBoundary";
 import RecordingsPanel from "./RecordingsPanel";
 import ChatPanel from "./ChatPanel";
 import RoomSwitcher from "./RoomSwitcher";
@@ -31,7 +31,6 @@ const RIGHT_MAX = 640;
 /// Left and right panels collapse to a thin rail; the right panel is also drag-resizable.
 export default function Workspace() {
   const { t } = useTranslation("workspace");
-  const { pathname } = useLocation();
   const { currentRoom } = useRoom();
   const [leftOpen, setLeftOpen] = usePersistedBool("diariz.panels.left", true);
   const [rightOpen, setRightOpen] = usePersistedBool("diariz.panels.right", false);
@@ -73,10 +72,14 @@ export default function Workspace() {
             style={{ width: leftWidth }}
             className="flex shrink-0 flex-col border-r bg-white dark:border-gray-700 dark:bg-gray-900"
           >
-            <RoomSwitcher onCollapse={() => setLeftOpen(false)} chevron="◀" />
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <RecordingsPanel />
-            </div>
+            {/* A crash in the sidebar is contained here, so the detail panel (e.g. an opened folder) still
+                renders instead of the whole app going blank (#289). */}
+            <RouteErrorBoundary>
+              <RoomSwitcher onCollapse={() => setLeftOpen(false)} chevron="◀" />
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <RecordingsPanel />
+              </div>
+            </RouteErrorBoundary>
           </aside>
           <div
             role="separator"
@@ -92,11 +95,10 @@ export default function Workspace() {
 
       <main data-tour="detail" className="min-w-0 flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950">
         <div className="p-6">
-          {/* Contain a routed-page render crash so it shows a message instead of blanking the whole app
-              (issue #289); keyed by path so navigating away recovers. */}
-          <ErrorBoundary resetKey={pathname} message={t("detailErrorTitle")} hint={t("detailErrorHint")}>
+          {/* Contain a routed-page crash so it shows a message instead of blanking the whole app (#289). */}
+          <RouteErrorBoundary>
             <Outlet />
-          </ErrorBoundary>
+          </RouteErrorBoundary>
         </div>
       </main>
 
@@ -116,7 +118,10 @@ export default function Workspace() {
         >
           <PanelHeader title={t("panelChat")} onCollapse={() => setRightOpen(false)} chevron="▶" />
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <ChatPanel />
+            {/* Contain a chat-panel crash so it doesn't blank the detail panel or the whole app (#289). */}
+            <RouteErrorBoundary>
+              <ChatPanel />
+            </RouteErrorBoundary>
           </div>
         </aside>
       </div>

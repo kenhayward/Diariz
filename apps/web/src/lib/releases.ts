@@ -54,6 +54,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.132.2",
+    date: "2026-07-13",
+    pr: 292,
+    headline: "A page error no longer blanks the whole app",
+    summary:
+      "Follow-up to the folder fix: some pages could still crash to a completely blank screen (opening a folder in your personal room was one case). The workspace now contains such a crash to the affected panel - the detail page, the sidebar, or the chat - and shows a short error message there instead of unmounting the entire app, so the rest stays usable and an opened folder still shows. Production builds now ship source maps so any remaining error reports its exact location.",
+    fixed: [
+      "A render or effect error in a workspace panel is contained and shown as a message there, instead of blanking the entire app; it clears when you navigate away.",
+    ],
+    changed: [
+      "Production builds now include source maps so error reports point to real code locations.",
+    ],
+  },
+  {
     version: "0.132.1",
     date: "2026-07-13",
     pr: 291,
