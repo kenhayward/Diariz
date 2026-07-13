@@ -14,9 +14,9 @@ const CONTEXT_OPTIONS: { bit: number; key: string }[] = [
   { bit: FormulaContextBits.Actions, key: "contextActions" },
 ];
 
-/// Create/edit a formula. Mirrors EditActionModal's form-as-dialog convention: backdrop click + Escape
-/// both close, Save is disabled until the required fields (name, prompt) are filled. Context is a
-/// [Flags] bitmask - each checkbox XORs its bit (see FormulaContextBits).
+/// Create/edit a formula (form-as-dialog). Escape or Cancel close it - deliberately NOT a backdrop click,
+/// so an in-progress prompt isn't lost to a stray click. Save is disabled until the required fields (name,
+/// prompt) are filled. Context is a [Flags] bitmask - each checkbox XORs its bit (see FormulaContextBits).
 /// When `formula` is omitted a new formula is created in `scope` (default "Personal" - Preferences ->
 /// Formulas creates only Personal formulas; the admin Manage Formulas popup passes "Platform"). When
 /// `formula` is given, its own (immutable) scope is edited - `scope` is ignored.
