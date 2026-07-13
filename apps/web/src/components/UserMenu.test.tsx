@@ -11,9 +11,16 @@ const authState: {
   fullName: string | null;
   isAdmin: boolean;
   isPlatformAdmin: boolean;
+  canManageFormulas: boolean;
   logout: () => void;
 } = {
-  initials: "JD", email: "jane.doe@x.com", fullName: "Jane Doe", isAdmin: false, isPlatformAdmin: false, logout,
+  initials: "JD",
+  email: "jane.doe@x.com",
+  fullName: "Jane Doe",
+  isAdmin: false,
+  isPlatformAdmin: false,
+  canManageFormulas: false,
+  logout,
 };
 
 vi.mock("../auth", () => ({ useAuth: () => authState }));
@@ -26,6 +33,7 @@ vi.mock("../lib/api", () => ({
     }),
     updatePlatformSettings: vi.fn(),
     listUsers: vi.fn().mockResolvedValue([]),
+    listManagedFormulas: vi.fn().mockResolvedValue([]),
     getUserStorage: vi.fn().mockResolvedValue({ usedBytes: 1024 ** 3, quotaBytes: 5 * 1024 ** 3, totalTranscriptionMs: 3_661_000 }),
   },
   apiErrorMessage: (e: unknown) => String(e),
@@ -47,6 +55,7 @@ describe("UserMenu", () => {
     vi.clearAllMocks();
     authState.isAdmin = false;
     authState.isPlatformAdmin = false;
+    authState.canManageFormulas = false;
   });
 
   it("hides Manage Users for non-admins and shows it for admins", () => {
@@ -58,6 +67,25 @@ describe("UserMenu", () => {
     renderMenu();
     fireEvent.click(screen.getAllByRole("button", { name: /account/i })[1]);
     expect(screen.getByRole("menuitem", { name: /manage users/i })).toBeTruthy();
+  });
+
+  it("hides Manage Formulas for non-privileged users and shows it when canManageFormulas", () => {
+    renderMenu();
+    fireEvent.click(screen.getByRole("button", { name: /account/i }));
+    expect(screen.queryByRole("menuitem", { name: /manage formulas/i })).toBeNull();
+
+    authState.canManageFormulas = true;
+    renderMenu();
+    fireEvent.click(screen.getAllByRole("button", { name: /account/i })[1]);
+    expect(screen.getByRole("menuitem", { name: /manage formulas/i })).toBeTruthy();
+  });
+
+  it("Manage Formulas opens the modal", async () => {
+    authState.canManageFormulas = true;
+    renderMenu();
+    fireEvent.click(screen.getByRole("button", { name: /account/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /manage formulas/i }));
+    expect(await screen.findByRole("dialog", { name: /manage formulas/i })).toBeTruthy();
   });
 
   it("shows the initials and opens a menu with the user's name, Preferences and Sign Out", () => {

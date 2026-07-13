@@ -491,6 +491,7 @@ export interface Permissions {
   manageRooms: boolean;
   manageUsers: boolean;
   managePlatform: boolean;
+  manageFormulas: boolean;
 }
 
 /// A room the signed-in user belongs to. `permissions` is the caller's effective RoomPermission grid as a

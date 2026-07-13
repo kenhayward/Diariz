@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
-import { FormulaContextBits, type Formula } from "../lib/types";
+import { FormulaContextBits, type Formula, type FormulaScope } from "../lib/types";
 
 // Attachments (FormulaContextBits.Attachments) is intentionally omitted until attachment extraction
 // ships in a later phase - FormulaContextBuilder ignores the flag today, so surfacing it would be a no-op.
@@ -13,16 +13,20 @@ const CONTEXT_OPTIONS: { bit: number; key: string }[] = [
   { bit: FormulaContextBits.Actions, key: "contextActions" },
 ];
 
-/// Create/edit a Personal formula (Preferences -> Formulas). Mirrors EditActionModal's form-as-dialog
-/// convention: backdrop click + Escape both close, Save is disabled until the required fields (name,
-/// prompt) are filled. Context is a [Flags] bitmask - each checkbox XORs its bit (see FormulaContextBits).
-/// When `formula` is omitted a new Personal formula is created; otherwise the given formula is updated.
+/// Create/edit a formula. Mirrors EditActionModal's form-as-dialog convention: backdrop click + Escape
+/// both close, Save is disabled until the required fields (name, prompt) are filled. Context is a
+/// [Flags] bitmask - each checkbox XORs its bit (see FormulaContextBits).
+/// When `formula` is omitted a new formula is created in `scope` (default "Personal" - Preferences ->
+/// Formulas creates only Personal formulas; the admin Manage Formulas popup passes "Platform"). When
+/// `formula` is given, its own (immutable) scope is edited - `scope` is ignored.
 export default function FormulaEditModal({
   formula,
+  scope = "Personal",
   onClose,
   onSaved,
 }: {
   formula?: Formula | null;
+  scope?: FormulaScope;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -61,7 +65,7 @@ export default function FormulaEditModal({
         });
       } else {
         await api.createFormula({
-          scope: "Personal",
+          scope,
           name: name.trim(),
           description: description.trim() || null,
           prompt: prompt.trim(),
@@ -78,7 +82,7 @@ export default function FormulaEditModal({
 
   const field = "w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100";
   const labelSpan = "mb-1 block text-gray-600 dark:text-gray-300";
-  const title = formula ? t("editFormulaTitle") : t("newFormulaTitle");
+  const title = formula ? t("editFormulaTitle") : scope !== "Personal" ? t("newPlatformFormulaTitle") : t("newFormulaTitle");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>

@@ -77,6 +77,29 @@ describe("FormulaEditModal", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("creating with scope=\"Platform\" calls createFormula with scope Platform and titles the modal accordingly", async () => {
+    (api.createFormula as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    const { onSaved, onClose } = renderModal({ scope: "Platform" });
+
+    expect(screen.getByRole("heading", { name: /new platform formula/i })).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "Org Wide" } });
+    fireEvent.change(screen.getByLabelText(/^prompt$/i), { target: { value: "Do the thing" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(api.createFormula).toHaveBeenCalledWith({
+        scope: "Platform",
+        name: "Org Wide",
+        description: null,
+        prompt: "Do the thing",
+        context: 0,
+      }),
+    );
+    expect(onSaved).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
+  });
+
   it("prefills fields (including context) from an existing formula and updates it", async () => {
     (api.updateFormula as ReturnType<typeof vi.fn>).mockResolvedValue({});
     const { onSaved, onClose } = renderModal({ formula: existingFormula });
