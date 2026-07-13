@@ -801,7 +801,7 @@ export interface SharedFormula {
 
 /// Where a formula result came from, for the runs-list icon. Mirrors FormulaResultOriginDto.
 export interface FormulaResultOrigin {
-  kind: "diariz" | "platform" | "personal"; // Phase D adds "shared"
+  kind: "diariz" | "platform" | "personal"; // a subscribed shared formula resolves to "personal" (the sharer)
   personName: string | null;
   personPictureUrl: string | null;
 }

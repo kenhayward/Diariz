@@ -529,8 +529,10 @@ public record FormulaResultDto(
     DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, FormulaResultOriginDto Origin);
 
 /// <summary>Where a formula result came from, for the runs-list icon. Kind: "diariz" | "platform" |
-/// "personal" (Phase D adds "shared"). Diariz/Platform are "official" (no person - the UI shows the Diariz
-/// logo); personal/shared carry the person's display + picture for an avatar.</summary>
+/// "personal". Diariz/Platform are "official" (no person - the UI shows the Diariz logo); "personal" carries
+/// the person's display + picture for an avatar. A result from a subscribed shared formula is "personal"
+/// attributed to the formula's owner (the sharer), so its row already shows the sharer's avatar - no separate
+/// "shared" kind is needed.</summary>
 public record FormulaResultOriginDto(string Kind, string? PersonName, string? PersonPictureUrl);
 
 /// <summary>A formula result's generated Markdown body, fetched separately from the list/summary DTO.</summary>

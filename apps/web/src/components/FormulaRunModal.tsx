@@ -62,8 +62,10 @@ export default function FormulaRunModal({
     return [
       g("Diariz", filtered.filter((f) => f.scope === "Diariz")),
       g("Platform", filtered.filter((f) => f.scope === "Platform")),
-      g("Personal", filtered.filter((f) => f.scope === "Personal" && f.ownerUserId === myId)),
-      g("Shared", filtered.filter((f) => f.scope === "Personal" && f.ownerUserId !== myId)),
+      // With no decodable caller id, keep all Personal formulas under "Personal" rather than mislabelling
+      // them "Shared" - the server already scoped the list, so this is only about which heading they sit under.
+      g("Personal", filtered.filter((f) => f.scope === "Personal" && (myId == null || f.ownerUserId === myId))),
+      g("Shared", filtered.filter((f) => f.scope === "Personal" && myId != null && f.ownerUserId !== myId)),
     ].filter((x) => x.items.length > 0);
   }, [filtered, myId]);
 

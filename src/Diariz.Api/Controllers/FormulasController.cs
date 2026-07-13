@@ -239,7 +239,15 @@ public class FormulasController : ControllerBase
             {
                 Id = Guid.NewGuid(), FormulaId = id, UserId = userId, CreatedAt = DateTimeOffset.UtcNow,
             });
-            await _db.SaveChangesAsync();
+            try
+            {
+                await _db.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                // A concurrent first-subscribe won the race and the unique (FormulaId, UserId) index rejected
+                // this one - the caller is already subscribed, so treat it as success (idempotent).
+            }
         }
         return NoContent();
     }
