@@ -654,6 +654,9 @@ public sealed class FakeFormulaRunner : IFormulaRunner
     public Exception? ThrowOnCall { get; set; }
     public int Calls { get; private set; }
     public (Guid UserId, Guid RecordingId, Guid FormulaId)? LastCall { get; private set; }
+    /// <summary>The (userId, formulaId) of the most recent <see cref="ValidateFormulaRunAccessAsync"/> call
+    /// (the section run controller has no recording to record in <see cref="LastCall"/>).</summary>
+    public (Guid UserId, Guid FormulaId)? LastFormulaAccessCall { get; private set; }
 
     public Task<FormulaResult> RunAsync(Guid userId, Guid recordingId, Guid formulaId, CancellationToken ct = default)
     {
@@ -667,6 +670,14 @@ public sealed class FakeFormulaRunner : IFormulaRunner
     {
         Calls++;
         LastCall = (userId, recordingId, formulaId);
+        if (ThrowOnCall is not null) throw ThrowOnCall;
+        return Task.FromResult(ValidatedFormula);
+    }
+
+    public Task<Formula> ValidateFormulaRunAccessAsync(Guid userId, Guid formulaId, CancellationToken ct = default)
+    {
+        Calls++;
+        LastFormulaAccessCall = (userId, formulaId);
         if (ThrowOnCall is not null) throw ThrowOnCall;
         return Task.FromResult(ValidatedFormula);
     }

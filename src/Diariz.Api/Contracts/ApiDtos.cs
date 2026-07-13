@@ -537,6 +537,15 @@ public record FormulaResultDto(
 /// "shared" kind is needed.</summary>
 public record FormulaResultOriginDto(string Kind, string? PersonName, string? PersonPictureUrl);
 
+/// <summary>List/summary shape for a folder's (section's) formula results - the section-scoped twin of
+/// <see cref="FormulaResultDto"/>. The generated Markdown <c>Text</c> is fetched separately (a dedicated text
+/// endpoint) so listing stays cheap. <c>Status</c> is a <c>FormulaRunStatus</c> name (Generating/Ready/Failed);
+/// <c>Error</c> carries the failure reason.</summary>
+public record SectionFormulaResultDto(
+    Guid Id, Guid SectionId, string Name, Guid? CreatedByUserId,
+    DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, string Status, string? Error,
+    FormulaResultOriginDto Origin);
+
 /// <summary>A formula result's generated Markdown body, fetched separately from the list/summary DTO.</summary>
 public record FormulaResultTextDto(string Text);
 

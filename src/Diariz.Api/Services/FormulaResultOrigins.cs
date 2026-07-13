@@ -11,16 +11,26 @@ namespace Diariz.Api.Services;
 /// endpoints so the icon is consistent everywhere.</summary>
 public static class FormulaResultOrigins
 {
+    public static Task<IReadOnlyDictionary<Guid, FormulaResultOriginDto>> ResolveAsync(
+        DiarizDbContext db, IReadOnlyList<FormulaResult> results, CancellationToken ct = default) =>
+        ResolveAsync(db, results.Select(r => (r.Id, r.FormulaId, r.CreatedByUserId)), ct);
+
+    /// <summary>The core resolver over a lightweight projection - each result's id, its (nullable) formula id, and
+    /// its (nullable) creator - so both recording (<see cref="FormulaResult"/>) and folder
+    /// (<c>SectionFormulaResult</c>) results share one batched lookup. Callers pass the entity-specific overload
+    /// (above) or this tuple form directly.</summary>
     public static async Task<IReadOnlyDictionary<Guid, FormulaResultOriginDto>> ResolveAsync(
-        DiarizDbContext db, IReadOnlyList<FormulaResult> results, CancellationToken ct = default)
+        DiarizDbContext db, IEnumerable<(Guid ResultId, Guid? FormulaId, Guid? CreatedByUserId)> results,
+        CancellationToken ct = default)
     {
-        var formulaIds = results.Where(r => r.FormulaId != null).Select(r => r.FormulaId!.Value).Distinct().ToList();
+        var list = results.ToList();
+        var formulaIds = list.Where(r => r.FormulaId != null).Select(r => r.FormulaId!.Value).Distinct().ToList();
         var formulas = (await db.Formulas.Where(f => formulaIds.Contains(f.Id))
                 .Select(f => new { f.Id, f.Scope, f.OwnerUserId }).ToListAsync(ct))
             .ToDictionary(f => f.Id, f => (f.Scope, f.OwnerUserId));
 
         var personIds = new HashSet<Guid>();
-        foreach (var r in results)
+        foreach (var r in list)
         {
             if (r.FormulaId is Guid fid && formulas.TryGetValue(fid, out var f))
             {
@@ -33,8 +43,8 @@ public static class FormulaResultOrigins
                 .Select(u => new { u.Id, u.FullName, u.Email, u.PictureUrl }).ToListAsync(ct))
             .ToDictionary(u => u.Id, u => (u.FullName, u.Email, u.PictureUrl));
 
-        var origins = new Dictionary<Guid, FormulaResultOriginDto>(results.Count);
-        foreach (var r in results)
+        var origins = new Dictionary<Guid, FormulaResultOriginDto>(list.Count);
+        foreach (var r in list)
         {
             FormulaScope? scope = null;
             Guid? personId = null;
@@ -47,7 +57,7 @@ public static class FormulaResultOrigins
             {
                 personId = r.CreatedByUserId; // formula deleted/missing -> attribute to the creator
             }
-            origins[r.Id] = Build(scope, personId, people);
+            origins[r.ResultId] = Build(scope, personId, people);
         }
         return origins;
     }

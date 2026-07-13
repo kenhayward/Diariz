@@ -30,6 +30,13 @@ public interface IFormulaRunner
     /// success. Shared by the synchronous tool path (<see cref="RunAsync"/>) and the async controller, which
     /// enqueues a job instead of running inline.</summary>
     Task<Formula> ValidateRecordingRunAsync(Guid userId, Guid recordingId, Guid formulaId, CancellationToken ct = default);
+
+    /// <summary>The recording-agnostic half of the run guards: load formula (404 if missing), subscription/
+    /// run-access (<see cref="EnsureCanRun"/> 404/403), and LLM config (<see cref="FormulaNotConfiguredException"/>
+    /// 400), returning the resolved <see cref="Formula"/>. It checks NO recording/section access - the caller
+    /// gates that itself (recording ownership in <see cref="ValidateRecordingRunAsync"/>, folder membership in the
+    /// section run controller) before or after calling this.</summary>
+    Task<Formula> ValidateFormulaRunAccessAsync(Guid userId, Guid formulaId, CancellationToken ct = default);
 }
 
 /// <summary>Synchronous run pipeline for a Formula: mirrors the one-off LLM calls in
@@ -54,11 +61,19 @@ public class FormulaRunner : IFormulaRunner
     /// Returns the resolved <see cref="Formula"/> so the caller doesn't re-load it.</summary>
     public async Task<Formula> ValidateRecordingRunAsync(Guid userId, Guid recordingId, Guid formulaId, CancellationToken ct = default)
     {
-        var formula = await _db.Formulas.FirstOrDefaultAsync(f => f.Id == formulaId, ct);
-        if (formula is null) throw new FormulaNotFoundException("Formula not found.");
-
         if (!await IsRecordingAccessibleAsync(userId, recordingId, ct))
             throw new FormulaNotFoundException("Recording not found.");
+
+        return await ValidateFormulaRunAccessAsync(userId, formulaId, ct);
+    }
+
+    /// <summary>The recording-agnostic run guards (no recording/section access - the caller owns that): load
+    /// formula (404) -> subscription/run-access (404/403) -> LLM config (400). Returns the resolved
+    /// <see cref="Formula"/>.</summary>
+    public async Task<Formula> ValidateFormulaRunAccessAsync(Guid userId, Guid formulaId, CancellationToken ct = default)
+    {
+        var formula = await _db.Formulas.FirstOrDefaultAsync(f => f.Id == formulaId, ct);
+        if (formula is null) throw new FormulaNotFoundException("Formula not found.");
 
         var subscribed = formula.Scope == FormulaScope.Personal
             && formula.OwnerUserId != userId
