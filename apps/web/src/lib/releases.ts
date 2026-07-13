@@ -56,7 +56,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.130.1",
     date: "2026-07-13",
-    pr: 0, // set to the real PR number after opening the PR
+    pr: 286,
     headline: "Formulas polish: gradient flask, tidier modals",
     summary:
       "Refines the Formulas modals and branding. The flask icon now has a bright-blue liquid, and it appears beside the New Formula, Edit Formula, and Run a formula titles. The create/edit modal no longer closes if you click outside it (so you can't lose an in-progress prompt), and it is wider with a single-row context picker and a taller prompt box. The admin popup is renamed Manage Platform Formulas, with New moved to the bottom-left and a tidier Close at the bottom-right. The About box now describes Formulas' scopes, the /formula chat command, and the run_formula MCP tool.",
