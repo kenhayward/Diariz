@@ -56,7 +56,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.132.1",
     date: "2026-07-13",
-    pr: 0, // set to the real PR number after opening the PR
+    pr: 291,
     headline: "Fix: folders in shared rooms wouldn't open",
     summary:
       "Opening a folder in a shared room left the page stuck on \"Loading ...\", and a folder-page error could blank the screen entirely. Folder pages are now scoped to the folder's own room and authorised by your membership in it, so a folder in any room you belong to opens correctly. A detail-page error now shows a message (and clears when you navigate away) instead of blanking the app, and a folder that can't be loaded shows an error rather than hanging.",
