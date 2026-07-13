@@ -30,11 +30,8 @@ public static class FormulaResultOrigins
         }
 
         var people = (await db.Users.Where(u => personIds.Contains(u.Id))
-                .Select(u => new { u.Id, u.FullName, u.Email }).ToListAsync(ct))
-            .ToDictionary(u => u.Id, u => (u.FullName, u.Email));
-        var pictures = (await db.Users.Where(u => personIds.Contains(u.Id))
-                .Select(u => new { u.Id, u.PictureUrl }).ToListAsync(ct))
-            .ToDictionary(u => u.Id, u => u.PictureUrl);
+                .Select(u => new { u.Id, u.FullName, u.Email, u.PictureUrl }).ToListAsync(ct))
+            .ToDictionary(u => u.Id, u => (u.FullName, u.Email, u.PictureUrl));
 
         var origins = new Dictionary<Guid, FormulaResultOriginDto>(results.Count);
         foreach (var r in results)
@@ -50,15 +47,14 @@ public static class FormulaResultOrigins
             {
                 personId = r.CreatedByUserId; // formula deleted/missing -> attribute to the creator
             }
-            origins[r.Id] = Build(scope, personId, people, pictures);
+            origins[r.Id] = Build(scope, personId, people);
         }
         return origins;
     }
 
     private static FormulaResultOriginDto Build(
         FormulaScope? scope, Guid? personId,
-        IReadOnlyDictionary<Guid, (string? FullName, string? Email)> people,
-        IReadOnlyDictionary<Guid, string?> pictures)
+        IReadOnlyDictionary<Guid, (string? FullName, string? Email, string? PictureUrl)> people)
     {
         var kind = scope switch
         {
@@ -69,8 +65,7 @@ public static class FormulaResultOrigins
         if (scope is FormulaScope.Diariz or FormulaScope.Platform)
             return new(kind, null, null);
         if (personId is Guid id && people.TryGetValue(id, out var p))
-            return new(kind, string.IsNullOrWhiteSpace(p.FullName) ? p.Email : p.FullName,
-                pictures.TryGetValue(id, out var pic) ? pic : null);
+            return new(kind, string.IsNullOrWhiteSpace(p.FullName) ? p.Email : p.FullName, p.PictureUrl);
         return new(kind, null, null);
     }
 }
