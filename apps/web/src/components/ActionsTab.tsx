@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useSelection } from "../lib/selection";
+import { useRoomBasePath } from "../lib/rooms";
 import type { ActionListItem } from "../lib/types";
 
 /// The cross-transcript Actions list (left panel, "Actions" tab). Rows are compact (the panel is narrow):
@@ -20,6 +21,9 @@ export default function ActionsTab({
 }) {
   const { t, i18n } = useTranslation("workspace");
   const { selectMode, selectedIds, toggle, set } = useSelection();
+  // Keep links inside the room being viewed - a shared room's detail routes carry the /rooms/:id prefix, so
+  // without it a click falls back to the personal-room URL and switches the user out of the room.
+  const basePath = useRoomBasePath();
 
   return (
     <div>
@@ -70,7 +74,7 @@ export default function ActionsTab({
                   <div className="min-w-0 flex-1">
                     {/* Title links to the source transcript; stop propagation so it navigates, not selects. */}
                     <Link
-                      to={`/recordings/${a.recordingId}`}
+                      to={`${basePath}/recordings/${a.recordingId}`}
                       onClick={(e) => e.stopPropagation()}
                       className={`block truncate text-sm font-medium hover:underline ${
                         a.completed

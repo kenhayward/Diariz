@@ -57,11 +57,12 @@ export const RELEASES: Release[] = [
     version: "0.133.2",
     date: "2026-07-13",
     pr: 298,
-    headline: "Fix: opening a transcript from a shared-room folder stays in the room",
+    headline: "Fix: opening a transcript in a shared room stays in the room",
     summary:
-      "On a folder page in a shared room, clicking a transcript in the list jumped you back to the same transcript in your Personal Room instead of staying in the shared room. The list's links now keep the room's URL prefix, so you stay where you were.",
+      "In a shared room, clicking a transcript from a folder page's list or from the Actions panel jumped you back to the same transcript in your Personal Room instead of staying in the shared room. Those links now keep the room's URL prefix, so you stay where you were. (The List, Calendar, and Tags panels already stayed in the room.)",
     fixed: [
       "Clicking a transcript in a shared-room folder's list now opens it within that room (it was linking to the personal-room URL and switching you out of the room).",
+      "Clicking an action's transcript link in the Actions panel now stays in the shared room too (same personal-room URL bug).",
     ],
   },
   {
