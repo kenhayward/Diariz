@@ -81,6 +81,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddRoomRecordingPosition` | `RoomRecordings.Position` (int, not-null, **default 0**). Per-room sort order of a recording within its room, so a recording can be ordered differently in two rooms; supersedes the now-dead global `Recording.Position`. **Backfills** once, copying `Recording.Position` onto each **main** placement (`RoomRecordingPositionBackfill`); shared placements keep 0 |
 | `AddFormulas` | `Formulas` (a saved prompt + chosen context; `Scope` int 0=Personal/1=Platform/2=Diariz; `OwnerUserId` FK `ON DELETE CASCADE`, set only for Personal - a user's personal formulas die with the account; `Context` int **[Flags]**; `Enabled` bool default true; `IsBuiltIn` blocks delete) + `FormulaResults` (the generated Markdown per recording; cascade on `Recording`, `ON DELETE SET NULL` on `Formula`, nullable `CreatedByUserId` `ON DELETE SET NULL` - the document survives its author's account deletion with attribution dropped, index `(RecordingId, Ordinal)`) — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddFormulaSharing` | `Formulas.Shared` (bool, not-null, **default false** - only meaningful for Personal scope: when true the formula is discoverable platform-wide) + `FormulaSubscriptions` (a subscriber's live link to a shared Personal formula; `FormulaId` FK `ON DELETE CASCADE`, `UserId` FK `ON DELETE CASCADE`, unique index `(FormulaId, UserId)`) — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddFormulaResultStatus` | `FormulaResults.Status` (int enum `Generating/Ready/Failed`, not-null, default 0) + `FormulaResults.Error` (text, null), for the async run lifecycle; existing rows backfilled to `Ready` — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
 
@@ -323,11 +324,18 @@ The Markdown document produced by running a `Formula` over a recording. Many per
 | `CreatedByUserId` | uuid FK → AspNetUsers, null | **`ON DELETE SET NULL`** — a result can live on another user's shared recording, so the document survives its author's account deletion with attribution dropped |
 | `FormulaId` | uuid FK → Formulas, null | **`ON DELETE SET NULL`** — the result survives its source formula being deleted |
 | `Name` | varchar(256) | formula name snapshot, so a later formula rename/delete doesn't relabel past results |
-| `Text` | text | generated Markdown body |
+| `Text` | text | generated Markdown body (empty until the run completes) |
 | `Ordinal` | int | 0-based order within the recording |
+| `Status` | int enum | run lifecycle: `Generating = 0`, `Ready = 1`, `Failed = 2`. The row is created `Generating` when the run is enqueued and flipped by the `FormulaRunWorker`; existing rows were backfilled to `Ready` |
+| `Error` | text, null | failure message when `Status = Failed` |
 | `CreatedAt` / `UpdatedAt` | timestamptz | |
 
 Indexes: `(RecordingId, Ordinal)`, `FormulaId`, `CreatedByUserId`.
+
+Formula runs are **asynchronous**: `POST .../formulas/{id}/run` creates a `Generating` row, enqueues a
+`FormulaRunJob` on the `formula-run-jobs` Redis stream (consumer group `formula-runners`), and returns 202;
+the in-process `FormulaRunWorker` runs the LLM and flips the row to `Ready`/`Failed` (SignalR
+`FormulaResultStatusChanged`, plus the client polls). The MCP/chat `run_formula` tool stays synchronous.
 
 #### `FormulaSubscriptions`
 A subscriber's live link to another user's shared Personal formula (a pointer, not a copy): it lets the
