@@ -57,4 +57,9 @@
     <Content Include="prompts\**\*.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- Editable Diariz-provided formulas, read at boot (edit/mount/extend without a rebuild). -->
+  <ItemGroup>
+    <Content Include="formulas\**\*.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
