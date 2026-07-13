@@ -82,6 +82,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddFormulas` | `Formulas` (a saved prompt + chosen context; `Scope` int 0=Personal/1=Platform/2=Diariz; `OwnerUserId` FK `ON DELETE CASCADE`, set only for Personal - a user's personal formulas die with the account; `Context` int **[Flags]**; `Enabled` bool default true; `IsBuiltIn` blocks delete) + `FormulaResults` (the generated Markdown per recording; cascade on `Recording`, `ON DELETE SET NULL` on `Formula`, nullable `CreatedByUserId` `ON DELETE SET NULL` - the document survives its author's account deletion with attribution dropped, index `(RecordingId, Ordinal)`) — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddFormulaSharing` | `Formulas.Shared` (bool, not-null, **default false** - only meaningful for Personal scope: when true the formula is discoverable platform-wide) + `FormulaSubscriptions` (a subscriber's live link to a shared Personal formula; `FormulaId` FK `ON DELETE CASCADE`, `UserId` FK `ON DELETE CASCADE`, unique index `(FormulaId, UserId)`) — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddFormulaResultStatus` | `FormulaResults.Status` (int enum `Generating/Ready/Failed`, not-null, default 0) + `FormulaResults.Error` (text, null), for the async run lifecycle; existing rows backfilled to `Ready` — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddSectionFormulaResults` | `SectionFormulaResults` table (a formula run over a folder + its sub-sections; `SectionId` FK `ON DELETE CASCADE`, `FormulaId`/`CreatedByUserId` FK `ON DELETE SET NULL`, `Status`/`Error` like `FormulaResults`, index `(SectionId, Ordinal)`) — additive new table, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
 
@@ -115,11 +116,15 @@ ApplicationUser
  └─1:n─ Formula (cascade)                          OwnerUserId (Personal scope only; null for Platform/Diariz)
 Formula
  └─1:n─ FormulaResult (via FormulaId, SetNull)     survives its Formula being deleted
+ └─1:n─ SectionFormulaResult (via FormulaId, SetNull)  folder run; survives its Formula being deleted
  └─1:n─ FormulaSubscription (cascade)              a shared Personal formula's subscriber links
 Recording
  └─1:n─ FormulaResult (cascade)                    RecordingId
+Section
+ └─1:n─ SectionFormulaResult (cascade)             SectionId (a folder's formula run results)
 ApplicationUser
  └─1:n─ FormulaResult (SetNull)                    CreatedByUserId (nullable; doc survives author deletion)
+ └─1:n─ SectionFormulaResult (SetNull)             CreatedByUserId (nullable)
  └─1:n─ FormulaSubscription (cascade)              UserId (a subscriber's links die with the account)
 ```
 
@@ -333,9 +338,33 @@ The Markdown document produced by running a `Formula` over a recording. Many per
 Indexes: `(RecordingId, Ordinal)`, `FormulaId`, `CreatedByUserId`.
 
 Formula runs are **asynchronous**: `POST .../formulas/{id}/run` creates a `Generating` row, enqueues a
-`FormulaRunJob` on the `formula-run-jobs` Redis stream (consumer group `formula-runners`), and returns 202;
-the in-process `FormulaRunWorker` runs the LLM and flips the row to `Ready`/`Failed` (SignalR
-`FormulaResultStatusChanged`, plus the client polls). The MCP/chat `run_formula` tool stays synchronous.
+`FormulaRunJob(RecordingId?, SectionId?, ResultId, FormulaId, UserId)` on the `formula-run-jobs` Redis stream
+(consumer group `formula-runners`), and returns 202; the in-process `FormulaRunWorker` runs the LLM and flips
+the row to `Ready`/`Failed` (SignalR `FormulaResultStatusChanged`, plus the client polls). The MCP/chat
+`run_formula` tool stays synchronous.
+
+#### `SectionFormulaResults`
+The Markdown document produced by running a `Formula` over a **folder (section) and its sub-sections**. Many
+per section (one per run). Mirrors `FormulaResults` but section-scoped; the run is a **map-reduce** (the
+formula runs on each included recording, then over the combined per-meeting outputs). The same async job
+pipeline is used - the `FormulaRunJob` carries `SectionId` (with `RecordingId` null) and the worker flips this
+row.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `SectionId` | uuid FK → Sections | **cascade** — deleting a folder removes its formula results |
+| `CreatedByUserId` | uuid FK → AspNetUsers, null | **`ON DELETE SET NULL`** |
+| `FormulaId` | uuid FK → Formulas, null | **`ON DELETE SET NULL`** |
+| `Name` | varchar(256) | formula name snapshot |
+| `Text` | text | generated Markdown body (empty until the run completes) |
+| `Ordinal` | int | 0-based order within the folder |
+| `Status` | int enum | `Generating = 0`, `Ready = 1`, `Failed = 2` |
+| `Error` | text, null | failure message when `Status = Failed` |
+| `CreatedAt` / `UpdatedAt` | timestamptz | |
+
+Indexes: `(SectionId, Ordinal)`, `FormulaId`, `CreatedByUserId`. Run access = room membership; edit/delete a
+result = its creator or a member with `ManageContents`.
 
 #### `FormulaSubscriptions`
 A subscriber's live link to another user's shared Personal formula (a pointer, not a copy): it lets the

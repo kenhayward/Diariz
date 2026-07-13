@@ -22,7 +22,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Action items** | Auto-extracted with owner and deadline, tracked across every meeting with completion and a person filter, linking back to the transcript. |
 | **Tag cloud** | Every meeting is auto-tagged with weighted topics; a Tags tab shows a weighted cloud and the meetings behind each tag. |
 | **Chat over transcripts** | Stream answers over one meeting, a folder (its summary/minutes/actions), several selected, or all meetings - context inferred from what you're viewing - via your OpenAI-compatible model, with attachments and saved conversations. |
-| **Formulas** | Save a prompt + a context and run it over a recording (personal, platform-wide, or built-in) to generate a Markdown document you can edit, download, or email - from the Formulas tab, \`/formula\` in chat, or Claude via MCP; share a personal one so others can find and add it (a live link); admins manage the shared ones. |
+| **Formulas** | Save a prompt + a context and run it over a recording - or a whole folder and its sub-sections (every meeting in it) - to generate a Markdown document you can edit, download, or email. Runs in the background (\"Generating...\" then fills in). Personal, platform-wide, or built-in; from the Formulas tab (on a recording or a folder), \`/formula\` in chat, or Claude via MCP; share a personal one so others can find and add it (a live link); admins manage the shared ones. |
 | **Search** | Keyword search across your library, upgraded to semantic (meaning-based) search when an embeddings endpoint is configured. |
 | **Chat tools** | The assistant searches your library with built-in tools (who-said-what, attendees, talk time, summaries, email-to-self) and links to the exact segment. |
 | **Voice dictation** | Speak your chat questions - transcribed into the chat box in Chrome/Edge or via a server speech-to-text endpoint. |
@@ -53,6 +53,18 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.135.0",
+    date: "2026-07-13",
+    pr: 301,
+    headline: "Run a Formula over a whole folder",
+    summary:
+      "Folders now have a Formulas tab, just like recordings. Run any saved formula over a folder and it applies to every meeting in that folder and its sub-sections: it runs the formula on each transcript, then runs the same formula over the combined results, and saves one document to the folder. It runs in the background (the result shows \"Generating...\" then fills in), and you can open, edit, download, email, or delete folder results exactly like recording ones. Anyone in a shared room can run one; editing or deleting a folder result needs to be its creator or have manage-content rights.",
+    added: [
+      "A Formulas tab on every folder (section) page: run a saved formula over all the meetings in the folder and its sub-sections, and keep the generated documents on the folder.",
+      "Folder formula runs use a map-reduce - the formula runs on each meeting, then over the combined per-meeting results - so large folders don't overflow a single request.",
+    ],
+  },
   {
     version: "0.134.0",
     date: "2026-07-13",
