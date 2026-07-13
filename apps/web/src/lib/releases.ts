@@ -54,6 +54,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.130.1",
+    date: "2026-07-13",
+    pr: 0, // set to the real PR number after opening the PR
+    headline: "Formulas polish: gradient flask, tidier modals",
+    summary:
+      "Refines the Formulas modals and branding. The flask icon now has a bright-blue liquid, and it appears beside the New Formula, Edit Formula, and Run a formula titles. The create/edit modal no longer closes if you click outside it (so you can't lose an in-progress prompt), and it is wider with a single-row context picker and a taller prompt box. The admin popup is renamed Manage Platform Formulas, with New moved to the bottom-left and a tidier Close at the bottom-right. The About box now describes Formulas' scopes, the /formula chat command, and the run_formula MCP tool.",
+    changed: [
+      "Flask icon: bright-blue gradient liquid; shown on the New Formula, Edit Formula, and Run a formula titles.",
+      "Create/edit formula modal no longer closes on an outside click; it is wider, with a one-row context picker and a taller prompt.",
+      "Admin popup renamed Manage Platform Formulas; New formula moved to the bottom-left, Close to the bottom-right.",
+      "About box: enriched Formulas and Connect Claude (MCP) descriptions.",
+    ],
+  },
+  {
     version: "0.130.0",
     date: "2026-07-13",
     pr: 285,
