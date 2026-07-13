@@ -411,6 +411,20 @@ default timeout for its header phase and relies on client-disconnect for cancell
   the web list shows the Diariz logo for Diariz/Platform formulas and the author's avatar for Personal ones (a
   result whose formula was deleted falls back to its creator).
 
+  **Shared formulas.** A `Personal` formula can be marked **`Shared`** (a checkbox in its editor), making it
+  discoverable platform-wide. Other users **subscribe** to it - a **`FormulaSubscription`** link row (a live
+  pointer, not a copy), unique per `(FormulaId, UserId)`, that cascade-deletes with either the formula or the
+  subscriber. A subscriber can **run** the shared formula (with their own LLM config) and sees it under a new
+  **"Shared Formulas"** group in the run picker; the owner's edits propagate live, and un-sharing hides it from
+  discovery/the run list and blocks running (existing links go inert, re-sharing restores them). Run access for
+  a `Personal` formula is **owner OR (Shared AND the caller has a subscription)** - a shared but un-subscribed
+  formula stays 404 on run (leak-avoidance; it's added via the browser, not run directly). Endpoints on
+  `FormulasController`: **`GET api/formulas/shared`** (formulas shared by others, with the owner's name/avatar
+  and whether the caller already added it), **`POST/DELETE api/formulas/{id}/subscribe`** (idempotent
+  add/remove; 404 for a missing/non-shared/own formula); `GET api/formulas` also returns the caller's
+  subscribed shared formulas. The web **`SharedFormulasBrowser`** modal (opened from a "Find shared formulas"
+  button in the run picker) lists them with the sharer's avatar, a read-only prompt preview, and Add/Remove.
+
 ## Meeting notes (the user's own notes)
 
 Users can jot their **own note lines** for a meeting - sparse trigger phrases, questions, observations - as

@@ -80,6 +80,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddRecordingPlacementPreference` | `UserSettings.RecordingPlacementMode` (int, not-null, **default 1** = `SelectedFolder`) + `UserSettings.RecordingPlacementSectionId` (uuid, nullable). Where a new recording is filed in the recorder's personal room; no data backfill (the column default covers existing rows) |
 | `AddRoomRecordingPosition` | `RoomRecordings.Position` (int, not-null, **default 0**). Per-room sort order of a recording within its room, so a recording can be ordered differently in two rooms; supersedes the now-dead global `Recording.Position`. **Backfills** once, copying `Recording.Position` onto each **main** placement (`RoomRecordingPositionBackfill`); shared placements keep 0 |
 | `AddFormulas` | `Formulas` (a saved prompt + chosen context; `Scope` int 0=Personal/1=Platform/2=Diariz; `OwnerUserId` FK `ON DELETE CASCADE`, set only for Personal - a user's personal formulas die with the account; `Context` int **[Flags]**; `Enabled` bool default true; `IsBuiltIn` blocks delete) + `FormulaResults` (the generated Markdown per recording; cascade on `Recording`, `ON DELETE SET NULL` on `Formula`, nullable `CreatedByUserId` `ON DELETE SET NULL` - the document survives its author's account deletion with attribution dropped, index `(RecordingId, Ordinal)`) — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddFormulaSharing` | `Formulas.Shared` (bool, not-null, **default false** - only meaningful for Personal scope: when true the formula is discoverable platform-wide) + `FormulaSubscriptions` (a subscriber's live link to a shared Personal formula; `FormulaId` FK `ON DELETE CASCADE`, `UserId` FK `ON DELETE CASCADE`, unique index `(FormulaId, UserId)`) — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
 
@@ -113,10 +114,12 @@ ApplicationUser
  └─1:n─ Formula (cascade)                          OwnerUserId (Personal scope only; null for Platform/Diariz)
 Formula
  └─1:n─ FormulaResult (via FormulaId, SetNull)     survives its Formula being deleted
+ └─1:n─ FormulaSubscription (cascade)              a shared Personal formula's subscriber links
 Recording
  └─1:n─ FormulaResult (cascade)                    RecordingId
 ApplicationUser
  └─1:n─ FormulaResult (SetNull)                    CreatedByUserId (nullable; doc survives author deletion)
+ └─1:n─ FormulaSubscription (cascade)              UserId (a subscriber's links die with the account)
 ```
 
 ### Tables in detail
@@ -304,6 +307,7 @@ admin-managed, no owner), or `Diariz` (seeded, `IsBuiltIn = true`, cannot be del
 | `Prompt` | text | |
 | `Context` | int **[Flags]** | which parts of the recording the run may see: `Transcript`=1, `Notes`=2, `Attachments`=4, `Summary`=8, `Minutes`=16, `Actions`=32 (append-only) |
 | `Enabled` | bool, **DB default true** | Platform/Diariz availability toggle |
+| `Shared` | bool, **DB default false** | only meaningful for `Personal` scope: when true, other users can discover this formula and subscribe to it (a live link - see `FormulaSubscriptions`) |
 | `IsBuiltIn` | bool, default false | Diariz-seeded; blocks delete |
 | `CreatedAt` / `UpdatedAt` | timestamptz | |
 
@@ -324,6 +328,21 @@ The Markdown document produced by running a `Formula` over a recording. Many per
 | `CreatedAt` / `UpdatedAt` | timestamptz | |
 
 Indexes: `(RecordingId, Ordinal)`, `FormulaId`, `CreatedByUserId`.
+
+#### `FormulaSubscriptions`
+A subscriber's live link to another user's shared Personal formula (a pointer, not a copy): it lets the
+subscriber run the formula and see it under "Shared Formulas" in the run picker, and the owner's edits
+propagate. Deleting the formula OR the subscriber cascade-removes the link.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `FormulaId` | uuid FK → Formulas | **`ON DELETE CASCADE`** — deleting the shared formula removes every subscriber's link |
+| `UserId` | uuid FK → AspNetUsers | **`ON DELETE CASCADE`** — a subscriber's links die with the account |
+| `CreatedAt` | timestamptz | |
+
+Indexes: unique `(FormulaId, UserId)` (a user can't add the same formula twice; the controller is also
+idempotent), `UserId`.
 
 #### `Attachments`
 Supporting documents on a recording — an uploaded file (blob) or a URL.
