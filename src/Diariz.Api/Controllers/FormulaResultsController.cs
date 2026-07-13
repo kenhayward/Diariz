@@ -52,7 +52,8 @@ public class FormulaResultsController : ControllerBase
             .Where(r => r.RecordingId == recordingId)
             .OrderBy(r => r.Ordinal).ThenBy(r => r.CreatedAt)
             .ToListAsync();
-        return Ok(results.Select(ToDto).ToList());
+        var origins = await FormulaResultOrigins.ResolveAsync(_db, results);
+        return Ok(results.Select(r => ToDto(r, origins[r.Id])).ToList());
     }
 
     [HttpGet("{id:guid}")]
@@ -79,7 +80,8 @@ public class FormulaResultsController : ControllerBase
         result.Text = req.Text;
         result.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync();
-        return Ok(ToDto(result));
+        var origins = await FormulaResultOrigins.ResolveAsync(_db, new[] { result });
+        return Ok(ToDto(result, origins[result.Id]));
     }
 
     [HttpDelete("{id:guid}")]
@@ -134,8 +136,8 @@ public class FormulaResultsController : ControllerBase
 
     private ObjectResult Forbidden(string message) => StatusCode(StatusCodes.Status403Forbidden, message);
 
-    private static FormulaResultDto ToDto(FormulaResult r) => new(
-        r.Id, r.RecordingId, r.Name, r.CreatedByUserId, r.CreatedAt, r.UpdatedAt);
+    private static FormulaResultDto ToDto(FormulaResult r, FormulaResultOriginDto origin) => new(
+        r.Id, r.RecordingId, r.Name, r.CreatedByUserId, r.CreatedAt, r.UpdatedAt, origin);
 
     /// <summary>Filesystem-safe lowercase slug for download filenames (mirrors
     /// <c>RecordingsController.Slug</c>).</summary>

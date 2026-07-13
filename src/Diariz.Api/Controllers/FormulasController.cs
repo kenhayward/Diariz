@@ -193,7 +193,8 @@ public class FormulasController : ControllerBase
         try
         {
             var result = await _runner.RunAsync(UserId, recordingId, formulaId, ct);
-            return Ok(ToResultDto(result));
+            var origins = await FormulaResultOrigins.ResolveAsync(_db, new[] { result }, ct);
+            return Ok(ToResultDto(result, origins[result.Id]));
         }
         catch (FormulaNotFoundException)
         {
@@ -228,6 +229,6 @@ public class FormulasController : ControllerBase
         f.Id, f.Scope.ToString(), f.OwnerUserId, f.Name, f.Description, f.Prompt,
         (int)f.Context, f.Enabled, f.IsBuiltIn);
 
-    private static FormulaResultDto ToResultDto(FormulaResult r) => new(
-        r.Id, r.RecordingId, r.Name, r.CreatedByUserId, r.CreatedAt, r.UpdatedAt);
+    private static FormulaResultDto ToResultDto(FormulaResult r, FormulaResultOriginDto origin) => new(
+        r.Id, r.RecordingId, r.Name, r.CreatedByUserId, r.CreatedAt, r.UpdatedAt, origin);
 }
