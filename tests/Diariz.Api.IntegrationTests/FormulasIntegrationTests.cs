@@ -254,4 +254,101 @@ public class FormulasIntegrationTests(ContainersFixture fx)
         Assert.Equal(recB, result.RecordingId);
         Assert.Equal("A's output on B's recording", result.Text);
     }
+
+    [Fact]
+    public async Task DeletingSharedFormula_CascadesItsSubscriptions()
+    {
+        // Owner A shares a Personal formula; subscriber B links to it. Deleting the formula removes the link.
+        var userA = await SeedUser();
+        var userB = await SeedUser();
+        var formulaId = Guid.NewGuid();
+        var subId = Guid.NewGuid();
+
+        await using (var db = fx.CreateDbContext())
+        {
+            db.Formulas.Add(new Formula
+            {
+                Id = formulaId, Scope = FormulaScope.Personal, OwnerUserId = userA,
+                Name = "A's Shared", Prompt = "Do a thing.", Context = FormulaContext.Transcript, Shared = true,
+            });
+            db.FormulaSubscriptions.Add(new FormulaSubscription
+            {
+                Id = subId, FormulaId = formulaId, UserId = userB, CreatedAt = DateTimeOffset.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = fx.CreateDbContext())
+        {
+            db.Formulas.Remove((await db.Formulas.FindAsync(formulaId))!);
+            await db.SaveChangesAsync();
+        }
+
+        await using var verify = fx.CreateDbContext();
+        Assert.False(await verify.FormulaSubscriptions.AnyAsync(s => s.Id == subId));
+        Assert.True(await verify.Users.AnyAsync(u => u.Id == userB)); // subscriber survives
+    }
+
+    [Fact]
+    public async Task DeletingSubscriber_CascadesTheirSubscriptions_ButKeepsFormulaAndOwner()
+    {
+        var userA = await SeedUser();
+        var userB = await SeedUser();
+        var formulaId = Guid.NewGuid();
+        var subId = Guid.NewGuid();
+
+        await using (var db = fx.CreateDbContext())
+        {
+            db.Formulas.Add(new Formula
+            {
+                Id = formulaId, Scope = FormulaScope.Personal, OwnerUserId = userA,
+                Name = "A's Shared", Prompt = "Do a thing.", Context = FormulaContext.Transcript, Shared = true,
+            });
+            db.FormulaSubscriptions.Add(new FormulaSubscription
+            {
+                Id = subId, FormulaId = formulaId, UserId = userB, CreatedAt = DateTimeOffset.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = fx.CreateDbContext())
+        {
+            db.Users.Remove((await db.Users.FindAsync(userB))!);
+            await db.SaveChangesAsync();
+        }
+
+        await using var verify = fx.CreateDbContext();
+        Assert.False(await verify.FormulaSubscriptions.AnyAsync(s => s.Id == subId));
+        Assert.True(await verify.Formulas.AnyAsync(f => f.Id == formulaId));
+        Assert.True(await verify.Users.AnyAsync(u => u.Id == userA));
+    }
+
+    [Fact]
+    public async Task FormulaSubscription_IsUnique_PerFormulaAndUser()
+    {
+        var userA = await SeedUser();
+        var userB = await SeedUser();
+        var formulaId = Guid.NewGuid();
+
+        await using (var db = fx.CreateDbContext())
+        {
+            db.Formulas.Add(new Formula
+            {
+                Id = formulaId, Scope = FormulaScope.Personal, OwnerUserId = userA,
+                Name = "A's Shared", Prompt = "Do a thing.", Context = FormulaContext.Transcript, Shared = true,
+            });
+            db.FormulaSubscriptions.Add(new FormulaSubscription
+            {
+                Id = Guid.NewGuid(), FormulaId = formulaId, UserId = userB, CreatedAt = DateTimeOffset.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await using var db2 = fx.CreateDbContext();
+        db2.FormulaSubscriptions.Add(new FormulaSubscription
+        {
+            Id = Guid.NewGuid(), FormulaId = formulaId, UserId = userB, CreatedAt = DateTimeOffset.UtcNow,
+        });
+        await Assert.ThrowsAsync<DbUpdateException>(() => db2.SaveChangesAsync());
+    }
 }
