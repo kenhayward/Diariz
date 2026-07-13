@@ -2,10 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
-import type { Formula, FormulaResult, FormulaScope } from "../lib/types";
+import type { Formula, FormulaResult } from "../lib/types";
+import { useAuth } from "../auth";
 import FlaskIcon from "./FlaskIcon";
-
-const SCOPE_ORDER: FormulaScope[] = ["Diariz", "Platform", "Personal"];
 
 /// "Run formula" picker: loads every formula the caller can run (their Personal ones + enabled
 /// Platform/Diariz ones - see api.listFormulas), grouped under a scope heading, with a type-ahead filter
@@ -18,6 +17,7 @@ export default function FormulaRunModal({
   onRun,
   onError,
   onManageFormulas,
+  onFindShared,
 }: {
   recordingId: string;
   onClose: () => void;
@@ -26,8 +26,11 @@ export default function FormulaRunModal({
   /// Opens Preferences on the Formulas tab. Optional: that tab lands in Task 9, so callers that can't yet
   /// reach it may omit this - the link still renders, it just becomes a no-op.
   onManageFormulas?: () => void;
+  /// Opens the "Find shared formulas" discovery browser. Optional; the button is a no-op when omitted.
+  onFindShared?: () => void;
 }) {
   const { t } = useTranslation(["workspace", "common"]);
+  const { id: myId } = useAuth();
   const { data: formulas = [], isLoading, error: loadError } = useQuery({
     queryKey: ["formulas"],
     queryFn: api.listFormulas,
@@ -52,17 +55,23 @@ export default function FormulaRunModal({
       )
     : formulas;
 
-  const groups = useMemo(
-    () => SCOPE_ORDER.map((scope) => ({ scope, items: filtered.filter((f) => f.scope === scope) })).filter(
-      (g) => g.items.length > 0,
-    ),
-    [filtered],
-  );
+  // Four groups: Diariz, Platform, the caller's own Personal formulas, and Shared (Personal formulas owned
+  // by someone else - added via the discovery browser).
+  const groups = useMemo(() => {
+    const g = (key: string, items: Formula[]) => ({ scope: key, items });
+    return [
+      g("Diariz", filtered.filter((f) => f.scope === "Diariz")),
+      g("Platform", filtered.filter((f) => f.scope === "Platform")),
+      g("Personal", filtered.filter((f) => f.scope === "Personal" && f.ownerUserId === myId)),
+      g("Shared", filtered.filter((f) => f.scope === "Personal" && f.ownerUserId !== myId)),
+    ].filter((x) => x.items.length > 0);
+  }, [filtered, myId]);
 
-  const scopeLabel: Record<FormulaScope, string> = {
+  const scopeLabel: Record<string, string> = {
     Diariz: t("workspace:formulaScopeDiariz"),
     Platform: t("workspace:formulaScopePlatform"),
     Personal: t("workspace:formulaScopePersonal"),
+    Shared: t("workspace:formulaScopeShared"),
   };
 
   async function run(formula: Formula) {
@@ -156,13 +165,22 @@ export default function FormulaRunModal({
         </div>
 
         <div className="mt-3 flex items-center justify-between border-t pt-3 dark:border-gray-700">
-          <button
-            type="button"
-            onClick={() => onManageFormulas?.()}
-            className="text-sm text-blue-600 hover:underline dark:text-blue-400"
-          >
-            {t("workspace:manageFormulas")}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => onManageFormulas?.()}
+              className="text-sm text-blue-600 hover:underline dark:text-blue-400"
+            >
+              {t("workspace:manageFormulas")}
+            </button>
+            <button
+              type="button"
+              onClick={() => onFindShared?.()}
+              className="text-sm text-blue-600 hover:underline dark:text-blue-400"
+            >
+              {t("workspace:findSharedFormulas")}
+            </button>
+          </div>
           <button
             type="button"
             onClick={onClose}
