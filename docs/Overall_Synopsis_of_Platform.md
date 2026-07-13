@@ -403,7 +403,13 @@ default timeout for its header phase and relies on client-disconnect for cancell
   without leaving the popup. It's backed by **`GET api/formulas/managed`** (every Platform/Diariz formula,
   enabled or not, ordered by scope then name - so the popup can see and toggle disabled shared formulas too)
   plus the existing CRUD/enable endpoints above; the profile now also exposes `ManageFormulas` via
-  `PermissionsDto` so the web app can gate the account-menu entry point.
+  `PermissionsDto` so the web app can gate the account-menu entry point. The Formulas tab is a **two-panel
+  view** (`FormulasPanel`): a resizable left runs-list (`FormulasManager`) beside a right panel that renders
+  the selected result's Markdown read-only. Each `FormulaResultDto` now carries an **`Origin`**
+  (`FormulaResultOriginDto`: `Kind` = `diariz`/`platform`/`personal` + optional person name/picture), resolved
+  server-side and batched (no N+1) by **`Services/FormulaResultOrigins`** across the List/Update/Run endpoints;
+  the web list shows the Diariz logo for Diariz/Platform formulas and the author's avatar for Personal ones (a
+  result whose formula was deleted falls back to its creator).
 
 ## Meeting notes (the user's own notes)
 
