@@ -367,7 +367,10 @@ default timeout for its header phase and relies on client-disconnect for cancell
   survives its source formula being deleted) and `CreatedByUserId` is likewise nullable/`SET NULL` (a result
   survives its author's account being deleted); `FormulaResult` itself cascades with its `Recording`.
   **`Services/Seeder.SeedFormulasAsync`** insert-if-missing-by-name seeds four `Diariz`-scope starter formulas
-  on startup: *Follow-up email*, *Meeting recap*, *Decisions & risks*, and *Tone & sentiment read*.
+  on startup: *Follow-up email*, *Meeting recap*, *Decisions & risks*, and *Tone & sentiment read* - loaded at
+  boot from git-editable `src/Diariz.Api/formulas/*.md` (markdown + `name`/`description`/`context` frontmatter,
+  parsed by `BuiltInFormulaCatalog`; still create-only by name, so admin edits survive), mirroring the editable
+  `prompts/*.md` templates.
   Formulas run **synchronously, with no Redis stream** — `IFormulaRunner`/`FormulaRunner` mirrors the one-off
   LLM calls already used for chat-title generation rather than the async summarise/minutes/actions pipeline:
   it resolves the caller's per-user-or-server LLM config via the same `ISummarizationSettingsResolver`, loads
