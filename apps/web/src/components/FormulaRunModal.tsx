@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import type { Formula, FormulaResult, FormulaScope } from "../lib/types";
+import FlaskIcon from "./FlaskIcon";
 
 const SCOPE_ORDER: FormulaScope[] = ["Diariz", "Platform", "Personal"];
 
@@ -88,7 +89,10 @@ export default function FormulaRunModal({
         className="flex max-h-[80vh] w-full max-w-md flex-col rounded-lg border bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-3 text-base font-semibold dark:text-gray-100">{t("workspace:formulaRunModalTitle")}</h2>
+        <h2 className="mb-3 flex items-center gap-2 text-base font-semibold dark:text-gray-100">
+          <FlaskIcon />
+          {t("workspace:formulaRunModalTitle")}
+        </h2>
 
         <input
           role="searchbox"
