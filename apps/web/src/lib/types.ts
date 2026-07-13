@@ -790,6 +790,13 @@ export interface Formula {
   isBuiltIn: boolean;
 }
 
+/// Where a formula result came from, for the runs-list icon. Mirrors FormulaResultOriginDto.
+export interface FormulaResultOrigin {
+  kind: "diariz" | "platform" | "personal"; // Phase D adds "shared"
+  personName: string | null;
+  personPictureUrl: string | null;
+}
+
 /// A formula's saved output on a recording. `name`/timestamps only - the generated Markdown body is fetched
 /// separately via `getFormulaResultText`.
 export interface FormulaResult {
@@ -799,6 +806,7 @@ export interface FormulaResult {
   createdByUserId: string | null;
   createdAt: string;
   updatedAt: string;
+  origin: FormulaResultOrigin;
 }
 
 /// FormulaContext bit flags - mirror src/Diariz.Domain/Entities/FormulaContext.cs (append-only; keep in sync).
