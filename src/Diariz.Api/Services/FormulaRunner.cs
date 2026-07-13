@@ -61,8 +61,8 @@ public class FormulaRunner : IFormulaRunner
             throw new FormulaNotConfiguredException("No LLM endpoint is configured for this user or server.");
 
         // Reuse the shared context/LLM primitives (also driving the async FormulaRunProcessor). Ownership was
-        // already enforced above by LoadRecordingAsync, so re-loading the context here (no ownership filter) is
-        // safe. A TimeoutSeconds expiry surfaces as an OperationCanceledException with the OUTER `ct` still
+        // already enforced above by IsRecordingAccessibleAsync, so re-loading the context here (no ownership
+        // filter) is safe. A TimeoutSeconds expiry surfaces as an OperationCanceledException with the OUTER `ct` still
         // uncancelled; the calling controller distinguishes a timeout from a client disconnect via
         // `!ct.IsCancellationRequested` (outer-ct-cancelled = client went away; otherwise = LLM timeout -> 504).
         var text = await FormulaRunProcessor.RunOverRecordingAsync(_db, _chat, cfg, formula, recordingId, ct);
@@ -88,8 +88,8 @@ public class FormulaRunner : IFormulaRunner
     /// formula must be enabled. A non-owned Personal formula throws <see cref="FormulaNotFoundException"/>
     /// (not Access) so its very existence isn't leaked - consistent with the CRUD controller's 404s; a
     /// disabled Platform/Diariz formula is public knowledge, so it stays <see cref="FormulaAccessException"/>.
-    /// (Access to the *recording* is checked separately, in <see cref="LoadRecordingAsync"/>, before this
-    /// ever runs.)</summary>
+    /// (Access to the *recording* is checked separately, in <see cref="IsRecordingAccessibleAsync"/>, before
+    /// this ever runs.)</summary>
     private static void EnsureCanRun(Formula formula, Guid userId, bool subscribed)
     {
         if (formula.Scope == FormulaScope.Personal)
