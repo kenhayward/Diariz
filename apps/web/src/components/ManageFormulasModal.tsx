@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import type { Formula } from "../lib/types";
 import FormulaEditModal from "./FormulaEditModal";
+import FlaskIcon from "./FlaskIcon";
 
 /// Admin-only management of Platform + Diariz (built-in) formulas (ManageFormulas-gated). Mirrors
 /// ManageUsersModal's chrome: a fixed-size panel that does NOT close on a backdrop click (Close button
@@ -70,17 +71,10 @@ export default function ManageFormulasModal({ onClose }: { onClose: () => void }
         aria-label={t("formulasTitle")}
         className="flex h-[85vh] w-full max-w-4xl flex-col rounded-lg border bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900"
       >
-        <h2 className="mb-3 shrink-0 text-base font-semibold dark:text-gray-100">{t("formulasTitle")}</h2>
-
-        <div className="mb-3 shrink-0">
-          <button
-            type="button"
-            onClick={() => setEditing(null)}
-            className="rounded bg-gray-900 px-3 py-1.5 text-sm text-white dark:bg-gray-100 dark:text-gray-900"
-          >
-            {t("account:newFormula")}
-          </button>
-        </div>
+        <h2 className="mb-3 flex shrink-0 items-center gap-2 text-base font-semibold dark:text-gray-100">
+          <FlaskIcon />
+          {t("formulasTitle")}
+        </h2>
 
         {error && <p className="mb-2 shrink-0 text-sm text-red-600 dark:text-red-400">{error}</p>}
         {isLoading && <p className="shrink-0 text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>}
@@ -145,10 +139,18 @@ export default function ManageFormulasModal({ onClose }: { onClose: () => void }
           </table>
         </div>
 
-        <div className="mt-3 flex shrink-0 border-t pt-3 dark:border-gray-700">
+        <div className="mt-3 flex shrink-0 items-center justify-between border-t pt-3 dark:border-gray-700">
           <button
+            type="button"
+            onClick={() => setEditing(null)}
+            className="rounded bg-gray-900 px-3 py-1.5 text-sm text-white dark:bg-gray-100 dark:text-gray-900"
+          >
+            {t("account:newFormula")}
+          </button>
+          <button
+            type="button"
             onClick={onClose}
-            className="w-full rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+            className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
           >
             {t("common:close")}
           </button>
