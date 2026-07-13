@@ -40,15 +40,40 @@ public class SectionPageController : ControllerBase
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    /// <summary>The section id plus its child section ids - the set a recording's <c>SectionId</c> must be in
-    /// to count as "included" in this folder.</summary>
-    private async Task<List<Guid>> IncludedSectionIdsAsync(Guid sectionId)
+    /// <summary>The section id plus its child section ids (within the same room) - the set a recording's
+    /// placement <c>SectionId</c> must be in to count as "included" in this folder.</summary>
+    private async Task<List<Guid>> IncludedSectionIdsAsync(Guid sectionId, Guid roomId)
     {
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
         var ids = await _db.Sections
             .Where(s => s.RoomId == roomId && s.ParentId == sectionId).Select(s => s.Id).ToListAsync();
         ids.Add(sectionId);
         return ids;
+    }
+
+    /// <summary>Load a section by id and check the caller may VIEW it - i.e. is a member of the section's own
+    /// room (their personal room for a personal folder, or a shared room they belong to). Returns null when the
+    /// section doesn't exist OR the caller isn't a member, so callers 404 either way and a room's contents stay
+    /// private. Fixes issue #289: folders in a shared room were hardcoded to the caller's personal room and so
+    /// 404'd, leaving the page stuck on "Loading ...".</summary>
+    private async Task<Section?> ViewableSectionAsync(Guid id, bool withArtifacts = false)
+    {
+        IQueryable<Section> q = _db.Sections;
+        if (withArtifacts) q = q.Include(s => s.Summary).Include(s => s.Minutes);
+        var section = await q.FirstOrDefaultAsync(s => s.Id == id);
+        if (section is null || !await _rooms.IsMemberAsync(UserId, section.RoomId)) return null;
+        return section;
+    }
+
+    /// <summary>As <see cref="ViewableSectionAsync"/> but additionally requires ManageContents in the section's
+    /// room (the personal-room owner holds every permission). Returns the section (with artifacts included), or
+    /// an error result: 404 for a non-member/missing section, 403 for a member lacking the permission.</summary>
+    private async Task<(Section? Section, ActionResult? Error)> ManageableSectionAsync(Guid id)
+    {
+        var section = await ViewableSectionAsync(id, withArtifacts: true);
+        if (section is null) return (null, NotFound());
+        if (!(await _rooms.PermissionsAsync(UserId, section.RoomId)).HasFlag(RoomPermission.ManageContents))
+            return (null, Forbid());
+        return (section, null);
     }
 
     // ---- Detail (stats + folder summary + folder minutes) ----
@@ -56,14 +81,11 @@ public class SectionPageController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<SectionDetailDto>> Get(Guid id)
     {
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        var section = await _db.Sections
-            .Include(s => s.Summary)
-            .Include(s => s.Minutes)
-            .FirstOrDefaultAsync(s => s.Id == id && s.RoomId == roomId);
+        var section = await ViewableSectionAsync(id, withArtifacts: true);
         if (section is null) return NotFound();
+        var roomId = section.RoomId;
 
-        var allIds = await IncludedSectionIdsAsync(id);
+        var allIds = await IncludedSectionIdsAsync(id, roomId);
         // Recordings filed under this folder (or its children) now come from the placement in the caller's
         // personal room, not from Recording.SectionId.
         var recs = from p in _db.RoomRecordings
@@ -93,9 +115,10 @@ public class SectionPageController : ControllerBase
     [HttpGet("{id:guid}/actions")]
     public async Task<ActionResult<IReadOnlyList<ActionListItemDto>>> Actions(Guid id)
     {
-        if (!await OwnsSectionAsync(id)) return NotFound();
-        var allIds = await IncludedSectionIdsAsync(id);
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var section = await ViewableSectionAsync(id);
+        if (section is null) return NotFound();
+        var roomId = section.RoomId;
+        var allIds = await IncludedSectionIdsAsync(id, roomId);
         return await (
             from a in _db.RecordingActions
             join r in _db.Recordings on a.RecordingId equals r.Id
@@ -110,9 +133,10 @@ public class SectionPageController : ControllerBase
     [HttpGet("{id:guid}/notes")]
     public async Task<ActionResult<IReadOnlyList<SectionNoteListItemDto>>> Notes(Guid id)
     {
-        if (!await OwnsSectionAsync(id)) return NotFound();
-        var allIds = await IncludedSectionIdsAsync(id);
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var section = await ViewableSectionAsync(id);
+        if (section is null) return NotFound();
+        var roomId = section.RoomId;
+        var allIds = await IncludedSectionIdsAsync(id, roomId);
         return await (
             from n in _db.MeetingNotes
             join r in _db.Recordings on n.RecordingId equals r.Id
@@ -126,9 +150,10 @@ public class SectionPageController : ControllerBase
     [HttpGet("{id:guid}/attachments")]
     public async Task<ActionResult<IReadOnlyList<SectionAttachmentListItemDto>>> Attachments(Guid id)
     {
-        if (!await OwnsSectionAsync(id)) return NotFound();
-        var allIds = await IncludedSectionIdsAsync(id);
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
+        var section = await ViewableSectionAsync(id);
+        if (section is null) return NotFound();
+        var roomId = section.RoomId;
+        var allIds = await IncludedSectionIdsAsync(id, roomId);
         return await (
             from a in _db.Attachments
             join r in _db.Recordings on a.RecordingId equals r.Id
@@ -145,23 +170,22 @@ public class SectionPageController : ControllerBase
     [HttpPost("{id:guid}/summary/generate")]
     public async Task<IActionResult> GenerateSummary(Guid id)
     {
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        var section = await _db.Sections.Include(s => s.Summary)
-            .FirstOrDefaultAsync(s => s.Id == id && s.RoomId == roomId);
-        if (section is null) return NotFound();
+        var (section, error) = await ManageableSectionAsync(id);
+        if (error is not null) return error;
+        var sec = section!;
 
         var cfg = await _summarization.ResolveAsync(UserId);
         if (!cfg.Enabled)
             return BadRequest("Summarisation is not configured. Set an LLM endpoint in Settings.");
 
-        var summary = await UpsertSummaryAsync(section);
+        var summary = await UpsertSummaryAsync(sec);
         if (summary.Status == SectionGenerationStatus.Generating) return Accepted(); // idempotent
 
         summary.IsUserEdited = false; // an explicit regenerate overwrites a hand-edited summary
         summary.Status = SectionGenerationStatus.Generating;
         summary.Error = null;
-        await _queue.EnqueueSectionSummaryAsync(new SectionSummaryJob(section.Id));
-        await _hub.NotifySectionStatusAsync(UserId, section.Id, "summary", "Generating");
+        await _queue.EnqueueSectionSummaryAsync(new SectionSummaryJob(sec.Id));
+        await _hub.NotifySectionStatusAsync(UserId, sec.Id, "summary", "Generating");
         await _db.SaveChangesAsync();
         return Accepted();
     }
@@ -169,12 +193,10 @@ public class SectionPageController : ControllerBase
     [HttpPut("{id:guid}/summary")]
     public async Task<IActionResult> UpdateSummary(Guid id, UpdateSummaryRequest req)
     {
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        var section = await _db.Sections.Include(s => s.Summary)
-            .FirstOrDefaultAsync(s => s.Id == id && s.RoomId == roomId);
-        if (section is null) return NotFound();
+        var (section, error) = await ManageableSectionAsync(id);
+        if (error is not null) return error;
 
-        var summary = await UpsertSummaryAsync(section);
+        var summary = await UpsertSummaryAsync(section!);
         summary.Text = req.Text ?? string.Empty;
         summary.Model = SectionSummary.UserEditedModel;
         summary.IsUserEdited = true;
@@ -190,29 +212,28 @@ public class SectionPageController : ControllerBase
     [HttpPost("{id:guid}/minutes/generate")]
     public async Task<IActionResult> GenerateMinutes(Guid id, ApplyMeetingTypeRequest req)
     {
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        var section = await _db.Sections.Include(s => s.Minutes)
-            .FirstOrDefaultAsync(s => s.Id == id && s.RoomId == roomId);
-        if (section is null) return NotFound();
+        var (section, error) = await ManageableSectionAsync(id);
+        if (error is not null) return error;
+        var sec = section!;
 
-        // A chosen type must be the caller's own Personal type or a shared Platform type.
+        // A chosen type must be a General type (null room) or a type in this section's room.
         if (req.MeetingTypeId is { } typeId &&
-            !await _db.MeetingTypes.AnyAsync(t => t.Id == typeId && (t.RoomId == null || t.RoomId == roomId)))
+            !await _db.MeetingTypes.AnyAsync(t => t.Id == typeId && (t.RoomId == null || t.RoomId == sec.RoomId)))
             return NotFound();
 
         var cfg = await _summarization.ResolveAsync(UserId);
         if (!cfg.Enabled)
             return BadRequest("Summarisation is not configured. Set an LLM endpoint in Settings.");
 
-        var minutes = await UpsertMinutesAsync(section);
+        var minutes = await UpsertMinutesAsync(sec);
         minutes.MeetingTypeId = req.MeetingTypeId;
         if (minutes.Status == SectionGenerationStatus.Generating) return Accepted();
 
         minutes.IsUserEdited = false;
         minutes.Status = SectionGenerationStatus.Generating;
         minutes.Error = null;
-        await _queue.EnqueueSectionMinutesAsync(new SectionMinutesJob(section.Id));
-        await _hub.NotifySectionStatusAsync(UserId, section.Id, "minutes", "Generating");
+        await _queue.EnqueueSectionMinutesAsync(new SectionMinutesJob(sec.Id));
+        await _hub.NotifySectionStatusAsync(UserId, sec.Id, "minutes", "Generating");
         await _db.SaveChangesAsync();
         return Accepted();
     }
@@ -220,12 +241,10 @@ public class SectionPageController : ControllerBase
     [HttpPut("{id:guid}/minutes")]
     public async Task<IActionResult> UpdateMinutes(Guid id, UpdateMeetingMinutesRequest req)
     {
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        var section = await _db.Sections.Include(s => s.Minutes)
-            .FirstOrDefaultAsync(s => s.Id == id && s.RoomId == roomId);
-        if (section is null) return NotFound();
+        var (section, error) = await ManageableSectionAsync(id);
+        if (error is not null) return error;
 
-        var minutes = await UpsertMinutesAsync(section);
+        var minutes = await UpsertMinutesAsync(section!);
         minutes.Text = req.Text ?? string.Empty;
         minutes.Model = SectionMinutes.UserEditedModel;
         minutes.IsUserEdited = true;
@@ -237,12 +256,6 @@ public class SectionPageController : ControllerBase
     }
 
     // ---- helpers ----
-
-    private async Task<bool> OwnsSectionAsync(Guid id)
-    {
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        return await _db.Sections.AnyAsync(s => s.Id == id && s.RoomId == roomId);
-    }
 
     private async Task<SectionSummary> UpsertSummaryAsync(Section section)
     {

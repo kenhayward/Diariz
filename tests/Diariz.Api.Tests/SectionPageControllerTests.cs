@@ -221,4 +221,71 @@ public class SectionPageControllerTests
         Assert.True(m.IsUserEdited);
         Assert.Equal("hand minutes", m.Text);
     }
+
+    // Creates a folder inside a shared room the given user belongs to (with the given permission).
+    private static async Task<Diariz.Domain.Entities.Section> SharedRoomSection(
+        DiarizDbContext db, Guid memberId, RoomPermission perm = RoomPermission.ManageContents)
+    {
+        Users.Ensure(db, memberId);
+        var scope = new RoomScope(db);
+        var roomId = await scope.CreateSharedRoomAsync("Eng", null, null, null);
+        await scope.SetMemberAsync(roomId, RoomPrincipalType.User, memberId, perm);
+        var s = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = memberId, RoomId = roomId, Name = "Shared F" };
+        db.Sections.Add(s);
+        await db.SaveChangesAsync();
+        return s;
+    }
+
+    [Fact]
+    public async Task Get_returns_a_folder_in_a_shared_room_the_caller_belongs_to()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var section = await SharedRoomSection(db, me);
+
+        // Regression (issue #289): a folder in a shared room used to 404 (the controller hardcoded the
+        // caller's personal room), leaving the page stuck on "Loading ...".
+        var dto = (await Build(db, me).Get(section.Id)).Value!;
+
+        Assert.Equal(section.Id, dto.Id);
+        Assert.Equal("Shared F", dto.Name);
+    }
+
+    [Fact]
+    public async Task Get_a_folder_in_a_room_the_caller_is_not_in_is_not_found()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var section = await SharedRoomSection(db, owner);
+        var outsider = Guid.NewGuid();
+        Users.Ensure(db, outsider);
+
+        Assert.IsType<NotFoundResult>((await Build(db, outsider).Get(section.Id)).Result);
+    }
+
+    [Fact]
+    public async Task Aggregations_read_a_shared_room_folder_for_a_member()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var section = await SharedRoomSection(db, me);
+
+        // A member gets an (empty) list, not a 404 (Value non-null means it wasn't NotFound).
+        Assert.Empty((await Build(db, me).Actions(section.Id)).Value!);
+        Assert.Empty((await Build(db, me).Notes(section.Id)).Value!);
+        Assert.Empty((await Build(db, me).Attachments(section.Id)).Value!);
+    }
+
+    [Fact]
+    public async Task GenerateSummary_in_a_shared_room_needs_ManageContents()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        // A member who can view but not manage contents cannot generate a folder summary.
+        var section = await SharedRoomSection(db, me, RoomPermission.CreateRecording);
+
+        var result = await Build(db, me).GenerateSummary(section.Id);
+
+        Assert.IsType<ForbidResult>(result);
+    }
 }

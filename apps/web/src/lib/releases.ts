@@ -54,6 +54,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.132.1",
+    date: "2026-07-13",
+    pr: 291,
+    headline: "Fix: folders in shared rooms wouldn't open",
+    summary:
+      "Opening a folder in a shared room left the page stuck on \"Loading ...\", and a folder-page error could blank the screen entirely. Folder pages are now scoped to the folder's own room and authorised by your membership in it, so a folder in any room you belong to opens correctly. A detail-page error now shows a message (and clears when you navigate away) instead of blanking the app, and a folder that can't be loaded shows an error rather than hanging.",
+    fixed: [
+      "Folders in a shared room now open correctly - the folder page is scoped to the folder's own room and your membership in it, not always your personal room.",
+      "A render error in the detail panel shows a message and recovers on navigation, instead of blanking the whole app.",
+      "A folder that can't be loaded shows an error instead of hanging on \"Loading ...\".",
+    ],
+  },
+  {
     version: "0.132.0",
     date: "2026-07-13",
     pr: 290,

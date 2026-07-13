@@ -35,7 +35,7 @@ export default function SectionDetail() {
   const [info, setInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const { data: section } = useQuery({
+  const { data: section, isError, error: sectionError } = useQuery({
     queryKey: ["section", id],
     queryFn: () => api.getSection(id!),
     enabled: !!id,
@@ -51,7 +51,11 @@ export default function SectionDetail() {
   const { data: attachments } = useQuery({ queryKey: ["section-attachments", id], queryFn: () => api.listSectionAttachments(id!), enabled: !!id });
   const { data: folderAttachments } = useQuery({ queryKey: ["folder-attachments", id], queryFn: () => api.listFolderAttachments(id!), enabled: !!id });
 
-  if (!id || !section) return <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>;
+  if (!id) return null;
+  // Surface a load failure (e.g. a folder you can't access) instead of hanging on "Loading ..." forever.
+  if (isError)
+    return <p className="p-4 text-sm text-red-600 dark:text-red-400">{apiErrorMessage(sectionError, t("workspace:errLoadFolder"))}</p>;
+  if (!section) return <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>;
 
   const refetchSection = () => qc.invalidateQueries({ queryKey: ["section", id] });
   const run = async (fn: () => Promise<unknown>, fallback: string, invalidate: unknown[]) => {
