@@ -56,7 +56,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.133.0",
     date: "2026-07-13",
-    pr: 0, // set to the real PR number after opening the PR
+    pr: 296,
     headline: "Schedule a recording to stop itself",
     summary:
       "You can now set the recorder to stop on its own - pick \"in 15 / 30 minutes\" or \"in 1 hour\", or a specific clock time, from the new Auto-stop control next to the record button. When the time arrives the recording ends and its transcription starts automatically, so you can start a meeting recording and walk away.",
