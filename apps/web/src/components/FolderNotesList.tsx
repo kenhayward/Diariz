@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink } from "react-router-dom";
+import { useRoomBasePath } from "../lib/rooms";
 import type { SectionNoteItem } from "../lib/types";
 
 /// The folder Notes tab: every note across the folder's recordings (and sub-folders), with a read-only
@@ -15,6 +16,8 @@ export default function FolderNotesList({
   onDelete: (recordingId: string, id: string) => void;
 }) {
   const { t } = useTranslation("workspace");
+  // Keep meeting links inside the room being viewed - see FolderRecordingList for the room-prefix rationale.
+  const basePath = useRoomBasePath();
   if (items.length === 0)
     return <p className="px-4 pb-4 text-sm text-gray-500 dark:text-gray-400">{t("folderNoNotes")}</p>;
 
@@ -30,7 +33,7 @@ export default function FolderNotesList({
         </thead>
         <tbody>
           {items.map((n, i) => (
-            <Row key={n.id} note={n} row={i + 1} onEdit={onEdit} onDelete={onDelete} />
+            <Row key={n.id} note={n} row={i + 1} basePath={basePath} onEdit={onEdit} onDelete={onDelete} />
           ))}
         </tbody>
       </table>
@@ -39,10 +42,11 @@ export default function FolderNotesList({
 }
 
 function Row({
-  note, row, onEdit, onDelete,
+  note, row, basePath, onEdit, onDelete,
 }: {
   note: SectionNoteItem;
   row: number;
+  basePath: string;
   onEdit: (recordingId: string, id: string, text: string) => void;
   onDelete: (recordingId: string, id: string) => void;
 }) {
@@ -52,7 +56,7 @@ function Row({
   return (
     <tr className="align-top">
       <td className="truncate py-1 pr-2 text-xs">
-        <NavLink to={`/recordings/${note.recordingId}`} className="text-blue-600 hover:underline dark:text-blue-400" title={note.recordingName}>
+        <NavLink to={`${basePath}/recordings/${note.recordingId}`} className="text-blue-600 hover:underline dark:text-blue-400" title={note.recordingName}>
           {note.recordingName}
         </NavLink>
       </td>

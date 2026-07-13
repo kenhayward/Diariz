@@ -59,10 +59,11 @@ export const RELEASES: Release[] = [
     pr: 298,
     headline: "Fix: opening a transcript in a shared room stays in the room",
     summary:
-      "In a shared room, clicking a transcript from a folder page's list or from the Actions panel jumped you back to the same transcript in your Personal Room instead of staying in the shared room. Those links now keep the room's URL prefix, so you stay where you were. (The List, Calendar, and Tags panels already stayed in the room.)",
+      "In a shared room, clicking a transcript could jump you back to the same transcript in your Personal Room instead of staying in the room. Every meeting link that had this bug - the Actions panel, and a folder page's transcript / actions / notes / attachments lists - now keeps the room's URL prefix, so you stay where you were. (The List, Calendar, and Tags panels already stayed in the room.)",
     fixed: [
       "Clicking a transcript in a shared-room folder's list now opens it within that room (it was linking to the personal-room URL and switching you out of the room).",
-      "Clicking an action's transcript link in the Actions panel now stays in the shared room too (same personal-room URL bug).",
+      "The Actions panel's transcript links now stay in the shared room too (same personal-room URL bug).",
+      "A folder page's Actions, Notes, and Attachments lists now link their Meeting column within the room as well.",
     ],
   },
   {
