@@ -56,7 +56,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.130.0",
     date: "2026-07-13",
-    pr: 286,
+    pr: 285,
     headline: "Manage shared Formulas as an admin",
     summary:
       "Admins with the new Manage Formulas permission get a Manage Formulas window (from the account menu) " +
