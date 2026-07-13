@@ -24,6 +24,7 @@ import type {
   ChatUsage,
   Formula,
   FormulaResult,
+  SectionFormulaResult,
   FormulaScope,
   SharedFormula,
   GrantResult,
@@ -1227,6 +1228,48 @@ export const api = {
 
   async downloadFormulaResult(recordingId: string, id: string): Promise<void> {
     const res = await http.get(`/api/recordings/${recordingId}/formula-results/${id}/download`, {
+      responseType: "blob",
+    });
+    triggerBlobDownload(res.data as Blob, filenameFromHeaders(res.headers, "formula-result.md"));
+  },
+
+  // ---- Section (folder) formulas + results ----
+  // Mirror the recording endpoints against /api/sections/{id}/... - the worker/callback contract is the same,
+  // only the target (a folder) differs.
+
+  /// Run a formula over a section (folder) and return the persisted result.
+  async runSectionFormula(sectionId: string, formulaId: string): Promise<SectionFormulaResult> {
+    const { data } = await http.post<SectionFormulaResult>(`/api/sections/${sectionId}/formulas/${formulaId}/run`);
+    return data;
+  },
+
+  async listSectionFormulaResults(sectionId: string): Promise<SectionFormulaResult[]> {
+    const { data } = await http.get<SectionFormulaResult[]>(`/api/sections/${sectionId}/formula-results`);
+    return data;
+  },
+
+  /// Fetch a section formula result's generated Markdown body (fetched separately so listing stays cheap).
+  async getSectionFormulaResultText(sectionId: string, id: string): Promise<string> {
+    const { data } = await http.get<{ text: string }>(`/api/sections/${sectionId}/formula-results/${id}`);
+    return data.text;
+  },
+
+  async updateSectionFormulaResult(sectionId: string, id: string, text: string): Promise<SectionFormulaResult> {
+    const { data } = await http.put<SectionFormulaResult>(`/api/sections/${sectionId}/formula-results/${id}`, { text });
+    return data;
+  },
+
+  async deleteSectionFormulaResult(sectionId: string, id: string): Promise<void> {
+    await http.delete(`/api/sections/${sectionId}/formula-results/${id}`);
+  },
+
+  /// Email a section formula result's Markdown to the signed-in user's own registered address.
+  async emailSectionFormulaResult(sectionId: string, id: string): Promise<void> {
+    await http.post(`/api/sections/${sectionId}/formula-results/${id}/email`);
+  },
+
+  async downloadSectionFormulaResult(sectionId: string, id: string): Promise<void> {
+    const res = await http.get(`/api/sections/${sectionId}/formula-results/${id}/download`, {
       responseType: "blob",
     });
     triggerBlobDownload(res.data as Blob, filenameFromHeaders(res.headers, "formula-result.md"));

@@ -2,26 +2,31 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
-import type { Formula, FormulaResult } from "../lib/types";
+import type { Formula, FormulaResult, SectionFormulaResult } from "../lib/types";
+
+/// What a run targets: a recording or a section (folder). The picker dispatches the run call on `kind`.
+export type FormulaRunTarget =
+  | { kind: "recording"; recordingId: string }
+  | { kind: "section"; sectionId: string };
 import { useAuth } from "../auth";
 import FlaskIcon from "./FlaskIcon";
 
 /// "Run formula" picker: loads every formula the caller can run (their Personal ones + enabled
 /// Platform/Diariz ones - see api.listFormulas), grouped under a scope heading, with a type-ahead filter
-/// (modeled on AddMemberTypeahead). Picking one runs it against the recording; on success the parent is
+/// (modeled on AddMemberTypeahead). Picking one runs it against the target (a recording or a section); on success the parent is
 /// notified (refresh + select the new result) and the modal closes. A run failure is surfaced through the
 /// parent's error display (onError) and the modal stays open so the user can retry or pick another formula.
 export default function FormulaRunModal({
-  recordingId,
+  target,
   onClose,
   onRun,
   onError,
   onManageFormulas,
   onFindShared,
 }: {
-  recordingId: string;
+  target: FormulaRunTarget;
   onClose: () => void;
-  onRun: (result: FormulaResult) => void;
+  onRun: (result: FormulaResult | SectionFormulaResult) => void;
   onError: (msg: string) => void;
   /// Opens Preferences on the Formulas tab. Optional: that tab lands in Task 9, so callers that can't yet
   /// reach it may omit this - the link still renders, it just becomes a no-op.
@@ -80,7 +85,10 @@ export default function FormulaRunModal({
     setRunning(formula.id);
     setRunError(null);
     try {
-      const result = await api.runFormula(recordingId, formula.id);
+      const result =
+        target.kind === "section"
+          ? await api.runSectionFormula(target.sectionId, formula.id)
+          : await api.runFormula(target.recordingId, formula.id);
       onRun(result);
       onClose();
     } catch (e) {

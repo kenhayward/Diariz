@@ -6,6 +6,7 @@ vi.mock("../lib/api", () => ({
   api: {
     listFormulas: vi.fn(),
     runFormula: vi.fn(),
+    runSectionFormula: vi.fn(),
   },
   apiErrorMessage: (e: unknown, fallback: string) => {
     const resp = (e as { response?: { data?: string } })?.response?.data;
@@ -42,7 +43,13 @@ function renderModal(overrides: Partial<React.ComponentProps<typeof FormulaRunMo
   const onError = vi.fn();
   render(
     <QueryClientProvider client={qc}>
-      <FormulaRunModal recordingId="rec-1" onClose={onClose} onRun={onRun} onError={onError} {...overrides} />
+      <FormulaRunModal
+        target={{ kind: "recording", recordingId: "rec-1" }}
+        onClose={onClose}
+        onRun={onRun}
+        onError={onError}
+        {...overrides}
+      />
     </QueryClientProvider>,
   );
   return { onClose, onRun, onError };
@@ -86,6 +93,19 @@ describe("FormulaRunModal", () => {
     await screen.findByText("Action Items");
     fireEvent.click(screen.getByText("Action Items"));
     await waitFor(() => expect(api.runFormula).toHaveBeenCalledWith("rec-1", "f1"));
+    await waitFor(() => expect(onRun).toHaveBeenCalledWith(result));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("runs the picked formula against a section when the target is a section", async () => {
+    (api.listFormulas as ReturnType<typeof vi.fn>).mockResolvedValue([formula({ id: "f1", name: "Action Items" })]);
+    const result = { id: "res-1", sectionId: "sec-1", name: "Action Items", createdByUserId: "u1", createdAt: "now", updatedAt: "now" };
+    (api.runSectionFormula as ReturnType<typeof vi.fn>).mockResolvedValue(result);
+    const { onRun, onClose } = renderModal({ target: { kind: "section", sectionId: "sec-1" } });
+    await screen.findByText("Action Items");
+    fireEvent.click(screen.getByText("Action Items"));
+    await waitFor(() => expect(api.runSectionFormula).toHaveBeenCalledWith("sec-1", "f1"));
+    expect(api.runFormula).not.toHaveBeenCalled();
     await waitFor(() => expect(onRun).toHaveBeenCalledWith(result));
     expect(onClose).toHaveBeenCalled();
   });
