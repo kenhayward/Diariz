@@ -56,7 +56,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.130.2",
     date: "2026-07-13",
-    pr: 0, // set to the real PR number after opening the PR
+    pr: 287,
     headline: "Built-in formulas are now editable files",
     summary:
       "The four Diariz-provided formulas are no longer baked into the server code - they now live as plain markdown files (formulas/*.md) with a small frontmatter, loaded at startup the same way the prompt templates are. Behaviour is unchanged (same formulas, still create-only so your edits survive restarts), but the shipped set can now be edited or extended without a code change or rebuild.",
