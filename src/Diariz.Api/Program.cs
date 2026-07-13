@@ -256,6 +256,9 @@ builder.Services.AddHostedService<MeetingMinutesWorker>();
 // the arbitrary-prompt IMeetingMinutesClient to combine the included recordings' summaries/minutes.
 builder.Services.AddHostedService<SectionSummaryWorker>();
 builder.Services.AddHostedService<SectionMinutesWorker>();
+// Async formula runs: run a saved formula over a recording (its own stream/worker), reusing the per-user
+// summarisation config + IChatStreamClient to stream the completion.
+builder.Services.AddHostedService<FormulaRunWorker>();
 // Action extraction also runs in the pipeline (its own stream/worker), reusing IActionsClient (registered above).
 builder.Services.AddHostedService<ActionsWorker>();
 // Tag-cloud extraction runs in the pipeline too (its own stream/worker), sharing the per-user summarisation
