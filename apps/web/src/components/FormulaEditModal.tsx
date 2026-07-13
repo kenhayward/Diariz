@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import { FormulaContextBits, type Formula, type FormulaScope } from "../lib/types";
+import FlaskIcon from "./FlaskIcon";
 
 // Attachments (FormulaContextBits.Attachments) is intentionally omitted until attachment extraction
 // ships in a later phase - FormulaContextBuilder ignores the flag today, so surfacing it would be a no-op.
@@ -84,16 +85,19 @@ export default function FormulaEditModal({
   const labelSpan = "mb-1 block text-gray-600 dark:text-gray-300";
   const title = formula ? t("editFormulaTitle") : scope !== "Personal" ? t("newPlatformFormulaTitle") : t("newFormulaTitle");
 
+  // Does NOT close on a backdrop click (Escape or Cancel only) - avoids losing an in-progress edit.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <form
         role="dialog"
         aria-label={title}
-        className="flex max-h-[85vh] w-full max-w-lg flex-col space-y-3 overflow-y-auto rounded-lg border bg-white p-4 shadow-xl dark:border-gray-700 dark:bg-gray-900"
-        onClick={(e) => e.stopPropagation()}
+        className="flex max-h-[85vh] w-full max-w-4xl flex-col space-y-3 overflow-y-auto rounded-lg border bg-white p-4 shadow-xl dark:border-gray-700 dark:bg-gray-900"
         onSubmit={save}
       >
-        <h2 className="text-base font-semibold dark:text-gray-100">{title}</h2>
+        <h2 className="flex items-center gap-2 text-base font-semibold dark:text-gray-100">
+          <FlaskIcon />
+          {title}
+        </h2>
 
         <label className="block text-sm">
           <span className={labelSpan}>{t("formulaName")}</span>
@@ -108,7 +112,7 @@ export default function FormulaEditModal({
         <label className="block text-sm">
           <span className={labelSpan}>{t("formulaPrompt")}</span>
           <textarea
-            rows={6}
+            rows={12}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             className={`${field} font-mono`}
@@ -119,7 +123,7 @@ export default function FormulaEditModal({
         <div>
           <span className={`text-sm ${labelSpan}`}>{t("formulaContext")}</span>
           <p className="mb-2 text-xs text-gray-400 dark:text-gray-500">{t("formulaContextHint")}</p>
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
             {CONTEXT_OPTIONS.map((opt) => (
               <label key={opt.bit} className="flex items-center gap-2 text-sm dark:text-gray-200">
                 <input type="checkbox" checked={(context & opt.bit) !== 0} onChange={() => toggle(opt.bit)} />
