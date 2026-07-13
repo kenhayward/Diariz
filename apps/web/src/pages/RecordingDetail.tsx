@@ -114,11 +114,16 @@ export default function RecordingDetail() {
     queryFn: () => api.listAttachments(id),
     enabled: Boolean(id),
   });
-  // Generated formula results (the Formulas tab).
+  // Generated formula results (the Formulas tab). Formula runs are async, so poll while any result is still
+  // generating (the run adds a Generating row immediately; the poll fills in the Ready/Failed outcome).
   const { data: formulaResults = [] } = useQuery({
     queryKey: ["formula-results", id],
     queryFn: () => api.listFormulaResults(id),
     enabled: Boolean(id),
+    refetchInterval: (q) => {
+      const d = q.state.data as FormulaResult[] | undefined;
+      return d?.some((r) => r.status === "Generating") ? 2500 : false;
+    },
   });
   // The user's own note lines (the Notes tab). Sparse trigger phrases that will steer the minutes (PR 3).
   const { data: notes = [] } = useQuery({

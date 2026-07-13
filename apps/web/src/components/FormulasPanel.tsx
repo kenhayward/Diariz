@@ -66,22 +66,32 @@ export default function FormulasPanel({
         className="w-1 shrink-0 cursor-col-resize bg-gray-200 hover:bg-blue-400 dark:bg-gray-700"
       />
       <div className="min-w-0 flex-1 pl-3">
-        <ResultView recordingId={recordingId} selectedId={selectedId} />
+        <ResultView recordingId={recordingId} selected={results.find((r) => r.id === selectedId) ?? null} />
       </div>
     </div>
   );
 }
 
-function ResultView({ recordingId, selectedId }: { recordingId: string; selectedId: string | null }) {
+function ResultView({ recordingId, selected }: { recordingId: string; selected: FormulaResult | null }) {
   const { t } = useTranslation(["workspace", "common"]);
+  // Only Ready results have a body to fetch; Generating/Failed results render a status message instead.
+  const isReady = selected?.status === "Ready";
   const { data, isLoading, error } = useQuery({
-    queryKey: ["formula-result-text", recordingId, selectedId],
-    queryFn: () => api.getFormulaResultText(recordingId, selectedId!),
-    enabled: selectedId != null,
+    queryKey: ["formula-result-text", recordingId, selected?.id],
+    queryFn: () => api.getFormulaResultText(recordingId, selected!.id),
+    enabled: selected != null && isReady,
   });
 
-  if (selectedId == null)
+  if (selected == null)
     return <p className="px-1 py-6 text-sm text-gray-400 dark:text-gray-500">{t("formulaSelectToView")}</p>;
+  if (selected.status === "Generating")
+    return <p className="px-1 py-6 text-sm text-gray-500 dark:text-gray-400">{t("formulaGenerating")}</p>;
+  if (selected.status === "Failed")
+    return (
+      <p className="px-1 py-6 text-sm text-red-600 dark:text-red-400">
+        {selected.error ? `${t("formulaFailed")}: ${selected.error}` : t("formulaFailed")}
+      </p>
+    );
   if (isLoading) return <p className="px-1 py-6 text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>;
   if (error)
     return (

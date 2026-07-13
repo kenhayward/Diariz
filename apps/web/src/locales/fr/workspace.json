@@ -306,6 +306,8 @@
   "errRunFormula": "Impossible d'exécuter la formule.",
   "formulaResultLoadFailed": "Impossible de charger ce résultat.",
   "formulaSelectToView": "Sélectionnez un résultat pour l'afficher.",
+  "formulaGenerating": "Génération en cours...",
+  "formulaFailed": "Échec de la génération",
   "confirmDeleteFormulaResult": "Supprimer \"{{name}}\" ? Cette action est irréversible.",
   "errDeleteFormulaResult": "Impossible de supprimer le résultat.",
   "errDownloadFormulaResult": "Impossible de télécharger le résultat.",
