@@ -56,7 +56,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.133.1",
     date: "2026-07-13",
-    pr: 0, // set to the real PR number after opening the PR
+    pr: 297,
     headline: "Fix: a shared-room folder's transcript list was empty",
     summary:
       "On a folder page in a shared room, the \"transcripts in this folder\" list showed nothing even though the folder opened. It was reading your personal library instead of the room you were viewing, so it never found the folder's recordings. It now reads the current room's recordings and folders.",
