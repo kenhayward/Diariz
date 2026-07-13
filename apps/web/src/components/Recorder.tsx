@@ -40,6 +40,8 @@ import {
 } from "../lib/pendingRecording";
 import * as timing from "../lib/recorderTiming";
 import type { Timing } from "../lib/recorderTiming";
+import * as schedule from "../lib/recorderSchedule";
+import type { AutoStopChoice } from "../lib/recorderSchedule";
 import {
   savePendingNotes,
   loadPendingNotes,
@@ -52,6 +54,7 @@ import type { MeetingNote, RecordingSource } from "../lib/types";
 const SOURCE_KEY = "diariz.recorder.source";
 const CONSTRAINTS_KEY = "diariz.recorder.audioConstraints";
 const SYSTEM_AUDIO_KEY = "diariz.recorder.systemAudio";
+const AUTOSTOP_KEY = "diariz.recorder.autoStop";
 
 // Whether this environment can capture system audio at all (Chromium/desktop). Drives the System audio
 // checkbox + the "No microphone" dropdown option; false in Firefox/Safari.
@@ -131,6 +134,21 @@ function loadSavedSystemAudio(): boolean {
   }
 }
 
+// The persisted auto-stop preference ({ choice, time }); the resolved target itself is never persisted
+// (it's re-derived on selection / at Record time and cleared on stop).
+function loadSavedAutoStop(): { choice: AutoStopChoice; time: string } {
+  try {
+    const raw = localStorage.getItem(AUTOSTOP_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { choice?: AutoStopChoice; time?: string };
+      return { choice: parsed.choice ?? "off", time: parsed.time ?? "" };
+    }
+  } catch {
+    /* storage unavailable / malformed — fall through to the default */
+  }
+  return { choice: "off", time: "" };
+}
+
 // A share dialog that was cancelled/denied, or that returned no audio track. When a mic is also being
 // captured we can safely fall back to mic-only; a hard failure (e.g. NotReadableError) is rethrown.
 function isAbortish(e: unknown): boolean {
@@ -179,6 +197,13 @@ export default function Recorder({
   // True once the input has been near-silent for a sustained period while recording (see InputLevelMeter).
   const [silent, setSilent] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  // Auto-stop: schedule the current recording to end after N minutes or at a set clock time. The chosen
+  // option persists; the resolved absolute target lives in a ref (read by the ticker) mirrored to state
+  // (for the "stops at HH:MM" display).
+  const [autoStopChoice, setAutoStopChoice] = useState<AutoStopChoice>("off");
+  const [autoStopTime, setAutoStopTime] = useState(""); // HH:MM for the "at" option
+  const scheduledStopRef = useRef<number | null>(null); // resolved absolute target, read by the ticker
+  const [scheduledStopAt, setScheduledStopAt] = useState<number | null>(null); // mirror for display
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // A non-fatal notice (e.g. we fell back to mic-only because system audio wasn't shared).
@@ -224,6 +249,9 @@ export default function Recorder({
   // Read inside upload() (state may not have flushed when onstop fires).
   const liveLinesRef = useRef<MeetingNote[]>([]);
   const timerRef = useRef<number | null>(null);
+  // A separate wall-clock interval for the auto-stop check. Kept independent of the elapsed ticker (which
+  // freezes on pause) so a *paused* recording still auto-stops at its scheduled time.
+  const scheduleTimerRef = useRef<number | null>(null);
   // The coarse source actually being recorded (mic vs system); the tray only speaks in these terms,
   // and the upload title/enum needs it, so we can't rely on `selection` state having flushed.
   const activeSourceRef = useRef<AudioSourceKind>("mic");
@@ -254,6 +282,9 @@ export default function Recorder({
   useEffect(() => {
     setConstraints(loadSavedConstraints());
     setSystemAudio(CAN_SYSTEM_AUDIO && loadSavedSystemAudio());
+    const savedAutoStop = loadSavedAutoStop();
+    setAutoStopChoice(savedAutoStop.choice);
+    setAutoStopTime(savedAutoStop.time);
     const saved = loadSavedSource();
     let cancelled = false;
     void (async () => {
@@ -326,6 +357,35 @@ export default function Recorder({
     }
   }
 
+  function persistAutoStop(choice: AutoStopChoice, time: string) {
+    try {
+      localStorage.setItem(AUTOSTOP_KEY, JSON.stringify({ choice, time }));
+    } catch {
+      /* non-fatal */
+    }
+  }
+
+  // Recompute the absolute stop target from the current choice and store it in both the ref (read by the
+  // ticker) and state (drives the "stops at HH:MM" display). `anchorMs` is the base for relative choices.
+  const applySchedule = useCallback((choice: AutoStopChoice, time: string, anchorMs: number) => {
+    const at = schedule.resolveStopAt(choice, time, anchorMs, Date.now());
+    scheduledStopRef.current = at;
+    setScheduledStopAt(at);
+  }, []);
+
+  // On change (persist + re-resolve). Anchor = now when changed here; a relative choice set before Record
+  // is re-anchored to record-start inside start().
+  function onAutoStopChoice(choice: AutoStopChoice) {
+    setAutoStopChoice(choice);
+    persistAutoStop(choice, autoStopTime);
+    applySchedule(choice, autoStopTime, Date.now());
+  }
+  function onAutoStopTime(time: string) {
+    setAutoStopTime(time);
+    persistAutoStop(autoStopChoice, time);
+    applySchedule(autoStopChoice, time, Date.now());
+  }
+
   function toggleConstraint(key: keyof AudioConstraints) {
     setConstraints((c) => {
       const next = { ...c, [key]: !c[key] };
@@ -364,6 +424,21 @@ export default function Recorder({
   function stopTicker() {
     if (timerRef.current) window.clearInterval(timerRef.current);
     timerRef.current = null;
+  }
+
+  // Auto-stop watcher: a wall-clock interval that ends the recording once the scheduled target is reached
+  // (which runs the normal upload + transcription). Runs from start() to stop() regardless of pause, so a
+  // paused recording still stops on time. `stop()` is a hoisted function declaration, so calling it is safe.
+  function startScheduleWatcher() {
+    if (scheduleTimerRef.current) window.clearInterval(scheduleTimerRef.current);
+    scheduleTimerRef.current = window.setInterval(() => {
+      if (schedule.shouldStop(scheduledStopRef.current, Date.now())) stop();
+    }, 1000);
+  }
+
+  function stopScheduleWatcher() {
+    if (scheduleTimerRef.current) window.clearInterval(scheduleTimerRef.current);
+    scheduleTimerRef.current = null;
   }
 
   // Mute/unmute the live capture tracks. While paused we disable them so nothing is captured *and* the
@@ -517,8 +592,11 @@ export default function Recorder({
       recorderRef.current = recorder;
       activeSourceRef.current = coarse;
       timingRef.current = timing.start(Date.now());
+      // Re-anchor a relative auto-stop to record-start, so "in N minutes" means N minutes of recording.
+      applySchedule(autoStopChoice, autoStopTime, Date.now());
       setElapsed(0);
       startTicker();
+      startScheduleWatcher();
       setRecording(true);
       setPaused(false);
       // Fresh notes for a fresh recording: clear any stale unattached lines (orphans from a crash whose
@@ -565,8 +643,12 @@ export default function Recorder({
 
   function stop() {
     stopTicker();
+    stopScheduleWatcher();
     // Fold any running segment so the uploaded duration is final and paused-free.
     timingRef.current = timing.pause(timingRef.current, Date.now());
+    // Clear the resolved auto-stop target so a finished schedule can't re-fire and the display clears.
+    scheduledStopRef.current = null;
+    setScheduledStopAt(null);
     setRecording(false);
     setPaused(false);
     setSilent(false);
@@ -871,6 +953,31 @@ export default function Recorder({
           data-testid="upload-input"
         />
 
+        {/* Schedule the current recording to auto-stop (then the normal upload+transcription runs). */}
+        <select
+          value={autoStopChoice}
+          onChange={(e) => onAutoStopChoice(e.target.value as AutoStopChoice)}
+          disabled={busy || !canRecord}
+          aria-label={t("autoStopLabel")}
+          title={t("autoStopLabel")}
+          className="rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+        >
+          <option value="off">{t("autoStopOff")}</option>
+          <option value="in15">{t("autoStopIn15")}</option>
+          <option value="in30">{t("autoStopIn30")}</option>
+          <option value="in60">{t("autoStopIn60")}</option>
+          <option value="at">{t("autoStopAt")}</option>
+        </select>
+        {autoStopChoice === "at" && (
+          <input
+            type="time"
+            value={autoStopTime}
+            onChange={(e) => onAutoStopTime(e.target.value)}
+            aria-label={t("autoStopAtAria")}
+            className="rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          />
+        )}
+
         {recording && (
           <>
             {paused ? (
@@ -879,6 +986,13 @@ export default function Recorder({
               </span>
             ) : (
               <span className="font-mono text-sm text-red-600">● {mmss}</span>
+            )}
+            {scheduledStopAt != null && (
+              <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
+                {t("autoStopScheduled", {
+                  time: new Date(scheduledStopAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                })}
+              </span>
             )}
             {/* Meter (and its silence detection) only runs while actively capturing. */}
             {!paused && <InputLevelMeter stream={streamRef.current} onSilentChange={setSilent} />}

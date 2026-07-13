@@ -14,7 +14,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 
 | Feature | Description |
 | --- | --- |
-| **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume), system audio, or both mixed together on one device - system audio works in Chromium browsers ("Share audio") and seamlessly in the desktop app; or upload files (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A). |
+| **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume), system audio, or both mixed together on one device - system audio works in Chromium browsers ("Share audio") and seamlessly in the desktop app; schedule a recording to auto-stop at a set time or after 15/30/60 minutes; or upload files (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A). |
 | **Transcribe & diarize** | Server-side WhisperX (word-level timestamps) with pyannote speaker diarization; speaker-labelled, editable, playable segments you can re-transcribe any time. |
 | **Speaker identification** | Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). |
 | **Notes** | Take your own note lines live during a meeting (timestamped, crash-safe); they appear inline in the transcript at the moment you wrote them, steer the minutes, and can be woven into an enhanced-notes section linking to the exact transcript moments. |
@@ -53,6 +53,17 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.133.0",
+    date: "2026-07-13",
+    pr: 296,
+    headline: "Schedule a recording to stop itself",
+    summary:
+      "You can now set the recorder to stop on its own - pick \"in 15 / 30 minutes\" or \"in 1 hour\", or a specific clock time, from the new Auto-stop control next to the record button. When the time arrives the recording ends and its transcription starts automatically, so you can start a meeting recording and walk away.",
+    added: [
+      "Auto-stop: schedule the current recording to end after 15/30/60 minutes or at a set time, which then starts transcription automatically.",
+    ],
+  },
   {
     version: "0.132.3",
     date: "2026-07-13",
