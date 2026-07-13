@@ -14,6 +14,9 @@ public class Formula
     public string Prompt { get; set; } = string.Empty;
     public FormulaContext Context { get; set; }
     public bool Enabled { get; set; } = true;      // Platform/Diariz availability
+    /// <summary>Only meaningful for Personal scope: when true, other users can discover this formula and
+    /// subscribe to it (a live link, not a copy). Deleting the formula cascade-removes their subscriptions.</summary>
+    public bool Shared { get; set; }
     public bool IsBuiltIn { get; set; }            // Diariz-seeded; blocks delete
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;

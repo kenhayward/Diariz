@@ -274,6 +274,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<int>("Scope")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("Shared")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -326,6 +329,31 @@ namespace Diariz.Domain.Migrations
                     b.HasIndex("RecordingId", "Ordinal");
 
                     b.ToTable("FormulaResults");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.FormulaSubscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("FormulaId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("FormulaId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("FormulaSubscriptions");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.IcsCalendarSource", b =>
@@ -1869,6 +1897,25 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("Formula");
 
                     b.Navigation("Recording");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.FormulaSubscription", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.Formula", "Formula")
+                        .WithMany()
+                        .HasForeignKey("FormulaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Formula");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.IcsCalendarSource", b =>

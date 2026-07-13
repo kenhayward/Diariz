@@ -40,6 +40,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<RoomRecording> RoomRecordings => Set<RoomRecording>();
     public DbSet<Formula> Formulas => Set<Formula>();
     public DbSet<FormulaResult> FormulaResults => Set<FormulaResult>();
+    public DbSet<FormulaSubscription> FormulaSubscriptions => Set<FormulaSubscription>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -289,6 +290,18 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 .WithMany()
                 .HasForeignKey(f => f.OwnerUserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // A subscriber's live link to a shared Personal formula. Two cascade paths (formula + user) are safe
+        // on Postgres (see the FormulaResult block). Unique per (FormulaId, UserId) so a user can't add the
+        // same formula twice; the controller is also idempotent.
+        builder.Entity<FormulaSubscription>(e =>
+        {
+            e.HasIndex(s => new { s.FormulaId, s.UserId }).IsUnique();
+            e.HasOne(s => s.Formula).WithMany()
+                .HasForeignKey(s => s.FormulaId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(s => s.User).WithMany()
+                .HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         // The Markdown document produced by running a Formula over a recording. Cascades with the recording;
