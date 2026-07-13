@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
+import ErrorBoundary from "./ErrorBoundary";
 import RecordingsPanel from "./RecordingsPanel";
 import ChatPanel from "./ChatPanel";
 import RoomSwitcher from "./RoomSwitcher";
@@ -30,6 +31,7 @@ const RIGHT_MAX = 640;
 /// Left and right panels collapse to a thin rail; the right panel is also drag-resizable.
 export default function Workspace() {
   const { t } = useTranslation("workspace");
+  const { pathname } = useLocation();
   const { currentRoom } = useRoom();
   const [leftOpen, setLeftOpen] = usePersistedBool("diariz.panels.left", true);
   const [rightOpen, setRightOpen] = usePersistedBool("diariz.panels.right", false);
@@ -90,7 +92,11 @@ export default function Workspace() {
 
       <main data-tour="detail" className="min-w-0 flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950">
         <div className="p-6">
-          <Outlet />
+          {/* Contain a routed-page render crash so it shows a message instead of blanking the whole app
+              (issue #289); keyed by path so navigating away recovers. */}
+          <ErrorBoundary resetKey={pathname} message={t("detailErrorTitle")} hint={t("detailErrorHint")}>
+            <Outlet />
+          </ErrorBoundary>
         </div>
       </main>
 
