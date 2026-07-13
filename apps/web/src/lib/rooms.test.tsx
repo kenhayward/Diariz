@@ -1,7 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useNavigate } from "react-router-dom";
 import { RoomProvider, useRoom } from "./rooms";
 import { RoomPermission, type RoomListItem } from "./types";
 import { api } from "./api";
@@ -118,4 +118,42 @@ describe("RoomProvider", () => {
     await screen.findByText("Ada Lovelace");
     expect(screen.getByTestId("rec-section").textContent).toBe("sec-fixed");
   });
+
+  it("keeps a stable hook count when navigating to a personal folder (issue #289)", async () => {
+    // Navigating from a non-folder route to /sections/:id used to short-circuit the second useMatch,
+    // dropping a hook between renders of the same RoomProvider instance - a Rules-of-Hooks violation that
+    // crashed React with "Cannot read properties of undefined (reading 'length')". Shared folders
+    // (/rooms/:id/sections/:id) were unaffected because the first useMatch missed and both hooks still ran.
+    (api.listRooms as Mock).mockResolvedValue([personal]);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={["/recordings/rec-1"]}>
+          <RoomProvider>
+            <Navigator />
+          </RoomProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await screen.findByTestId("go");
+    // With the bug this navigation re-renders RoomProvider with one fewer hook and throws.
+    expect(() => fireEvent.click(screen.getByTestId("go"))).not.toThrow();
+    expect(screen.getByTestId("nav-section").textContent).toBe("sec-1");
+  });
 });
+
+/// Navigates to a personal folder route on click, and reads the folder RoomProvider resolves - so the test
+/// can force a same-instance re-render across the /recordings -> /sections route change.
+function Navigator() {
+  const nav = useNavigate();
+  const { selectedSectionId } = useRoom();
+  return (
+    <>
+      <button data-testid="go" onClick={() => nav("/sections/sec-1")}>
+        go
+      </button>
+      <span data-testid="nav-section">{selectedSectionId ?? "null"}</span>
+    </>
+  );
+}

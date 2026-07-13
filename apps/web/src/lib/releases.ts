@@ -54,6 +54,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.132.3",
+    date: "2026-07-13",
+    pr: 293,
+    headline: "Fix: opening a personal-room folder crashed the page",
+    summary:
+      "The real root cause behind the folder blank: the room provider called a routing hook conditionally (two route checks joined by a fallback), so opening a folder in your personal room dropped one of React's hooks between renders and crashed the page. Both checks now always run. Shared-room folders were never affected because their route took the other branch. This is the underlying fix; the earlier release just stopped the crash from blanking the whole app.",
+    fixed: [
+      "Opening a folder in your personal room no longer crashes the page (a conditional React hook in the room provider - a Rules of Hooks violation).",
+    ],
+  },
+  {
     version: "0.132.2",
     date: "2026-07-13",
     pr: 292,

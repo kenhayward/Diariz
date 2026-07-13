@@ -28,9 +28,14 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   // useMatch (not useParams) so this works even though RoomProvider sits on the parent "/" route, above the
   // route that carries :roomId. Matches /rooms/:roomId and any nested detail under it.
   const roomId = useMatch("/rooms/:roomId/*")?.params.roomId;
-  // The folder currently open, from either the legacy or the room-scoped section route.
-  const selectedSectionId =
-    useMatch("/sections/:id")?.params.id ?? useMatch("/rooms/:roomId/sections/:id")?.params.id ?? null;
+  // The folder currently open, from either the legacy or the room-scoped section route. Both useMatch calls
+  // must be UNCONDITIONAL: joining them with `??` short-circuits (skips) the second hook whenever the first
+  // (/sections/:id) matches, so the hook count drops between renders when you open a personal folder - a
+  // Rules-of-Hooks violation that crashed React with "reading 'length'" (issue #289). Combine the results,
+  // not the hook calls.
+  const legacySectionMatch = useMatch("/sections/:id");
+  const roomSectionMatch = useMatch("/rooms/:roomId/sections/:id");
+  const selectedSectionId = legacySectionMatch?.params.id ?? roomSectionMatch?.params.id ?? null;
   const { data: rooms = [], isLoading } = useQuery({ queryKey: ["rooms"], queryFn: api.listRooms });
   const { data: settings } = useQuery({ queryKey: ["user-settings"], queryFn: api.getUserSettings });
 
