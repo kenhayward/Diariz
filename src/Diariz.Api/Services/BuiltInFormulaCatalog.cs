@@ -98,8 +98,10 @@ public static class BuiltInFormulaCatalog
         foreach (var path in Directory.EnumerateFiles(dir, "*.md")
                      .OrderBy(p => Path.GetFileName(p), StringComparer.Ordinal))
         {
+            // Skip a bad file (malformed, unreadable, or wrong-permissions on a mounted volume) rather than
+            // crash boot; UnauthorizedAccessException is a SystemException, not an IOException, so name it.
             try { specs.Add(Parse(File.ReadAllText(path), Path.GetFileName(path))); }
-            catch (Exception ex) when (ex is FormatException or IOException)
+            catch (Exception ex) when (ex is FormatException or IOException or UnauthorizedAccessException)
             {
                 log?.LogWarning("Skipping built-in formula {File}: {Error}", Path.GetFileName(path), ex.Message);
             }
