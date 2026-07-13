@@ -266,7 +266,7 @@ describe("ChatPanel", () => {
   describe("/formula command", () => {
     const formula = {
       id: "f1", scope: "Personal", ownerUserId: "u1", name: "Follow-up email",
-      description: null, prompt: "Draft a follow-up.", context: 1, enabled: true, isBuiltIn: false,
+      description: null, prompt: "Draft a follow-up.", context: 1, enabled: true, isBuiltIn: false, shared: false,
     };
 
     beforeEach(() => {

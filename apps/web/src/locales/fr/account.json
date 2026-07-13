@@ -42,6 +42,8 @@
   "contextSummary": "Résumé",
   "contextMinutes": "Compte rendu",
   "contextActions": "Actions",
+  "formulaShared": "Partager cette formule",
+  "formulaSharedHint": "D'autres personnes peuvent trouver et ajouter cette formule. Elles peuvent l'exécuter mais pas la modifier, et vos modifications ultérieures s'appliquent aussi à elles.",
   "jobTitle": "Intitulé du poste",
   "companyName": "Nom de l'entreprise",
   "jobDescription": "Description du poste",

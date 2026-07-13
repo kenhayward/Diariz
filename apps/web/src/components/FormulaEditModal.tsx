@@ -36,8 +36,11 @@ export default function FormulaEditModal({
   const [description, setDescription] = useState(formula?.description ?? "");
   const [prompt, setPrompt] = useState(formula?.prompt ?? "");
   const [context, setContext] = useState(formula?.context ?? 0);
+  const [shared, setShared] = useState(formula?.shared ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isPersonal = formula ? formula.scope === "Personal" : scope === "Personal";
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -63,6 +66,7 @@ export default function FormulaEditModal({
           description: description.trim() || null,
           prompt: prompt.trim(),
           context,
+          shared,
         });
       } else {
         await api.createFormula({
@@ -71,6 +75,7 @@ export default function FormulaEditModal({
           description: description.trim() || null,
           prompt: prompt.trim(),
           context,
+          shared,
         });
       }
       onSaved();
@@ -132,6 +137,16 @@ export default function FormulaEditModal({
             ))}
           </div>
         </div>
+
+        {isPersonal && (
+          <label className="flex items-start gap-2 text-sm dark:text-gray-200">
+            <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} className="mt-0.5" />
+            <span>
+              <span className="font-medium">{t("formulaShared")}</span>
+              <span className="block text-xs text-gray-400 dark:text-gray-500">{t("formulaSharedHint")}</span>
+            </span>
+          </label>
+        )}
 
         {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 

@@ -25,6 +25,7 @@ import type {
   Formula,
   FormulaResult,
   FormulaScope,
+  SharedFormula,
   GrantResult,
   Language,
   McpToken,
@@ -1151,6 +1152,7 @@ export const api = {
     description?: string | null;
     prompt: string;
     context: number;
+    shared?: boolean;
   }): Promise<Formula> {
     const { data } = await http.post<Formula>("/api/formulas", body);
     return data;
@@ -1159,7 +1161,7 @@ export const api = {
   /// Partial update: omitted fields are left unchanged.
   async updateFormula(
     id: string,
-    body: { name?: string; description?: string | null; prompt?: string; context?: number },
+    body: { name?: string; description?: string | null; prompt?: string; context?: number; shared?: boolean },
   ): Promise<Formula> {
     const { data } = await http.put<Formula>(`/api/formulas/${id}`, body);
     return data;
@@ -1167,6 +1169,22 @@ export const api = {
 
   async deleteFormula(id: string): Promise<void> {
     await http.delete(`/api/formulas/${id}`);
+  },
+
+  /// Formulas shared by other users, for the discovery browser.
+  async listSharedFormulas(): Promise<SharedFormula[]> {
+    const { data } = await http.get<SharedFormula[]>("/api/formulas/shared");
+    return data;
+  },
+
+  /// Add a shared formula to the caller's collection (idempotent).
+  async subscribeFormula(id: string): Promise<void> {
+    await http.post(`/api/formulas/${id}/subscribe`);
+  },
+
+  /// Remove the caller's link to a shared formula (idempotent).
+  async unsubscribeFormula(id: string): Promise<void> {
+    await http.delete(`/api/formulas/${id}/subscribe`);
   },
 
   /// Enable/disable a Platform/Diariz formula (Personal formulas are always available).

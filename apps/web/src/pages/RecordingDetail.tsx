@@ -33,6 +33,7 @@ import ToolbarButton, { iconProps } from "../components/ToolbarButton";
 import FormulasToolbar from "../components/FormulasToolbar";
 import FormulasPanel from "../components/FormulasPanel";
 import FormulaRunModal from "../components/FormulaRunModal";
+import SharedFormulasBrowser from "../components/SharedFormulasBrowser";
 import FormulaResultEditModal from "../components/FormulaResultEditModal";
 import { recordingMenu } from "../components/recordingMenu";
 import { copyRichLink, transcriptUrl } from "../lib/clipboard";
@@ -218,6 +219,8 @@ export default function RecordingDetail() {
   const [editingFormulaResult, setEditingFormulaResult] = useState<FormulaResult | null>(null);
   // "Manage formulas" (in FormulaRunModal's footer) opens Preferences on the Formulas tab.
   const [managingFormulas, setManagingFormulas] = useState(false);
+  // "Find shared formulas" opens the global discovery browser (no recording context).
+  const [sharedBrowserOpen, setSharedBrowserOpen] = useState(false);
   // Mini player (the small header progress bar): current time + play/pause state of the shared <audio>.
   const [audioCur, setAudioCur] = useState(0);
   const [audioPaused, setAudioPaused] = useState(true);
@@ -1647,8 +1650,13 @@ export default function RecordingDetail() {
             setFormulaRunOpen(false);
             setManagingFormulas(true);
           }}
+          onFindShared={() => {
+            setFormulaRunOpen(false);
+            setSharedBrowserOpen(true);
+          }}
         />
       )}
+      {sharedBrowserOpen && <SharedFormulasBrowser onClose={() => setSharedBrowserOpen(false)} />}
       {editingFormulaResult && (
         <FormulaResultEditModal
           name={editingFormulaResult.name}

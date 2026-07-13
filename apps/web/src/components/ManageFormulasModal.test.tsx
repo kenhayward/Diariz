@@ -45,6 +45,7 @@ const formula = (over: Partial<Formula> = {}): Formula => ({
   context: 1,
   enabled: true,
   isBuiltIn: false,
+  shared: false,
   ...over,
 });
 

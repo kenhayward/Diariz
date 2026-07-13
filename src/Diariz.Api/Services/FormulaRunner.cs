@@ -52,7 +52,11 @@ public class FormulaRunner : IFormulaRunner
         var rec = await LoadRecordingAsync(userId, recordingId, formula.Context, ct);
         if (rec is null) throw new FormulaNotFoundException("Recording not found.");
 
-        EnsureCanRun(formula, userId);
+        var subscribed = formula.Scope == FormulaScope.Personal
+            && formula.OwnerUserId != userId
+            && formula.Shared
+            && await _db.FormulaSubscriptions.AnyAsync(s => s.FormulaId == formula.Id && s.UserId == userId, ct);
+        EnsureCanRun(formula, userId, subscribed);
 
         var cfg = await _settings.ResolveAsync(userId, ct);
         if (!cfg.Enabled)
@@ -97,11 +101,13 @@ public class FormulaRunner : IFormulaRunner
     /// disabled Platform/Diariz formula is public knowledge, so it stays <see cref="FormulaAccessException"/>.
     /// (Access to the *recording* is checked separately, in <see cref="LoadRecordingAsync"/>, before this
     /// ever runs.)</summary>
-    private static void EnsureCanRun(Formula formula, Guid userId)
+    private static void EnsureCanRun(Formula formula, Guid userId, bool subscribed)
     {
         if (formula.Scope == FormulaScope.Personal)
         {
-            if (formula.OwnerUserId != userId)
+            // Owner, or a subscriber to a shared formula. Otherwise hide its existence (404) - it's added via
+            // the discovery browser, not run directly.
+            if (formula.OwnerUserId != userId && !subscribed)
                 throw new FormulaNotFoundException("Formula not found.");
         }
         else if (!formula.Enabled)

@@ -501,4 +501,170 @@ public class FormulasControllerTests
         await Assert.ThrowsAsync<OperationCanceledException>(
             () => controller.Run(Guid.NewGuid(), Guid.NewGuid(), cancelled));
     }
+
+    // ---- Sharing ----
+
+    private static ApplicationUser MakeUser(Guid id, string? fullName, string email) =>
+        new() { Id = id, FullName = fullName, Email = email, UserName = email };
+
+    [Fact]
+    public async Task Create_personal_sets_shared_when_requested()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var controller = Build(db, userId);
+
+        var result = await controller.Create(new CreateFormulaRequest(
+            "Personal", "My Formula", null, "Summarize.", (int)FormulaContext.Transcript, Shared: true));
+
+        var dto = Assert.IsType<FormulaDto>(Assert.IsType<CreatedResult>(result.Result).Value);
+        Assert.True(dto.Shared);
+    }
+
+    [Fact]
+    public async Task Create_platform_ignores_shared()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        Perms.Grant(db, userId, PlatformPermission.ManageFormulas);
+        var controller = Build(db, userId);
+
+        var result = await controller.Create(new CreateFormulaRequest(
+            "Platform", "Shared Formula", null, "Summarize.", (int)FormulaContext.Transcript, Shared: true));
+
+        var dto = Assert.IsType<FormulaDto>(Assert.IsType<CreatedResult>(result.Result).Value);
+        Assert.False(dto.Shared);
+    }
+
+    [Fact]
+    public async Task Update_toggles_shared_for_owner()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var formula = Personal(owner);
+        db.Formulas.Add(formula);
+        await db.SaveChangesAsync();
+
+        var controller = Build(db, owner);
+
+        var on = await controller.Update(formula.Id, new UpdateFormulaRequest(null, null, null, null, Shared: true));
+        Assert.True(Assert.IsType<FormulaDto>(Assert.IsType<OkObjectResult>(on.Result).Value).Shared);
+
+        var off = await controller.Update(formula.Id, new UpdateFormulaRequest(null, null, null, null, Shared: false));
+        Assert.False(Assert.IsType<FormulaDto>(Assert.IsType<OkObjectResult>(off.Result).Value).Shared);
+    }
+
+    [Fact]
+    public async Task List_includes_a_subscribed_shared_formula_and_excludes_unsubscribed()
+    {
+        using var db = TestDb.Create();
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        var shared = Personal(a, "A's Shared");
+        shared.Shared = true;
+        db.Formulas.Add(shared);
+        await db.SaveChangesAsync();
+
+        // Without a subscription, B doesn't see it.
+        var listBefore = await Build(db, b).List();
+        Assert.DoesNotContain(listBefore, f => f.Name == "A's Shared");
+
+        db.FormulaSubscriptions.Add(new FormulaSubscription
+        {
+            Id = Guid.NewGuid(), FormulaId = shared.Id, UserId = b, CreatedAt = DateTimeOffset.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        var listAfter = await Build(db, b).List();
+        Assert.Contains(listAfter, f => f.Name == "A's Shared");
+    }
+
+    [Fact]
+    public async Task Shared_lists_others_shared_formulas_with_owner_and_alreadyAdded()
+    {
+        using var db = TestDb.Create();
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        db.Users.Add(MakeUser(a, "Alice Owner", "alice@example.com"));
+
+        var shared = Personal(a, "A's Shared");
+        shared.Shared = true;
+        var notShared = Personal(a, "A's Private"); // not shared
+        var bOwn = Personal(b, "B's Own");
+        bOwn.Shared = true; // shared but owned by the caller -> excluded
+        db.Formulas.AddRange(shared, notShared, bOwn);
+        await db.SaveChangesAsync();
+
+        var result = await Build(db, b).Shared();
+        var list = Assert.IsAssignableFrom<IReadOnlyList<SharedFormulaDto>>(result.Value);
+
+        Assert.Single(list);
+        var row = list[0];
+        Assert.Equal("A's Shared", row.Formula.Name);
+        Assert.Equal("Alice Owner", row.OwnerName);
+        Assert.False(row.AlreadyAdded);
+
+        db.FormulaSubscriptions.Add(new FormulaSubscription
+        {
+            Id = Guid.NewGuid(), FormulaId = shared.Id, UserId = b, CreatedAt = DateTimeOffset.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        var result2 = await Build(db, b).Shared();
+        var list2 = Assert.IsAssignableFrom<IReadOnlyList<SharedFormulaDto>>(result2.Value);
+        Assert.True(list2[0].AlreadyAdded);
+    }
+
+    [Fact]
+    public async Task Subscribe_adds_link_is_idempotent_and_404s_for_own_or_nonshared()
+    {
+        using var db = TestDb.Create();
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        var shared = Personal(a, "A's Shared");
+        shared.Shared = true;
+        var notShared = Personal(a, "A's Private");
+        var bOwn = Personal(b, "B's Own");
+        bOwn.Shared = true;
+        db.Formulas.AddRange(shared, notShared, bOwn);
+        await db.SaveChangesAsync();
+
+        var controller = Build(db, b);
+
+        Assert.IsType<NoContentResult>(await controller.Subscribe(shared.Id));
+        Assert.Equal(1, db.FormulaSubscriptions.Count(s => s.FormulaId == shared.Id && s.UserId == b));
+
+        // Idempotent - second call doesn't add a duplicate.
+        Assert.IsType<NoContentResult>(await controller.Subscribe(shared.Id));
+        Assert.Equal(1, db.FormulaSubscriptions.Count(s => s.FormulaId == shared.Id && s.UserId == b));
+
+        // Non-shared, own, and missing -> 404 (leak-avoidance).
+        Assert.IsType<NotFoundResult>(await controller.Subscribe(notShared.Id));
+        Assert.IsType<NotFoundResult>(await controller.Subscribe(bOwn.Id));
+        Assert.IsType<NotFoundResult>(await controller.Subscribe(Guid.NewGuid()));
+    }
+
+    [Fact]
+    public async Task Unsubscribe_removes_link_and_is_idempotent()
+    {
+        using var db = TestDb.Create();
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        var shared = Personal(a, "A's Shared");
+        shared.Shared = true;
+        db.Formulas.Add(shared);
+        db.FormulaSubscriptions.Add(new FormulaSubscription
+        {
+            Id = Guid.NewGuid(), FormulaId = shared.Id, UserId = b, CreatedAt = DateTimeOffset.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        var controller = Build(db, b);
+
+        Assert.IsType<NoContentResult>(await controller.Unsubscribe(shared.Id));
+        Assert.Equal(0, db.FormulaSubscriptions.Count(s => s.FormulaId == shared.Id && s.UserId == b));
+
+        // Idempotent - removing again is still NoContent.
+        Assert.IsType<NoContentResult>(await controller.Unsubscribe(shared.Id));
+    }
 }

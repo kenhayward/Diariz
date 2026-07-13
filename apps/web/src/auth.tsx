@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, getToken, setToken } from "./lib/api";
 import type { Permissions } from "./lib/types";
-import { emailFromToken, fullNameFromToken, pictureFromToken } from "./lib/jwt";
+import { emailFromToken, fullNameFromToken, pictureFromToken, userIdFromToken } from "./lib/jwt";
 import { refreshDelayMs } from "./lib/tokenRefresh";
 import { initialsFromName, initialsFromEmail } from "./lib/initials";
 
@@ -11,6 +11,8 @@ const NO_PERMISSIONS: Permissions = { manageRooms: false, manageUsers: false, ma
 
 interface AuthState {
   isAuthed: boolean;
+  /// The caller's user id, decoded from the JWT (for owner-vs-shared checks in the run picker).
+  id: string | null;
   email: string | null;
   fullName: string | null;
   /// The caller's platform permissions, from GET /api/user/profile. Never inferred from the JWT: a token
@@ -34,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setTokenState] = useState<string | null>(() => getToken());
   const qc = useQueryClient();
 
+  const id = useMemo(() => userIdFromToken(token), [token]);
   const email = useMemo(() => emailFromToken(token), [token]);
   const fullName = useMemo(() => fullNameFromToken(token), [token]);
   const initials = useMemo(() => (fullName ? initialsFromName(fullName) : initialsFromEmail(email)), [fullName, email]);
@@ -118,6 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         isAuthed: Boolean(token),
+        id,
         email,
         fullName,
         permissions,

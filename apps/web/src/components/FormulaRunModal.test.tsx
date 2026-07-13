@@ -13,6 +13,10 @@ vi.mock("../lib/api", () => ({
   },
 }));
 
+// The caller is "u1": their own Personal formulas group under "Personal"; Personal formulas owned by anyone
+// else group under "Shared".
+vi.mock("../auth", () => ({ useAuth: () => ({ id: "u1" }) }));
+
 import { api } from "../lib/api";
 import FormulaRunModal from "./FormulaRunModal";
 import type { Formula } from "../lib/types";
@@ -27,6 +31,7 @@ const formula = (over: Partial<Formula> = {}): Formula => ({
   context: 1,
   enabled: true,
   isBuiltIn: false,
+  shared: false,
   ...over,
 });
 
@@ -109,5 +114,25 @@ describe("FormulaRunModal", () => {
     (api.listFormulas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     renderModal();
     expect(await screen.findByText(/manage formulas/i)).toBeTruthy();
+  });
+
+  it("groups a Personal formula owned by another user under the Shared heading", async () => {
+    (api.listFormulas as ReturnType<typeof vi.fn>).mockResolvedValue([
+      formula({ id: "f1", name: "My Own", scope: "Personal", ownerUserId: "u1" }),
+      formula({ id: "f2", name: "From Someone", scope: "Personal", ownerUserId: "u2", shared: true }),
+    ]);
+    renderModal();
+    await screen.findByText("My Own");
+    expect(screen.getByText("Personal")).toBeTruthy();
+    expect(screen.getByText("Shared")).toBeTruthy();
+    expect(screen.getByText("From Someone")).toBeTruthy();
+  });
+
+  it("calls onFindShared when the Find shared formulas button is clicked", async () => {
+    (api.listFormulas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    const onFindShared = vi.fn();
+    renderModal({ onFindShared });
+    fireEvent.click(await screen.findByText(/find shared formulas/i));
+    expect(onFindShared).toHaveBeenCalled();
   });
 });

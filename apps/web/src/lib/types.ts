@@ -788,11 +788,20 @@ export interface Formula {
   context: number;
   enabled: boolean;
   isBuiltIn: boolean;
+  shared: boolean;
+}
+
+/// A formula shared by another user, for the discovery browser (mirrors SharedFormulaDto).
+export interface SharedFormula {
+  formula: Formula;
+  ownerName: string | null;
+  ownerPictureUrl: string | null;
+  alreadyAdded: boolean;
 }
 
 /// Where a formula result came from, for the runs-list icon. Mirrors FormulaResultOriginDto.
 export interface FormulaResultOrigin {
-  kind: "diariz" | "platform" | "personal"; // Phase D adds "shared"
+  kind: "diariz" | "platform" | "personal"; // a subscribed shared formula resolves to "personal" (the sharer)
   personName: string | null;
   personPictureUrl: string | null;
 }

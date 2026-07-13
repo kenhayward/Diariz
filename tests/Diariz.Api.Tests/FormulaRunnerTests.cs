@@ -190,6 +190,77 @@ public class FormulaRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_SharedFormulaSubscribedByCaller_ProducesResult()
+    {
+        // B runs A's shared Personal formula over B's own recording; a subscription grants run access.
+        using var db = TestDb.Create();
+        var ownerA = Guid.NewGuid();
+        var callerB = Guid.NewGuid();
+        var (rec, _) = await SeedRecordingWithTranscript(db, callerB);
+
+        var formula = new Formula
+        {
+            Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = ownerA,
+            Name = "A's Shared", Prompt = "P", Context = FormulaContext.Transcript, Enabled = true, Shared = true,
+        };
+        db.Formulas.Add(formula);
+        db.FormulaSubscriptions.Add(new FormulaSubscription
+        {
+            Id = Guid.NewGuid(), FormulaId = formula.Id, UserId = callerB, CreatedAt = DateTimeOffset.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        var runner = MakeRunner(db, new FakeChatStreamClient { Tokens = ["ok"] }, new FakeSummarizationSettingsResolver());
+
+        var result = await runner.RunAsync(callerB, rec.Id, formula.Id);
+
+        Assert.Equal(callerB, result.CreatedByUserId);
+        Assert.Equal(formula.Id, result.FormulaId);
+    }
+
+    [Fact]
+    public async Task RunAsync_SharedFormulaNotSubscribed_ThrowsFormulaNotFoundException()
+    {
+        using var db = TestDb.Create();
+        var ownerA = Guid.NewGuid();
+        var callerB = Guid.NewGuid();
+        var (rec, _) = await SeedRecordingWithTranscript(db, callerB);
+
+        var formula = new Formula
+        {
+            Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = ownerA,
+            Name = "A's Shared", Prompt = "P", Context = FormulaContext.Transcript, Enabled = true, Shared = true,
+        };
+        db.Formulas.Add(formula);
+        await db.SaveChangesAsync();
+
+        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeSummarizationSettingsResolver());
+
+        await Assert.ThrowsAsync<FormulaNotFoundException>(() => runner.RunAsync(callerB, rec.Id, formula.Id));
+    }
+
+    [Fact]
+    public async Task RunAsync_NonSharedNonOwnedPersonalFormula_ThrowsFormulaNotFoundException()
+    {
+        using var db = TestDb.Create();
+        var ownerA = Guid.NewGuid();
+        var callerB = Guid.NewGuid();
+        var (rec, _) = await SeedRecordingWithTranscript(db, callerB);
+
+        var formula = new Formula
+        {
+            Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = ownerA,
+            Name = "A's Private", Prompt = "P", Context = FormulaContext.Transcript, Enabled = true, Shared = false,
+        };
+        db.Formulas.Add(formula);
+        await db.SaveChangesAsync();
+
+        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeSummarizationSettingsResolver());
+
+        await Assert.ThrowsAsync<FormulaNotFoundException>(() => runner.RunAsync(callerB, rec.Id, formula.Id));
+    }
+
+    [Fact]
     public async Task RunAsync_NotConfigured_ThrowsFormulaNotConfiguredException()
     {
         using var db = TestDb.Create();

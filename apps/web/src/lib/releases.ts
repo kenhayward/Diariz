@@ -22,7 +22,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Action items** | Auto-extracted with owner and deadline, tracked across every meeting with completion and a person filter, linking back to the transcript. |
 | **Tag cloud** | Every meeting is auto-tagged with weighted topics; a Tags tab shows a weighted cloud and the meetings behind each tag. |
 | **Chat over transcripts** | Stream answers over one meeting, a folder (its summary/minutes/actions), several selected, or all meetings - context inferred from what you're viewing - via your OpenAI-compatible model, with attachments and saved conversations. |
-| **Formulas** | Save a prompt + a context and run it over a recording (personal, platform-wide, or built-in) to generate a Markdown document you can edit, download, or email - from the Formulas tab, \`/formula\` in chat, or Claude via MCP; admins manage the shared ones. |
+| **Formulas** | Save a prompt + a context and run it over a recording (personal, platform-wide, or built-in) to generate a Markdown document you can edit, download, or email - from the Formulas tab, \`/formula\` in chat, or Claude via MCP; share a personal one so others can find and add it (a live link); admins manage the shared ones. |
 | **Search** | Keyword search across your library, upgraded to semantic (meaning-based) search when an embeddings endpoint is configured. |
 | **Chat tools** | The assistant searches your library with built-in tools (who-said-what, attendees, talk time, summaries, email-to-self) and links to the exact segment. |
 | **Voice dictation** | Speak your chat questions - transcribed into the chat box in Chrome/Edge or via a server speech-to-text endpoint. |
@@ -53,6 +53,18 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.132.0",
+    date: "2026-07-13",
+    pr: 290,
+    headline: "Share formulas with your team",
+    summary:
+      "You can now share a personal formula with everyone on the platform. Turn on \"Share this formula\" when editing it, and others can find it under \"Find shared formulas\" in the run picker, see who shared it, read what it does, and add it to their own collection - a live link, so your later edits reach them too. Added formulas appear in a new \"Shared Formulas\" group; anyone can remove one they added, and deleting the original removes it for everyone.",
+    added: [
+      "Share a personal formula platform-wide, and discover + add formulas others have shared (a live link, not a copy).",
+      "A \"Shared Formulas\" group in the run picker and a \"Find shared formulas\" browser with the sharer's name and avatar.",
+    ],
+  },
   {
     version: "0.131.0",
     date: "2026-07-13",

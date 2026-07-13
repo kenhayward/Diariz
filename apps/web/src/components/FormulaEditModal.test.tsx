@@ -27,6 +27,7 @@ const existingFormula: Formula = {
   context: 3, // Transcript (1) + Notes (2)
   enabled: true,
   isBuiltIn: false,
+  shared: false,
 };
 
 describe("FormulaEditModal", () => {
@@ -71,6 +72,7 @@ describe("FormulaEditModal", () => {
         description: null,
         prompt: "Summarize this",
         context: 33,
+        shared: false,
       }),
     );
     expect(onSaved).toHaveBeenCalled();
@@ -94,6 +96,7 @@ describe("FormulaEditModal", () => {
         description: null,
         prompt: "Do the thing",
         context: 0,
+        shared: false,
       }),
     );
     expect(onSaved).toHaveBeenCalled();
@@ -121,6 +124,7 @@ describe("FormulaEditModal", () => {
         description: "Desc",
         prompt: "Old prompt",
         context: 11,
+        shared: false,
       }),
     );
     expect(onSaved).toHaveBeenCalled();
@@ -137,6 +141,30 @@ describe("FormulaEditModal", () => {
     const { onClose, container } = renderModal();
     fireEvent.click(container.firstChild as Element);
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("renders the Share checkbox for a Personal create but not for Platform", () => {
+    const { unmount } = renderModal();
+    expect(screen.getByLabelText(/share this formula/i)).toBeTruthy();
+    unmount();
+
+    renderModal({ scope: "Platform" });
+    expect(screen.queryByLabelText(/share this formula/i)).toBeNull();
+  });
+
+  it("toggling Share sends shared: true in the create payload", async () => {
+    (api.createFormula as ReturnType<typeof vi.fn>).mockResolvedValue({});
+    renderModal();
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "Shared One" } });
+    fireEvent.change(screen.getByLabelText(/^prompt$/i), { target: { value: "Do it" } });
+    fireEvent.click(screen.getByLabelText(/share this formula/i));
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(api.createFormula).toHaveBeenCalledWith(
+        expect.objectContaining({ scope: "Personal", name: "Shared One", shared: true }),
+      ),
+    );
   });
 
   it("shows an error and keeps the modal open when save fails", async () => {

@@ -128,7 +128,12 @@ the tab: type **`/formula <name>`** in the chat box to run it on the recording y
 to run it for you - the built-in `run_formula` chat tool is exposed over MCP, so Claude Desktop, Claude Code,
 and the claude.ai web connector can trigger any formula you can see. Admins with **Manage Formulas** get a
 **Manage Formulas** window from the account menu to create and edit Platform-wide formulas shared with
-everyone, and to enable/disable or tune the built-in Diariz starter formulas.
+everyone, and to enable/disable or tune the built-in Diariz starter formulas. You can also **share a Personal
+formula** with everyone on the platform: turn on "Share this formula" in its editor, and others can open **Find
+shared formulas** in the run picker to see who shared it, read what it does, and **add** it to their own
+collection - a **live link, not a copy**, so your later edits reach them too. Added formulas appear in a new
+**Shared Formulas** group in the run picker (run with the subscriber's own LLM config); anyone can remove one
+they added, and deleting the original removes it for everyone.
 - **Extract action items** (Action / Actor / Deadline) with that same LLM — **automatically as part of the
 transcription pipeline**, into an editable table in an always-available **Action items** panel (collapsed by
 default, with a refresh button to re-extract). The automatic pass runs once and never overwrites actions

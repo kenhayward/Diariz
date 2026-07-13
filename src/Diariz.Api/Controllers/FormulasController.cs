@@ -49,7 +49,9 @@ public class FormulasController : ControllerBase
         var userId = UserId;
         var formulas = await _db.Formulas
             .Where(f => (f.Scope == FormulaScope.Personal && f.OwnerUserId == userId)
-                     || (f.Scope != FormulaScope.Personal && f.Enabled))
+                     || (f.Scope != FormulaScope.Personal && f.Enabled)
+                     || (f.Scope == FormulaScope.Personal && f.Shared
+                         && _db.FormulaSubscriptions.Any(s => s.FormulaId == f.Id && s.UserId == userId)))
             .ToListAsync();
         return formulas.Select(ToDto).ToList();
     }
@@ -98,6 +100,7 @@ public class FormulasController : ControllerBase
             Context = (FormulaContext)req.Context,
             Enabled = true,
             IsBuiltIn = false,
+            Shared = scope == FormulaScope.Personal && req.Shared,
         };
         _db.Formulas.Add(formula);
         await _db.SaveChangesAsync();
@@ -129,6 +132,7 @@ public class FormulasController : ControllerBase
         if (req.Description is not null) formula.Description = req.Description;
         if (req.Prompt is not null) formula.Prompt = req.Prompt;
         if (req.Context is not null) formula.Context = (FormulaContext)req.Context.Value;
+        if (req.Shared is not null && formula.Scope == FormulaScope.Personal) formula.Shared = req.Shared.Value;
         formula.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync();
         return Ok(ToDto(formula));
@@ -184,6 +188,84 @@ public class FormulasController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Formulas shared by OTHER users, for the discovery browser. Any authed user; excludes the
+    /// caller's own. Includes the owner's display (name falls back to email) + avatar and whether the caller
+    /// has already added it.</summary>
+    [HttpGet("shared")]
+    public async Task<ActionResult<IReadOnlyList<SharedFormulaDto>>> Shared()
+    {
+        var userId = UserId;
+        var shared = await _db.Formulas
+            .Where(f => f.Scope == FormulaScope.Personal && f.Shared && f.OwnerUserId != userId)
+            .OrderBy(f => f.Name)
+            .ToListAsync();
+
+        var ownerIds = shared.Where(f => f.OwnerUserId != null).Select(f => f.OwnerUserId!.Value).Distinct().ToList();
+        var owners = (await _db.Users.Where(u => ownerIds.Contains(u.Id))
+                .Select(u => new { u.Id, u.FullName, u.Email, u.PictureUrl }).ToListAsync())
+            .ToDictionary(u => u.Id, u => (u.FullName, u.Email, u.PictureUrl));
+
+        var sharedIds = shared.Select(f => f.Id).ToList();
+        var mine = (await _db.FormulaSubscriptions
+                .Where(s => s.UserId == userId && sharedIds.Contains(s.FormulaId))
+                .Select(s => s.FormulaId).ToListAsync())
+            .ToHashSet();
+
+        return shared.Select(f =>
+        {
+            string? name = null, pic = null;
+            if (f.OwnerUserId is Guid oid && owners.TryGetValue(oid, out var o))
+            {
+                name = string.IsNullOrWhiteSpace(o.FullName) ? o.Email : o.FullName;
+                pic = o.PictureUrl;
+            }
+            return new SharedFormulaDto(ToDto(f), name, pic, mine.Contains(f.Id));
+        }).ToList();
+    }
+
+    /// <summary>Add a shared Personal formula (owned by someone else) to the caller's collection. Idempotent.
+    /// 404 for a missing / non-shared / non-Personal / own formula (leak-avoidance).</summary>
+    [HttpPost("{id:guid}/subscribe")]
+    public async Task<IActionResult> Subscribe(Guid id)
+    {
+        var userId = UserId;
+        var f = await _db.Formulas.FirstOrDefaultAsync(x => x.Id == id);
+        if (f is null || f.Scope != FormulaScope.Personal || !f.Shared || f.OwnerUserId == userId)
+            return NotFound();
+
+        if (!await _db.FormulaSubscriptions.AnyAsync(s => s.FormulaId == id && s.UserId == userId))
+        {
+            _db.FormulaSubscriptions.Add(new FormulaSubscription
+            {
+                Id = Guid.NewGuid(), FormulaId = id, UserId = userId, CreatedAt = DateTimeOffset.UtcNow,
+            });
+            try
+            {
+                await _db.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                // A concurrent first-subscribe won the race and the unique (FormulaId, UserId) index rejected
+                // this one - the caller is already subscribed, so treat it as success (idempotent).
+            }
+        }
+        return NoContent();
+    }
+
+    /// <summary>Remove the caller's link to a shared formula. Idempotent.</summary>
+    [HttpDelete("{id:guid}/subscribe")]
+    public async Task<IActionResult> Unsubscribe(Guid id)
+    {
+        var userId = UserId;
+        var sub = await _db.FormulaSubscriptions.FirstOrDefaultAsync(s => s.FormulaId == id && s.UserId == userId);
+        if (sub is not null)
+        {
+            _db.FormulaSubscriptions.Remove(sub);
+            await _db.SaveChangesAsync();
+        }
+        return NoContent();
+    }
+
     /// <summary>Runs a formula over a recording and returns the persisted result. Lives on an absolute
     /// route under <c>api/recordings</c> so the URL reads naturally while the rest of this controller's
     /// CRUD stays under <c>api/formulas</c>.</summary>
@@ -227,7 +309,7 @@ public class FormulasController : ControllerBase
 
     private static FormulaDto ToDto(Formula f) => new(
         f.Id, f.Scope.ToString(), f.OwnerUserId, f.Name, f.Description, f.Prompt,
-        (int)f.Context, f.Enabled, f.IsBuiltIn);
+        (int)f.Context, f.Enabled, f.IsBuiltIn, f.Shared);
 
     private static FormulaResultDto ToResultDto(FormulaResult r, FormulaResultOriginDto origin) => new(
         r.Id, r.RecordingId, r.Name, r.CreatedByUserId, r.CreatedAt, r.UpdatedAt, origin);
