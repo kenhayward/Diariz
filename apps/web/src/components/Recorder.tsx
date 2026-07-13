@@ -249,6 +249,9 @@ export default function Recorder({
   // Read inside upload() (state may not have flushed when onstop fires).
   const liveLinesRef = useRef<MeetingNote[]>([]);
   const timerRef = useRef<number | null>(null);
+  // A separate wall-clock interval for the auto-stop check. Kept independent of the elapsed ticker (which
+  // freezes on pause) so a *paused* recording still auto-stops at its scheduled time.
+  const scheduleTimerRef = useRef<number | null>(null);
   // The coarse source actually being recorded (mic vs system); the tray only speaks in these terms,
   // and the upload title/enum needs it, so we can't rely on `selection` state having flushed.
   const activeSourceRef = useRef<AudioSourceKind>("mic");
@@ -412,18 +415,30 @@ export default function Recorder({
 
   function startTicker() {
     if (timerRef.current) window.clearInterval(timerRef.current);
-    timerRef.current = window.setInterval(() => {
-      const now = Date.now();
-      setElapsed(timing.elapsedMs(timingRef.current, now));
-      // Auto-stop: once the scheduled target is reached, end the recording (which runs the normal
-      // upload + transcription). `stop()` is a hoisted function declaration, so calling it here is safe.
-      if (schedule.shouldStop(scheduledStopRef.current, now)) stop();
-    }, 250);
+    timerRef.current = window.setInterval(
+      () => setElapsed(timing.elapsedMs(timingRef.current, Date.now())),
+      250,
+    );
   }
 
   function stopTicker() {
     if (timerRef.current) window.clearInterval(timerRef.current);
     timerRef.current = null;
+  }
+
+  // Auto-stop watcher: a wall-clock interval that ends the recording once the scheduled target is reached
+  // (which runs the normal upload + transcription). Runs from start() to stop() regardless of pause, so a
+  // paused recording still stops on time. `stop()` is a hoisted function declaration, so calling it is safe.
+  function startScheduleWatcher() {
+    if (scheduleTimerRef.current) window.clearInterval(scheduleTimerRef.current);
+    scheduleTimerRef.current = window.setInterval(() => {
+      if (schedule.shouldStop(scheduledStopRef.current, Date.now())) stop();
+    }, 1000);
+  }
+
+  function stopScheduleWatcher() {
+    if (scheduleTimerRef.current) window.clearInterval(scheduleTimerRef.current);
+    scheduleTimerRef.current = null;
   }
 
   // Mute/unmute the live capture tracks. While paused we disable them so nothing is captured *and* the
@@ -581,6 +596,7 @@ export default function Recorder({
       applySchedule(autoStopChoice, autoStopTime, Date.now());
       setElapsed(0);
       startTicker();
+      startScheduleWatcher();
       setRecording(true);
       setPaused(false);
       // Fresh notes for a fresh recording: clear any stale unattached lines (orphans from a crash whose
@@ -627,6 +643,7 @@ export default function Recorder({
 
   function stop() {
     stopTicker();
+    stopScheduleWatcher();
     // Fold any running segment so the uploaded duration is final and paused-free.
     timingRef.current = timing.pause(timingRef.current, Date.now());
     // Clear the resolved auto-stop target so a finished schedule can't re-fire and the display clears.

@@ -566,9 +566,42 @@ describe("Recorder auto-stop", () => {
       });
       expect(api.upload).not.toHaveBeenCalled();
 
-      // Cross the mark: the 250 ms ticker sees shouldStop() and stops -> onstop -> upload().
+      // Cross the mark: the schedule watcher sees shouldStop() and stops -> onstop -> upload().
       await act(async () => {
         await vi.advanceTimersByTimeAsync(60_500);
+      });
+      expect(api.upload).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still auto-stops while paused (the schedule is a wall-clock time)", async () => {
+    vi.useFakeTimers();
+    try {
+      (getStream as Mock).mockResolvedValue(fakeSession);
+      (api.upload as Mock).mockResolvedValue({ id: "r1" });
+      render(<Recorder onUploaded={() => {}} />);
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      fireEvent.change(screen.getByLabelText(/auto-stop/i), { target: { value: "in15" } });
+      fireEvent.click(screen.getByLabelText(/^record$/i));
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      // Pause 5 minutes in, then walk away.
+      await act(async () => {
+        vi.advanceTimersByTime(5 * 60_000);
+      });
+      fireEvent.click(screen.getByRole("button", { name: /^pause$/i }));
+
+      // The elapsed ticker is frozen while paused, but the schedule watcher keeps running: at the
+      // 15-minute wall-clock mark the recording still auto-stops and uploads.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(11 * 60_000);
       });
       expect(api.upload).toHaveBeenCalledTimes(1);
     } finally {
