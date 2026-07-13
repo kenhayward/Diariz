@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 
 // A JWT-shaped token whose payload decodes to { sub: "u1" } (used for the per-user pending key).
@@ -220,7 +220,7 @@ describe("Recorder source selection", () => {
     render(<Recorder onUploaded={() => {}} />);
 
     await screen.findByRole("option", { name: "USB Headset" });
-    const select = screen.getByRole("combobox");
+    const select = screen.getByRole("combobox", { name: /^microphone$/i });
     expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual([
       "Microphone (default)",
       "Built-in Mic",
@@ -240,7 +240,7 @@ describe("Recorder source selection", () => {
     // Wait for the async device load to populate the options before selecting — otherwise a slow
     // runner can click Record before the label is known, resolving the source without its label.
     await screen.findByRole("option", { name: "USB Headset" });
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "dev:bbb" } });
+    fireEvent.change(screen.getByRole("combobox", { name: /^microphone$/i }), { target: { value: "dev:bbb" } });
     fireEvent.click(screen.getByRole("button", { name: /record/i }));
 
     await waitFor(() =>
@@ -262,7 +262,7 @@ describe("Recorder source selection", () => {
     });
     render(<Recorder onUploaded={() => {}} />);
 
-    const select = (await screen.findByRole("combobox")) as HTMLSelectElement;
+    const select = (await screen.findByRole("combobox", { name: /^microphone$/i })) as HTMLSelectElement;
     await waitFor(() => expect(select.value).toBe("dev:bbb"));
   });
 
@@ -287,7 +287,7 @@ describe("Recorder source selection", () => {
     (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
     render(<Recorder onUploaded={() => {}} />);
 
-    fireEvent.change(await screen.findByRole("combobox"), { target: { value: "none" } });
+    fireEvent.change(await screen.findByRole("combobox", { name: /^microphone$/i }), { target: { value: "none" } });
     const cog = screen.getByRole("button", { name: /audio settings/i }) as HTMLButtonElement;
     expect(cog.disabled).toBe(true);
   });
@@ -361,7 +361,7 @@ describe("Recorder source selection", () => {
     (api.upload as Mock).mockResolvedValue({ id: "r1" });
     render(<Recorder onUploaded={() => {}} />);
 
-    fireEvent.change(await screen.findByRole("combobox"), { target: { value: "none" } });
+    fireEvent.change(await screen.findByRole("combobox", { name: /^microphone$/i }), { target: { value: "none" } });
     fireEvent.click(screen.getByRole("checkbox", { name: /system audio/i }));
     fireEvent.click(screen.getByRole("button", { name: /record/i }));
     await screen.findByText(/●/);
@@ -375,7 +375,7 @@ describe("Recorder source selection", () => {
 
   it("disables Record when No Microphone and system audio is off", async () => {
     render(<Recorder onUploaded={() => {}} />);
-    fireEvent.change(await screen.findByRole("combobox"), { target: { value: "none" } });
+    fireEvent.change(await screen.findByRole("combobox", { name: /^microphone$/i }), { target: { value: "none" } });
     expect((screen.getByRole("button", { name: /record/i }) as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -466,7 +466,7 @@ describe("Recorder source selection", () => {
       .mockResolvedValue({ devices: [{ deviceId: "bbb", label: "USB Headset" }], hasLabels: true }); // after grant
     render(<Recorder onUploaded={() => {}} />);
 
-    fireEvent.focus(await screen.findByRole("combobox"));
+    fireEvent.focus(await screen.findByRole("combobox", { name: /^microphone$/i }));
 
     expect(await screen.findByRole("option", { name: "USB Headset" })).toBeTruthy();
     expect(unlockDeviceLabels).toHaveBeenCalled();
@@ -479,7 +479,7 @@ describe("Recorder source selection", () => {
     );
     render(<Recorder onUploaded={() => {}} />);
 
-    fireEvent.focus(await screen.findByRole("combobox"));
+    fireEvent.focus(await screen.findByRole("combobox", { name: /^microphone$/i }));
 
     // The hint shows in the status bar (neutral tone), not inline under the top bar.
     await waitFor(() =>
@@ -495,7 +495,7 @@ describe("Recorder source selection", () => {
   it("no longer shows the bespoke 'allow microphone' link", async () => {
     (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: false });
     render(<Recorder onUploaded={() => {}} />);
-    await screen.findByRole("combobox");
+    await screen.findByRole("combobox", { name: /^microphone$/i });
     expect(screen.queryByRole("button", { name: /allow microphone/i })).toBeNull();
   });
 });
@@ -530,6 +530,50 @@ describe("Recorder pause/resume", () => {
     // Resumed: back to Pause, no "Paused" indicator.
     expect(await screen.findByRole("button", { name: /^pause$/i })).toBeTruthy();
     expect(screen.queryByText(/paused/i)).toBeNull();
+  });
+});
+
+describe("Recorder auto-stop", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
+    (getStream as Mock).mockResolvedValue(fakeSession);
+  });
+
+  it("auto-stops the recording and uploads when the scheduled time is reached", async () => {
+    vi.useFakeTimers();
+    try {
+      (getStream as Mock).mockResolvedValue(fakeSession);
+      (api.upload as Mock).mockResolvedValue({ id: "r1" });
+      render(<Recorder onUploaded={() => {}} />);
+      // Flush the mount effects (device enumeration, pending-recording load) under fake timers.
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      // Choose "in 15 minutes", then start recording.
+      fireEvent.change(screen.getByLabelText(/auto-stop/i), { target: { value: "in15" } });
+      fireEvent.click(screen.getByLabelText(/^record$/i));
+      // Flush start()'s awaited getStream promise under fake timers.
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      // Nothing yet before the 15-minute mark.
+      await act(async () => {
+        vi.advanceTimersByTime(14 * 60_000);
+      });
+      expect(api.upload).not.toHaveBeenCalled();
+
+      // Cross the mark: the 250 ms ticker sees shouldStop() and stops -> onstop -> upload().
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_500);
+      });
+      expect(api.upload).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
