@@ -72,20 +72,20 @@ describe("UserMenu", () => {
   it("hides Manage Formulas for non-privileged users and shows it when canManageFormulas", () => {
     renderMenu();
     fireEvent.click(screen.getByRole("button", { name: /account/i }));
-    expect(screen.queryByRole("menuitem", { name: /manage formulas/i })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: /manage platform formulas/i })).toBeNull();
 
     authState.canManageFormulas = true;
     renderMenu();
     fireEvent.click(screen.getAllByRole("button", { name: /account/i })[1]);
-    expect(screen.getByRole("menuitem", { name: /manage formulas/i })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /manage platform formulas/i })).toBeTruthy();
   });
 
   it("Manage Formulas opens the modal", async () => {
     authState.canManageFormulas = true;
     renderMenu();
     fireEvent.click(screen.getByRole("button", { name: /account/i }));
-    fireEvent.click(screen.getByRole("menuitem", { name: /manage formulas/i }));
-    expect(await screen.findByRole("dialog", { name: /manage formulas/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("menuitem", { name: /manage platform formulas/i }));
+    expect(await screen.findByRole("dialog", { name: /manage platform formulas/i })).toBeTruthy();
   });
 
   it("shows the initials and opens a menu with the user's name, Preferences and Sign Out", () => {

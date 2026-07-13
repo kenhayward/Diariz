@@ -133,10 +133,10 @@ describe("FormulaEditModal", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("closes on a backdrop click", () => {
+  it("does not close on a backdrop click", () => {
     const { onClose, container } = renderModal();
     fireEvent.click(container.firstChild as Element);
-    expect(onClose).toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("shows an error and keeps the modal open when save fails", async () => {
