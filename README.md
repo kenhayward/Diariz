@@ -20,7 +20,7 @@ At a glance - see **[docs/features.md](docs/features.md)** for the full detail o
 
 | Feature | Description |
 | :--- | :--- |
-| **Capture** | Record from the browser mic (device picker, DSP tuning, live level meter, pause/resume), system audio, or both mixed on one device; system audio works in Chromium browsers ("Share audio") and seamlessly in the desktop app; upload files (WAV/MP3/FLAC/Ogg/Opus/WebM/M4A) or drag-drop several at once. |
+| **Capture** | Record from the browser mic (device picker, DSP tuning, live level meter, pause/resume), system audio, or both mixed on one device; schedule a recording to auto-stop at a set time or after 15/30/60 minutes; system audio works in Chromium browsers ("Share audio") and seamlessly in the desktop app; upload files (WAV/MP3/FLAC/Ogg/Opus/WebM/M4A) or drag-drop several at once. |
 | **Transcribe & diarize** | Server-side WhisperX (large-v3, word-level timestamps) + pyannote speaker diarization; speaker-labelled, editable, playable segments; re-transcribe any time, with an original/revised toggle. |
 | **Speaker identification** | Enrol a voice once (SpeechBrain ECAPA voiceprints) and Diariz recognises it across later recordings; rename, merge, and erase voiceprints (GDPR). |
 | **Summaries & minutes** | Auto summary plus full professional meeting minutes (WYSIWYG-editable, emailable), driven by reusable meeting-type templates with per-block layout control (H1-H3 headings, break, Markdown, horizontal rules, drag-to-reorder) and JSON import/export. |
