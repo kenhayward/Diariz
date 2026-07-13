@@ -35,4 +35,13 @@ public static class TranscriptionHubExtensions
         Guid userId, Guid sectionId, string kind, string status) =>
         hub.Clients.Group(userId.ToString())
             .SendAsync("SectionStatusChanged", new { sectionId, kind, status });
+
+    /// <summary>Push an async formula-run status change to the owner. A distinct event from the recording/section
+    /// ones - carries both the (nullable) recording/section scope and the specific result row. Exactly one of
+    /// <paramref name="recordingId"/>/<paramref name="sectionId"/> is set; <paramref name="status"/> is a
+    /// <c>FormulaRunStatus</c> name.</summary>
+    public static Task NotifyFormulaStatusAsync(this IHubContext<TranscriptionHub> hub,
+        Guid userId, Guid? recordingId, Guid? sectionId, Guid formulaResultId, string status) =>
+        hub.Clients.Group(userId.ToString())
+            .SendAsync("FormulaResultStatusChanged", new { recordingId, sectionId, formulaResultId, status });
 }
