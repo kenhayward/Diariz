@@ -289,6 +289,7 @@
   "errLoadFormulas": "Impossible de charger les formules.",
   "errRunFormula": "Impossible d'exécuter la formule.",
   "formulaResultLoadFailed": "Impossible de charger ce résultat.",
+  "formulaSelectToView": "Sélectionnez un résultat pour l'afficher.",
   "confirmDeleteFormulaResult": "Supprimer \"{{name}}\" ? Cette action est irréversible.",
   "errDeleteFormulaResult": "Impossible de supprimer le résultat.",
   "errDownloadFormulaResult": "Impossible de télécharger le résultat.",

@@ -521,7 +521,13 @@ public record SetFormulaEnabledRequest(bool Enabled);
 /// deliberately NOT included here - it's fetched separately via a dedicated text endpoint so listing a
 /// recording's results stays cheap.</summary>
 public record FormulaResultDto(
-    Guid Id, Guid RecordingId, string Name, Guid? CreatedByUserId, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+    Guid Id, Guid RecordingId, string Name, Guid? CreatedByUserId,
+    DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, FormulaResultOriginDto Origin);
+
+/// <summary>Where a formula result came from, for the runs-list icon. Kind: "diariz" | "platform" |
+/// "personal" (Phase D adds "shared"). Diariz/Platform are "official" (no person - the UI shows the Diariz
+/// logo); personal/shared carry the person's display + picture for an avatar.</summary>
+public record FormulaResultOriginDto(string Kind, string? PersonName, string? PersonPictureUrl);
 
 /// <summary>A formula result's generated Markdown body, fetched separately from the list/summary DTO.</summary>
 public record FormulaResultTextDto(string Text);

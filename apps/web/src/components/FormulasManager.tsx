@@ -1,6 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { formatRelativeTime } from "../lib/format";
-import type { FormulaResult } from "../lib/types";
+import { initialsFromName } from "../lib/initials";
+import type { FormulaResult, FormulaResultOrigin } from "../lib/types";
+import Avatar from "./Avatar";
 import FlaskIcon from "./FlaskIcon";
 
 /// The Formulas tab's content: the "Generated" results list (name + a muted "Generated {{time}} from the
@@ -35,20 +37,31 @@ export default function FormulasManager({
             type="button"
             onClick={() => onSelect(selectedId === r.id ? null : r.id)}
             aria-pressed={selectedId === r.id}
-            className={`block w-full rounded px-2 py-2 text-left ${
+            className={`flex w-full items-center gap-2 rounded px-2 py-2 text-left ${
               selectedId === r.id ? "bg-blue-50 dark:bg-blue-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-800"
             }`}
           >
-            <span className="block text-sm font-medium text-gray-800 dark:text-gray-100">{r.name}</span>
-            <span className="block text-xs text-gray-400 dark:text-gray-500">
-              {t("formulaGeneratedMeta", {
-                time: formatRelativeTime(r.createdAt, i18n.language),
-                name: r.name,
-              })}
+            <OriginIcon origin={r.origin} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-gray-800 dark:text-gray-100">{r.name}</span>
+              <span className="block truncate text-xs text-gray-400 dark:text-gray-500">
+                {t("formulaGeneratedMeta", {
+                  time: formatRelativeTime(r.createdAt, i18n.language),
+                  name: r.name,
+                })}
+              </span>
             </span>
           </button>
         </li>
       ))}
     </ul>
   );
+}
+
+/// Diariz + Platform formulas are "official" -> the Diariz logo; personal/shared -> the person's avatar.
+function OriginIcon({ origin }: { origin: FormulaResultOrigin }) {
+  if (origin.kind === "diariz" || origin.kind === "platform") {
+    return <img src="/logo.png" alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />;
+  }
+  return <Avatar size="xs" initials={initialsFromName(origin.personName)} pictureUrl={origin.personPictureUrl} />;
 }

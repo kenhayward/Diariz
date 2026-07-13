@@ -10,6 +10,7 @@ const result = (over: Partial<FormulaResult> = {}): FormulaResult => ({
   createdByUserId: "u1",
   createdAt: new Date(Date.now() - 5 * 60_000).toISOString(),
   updatedAt: new Date().toISOString(),
+  origin: { kind: "personal", personName: "Ada Lovelace", personPictureUrl: null },
   ...over,
 });
 
@@ -45,5 +46,17 @@ describe("FormulasManager", () => {
     const buttons = screen.getAllByRole("button");
     expect(buttons.find((b) => b.textContent?.includes("One"))?.getAttribute("aria-pressed")).toBe("true");
     expect(buttons.find((b) => b.textContent?.includes("Two"))?.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("shows the Diariz logo for a built-in result and initials for a personal one", () => {
+    const two = [
+      result({ id: "r1", name: "Recap", origin: { kind: "diariz", personName: null, personPictureUrl: null } }),
+      result({ id: "r2", name: "Mine", origin: { kind: "personal", personName: "Ada Lovelace", personPictureUrl: null } }),
+    ];
+    const { container } = render(<FormulasManager results={two} selectedId={null} onSelect={vi.fn()} />);
+    // Diariz -> the logo image (decorative alt="" -> query by src rather than role)
+    expect(container.querySelector('img[src="/logo.png"]')).toBeTruthy();
+    // Personal (no picture) -> initials bubble "AL"
+    expect(screen.getByText("AL")).toBeTruthy();
   });
 });

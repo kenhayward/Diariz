@@ -118,7 +118,10 @@ it to yourself. Formulas come in three scopes: Diariz-provided **starter formula
 (Follow-up email, Meeting recap, Decisions & risks, Tone & sentiment read), **Platform-wide** formulas shared
 with everyone, and your own **Personal** formulas — create and edit these in **Preferences → Formulas**. A new
 recording-level **Formulas tab** lists every formula you can use, runs one synchronously against your
-configured LLM, and keeps every past result for that recording. Creating, editing, deleting, or enabling/
+configured LLM, and keeps every past result for that recording. The tab is a resizable two-panel view - the
+list of results you have generated on the left (each with an **origin icon**: the Diariz logo for built-in and
+platform formulas, the author's avatar for your own), and the selected result's rendered document on the right,
+read in place. Creating, editing, deleting, or enabling/
 disabling a Platform or Diariz formula requires the new **Manage Formulas** permission (granted via a user
 group), while your Personal formulas are always yours to manage. You can also run a formula without opening
 the tab: type **`/formula <name>`** in the chat box to run it on the recording you have open, or ask **Claude**

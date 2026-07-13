@@ -613,7 +613,7 @@ describe("RecordingDetail", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     (api.deleteFormulaResult as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.listFormulaResults as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: "fr1", recordingId: "rec-123", name: "Action Items", createdByUserId: "u1", createdAt: base.createdAt, updatedAt: base.createdAt },
+      { id: "fr1", recordingId: "rec-123", name: "Action Items", createdByUserId: "u1", createdAt: base.createdAt, updatedAt: base.createdAt, origin: { kind: "personal", personName: "You", personPictureUrl: null } },
     ]);
     renderPage(base);
     await loaded();
@@ -629,7 +629,7 @@ describe("RecordingDetail", () => {
   it("downloads the selected formula result from the toolbar", async () => {
     (api.downloadFormulaResult as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.listFormulaResults as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: "fr1", recordingId: "rec-123", name: "Action Items", createdByUserId: "u1", createdAt: base.createdAt, updatedAt: base.createdAt },
+      { id: "fr1", recordingId: "rec-123", name: "Action Items", createdByUserId: "u1", createdAt: base.createdAt, updatedAt: base.createdAt, origin: { kind: "personal", personName: "You", personPictureUrl: null } },
     ]);
     renderPage(base);
     await loaded();

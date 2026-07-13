@@ -289,6 +289,7 @@
   "errLoadFormulas": "Formeln konnten nicht geladen werden.",
   "errRunFormula": "Die Formel konnte nicht ausgeführt werden.",
   "formulaResultLoadFailed": "Dieses Ergebnis konnte nicht geladen werden.",
+  "formulaSelectToView": "Wählen Sie ein Ergebnis zur Anzeige aus.",
   "confirmDeleteFormulaResult": "\"{{name}}\" löschen? Dies kann nicht rückgängig gemacht werden.",
   "errDeleteFormulaResult": "Das Ergebnis konnte nicht gelöscht werden.",
   "errDownloadFormulaResult": "Das Ergebnis konnte nicht heruntergeladen werden.",

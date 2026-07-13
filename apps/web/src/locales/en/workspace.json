@@ -289,6 +289,7 @@
   "errLoadFormulas": "Could not load formulas.",
   "errRunFormula": "Could not run the formula.",
   "formulaResultLoadFailed": "Could not load this result.",
+  "formulaSelectToView": "Select a result to view it.",
   "confirmDeleteFormulaResult": "Delete \"{{name}}\"? This cannot be undone.",
   "errDeleteFormulaResult": "Could not delete the result.",
   "errDownloadFormulaResult": "Could not download the result.",
