@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -18,7 +18,17 @@ import FolderActionsTable from "../components/FolderActionsTable";
 import FolderNotesList from "../components/FolderNotesList";
 import FolderAttachmentsList from "../components/FolderAttachmentsList";
 import FolderAttachmentsManager from "../components/FolderAttachmentsManager";
-import type { SectionAttachmentItem, SectionDetail as SectionDetailT } from "../lib/types";
+import FormulasToolbar from "../components/FormulasToolbar";
+import FormulasPanel from "../components/FormulasPanel";
+import FormulaRunModal from "../components/FormulaRunModal";
+import SharedFormulasBrowser from "../components/SharedFormulasBrowser";
+import FormulaResultEditModal from "../components/FormulaResultEditModal";
+import PreferencesModal from "../components/PreferencesModal";
+import type {
+  SectionAttachmentItem,
+  SectionDetail as SectionDetailT,
+  SectionFormulaResult,
+} from "../lib/types";
 
 const TAB_KEY = "diariz.sectionTab";
 
@@ -34,6 +44,16 @@ export default function SectionDetail() {
   const [editingMinutes, setEditingMinutes] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Formulas tab: single-selected result id (shared between FormulasPanel and FormulasToolbar), the Run
+  // picker, the edit modal target, the shared-formula browser, and "Manage formulas" (opens Preferences).
+  // Mirrors RecordingDetail's Formulas wiring, targeting a section instead of a recording.
+  const [selectedFormulaResultId, setSelectedFormulaResultId] = useState<string | null>(null);
+  const [formulaRunOpen, setFormulaRunOpen] = useState(false);
+  const [editingFormulaResult, setEditingFormulaResult] = useState<SectionFormulaResult | null>(null);
+  const [sharedBrowserOpen, setSharedBrowserOpen] = useState(false);
+  const [managingFormulas, setManagingFormulas] = useState(false);
+  // Drop the selection when navigating to a different folder.
+  useEffect(() => setSelectedFormulaResultId(null), [id]);
 
   const { data: section, isError, error: sectionError } = useQuery({
     queryKey: ["section", id],
@@ -50,6 +70,17 @@ export default function SectionDetail() {
   const { data: notes } = useQuery({ queryKey: ["section-notes", id], queryFn: () => api.listSectionNotes(id!), enabled: !!id });
   const { data: attachments } = useQuery({ queryKey: ["section-attachments", id], queryFn: () => api.listSectionAttachments(id!), enabled: !!id });
   const { data: folderAttachments } = useQuery({ queryKey: ["folder-attachments", id], queryFn: () => api.listFolderAttachments(id!), enabled: !!id });
+  // Generated formula results (the Formulas tab). Runs are async, so poll while any result is still
+  // generating (the run adds a Generating row immediately; the poll fills in the Ready/Failed outcome).
+  const { data: formulaResults = [] } = useQuery({
+    queryKey: ["section-formula-results", id],
+    queryFn: () => api.listSectionFormulaResults(id!),
+    enabled: !!id,
+    refetchInterval: (q) => {
+      const d = q.state.data as SectionFormulaResult[] | undefined;
+      return d?.some((r) => r.status === "Generating") ? 2500 : false;
+    },
+  });
 
   if (!id) return null;
   // Surface a load failure (e.g. a folder you can't access) instead of hanging on "Loading ..." forever.
@@ -74,6 +105,49 @@ export default function SectionDetail() {
     const ok = await copyRichLink(folderUrl(id!), section!.name);
     setInfo(ok ? t("workspace:linkCopied") : null);
     setError(ok ? null : t("workspace:errCopyLink"));
+  }
+
+  // ---- Formulas tab handlers (mirror RecordingDetail, targeting the section) ----
+  const refreshFormulas = () => {
+    void qc.invalidateQueries({ queryKey: ["section-formula-results", id] });
+    void qc.invalidateQueries({ queryKey: ["section-formula-result-text", id] });
+  };
+  async function downloadFormulaResult() {
+    if (!selectedFormulaResultId) return;
+    setError(null);
+    try {
+      await api.downloadSectionFormulaResult(id!, selectedFormulaResultId);
+    } catch (e) {
+      setError(apiErrorMessage(e, t("workspace:errDownloadFormulaResult")));
+    }
+  }
+  async function emailFormulaResult() {
+    if (!selectedFormulaResultId) return;
+    setError(null);
+    setInfo(null);
+    try {
+      await api.emailSectionFormulaResult(id!, selectedFormulaResultId);
+      setInfo(t("workspace:emailedFormulaResult"));
+    } catch (e) {
+      setError(apiErrorMessage(e, t("workspace:errEmailFormulaResult")));
+    }
+  }
+  async function deleteFormulaResult() {
+    const r = formulaResults.find((x) => x.id === selectedFormulaResultId);
+    if (!r) return;
+    if (!window.confirm(t("workspace:confirmDeleteFormulaResult", { name: r.name }))) return;
+    setError(null);
+    try {
+      await api.deleteSectionFormulaResult(id!, r.id);
+      setSelectedFormulaResultId(null);
+      refreshFormulas();
+    } catch (e) {
+      setError(apiErrorMessage(e, t("workspace:errDeleteFormulaResult")));
+    }
+  }
+  function openFormulaResult() {
+    const r = formulaResults.find((x) => x.id === selectedFormulaResultId);
+    if (r) setEditingFormulaResult(r);
   }
 
   const hasRecordings = section.stats.transcriptCount > 0;
@@ -223,7 +297,32 @@ export default function SectionDetail() {
     ),
   };
 
-  const tabs = [overview, minutes, actionsTab, notesTab, attachmentsTab];
+  // ---- Formulas tab (reuses the recording tab's components, targeting this section) ----
+  const formulasTab: DetailTab = {
+    key: "formulas",
+    label: t("workspace:detailTabFormulas"),
+    toolbar: (
+      <FormulasToolbar
+        selectedId={selectedFormulaResultId}
+        onRun={() => setFormulaRunOpen(true)}
+        onOpen={openFormulaResult}
+        onDownload={downloadFormulaResult}
+        onEmail={emailFormulaResult}
+        onDelete={deleteFormulaResult}
+      />
+    ),
+    content: (
+      <FormulasPanel
+        loadText={(resultId) => api.getSectionFormulaResultText(id, resultId)}
+        sourceKey={["section-formula-result-text", id]}
+        results={formulaResults}
+        selectedId={selectedFormulaResultId}
+        onSelect={setSelectedFormulaResultId}
+      />
+    ),
+  };
+
+  const tabs = [overview, minutes, actionsTab, notesTab, attachmentsTab, formulasTab];
 
   // ---- subheading: N transcripts · duration · first-last date ----
   const s = section.stats;
@@ -271,6 +370,39 @@ export default function SectionDetail() {
           onClose={() => setEditingMinutes(false)}
           onSave={async (md) => { await run(() => api.updateSectionMinutes(id, md), "workspace:errMinutes", ["section", id]); setEditingMinutes(false); }}
         />
+      )}
+
+      {formulaRunOpen && (
+        <FormulaRunModal
+          target={{ kind: "section", sectionId: id }}
+          onClose={() => setFormulaRunOpen(false)}
+          onRun={(r) => {
+            refreshFormulas();
+            setSelectedFormulaResultId(r.id);
+          }}
+          onError={(msg) => setError(msg)}
+          onManageFormulas={() => {
+            setFormulaRunOpen(false);
+            setManagingFormulas(true);
+          }}
+          onFindShared={() => {
+            setFormulaRunOpen(false);
+            setSharedBrowserOpen(true);
+          }}
+        />
+      )}
+      {sharedBrowserOpen && <SharedFormulasBrowser onClose={() => setSharedBrowserOpen(false)} />}
+      {editingFormulaResult && (
+        <FormulaResultEditModal
+          name={editingFormulaResult.name}
+          load={() => api.getSectionFormulaResultText(id, editingFormulaResult.id)}
+          save={(md) => api.updateSectionFormulaResult(id, editingFormulaResult.id, md).then(() => undefined)}
+          onSaved={refreshFormulas}
+          onClose={() => setEditingFormulaResult(null)}
+        />
+      )}
+      {managingFormulas && (
+        <PreferencesModal initialTab="formulas" onClose={() => setManagingFormulas(false)} />
       )}
     </div>
   );
