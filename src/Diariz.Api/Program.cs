@@ -32,6 +32,7 @@ builder.Services.Configure<TagsOptions>(builder.Configuration.GetSection(TagsOpt
 builder.Services.Configure<EmbeddingOptions>(builder.Configuration.GetSection(EmbeddingOptions.Section));
 builder.Services.Configure<SectionSummaryOptions>(builder.Configuration.GetSection(SectionSummaryOptions.Section));
 builder.Services.Configure<SectionMinutesOptions>(builder.Configuration.GetSection(SectionMinutesOptions.Section));
+builder.Services.Configure<FormulaRunOptions>(builder.Configuration.GetSection(FormulaRunOptions.Section));
 builder.Services.Configure<ChatOptions>(builder.Configuration.GetSection(ChatOptions.Section));
 builder.Services.Configure<DictationOptions>(builder.Configuration.GetSection(DictationOptions.Section));
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.Section));

@@ -445,6 +445,7 @@ public sealed class FakeJobQueue : IJobQueue
     public List<TagsJob> TagsEnqueued { get; } = new();
     public List<SectionSummaryJob> SectionSummaryEnqueued { get; } = new();
     public List<SectionMinutesJob> SectionMinutesEnqueued { get; } = new();
+    public List<FormulaRunJob> FormulaRunJobs { get; } = new();
 
     public Task EnqueueAsync(TranscriptionJob job, CancellationToken ct = default)
     {
@@ -497,6 +498,12 @@ public sealed class FakeJobQueue : IJobQueue
     public Task EnqueueSectionMinutesAsync(SectionMinutesJob job, CancellationToken ct = default)
     {
         SectionMinutesEnqueued.Add(job);
+        return Task.CompletedTask;
+    }
+
+    public Task EnqueueFormulaRunAsync(FormulaRunJob job, CancellationToken ct = default)
+    {
+        FormulaRunJobs.Add(job);
         return Task.CompletedTask;
     }
 }

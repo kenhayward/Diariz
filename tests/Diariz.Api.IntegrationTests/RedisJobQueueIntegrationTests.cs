@@ -18,7 +18,8 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
         var opts = Options.Create(new JobQueueOptions { StreamKey = $"jobs-{Guid.NewGuid()}" });
         var queue = new RedisJobQueue(mux, opts, Options.Create(new SummarizationOptions()),
             Options.Create(new MeetingMinutesOptions()), Options.Create(new ActionsOptions()), Options.Create(new EmbeddingOptions()),
-            Options.Create(new TagsOptions()), Options.Create(new SectionSummaryOptions()), Options.Create(new SectionMinutesOptions()));
+            Options.Create(new TagsOptions()), Options.Create(new SectionSummaryOptions()), Options.Create(new SectionMinutesOptions()),
+            Options.Create(new FormulaRunOptions()));
 
         var job = new TranscriptionJob(Guid.NewGuid(), Guid.NewGuid(), "user/blob.webm", "whisperx-large-v3");
         await queue.EnqueueAsync(job);
@@ -47,7 +48,8 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
         var queue = new RedisJobQueue(mux, Options.Create(new JobQueueOptions()),
             Options.Create(new SummarizationOptions { StreamKey = streamKey }),
             Options.Create(new MeetingMinutesOptions()), Options.Create(new ActionsOptions()), Options.Create(new EmbeddingOptions()),
-            Options.Create(new TagsOptions()), Options.Create(new SectionSummaryOptions()), Options.Create(new SectionMinutesOptions()));
+            Options.Create(new TagsOptions()), Options.Create(new SectionSummaryOptions()), Options.Create(new SectionMinutesOptions()),
+            Options.Create(new FormulaRunOptions()));
 
         var job = new SummarizationJob(Guid.NewGuid(), Guid.NewGuid());
         await queue.EnqueueSummarizationAsync(job);
@@ -67,7 +69,8 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
         var queue = new RedisJobQueue(mux, Options.Create(new JobQueueOptions()),
             Options.Create(new SummarizationOptions()),
             Options.Create(new MeetingMinutesOptions { StreamKey = streamKey }), Options.Create(new ActionsOptions()), Options.Create(new EmbeddingOptions()),
-            Options.Create(new TagsOptions()), Options.Create(new SectionSummaryOptions()), Options.Create(new SectionMinutesOptions()));
+            Options.Create(new TagsOptions()), Options.Create(new SectionSummaryOptions()), Options.Create(new SectionMinutesOptions()),
+            Options.Create(new FormulaRunOptions()));
 
         var job = new MeetingMinutesJob(Guid.NewGuid(), Guid.NewGuid());
         await queue.EnqueueMeetingMinutesAsync(job);
@@ -87,7 +90,8 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
         var queue = new RedisJobQueue(mux, Options.Create(new JobQueueOptions()),
             Options.Create(new SummarizationOptions()), Options.Create(new MeetingMinutesOptions()),
             Options.Create(new ActionsOptions { StreamKey = streamKey }), Options.Create(new EmbeddingOptions()),
-            Options.Create(new TagsOptions()), Options.Create(new SectionSummaryOptions()), Options.Create(new SectionMinutesOptions()));
+            Options.Create(new TagsOptions()), Options.Create(new SectionSummaryOptions()), Options.Create(new SectionMinutesOptions()),
+            Options.Create(new FormulaRunOptions()));
 
         var job = new ActionsJob(Guid.NewGuid(), Guid.NewGuid());
         await queue.EnqueueActionsAsync(job);
@@ -107,7 +111,8 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
         var queue = new RedisJobQueue(mux, Options.Create(new JobQueueOptions()),
             Options.Create(new SummarizationOptions()), Options.Create(new MeetingMinutesOptions()),
             Options.Create(new ActionsOptions()), Options.Create(new EmbeddingOptions { StreamKey = streamKey }),
-            Options.Create(new TagsOptions()), Options.Create(new SectionSummaryOptions()), Options.Create(new SectionMinutesOptions()));
+            Options.Create(new TagsOptions()), Options.Create(new SectionSummaryOptions()), Options.Create(new SectionMinutesOptions()),
+            Options.Create(new FormulaRunOptions()));
 
         var job = new EmbeddingJob(Guid.NewGuid(), Guid.NewGuid());
         await queue.EnqueueEmbeddingAsync(job);
@@ -127,7 +132,8 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
         var queue = new RedisJobQueue(mux, Options.Create(new JobQueueOptions()),
             Options.Create(new SummarizationOptions()), Options.Create(new MeetingMinutesOptions()),
             Options.Create(new ActionsOptions()), Options.Create(new EmbeddingOptions()),
-            Options.Create(new TagsOptions { StreamKey = streamKey }), Options.Create(new SectionSummaryOptions()), Options.Create(new SectionMinutesOptions()));
+            Options.Create(new TagsOptions { StreamKey = streamKey }), Options.Create(new SectionSummaryOptions()), Options.Create(new SectionMinutesOptions()),
+            Options.Create(new FormulaRunOptions()));
 
         var job = new TagsJob(Guid.NewGuid(), Guid.NewGuid());
         await queue.EnqueueTagsAsync(job);
@@ -137,5 +143,26 @@ public class RedisJobQueueIntegrationTests(ContainersFixture fx)
         var roundTripped = JsonSerializer.Deserialize<TagsJob>(json);
         Assert.Equal(job.RecordingId, roundTripped!.RecordingId);
         Assert.Equal(job.TranscriptionId, roundTripped.TranscriptionId);
+    }
+
+    [Fact]
+    public async Task EnqueueFormulaRunAsync_AddsJsonJobToFormulaRunStream()
+    {
+        using var mux = await ConnectionMultiplexer.ConnectAsync(fx.RedisConnectionString);
+        var streamKey = $"formula-run-{Guid.NewGuid()}";
+        var queue = new RedisJobQueue(mux, Options.Create(new JobQueueOptions()),
+            Options.Create(new SummarizationOptions()), Options.Create(new MeetingMinutesOptions()),
+            Options.Create(new ActionsOptions()), Options.Create(new EmbeddingOptions()),
+            Options.Create(new TagsOptions()), Options.Create(new SectionSummaryOptions()),
+            Options.Create(new SectionMinutesOptions()),
+            Options.Create(new FormulaRunOptions { StreamKey = streamKey }));
+
+        var job = new FormulaRunJob(Guid.NewGuid(), null, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        await queue.EnqueueFormulaRunAsync(job);
+
+        var entries = await mux.GetDatabase().StreamRangeAsync(streamKey, "-", "+");
+        var json = Assert.Single(entries).Values.Single(v => v.Name == "job").Value.ToString();
+        var roundTripped = JsonSerializer.Deserialize<FormulaRunJob>(json);
+        Assert.Equal(job, roundTripped);
     }
 }
