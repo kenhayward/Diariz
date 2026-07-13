@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink } from "react-router-dom";
+import { useRoomBasePath } from "../lib/rooms";
 import type { ActionListItem } from "../lib/types";
 
 type Patch = { text?: string; actor?: string; deadline?: string };
@@ -20,6 +21,8 @@ export default function FolderActionsTable({
   onDelete: (recordingId: string, id: string) => void;
 }) {
   const { t } = useTranslation("workspace");
+  // Keep meeting links inside the room being viewed - see FolderRecordingList for the room-prefix rationale.
+  const basePath = useRoomBasePath();
   if (items.length === 0)
     return <p className="px-4 pb-4 text-sm text-gray-500 dark:text-gray-400">{t("folderNoActions")}</p>;
 
@@ -39,7 +42,7 @@ export default function FolderActionsTable({
         </thead>
         <tbody>
           {items.map((a, i) => (
-            <Row key={a.id} action={a} row={i + 1} onUpdate={onUpdate} onToggleComplete={onToggleComplete} onDelete={onDelete} />
+            <Row key={a.id} action={a} row={i + 1} basePath={basePath} onUpdate={onUpdate} onToggleComplete={onToggleComplete} onDelete={onDelete} />
           ))}
         </tbody>
       </table>
@@ -48,10 +51,11 @@ export default function FolderActionsTable({
 }
 
 function Row({
-  action, row, onUpdate, onToggleComplete, onDelete,
+  action, row, basePath, onUpdate, onToggleComplete, onDelete,
 }: {
   action: ActionListItem;
   row: number;
+  basePath: string;
   onUpdate: (recordingId: string, id: string, patch: Patch) => void;
   onToggleComplete: (id: string, completed: boolean) => void;
   onDelete: (recordingId: string, id: string) => void;
@@ -61,7 +65,7 @@ function Row({
   return (
     <tr className="align-top">
       <td className="truncate py-1 pr-2 text-xs">
-        <NavLink to={`/recordings/${action.recordingId}`} className="text-blue-600 hover:underline dark:text-blue-400" title={action.recordingName}>
+        <NavLink to={`${basePath}/recordings/${action.recordingId}`} className="text-blue-600 hover:underline dark:text-blue-400" title={action.recordingName}>
           {action.recordingName}
         </NavLink>
       </td>

@@ -4,6 +4,7 @@ import { NavLink } from "react-router-dom";
 import { api } from "../lib/api";
 import { isMarkdownAttachment } from "../lib/attachments";
 import { formatBytes } from "../lib/format";
+import { useRoomBasePath } from "../lib/rooms";
 import type { SectionAttachmentItem } from "../lib/types";
 import { openAttachment } from "./AttachmentsManager";
 import MarkdownAttachmentEditModal from "./MarkdownAttachmentEditModal";
@@ -22,6 +23,8 @@ export default function FolderAttachmentsList({
 }) {
   const { t } = useTranslation(["workspace", "common"]);
   const [editing, setEditing] = useState<SectionAttachmentItem | null>(null);
+  // Keep meeting links inside the room being viewed - see FolderRecordingList for the room-prefix rationale.
+  const basePath = useRoomBasePath();
   if (items.length === 0)
     return <p className="px-4 pb-4 text-sm text-gray-500 dark:text-gray-400">{t("workspace:folderNoAttachments")}</p>;
 
@@ -40,7 +43,7 @@ export default function FolderAttachmentsList({
           {items.map((a) => (
             <tr key={a.id} className="align-top">
               <td className="truncate py-1 pr-2 text-xs">
-                <NavLink to={`/recordings/${a.recordingId}`} className="text-blue-600 hover:underline dark:text-blue-400" title={a.recordingName}>
+                <NavLink to={`${basePath}/recordings/${a.recordingId}`} className="text-blue-600 hover:underline dark:text-blue-400" title={a.recordingName}>
                   {a.recordingName}
                 </NavLink>
               </td>

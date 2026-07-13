@@ -5,7 +5,7 @@ import { NavLink } from "react-router-dom";
 import { api } from "../lib/api";
 import { formatDuration, formatDate } from "../lib/format";
 import { buildRecordingTree, type SectionNode } from "../lib/recordingTree";
-import { useRoom } from "../lib/rooms";
+import { useRoom, useRoomBasePath } from "../lib/rooms";
 import type { RecordingSummary } from "../lib/types";
 
 /// Read-only list of the transcripts in a folder, grouped by sub-folder (click a row to open it). Mirrors the
@@ -19,6 +19,10 @@ export default function FolderRecordingList({ sectionId }: { sectionId: string }
   // undefined only briefly while the rooms list loads.
   const { currentRoom } = useRoom();
   const roomId = currentRoom?.id;
+  // Keep row links inside the current room - a shared room's detail routes carry the /rooms/:id prefix, so
+  // without it a click falls back to the personal-room URL and reopens the recording there (leaving the shared
+  // room). Mirrors the sidebar's RecordingsPanel.
+  const basePath = useRoomBasePath();
   const { data: recordings } = useQuery({ queryKey: ["recordings", roomId], queryFn: () => api.listRecordings(roomId) });
   const { data: sections } = useQuery({ queryKey: ["sections", roomId], queryFn: () => api.listSections(roomId) });
 
@@ -37,7 +41,7 @@ export default function FolderRecordingList({ sectionId }: { sectionId: string }
   return (
     <div className="px-4 pb-4">
       <ul className="divide-y dark:divide-gray-800">
-        {node.items.map((r) => <RecordingRow key={r.id} r={r} lang={i18n.language} />)}
+        {node.items.map((r) => <RecordingRow key={r.id} r={r} lang={i18n.language} basePath={basePath} />)}
       </ul>
       {node.children.map((child) =>
         child.items.length === 0 ? null : (
@@ -46,7 +50,7 @@ export default function FolderRecordingList({ sectionId }: { sectionId: string }
               {child.name} <span className="font-normal text-indigo-400">({child.items.length})</span>
             </div>
             <ul className="divide-y dark:divide-gray-800">
-              {child.items.map((r) => <RecordingRow key={r.id} r={r} lang={i18n.language} />)}
+              {child.items.map((r) => <RecordingRow key={r.id} r={r} lang={i18n.language} basePath={basePath} />)}
             </ul>
           </div>
         ),
@@ -55,11 +59,11 @@ export default function FolderRecordingList({ sectionId }: { sectionId: string }
   );
 }
 
-function RecordingRow({ r, lang }: { r: RecordingSummary; lang: string }) {
+function RecordingRow({ r, lang, basePath }: { r: RecordingSummary; lang: string; basePath: string }) {
   return (
     <li>
       <NavLink
-        to={`/recordings/${r.id}`}
+        to={`${basePath}/recordings/${r.id}`}
         className="flex items-center justify-between gap-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-800/60"
       >
         <span className="min-w-0 flex-1 truncate text-sm text-gray-800 dark:text-gray-100">{r.name ?? r.title}</span>

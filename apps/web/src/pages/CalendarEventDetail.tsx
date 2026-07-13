@@ -7,6 +7,7 @@ import DetailTabs, { type DetailTab } from "../components/DetailTabs";
 import CalendarEventDetails from "../components/CalendarEventDetails";
 import LinkRecordingModal from "../components/LinkRecordingModal";
 import NotesSection from "../components/NotesSection";
+import { useRoomBasePath } from "../lib/rooms";
 
 /// The centre panel for a Google Calendar meeting that has no recording (reached by clicking an event in
 /// the Calendar tab). Shows a single Overview tab with the meeting's details, a "Link a recording" action,
@@ -15,6 +16,9 @@ export default function CalendarEventDetail() {
   const { eventId } = useParams();
   const navigate = useNavigate();
   const { t } = useTranslation(["workspace"]);
+  // Keep the jump-to-recording inside the current room. Google Calendar is personal today, so this resolves
+  // to "" (top-level route); the prefix keeps it correct should a calendar ever be reached under a room route.
+  const basePath = useRoomBasePath();
   const qc = useQueryClient();
   const [pickOpen, setPickOpen] = useState(false);
 
@@ -98,7 +102,7 @@ export default function CalendarEventDetail() {
           onClose={() => setPickOpen(false)}
           onLinked={(recId) => {
             setPickOpen(false);
-            navigate(`/recordings/${recId}`);
+            navigate(`${basePath}/recordings/${recId}`);
           }}
         />
       )}

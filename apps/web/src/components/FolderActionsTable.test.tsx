@@ -1,10 +1,18 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { I18nextProvider } from "react-i18next";
 import i18n from "../lib/i18n";
 import FolderActionsTable from "./FolderActionsTable";
 import type { ActionListItem } from "../lib/types";
+
+// The room the folder page is viewing; its meeting links must stay inside it. Default (undefined) is the
+// personal room, so the pre-existing assertions below keep expecting the top-level "/recordings/..." URL.
+const roomState = { currentRoom: undefined as { id: string; isPersonal: boolean } | undefined };
+vi.mock("../lib/rooms", () => ({
+  useRoomBasePath: () =>
+    roomState.currentRoom && !roomState.currentRoom.isPersonal ? `/rooms/${roomState.currentRoom.id}` : "",
+}));
 
 const item: ActionListItem = {
   id: "a1", recordingId: "r1", recordingName: "Kickoff", text: "Ship it", actor: "Ana",
@@ -28,11 +36,21 @@ function renderTable(props: Partial<React.ComponentProps<typeof FolderActionsTab
 }
 
 describe("FolderActionsTable", () => {
+  beforeEach(() => {
+    roomState.currentRoom = undefined;
+  });
+
   it("shows the read-only Meeting column and has no add control", () => {
     renderTable();
     expect(screen.getByText("Meeting")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Kickoff" }).getAttribute("href")).toBe("/recordings/r1");
     expect(screen.queryByRole("button", { name: /add action/i })).toBeNull();
+  });
+
+  it("keeps the room prefix on the meeting link in a shared room", () => {
+    roomState.currentRoom = { id: "room-s", isPersonal: false };
+    renderTable();
+    expect(screen.getByRole("link", { name: "Kickoff" }).getAttribute("href")).toBe("/rooms/room-s/recordings/r1");
   });
 
   it("commits an edit with the source recordingId", () => {
