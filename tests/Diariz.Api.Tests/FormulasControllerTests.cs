@@ -13,8 +13,10 @@ namespace Diariz.Api.Tests;
 /// <see cref="UserPermissions"/> service runs against the in-memory provider, so no fake is needed for it.</summary>
 public class FormulasControllerTests
 {
-    private static FormulasController Build(DiarizDbContext db, Guid userId, IFormulaRunner? runner = null) =>
-        new(db, new UserPermissions(db), runner ?? new FakeFormulaRunner()) { ControllerContext = Http.Context(userId) };
+    private static FormulasController Build(DiarizDbContext db, Guid userId, IFormulaRunner? runner = null,
+        FakeJobQueue? queue = null, FakeHubContext? hub = null) =>
+        new(db, new UserPermissions(db), runner ?? new FakeFormulaRunner(),
+            queue ?? new FakeJobQueue(), hub ?? new FakeHubContext()) { ControllerContext = Http.Context(userId) };
 
     private static Formula Personal(Guid owner, string name = "Mine") => new()
     {
@@ -396,45 +398,96 @@ public class FormulasControllerTests
         Assert.Equal(3, list.Count);
     }
 
-    // ---- Run ----
+    // ---- Run (async: validate -> create Generating row -> enqueue -> 202) ----
+
+    private static Formula RunnableFormula(Guid formulaId, string name = "Key Decisions") => new()
+    {
+        Id = formulaId, Scope = FormulaScope.Personal, OwnerUserId = Guid.NewGuid(),
+        Name = name, Prompt = "P", Context = FormulaContext.Transcript, Enabled = true,
+    };
 
     [Fact]
-    public async Task Run_ReturnsFormulaResultDto()
+    public async Task Run_Valid_CreatesGeneratingResult_EnqueuesJob_Returns202()
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var recordingId = Guid.NewGuid();
         var formulaId = Guid.NewGuid();
-        var runner = new FakeFormulaRunner
-        {
-            Result = new FormulaResult
-            {
-                Id = Guid.NewGuid(), RecordingId = recordingId, CreatedByUserId = userId,
-                FormulaId = formulaId, Name = "Key Decisions", Text = "- Decision one",
-            },
-        };
-        var controller = Build(db, userId, runner);
+        var runner = new FakeFormulaRunner { ValidatedFormula = RunnableFormula(formulaId) };
+        var queue = new FakeJobQueue();
+        var hub = new FakeHubContext();
+        var controller = Build(db, userId, runner, queue, hub);
 
         var result = await controller.Run(recordingId, formulaId, CancellationToken.None);
 
-        var dto = Assert.IsType<FormulaResultDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        // 202 Accepted with a pending DTO.
+        var dto = Assert.IsType<FormulaResultDto>(Assert.IsType<AcceptedResult>(result.Result).Value);
+        Assert.Equal("Generating", dto.Status);
+        Assert.Null(dto.Error);
         Assert.Equal(recordingId, dto.RecordingId);
         Assert.Equal("Key Decisions", dto.Name);
         Assert.Equal(userId, dto.CreatedByUserId);
         Assert.Equal((userId, recordingId, formulaId), runner.LastCall);
+
+        // A pending row was persisted.
+        var row = Assert.Single(db.FormulaResults);
+        Assert.Equal(FormulaRunStatus.Generating, row.Status);
+        Assert.Equal("Key Decisions", row.Name);
+        Assert.Equal(userId, row.CreatedByUserId);
+        Assert.Equal(recordingId, row.RecordingId);
+        Assert.Equal(formulaId, row.FormulaId);
+        Assert.Equal(0, row.Ordinal);
+        Assert.Equal(row.Id, dto.Id);
+
+        // Exactly one job was enqueued, scoped to the recording (no section).
+        var job = Assert.Single(queue.FormulaRunJobs);
+        Assert.Equal(recordingId, job.RecordingId);
+        Assert.Null(job.SectionId);
+        Assert.Equal(row.Id, job.ResultId);
+        Assert.Equal(formulaId, job.FormulaId);
+        Assert.Equal(userId, job.UserId);
+
+        // The owner was notified of the pending run.
+        var msg = Assert.Single(hub.Sent);
+        Assert.Equal("FormulaResultStatusChanged", msg.Method);
     }
 
     [Fact]
-    public async Task Run_FormulaAccessException_Returns403()
+    public async Task Run_Valid_NextResult_GetsNextOrdinal()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var recordingId = Guid.NewGuid();
+        var formulaId = Guid.NewGuid();
+        db.FormulaResults.Add(new FormulaResult
+        {
+            Id = Guid.NewGuid(), RecordingId = recordingId, CreatedByUserId = userId,
+            Name = "Existing", Ordinal = 5, Status = FormulaRunStatus.Ready,
+        });
+        await db.SaveChangesAsync();
+        var runner = new FakeFormulaRunner { ValidatedFormula = RunnableFormula(formulaId) };
+        var controller = Build(db, userId, runner);
+
+        await controller.Run(recordingId, formulaId, CancellationToken.None);
+
+        var created = db.FormulaResults.Single(r => r.Name == "Key Decisions");
+        Assert.Equal(6, created.Ordinal);
+    }
+
+    [Fact]
+    public async Task Run_FormulaAccessException_Returns403_NoRowNoJob()
     {
         using var db = TestDb.Create();
         var runner = new FakeFormulaRunner { ThrowOnCall = new FormulaAccessException("nope") };
-        var controller = Build(db, Guid.NewGuid(), runner);
+        var queue = new FakeJobQueue();
+        var controller = Build(db, Guid.NewGuid(), runner, queue);
 
         var result = await controller.Run(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
 
         var status = Assert.IsType<ObjectResult>(result.Result);
         Assert.Equal(403, status.StatusCode);
+        Assert.Empty(db.FormulaResults);
+        Assert.Empty(queue.FormulaRunJobs);
     }
 
     [Fact]
@@ -448,6 +501,7 @@ public class FormulasControllerTests
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
         Assert.Equal("Formulas need an AI endpoint. Set one in Settings.", badRequest.Value);
+        Assert.Empty(db.FormulaResults);
     }
 
     [Fact]
@@ -460,46 +514,7 @@ public class FormulasControllerTests
         var result = await controller.Run(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
 
         Assert.IsType<NotFoundResult>(result.Result);
-    }
-
-    [Fact]
-    public async Task Run_HttpRequestException_Returns502()
-    {
-        using var db = TestDb.Create();
-        var runner = new FakeFormulaRunner { ThrowOnCall = new HttpRequestException("unreachable") };
-        var controller = Build(db, Guid.NewGuid(), runner);
-
-        var result = await controller.Run(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
-
-        var status = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(502, status.StatusCode);
-    }
-
-    [Fact]
-    public async Task Run_TimeoutOperationCanceled_Returns504()
-    {
-        using var db = TestDb.Create();
-        var runner = new FakeFormulaRunner { ThrowOnCall = new OperationCanceledException("timed out") };
-        var controller = Build(db, Guid.NewGuid(), runner);
-
-        var result = await controller.Run(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
-
-        var status = Assert.IsType<ObjectResult>(result.Result);
-        Assert.Equal(504, status.StatusCode);
-    }
-
-    [Fact]
-    public async Task Run_ClientAbort_PropagatesOperationCanceled_NotTurnedInto504()
-    {
-        // When the request's own token is already cancelled, an OperationCanceledException is a genuine client
-        // abort and must propagate (the `when (ct.IsCancellationRequested)` rethrow branch), not become a 504.
-        using var db = TestDb.Create();
-        var runner = new FakeFormulaRunner { ThrowOnCall = new OperationCanceledException("aborted") };
-        var controller = Build(db, Guid.NewGuid(), runner);
-        var cancelled = new CancellationToken(canceled: true);
-
-        await Assert.ThrowsAsync<OperationCanceledException>(
-            () => controller.Run(Guid.NewGuid(), Guid.NewGuid(), cancelled));
+        Assert.Empty(db.FormulaResults);
     }
 
     // ---- Sharing ----

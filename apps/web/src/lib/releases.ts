@@ -54,6 +54,18 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.134.0",
+    date: "2026-07-13",
+    pr: 300,
+    headline: "Formula runs now run in the background",
+    summary:
+      "Running a formula on a transcript no longer holds you on a spinner while the model works. The run starts in the background: the result appears right away as \"Generating...\" and fills in when it's done (or shows a clear error if it failed), so you can keep working and run several at once. This also sets up formulas that run over a whole folder, which won't fit in a single blocking request.",
+    changed: [
+      "Formula runs are now asynchronous - the result shows a \"Generating...\" state and updates when ready, instead of blocking until the model finishes.",
+      "A failed run now surfaces its error on the result instead of losing the attempt.",
+    ],
+  },
+  {
     version: "0.133.3",
     date: "2026-07-13",
     pr: 299,

@@ -357,7 +357,7 @@ default timeout for its header phase and relies on client-disconnect for cancell
   **system prompt** grounds questions in the user's own meetings and (with tools) tells the model to search the
   transcripts before saying it doesn't know. With tools off, chat is the same single-pass stream as before.
   Tools run inside the API (no worker) — server-redeploy only.
-- **Formulas (sync, no job queue).** A **`Formula`** is a saved prompt + a chosen context (`FormulaContext`, a
+- **Formulas (async run pipeline).** A **`Formula`** is a saved prompt + a chosen context (`FormulaContext`, a
   `[Flags]` combination of `Transcript`/`Notes`/`Attachments`/`Summary`/`Minutes`/`Actions`), run over a
   recording to produce a **`FormulaResult`** — a persisted Markdown document (`Name`, `Text`, `Ordinal` for
   display order). A `Formula` has a **`FormulaScope`**: `Personal` (owned by one user, `OwnerUserId` set,
@@ -371,20 +371,26 @@ default timeout for its header phase and relies on client-disconnect for cancell
   boot from git-editable `src/Diariz.Api/formulas/*.md` (markdown + `name`/`description`/`context` frontmatter,
   parsed by `BuiltInFormulaCatalog`; still create-only by name, so admin edits survive), mirroring the editable
   `prompts/*.md` templates.
-  Formulas run **synchronously, with no Redis stream** — `IFormulaRunner`/`FormulaRunner` mirrors the one-off
-  LLM calls already used for chat-title generation rather than the async summarise/minutes/actions pipeline:
-  it resolves the caller's per-user-or-server LLM config via the same `ISummarizationSettingsResolver`, loads
-  only the recording data the formula's context flags require (so a Summary-only formula never pulls the full
-  segment list), builds a single context blob (`FormulaContextBuilder`, a pure formatter), and streams one
-  completion through **`IChatStreamClient`** (the same streaming client chat uses) inside a per-request timeout
-  derived from the resolved config — then persists the result and returns it in the same HTTP response. A
-  formula's own LLM-timeout expiry is distinguished from a genuine client disconnect by checking whether the
-  *outer* cancellation token (vs. the runner's linked/timeout token) fired, mapping the former to a clean abort
-  and the latter to **504**.
+  Formula runs are **asynchronous**, mirroring the summarise/minutes pipeline: the run endpoint validates
+  access + LLM config (via the shared `IFormulaRunner.ValidateRecordingRunAsync`), creates a `FormulaResult`
+  in **`Status = Generating`**, enqueues a **`FormulaRunJob`** on the **`formula-run-jobs`** Redis stream
+  (consumer group `formula-runners`), and returns **202** immediately. The in-process **`FormulaRunWorker`**
+  (`BackgroundService`, one stream per kind) `XREADGROUP`s the job, opens a DI scope, and dispatches to the
+  static **`FormulaRunProcessor`**, which resolves the caller's per-user-or-server LLM config via
+  `ISummarizationSettingsResolver`, loads only the recording data the formula's context flags require (so a
+  Summary-only formula never pulls the full segment list), builds a single context blob
+  (`FormulaContextBuilder`, a pure formatter), streams one completion through **`IChatStreamClient`** inside a
+  timeout derived from the resolved config, and flips the row to **`Ready`** (with `Text`) or **`Failed`**
+  (with `Error`) - notifying the browser over SignalR (**`FormulaResultStatusChanged`**; the client also polls
+  while any result is `Generating`). The **MCP/chat `run_formula` tool stays synchronous** - it targets a
+  single recording and must return the result inside the tool call, so it shares the same
+  context/LLM helpers (`FormulaRunProcessor.RunOverRecordingAsync`) but persists a `Ready` result inline via
+  `IFormulaRunner.RunAsync`.
   Endpoints: **`FormulasController`** at `api/formulas` is Formula CRUD (`GET` = the caller's own Personal
   formulas ∪ every enabled Platform/Diariz formula; `POST`/`PUT`/`DELETE`/`PUT .../enabled`) plus
-  **`POST api/recordings/{id}/formulas/{formulaId}/run`** (executes `IFormulaRunner` and returns the
-  `FormulaResult`); **`FormulaResultsController`** at `api/recordings/{id}/formula-results` covers listing,
+  **`POST api/recordings/{id}/formulas/{formulaId}/run`** (validates, creates a `Generating` `FormulaResult`,
+  enqueues a `FormulaRunJob`, and returns **202** with the pending result); **`FormulaResultsController`** at
+  `api/recordings/{id}/formula-results` covers listing (with `Status`/`Error`),
   reading, hand-editing, deleting, emailing (to the caller's own registered address, mirroring the meeting-minutes
   email), and downloading a result as a `.md` file. Write access to a `Personal` formula requires ownership (a
   non-owned Personal formula 404s rather than 403ing, so its existence isn't leaked); write access to a

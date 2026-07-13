@@ -13,6 +13,8 @@ public class FormulaResult
     public string Name { get; set; } = string.Empty;   // formula name snapshot
     public string Text { get; set; } = string.Empty;   // generated Markdown body
     public int Ordinal { get; set; }
+    public FormulaRunStatus Status { get; set; } = FormulaRunStatus.Generating;
+    public string? Error { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

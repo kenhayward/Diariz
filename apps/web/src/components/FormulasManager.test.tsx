@@ -7,6 +7,8 @@ const result = (over: Partial<FormulaResult> = {}): FormulaResult => ({
   id: "r1",
   recordingId: "rec-1",
   name: "Action Items",
+  status: "Ready",
+  error: null,
   createdByUserId: "u1",
   createdAt: new Date(Date.now() - 5 * 60_000).toISOString(),
   updatedAt: new Date().toISOString(),
@@ -46,6 +48,35 @@ describe("FormulasManager", () => {
     const buttons = screen.getAllByRole("button");
     expect(buttons.find((b) => b.textContent?.includes("One"))?.getAttribute("aria-pressed")).toBe("true");
     expect(buttons.find((b) => b.textContent?.includes("Two"))?.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("renders a Generating result as a non-openable spinner row", () => {
+    const onSelect = vi.fn();
+    const { container } = render(
+      <FormulasManager
+        results={[result({ id: "g1", name: "Action Items", status: "Generating" })]}
+        selectedId={null}
+        onSelect={onSelect}
+      />,
+    );
+    // A "generating" affordance is shown (the localised label) plus a spinner element.
+    expect(screen.getByText(/generating/i)).toBeTruthy();
+    expect(container.querySelector(".animate-spin")).toBeTruthy();
+    // It is not a selectable button, and clicking it does not select it for viewing.
+    expect(screen.queryByRole("button")).toBeNull();
+    fireEvent.click(screen.getByText(/generating/i));
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("renders a Failed result with an error marker exposing the error", () => {
+    render(
+      <FormulasManager
+        results={[result({ id: "x1", name: "Action Items", status: "Failed", error: "Model timed out" })]}
+        selectedId={null}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/model timed out/i)).toBeTruthy();
   });
 
   it("shows the Diariz logo for a built-in result and initials for a personal one", () => {

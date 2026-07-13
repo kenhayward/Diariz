@@ -137,7 +137,8 @@ public class FormulaResultsController : ControllerBase
     private ObjectResult Forbidden(string message) => StatusCode(StatusCodes.Status403Forbidden, message);
 
     private static FormulaResultDto ToDto(FormulaResult r, FormulaResultOriginDto origin) => new(
-        r.Id, r.RecordingId, r.Name, r.CreatedByUserId, r.CreatedAt, r.UpdatedAt, origin);
+        r.Id, r.RecordingId, r.Name, r.CreatedByUserId, r.CreatedAt, r.UpdatedAt, origin,
+        r.Status.ToString(), r.Error);
 
     /// <summary>Filesystem-safe lowercase slug for download filenames (mirrors
     /// <c>RecordingsController.Slug</c>).</summary>

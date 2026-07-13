@@ -133,6 +133,21 @@ public class SectionMinutesOptions
     public string ConsumerName { get; set; } = "api-1";
 }
 
+/// <summary>Config for the async formula-run worker: runs a saved formula over a recording or a folder
+/// (section), reducing per-source outputs into one result. LLM endpoint/model/key come from the per-user
+/// summarisation config.</summary>
+public class FormulaRunOptions
+{
+    public const string Section = "FormulaRun";
+
+    /// <summary>Upper bound on the combined per-source outputs sent to the model in the reduce step.</summary>
+    public int CombineCharBudget { get; set; } = 32000;
+
+    public string StreamKey { get; set; } = "formula-run-jobs";
+    public string ConsumerGroup { get; set; } = "formula-runners";
+    public string ConsumerName { get; set; } = "api-1";
+}
+
 /// <summary>Config for the in-process tag-cloud extraction worker (runs alongside the summary/actions in
 /// the pipeline). The LLM endpoint/model/key come from the per-user summarisation config.</summary>
 public class TagsOptions

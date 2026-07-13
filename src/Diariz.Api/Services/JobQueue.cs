@@ -17,6 +17,7 @@ public interface IJobQueue
     Task EnqueueTagsAsync(TagsJob job, CancellationToken ct = default);
     Task EnqueueSectionSummaryAsync(SectionSummaryJob job, CancellationToken ct = default);
     Task EnqueueSectionMinutesAsync(SectionMinutesJob job, CancellationToken ct = default);
+    Task EnqueueFormulaRunAsync(FormulaRunJob job, CancellationToken ct = default);
 }
 
 /// <summary>Producer side of the transcription + summarisation queues, backed by Redis Streams.</summary>
@@ -31,12 +32,13 @@ public class RedisJobQueue : IJobQueue
     private readonly TagsOptions _tagsOpts;
     private readonly SectionSummaryOptions _sectionSummaryOpts;
     private readonly SectionMinutesOptions _sectionMinutesOpts;
+    private readonly FormulaRunOptions _formulaRunOpts;
 
     public RedisJobQueue(IConnectionMultiplexer redis, IOptions<JobQueueOptions> opts,
         IOptions<SummarizationOptions> summaryOpts, IOptions<MeetingMinutesOptions> minutesOpts,
         IOptions<ActionsOptions> actionsOpts, IOptions<EmbeddingOptions> embeddingOpts,
         IOptions<TagsOptions> tagsOpts, IOptions<SectionSummaryOptions> sectionSummaryOpts,
-        IOptions<SectionMinutesOptions> sectionMinutesOpts)
+        IOptions<SectionMinutesOptions> sectionMinutesOpts, IOptions<FormulaRunOptions> formulaRunOpts)
     {
         _redis = redis;
         _opts = opts.Value;
@@ -47,6 +49,7 @@ public class RedisJobQueue : IJobQueue
         _tagsOpts = tagsOpts.Value;
         _sectionSummaryOpts = sectionSummaryOpts.Value;
         _sectionMinutesOpts = sectionMinutesOpts.Value;
+        _formulaRunOpts = formulaRunOpts.Value;
     }
 
     public async Task EnqueueAsync(TranscriptionJob job, CancellationToken ct = default)
@@ -110,5 +113,12 @@ public class RedisJobQueue : IJobQueue
         var db = _redis.GetDatabase();
         var payload = JsonSerializer.Serialize(job);
         await db.StreamAddAsync(_sectionMinutesOpts.StreamKey, "job", payload);
+    }
+
+    public async Task EnqueueFormulaRunAsync(FormulaRunJob job, CancellationToken ct = default)
+    {
+        var db = _redis.GetDatabase();
+        var payload = JsonSerializer.Serialize(job);
+        await db.StreamAddAsync(_formulaRunOpts.StreamKey, "job", payload);
     }
 }

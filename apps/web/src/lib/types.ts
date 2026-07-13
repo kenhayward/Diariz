@@ -807,11 +807,16 @@ export interface FormulaResultOrigin {
 }
 
 /// A formula's saved output on a recording. `name`/timestamps only - the generated Markdown body is fetched
-/// separately via `getFormulaResultText`.
+/// separately via `getFormulaResultText`. Formula runs are async: a result appears as `Generating`, then
+/// becomes `Ready` (body available) or `Failed` (`error` carries the reason).
 export interface FormulaResult {
   id: string;
   recordingId: string;
   name: string;
+  /// Async lifecycle: "Generating" (in flight, no body yet), "Ready" (body available), "Failed".
+  status: "Generating" | "Ready" | "Failed";
+  /// The failure reason when `status === "Failed"`; null otherwise.
+  error: string | null;
   createdByUserId: string | null;
   createdAt: string;
   updatedAt: string;

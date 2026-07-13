@@ -34,6 +34,12 @@ public record SectionSummaryJob(Guid SectionId);
 /// chosen meeting type is read from the persisted SectionMinutes row (set before enqueue).</summary>
 public record SectionMinutesJob(Guid SectionId);
 
+/// <summary>Job payload for an async formula run, consumed by the API's FormulaRunWorker. Exactly one of
+/// <paramref name="RecordingId"/>/<paramref name="SectionId"/> is set (the other null) to scope the run;
+/// <paramref name="ResultId"/> is the pre-created result row the worker flips as it progresses;
+/// <paramref name="UserId"/> resolves the owner's per-user LLM config.</summary>
+public record FormulaRunJob(Guid? RecordingId, Guid? SectionId, Guid ResultId, Guid FormulaId, Guid UserId);
+
 /// <summary>Job payload for async transcript-chunk embedding (RAG index), consumed by the API's
 /// EmbeddingWorker. The worker windows the transcription's segments, embeds them, and replaces the
 /// recording's existing chunks. No-ops when the owner has no embedding endpoint.</summary>

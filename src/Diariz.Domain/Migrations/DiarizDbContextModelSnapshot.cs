@@ -299,6 +299,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Error")
+                        .HasColumnType("text");
+
                     b.Property<Guid?>("FormulaId")
                         .HasColumnType("uuid");
 
@@ -312,6 +315,9 @@ namespace Diariz.Domain.Migrations
 
                     b.Property<Guid>("RecordingId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Text")
                         .IsRequired()

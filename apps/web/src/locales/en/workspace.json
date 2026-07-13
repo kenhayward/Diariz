@@ -306,6 +306,8 @@
   "errRunFormula": "Could not run the formula.",
   "formulaResultLoadFailed": "Could not load this result.",
   "formulaSelectToView": "Select a result to view it.",
+  "formulaGenerating": "Generating...",
+  "formulaFailed": "Generation failed",
   "confirmDeleteFormulaResult": "Delete \"{{name}}\"? This cannot be undone.",
   "errDeleteFormulaResult": "Could not delete the result.",
   "errDownloadFormulaResult": "Could not download the result.",

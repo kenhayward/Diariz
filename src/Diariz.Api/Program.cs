@@ -32,6 +32,7 @@ builder.Services.Configure<TagsOptions>(builder.Configuration.GetSection(TagsOpt
 builder.Services.Configure<EmbeddingOptions>(builder.Configuration.GetSection(EmbeddingOptions.Section));
 builder.Services.Configure<SectionSummaryOptions>(builder.Configuration.GetSection(SectionSummaryOptions.Section));
 builder.Services.Configure<SectionMinutesOptions>(builder.Configuration.GetSection(SectionMinutesOptions.Section));
+builder.Services.Configure<FormulaRunOptions>(builder.Configuration.GetSection(FormulaRunOptions.Section));
 builder.Services.Configure<ChatOptions>(builder.Configuration.GetSection(ChatOptions.Section));
 builder.Services.Configure<DictationOptions>(builder.Configuration.GetSection(DictationOptions.Section));
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.Section));
@@ -255,6 +256,9 @@ builder.Services.AddHostedService<MeetingMinutesWorker>();
 // the arbitrary-prompt IMeetingMinutesClient to combine the included recordings' summaries/minutes.
 builder.Services.AddHostedService<SectionSummaryWorker>();
 builder.Services.AddHostedService<SectionMinutesWorker>();
+// Async formula runs: run a saved formula over a recording (its own stream/worker), reusing the per-user
+// summarisation config + IChatStreamClient to stream the completion.
+builder.Services.AddHostedService<FormulaRunWorker>();
 // Action extraction also runs in the pipeline (its own stream/worker), reusing IActionsClient (registered above).
 builder.Services.AddHostedService<ActionsWorker>();
 // Tag-cloud extraction runs in the pipeline too (its own stream/worker), sharing the per-user summarisation

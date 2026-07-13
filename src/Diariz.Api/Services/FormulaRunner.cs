@@ -1,6 +1,4 @@
 using System.Linq.Expressions;
-using System.Text;
-using Diariz.Api.Contracts;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +23,13 @@ public interface IFormulaRunner
     /// loads the formula + the recording's context, enforces run-access, calls the resolved LLM synchronously,
     /// and persists (and returns) the resulting <see cref="FormulaResult"/>.</summary>
     Task<FormulaResult> RunAsync(Guid userId, Guid recordingId, Guid formulaId, CancellationToken ct = default);
+
+    /// <summary>Runs the shared pre-flight guards for a recording formula-run - load formula (404 if missing),
+    /// recording access (404), subscription/run-access (<see cref="EnsureCanRun"/> 404/403), and LLM config
+    /// (<see cref="FormulaNotConfiguredException"/> 400) - and returns the resolved <see cref="Formula"/> on
+    /// success. Shared by the synchronous tool path (<see cref="RunAsync"/>) and the async controller, which
+    /// enqueues a job instead of running inline.</summary>
+    Task<Formula> ValidateRecordingRunAsync(Guid userId, Guid recordingId, Guid formulaId, CancellationToken ct = default);
 }
 
 /// <summary>Synchronous run pipeline for a Formula: mirrors the one-off LLM calls in
@@ -44,13 +49,16 @@ public class FormulaRunner : IFormulaRunner
         _settings = settings;
     }
 
-    public async Task<FormulaResult> RunAsync(Guid userId, Guid recordingId, Guid formulaId, CancellationToken ct = default)
+    /// <summary>The shared pre-flight guards, in the order the controller and the tool path both rely on:
+    /// load formula (404) -> recording access (404) -> subscription/run-access (404/403) -> LLM config (400).
+    /// Returns the resolved <see cref="Formula"/> so the caller doesn't re-load it.</summary>
+    public async Task<Formula> ValidateRecordingRunAsync(Guid userId, Guid recordingId, Guid formulaId, CancellationToken ct = default)
     {
         var formula = await _db.Formulas.FirstOrDefaultAsync(f => f.Id == formulaId, ct);
         if (formula is null) throw new FormulaNotFoundException("Formula not found.");
 
-        var rec = await LoadRecordingAsync(userId, recordingId, formula.Context, ct);
-        if (rec is null) throw new FormulaNotFoundException("Recording not found.");
+        if (!await IsRecordingAccessibleAsync(userId, recordingId, ct))
+            throw new FormulaNotFoundException("Recording not found.");
 
         var subscribed = formula.Scope == FormulaScope.Personal
             && formula.OwnerUserId != userId
@@ -62,22 +70,20 @@ public class FormulaRunner : IFormulaRunner
         if (!cfg.Enabled)
             throw new FormulaNotConfiguredException("No LLM endpoint is configured for this user or server.");
 
-        var noteLines = formula.Context.HasFlag(FormulaContext.Notes)
-            ? await LoadNoteLinesAsync(recordingId, ct)
-            : [];
-        var context = FormulaContextBuilder.Build(formula.Context, BuildContextData(rec, noteLines));
-        var messages = new[] { new ChatMessage("system", formula.Prompt), new ChatMessage("user", context) };
+        return formula;
+    }
 
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(TimeSpan.FromSeconds(cfg.TimeoutSeconds));
+    public async Task<FormulaResult> RunAsync(Guid userId, Guid recordingId, Guid formulaId, CancellationToken ct = default)
+    {
+        var formula = await ValidateRecordingRunAsync(userId, recordingId, formulaId, ct);
+        var cfg = await _settings.ResolveAsync(userId, ct);
 
-        // A TimeoutSeconds expiry surfaces here as an OperationCanceledException with the OUTER `ct` still
-        // uncancelled (only the linked source fired). The calling controller (added in the next task)
-        // distinguishes a timeout from a genuine client disconnect by testing `!ct.IsCancellationRequested`:
-        // outer-ct-cancelled = client went away (let it propagate); otherwise = LLM timeout (map to 504).
-        var sb = new StringBuilder();
-        await foreach (var token in _chat.StreamAsync(cfg, messages, cts.Token))
-            sb.Append(token);
+        // Reuse the shared context/LLM primitives (also driving the async FormulaRunProcessor). Ownership was
+        // already enforced above by IsRecordingAccessibleAsync, so re-loading the context here (no ownership
+        // filter) is safe. A TimeoutSeconds expiry surfaces as an OperationCanceledException with the OUTER `ct` still
+        // uncancelled; the calling controller distinguishes a timeout from a client disconnect via
+        // `!ct.IsCancellationRequested` (outer-ct-cancelled = client went away; otherwise = LLM timeout -> 504).
+        var text = await FormulaRunProcessor.RunOverRecordingAsync(_db, _chat, cfg, formula, recordingId, ct);
 
         var ordinal = await NextOrdinalAsync(recordingId, ct);
         var result = new FormulaResult
@@ -87,8 +93,9 @@ public class FormulaRunner : IFormulaRunner
             CreatedByUserId = userId,
             FormulaId = formula.Id,
             Name = formula.Name,
-            Text = sb.ToString().Trim(),
+            Text = text,
             Ordinal = ordinal,
+            Status = FormulaRunStatus.Ready,
         };
         _db.FormulaResults.Add(result);
         await _db.SaveChangesAsync(ct);
@@ -99,8 +106,8 @@ public class FormulaRunner : IFormulaRunner
     /// formula must be enabled. A non-owned Personal formula throws <see cref="FormulaNotFoundException"/>
     /// (not Access) so its very existence isn't leaked - consistent with the CRUD controller's 404s; a
     /// disabled Platform/Diariz formula is public knowledge, so it stays <see cref="FormulaAccessException"/>.
-    /// (Access to the *recording* is checked separately, in <see cref="LoadRecordingAsync"/>, before this
-    /// ever runs.)</summary>
+    /// (Access to the *recording* is checked separately, in <see cref="IsRecordingAccessibleAsync"/>, before
+    /// this ever runs.)</summary>
     private static void EnsureCanRun(Formula formula, Guid userId, bool subscribed)
     {
         if (formula.Scope == FormulaScope.Personal)
@@ -116,66 +123,15 @@ public class FormulaRunner : IFormulaRunner
         }
     }
 
-    /// <summary>Loads the recording, scoped to the caller via <see cref="AccessibleBy"/>. Every include is
-    /// gated on the formula's Context flags so a Summary-only formula doesn't drag the full segment list into
-    /// memory: Segments + Speakers only when Transcript is set, Summary/Minutes/Actions each behind their own
-    /// flag. The highest-version Transcription itself is always loaded (Summary/Minutes hang off it).</summary>
-    private async Task<Recording?> LoadRecordingAsync(
-        Guid userId, Guid recordingId, FormulaContext flags, CancellationToken ct)
-    {
-        IQueryable<Recording> query = _db.Recordings;
-
-        if (flags.HasFlag(FormulaContext.Transcript))
-            query = query
-                .Include(r => r.Speakers)
-                .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
-                    .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal));
-
-        if (flags.HasFlag(FormulaContext.Summary))
-            query = query.Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
-                .ThenInclude(t => t.Summary);
-        if (flags.HasFlag(FormulaContext.Minutes))
-            query = query.Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
-                .ThenInclude(t => t.MeetingMinutes);
-        if (flags.HasFlag(FormulaContext.Actions))
-            query = query.Include(r => r.Actions);
-
-        return await query.Where(AccessibleBy(userId)).FirstOrDefaultAsync(r => r.Id == recordingId, ct);
-    }
+    /// <summary>Phase 1 recording-run access = ownership. The actual run context is (re)built - with the
+    /// Context-gated includes - by <see cref="FormulaRunProcessor.BuildRecordingContextAsync"/>, which
+    /// deliberately applies no ownership filter, so this gate stays here.</summary>
+    private async Task<bool> IsRecordingAccessibleAsync(Guid userId, Guid recordingId, CancellationToken ct) =>
+        await _db.Recordings.Where(AccessibleBy(userId)).AnyAsync(r => r.Id == recordingId, ct);
 
     /// <summary>Phase 1 recording access = ownership. Factored out (as a translatable expression, not just a
-    /// predicate over a loaded entity) so room-sharing access can extend this later without touching the
-    /// query-building above.</summary>
+    /// predicate over a loaded entity) so room-sharing access can extend this later.</summary>
     private static Expression<Func<Recording, bool>> AccessibleBy(Guid userId) => r => r.UserId == userId;
-
-    private static FormulaContextData BuildContextData(Recording rec, IReadOnlyList<string> noteLines)
-    {
-        var current = rec.Transcriptions.FirstOrDefault();
-        var names = rec.Speakers.ToDictionary(s => s.Label, s => s.DisplayName);
-        var segments = current?.Segments
-            .OrderBy(s => s.Ordinal)
-            .Select(s => new SegmentDto(
-                s.Id, s.SpeakerLabel,
-                names.TryGetValue(s.SpeakerLabel, out var dn) ? dn : s.SpeakerLabel,
-                s.StartMs, s.EndMs, s.Original, s.Revised))
-            .ToList() ?? [];
-        var actions = rec.Actions
-            .OrderBy(a => a.Ordinal)
-            .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal))
-            .ToList();
-
-        return new FormulaContextData(
-            segments, current?.Summary?.Text, current?.MeetingMinutes?.Text, noteLines, actions);
-    }
-
-    /// <summary>The recording's own note lines, in order. Loaded separately - <see cref="Recording"/> has no
-    /// navigation collection onto <see cref="MeetingNote"/> (it's addressed by <c>RecordingId</c> only).</summary>
-    private async Task<IReadOnlyList<string>> LoadNoteLinesAsync(Guid recordingId, CancellationToken ct) =>
-        await _db.MeetingNotes
-            .Where(n => n.RecordingId == recordingId)
-            .OrderBy(n => n.Ordinal)
-            .Select(n => n.Text)
-            .ToListAsync(ct);
 
     /// <summary>The next display ordinal for this recording's results (max+1). <c>(RecordingId, Ordinal)</c>
     /// is intentionally NOT a unique index: Ordinal is display-order only, so a rare collision from two
