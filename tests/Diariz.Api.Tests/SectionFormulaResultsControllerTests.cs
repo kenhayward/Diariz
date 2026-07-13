@@ -15,9 +15,10 @@ namespace Diariz.Api.Tests;
 public class SectionFormulaResultsControllerTests
 {
     private static SectionFormulaResultsController Build(DiarizDbContext db, Guid userId,
-        IFormulaRunner? runner = null, FakeJobQueue? queue = null, FakeHubContext? hub = null) =>
+        IFormulaRunner? runner = null, FakeJobQueue? queue = null, FakeHubContext? hub = null,
+        IEmailSender? email = null) =>
         new(db, runner ?? new FakeFormulaRunner(), queue ?? new FakeJobQueue(), hub ?? new FakeHubContext(),
-            new RoomScope(db))
+            new RoomScope(db), email ?? new FakeEmailSender())
         { ControllerContext = Http.Context(userId) };
 
     // A folder in the given user's own personal room.
@@ -222,5 +223,286 @@ public class SectionFormulaResultsControllerTests
         Assert.Equal("This folder has no meetings to run a formula over.", badRequest.Value);
         Assert.Empty(db.SectionFormulaResults);
         Assert.Empty(queue.FormulaRunJobs);
+    }
+
+    // ---- Results CRUD (list/get/update/delete/email/download) ----
+    // View = section member; edit/delete = the result's creator OR a member with room ManageContents.
+    // Mirrors the recording FormulaResultsController; a non-permitted edit returns 403 like that controller.
+
+    // A folder inside a shared room the given user belongs to (with the given permission).
+    private static async Task<Section> SharedRoomSection(
+        DiarizDbContext db, Guid memberId, RoomPermission perm = RoomPermission.ManageContents)
+    {
+        Users.Ensure(db, memberId);
+        var scope = new RoomScope(db);
+        var roomId = await scope.CreateSharedRoomAsync("Eng", null, null, null);
+        await scope.SetMemberAsync(roomId, RoomPrincipalType.User, memberId, perm);
+        var s = new Section { Id = Guid.NewGuid(), UserId = memberId, RoomId = roomId, Name = "Shared F" };
+        db.Sections.Add(s);
+        await db.SaveChangesAsync();
+        return s;
+    }
+
+    private static async Task<SectionFormulaResult> SeedResult(
+        DiarizDbContext db, Guid sectionId, Guid creatorId, string name = "Key Decisions",
+        string text = "# Key Decisions\n\n- Ship it", int ordinal = 0)
+    {
+        Users.Ensure(db, creatorId);
+        var r = new SectionFormulaResult
+        {
+            Id = Guid.NewGuid(), SectionId = sectionId, CreatedByUserId = creatorId,
+            Name = name, Text = text, Ordinal = ordinal, Status = FormulaRunStatus.Ready,
+            CreatedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow,
+        };
+        db.SectionFormulaResults.Add(r);
+        await db.SaveChangesAsync();
+        return r;
+    }
+
+    [Fact]
+    public async Task List_ForMember_ReturnsResults_OrderedWithStatusAndOrigin()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var section = await Section(db, userId);
+        await SeedResult(db, section.Id, userId, "Second", ordinal: 1);
+        await SeedResult(db, section.Id, userId, "First", ordinal: 0);
+
+        var result = await Build(db, userId).List(section.Id);
+
+        var list = Assert.IsAssignableFrom<IReadOnlyList<SectionFormulaResultDto>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(2, list.Count);
+        Assert.Equal("First", list[0].Name);
+        Assert.Equal("Second", list[1].Name);
+        Assert.Equal("Ready", list[0].Status);
+        Assert.Null(list[0].Error);
+        Assert.NotNull(list[0].Origin);
+        Assert.Equal(section.Id, list[0].SectionId);
+    }
+
+    [Fact]
+    public async Task List_ForNonMember_Returns404()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var section = await Section(db, owner);
+        await SeedResult(db, section.Id, owner);
+        var outsider = Guid.NewGuid();
+        Users.Ensure(db, outsider);
+
+        var result = await Build(db, outsider).List(section.Id);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Get_ReturnsMarkdownText_ForMember()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var section = await Section(db, userId);
+        var r = await SeedResult(db, section.Id, userId, text: "# Decisions\n\n- One");
+
+        var result = await Build(db, userId).Get(section.Id, r.Id);
+
+        var dto = Assert.IsType<FormulaResultTextDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal("# Decisions\n\n- One", dto.Text);
+    }
+
+    [Fact]
+    public async Task Get_ForNonMember_Returns404()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var section = await Section(db, owner);
+        var r = await SeedResult(db, section.Id, owner);
+        var outsider = Guid.NewGuid();
+        Users.Ensure(db, outsider);
+
+        var result = await Build(db, outsider).Get(section.Id, r.Id);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Update_ByCreator_ChangesTextAndUpdatedAt()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var section = await Section(db, userId);
+        var r = await SeedResult(db, section.Id, userId, text: "Old text");
+        r.UpdatedAt = DateTimeOffset.UtcNow.AddDays(-1);
+        await db.SaveChangesAsync();
+        var before = r.UpdatedAt;
+
+        var result = await Build(db, userId).Update(section.Id, r.Id, new UpdateFormulaResultRequest("New text"));
+
+        var dto = Assert.IsType<SectionFormulaResultDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(r.Id, dto.Id);
+        var updated = await db.SectionFormulaResults.FindAsync(r.Id);
+        Assert.Equal("New text", updated!.Text);
+        Assert.True(updated.UpdatedAt > before);
+    }
+
+    [Fact]
+    public async Task Update_ByMemberWithManageContents_WhenCreatorIsSomeoneElse_Ok()
+    {
+        using var db = TestDb.Create();
+        var manager = Guid.NewGuid();
+        var creator = Guid.NewGuid();
+        var section = await SharedRoomSection(db, manager, RoomPermission.ManageContents);
+        var r = await SeedResult(db, section.Id, creator);
+
+        var result = await Build(db, manager).Update(section.Id, r.Id, new UpdateFormulaResultRequest("Edited by manager"));
+
+        var dto = Assert.IsType<SectionFormulaResultDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(r.Id, dto.Id);
+        Assert.Equal("Edited by manager", (await db.SectionFormulaResults.FindAsync(r.Id))!.Text);
+    }
+
+    [Fact]
+    public async Task Update_ByMemberWithoutManageContents_WhoIsNotCreator_Returns403()
+    {
+        using var db = TestDb.Create();
+        var member = Guid.NewGuid();
+        var creator = Guid.NewGuid();
+        // A member who can view but not manage contents, and who did not create the result.
+        var section = await SharedRoomSection(db, member, RoomPermission.CreateRecording);
+        var r = await SeedResult(db, section.Id, creator);
+
+        var result = await Build(db, member).Update(section.Id, r.Id, new UpdateFormulaResultRequest("Hacked"));
+
+        var status = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(403, status.StatusCode);
+        Assert.Equal(r.Text, (await db.SectionFormulaResults.FindAsync(r.Id))!.Text);
+    }
+
+    [Fact]
+    public async Task Update_ByNonMember_Returns404()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var section = await Section(db, owner);
+        var r = await SeedResult(db, section.Id, owner);
+        var outsider = Guid.NewGuid();
+        Users.Ensure(db, outsider);
+
+        var result = await Build(db, outsider).Update(section.Id, r.Id, new UpdateFormulaResultRequest("Hacked"));
+
+        Assert.IsType<NotFoundResult>(result.Result);
+        Assert.Equal(r.Text, (await db.SectionFormulaResults.FindAsync(r.Id))!.Text);
+    }
+
+    [Fact]
+    public async Task Delete_ByCreator_Returns204()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var section = await Section(db, userId);
+        var r = await SeedResult(db, section.Id, userId);
+
+        var result = await Build(db, userId).Delete(section.Id, r.Id);
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.False(db.SectionFormulaResults.Any(x => x.Id == r.Id));
+    }
+
+    [Fact]
+    public async Task Delete_ByMemberWithManageContents_WhenCreatorIsSomeoneElse_Returns204()
+    {
+        using var db = TestDb.Create();
+        var manager = Guid.NewGuid();
+        var creator = Guid.NewGuid();
+        var section = await SharedRoomSection(db, manager, RoomPermission.ManageContents);
+        var r = await SeedResult(db, section.Id, creator);
+
+        var result = await Build(db, manager).Delete(section.Id, r.Id);
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.False(db.SectionFormulaResults.Any(x => x.Id == r.Id));
+    }
+
+    [Fact]
+    public async Task Delete_ByMemberWithoutManageContents_WhoIsNotCreator_Returns403()
+    {
+        using var db = TestDb.Create();
+        var member = Guid.NewGuid();
+        var creator = Guid.NewGuid();
+        var section = await SharedRoomSection(db, member, RoomPermission.CreateRecording);
+        var r = await SeedResult(db, section.Id, creator);
+
+        var result = await Build(db, member).Delete(section.Id, r.Id);
+
+        var status = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(403, status.StatusCode);
+        Assert.True(db.SectionFormulaResults.Any(x => x.Id == r.Id));
+    }
+
+    [Fact]
+    public async Task Email_SendsToSignedInUsersOwnAddress()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var section = await Section(db, userId);
+        var r = await SeedResult(db, section.Id, userId, "Key Decisions", "# Key Decisions\n\n- Ship it");
+        var email = new FakeEmailSender { Sent = true };
+
+        var result = await Build(db, userId, email: email).Email(section.Id, r.Id);
+
+        Assert.IsType<OkResult>(result);
+        var msg = Assert.Single(email.Messages);
+        Assert.Equal($"{userId:N}@x.test", msg.To);
+        Assert.Contains("Key Decisions", msg.Subject);
+        Assert.Contains("Ship it", msg.Body);
+    }
+
+    [Fact]
+    public async Task Email_ForNonMember_Returns404()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var section = await Section(db, owner);
+        var r = await SeedResult(db, section.Id, owner);
+        var outsider = Guid.NewGuid();
+        Users.Ensure(db, outsider);
+        var email = new FakeEmailSender();
+
+        var result = await Build(db, outsider, email: email).Email(section.Id, r.Id);
+
+        Assert.IsType<NotFoundResult>(result);
+        Assert.Empty(email.Messages);
+    }
+
+    [Fact]
+    public async Task Download_ReturnsMarkdown_WithSluggedFilename()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var section = await Section(db, userId);
+        var r = await SeedResult(db, section.Id, userId, "Key Decisions", "# Key Decisions\n\n- Ship it");
+
+        var result = await Build(db, userId).Download(section.Id, r.Id);
+
+        var file = Assert.IsType<FileContentResult>(result);
+        Assert.Equal("text/markdown", file.ContentType);
+        Assert.Equal("key-decisions.md", file.FileDownloadName);
+        Assert.Equal("# Key Decisions\n\n- Ship it", System.Text.Encoding.UTF8.GetString(file.FileContents));
+    }
+
+    [Fact]
+    public async Task ResultFromADifferentSection_Returns404()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var section = await Section(db, userId);
+        var other = new Section { Id = Guid.NewGuid(), UserId = userId, RoomId = section.RoomId, Name = "Other" };
+        db.Sections.Add(other);
+        await db.SaveChangesAsync();
+        var r = await SeedResult(db, other.Id, userId); // belongs to a different folder
+
+        var result = await Build(db, userId).Get(section.Id, r.Id);
+
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 }
