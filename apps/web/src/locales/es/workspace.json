@@ -289,6 +289,7 @@
   "errLoadFormulas": "No se pudieron cargar las fórmulas.",
   "errRunFormula": "No se pudo ejecutar la fórmula.",
   "formulaResultLoadFailed": "No se pudo cargar este resultado.",
+  "formulaSelectToView": "Selecciona un resultado para verlo.",
   "confirmDeleteFormulaResult": "¿Eliminar \"{{name}}\"? Esto no se puede deshacer.",
   "errDeleteFormulaResult": "No se pudo eliminar el resultado.",
   "errDownloadFormulaResult": "No se pudo descargar el resultado.",

@@ -31,7 +31,7 @@ import PreferencesModal from "../components/PreferencesModal";
 import SpeakerAssign from "../components/SpeakerAssign";
 import ToolbarButton, { iconProps } from "../components/ToolbarButton";
 import FormulasToolbar from "../components/FormulasToolbar";
-import FormulasManager from "../components/FormulasManager";
+import FormulasPanel from "../components/FormulasPanel";
 import FormulaRunModal from "../components/FormulaRunModal";
 import FormulaResultEditModal from "../components/FormulaResultEditModal";
 import { recordingMenu } from "../components/recordingMenu";
@@ -546,7 +546,11 @@ export default function RecordingDetail() {
     qc.invalidateQueries({ queryKey: ["user-storage"] }); // attachment bytes count toward quota
   };
 
-  const refreshFormulas = () => qc.invalidateQueries({ queryKey: ["formula-results", id] });
+  const refreshFormulas = () => {
+    void qc.invalidateQueries({ queryKey: ["formula-results", id] });
+    // Also refresh the two-panel preview so an edited result's rendered body isn't stale.
+    void qc.invalidateQueries({ queryKey: ["formula-result-text", id] });
+  };
 
   async function downloadFormulaResult() {
     if (!selectedFormulaResultId) return;
@@ -1474,7 +1478,8 @@ export default function RecordingDetail() {
         />
       ),
       content: (
-        <FormulasManager
+        <FormulasPanel
+          recordingId={id}
           results={formulaResults}
           selectedId={selectedFormulaResultId}
           onSelect={setSelectedFormulaResultId}
