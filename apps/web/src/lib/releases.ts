@@ -56,7 +56,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.132.0",
     date: "2026-07-13",
-    pr: 0, // set after opening the PR
+    pr: 290,
     headline: "Share formulas with your team",
     summary:
       "You can now share a personal formula with everyone on the platform. Turn on \"Share this formula\" when editing it, and others can find it under \"Find shared formulas\" in the run picker, see who shared it, read what it does, and add it to their own collection - a live link, so your later edits reach them too. Added formulas appear in a new \"Shared Formulas\" group; anyone can remove one they added, and deleting the original removes it for everyone.",
