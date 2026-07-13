@@ -357,6 +357,45 @@ public class FormulasControllerTests
         Assert.Equal(3, list.Count);
     }
 
+    // ---- Managed (admin: all Platform/Diariz, incl. disabled, never Personal) ----
+
+    [Fact]
+    public async Task Managed_WithoutManageFormulas_Returns403()
+    {
+        using var db = TestDb.Create();
+        var controller = Build(db, Guid.NewGuid());
+
+        var result = await controller.Managed();
+
+        var status = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(403, status.StatusCode);
+    }
+
+    [Fact]
+    public async Task Managed_WithManageFormulas_ReturnsAllPlatformAndDiariz_InclDisabled_NotPersonal()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        Perms.Grant(db, userId, PlatformPermission.ManageFormulas);
+        var mine = Personal(userId, "Mine");
+        var enabledPlatform = Platform("Enabled Platform", enabled: true);
+        var disabledPlatform = Platform("Disabled Platform", enabled: false);
+        var disabledDiariz = Diariz("Disabled Built-in");
+        disabledDiariz.Enabled = false;
+        db.Formulas.AddRange(mine, enabledPlatform, disabledPlatform, disabledDiariz);
+        await db.SaveChangesAsync();
+
+        var controller = Build(db, userId);
+        var result = await controller.Managed();
+
+        var list = Assert.IsAssignableFrom<IReadOnlyList<FormulaDto>>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.DoesNotContain(list, f => f.Name == "Mine");
+        Assert.Contains(list, f => f.Name == "Enabled Platform");
+        Assert.Contains(list, f => f.Name == "Disabled Platform");
+        Assert.Contains(list, f => f.Name == "Disabled Built-in");
+        Assert.Equal(3, list.Count);
+    }
+
     // ---- Run ----
 
     [Fact]
