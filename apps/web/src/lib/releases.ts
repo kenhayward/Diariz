@@ -56,7 +56,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.132.2",
     date: "2026-07-13",
-    pr: 0, // set to the real PR number after opening the PR
+    pr: 292,
     headline: "A page error no longer blanks the whole app",
     summary:
       "Follow-up to the folder fix: some pages could still crash to a completely blank screen (opening a folder in your personal room was one case). The workspace now contains such a crash to the affected panel - the detail page, the sidebar, or the chat - and shows a short error message there instead of unmounting the entire app, so the rest stays usable and an opened folder still shows. Production builds now ship source maps so any remaining error reports its exact location.",
