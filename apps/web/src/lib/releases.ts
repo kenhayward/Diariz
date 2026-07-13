@@ -54,6 +54,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.133.1",
+    date: "2026-07-13",
+    pr: 0, // set to the real PR number after opening the PR
+    headline: "Fix: a shared-room folder's transcript list was empty",
+    summary:
+      "On a folder page in a shared room, the \"transcripts in this folder\" list showed nothing even though the folder opened. It was reading your personal library instead of the room you were viewing, so it never found the folder's recordings. It now reads the current room's recordings and folders.",
+    fixed: [
+      "A folder in a shared room now lists its transcripts (the list was scoped to your personal library instead of the room being viewed).",
+    ],
+  },
+  {
     version: "0.133.0",
     date: "2026-07-13",
     pr: 296,

@@ -5,6 +5,7 @@ import { NavLink } from "react-router-dom";
 import { api } from "../lib/api";
 import { formatDuration, formatDate } from "../lib/format";
 import { buildRecordingTree, type SectionNode } from "../lib/recordingTree";
+import { useRoom } from "../lib/rooms";
 import type { RecordingSummary } from "../lib/types";
 
 /// Read-only list of the transcripts in a folder, grouped by sub-folder (click a row to open it). Mirrors the
@@ -12,8 +13,14 @@ import type { RecordingSummary } from "../lib/types";
 /// recordings + sections queries and renders this section's node from the tree.
 export default function FolderRecordingList({ sectionId }: { sectionId: string }) {
   const { t, i18n } = useTranslation("workspace");
-  const { data: recordings } = useQuery({ queryKey: ["recordings"], queryFn: () => api.listRecordings() });
-  const { data: sections } = useQuery({ queryKey: ["sections"], queryFn: () => api.listSections() });
+  // Scope to the room the folder page is viewing (its own room), matching the sidebar's RecordingsPanel so
+  // the cache is shared. Without this the queries returned the caller's personal library, so a folder in a
+  // shared room found no matching section and rendered an empty list (issue #295). `currentRoom?.id` is
+  // undefined only briefly while the rooms list loads.
+  const { currentRoom } = useRoom();
+  const roomId = currentRoom?.id;
+  const { data: recordings } = useQuery({ queryKey: ["recordings", roomId], queryFn: () => api.listRecordings(roomId) });
+  const { data: sections } = useQuery({ queryKey: ["sections", roomId], queryFn: () => api.listSections(roomId) });
 
   const node = useMemo(() => {
     if (!recordings || !sections) return null;
