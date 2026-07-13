@@ -19,6 +19,8 @@ vi.mock("../lib/rooms", () => ({
     recordingSectionId: null,
     isLoading: false,
   }),
+  useRoomBasePath: () =>
+    roomState.currentRoom && !roomState.currentRoom.isPersonal ? `/rooms/${roomState.currentRoom.id}` : "",
 }));
 
 vi.mock("../lib/api", () => ({ api: { listRecordings: vi.fn(), listSections: vi.fn() } }));
@@ -65,5 +67,29 @@ describe("FolderRecordingList room scoping (issue #295)", () => {
     await waitFor(() => expect(screen.getByText("Kickoff")).toBeTruthy());
     expect(api.listRecordings).toHaveBeenCalledWith("room-s");
     expect(api.listSections).toHaveBeenCalledWith("room-s");
+  });
+
+  it("links each recording within the current room so clicking it stays in the shared room", async () => {
+    roomState.currentRoom = { id: "room-s", isPersonal: false };
+    renderList();
+
+    const link = await waitFor(() => screen.getByRole("link", { name: /Kickoff/ }));
+    expect(link.getAttribute("href")).toBe("/rooms/room-s/recordings/r1");
+  });
+
+  it("links each recording at the top level in the personal room", async () => {
+    roomState.currentRoom = { id: "p1", isPersonal: true };
+    // The folder page scopes its queries to the room it views (here the personal room, id "p1"); serve the
+    // recording for that id so a row renders. The personal room's base path is "", so the link is top-level.
+    mock(api.listRecordings).mockImplementation((roomId?: string) =>
+      Promise.resolve(roomId === "p1" ? [rec] : []),
+    );
+    mock(api.listSections).mockImplementation((roomId?: string) =>
+      Promise.resolve(roomId === "p1" ? [section] : []),
+    );
+    renderList();
+
+    const link = await waitFor(() => screen.getByRole("link", { name: /Kickoff/ }));
+    expect(link.getAttribute("href")).toBe("/recordings/r1");
   });
 });
