@@ -29,6 +29,11 @@
     <None Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- The shipped built-in formulas, linked into the test output so the shipped-folder loader test runs. -->
+  <ItemGroup>
+    <Content Include="..\..\src\Diariz.Api\formulas\*.md" Link="formulas\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- The API is an ASP.NET Core app; tests touch controllers/SignalR types directly. -->
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

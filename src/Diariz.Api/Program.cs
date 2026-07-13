@@ -278,6 +278,11 @@ var promptsDir = Directory.Exists(Path.Combine(builder.Environment.ContentRootPa
     : Path.Combine(AppContext.BaseDirectory, "prompts");
 builder.Services.AddSingleton<IPromptTemplateProvider>(_ => new FilePromptTemplateProvider(promptsDir));
 
+// Prefer the content root's formulas/ (dev + published output), else the app base dir. Loaded once at boot.
+var formulasDir = Directory.Exists(Path.Combine(builder.Environment.ContentRootPath, "formulas"))
+    ? Path.Combine(builder.Environment.ContentRootPath, "formulas")
+    : Path.Combine(AppContext.BaseDirectory, "formulas");
+
 // ---- Localized export/email labels (runtime JSON, not compiled .resx) ----
 // Prefer the content root's locales/ (present in dev and copied to the published output), falling back to
 // the app base directory.
@@ -459,7 +464,7 @@ await using (var scope = app.Services.CreateAsyncScope())
     // holders were moved into groups once, by the AddUserGroups migration - never on boot, or a demoted user
     // would be silently re-promoted from their stale AspNetUserRoles row.
     await Seeder.SeedPlatformAuthorityAsync(db, seedUserId);
-    await Seeder.SeedFormulasAsync(db);
+    await Seeder.SeedFormulasAsync(db, BuiltInFormulaCatalog.LoadFrom(formulasDir, app.Logger));
     await MeetingTypeSeeder.SeedAsync(db);
 }
 
