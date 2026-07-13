@@ -56,7 +56,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.131.0",
     date: "2026-07-13",
-    pr: 0, // set to the real PR number after opening the PR
+    pr: 288,
     headline: "Formulas tab: side-by-side runs and results",
     summary:
       "The Formulas tab is now a two-panel view: a resizable list of the formulas you have run on the left, and the selected result's rendered document on the right - click a run to read it in place, with the toolbar acting on your selection as before. Each run in the list shows an origin icon: the Diariz logo for built-in formulas, or the author's avatar for your own.",
