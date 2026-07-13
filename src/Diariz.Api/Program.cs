@@ -318,6 +318,8 @@ builder.Services.AddScoped<IChatTool, GetRecordingDetailsTool>();
 builder.Services.AddScoped<IChatTool, SendEmailTool>();
 // A write tool that saves prepared content to a transcript as a Markdown attachment (client resolves which).
 builder.Services.AddScoped<IChatTool, AddAsAttachmentTool>();
+// A write tool that runs a saved Formula over a recording and persists the result (also exposed over MCP).
+builder.Services.AddScoped<IChatTool, RunFormulaTool>();
 builder.Services.AddScoped<IChatToolRegistry, ChatToolRegistry>();
 builder.Services.AddScoped<IChatToolSettingsResolver, ChatToolSettingsResolver>();
 builder.Services.AddScoped<IChatToolOrchestrator, ChatToolOrchestrator>();

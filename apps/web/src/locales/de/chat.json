@@ -56,6 +56,7 @@
   "cmdHelpLoad": "Öffnet eine gespeicherte Unterhaltung.",
   "cmdHelpRetry": "Stellt die letzte Frage erneut.",
   "cmdHelpAttach": "Diese Unterhaltung als Anhang speichern.",
+  "cmdHelpFormula": "Führt eine gespeicherte Formel für die geöffnete Aufnahme aus.",
   "cmdAttachDocTitle": "Chat-Unterhaltung",
   "cmdAttachYou": "Sie",
   "cmdAttachAssistant": "Assistent",
@@ -73,6 +74,11 @@
   "cmdCopyNone": "Es gibt noch keine Antwort zum Kopieren.",
   "cmdCopyFailed": "Kopieren in die Zwischenablage fehlgeschlagen.",
   "cmdRetryNone": "Es gibt keine vorherige Frage zum Wiederholen.",
+  "cmdFormulaNoRecording": "Öffne zuerst eine Aufnahme und führe dann /formula <Name> aus.",
+  "cmdFormulaNotFound": "Es wurde keine Formel namens \"{{name}}\" gefunden.",
+  "cmdFormulaAmbiguous": "Mehrere Formeln passen: {{names}}. Gib den vollständigen Namen ein, um eine auszuwählen.",
+  "cmdFormulaRan": "Formel \"{{name}}\" ausgeführt:",
+  "cmdFormulaFailed": "Die Formel konnte nicht ausgeführt werden.",
   "couldNotReadFile": "Die Datei konnte nicht gelesen werden.",
   "contextUsedAria": "Kontext zu {{pct}} % genutzt",
   "modelFallback": "Modell",
@@ -94,6 +100,7 @@
     "add_as_attachment": "Notiz speichern",
     "get_transcript": "Transkript abrufen",
     "get_meeting_minutes": "Protokoll abrufen",
-    "get_recording_details": "Aufnahmedetails"
+    "get_recording_details": "Aufnahmedetails",
+    "run_formula": "Formel ausführen"
   }
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  parseChatCommand, buildToolsOutput, buildHelpOutput, bulletList, matchCommands,
+  parseChatCommand, parseRunFormula, buildToolsOutput, buildHelpOutput, bulletList, matchCommands,
   conversationToMarkdown, type CommandInfo,
 } from "./chatCommands";
 
@@ -24,6 +24,30 @@ describe("parseChatCommand", () => {
     expect(parseChatCommand("run /tools please")).toBeNull(); // only a bare command counts
     expect(parseChatCommand("/nope")).toBeNull();
     expect(parseChatCommand("")).toBeNull();
+  });
+});
+
+describe("parseRunFormula", () => {
+  it("extracts the trimmed formula name after /formula", () => {
+    expect(parseRunFormula("/formula Follow-up email")).toBe("Follow-up email");
+    expect(parseRunFormula("  /formula   Action items  ")).toBe("Action items");
+  });
+
+  it("is case-insensitive on the command itself", () => {
+    expect(parseRunFormula("/FORMULA Recap")).toBe("Recap");
+    expect(parseRunFormula("/Formula recap")).toBe("recap");
+  });
+
+  it("returns null for a bare /formula with no name", () => {
+    expect(parseRunFormula("/formula")).toBeNull();
+    expect(parseRunFormula("/formula ")).toBeNull();
+  });
+
+  it("returns null for lookalike commands and normal text", () => {
+    expect(parseRunFormula("/formulas x")).toBeNull();
+    expect(parseRunFormula("run /formula Recap please")).toBeNull();
+    expect(parseRunFormula("just a normal message")).toBeNull();
+    expect(parseRunFormula("")).toBeNull();
   });
 });
 

@@ -56,6 +56,7 @@
   "cmdHelpLoad": "Abre una conversación guardada.",
   "cmdHelpRetry": "Vuelve a hacer la última pregunta.",
   "cmdHelpAttach": "Guardar esta conversación como adjunto.",
+  "cmdHelpFormula": "Ejecuta una fórmula guardada sobre la grabación abierta.",
   "cmdAttachDocTitle": "Conversación del chat",
   "cmdAttachYou": "Tú",
   "cmdAttachAssistant": "Asistente",
@@ -73,6 +74,11 @@
   "cmdCopyNone": "Todavía no hay respuesta que copiar.",
   "cmdCopyFailed": "No se pudo copiar al portapapeles.",
   "cmdRetryNone": "No hay una pregunta anterior para reintentar.",
+  "cmdFormulaNoRecording": "Abre primero una grabación y luego ejecuta /formula <nombre>.",
+  "cmdFormulaNotFound": "No se encontró ninguna fórmula llamada \"{{name}}\".",
+  "cmdFormulaAmbiguous": "Coinciden varias fórmulas: {{names}}. Escribe el nombre completo para elegir una.",
+  "cmdFormulaRan": "Se ejecutó la fórmula \"{{name}}\":",
+  "cmdFormulaFailed": "No se pudo ejecutar la fórmula.",
   "couldNotReadFile": "No se pudo leer el archivo.",
   "contextUsedAria": "Contexto {{pct}} % usado",
   "modelFallback": "modelo",
@@ -94,6 +100,7 @@
     "add_as_attachment": "guardar nota",
     "get_transcript": "obtener transcripción",
     "get_meeting_minutes": "obtener acta",
-    "get_recording_details": "detalles de la grabación"
+    "get_recording_details": "detalles de la grabación",
+    "run_formula": "ejecutar fórmula"
   }
 }

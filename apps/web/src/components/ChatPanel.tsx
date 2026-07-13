@@ -20,6 +20,7 @@ import {
 } from "../lib/toolCallLine";
 import {
   parseChatCommand,
+  parseRunFormula,
   buildToolsOutput,
   buildHelpOutput,
   bulletList,
@@ -303,6 +304,38 @@ export default function ChatPanel() {
     }
   }
 
+  /// "/formula <name>": run a saved formula against the recording open in the middle panel and show its
+  /// Markdown result inline in the chat (the deterministic, client-side sibling of the `run_formula` MCP
+  /// tool). Never sent to the model - resolved entirely against the REST API.
+  async function runFormulaCommand(name: string) {
+    setInput("");
+    if (!activeId) {
+      setCommandOutput(t("cmdFormulaNoRecording"));
+      return;
+    }
+    try {
+      const formulas = await api.listFormulas();
+      const lower = name.toLowerCase();
+      const exact = formulas.find((f) => f.name.toLowerCase() === lower);
+      const matches = exact ? [exact] : formulas.filter((f) => f.name.toLowerCase().includes(lower));
+      if (matches.length === 0) {
+        setCommandOutput(t("cmdFormulaNotFound", { name }));
+        return;
+      }
+      if (matches.length > 1) {
+        setCommandOutput(t("cmdFormulaAmbiguous", { names: matches.map((f) => f.name).join(", ") }));
+        return;
+      }
+      const formula = matches[0];
+      const result = await api.runFormula(activeId, formula.id);
+      const text = await api.getFormulaResultText(activeId, result.id);
+      setCommandOutput(`${t("cmdFormulaRan", { name: formula.name })}\n\n${text}`);
+      qc.invalidateQueries({ queryKey: ["formula-results", activeId] });
+    } catch (e) {
+      setCommandOutput(apiErrorMessage(e, t("cmdFormulaFailed")));
+    }
+  }
+
   /// Once the reply completes, act on any attachment the tool queued: one candidate → add it; several → ask.
   function resolvePendingDraft() {
     const draft = pendingDraftRef.current;
@@ -318,6 +351,9 @@ export default function ChatPanel() {
     { cmd: "clear", command: "/clear", description: t("cmdHelpClear") },
     { cmd: "context", command: "/context", description: t("cmdHelpContext") },
     { cmd: "copy", command: "/copy", description: t("cmdHelpCopy") },
+    // Display-only: "/formula <name>" takes an argument and runs its own async lookup (runFormulaCommand)
+    // rather than a bare runSlash action, so it has no ChatCommand of its own - see parseRunFormula.
+    { cmd: null, command: "/formula", description: t("cmdHelpFormula") },
     { cmd: "help", command: "/help", description: t("cmdHelpHelp") },
     { cmd: "load", command: "/load", description: t("cmdHelpLoad") },
     { cmd: "retry", command: "/retry", description: t("cmdHelpRetry") },
@@ -468,7 +504,14 @@ export default function ChatPanel() {
     if (!prompt || streaming) return;
 
     // Slash commands are handled entirely client-side — they never reach the model (so "/tools" always
-    // just lists the tools and can't trigger a spurious tool call).
+    // just lists the tools and can't trigger a spurious tool call). "/formula <name>" is checked first since
+    // it takes an argument and isn't part of the bare ChatCommand union.
+    const formulaName = parseRunFormula(prompt);
+    if (formulaName) {
+      void runFormulaCommand(formulaName);
+      return;
+    }
+
     const command = parseChatCommand(prompt);
     if (command) {
       runSlash(command);
@@ -839,7 +882,9 @@ export default function ChatPanel() {
                 type="button"
                 // Keep focus in the textarea; mousedown fires before blur so the popup doesn't flicker.
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => runSlash(c.cmd)}
+                // A bare runSlash command runs immediately; the display-only "/formula" entry has no
+                // argument-less action, so clicking it just fills the input for the user to type a name.
+                onClick={() => (c.cmd ? runSlash(c.cmd) : setInput(`${c.command} `))}
                 className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
               >
                 <span className="font-mono text-sm text-blue-600 dark:text-blue-400">{c.command}</span>
@@ -866,9 +911,11 @@ export default function ChatPanel() {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                // If a partial "/cmd" is typed, Enter runs the top match; a complete command falls through
-                // to send() (which parses + runs it), and normal text is sent to the model.
-                if (commandMatches.length > 0 && !parseChatCommand(input)) runSlash(commandMatches[0].cmd);
+                // If a partial "/cmd" is typed, Enter runs the top match; a complete command (or "/formula
+                // <name>") falls through to send() (which parses + runs it), and normal text is sent to the
+                // model. The display-only "/formula" entry has no bare cmd to run, so it falls through too.
+                const topMatch = commandMatches[0];
+                if (commandMatches.length > 0 && topMatch.cmd && !parseChatCommand(input)) runSlash(topMatch.cmd);
                 else send();
               }
             }}
