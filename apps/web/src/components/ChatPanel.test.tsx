@@ -1,14 +1,18 @@
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SelectionProvider, useSelection } from "../lib/selection";
+import { RoomProvider } from "../lib/rooms";
+import { RoomPermission, type RoomListItem } from "../lib/types";
 
 vi.mock("../lib/api", () => ({
   api: {
     listRecordings: vi.fn(),
+    listRooms: vi.fn(),
     getUserSettings: vi.fn(),
+    getSection: vi.fn(),
     chatStream: vi.fn(),
     uploadChatAttachment: vi.fn(),
     listChatConversations: vi.fn(),
@@ -25,6 +29,34 @@ vi.mock("../lib/api", () => ({
 
 import { api } from "../lib/api";
 import ChatPanel from "./ChatPanel";
+
+const sharedRoom: RoomListItem = {
+  id: "room-s", name: "Engineering", kind: 1, icon: null, color: null,
+  isPersonal: false, permissions: RoomPermission.CreateRecording,
+};
+
+/// Shows the current router pathname so a test can assert where a navigation landed.
+function LocationProbe() {
+  return <span data-testid="loc">{useLocation().pathname}</span>;
+}
+
+/// Like renderPanel but inside a real RoomProvider, so useRoomBasePath resolves to the room in the URL and
+/// the chat's transcript navigation carries the /rooms/:id prefix. listRooms must be mocked by the caller.
+function renderPanelInRoom(route: string) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <SelectionProvider>
+        <MemoryRouter initialEntries={[route]}>
+          <RoomProvider>
+            <ChatPanel />
+            <LocationProbe />
+          </RoomProvider>
+        </MemoryRouter>
+      </SelectionProvider>
+    </QueryClientProvider>,
+  );
+}
 
 const rec = (id: string, title: string, status = "Transcribed") => ({
   id, title, name: null, source: "Microphone", durationMs: 1000, status,
@@ -132,6 +164,72 @@ describe("ChatPanel", () => {
       ),
     );
     expect(screen.getByRole("button", { name: /current folder/i })).toBeTruthy();
+  });
+
+  it("infers the open folder in a shared room (matches the room-scoped section route)", async () => {
+    // The middle panel opens a shared-room folder at /rooms/:id/sections/:id; chat must still detect it as
+    // the current folder. Before the room-aware route hooks it only matched /sections/:id and sent no context.
+    renderPanel("/rooms/room-s/sections/sec-1");
+
+    await ask("Summarise this folder");
+
+    await waitFor(() =>
+      expect(api.chatStream).toHaveBeenCalledWith(
+        expect.objectContaining({ sectionId: "sec-1", recordingIds: [] }),
+        expect.anything(),
+      ),
+    );
+    expect(screen.getByRole("button", { name: /current folder/i })).toBeTruthy();
+  });
+
+  it("infers the open recording in a shared room (matches the room-scoped recording route)", async () => {
+    renderPanel("/rooms/room-s/recordings/rec-1");
+
+    await ask("Summarise this");
+
+    await waitFor(() =>
+      expect(api.chatStream).toHaveBeenCalledWith(
+        expect.objectContaining({ recordingIds: ["rec-1"] }),
+        expect.anything(),
+      ),
+    );
+  });
+
+  it("keeps a citation click inside the shared room", async () => {
+    mock(api.listRooms).mockResolvedValue([sharedRoom]);
+    // The assistant cites a different recording; clicking it must open that recording within the room.
+    mock(api.chatStream).mockImplementation(async (_body: any, h: any) => {
+      h.onMeta?.({ model: "gpt-oss", contextUsed: 10, contextTotal: 100 });
+      h.onToken("See [jump](/recordings/rec-2?t=5000)");
+      return { model: "gpt-oss", contextUsed: 12, contextTotal: 100 };
+    });
+    renderPanelInRoom("/rooms/room-s/recordings/rec-1");
+
+    await ask("Where was that?");
+    const link = await screen.findByRole("link", { name: "jump" });
+    await act(async () => fireEvent.click(link));
+
+    await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/rooms/room-s/recordings/rec-2"));
+  });
+
+  it("reopens a restored folder conversation inside the shared room", async () => {
+    mock(api.listRooms).mockResolvedValue([sharedRoom]);
+    mock(api.listChatConversations).mockResolvedValue([
+      { id: "conv-1", title: "Folder chat", updatedAt: "2026-01-01T00:00:00Z" },
+    ]);
+    mock(api.getChatConversation).mockResolvedValue({
+      id: "conv-1", title: "Folder chat", messages: [],
+      context: {
+        sectionId: "sec-9", recordingIds: [], searchAllMeetings: false,
+        includeAttachments: false, attachmentName: null, attachmentText: null,
+      },
+    });
+    renderPanelInRoom("/rooms/room-s/recordings/rec-1");
+
+    await act(async () => fireEvent.click(await screen.findByRole("button", { name: /saved conversations/i })));
+    await act(async () => fireEvent.click(await screen.findByRole("button", { name: "Folder chat" })));
+
+    await waitFor(() => expect(screen.getByTestId("loc").textContent).toBe("/rooms/room-s/sections/sec-9"));
   });
 
   it("sends no transcript context when None is chosen", async () => {

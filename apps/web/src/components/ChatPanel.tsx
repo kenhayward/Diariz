@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useMatch } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import { parseRecordingLink, recordingLinkPath } from "../lib/transcriptNav";
 import { linkifyRecordings } from "../lib/linkify";
 import { renderMarkdown } from "../lib/markdown";
-import { useActiveRecordingId } from "../lib/useActiveRecordingId";
+import { useActiveRecordingId, useActiveSectionId } from "../lib/activeRoute";
+import { useRoomBasePath } from "../lib/rooms";
 import { useSelection } from "../lib/selection";
 import {
   inferCurrentContext, currentContextLabelKey, currentContextRequest, type CurrentContext,
@@ -50,7 +51,10 @@ export default function ChatPanel() {
   const { t } = useTranslation("chat");
   const navigate = useNavigate();
   const activeId = useActiveRecordingId();
-  const activeSectionId = useMatch("/sections/:id")?.params.id ?? null;
+  const activeSectionId = useActiveSectionId();
+  // Keep chat's transcript navigation inside the room being viewed (empty for the personal room). Without it
+  // clicking a citation or reopening a restored folder falls back to the personal-room URL, switching rooms.
+  const basePath = useRoomBasePath();
   const selection = useSelection();
   const qc = useQueryClient();
   // The chat "add as attachment" tool: the model queues a note during the turn; we act once the reply lands —
@@ -77,7 +81,7 @@ export default function ChatPanel() {
       const l = parseRecordingLink(a.getAttribute("href") ?? "");
       if (l && l.id === link.id && l.t != null) times.add(l.t);
     });
-    navigate(recordingLinkPath(link, [...times].sort((a, b) => a - b)));
+    navigate(`${basePath}${recordingLinkPath(link, [...times].sort((a, b) => a - b))}`);
   }
   // The model's context-window size for the dial (per-user override, else server default).
   const { data: settings } = useQuery({ queryKey: ["user-settings"], queryFn: api.getUserSettings });
@@ -575,7 +579,7 @@ export default function ChatPanel() {
       if (c.context.sectionId) {
         setContextMode("current");
         setFrozenCurrent({ kind: "folder", sectionId: c.context.sectionId });
-        navigate(`/sections/${c.context.sectionId}`);
+        navigate(`${basePath}/sections/${c.context.sectionId}`);
       } else if (c.context.searchAllMeetings) {
         setContextMode("all");
       } else if (ids.length > 0) {
