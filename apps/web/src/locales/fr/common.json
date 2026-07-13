@@ -7,5 +7,6 @@
   "loading": "Chargement…",
   "create": "Créer",
   "remove": "Retirer",
-  "delete": "Supprimer"
+  "delete": "Supprimer",
+  "edit": "Modifier"
 }

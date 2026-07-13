@@ -74,5 +74,14 @@
   "confirmDeleteGroup": "Delete the group \"{{name}}\"? Its members keep their accounts.",
   "newGroupName": "New group name",
   "addGroup": "Add group",
-  "noGroups": "No groups"
+  "noGroups": "No groups",
+  "formulasTitle": "Manage formulas",
+  "colFormulaName": "Name",
+  "colFormulaScope": "Scope",
+  "colFormulaDescription": "Description",
+  "colFormulaEnabled": "Enabled",
+  "scopePlatform": "Platform",
+  "scopeDiariz": "Diariz",
+  "builtInHint": "Built-in",
+  "enabledForAria": "Enabled for {{name}}"
 }

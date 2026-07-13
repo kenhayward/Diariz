@@ -74,5 +74,14 @@
   "confirmDeleteGroup": "Gruppe \"{{name}}\" löschen? Die Mitglieder behalten ihre Konten.",
   "newGroupName": "Name der neuen Gruppe",
   "addGroup": "Gruppe hinzufügen",
-  "noGroups": "Keine Gruppen"
+  "noGroups": "Keine Gruppen",
+  "formulasTitle": "Formeln verwalten",
+  "colFormulaName": "Name",
+  "colFormulaScope": "Bereich",
+  "colFormulaDescription": "Beschreibung",
+  "colFormulaEnabled": "Aktiviert",
+  "scopePlatform": "Plattform",
+  "scopeDiariz": "Diariz",
+  "builtInHint": "Integriert",
+  "enabledForAria": "Aktiviert für {{name}}"
 }

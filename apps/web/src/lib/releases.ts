@@ -54,6 +54,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.130.0",
+    date: "2026-07-13",
+    pr: 285,
+    headline: "Manage shared Formulas as an admin",
+    summary:
+      "Admins with the new Manage Formulas permission get a Manage Formulas window (from the account menu) " +
+      "to create and edit Platform-wide formulas that everyone can run, and to enable/disable or tune the " +
+      "built-in Diariz formulas. Completes the Formulas feature (personal formulas, the Formulas tab, and " +
+      "running from chat/MCP shipped earlier).",
+    added: [
+      "A Manage Formulas admin window (for users with the Manage Formulas permission) to create/edit Platform-wide formulas and enable/disable or edit the built-in Diariz formulas.",
+    ],
+  },
+  {
     version: "0.129.0",
     date: "2026-07-12",
     pr: 284,

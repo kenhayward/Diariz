@@ -394,9 +394,13 @@ default timeout for its header phase and relies on client-disconnect for cancell
   result; it's a regular chat tool, so it's exposed over MCP automatically (it is not listed in
   `McpToolProjection.ExcludedToolNames`), letting Claude (Desktop/Code/the claude.ai web connector) run a
   user's formulas. There's also a deterministic **`/formula <name>`** client slash command in the chat panel
-  that runs a formula on the open recording directly, without going through the LLM. **Not yet built (later
-  phase):** an admin popup for bulk-managing Platform/Diariz formulas (today that's done directly through the
-  CRUD endpoints/UI above).
+  that runs a formula on the open recording directly, without going through the LLM. Formulas is now complete:
+  an admin **Manage Formulas** popup, opened from the account menu and gated on the `ManageFormulas`
+  permission, lets an admin create/edit Platform-wide formulas and enable/disable or edit the Diariz built-ins
+  without leaving the popup. It's backed by **`GET api/formulas/managed`** (every Platform/Diariz formula,
+  enabled or not, ordered by scope then name - so the popup can see and toggle disabled shared formulas too)
+  plus the existing CRUD/enable endpoints above; the profile now also exposes `ManageFormulas` via
+  `PermissionsDto` so the web app can gate the account-menu entry point.
 
 ## Meeting notes (the user's own notes)
 

@@ -74,5 +74,14 @@
   "confirmDeleteGroup": "¿Eliminar el grupo \"{{name}}\"? Sus miembros conservan sus cuentas.",
   "newGroupName": "Nombre del nuevo grupo",
   "addGroup": "Añadir grupo",
-  "noGroups": "Sin grupos"
+  "noGroups": "Sin grupos",
+  "formulasTitle": "Gestionar fórmulas",
+  "colFormulaName": "Nombre",
+  "colFormulaScope": "Ámbito",
+  "colFormulaDescription": "Descripción",
+  "colFormulaEnabled": "Habilitada",
+  "scopePlatform": "Plataforma",
+  "scopeDiariz": "Diariz",
+  "builtInHint": "Integrada",
+  "enabledForAria": "Habilitada para {{name}}"
 }

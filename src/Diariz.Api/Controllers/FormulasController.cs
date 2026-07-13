@@ -54,6 +54,25 @@ public class FormulasController : ControllerBase
         return formulas.Select(ToDto).ToList();
     }
 
+    /// <summary>Every Platform/Diariz formula, enabled or not (never Personal) - for the Formulas admin
+    /// popup, which needs to see and toggle disabled shared formulas too. Gated by <see cref="PlatformPermission.ManageFormulas"/>
+    /// via the <c>[Authorize]</c> policy; the explicit check below also makes the 403 unit-testable (a
+    /// directly-constructed controller doesn't run the authorization pipeline).</summary>
+    [HttpGet("managed")]
+    [Authorize(Policy = "ManageFormulas")]
+    public async Task<ActionResult<IReadOnlyList<FormulaDto>>> Managed()
+    {
+        if (!await CanManageFormulasAsync())
+            return Forbidden("Only a Formulas Administrator can view managed formulas.");
+
+        var formulas = await _db.Formulas
+            .Where(f => f.Scope == FormulaScope.Platform || f.Scope == FormulaScope.Diariz)
+            .OrderBy(f => f.Scope)
+            .ThenBy(f => f.Name)
+            .ToListAsync();
+        return Ok(formulas.Select(ToDto).ToList());
+    }
+
     /// <summary>Creates a formula. A Personal formula is always allowed and owned by the caller; a
     /// Platform/Diariz formula requires <see cref="PlatformPermission.ManageFormulas"/>. Clients can never
     /// set <see cref="Formula.IsBuiltIn"/> - only the seeder does.</summary>

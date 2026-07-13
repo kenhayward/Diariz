@@ -10,17 +10,19 @@ import Avatar from "./Avatar";
 import SettingsModal from "./SettingsModal";
 import PreferencesModal from "./PreferencesModal";
 import ManageUsersModal from "./ManageUsersModal";
+import ManageFormulasModal from "./ManageFormulasModal";
 import AboutModal from "./AboutModal";
 
 export default function UserMenu() {
   const { t } = useTranslation("account");
-  const { initials, pictureUrl, email, fullName, isAdmin, isPlatformAdmin, logout } = useAuth();
+  const { initials, pictureUrl, email, fullName, isAdmin, isPlatformAdmin, canManageFormulas, logout } = useAuth();
   const tour = useTour();
   const { data: storage } = useQuery({ queryKey: ["user-storage"], queryFn: api.getUserStorage });
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [usersOpen, setUsersOpen] = useState(false);
+  const [formulasOpen, setFormulasOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -120,6 +122,19 @@ export default function UserMenu() {
               {t("manageUsers")}
             </button>
           )}
+          {canManageFormulas && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                setFormulasOpen(true);
+              }}
+              className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
+            >
+              {t("manageFormulas")}
+            </button>
+          )}
 
           <button
             type="button"
@@ -162,6 +177,7 @@ export default function UserMenu() {
       {preferencesOpen && <PreferencesModal onClose={() => setPreferencesOpen(false)} />}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       {usersOpen && <ManageUsersModal onClose={() => setUsersOpen(false)} />}
+      {formulasOpen && <ManageFormulasModal onClose={() => setFormulasOpen(false)} />}
       {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
     </div>
   );

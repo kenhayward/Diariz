@@ -7,7 +7,7 @@ import { refreshDelayMs } from "./lib/tokenRefresh";
 import { initialsFromName, initialsFromEmail } from "./lib/initials";
 
 /// No authority until the server says otherwise: the profile is fetched, not decoded from the token.
-const NO_PERMISSIONS: Permissions = { manageRooms: false, manageUsers: false, managePlatform: false };
+const NO_PERMISSIONS: Permissions = { manageRooms: false, manageUsers: false, managePlatform: false, manageFormulas: false };
 
 interface AuthState {
   isAuthed: boolean;
@@ -18,6 +18,7 @@ interface AuthState {
   permissions: Permissions;
   isAdmin: boolean;
   isPlatformAdmin: boolean;
+  canManageFormulas: boolean;
   initials: string;
   /// Profile picture URL from a linked Google account, or null (then the avatar shows initials).
   pictureUrl: string | null;
@@ -48,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const permissions = profile?.permissions ?? NO_PERMISSIONS;
   const isAdmin = permissions.manageUsers;
   const isPlatformAdmin = permissions.managePlatform;
+  const canManageFormulas = permissions.manageFormulas;
 
   function setSession(accessToken: string) {
     setToken(accessToken);
@@ -114,7 +116,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ isAuthed: Boolean(token), email, fullName, permissions, isAdmin, isPlatformAdmin, initials, pictureUrl, login, setSession, logout }}
+      value={{
+        isAuthed: Boolean(token),
+        email,
+        fullName,
+        permissions,
+        isAdmin,
+        isPlatformAdmin,
+        canManageFormulas,
+        initials,
+        pictureUrl,
+        login,
+        setSession,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>

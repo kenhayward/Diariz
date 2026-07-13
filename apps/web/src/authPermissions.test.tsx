@@ -17,11 +17,12 @@ import { api } from "./lib/api";
 import { AuthProvider, useAuth } from "./auth";
 
 function Probe() {
-  const { isAdmin, isPlatformAdmin, permissions } = useAuth();
+  const { isAdmin, isPlatformAdmin, canManageFormulas, permissions } = useAuth();
   return (
     <div>
       <span data-testid="admin">{String(isAdmin)}</span>
       <span data-testid="platform">{String(isPlatformAdmin)}</span>
+      <span data-testid="formulas">{String(canManageFormulas)}</span>
       <span data-testid="rooms">{String(permissions.manageRooms)}</span>
     </div>
   );
@@ -44,7 +45,7 @@ describe("AuthProvider permissions", () => {
   it("derives isAdmin and isPlatformAdmin from the profile, not the token", async () => {
     (api.getProfile as Mock).mockResolvedValue({
       email: "a@b.test",
-      permissions: { manageRooms: true, manageUsers: true, managePlatform: false },
+      permissions: { manageRooms: true, manageUsers: true, managePlatform: false, manageFormulas: false },
     });
 
     renderProbe();
@@ -52,12 +53,25 @@ describe("AuthProvider permissions", () => {
     await waitFor(() => expect(screen.getByTestId("admin").textContent).toBe("true"));
     expect(screen.getByTestId("platform").textContent).toBe("false");
     expect(screen.getByTestId("rooms").textContent).toBe("true");
+    expect(screen.getByTestId("formulas").textContent).toBe("false");
+  });
+
+  it("derives canManageFormulas from the profile, not the token", async () => {
+    (api.getProfile as Mock).mockResolvedValue({
+      email: "a@b.test",
+      permissions: { manageRooms: false, manageUsers: false, managePlatform: false, manageFormulas: true },
+    });
+
+    renderProbe();
+
+    await waitFor(() => expect(screen.getByTestId("formulas").textContent).toBe("true"));
+    expect(screen.getByTestId("admin").textContent).toBe("false");
   });
 
   it("grants nothing to a standard user", async () => {
     (api.getProfile as Mock).mockResolvedValue({
       email: "a@b.test",
-      permissions: { manageRooms: false, manageUsers: false, managePlatform: false },
+      permissions: { manageRooms: false, manageUsers: false, managePlatform: false, manageFormulas: false },
     });
 
     renderProbe();
@@ -65,6 +79,7 @@ describe("AuthProvider permissions", () => {
     await waitFor(() => expect(api.getProfile).toHaveBeenCalled());
     expect(screen.getByTestId("admin").textContent).toBe("false");
     expect(screen.getByTestId("platform").textContent).toBe("false");
+    expect(screen.getByTestId("formulas").textContent).toBe("false");
   });
 
   /// Fails closed: until the profile arrives (or if it fails), the user holds no authority.
@@ -75,6 +90,7 @@ describe("AuthProvider permissions", () => {
 
     expect(screen.getByTestId("admin").textContent).toBe("false");
     expect(screen.getByTestId("platform").textContent).toBe("false");
+    expect(screen.getByTestId("formulas").textContent).toBe("false");
   });
 
   /// Signing out must drop the cached profile: otherwise the next user to sign in on this browser sees the

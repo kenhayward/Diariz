@@ -1139,6 +1139,12 @@ export const api = {
     return data;
   },
 
+  /// ManageFormulas-gated: every Platform + Diariz formula, including disabled ones, for the admin popup.
+  async listManagedFormulas(): Promise<Formula[]> {
+    const { data } = await http.get<Formula[]>("/api/formulas/managed");
+    return data;
+  },
+
   async createFormula(body: {
     scope: FormulaScope;
     name: string;

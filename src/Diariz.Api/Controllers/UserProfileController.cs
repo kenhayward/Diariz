@@ -40,7 +40,8 @@ public class UserProfileController : ControllerBase
     private static PermissionsDto ToDto(PlatformPermission p) => new(
         p.HasFlag(PlatformPermission.ManageRooms),
         p.HasFlag(PlatformPermission.ManageUsers),
-        p.HasFlag(PlatformPermission.ManagePlatform));
+        p.HasFlag(PlatformPermission.ManagePlatform),
+        p.HasFlag(PlatformPermission.ManageFormulas));
 
     [HttpGet]
     public async Task<ActionResult<UserProfileDto>> Get()

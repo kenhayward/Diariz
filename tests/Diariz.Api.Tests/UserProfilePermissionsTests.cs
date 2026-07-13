@@ -44,6 +44,7 @@ public class UserProfilePermissionsTests
         Assert.True(profile.Permissions!.ManageUsers);
         Assert.False(profile.Permissions!.ManagePlatform);
         Assert.False(profile.Permissions!.ManageRooms);
+        Assert.False(profile.Permissions!.ManageFormulas);
     }
 
     [Fact]
@@ -58,6 +59,7 @@ public class UserProfilePermissionsTests
         Assert.False(profile.Permissions!.ManageUsers);
         Assert.False(profile.Permissions!.ManagePlatform);
         Assert.False(profile.Permissions!.ManageRooms);
+        Assert.False(profile.Permissions!.ManageFormulas);
     }
 
     [Fact]
@@ -72,5 +74,34 @@ public class UserProfilePermissionsTests
         Assert.True(profile.Permissions!.ManageRooms);
         Assert.True(profile.Permissions!.ManageUsers);
         Assert.True(profile.Permissions!.ManagePlatform);
+        // The old PlatformAdministrator role bundle predates Formulas and doesn't carry it.
+        Assert.False(profile.Permissions!.ManageFormulas);
+    }
+
+    [Fact]
+    public async Task Profile_ReportsManageFormulasTrue_ForAUserInAGroupWithIt()
+    {
+        using var host = new IdentityTestHost();
+        var (sut, _) = await BuildAsync(host, PlatformPermission.ManageFormulas);
+
+        var profile = (await sut.Get()).Value!;
+
+        Assert.NotNull(profile.Permissions);
+        Assert.True(profile.Permissions!.ManageFormulas);
+        Assert.False(profile.Permissions!.ManageRooms);
+        Assert.False(profile.Permissions!.ManageUsers);
+        Assert.False(profile.Permissions!.ManagePlatform);
+    }
+
+    [Fact]
+    public async Task Profile_ReportsManageFormulasFalse_ForAUserWithoutIt()
+    {
+        using var host = new IdentityTestHost();
+        var (sut, _) = await BuildAsync(host, PlatformPermission.ManageUsers);
+
+        var profile = (await sut.Get()).Value!;
+
+        Assert.NotNull(profile.Permissions);
+        Assert.False(profile.Permissions!.ManageFormulas);
     }
 }

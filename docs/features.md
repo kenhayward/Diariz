@@ -123,8 +123,9 @@ disabling a Platform or Diariz formula requires the new **Manage Formulas** perm
 group), while your Personal formulas are always yours to manage. You can also run a formula without opening
 the tab: type **`/formula <name>`** in the chat box to run it on the recording you have open, or ask **Claude**
 to run it for you - the built-in `run_formula` chat tool is exposed over MCP, so Claude Desktop, Claude Code,
-and the claude.ai web connector can trigger any formula you can see. *(Later phase: an admin popup for
-bulk-managing shared formulas.)*
+and the claude.ai web connector can trigger any formula you can see. Admins with **Manage Formulas** get a
+**Manage Formulas** window from the account menu to create and edit Platform-wide formulas shared with
+everyone, and to enable/disable or tune the built-in Diariz starter formulas.
 - **Extract action items** (Action / Actor / Deadline) with that same LLM — **automatically as part of the
 transcription pipeline**, into an editable table in an always-available **Action items** panel (collapsed by
 default, with a refresh button to re-extract). The automatic pass runs once and never overwrites actions
