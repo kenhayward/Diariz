@@ -504,16 +504,20 @@ public record SaveChatConversationResult(Guid Id, string Title);
 /// "Flags enum serializes as string" gotcha).</summary>
 public record FormulaDto(
     Guid Id, string Scope, Guid? OwnerUserId, string Name, string? Description, string Prompt,
-    int Context, bool Enabled, bool IsBuiltIn);
+    int Context, bool Enabled, bool IsBuiltIn, bool Shared);
+
+/// <summary>A formula shared by another user, for the discovery browser: the formula, the owner's display +
+/// avatar (name falls back to email), and whether the caller has already added it.</summary>
+public record SharedFormulaDto(FormulaDto Formula, string? OwnerName, string? OwnerPictureUrl, bool AlreadyAdded);
 
 /// <summary>Create request. <paramref name="Scope"/> is parsed to <see cref="FormulaScope"/>;
 /// <paramref name="Context"/> is the [Flags] bit value as an int.</summary>
-public record CreateFormulaRequest(string Scope, string Name, string? Description, string Prompt, int Context);
+public record CreateFormulaRequest(string Scope, string Name, string? Description, string Prompt, int Context, bool Shared = false);
 
 /// <summary>Partial update: null leaves a field unchanged, mirroring the tri-state pattern used by
 /// <see cref="UpdateUserSettingsRequest"/> (a value replaces it - none of these fields need a separate
 /// "clear" state, unlike the optional overrides in user settings).</summary>
-public record UpdateFormulaRequest(string? Name, string? Description, string? Prompt, int? Context);
+public record UpdateFormulaRequest(string? Name, string? Description, string? Prompt, int? Context, bool? Shared = null);
 
 public record SetFormulaEnabledRequest(bool Enabled);
 
