@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth";
@@ -6,6 +6,8 @@ import { api } from "../lib/api";
 import { useTour } from "../lib/tour";
 import { formatBytes, storagePercent } from "../lib/format";
 import { transcriptionTimeParts } from "../lib/transcriptionTime";
+import { useHubPopover } from "./hub/hubPopovers";
+import HubPopover from "./hub/HubPopover";
 import Avatar from "./Avatar";
 import SettingsModal from "./SettingsModal";
 import PreferencesModal from "./PreferencesModal";
@@ -13,68 +15,171 @@ import ManageUsersModal from "./ManageUsersModal";
 import ManageFormulasModal from "./ManageFormulasModal";
 import AboutModal from "./AboutModal";
 
+// One menu row inside the account popover. Rows are padded, rounded and highlight on hover; the footer
+// "Sign out" row is red-tinted. Kept as a real <button role="menuitem"> so the accessible name / gating
+// assertions carry over from the old menu.
+function MenuRow({
+  label,
+  onSelect,
+  variant = "default",
+}: {
+  label: string;
+  onSelect: () => void;
+  variant?: "default" | "danger";
+}) {
+  const danger = variant === "danger";
+  const base: CSSProperties = {
+    display: "block",
+    width: "100%",
+    padding: 10,
+    borderRadius: 9,
+    border: "none",
+    background: "transparent",
+    color: danger ? "var(--hub-red-text)" : "var(--hub-text)",
+    fontFamily: "system-ui",
+    fontWeight: danger ? 600 : 500,
+    fontSize: 14.5,
+    textAlign: "left",
+    cursor: "pointer",
+  };
+  const hoverBg = danger ? "var(--hub-red-soft-bg)" : "var(--hub-surface-hover)";
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onSelect}
+      style={base}
+      onMouseEnter={(e) => (e.currentTarget.style.background = hoverBg)}
+      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+    >
+      {label}
+    </button>
+  );
+}
+
+/**
+ * The command-hub account menu: a 46px avatar button that toggles a 308px account popover (header, usage
+ * stats, menu rows, Sign out). The avatar shares the hub's single-open popover state (`useHubPopover`, id
+ * "acct") so opening it closes the recorder popovers and vice-versa; `HubPopover` owns the backdrop +
+ * Escape. Behaviour, gating and data are unchanged from the old dropdown - this is a restyle.
+ */
 export default function UserMenu() {
   const { t } = useTranslation("account");
   const { initials, pictureUrl, email, fullName, isAdmin, isPlatformAdmin, canManageFormulas, logout } = useAuth();
   const tour = useTour();
   const { data: storage } = useQuery({ queryKey: ["user-storage"], queryFn: api.getUserStorage });
-  const [open, setOpen] = useState(false);
+  const { isOpen, toggle, close } = useHubPopover();
+  const open = isOpen("acct");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [usersOpen, setUsersOpen] = useState(false);
   const [formulasOpen, setFormulasOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    function onDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  // Run a menu action: close the popover, then open the chosen modal / start the tour.
+  const run = (fn: () => void) => () => {
+    close();
+    fn();
+  };
+
+  const name = fullName ?? email;
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative">
       <button
         type="button"
         aria-label="Account"
         aria-haspopup="menu"
         aria-expanded={open}
         data-tour="account"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => toggle("acct")}
+        style={{
+          padding: 0,
+          borderRadius: "50%",
+          border: "2px solid var(--hub-avatar-border)",
+          overflow: "hidden",
+          display: "grid",
+          placeItems: "center",
+          lineHeight: 0,
+          cursor: "pointer",
+          background: "transparent",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--hub-border-hover)")}
+        onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--hub-avatar-border)")}
       >
-        <Avatar initials={initials} pictureUrl={pictureUrl} />
+        <Avatar initials={initials} pictureUrl={pictureUrl} size="md" />
       </button>
 
-      {open && (
-        <div
-          role="menu"
-          // z-50 keeps the menu above the floating live-notes panel (z-40), which is rendered while recording.
-          className="absolute right-0 z-50 mt-2 w-48 overflow-hidden rounded-lg border bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-900"
-        >
-          {(fullName || email) && (
-            <div className="border-b px-3 py-2 dark:border-gray-700">
-              <div className="truncate text-sm font-medium dark:text-gray-100">{fullName ?? email}</div>
-              {storage && (
-                <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                  {t("storageUsage", {
-                    used: formatBytes(storage.usedBytes),
-                    total: formatBytes(storage.quotaBytes),
-                    percent: storagePercent(storage.usedBytes, storage.quotaBytes),
-                  })}
+      <HubPopover open={open} onClose={close} width={308} anchorClassName="right-0" ariaLabel="Account">
+        <div style={{ overflow: "hidden", borderRadius: 14 }}>
+          {/* Header: avatar + name + email. */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              padding: 16,
+              borderBottom: "1px solid var(--hub-popover-border)",
+            }}
+          >
+            <Avatar initials={initials} pictureUrl={pictureUrl} size="md" />
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{ fontFamily: "system-ui", fontWeight: 700, fontSize: 16, color: "var(--hub-text)" }}
+                className="truncate"
+              >
+                {name}
+              </div>
+              {fullName && (
+                <div
+                  style={{ fontFamily: "system-ui", fontWeight: 400, fontSize: 13, color: "var(--hub-muted)" }}
+                  className="truncate"
+                >
+                  {email}
                 </div>
               )}
-              {storage && storage.totalTranscriptionMs > 0 && (
-                <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+            </div>
+          </div>
+
+          {/* Usage stats: storage line + progress track, and total transcription time when present. */}
+          {storage && (
+            <div style={{ padding: 16, borderBottom: "1px solid var(--hub-popover-border)" }}>
+              <div
+                style={{ fontFamily: "system-ui", fontWeight: 500, fontSize: 12.5, color: "var(--hub-text-2)" }}
+              >
+                {t("storageUsage", {
+                  used: formatBytes(storage.usedBytes),
+                  total: formatBytes(storage.quotaBytes),
+                  percent: storagePercent(storage.usedBytes, storage.quotaBytes),
+                })}
+              </div>
+              <div
+                style={{
+                  marginTop: 8,
+                  height: 5,
+                  borderRadius: 3,
+                  background: "var(--hub-surface-hover)",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${storagePercent(storage.usedBytes, storage.quotaBytes)}%`,
+                    background: "var(--hub-blue)",
+                  }}
+                />
+              </div>
+              {storage.totalTranscriptionMs > 0 && (
+                <div
+                  style={{
+                    marginTop: 10,
+                    fontFamily: "system-ui",
+                    fontWeight: 500,
+                    fontSize: 12.5,
+                    color: "var(--hub-text-2)",
+                  }}
+                >
                   {(() => {
                     const { days, clock } = transcriptionTimeParts(storage.totalTranscriptionMs);
                     return days > 0
@@ -85,94 +190,25 @@ export default function UserMenu() {
               )}
             </div>
           )}
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              setPreferencesOpen(true);
-            }}
-            className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
-          >
-            {t("preferences")}
-          </button>
-          {isPlatformAdmin && (
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setOpen(false);
-                setSettingsOpen(true);
-              }}
-              className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
-            >
-              {t("settings")}
-            </button>
-          )}
-          {isAdmin && (
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setOpen(false);
-                setUsersOpen(true);
-              }}
-              className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
-            >
-              {t("manageUsers")}
-            </button>
-          )}
-          {canManageFormulas && (
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setOpen(false);
-                setFormulasOpen(true);
-              }}
-              className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
-            >
-              {t("manageFormulas")}
-            </button>
-          )}
 
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              tour.start();
-            }}
-            className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
-          >
-            {t("showTour")}
-          </button>
+          {/* Menu rows (same gating + modal handlers as before). */}
+          <div role="menu" style={{ padding: 8, display: "flex", flexDirection: "column" }}>
+            <MenuRow label={t("preferences")} onSelect={run(() => setPreferencesOpen(true))} />
+            {isPlatformAdmin && <MenuRow label={t("settings")} onSelect={run(() => setSettingsOpen(true))} />}
+            {isAdmin && <MenuRow label={t("manageUsers")} onSelect={run(() => setUsersOpen(true))} />}
+            {canManageFormulas && (
+              <MenuRow label={t("manageFormulas")} onSelect={run(() => setFormulasOpen(true))} />
+            )}
+            <MenuRow label={t("showTour")} onSelect={run(() => tour.start())} />
+            <MenuRow label={t("about")} onSelect={run(() => setAboutOpen(true))} />
+          </div>
 
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              setAboutOpen(true);
-            }}
-            className="block w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
-          >
-            {t("about")}
-          </button>
-
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              logout();
-            }}
-            className="block w-full border-t px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-          >
-            {t("signOut")}
-          </button>
+          {/* Footer: Sign out. */}
+          <div style={{ padding: 8, borderTop: "1px solid var(--hub-popover-border)" }}>
+            <MenuRow label={t("signOut")} variant="danger" onSelect={run(logout)} />
+          </div>
         </div>
-      )}
+      </HubPopover>
 
       {preferencesOpen && <PreferencesModal onClose={() => setPreferencesOpen(false)} />}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}

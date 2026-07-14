@@ -88,14 +88,14 @@ describe("UserMenu", () => {
     expect(await screen.findByRole("dialog", { name: /manage platform formulas/i })).toBeTruthy();
   });
 
-  it("shows the initials and opens a menu with the user's name, Preferences and Sign Out", () => {
+  it("shows the initials and opens a popover with the user's name, email, Preferences and Sign Out", () => {
     renderMenu();
     expect(screen.getByText("JD")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /account/i }));
-    // The name is shown instead of the email.
+    // The header now shows both the full name and the email.
     expect(screen.getByText("Jane Doe")).toBeTruthy();
-    expect(screen.queryByText("jane.doe@x.com")).toBeNull();
+    expect(screen.getByText("jane.doe@x.com")).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /preferences/i })).toBeTruthy();
     expect(screen.getByRole("menuitem", { name: /sign out/i })).toBeTruthy();
   });
@@ -133,11 +133,11 @@ describe("UserMenu", () => {
     expect(await screen.findByText(/Transcription 1:01:01/)).toBeTruthy();
   });
 
-  it("renders the menu above the live-notes panel", () => {
+  it("renders the account popover above the live-notes panel", () => {
     renderMenu();
     fireEvent.click(screen.getByRole("button", { name: /account/i }));
-    // The floating live-notes panel is z-40; the account menu must sit above it, not behind.
-    expect(screen.getByRole("menu").className).toContain("z-50");
+    // The floating live-notes panel is z-40; the account popover (the HubPopover panel) must sit above it.
+    expect(screen.getByRole("dialog").className).toContain("z-50");
   });
 
   it("Sign Out calls logout", () => {
