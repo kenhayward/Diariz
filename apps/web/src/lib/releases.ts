@@ -19,11 +19,11 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Recording hub** | Every meeting opens on a hub: a summary card (meeting type, key facts, the summary inline) over tiles for transcript, actions, speakers, notes, files, and formulas - each showing its count and a preview, with new-note / add-file / run-formula available in place. The transcript embeds a conversation-flow player showing who spoke when, which doubles as the scrubber. |
 | **Speaker identification** | Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). |
 | **Notes** | Take your own note lines live during a meeting (timestamped, crash-safe); they appear inline in the transcript at the moment you wrote them, steer the minutes, and can be woven into an enhanced-notes section linking to the exact transcript moments. |
-| **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable, driven by reusable meeting-type templates with per-block layout control (H1-H3 headings, break, Markdown, horizontal rules, drag-to-reorder) and JSON import/export. |
+| **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable. A meeting type carries no prompts of its own: it names the **formula** that generates its minutes, plus any others to run alongside (their documents appear in the Formulas tab). Minutes and formulas are the same machinery - any formula you can use can produce your minutes. Templates are built from blocks (H1-H3 headings, literal text, substituted details, model prompts, rules, drag-to-reorder) with JSON import/export. |
 | **Action items** | Auto-extracted with owner and deadline, tracked across every meeting with completion and a person filter, linking back to the transcript. |
 | **Tag cloud** | Every meeting is auto-tagged with weighted topics; a Tags tab shows a weighted cloud and the meetings behind each tag. |
 | **Chat over transcripts** | Stream answers over one meeting, a folder (its summary/minutes/actions), several selected, or all meetings - context inferred from what you're viewing - via your OpenAI-compatible model, with attachments and saved conversations. |
-| **Formulas** | Save a prompt + a context and run it over a recording - or a whole folder and its sub-sections (every meeting in it) - to generate a Markdown document you can edit, download, or email. Runs in the background (\"Generating...\" then fills in). Personal, platform-wide, or built-in; from the Formulas tab (on a recording or a folder), \`/formula\` in chat, or Claude via MCP; share a personal one so others can find and add it (a live link); admins manage the shared ones. |
+| **Formulas** | Build a document from headings, literal text, substituted meeting details and instructions to the model; choose what it may see (transcript, notes, summary, minutes, actions) and run it over a recording - or a whole folder and its sub-sections - to generate a Markdown document you can edit, download, or email. Runs in the background (\"Generating...\" then fills in); re-running one replaces its previous document, and a document you edited by hand is left alone. Personal, platform-wide, or built-in; from the Formulas tab (on a recording or a folder), \`/formula\` in chat, or Claude via MCP; share a personal one so others can find and add it (a live link); admins manage the shared ones. |
 | **Search** | Keyword search across your library, upgraded to semantic (meaning-based) search when an embeddings endpoint is configured. |
 | **Chat tools** | The assistant searches your library with built-in tools (who-said-what, attendees, talk time, summaries, email-to-self) and links to the exact segment. |
 | **Voice dictation** | Speak your chat questions - transcribed into the chat box in Chrome/Edge or via a server speech-to-text endpoint. |
@@ -54,6 +54,18 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.140.1",
+    date: "2026-07-14",
+    pr: 312,
+    headline: "The templates Diariz ships with are now readable files",
+    summary:
+      "The minutes templates that come with Diariz - General Meeting, Customer Meeting, 1:1, Interview and the rest - were written into the program itself, so the exact words given to the model were buried in code. They are now plain markdown files you can read, review and change: a heading is a heading, {{date}} is the meeting's date, and [[WRITE: ...]] is an instruction to the model. Nothing changes about the minutes they produce - this is the same content in a place you can actually see it, and it means future changes to those prompts are reviewable rather than invisible. The Formulas and Meeting Types documentation has also been brought up to date with the merge of the two.",
+    changed: [
+      "The built-in minutes templates moved out of the program and into readable markdown files, in the same format the built-in formulas already used. The minutes they produce are unchanged.",
+      "The Formulas / Meeting Types documentation now describes how they actually work: a meeting type points at the formula that generates its minutes, and a formula is a template rather than a single prompt.",
+    ],
+  },
   {
     version: "0.140.0",
     date: "2026-07-14",

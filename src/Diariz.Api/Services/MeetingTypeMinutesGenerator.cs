@@ -161,11 +161,15 @@ public sealed class MeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerator
             : new(overview, StandardGeneral().Content, DefaultMinutesContext);
     }
 
-    /// <summary>The in-code General standard - the last resort when nothing has been seeded.</summary>
+    /// <summary>The last resort when nothing has been seeded: the General standard from the content files, or - if
+    /// those are missing from the deployment entirely - the emergency template, so the app still produces usable
+    /// minutes rather than an empty document.</summary>
     private static (string Overview, TemplateContent Content) StandardGeneral()
     {
-        var std = MeetingTypeSeeder.Standards.First(s => s.Key == MeetingType.GeneralKey);
-        return (std.Overview, TemplateContent.Parse(std.ContentJson));
+        var std = MeetingTypeSeeder.Standards.FirstOrDefault(s => s.Key == MeetingType.GeneralKey);
+        return std is null
+            ? (string.Empty, MeetingTypeSeeder.EmergencyGeneral)
+            : (std.Overview, TemplateContent.Parse(std.ContentJson));
     }
 
     /// <summary>Field substitution is shared with the formula run pipeline - see <see cref="TemplateFields"/>.</summary>

@@ -179,7 +179,12 @@ default timeout for its header phase and relies on client-disconnect for cancell
   accessible formula can be a primary. A recording's `MeetingTypeId` (null → the seeded **General Meeting**
   default) selects the type. Types are **Platform** (admin-owned, shared) or **Personal** (a user's own); the app
   seeds a standard set on startup (`MeetingTypeSeeder`, insert-if-missing by `Key`), each with the built-in
-  `Diariz` formula that generates its minutes. A **Platform** type may reference only Platform/Diariz formulas —
+  `Diariz` formula that generates its minutes. **The shipped templates are markdown files** -
+  `src/Diariz.Api/meeting-types/*.md`, loaded at boot by `MeetingTypeCatalog` and parsed by `TemplateMarkdown`
+  (`#` = a section, `{{field}}` = a substituted value, `[[WRITE: …]]` = a model prompt, `---` = a rule) - the
+  same authoring format as the built-in formulas (`formulas/*.md`, `BuiltInFormulaCatalog`). The words the model
+  is given are content, not code: editable, mountable, and reviewable in a diff. If the directory is missing,
+  `MeetingTypeSeeder.EmergencyGeneral` keeps the app producing usable minutes. A **Platform** type may reference only Platform/Diariz formulas —
   minutes generate as the *recording owner*, and a Personal formula can only be run by its owner, so pointing a
   shared type at one would produce no minutes for everyone else (refused at save). The
   `MeetingTypeMinutesGenerator` resolves the type and its primary formula, **assembles the context from that

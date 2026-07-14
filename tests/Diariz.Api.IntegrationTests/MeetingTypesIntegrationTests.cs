@@ -11,6 +11,9 @@ namespace Diariz.Api.IntegrationTests;
 [Collection(IntegrationCollection.Name)]
 public class MeetingTypesIntegrationTests(ContainersFixture fx)
 {
+    // The templates are markdown files now, so the seeder needs the catalog installed - as Program.cs does at boot.
+    static MeetingTypesIntegrationTests() => Standards.Install();
+
     private static MeetingTypesController Build(Diariz.Domain.DiarizDbContext db, Guid userId) =>
         new(db, new UserPermissions(db), new RoomScope(db)) { ControllerContext = Http.Context(userId) };
 

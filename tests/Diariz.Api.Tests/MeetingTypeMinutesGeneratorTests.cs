@@ -11,6 +11,9 @@ namespace Diariz.Api.Tests;
 /// strategy.</summary>
 public class MeetingTypeMinutesGeneratorTests
 {
+    // The General fallback comes from the shipped meeting-types/*.md, so install the catalog as boot does.
+    public MeetingTypeMinutesGeneratorTests() => Standards.Install();
+
     private static readonly IReadOnlyList<SegmentDto> Segments =
         [new(Guid.NewGuid(), "SPEAKER_00", "Alice", 0, 1000, "Hello")];
     private static readonly SummarizationRequestConfig Config = new("https://llm.test/v1", "sk", "m", 60);
