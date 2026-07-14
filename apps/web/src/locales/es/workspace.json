@@ -427,6 +427,7 @@
   "systemDesktopSuffix": " (solo escritorio)",
   "recStop": "Detener",
   "recRecord": "Grabar",
+  "recStartRecording": "Iniciar grabación",
   "recPause": "Pausar",
   "recResume": "Reanudar",
   "recPaused": "En pausa",

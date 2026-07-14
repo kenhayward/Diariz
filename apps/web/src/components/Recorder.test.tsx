@@ -166,13 +166,14 @@ describe("Recorder transport controls", () => {
     (getStream as Mock).mockResolvedValue(fakeSession);
   });
 
-  // The transport buttons are icon-only: the glyph carries the meaning, the label lives on aria-label
-  // (and title) so screen readers + hover tooltips still name them.
+  // The circular transport buttons (pause/resume/stop) are icon-only: the glyph carries the meaning, the
+  // label lives on aria-label (and title) so screen readers + hover tooltips still name them. The record
+  // hero is now a labelled pill (icon + "Start recording" text) but keeps the accessible name "Record".
   const iconOnly = (btn: HTMLElement) => btn.querySelector("svg") !== null && btn.textContent === "";
 
-  it("renders Record and Upload as icons with accessible names", async () => {
+  it("renders Record (hero pill) and Upload (icon) with accessible names", async () => {
     render(<Recorder onUploaded={() => {}} />);
-    expect(iconOnly(await screen.findByRole("button", { name: /^record$/i }))).toBe(true);
+    expect(await screen.findByRole("button", { name: /^record$/i })).toBeTruthy();
     expect(iconOnly(screen.getByRole("button", { name: /^upload$/i }))).toBe(true);
   });
 
@@ -303,7 +304,7 @@ describe("Recorder source selection", () => {
     render(<Recorder onUploaded={() => {}} />);
 
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
-    await screen.findByText(/●/);
+    await screen.findByRole("button", { name: /^stop$/i });
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
 
     await waitFor(() => expect(api.upload).toHaveBeenCalled());
@@ -318,7 +319,7 @@ describe("Recorder source selection", () => {
     render(<Recorder onUploaded={() => {}} />);
 
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
-    await screen.findByText(/●/);
+    await screen.findByRole("button", { name: /^stop$/i });
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
 
     await waitFor(() => expect(api.upload).toHaveBeenCalled());
@@ -333,7 +334,7 @@ describe("Recorder source selection", () => {
     render(<Recorder onUploaded={() => {}} />);
 
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
-    await screen.findByText(/●/);
+    await screen.findByRole("button", { name: /^stop$/i });
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
 
     await waitFor(() => expect(api.upload).toHaveBeenCalled());
@@ -348,7 +349,7 @@ describe("Recorder source selection", () => {
 
     fireEvent.click(await screen.findByRole("checkbox", { name: /system audio/i }));
     fireEvent.click(screen.getByRole("button", { name: /record/i }));
-    await screen.findByText(/●/);
+    await screen.findByRole("button", { name: /^stop$/i });
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
 
     await waitFor(() => expect(api.upload).toHaveBeenCalled());
@@ -364,7 +365,7 @@ describe("Recorder source selection", () => {
     fireEvent.change(await screen.findByRole("combobox", { name: /^microphone$/i }), { target: { value: "none" } });
     fireEvent.click(screen.getByRole("checkbox", { name: /system audio/i }));
     fireEvent.click(screen.getByRole("button", { name: /record/i }));
-    await screen.findByText(/●/);
+    await screen.findByRole("button", { name: /^stop$/i });
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
 
     await waitFor(() => expect(api.upload).toHaveBeenCalled());
@@ -389,7 +390,7 @@ describe("Recorder source selection", () => {
 
     fireEvent.click(await screen.findByRole("checkbox", { name: /system audio/i }));
     fireEvent.click(screen.getByRole("button", { name: /record/i }));
-    await screen.findByText(/●/); // still recording (mic only)
+    await screen.findByRole("button", { name: /^stop$/i }); // still recording (mic only)
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
 
     await waitFor(() => expect(api.upload).toHaveBeenCalled());

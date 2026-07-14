@@ -29,7 +29,7 @@ import { useStatus } from "../lib/status";
 import { useRoom } from "../lib/rooms";
 import { RoomPermission } from "../lib/types";
 import type { StatusTone } from "../lib/statusBar";
-import InputLevelMeter from "./InputLevelMeter";
+import RecordHero from "./hub/RecordHero";
 import { AUDIO_ACCEPT_ATTR } from "../lib/audioFormats";
 import { useUpload } from "../lib/uploadContext";
 import {
@@ -60,9 +60,9 @@ const AUTOSTOP_KEY = "diariz.recorder.autoStop";
 // checkbox + the "No microphone" dropdown option; false in Firefox/Safari.
 const CAN_SYSTEM_AUDIO = supportsDisplayAudio() || isElectron;
 
-// Transport glyphs (16x16), drawn in `currentColor` so each button's own text colour applies. Record is
-// a microphone, pause two bars, resume a play triangle, stop a filled square, upload the arrow-into-tray.
-// The buttons are icon-only: the label lives on aria-label + title.
+// Transport glyph (16x16), drawn in `currentColor` so the button's own text colour applies. The Upload
+// button is icon-only: the label lives on aria-label + title. (The record/pause/resume/stop glyphs moved
+// into the RecordHero component along with the record cluster.)
 function TransportIcon({ children }: { children: ReactNode }) {
   return (
     <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
@@ -70,39 +70,6 @@ function TransportIcon({ children }: { children: ReactNode }) {
     </svg>
   );
 }
-
-const IconRecord = () => (
-  <TransportIcon>
-    <rect x="6" y="1.75" width="4" height="7.5" rx="2" fill="currentColor" />
-    <path
-      d="M3.75 7.5a4.25 4.25 0 0 0 8.5 0M8 11.75V14M5.75 14h4.5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </TransportIcon>
-);
-
-const IconPause = () => (
-  <TransportIcon>
-    <rect x="4.5" y="3.5" width="2.5" height="9" rx="0.75" fill="currentColor" />
-    <rect x="9" y="3.5" width="2.5" height="9" rx="0.75" fill="currentColor" />
-  </TransportIcon>
-);
-
-const IconPlay = () => (
-  <TransportIcon>
-    <path d="M5.5 3.4l6.5 4.6-6.5 4.6z" fill="currentColor" />
-  </TransportIcon>
-);
-
-const IconStop = () => (
-  <TransportIcon>
-    <rect x="4" y="4" width="8" height="8" rx="1" fill="currentColor" />
-  </TransportIcon>
-);
 
 const IconUpload = () => (
   <TransportIcon>
@@ -194,7 +161,7 @@ export default function Recorder({
   const [recording, setRecording] = useState(false);
   // Paused mid-recording: capture is suspended (nothing recorded, mic muted) but the recorder is still live.
   const [paused, setPaused] = useState(false);
-  // True once the input has been near-silent for a sustained period while recording (see InputLevelMeter).
+  // True once the input has been near-silent for a sustained period while recording (see HubLevelMeter).
   const [silent, setSilent] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   // Auto-stop: schedule the current recording to end after N minutes or at a set clock time. The chosen
@@ -901,37 +868,20 @@ export default function Recorder({
           )}
         </div>
 
-        {recording ? (
-          <>
-            <button
-              type="button"
-              onClick={paused ? resume : pause}
-              title={paused ? t("recResume") : t("recPause")}
-              aria-label={paused ? t("recResume") : t("recPause")}
-              className="flex items-center justify-center rounded border p-2 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
-            >
-              {paused ? <IconPlay /> : <IconPause />}
-            </button>
-            <button
-              onClick={stop}
-              title={t("recStop")}
-              aria-label={t("recStop")}
-              className="flex items-center justify-center rounded bg-red-600 p-2 text-white"
-            >
-              <IconStop />
-            </button>
-          </>
-        ) : (
-          <button
-            onClick={() => start()}
-            disabled={busy || (selection.kind === "none" && !systemAudio) || !canRecord}
-            title={!canRecord ? t("recNoPermission") : busy ? t("recUploading") : t("recRecord")}
-            aria-label={busy ? t("recUploading") : t("recRecord")}
-            className="flex items-center justify-center rounded bg-gray-900 p-2 text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
-          >
-            <IconRecord />
-          </button>
-        )}
+        <RecordHero
+          recording={recording}
+          paused={paused}
+          mmss={mmss}
+          stream={streamRef.current}
+          canRecord={canRecord}
+          busy={busy}
+          startDisabled={selection.kind === "none" && !systemAudio}
+          onStart={() => start()}
+          onPause={pause}
+          onResume={resume}
+          onStop={stop}
+          onSilentChange={setSilent}
+        />
 
         <button
           type="button"
@@ -980,13 +930,6 @@ export default function Recorder({
 
         {recording && (
           <>
-            {paused ? (
-              <span role="status" className="font-mono text-sm text-amber-600">
-                ❚❚ {mmss} · {t("recPaused")}
-              </span>
-            ) : (
-              <span className="font-mono text-sm text-red-600">● {mmss}</span>
-            )}
             {scheduledStopAt != null && (
               <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
                 {t("autoStopScheduled", {
@@ -994,8 +937,6 @@ export default function Recorder({
                 })}
               </span>
             )}
-            {/* Meter (and its silence detection) only runs while actively capturing. */}
-            {!paused && <InputLevelMeter stream={streamRef.current} onSilentChange={setSilent} />}
             {/* Live notes toggle: reopen the panel after it was closed. */}
             {!notesOpen && (
               <button

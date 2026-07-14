@@ -427,6 +427,7 @@
   "systemDesktopSuffix": " (bureau uniquement)",
   "recStop": "Arrêter",
   "recRecord": "Enregistrer",
+  "recStartRecording": "Démarrer l'enregistrement",
   "recPause": "Pause",
   "recResume": "Reprendre",
   "recPaused": "En pause",

@@ -427,6 +427,7 @@
   "systemDesktopSuffix": " (desktop only)",
   "recStop": "Stop",
   "recRecord": "Record",
+  "recStartRecording": "Start recording",
   "recPause": "Pause",
   "recResume": "Resume",
   "recPaused": "Paused",
