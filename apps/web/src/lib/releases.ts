@@ -55,6 +55,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.137.0",
+    date: "2026-07-14",
+    pr: 306,
+    headline: "Redesigned recording top bar",
+    summary:
+      "The top bar is now a record-centric command hub. One prominent Record control morphs into the live recording state (timer, a real level meter, pause and stop), and all audio-input settings are consolidated behind a single \"Audio source\" chip that opens a popover (microphone, system audio, and the processing options as chips). Auto-stop, notes-while-recording, and the account menu are now tidy popovers too. Everything is the same set of features, just clearer and less cluttered - and it follows your light or dark theme.",
+    changed: [
+      "The recording controls are reorganised into a command hub: a single Record control that becomes the live recording state, with audio settings behind an \"Audio source\" chip and auto-stop / notes / account as popovers.",
+      "The live level meter is now a multi-bar equalizer driven by your real microphone input.",
+      "The top bar is theme-aware (light and dark).",
+    ],
+  },
+  {
     version: "0.136.2",
     date: "2026-07-14",
     pr: 305,
