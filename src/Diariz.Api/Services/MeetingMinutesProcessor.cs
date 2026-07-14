@@ -4,6 +4,7 @@ using Diariz.Domain;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Diariz.Domain.Entities;
 using MinutesEntity = Diariz.Domain.Entities.MeetingMinutes;
 
 namespace Diariz.Api.Services;
@@ -20,7 +21,7 @@ public static class MeetingMinutesProcessor
 {
     public static async Task ProcessAsync(
         DiarizDbContext db, IMeetingTypeMinutesGenerator generator, ISummarizationSettingsResolver resolver,
-        IHubContext<TranscriptionHub> hub, MeetingMinutesJob job, int charBudget, ILogger logger,
+        IHubContext<TranscriptionHub> hub, IJobQueue queue, MeetingMinutesJob job, int charBudget, ILogger logger,
         CancellationToken ct = default)
     {
         var rec = await db.Recordings.FirstOrDefaultAsync(r => r.Id == job.RecordingId, ct);
@@ -99,6 +100,58 @@ public static class MeetingMinutesProcessor
             // Don't mark the recording Failed — the transcription (and any summary) are still valid; only the
             // minutes didn't generate. Log and leave the status untouched.
             logger.LogError(ex, "Meeting-minutes generation failed for recording {RecordingId}", rec.Id);
+        }
+
+        // The meeting type's ADDITIONAL formulas, after the minutes are saved (so one may legitimately declare
+        // the Minutes context and read them). Outside the try: a primary failure doesn't cancel them, and a
+        // failure here can't undo minutes that were written.
+        await EnqueueAdditionalFormulasAsync(db, queue, hub, rec, logger, ct);
+    }
+
+    /// <summary>Queue one run per additional formula on the recording's meeting type, in Ordinal order. Each lands
+    /// as an ordinary <see cref="FormulaResult"/> in the recording's Formulas tab.
+    ///
+    /// <para>This is an <b>automatic</b> run, so it replaces the recording's previous result for that formula
+    /// rather than appending a duplicate every time the minutes regenerate - and it <b>skips</b> a result the user
+    /// has hand-edited (see <see cref="FormulaResultUpsert"/>), exactly as the minutes themselves refuse to
+    /// overwrite hand-edited minutes.</para></summary>
+    private static async Task EnqueueAdditionalFormulasAsync(
+        DiarizDbContext db, IJobQueue queue, IHubContext<TranscriptionHub> hub, Recording rec, ILogger logger,
+        CancellationToken ct)
+    {
+        if (rec.MeetingTypeId is not { } typeId) return;
+
+        var formulas = await db.MeetingTypeFormulas
+            .Where(f => f.MeetingTypeId == typeId)
+            .OrderBy(f => f.Ordinal)
+            .Include(f => f.Formula)
+            .Select(f => f.Formula!)
+            .ToListAsync(ct);
+
+        foreach (var formula in formulas)
+        {
+            // A Platform/Diariz formula can be disabled after a type started pointing at it (only the PRIMARY is
+            // protected from that), so don't try to run one that isn't available.
+            if (formula.Scope != FormulaScope.Personal && !formula.Enabled) continue;
+
+            try
+            {
+                var result = await FormulaResultUpsert.ForRecordingAsync(
+                    db, rec.Id, formula, rec.UserId, automatic: true, ct);
+                if (result is null) continue; // the user edited this document - leave it alone.
+
+                await db.SaveChangesAsync(ct);
+                await queue.EnqueueFormulaRunAsync(
+                    new FormulaRunJob(rec.Id, null, result.Id, formula.Id, rec.UserId), ct);
+                await hub.NotifyFormulaStatusAsync(
+                    rec.UserId, rec.Id, null, result.Id, FormulaRunStatus.Generating.ToString());
+            }
+            catch (Exception ex)
+            {
+                // One additional formula failing to queue must not stop the others, nor touch the minutes.
+                logger.LogError(ex, "Could not queue formula {FormulaId} for recording {RecordingId}",
+                    formula.Id, rec.Id);
+            }
         }
     }
 }

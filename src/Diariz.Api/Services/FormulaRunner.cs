@@ -100,19 +100,10 @@ public class FormulaRunner : IFormulaRunner
         // `!ct.IsCancellationRequested` (outer-ct-cancelled = client went away; otherwise = LLM timeout -> 504).
         var text = await FormulaRunProcessor.RunOverRecordingAsync(_db, _chat, cfg, formula, recordingId, ct);
 
-        var ordinal = await NextOrdinalAsync(recordingId, ct);
-        var result = new FormulaResult
-        {
-            Id = Guid.NewGuid(),
-            RecordingId = recordingId,
-            CreatedByUserId = userId,
-            FormulaId = formula.Id,
-            Name = formula.Name,
-            Text = text,
-            Ordinal = ordinal,
-            Status = FormulaRunStatus.Ready,
-        };
-        _db.FormulaResults.Add(result);
+        // Same rule as the async path: replace this recording's existing result for the formula.
+        var result = (await FormulaResultUpsert.ForRecordingAsync(_db, recordingId, formula, userId, automatic: false, ct))!;
+        result.Text = text;
+        result.Status = FormulaRunStatus.Ready;
         await _db.SaveChangesAsync(ct);
         return result;
     }

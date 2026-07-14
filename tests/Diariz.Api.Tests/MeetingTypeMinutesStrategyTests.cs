@@ -13,8 +13,12 @@ public class MeetingTypeMinutesStrategyTests
 
     private static readonly SummarizationRequestConfig Config = new("https://llm.test/v1", "sk", "m", 60);
 
+    /// The user message is now the ASSEMBLED context (built from the primary formula's declared flags), not a
+    /// transcript the strategy builds for itself.
+    private const string Context = "## Transcript\n[00:00] Alice: Hello\n";
+
     private static MinutesComposition Compose(TemplateContent content, Func<string, string?>? fields = null) =>
-        new(content, "Overview text", fields ?? (_ => ""), Segments, Config, 16000, "PREAMBLE");
+        new(content, "Overview text", fields ?? (_ => ""), Context, Config, "PREAMBLE");
 
     private static TemplateContent TwoPrompts() => new(
     [
@@ -39,7 +43,9 @@ public class MeetingTypeMinutesStrategyTests
         // Each call carried the guardrail preamble, the overview, and the transcript as a data turn.
         Assert.Contains("PREAMBLE", client.AllMessages[0][0].Content);
         Assert.Contains("Overview text", client.AllMessages[0][0].Content);
-        Assert.Contains("## Transcript:", client.AllMessages[0][1].Content);
+        // The user message is the assembled context the PRIMARY FORMULA declared - the strategy no longer builds
+        // a transcript of its own.
+        Assert.Equal(Context, client.AllMessages[0][1].Content);
     }
 
     [Fact]

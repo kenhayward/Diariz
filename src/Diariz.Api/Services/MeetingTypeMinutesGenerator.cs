@@ -42,8 +42,15 @@ public sealed class MeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerator
         SummarizationRequestConfig config, int charBudget, CancellationToken ct = default)
     {
         // A meeting type carries no prompts of its own: the document it produces is its PRIMARY FORMULA's
-        // template. The type contributes only its framing (Overview).
-        var (overview, content) = await ResolveTemplateAsync(recordingOwnerId, meetingTypeId, ct);
+        // template, and the formula also declares WHAT THE MODEL SEES. The type contributes only its framing
+        // (Overview). Minutes and formulas are the same thing.
+        var template = await ResolveTemplateAsync(recordingOwnerId, meetingTypeId, ct);
+        var (overview, content) = (template.Overview, template.Content);
+
+        // The assembled context - the user message. Built from the formula's FormulaContext flags, exactly as a
+        // Formulas-tab run of the same formula would build it.
+        var minutesContext = await FormulaRunProcessor.BuildRecordingContextAsync(
+            _db, context.RecordingId, PrimaryContext(template.Context), charBudget, ct);
 
         var mode = (await _db.PlatformSettings.FirstOrDefaultAsync(ct))?.MinutesGenerationMode
                    ?? MinutesGenerationMode.SingleCall;
@@ -83,7 +90,7 @@ public sealed class MeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerator
 
         var input = new MinutesComposition(
             content, overview, name => ResolveField(name, context, actions, notesMarkdown),
-            segments, config, charBudget, preamble);
+            minutesContext, config, preamble);
 
         return await strategy.GenerateAsync(input, ct);
     }
@@ -98,13 +105,25 @@ public sealed class MeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerator
                "specifically from the transcript, and prefer their terminology:\n" + string.Join("\n", lines);
     }
 
-    /// <summary>The template to produce: the chosen type's framing plus its <b>primary formula's</b> content.
+    /// <summary>What a minutes run needs from the meeting type: its framing, its primary formula's template, and
+    /// that formula's declared context.
     ///
     /// <para>Falls back in order: the chosen type (when it exists and is usable by the owner - a Platform type or
     /// their own Personal one), else the seeded General type, else the in-code General standard (nothing seeded
     /// yet). A type whose <c>PrimaryFormulaId</c> is null keeps its own framing but borrows the General formula's
-    /// content, rather than producing an empty document.</para></summary>
-    private async Task<(string Overview, TemplateContent Content)> ResolveTemplateAsync(
+    /// template, rather than producing an empty document.</para></summary>
+    private sealed record ResolvedTemplate(string Overview, TemplateContent Content, FormulaContext Context);
+
+    /// <summary>The context a minutes template gets when nothing declares one (no primary formula anywhere): what
+    /// a minutes document needs - the transcript, the note-taker's lines, and the canonical actions.</summary>
+    private const FormulaContext DefaultMinutesContext =
+        FormulaContext.Transcript | FormulaContext.Notes | FormulaContext.Actions;
+
+    /// <summary>A primary formula's context, minus the <c>Minutes</c> bit: these ARE the minutes, so including it
+    /// would ask the document to read itself. (The meeting-type editor doesn't offer it either.)</summary>
+    private static FormulaContext PrimaryContext(FormulaContext flags) => flags & ~FormulaContext.Minutes;
+
+    private async Task<ResolvedTemplate> ResolveTemplateAsync(
         Guid ownerId, Guid? meetingTypeId, CancellationToken ct)
     {
         if (meetingTypeId is { } id)
@@ -114,33 +133,32 @@ public sealed class MeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerator
                 .FirstOrDefaultAsync(m => m.Id == id && (m.UserId == null || m.UserId == ownerId), ct);
 
             if (chosen is not null)
-                return (chosen.Overview, chosen.PrimaryFormula is { } f
-                    ? TemplateContent.Parse(f.ContentJson)
-                    : await GeneralContentAsync(ct));
+                return chosen.PrimaryFormula is { } f
+                    ? new(chosen.Overview, TemplateContent.Parse(f.ContentJson), f.Context)
+                    : await GeneralAsync(chosen.Overview, ct);
         }
 
         var general = await _db.MeetingTypes
             .Include(m => m.PrimaryFormula)
             .FirstOrDefaultAsync(m => m.Key == MeetingType.GeneralKey, ct);
 
-        if (general is not null)
-            return (general.Overview, general.PrimaryFormula is { } gf
-                ? TemplateContent.Parse(gf.ContentJson)
-                : StandardGeneral().Content);
+        if (general is not null) return await GeneralAsync(general.Overview, ct);
 
         var std = StandardGeneral();
-        return (std.Overview, std.Content);
+        return new(std.Overview, std.Content, DefaultMinutesContext);
     }
 
-    private async Task<TemplateContent> GeneralContentAsync(CancellationToken ct)
+    /// <summary>The seeded General type's formula, under <paramref name="overview"/> (which may belong to a type
+    /// that has no primary formula of its own).</summary>
+    private async Task<ResolvedTemplate> GeneralAsync(string overview, CancellationToken ct)
     {
         var general = await _db.MeetingTypes
             .Include(m => m.PrimaryFormula)
             .FirstOrDefaultAsync(m => m.Key == MeetingType.GeneralKey, ct);
 
         return general?.PrimaryFormula is { } f
-            ? TemplateContent.Parse(f.ContentJson)
-            : StandardGeneral().Content;
+            ? new(overview, TemplateContent.Parse(f.ContentJson), f.Context)
+            : new(overview, StandardGeneral().Content, DefaultMinutesContext);
     }
 
     /// <summary>The in-code General standard - the last resort when nothing has been seeded.</summary>

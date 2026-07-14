@@ -78,6 +78,9 @@ public class FormulaResultsController : ControllerBase
         if (!CanEdit(result, rec)) return Forbidden("Only the creator or the recording owner can edit this result.");
 
         result.Text = req.Text;
+        // Mark it hand-edited: an AUTOMATIC re-run (a meeting type's additional formulas, re-firing when the
+        // minutes regenerate) must never overwrite the user's own words. An explicit run still will.
+        result.IsUserEdited = true;
         result.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync();
         var origins = await FormulaResultOrigins.ResolveAsync(_db, new[] { result });

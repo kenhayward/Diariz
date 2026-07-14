@@ -182,7 +182,11 @@ default timeout for its header phase and relies on client-disconnect for cancell
   `Diariz` formula that generates its minutes. A **Platform** type may reference only Platform/Diariz formulas —
   minutes generate as the *recording owner*, and a Personal formula can only be run by its owner, so pointing a
   shared type at one would produce no minutes for everyone else (refused at save). The
-  `MeetingTypeMinutesGenerator` resolves the type and its primary formula, reads the platform-wide **generation mode**
+  `MeetingTypeMinutesGenerator` resolves the type and its primary formula, **assembles the context from that
+  formula's `FormulaContext` flags** (`FormulaContextBuilder` - the same assembly a Formulas-tab run of the same
+  formula uses, so the transcript arrives as `[mm:ss] Speaker: Text` and a minutes template can ask for the
+  summary/actions too; the `Minutes` bit is ignored for a primary, which would ask the document to read itself),
+  reads the platform-wide **generation mode**
   (`PlatformSettings.MinutesGenerationMode`, a Platform-Admin switch), and runs one of two
   `IMeetingTypeMinutesStrategy` implementations: **PerSection** (one LLM call per model-prompt block,
   bounded-parallel) or **SingleCall** (the whole template as one prompt/one call). The pure
@@ -365,6 +369,19 @@ default timeout for its header phase and relies on client-disconnect for cancell
   **system prompt** grounds questions in the user's own meetings and (with tools) tells the model to search the
   transcripts before saying it doesn't know. With tools off, chat is the same single-pass stream as before.
   Tools run inside the API (no worker) — server-redeploy only.
+- **Minutes are a formula run.** Once the minutes are saved, `MeetingMinutesProcessor` queues one `FormulaRunJob`
+  per **additional formula** on the recording's meeting type (`MeetingTypeFormulas`, in `Ordinal` order) - *after*
+  the minutes, so an additional formula may legitimately declare the `Minutes` context and read them. Each lands as
+  an ordinary `FormulaResult` in the recording's Formulas tab. A disabled Platform/Diariz formula is skipped (only
+  the **primary** is protected from being disabled), and one failing to queue never touches the minutes or the
+  others.
+- **A run replaces that formula's previous result** (`FormulaResultUpsert`), matched on `(RecordingId, FormulaId)` -
+  reusing the row, keeping its `Id` and `Ordinal` so the list doesn't reshuffle and an open deep-link stays valid.
+  Without this, a re-transcribed recording would accumulate a duplicate per regeneration. Because results are
+  **hand-editable**, an **automatic** run (the pipeline) **skips** a result with `IsUserEdited` - exactly as the
+  minutes refuse to overwrite hand-edited minutes - while an **explicit** run replaces it and clears the flag, as
+  `ApplyMeetingType` does. There is deliberately **no unique index** on `(RecordingId, FormulaId)`: enforcing one
+  would mean de-duplicating existing rows on upgrade, and those are real user documents.
 - **Formulas (async run pipeline).** A **`Formula`** is a saved **template** (`ContentJson`, the same
   `TemplateContent` shape a meeting type's minutes template uses - sections of heading / boilerplate / field /
   prompt / hr blocks) + a chosen context (`FormulaContext`, a `[Flags]` combination of
