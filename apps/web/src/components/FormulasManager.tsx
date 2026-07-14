@@ -94,7 +94,14 @@ function Spinner() {
 }
 
 /// Diariz + Platform formulas are "official" -> the Diariz logo; personal/shared -> the person's avatar.
-function OriginIcon({ origin }: { origin: FormulaResultOrigin }) {
+///
+/// `origin` is typed as required because the current API always sends it, but it is only decorative - and an
+/// API older than the one that introduced it (0.130.2) omits it entirely. Dereferencing it then threw during
+/// render, which the ErrorBoundary turned into "Something went wrong showing this page": the whole
+/// recording-detail panel taken down by one missing icon. So degrade instead, and show the unknown-person
+/// placeholder rather than the logo - we don't know the provenance, and shouldn't imply the result is official.
+function OriginIcon({ origin }: { origin: FormulaResultOrigin | null | undefined }) {
+  if (!origin) return <Avatar size="xs" initials={initialsFromName(null)} />;
   if (origin.kind === "diariz" || origin.kind === "platform") {
     return <img src="/logo.png" alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />;
   }
