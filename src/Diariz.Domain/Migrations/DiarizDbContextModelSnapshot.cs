@@ -535,10 +535,6 @@ namespace Diariz.Domain.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
-                    b.Property<string>("ContentJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -560,6 +556,9 @@ namespace Diariz.Domain.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("PrimaryFormulaId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("RoomId")
                         .HasColumnType("uuid");
 
@@ -579,9 +578,36 @@ namespace Diariz.Domain.Migrations
                     b.HasIndex("Key")
                         .IsUnique();
 
+                    b.HasIndex("PrimaryFormulaId");
+
                     b.HasIndex("UserId");
 
                     b.ToTable("MeetingTypes");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.MeetingTypeFormula", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("FormulaId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MeetingTypeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FormulaId");
+
+                    b.HasIndex("MeetingTypeId", "FormulaId")
+                        .IsUnique();
+
+                    b.ToTable("MeetingTypeFormulas");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.PlatformSettings", b =>
@@ -2027,12 +2053,38 @@ namespace Diariz.Domain.Migrations
 
             modelBuilder.Entity("Diariz.Domain.Entities.MeetingType", b =>
                 {
+                    b.HasOne("Diariz.Domain.Entities.Formula", "PrimaryFormula")
+                        .WithMany()
+                        .HasForeignKey("PrimaryFormulaId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade);
 
+                    b.Navigation("PrimaryFormula");
+
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.MeetingTypeFormula", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.Formula", "Formula")
+                        .WithMany()
+                        .HasForeignKey("FormulaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Diariz.Domain.Entities.MeetingType", "MeetingType")
+                        .WithMany("AdditionalFormulas")
+                        .HasForeignKey("MeetingTypeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Formula");
+
+                    b.Navigation("MeetingType");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.ProfileContribution", b =>
@@ -2420,6 +2472,11 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("Recordings");
 
                     b.Navigation("Settings");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.MeetingType", b =>
+                {
+                    b.Navigation("AdditionalFormulas");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.Recording", b =>

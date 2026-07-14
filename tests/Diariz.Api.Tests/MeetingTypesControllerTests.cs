@@ -17,8 +17,7 @@ public class MeetingTypesControllerTests
     }
 
     private static MeetingType Platform(string key) =>
-        new() { Id = Guid.NewGuid(), Key = key, UserId = null, GroupName = "Standard", Title = key,
-                ContentJson = new TemplateContent([]).Serialize() };
+        new() { Id = Guid.NewGuid(), Key = key, UserId = null, GroupName = "Standard", Title = key };
 
     // A personal type lives in its owner's personal room (now the scope). Mint that room so the seeded type is
     // findable by the room-scoped query.
@@ -26,8 +25,7 @@ public class MeetingTypesControllerTests
     {
         Users.Ensure(db, owner);
         var roomId = new Diariz.Api.Services.RoomScope(db).PersonalRoomIdAsync(owner).GetAwaiter().GetResult();
-        return new() { Id = Guid.NewGuid(), UserId = owner, RoomId = roomId, GroupName = "Mine", Title = title,
-                       ContentJson = new TemplateContent([]).Serialize() };
+        return new() { Id = Guid.NewGuid(), UserId = owner, RoomId = roomId, GroupName = "Mine", Title = title };
     }
 
     [Fact]

@@ -16,8 +16,8 @@ public class RoomScopedEntitiesModelTests
 
         db.SpeakerProfiles.Add(new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "A" });
         db.ChatSessions.Add(new ChatSession { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Title = "C", MessagesJson = "[]" });
-        db.MeetingTypes.Add(new MeetingType { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Title = "T", ContentJson = "{}" });
-        db.MeetingTypes.Add(new MeetingType { Id = Guid.NewGuid(), UserId = null, RoomId = null, Title = "Platform", ContentJson = "{}" });
+        db.MeetingTypes.Add(new MeetingType { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Title = "T" });
+        db.MeetingTypes.Add(new MeetingType { Id = Guid.NewGuid(), UserId = null, RoomId = null, Title = "Platform" });
         await db.SaveChangesAsync();
 
         Assert.Equal(roomId, db.SpeakerProfiles.Single().RoomId);

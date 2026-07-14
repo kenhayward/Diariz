@@ -240,16 +240,18 @@ public record ShareRecordingRequest(Guid FromRoomId, Guid ToRoomId);
 // ---- Meeting types (minutes templates) ----
 /// <summary>A meeting type (minutes template). <see cref="IsPlatform"/> = a shared, admin-owned type;
 /// <see cref="CanEdit"/> = the caller may edit/delete it (owns a Personal type, or is a Platform Admin for a
-/// Platform type). <see cref="Content"/> is the structured template (H1/H2 sections of blocks).</summary>
+/// Platform type). A type carries no prompts: <see cref="PrimaryFormulaId"/> is the formula whose template
+/// generates the minutes, and <see cref="AdditionalFormulaIds"/> run alongside in the same pipeline.</summary>
 public record MeetingTypeDto(
     Guid Id, bool IsPlatform, bool CanEdit, string GroupName, string Title, string Overview,
-    string Icon, string Color, Diariz.Api.Services.TemplateContent Content, bool IsDefault = false);
+    string Icon, string Color,
+    Guid? PrimaryFormulaId, IReadOnlyList<Guid> AdditionalFormulaIds, bool IsDefault = false);
 
 /// <summary>Create or update a meeting type. <paramref name="IsPlatform"/> requests a shared Platform type
 /// (honoured only for Platform Administrators; normal users always get a Personal type).</summary>
 public record MeetingTypeRequest(
     string GroupName, string Title, string Overview, string Icon, string Color,
-    Diariz.Api.Services.TemplateContent Content, bool IsPlatform = false);
+    Guid? PrimaryFormulaId, IReadOnlyList<Guid>? AdditionalFormulaIds, bool IsPlatform = false);
 
 /// <summary>Apply a meeting type to a recording (re-runs the minutes). Null = the General default.</summary>
 public record ApplyMeetingTypeRequest(Guid? MeetingTypeId);

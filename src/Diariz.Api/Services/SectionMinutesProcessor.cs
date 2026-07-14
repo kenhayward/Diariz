@@ -48,12 +48,13 @@ public static class SectionMinutesProcessor
             }
 
             var type = section.Minutes?.MeetingTypeId is { } typeId
-                ? await db.MeetingTypes.FirstOrDefaultAsync(t => t.Id == typeId, ct)
+                ? await db.MeetingTypes.Include(t => t.PrimaryFormula).FirstOrDefaultAsync(t => t.Id == typeId, ct)
                 : null;
 
             var folderText = items.Count == 0
                 ? ""
-                : await combiner.GenerateAsync(cfg, FolderMinutesPrompt.BuildMessages(folderTemplate, type, items, combineCharBudget), ct);
+                : await combiner.GenerateAsync(cfg, FolderMinutesPrompt.BuildMessages(
+                    folderTemplate, type, TypeContent(type), items, combineCharBudget), ct);
 
             minutes = await UpsertAsync(db, section);
             minutes.Model = cfg.Model;
@@ -142,4 +143,10 @@ public static class SectionMinutesProcessor
         }
         return minutes;
     }
+
+    /// <summary>The template a meeting type points at - its primary formula's content. Null (no type, or a type
+    /// with no primary formula) means the folder prompt falls back to its generic outline.</summary>
+    private static TemplateContent? TypeContent(MeetingType? type) =>
+        type?.PrimaryFormula is { } f ? TemplateContent.Parse(f.ContentJson) : null;
+
 }

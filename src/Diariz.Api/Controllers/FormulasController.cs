@@ -166,6 +166,10 @@ public class FormulasController : ControllerBase
                 return BadRequest("Built-in formulas can't be deleted.");
         }
 
+        if (await InUseByAsync(id) is { } usedBy)
+            return BadRequest($"This formula generates the minutes for {usedBy}. Point those meeting types at " +
+                              "another formula first.");
+
         _db.Formulas.Remove(formula);
         await _db.SaveChangesAsync();
         return NoContent();
@@ -189,10 +193,30 @@ public class FormulasController : ControllerBase
         if (!await CanManageFormulasAsync())
             return Forbidden("Only a Formulas Administrator can enable or disable a shared formula.");
 
+        // Disabling is as destructive as deleting for a template that depends on it - a disabled formula can't
+        // be run, so its meeting types would quietly stop producing minutes. Same guard, same message.
+        if (!req.Enabled && await InUseByAsync(id) is { } usedBy)
+            return BadRequest($"This formula generates the minutes for {usedBy}. Point those meeting types at " +
+                              "another formula first.");
+
         formula.Enabled = req.Enabled;
         formula.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync();
         return NoContent();
+    }
+
+    /// <summary>The meeting types that use this formula as their PRIMARY (i.e. it generates their minutes), as a
+    /// readable list - or null when none do. Additional-formula links are not checked: those cascade away
+    /// harmlessly, and a template without one still produces minutes.</summary>
+    private async Task<string?> InUseByAsync(Guid formulaId)
+    {
+        var titles = await _db.MeetingTypes
+            .Where(m => m.PrimaryFormulaId == formulaId)
+            .OrderBy(m => m.Title)
+            .Select(m => m.Title)
+            .ToListAsync();
+
+        return titles.Count == 0 ? null : string.Join(", ", titles);
     }
 
     /// <summary>Formulas shared by OTHER users, for the discovery browser. Any authed user; excludes the

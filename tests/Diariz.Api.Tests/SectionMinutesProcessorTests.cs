@@ -99,12 +99,9 @@ public class SectionMinutesProcessorTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        var type = new MeetingType
-        {
-            Id = Guid.NewGuid(), UserId = userId, Title = "Retro", Overview = "A sprint retro.",
-            ContentJson = new TemplateContent([new TemplateSection(1, "What went well", [])]).Serialize(),
-        };
-        db.MeetingTypes.Add(type);
+        var type = MeetingTypes.With(
+            db, new TemplateContent([new TemplateSection(1, "What went well", [])]),
+            title: "Retro", userId: userId, scope: FormulaScope.Personal, overview: "A sprint retro.");
         await db.SaveChangesAsync();
         var section = await SeedSection(db, userId, meetingTypeId: type.Id);
         await SeedRecording(db, userId, section.Id, minutesText: "# R\nBody.");

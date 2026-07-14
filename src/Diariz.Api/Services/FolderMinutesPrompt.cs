@@ -31,25 +31,25 @@ Follow this section structure:
     /// <summary>System = the instruction template with the chosen type's title/overview/structure substituted;
     /// user = the labelled per-recording minutes, bounded by <paramref name="charBudget"/>.</summary>
     public static IReadOnlyList<ChatMessage> BuildMessages(
-        string template, MeetingType? type, IReadOnlyList<(string RecordingName, string Minutes)> items,
-        int charBudget)
+        string template, MeetingType? type, TemplateContent? content,
+        IReadOnlyList<(string RecordingName, string Minutes)> items, int charBudget)
     {
         var baseTemplate = string.IsNullOrWhiteSpace(template) ? DefaultTemplate : template;
         var system = baseTemplate
             .Replace("{meeting_type_title}", string.IsNullOrWhiteSpace(type?.Title) ? "General meeting" : type!.Title)
             .Replace("{meeting_type_overview}", string.IsNullOrWhiteSpace(type?.Overview) ? "(none)" : type!.Overview)
-            .Replace("{meeting_type_structure}", Outline(type));
+            .Replace("{meeting_type_structure}", Outline(content));
         var user = "Individual meeting minutes:\n\n" + FolderSummaryPrompt.JoinItems(
             items.Select(i => (i.RecordingName, i.Minutes)).ToList(), charBudget, "minutes");
         return [new ChatMessage("system", system), new ChatMessage("user", user)];
     }
 
-    /// <summary>The H1/H2/H3 heading outline of the meeting type's template, so the model mirrors its shape.
-    /// Falls back to a generic outline when the type has no parseable structure.</summary>
-    internal static string Outline(MeetingType? type)
+    /// <summary>The H1/H2/H3 heading outline of the template the meeting type points at (its primary formula's
+    /// content), so the model mirrors its shape. Falls back to a generic outline when there is no parseable
+    /// structure - no type, or a type with no primary formula.</summary>
+    internal static string Outline(TemplateContent? content)
     {
-        if (type is null) return "- Summary\n- Discussion\n- Decisions\n- Action items";
-        var content = TemplateContent.Parse(type.ContentJson);
+        if (content is null) return "- Summary\n- Discussion\n- Decisions\n- Action items";
         var sb = new StringBuilder();
         foreach (var section in content.Sections)
         {

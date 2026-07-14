@@ -30,15 +30,14 @@ public class MeetingTypeMinutesGeneratorTests
 
     private static Guid AddType(DiarizDbContext db, Guid? owner, string sectionTitle)
     {
-        var t = new MeetingType
-        {
-            Id = Guid.NewGuid(), UserId = owner, GroupName = "G", Title = "T",
-            Overview = "Ctx", Icon = "document", Color = "#5C6BC0",
-            ContentJson = new TemplateContent(
-                [new TemplateSection(1, sectionTitle, [new TemplateBlock(TemplateBlock.Prompt, Text: "Write it.")])])
-                .Serialize(),
-        };
-        db.MeetingTypes.Add(t);
+        var content = new TemplateContent(
+            [new TemplateSection(1, sectionTitle, [new TemplateBlock(TemplateBlock.Prompt, Text: "Write it.")])]);
+
+        var t = MeetingTypes.With(
+            db, content,
+            userId: owner,
+            scope: owner is null ? FormulaScope.Platform : FormulaScope.Personal,
+            overview: "Ctx");
         db.SaveChanges();
         return t.Id;
     }
@@ -118,16 +117,13 @@ public class MeetingTypeMinutesGeneratorTests
 
     private static Guid AddTwoPromptType(DiarizDbContext db)
     {
-        var t = new MeetingType
-        {
-            Id = Guid.NewGuid(), UserId = null, GroupName = "G", Title = "T", Icon = "document", Color = "#5C6BC0",
-            ContentJson = new TemplateContent(
-            [
-                new TemplateSection(1, "A", [new TemplateBlock(TemplateBlock.Prompt, Text: "one")]),
-                new TemplateSection(1, "B", [new TemplateBlock(TemplateBlock.Prompt, Text: "two")]),
-            ]).Serialize(),
-        };
-        db.MeetingTypes.Add(t);
+        var content = new TemplateContent(
+        [
+            new TemplateSection(1, "A", [new TemplateBlock(TemplateBlock.Prompt, Text: "one")]),
+            new TemplateSection(1, "B", [new TemplateBlock(TemplateBlock.Prompt, Text: "two")]),
+        ]);
+
+        var t = MeetingTypes.With(db, content);
         db.SaveChanges();
         return t.Id;
     }

@@ -2,6 +2,7 @@ using Diariz.Api.Controllers;
 using Diariz.Api.IntegrationTests.Infrastructure;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
+using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,6 +14,15 @@ public class MeetingTypesIntegrationTests(ContainersFixture fx)
     private static MeetingTypesController Build(Diariz.Domain.DiarizDbContext db, Guid userId) =>
         new(db, new UserPermissions(db), new RoomScope(db)) { ControllerContext = Http.Context(userId) };
 
+    /// <summary>The formula the seeded General type points at - where its template now lives.</summary>
+    private static async Task<Formula> GeneralFormula(DiarizDbContext db)
+    {
+        var general = await db.MeetingTypes
+            .Include(m => m.PrimaryFormula)
+            .SingleAsync(m => m.Key == MeetingType.GeneralKey);
+        return general.PrimaryFormula!;
+    }
+
     [Fact]
     public async Task Seeder_persists_standards_with_jsonb_content_through_real_postgres()
     {
@@ -20,8 +30,12 @@ public class MeetingTypesIntegrationTests(ContainersFixture fx)
             await MeetingTypeSeeder.SeedAsync(db);
 
         await using var verify = fx.CreateDbContext();
-        var general = await verify.MeetingTypes.SingleAsync(m => m.Key == MeetingType.GeneralKey);
-        var content = TemplateContent.Parse(general.ContentJson);
+        var general = await verify.MeetingTypes
+            .Include(m => m.PrimaryFormula)
+            .SingleAsync(m => m.Key == MeetingType.GeneralKey);
+
+        // The template lives on the formula the type points at - and that formula's ContentJson is the jsonb column.
+        var content = TemplateContent.Parse(general.PrimaryFormula!.ContentJson);
         Assert.NotEmpty(content.Sections);                 // jsonb round-tripped
         Assert.True(content.Validate().Ok);
     }
@@ -37,9 +51,9 @@ public class MeetingTypesIntegrationTests(ContainersFixture fx)
 
         await using (var db = fx.CreateDbContext())
         {
-            var general = await db.MeetingTypes.SingleAsync(m => m.Key == MeetingType.GeneralKey);
-            var content = TemplateContent.Parse(general.ContentJson);
-            general.ContentJson = (content with
+            var formula = await GeneralFormula(db);
+            var content = TemplateContent.Parse(formula.ContentJson);
+            formula.ContentJson = (content with
             {
                 Sections = content.Sections.Where(s => s.Title != "Enhanced notes").ToList(),
             }).Serialize();
@@ -49,15 +63,13 @@ public class MeetingTypesIntegrationTests(ContainersFixture fx)
         await using (var db = fx.CreateDbContext())
         {
             // Sanity: jsonb reformatted the stored string (it no longer equals the compact serializer form).
-            var stored = await db.MeetingTypes.SingleAsync(m => m.Key == MeetingType.GeneralKey);
-            Assert.False(TemplateContent.Parse(stored.ContentJson).HasField("notes"));
+            Assert.False(TemplateContent.Parse((await GeneralFormula(db)).ContentJson).HasField("notes"));
 
             await MeetingTypeSeeder.SeedAsync(db); // next boot upgrades it
         }
 
         await using var verify = fx.CreateDbContext();
-        var upgraded = await verify.MeetingTypes.SingleAsync(m => m.Key == MeetingType.GeneralKey);
-        Assert.True(TemplateContent.Parse(upgraded.ContentJson).HasField("notes"));
+        Assert.True(TemplateContent.Parse((await GeneralFormula(verify)).ContentJson).HasField("notes"));
     }
 
     [Fact]
@@ -70,7 +82,6 @@ public class MeetingTypesIntegrationTests(ContainersFixture fx)
             var type = new MeetingType
             {
                 Id = Guid.NewGuid(), UserId = user.Id, GroupName = "Mine", Title = "Client call",
-                ContentJson = new TemplateContent([]).Serialize(),
             };
             var rec = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = "k", MeetingTypeId = type.Id };
             db.AddRange(user, type, rec);

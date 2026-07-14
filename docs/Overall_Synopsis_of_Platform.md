@@ -169,12 +169,20 @@ default timeout for its header phase and relies on client-disconnect for cancell
   `minute-takers`) with its own `MeetingMinutesWorker` (singleton `BackgroundService`) generates a formal,
   emailable **`MeetingMinutes`** (GitHub-flavoured Markdown) from the transcript, **chained after action
   extraction** so the minutes carry the **canonical extracted action set**. Minutes are driven by a
-  **meeting type** (`MeetingType`) — a reusable template of H1/H2 **sections** whose blocks are **boilerplate
-  text**, **substituted recording values** (`date`/`time`/`title`/`attendees`/`duration`, and `action_items`
-  which renders the deterministic actions table), or **model prompts**. A recording's `MeetingTypeId` (null → the
-  seeded **General Meeting** default) selects it. Types are **Platform** (admin-owned, shared) or **Personal**
-  (a user's own); the app seeds a standard set on startup (`MeetingTypeSeeder`, insert-if-missing by `Key`). The
-  `MeetingTypeMinutesGenerator` resolves the type, reads the platform-wide **generation mode**
+  **meeting type** (`MeetingType`), which is **presentation + selection only**: a title, group, icon, colour and
+  a free-text `Overview` that frames the model. It carries **no prompts of its own** — it names the
+  **`PrimaryFormulaId`**, the formula whose `TemplateContent` generates the minutes (H1/H2 **sections** whose
+  blocks are **boilerplate text**, **substituted recording values** —
+  `date`/`time`/`title`/`attendees`/`duration`, and `action_items` which renders the deterministic actions table
+  — or **model prompts**), plus any **`MeetingTypeFormulas`** run alongside in the same pipeline (their results
+  land in the recording's Formulas tab). So minutes and formulas are the same thing, authored the same way; any
+  accessible formula can be a primary. A recording's `MeetingTypeId` (null → the seeded **General Meeting**
+  default) selects the type. Types are **Platform** (admin-owned, shared) or **Personal** (a user's own); the app
+  seeds a standard set on startup (`MeetingTypeSeeder`, insert-if-missing by `Key`), each with the built-in
+  `Diariz` formula that generates its minutes. A **Platform** type may reference only Platform/Diariz formulas —
+  minutes generate as the *recording owner*, and a Personal formula can only be run by its owner, so pointing a
+  shared type at one would produce no minutes for everyone else (refused at save). The
+  `MeetingTypeMinutesGenerator` resolves the type and its primary formula, reads the platform-wide **generation mode**
   (`PlatformSettings.MinutesGenerationMode`, a Platform-Admin switch), and runs one of two
   `IMeetingTypeMinutesStrategy` implementations: **PerSection** (one LLM call per model-prompt block,
   bounded-parallel) or **SingleCall** (the whole template as one prompt/one call). The pure

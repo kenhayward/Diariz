@@ -61,7 +61,7 @@ public class SectionPageIntegrationTests(ContainersFixture fx)
         var typeId = Guid.NewGuid();
         await using (var db = fx.CreateDbContext())
         {
-            db.MeetingTypes.Add(new MeetingType { Id = typeId, UserId = userId, Title = "T", ContentJson = "{\"sections\":[]}" });
+            db.MeetingTypes.Add(new MeetingType { Id = typeId, UserId = userId, Title = "T" });
             db.Sections.Add(new Section { Id = sectionId, UserId = userId, RoomId = await RoomOf(db, userId), Name = "F" });
             db.SectionMinutes.Add(new SectionMinutes { Id = Guid.NewGuid(), SectionId = sectionId, MeetingTypeId = typeId });
             await db.SaveChangesAsync();

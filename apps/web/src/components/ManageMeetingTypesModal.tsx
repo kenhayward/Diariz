@@ -3,17 +3,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth";
-import type { MeetingType, TemplateContent, TemplateBlock, TemplateBlockKind } from "../lib/types";
+import type { MeetingType } from "../lib/types";
 import { groupMeetingTypes } from "../lib/meetingTypes";
-import { serializeMeetingType, parseMeetingType, exportFilename } from "../lib/meetingTypeIo";
-import {
-  FIELD_OPTIONS, addSection, removeSection, updateSection, moveSection,
-  addBlock, removeBlock, updateBlock, moveBlock, moveBlockCrossSection, normalizeBreaks,
-  contentError, emptyContent,
-} from "../lib/meetingTypeDraft";
+import { serializeMeetingType, parseMeetingType, exportFilename, resolveFormulaNames } from "../lib/meetingTypeIo";
 import MeetingTypeIcon from "./MeetingTypeIcon";
 import IconColorPicker from "./IconColorPicker";
-import KebabMenu from "./KebabMenu";
+import { PrimaryFormulaPicker, AdditionalFormulasPicker } from "./FormulaPicker";
 
 interface Draft {
   id: string | null; // null = a new (unsaved) type
@@ -22,7 +17,8 @@ interface Draft {
   overview: string;
   icon: string;
   color: string;
-  content: TemplateContent;
+  primaryFormulaId: string | null;
+  additionalFormulaIds: string[];
   isPlatform: boolean;
 }
 
@@ -31,14 +27,15 @@ const DEFAULT_COLOR = "#5C6BC0";
 function draftFrom(t: MeetingType): Draft {
   return {
     id: t.id, groupName: t.groupName, title: t.title, overview: t.overview,
-    icon: t.icon || "document", color: t.color || DEFAULT_COLOR, content: normalizeBreaks(t.content), isPlatform: t.isPlatform,
+    icon: t.icon || "document", color: t.color || DEFAULT_COLOR,
+    primaryFormulaId: t.primaryFormulaId, additionalFormulaIds: t.additionalFormulaIds, isPlatform: t.isPlatform,
   };
 }
 
 function blankDraft(isPlatform: boolean): Draft {
   return {
     id: null, groupName: "", title: "", overview: "", icon: "document", color: DEFAULT_COLOR,
-    content: emptyContent(), isPlatform,
+    primaryFormulaId: null, additionalFormulaIds: [], isPlatform,
   };
 }
 
@@ -51,6 +48,8 @@ export default function ManageMeetingTypesModal({ onClose }: { onClose: () => vo
   const { isPlatformAdmin } = useAuth();
   const qc = useQueryClient();
   const { data: types } = useQuery({ queryKey: ["meeting-types"], queryFn: api.listMeetingTypes });
+  // The formulas a type may point at. Same list the Formulas picker uses (own Personal + enabled shared).
+  const { data: formulas = [] } = useQuery({ queryKey: ["formulas"], queryFn: api.listFormulas });
 
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -91,14 +90,13 @@ export default function ManageMeetingTypesModal({ onClose }: { onClose: () => vo
     setError(null);
     if (!draft.title.trim()) return setError(t("workspace:mtTitleRequired"));
     if (!draft.groupName.trim()) return setError(t("workspace:mtGroupRequired"));
-    const ce = contentError(draft.content);
-    if (ce) return setError(t(`workspace:${ce}`));
-
     setBusy(true);
     try {
       const input = {
         groupName: draft.groupName.trim(), title: draft.title.trim(), overview: draft.overview.trim(),
-        icon: draft.icon, color: draft.color, content: draft.content, isPlatform: draft.isPlatform,
+        icon: draft.icon, color: draft.color,
+        primaryFormulaId: draft.primaryFormulaId, additionalFormulaIds: draft.additionalFormulaIds,
+        isPlatform: draft.isPlatform,
       };
       const saved = draft.id ? await api.updateMeetingType(draft.id, input) : await api.createMeetingType(input);
       await qc.invalidateQueries({ queryKey: ["meeting-types"] });
@@ -130,7 +128,12 @@ export default function ManageMeetingTypesModal({ onClose }: { onClose: () => vo
     if (!draft) return;
     const json = serializeMeetingType({
       groupName: draft.groupName, title: draft.title, overview: draft.overview,
-      icon: draft.icon, color: draft.color, content: draft.content,
+      icon: draft.icon, color: draft.color,
+      // Formula IDs mean nothing on another instance, so the export carries names.
+      primaryFormulaName: formulas.find((f) => f.id === draft.primaryFormulaId)?.name ?? null,
+      additionalFormulaNames: draft.additionalFormulaIds
+        .map((id) => formulas.find((f) => f.id === id)?.name)
+        .filter((n): n is string => n != null),
     });
     const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
     const a = document.createElement("a");
@@ -157,13 +160,23 @@ export default function ManageMeetingTypesModal({ onClose }: { onClose: () => vo
     if (name === null) return; // cancelled
     setBusy(true);
     try {
+      // Resolve the exported formula names against what THIS instance has; report any it doesn't.
+      const primary = resolveFormulaNames(
+        tpl.primaryFormulaName ? [tpl.primaryFormulaName] : [], formulas);
+      const additional = resolveFormulaNames(tpl.additionalFormulaNames, formulas);
+      const missing = [...primary.missing, ...additional.missing];
+
       const created = await api.createMeetingType({
         groupName: tpl.groupName || t("workspace:mtImportedGroup"),
         title: name.trim() || tpl.title || t("workspace:mtImportedGroup"),
-        overview: tpl.overview, icon: tpl.icon, color: tpl.color, content: tpl.content, isPlatform: false,
+        overview: tpl.overview, icon: tpl.icon, color: tpl.color,
+        primaryFormulaId: primary.ids[0] ?? null,
+        additionalFormulaIds: additional.ids,
+        isPlatform: false,
       });
       await qc.invalidateQueries({ queryKey: ["meeting-types"] });
       setDraft(draftFrom(created));
+      if (missing.length > 0) setError(t("workspace:mtImportMissingFormulas", { names: missing.join(", ") }));
     } catch (err) {
       setError(apiErrorMessage(err, t("workspace:mtSaveError")));
     } finally {
@@ -172,7 +185,6 @@ export default function ManageMeetingTypesModal({ onClose }: { onClose: () => vo
   }
 
   const patch = (p: Partial<Draft>) => setDraft((d) => (d ? { ...d, ...p } : d));
-  const setContent = (content: TemplateContent) => patch({ content });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -317,8 +329,22 @@ export default function ManageMeetingTypesModal({ onClose }: { onClose: () => vo
                     </label>
                   )}
 
-                  {/* Content: sections + blocks. */}
-                  <ContentEditor content={draft.content} onChange={setContent} t={t} />
+                  {/* A meeting type carries no prompts: it names the formula that generates its minutes,
+                      plus any run alongside it. Only formulas this type's scope may reference are offered. */}
+                  <PrimaryFormulaPicker
+                    formulas={formulas}
+                    value={draft.primaryFormulaId}
+                    isPlatform={draft.isPlatform}
+                    disabled={!editable || busy}
+                    onChange={(id) => patch({ primaryFormulaId: id })}
+                  />
+                  <AdditionalFormulasPicker
+                    formulas={formulas}
+                    value={draft.additionalFormulaIds}
+                    isPlatform={draft.isPlatform}
+                    disabled={!editable || busy}
+                    onChange={(ids) => patch({ additionalFormulaIds: ids })}
+                  />
                 </fieldset>
 
                 {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
@@ -362,247 +388,6 @@ export default function ManageMeetingTypesModal({ onClose }: { onClose: () => vo
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-/// The sections + blocks editor. Reorder via a drag handle (HTML5 DnD) or the per-item kebab (move up/down).
-function ContentEditor({
-  content,
-  onChange,
-  t,
-}: {
-  content: TemplateContent;
-  onChange: (c: TemplateContent) => void;
-  t: (k: string) => string;
-}) {
-  const dragSection = useRef<number | null>(null);
-  const dragBlock = useRef<{ section: number; index: number } | null>(null);
-
-  return (
-    <div className="border-t pt-3 dark:border-gray-700">
-      <div className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-200">{t("workspace:mtContent")}</div>
-      <div className="space-y-3">
-        {content.sections.map((section, si) => (
-          <div
-            key={si}
-            className="rounded border dark:border-gray-700"
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={() => {
-              if (dragSection.current !== null && dragSection.current !== si) {
-                onChange(moveSection(content, dragSection.current, si));
-              }
-              dragSection.current = null;
-            }}
-          >
-            <div className="flex items-center gap-2 border-b bg-gray-50 px-2 py-1.5 dark:border-gray-700 dark:bg-gray-800">
-              <span
-                draggable
-                onDragStart={() => (dragSection.current = si)}
-                aria-label={t("workspace:mtDragSection")}
-                className="cursor-grab select-none text-gray-400"
-              >
-                ⠿
-              </span>
-              <select
-                value={section.level}
-                onChange={(e) => onChange(updateSection(content, si, { level: Number(e.target.value) as 1 | 2 | 3 }))}
-                aria-label={t("workspace:mtHeadingLevel")}
-                className="rounded border px-1 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              >
-                <option value={1}>H1</option>
-                <option value={2}>H2</option>
-                <option value={3}>H3</option>
-              </select>
-              <input
-                value={section.title}
-                onChange={(e) => onChange(updateSection(content, si, { title: e.target.value }))}
-                placeholder={t("workspace:mtSectionTitle")}
-                aria-label={t("workspace:mtSectionTitle")}
-                className="min-w-0 flex-1 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-              />
-              <KebabMenu
-                label={t("workspace:mtSectionActions")}
-                actions={[
-                  { label: t("workspace:mtAddBoilerplate"), onClick: () => onChange(addBlock(content, si, "boilerplate")) },
-                  { label: t("workspace:mtAddField"), onClick: () => onChange(addBlock(content, si, "field")) },
-                  { label: t("workspace:mtAddPrompt"), onClick: () => onChange(addBlock(content, si, "prompt")) },
-                  { label: t("workspace:mtAddHr"), onClick: () => onChange(addBlock(content, si, "hr")) },
-                  { label: t("workspace:mtMoveUp"), onClick: () => onChange(moveSection(content, si, si - 1)), disabled: si === 0 },
-                  { label: t("workspace:mtMoveDown"), onClick: () => onChange(moveSection(content, si, si + 1)), disabled: si === content.sections.length - 1 },
-                  { label: t("workspace:mtDeleteSection"), onClick: () => onChange(removeSection(content, si)), danger: true },
-                ]}
-              />
-            </div>
-
-            <div
-              className="space-y-2 p-2"
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                if (dragBlock.current) {
-                  e.stopPropagation();
-                  onChange(moveBlockCrossSection(content, dragBlock.current, { section: si, index: section.blocks.length }));
-                }
-                dragBlock.current = null;
-              }}
-            >
-              {section.blocks.length === 0 && (
-                <p className="text-xs text-gray-400 dark:text-gray-500">{t("workspace:mtNoBlocks")}</p>
-              )}
-              {section.blocks.map((block, bi) => (
-                <BlockRow
-                  key={bi}
-                  section={si}
-                  index={bi}
-                  kind={block.kind}
-                  text={block.text ?? ""}
-                  field={block.field ?? "date"}
-                  breakAfter={block.breakAfter ?? "paragraph"}
-                  count={section.blocks.length}
-                  t={t}
-                  onText={(text) => onChange(updateBlock(content, si, bi, { text }))}
-                  onField={(field) => onChange(updateBlock(content, si, bi, { field }))}
-                  onBreakAfter={(breakAfter) => onChange(updateBlock(content, si, bi, { breakAfter: breakAfter as TemplateBlock["breakAfter"] }))}
-                  onDragStart={() => { dragBlock.current = { section: si, index: bi }; dragSection.current = null; }}
-                  onBlockDrop={() => {
-                    if (dragBlock.current) onChange(moveBlockCrossSection(content, dragBlock.current, { section: si, index: bi }));
-                    dragBlock.current = null;
-                  }}
-                  onMove={(to) => onChange(moveBlock(content, si, bi, to))}
-                  onRemove={() => onChange(removeBlock(content, si, bi))}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-      <button
-        type="button"
-        onClick={() => onChange(addSection(content, 1))}
-        className="mt-2 rounded border px-2 py-1 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-      >
-        + {t("workspace:mtAddSection")}
-      </button>
-    </div>
-  );
-}
-
-/// A textarea that grows to fit its content (no inner scrollbar), for the raw-markdown block text.
-function AutoGrowTextarea({
-  value, onChange, placeholder, ariaLabel,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-  ariaLabel: string;
-}) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }, [value]);
-  return (
-    <textarea
-      ref={ref}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      aria-label={ariaLabel}
-      rows={1}
-      className="w-full resize-none overflow-hidden rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-    />
-  );
-}
-
-function BlockRow({
-  kind, text, field, breakAfter, index, count, t, onText, onField, onBreakAfter, onDragStart, onBlockDrop, onMove, onRemove,
-}: {
-  section: number;
-  index: number;
-  count: number;
-  kind: TemplateBlockKind;
-  text: string;
-  field: string;
-  breakAfter: string;
-  t: (k: string) => string;
-  onText: (v: string) => void;
-  onField: (v: string) => void;
-  onBreakAfter: (v: string) => void;
-  onDragStart: () => void;
-  onBlockDrop: () => void;
-  onMove: (to: number) => void;
-  onRemove: () => void;
-}) {
-  const label =
-    kind === "boilerplate" ? t("workspace:mtKindBoilerplate")
-    : kind === "field" ? t("workspace:mtKindField")
-    : kind === "hr" ? t("workspace:mtKindHr")
-    : t("workspace:mtKindPrompt");
-
-  return (
-    <div
-      className="flex items-start gap-2 rounded border px-2 py-1.5 dark:border-gray-700"
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onBlockDrop(); }}
-    >
-      <span
-        draggable
-        onDragStart={onDragStart}
-        aria-label={t("workspace:mtDragBlock")}
-        title={t("workspace:mtDragBlock")}
-        className="mt-1 cursor-grab select-none text-gray-400"
-      >
-        ⠿
-      </span>
-      <span className="mt-1 w-16 shrink-0 text-xs font-medium uppercase text-gray-400">{label}</span>
-      <div className="min-w-0 flex-1">
-        {kind === "field" ? (
-          <select
-            value={field}
-            onChange={(e) => onField(e.target.value)}
-            aria-label={t("workspace:mtKindField")}
-            className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          >
-            {FIELD_OPTIONS.map((f) => (
-              <option key={f} value={f}>{t(`workspace:mtFieldOpt_${f}`)}</option>
-            ))}
-          </select>
-        ) : kind === "hr" ? (
-          // A horizontal rule has nothing to edit - show the line it renders as.
-          <div className="my-2 border-t border-gray-300 dark:border-gray-600" aria-hidden="true" />
-        ) : (
-          <AutoGrowTextarea
-            value={text}
-            onChange={onText}
-            placeholder={kind === "prompt" ? t("workspace:mtPromptPlaceholder") : t("workspace:mtBoilerplatePlaceholder")}
-            ariaLabel={label}
-          />
-        )}
-      </div>
-      {/* A rule always sits on its own paragraph (the composer forces it), so it has no break-after choice. */}
-      {kind !== "hr" && (
-        <select
-          value={breakAfter}
-          onChange={(e) => onBreakAfter(e.target.value)}
-          aria-label={t("workspace:mtBreakAfter")}
-          title={t("workspace:mtBreakAfter")}
-          className="mt-1 shrink-0 rounded border px-1 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-        >
-          <option value="none">{t("workspace:mtBreakNone")}</option>
-          <option value="line">{t("workspace:mtBreakLine")}</option>
-          <option value="paragraph">{t("workspace:mtBreakParagraph")}</option>
-        </select>
-      )}
-      <KebabMenu
-        label={t("workspace:mtBlockActions")}
-        actions={[
-          { label: t("workspace:mtMoveUp"), onClick: () => onMove(index - 1), disabled: index === 0 },
-          { label: t("workspace:mtMoveDown"), onClick: () => onMove(index + 1), disabled: index === count - 1 },
-          { label: t("workspace:mtDeleteBlock"), onClick: onRemove, danger: true },
-        ]}
-      />
     </div>
   );
 }

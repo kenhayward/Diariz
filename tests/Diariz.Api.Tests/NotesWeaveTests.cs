@@ -44,13 +44,9 @@ public class NotesWeaveTests
                {"level":1,"title":"Enhanced notes","blocks":[{"kind":"field","field":"notes"}]}]
               """
             : """[{"level":1,"title":"Summary","blocks":[{"kind":"prompt","text":"Summarise."}]}]""";
-        var type = new MeetingType
-        {
-            Id = Guid.NewGuid(), UserId = null, Key = null, Title = "T", GroupName = "G",
-            Icon = "document", Color = "#5C6BC0", Overview = "Test type.",
-            ContentJson = $$"""{"sections":{{sections}}}""",
-        };
-        db.MeetingTypes.Add(type);
+        // The template lives on the formula the type points at, so build both.
+        var content = TemplateContent.Parse($$"""{"sections":{{sections}}}""");
+        var type = MeetingTypes.With(db, content, title: "T", overview: "Test type.");
         await db.SaveChangesAsync();
         return type.Id;
     }

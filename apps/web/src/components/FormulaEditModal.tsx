@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
-import { barePrompt, fromPrompt, isStructured } from "../lib/formulaTemplate";
+import { normalizeBreaks, contentError, emptyContent } from "../lib/meetingTypeDraft";
+import TemplateContentEditor from "./TemplateContentEditor";
 import { FormulaContextBits, type Formula, type FormulaScope } from "../lib/types";
 import FlaskIcon from "./FlaskIcon";
 
@@ -35,12 +36,10 @@ export default function FormulaEditModal({
   const { t } = useTranslation("account");
   const [name, setName] = useState(formula?.name ?? "");
   const [description, setDescription] = useState(formula?.description ?? "");
-  // A formula's body is a template now. Until the structured editor lands, this modal edits the common case:
-  // a formula that is just a prompt (one headless section, one prompt block). A formula that carries real
-  // structure cannot be flattened into this textarea without destroying it, so it is shown read-only instead
-  // of being silently mangled on save.
-  const structured = isStructured(formula?.content);
-  const [prompt, setPrompt] = useState(barePrompt(formula?.content) ?? "");
+  // A formula IS a template: it is authored with the same structured block editor meeting-minutes templates
+  // use. (A formula that was just a prompt shows as one headless section holding one prompt block.)
+  const [content, setContent] = useState(() =>
+    formula ? normalizeBreaks(formula.content) : emptyContent());
   const [context, setContext] = useState(formula?.context ?? 0);
   const [shared, setShared] = useState(formula?.shared ?? false);
   const [busy, setBusy] = useState(false);
@@ -58,7 +57,9 @@ export default function FormulaEditModal({
     setContext((c) => c ^ bit);
   }
 
-  const canSave = !!name.trim() && !!prompt.trim() && !structured;
+  // A formula with no sections would generate nothing, so it is not saveable - the same bar the meeting-type
+  // editor applied to a template.
+  const canSave = !!name.trim() && content.sections.length > 0 && contentError(content) === null;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -70,7 +71,7 @@ export default function FormulaEditModal({
         await api.updateFormula(formula.id, {
           name: name.trim(),
           description: description.trim() || null,
-          content: fromPrompt(prompt.trim()),
+          content,
           context,
           shared,
         });
@@ -79,7 +80,7 @@ export default function FormulaEditModal({
           scope,
           name: name.trim(),
           description: description.trim() || null,
-          content: fromPrompt(prompt.trim()),
+          content,
           context,
           shared,
         });
@@ -120,21 +121,10 @@ export default function FormulaEditModal({
           <input value={description} onChange={(e) => setDescription(e.target.value)} className={field} />
         </label>
 
-        <label className="block text-sm">
+        <div className="block text-sm">
           <span className={labelSpan}>{t("formulaPrompt")}</span>
-          <textarea
-            rows={12}
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            disabled={structured}
-            className={`${field} font-mono disabled:opacity-60`}
-          />
-        </label>
-        {structured ? (
-          <p className="text-xs text-amber-600 dark:text-amber-400">{t("formulaStructuredHint")}</p>
-        ) : (
-          <p className="text-xs text-gray-400 dark:text-gray-500">{t("formulaPromptHint")}</p>
-        )}
+          <TemplateContentEditor content={content} onChange={setContent} t={t} />
+        </div>
 
         <div>
           <span className={`text-sm ${labelSpan}`}>{t("formulaContext")}</span>

@@ -45,18 +45,16 @@ public class FolderPromptTests
     [Fact]
     public void FolderMinutes_SubstitutesTypeTitleOverviewAndStructure()
     {
-        var type = new MeetingType
-        {
-            Id = Guid.NewGuid(), Title = "1:1", Overview = "A manager-report sync.",
-            ContentJson = new TemplateContent(
-            [
-                new TemplateSection(1, "Agenda", []),
-                new TemplateSection(2, "Follow-ups", []),
-            ]).Serialize(),
-        };
+        var type = new MeetingType { Id = Guid.NewGuid(), Title = "1:1", Overview = "A manager-report sync." };
+        // A type's shape now comes from the formula it points at, so the content travels alongside it.
+        var content = new TemplateContent(
+        [
+            new TemplateSection(1, "Agenda", []),
+            new TemplateSection(2, "Follow-ups", []),
+        ]);
 
         var msgs = FolderMinutesPrompt.BuildMessages(
-            FolderMinutesPrompt.DefaultTemplate, type,
+            FolderMinutesPrompt.DefaultTemplate, type, content,
             [("Week 1", "# Notes\nDiscussed goals.")], 10_000);
 
         Assert.Contains("Meeting type: 1:1", msgs[0].Content);
@@ -71,7 +69,7 @@ public class FolderPromptTests
     public void FolderMinutes_NullType_UsesGenericOutline()
     {
         var msgs = FolderMinutesPrompt.BuildMessages(
-            FolderMinutesPrompt.DefaultTemplate, null, [("X", "body")], 10_000);
+            FolderMinutesPrompt.DefaultTemplate, null, null, [("X", "body")], 10_000);
         Assert.Contains("General meeting", msgs[0].Content);
         Assert.Contains("Action items", msgs[0].Content); // generic fallback outline
     }

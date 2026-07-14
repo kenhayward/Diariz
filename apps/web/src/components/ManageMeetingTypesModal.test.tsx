@@ -9,6 +9,7 @@ vi.mock("../auth", () => ({ useAuth: () => ({ isPlatformAdmin: isAdmin }) }));
 vi.mock("../lib/api", () => ({
   api: {
     listMeetingTypes: vi.fn(),
+    listFormulas: vi.fn(),
     createMeetingType: vi.fn(),
     updateMeetingType: vi.fn(),
     deleteMeetingType: vi.fn(),
@@ -22,7 +23,8 @@ import ManageMeetingTypesModal from "./ManageMeetingTypesModal";
 function mt(id: string, title: string, isPlatform: boolean, canEdit: boolean): MeetingType {
   return {
     id, isPlatform, canEdit, groupName: isPlatform ? "Standard" : "Mine", title,
-    overview: "", icon: "document", color: "#5C6BC0", content: { sections: [] }, isDefault: id === "general",
+    overview: "", icon: "document", color: "#5C6BC0",
+    primaryFormulaId: null, additionalFormulaIds: [], isDefault: id === "general",
   };
 }
 
@@ -40,6 +42,12 @@ function renderModal() {
 describe("ManageMeetingTypesModal", () => {
   beforeEach(() => {
     isAdmin = false;
+    vi.mocked(api.listFormulas).mockResolvedValue([
+      {
+        id: "f1", scope: "Platform", ownerUserId: null, name: "Interview minutes", description: null,
+        content: { sections: [] }, context: 1, enabled: true, isBuiltIn: false, shared: false,
+      },
+    ]);
     vi.mocked(api.listMeetingTypes).mockResolvedValue([
       mt("general", "General Meeting", true, false),
       mt("mine", "My template", false, true),
@@ -84,24 +92,6 @@ describe("ManageMeetingTypesModal", () => {
     });
   });
 
-  it("changes a block's break-after and saves it", async () => {
-    const withBlock = mt("mine", "My template", false, true);
-    withBlock.content = {
-      sections: [{ level: 1, title: "S", blocks: [{ kind: "boilerplate", text: "hi", breakAfter: "paragraph" }] }],
-    };
-    vi.mocked(api.listMeetingTypes).mockResolvedValue([withBlock]);
-    vi.mocked(api.updateMeetingType).mockResolvedValue(withBlock);
-    renderModal();
-
-    fireEvent.click(await screen.findByText("My template"));
-    fireEvent.change(screen.getByLabelText("Break after"), { target: { value: "line" } });
-    fireEvent.click(screen.getByText("Save"));
-
-    await waitFor(() => expect(api.updateMeetingType).toHaveBeenCalled());
-    const sent = vi.mocked(api.updateMeetingType).mock.calls[0][1];
-    expect(sent.content.sections[0].blocks[0].breakAfter).toBe("line");
-  });
-
   it("enables Export only once a template is selected", async () => {
     renderModal();
     await screen.findByText("My template");
@@ -123,8 +113,10 @@ describe("ManageMeetingTypesModal", () => {
 
       const file = new File(
         [JSON.stringify({
-          "diariz-meeting-type": 1, groupName: "Hiring", title: "Interview", overview: "", icon: "chat", color: "#5C6BC0",
-          content: { sections: [{ level: 1, title: "Details", blocks: [{ kind: "boilerplate", text: "hi", breakAfter: "paragraph" }] }] },
+          "diariz-meeting-type": 1, groupName: "Hiring", title: "Interview", overview: "", icon: "chat",
+          color: "#5C6BC0",
+          // Formula IDs mean nothing on another instance, so the export carries names.
+          primaryFormulaName: "Interview minutes", additionalFormulaNames: [],
         })],
         "interview.json",
         { type: "application/json" },
@@ -134,7 +126,8 @@ describe("ManageMeetingTypesModal", () => {
       await waitFor(() => expect(api.createMeetingType).toHaveBeenCalledTimes(1));
       const input = vi.mocked(api.createMeetingType).mock.calls[0][0];
       expect(input).toMatchObject({ title: "Imported Interview", groupName: "Hiring", isPlatform: false });
-      expect(input.content.sections[0].title).toBe("Details");
+      // The exported name resolved to this instance's formula.
+      expect(input.primaryFormulaId).toBe("f1");
     } finally {
       window.prompt = origPrompt;
     }
