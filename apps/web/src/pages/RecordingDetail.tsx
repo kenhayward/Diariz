@@ -10,6 +10,7 @@ import ActionsTable from "../components/ActionsTable";
 import DetailSections, { type DetailSection } from "../components/detail/DetailSections";
 import DetailHeader from "../components/detail/DetailHeader";
 import RecordingHub from "../components/detail/RecordingHub";
+import MeetingCard from "../components/detail/MeetingCard";
 import ConversationFlowPlayer from "../components/detail/ConversationFlowPlayer";
 import {
   ActionsGlyph,
@@ -35,7 +36,6 @@ import { renderMarkdown } from "../lib/markdown";
 import { weaveTranscript } from "../lib/transcriptNotes";
 import { useAuth } from "../auth";
 import AttachmentsManager from "../components/AttachmentsManager";
-import CalendarEventDetails from "../components/CalendarEventDetails";
 import CalendarLinkModal from "../components/CalendarLinkModal";
 import PreferencesModal from "../components/PreferencesModal";
 import SpeakerAssign from "../components/SpeakerAssign";
@@ -1046,74 +1046,19 @@ export default function RecordingDetail() {
   // The linked-meeting block. It lived on the old Overview tab; the hero card has no slot for a whole
   // invite, so it keeps its own card directly beneath the hub. Calendar is personal-only, so none of this
   // shows while viewing the recording in a shared room.
-  const calendarBlock = (
-    <>
-          {/* Linked meeting: full invite details (live, falling back to the stored snapshot) + manage actions.
-              Calendar is personal-only, so it is hidden while viewing the recording in a shared room. */}
-          {rec.calendarLink && !inSharedRoom && (
-            <div className="mb-4 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-              <CalendarEventDetails
-                showTitle
-                event={
-                  linkedEvent ?? {
-                    id: rec.calendarLink.eventId,
-                    summary: rec.calendarLink.summary,
-                    start: rec.calendarLink.start,
-                    end: rec.calendarLink.end,
-                    htmlLink: rec.calendarLink.htmlLink,
-                  }
-                }
-              />
-              <div className="mt-3 flex gap-2 border-t border-gray-200 pt-2 dark:border-gray-700">
-                <button
-                  type="button"
-                  onClick={() => setLinkModalOpen(true)}
-                  className="rounded border px-2 py-1 text-xs hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-                >
-                  {t("workspace:calChangeMeeting")}
-                </button>
-                <button
-                  type="button"
-                  onClick={unlinkMeeting}
-                  className="rounded border px-2 py-1 text-xs hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-                >
-                  {t("workspace:calUnlinkMeeting")}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Unlinked but Calendar connected: accept the suggestion (if any) or browse to link one by hand.
-              Not offered in a shared room - calendar linking is personal-only. */}
-          {!rec.calendarLink && !inSharedRoom && profile?.googleCalendar === true && (
-            <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
-              {calendarMatch && (
-                <>
-                  <span className="text-gray-500 dark:text-gray-400">{t("workspace:calSuggestedMeeting")}:</span>
-                  <span className="text-gray-800 dark:text-gray-200">
-                    {calendarMatch.summary || t("workspace:meetingUntitled")}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={acceptSuggestion}
-                    className="rounded border px-2 py-0.5 text-xs hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-                  >
-                    {t("workspace:calAcceptSuggestion")}
-                  </button>
-                </>
-              )}
-              <button
-                type="button"
-                onClick={() => setLinkModalOpen(true)}
-                className="rounded border px-2 py-0.5 text-xs hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-              >
-                {t("workspace:calLinkModalTitle")}
-              </button>
-            </div>
-          )}
-
-    </>
-  );
+  // The meeting this recording came from. Calendar is personal-only, so it is hidden entirely while viewing
+  // the recording in a shared room.
+  const meetingCard = !inSharedRoom ? (
+    <MeetingCard
+      calendarLink={rec.calendarLink}
+      linkedEvent={linkedEvent}
+      suggestion={calendarMatch}
+      calendarConnected={profile?.googleCalendar === true}
+      onLink={() => setLinkModalOpen(true)}
+      onAcceptSuggestion={acceptSuggestion}
+      onUnlink={unlinkMeeting}
+    />
+  ) : null;
 
   // The hub: the detail page's landing view. Everything the old Overview tab carried is here — its facts
   // as the hero's chip row, its summary inline in the hero, its calendar block beneath — plus a tile per
@@ -1139,7 +1084,7 @@ export default function RecordingDetail() {
         onAddFile={() => selectTab("files")}
         onRunFormula={() => setFormulaRunOpen(true)}
       />
-      {calendarBlock}
+      {meetingCard}
     </div>
   );
 

@@ -41,7 +41,10 @@ hover, no extra click. Below it is a grid of **tiles**: Transcript, Actions, Spe
 Formulas, each showing its **real count and a preview of what's inside** (the first actions, the latest note,
 the attached files, the formula runs), so you can see what a meeting holds without opening anything. Notes,
 Files, and Formulas can be **added or run straight from their tile**. Clicking a tile drills into that section
-with a **breadcrumb** back to the hub, and the section you were last in is remembered.
+with a **breadcrumb** back to the hub, and the section you were last in is remembered. A **meeting card** below
+the tiles shows the calendar meeting the recording came from (time, location, organiser, description) with
+**Change** / **Unlink**, or — when it isn't linked yet — the meeting your calendar **suggests** it came from,
+ready to accept in one click. It only appears when there is something to show.
 - **Notes & enhanced notes.** Take your own note lines for a meeting — sparse trigger phrases, questions,
 observations. A **live notes panel** while recording stamps each line at the second you wrote it (crash-safe,
 lands on the recording's **Notes** tab after upload); you can also jot **prep notes on an upcoming Google Calendar

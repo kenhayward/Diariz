@@ -55,6 +55,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.136.2",
+    date: "2026-07-14",
+    pr: 305,
+    headline: "The linked meeting is now a card on the hub",
+    summary:
+      "The calendar information on a recording - the meeting it came from, or the one your calendar suggests it came from - was left over from the old layout: a bare line of text and a couple of plain buttons trailing below the hub's tiles. It is now a proper card, matching the tiles above it, with the meeting's details, and Change / Unlink (or Link) as buttons in its header. It still only appears when there is something to show: a linked meeting, or a calendar you can link one from.",
+    changed: [
+      "The recording hub's calendar section is now a card styled like the other tiles, instead of unstyled text below them.",
+    ],
+  },
+  {
     version: "0.136.1",
     date: "2026-07-14",
     pr: 304,
