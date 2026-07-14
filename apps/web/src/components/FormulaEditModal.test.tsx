@@ -31,6 +31,28 @@ const existingFormula: Formula = {
   shared: false,
 };
 
+
+/// Build a template through the real block editor: add a section, title it, add a prompt block, write it.
+/// A formula IS a template now, so this is what authoring one actually looks like.
+function authorTemplate(sectionTitle: string, promptText: string) {
+  fireEvent.click(screen.getByRole("button", { name: /add section/i }));
+  fireEvent.change(screen.getByPlaceholderText(/section title/i), { target: { value: sectionTitle } });
+  fireEvent.click(screen.getByRole("button", { name: /section actions/i }));
+  fireEvent.click(screen.getByRole("menuitem", { name: /add model prompt/i }));
+  fireEvent.change(screen.getByLabelText(/^prompt$/i), { target: { value: promptText } });
+}
+
+/// What `authorTemplate` produces, as the payload the API should receive.
+const authored = (sectionTitle: string, promptText: string) => ({
+  sections: [
+    {
+      level: 1,
+      title: sectionTitle,
+      blocks: [{ kind: "prompt", text: promptText, breakAfter: "paragraph" }],
+    },
+  ],
+});
+
 describe("FormulaEditModal", () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -38,22 +60,29 @@ describe("FormulaEditModal", () => {
     renderModal();
     expect(screen.getByLabelText(/^name$/i)).toBeTruthy();
     expect(screen.getByLabelText(/^description$/i)).toBeTruthy();
-    expect(screen.getByLabelText(/^prompt$/i)).toBeTruthy();
-    expect(screen.getByText(/markdown supported/i)).toBeTruthy();
-    for (const label of [/transcript/i, /notes/i, /summary/i, /minutes/i, /actions/i]) {
+    // A formula is authored as a template, so the block editor is the body.
+    expect(screen.getByRole("button", { name: /add section/i })).toBeTruthy();
+    for (const label of [/transcript/i, /notes/i, /summary/i, /minutes/i, /^actions$/i]) {
       expect(screen.getByLabelText(label)).toBeTruthy();
     }
-    // Attachments is intentionally not surfaced yet (its context flag is a no-op in Phase 1).
+    // Attachments is intentionally not surfaced yet (its context flag is a no-op).
     expect(screen.queryByLabelText(/attachments/i)).toBeNull();
   });
 
-  it("disables Save until name and prompt are filled", () => {
+  // An empty template generates nothing, and a half-built one (a section with no title, a prompt with no text)
+  // would be rejected by the server - so Save stays disabled until the template is actually valid.
+  it("disables Save until the formula has a name and a usable template", () => {
     renderModal();
     const save = () => screen.getByRole("button", { name: /^save$/i }) as HTMLButtonElement;
     expect(save().disabled).toBe(true);
+
     fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "X" } });
-    expect(save().disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText(/^prompt$/i), { target: { value: "Y" } });
+    expect(save().disabled).toBe(true); // named, but it would produce nothing
+
+    fireEvent.click(screen.getByRole("button", { name: /add section/i }));
+    expect(save().disabled).toBe(true); // a section with no title is invalid
+
+    fireEvent.change(screen.getByPlaceholderText(/section title/i), { target: { value: "Summary" } });
     expect(save().disabled).toBe(false);
   });
 
@@ -61,9 +90,9 @@ describe("FormulaEditModal", () => {
     (api.createFormula as ReturnType<typeof vi.fn>).mockResolvedValue({});
     const { onSaved, onClose } = renderModal();
     fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "My Formula" } });
-    fireEvent.change(screen.getByLabelText(/^prompt$/i), { target: { value: "Summarize this" } });
+    authorTemplate("Summary", "Summarize this");
     fireEvent.click(screen.getByLabelText(/transcript/i)); // bit 1
-    fireEvent.click(screen.getByLabelText(/actions/i)); // bit 32
+    fireEvent.click(screen.getByLabelText(/^actions$/i)); // bit 32
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(() =>
@@ -71,7 +100,7 @@ describe("FormulaEditModal", () => {
         scope: "Personal",
         name: "My Formula",
         description: null,
-        content: fromPrompt("Summarize this"),
+        content: authored("Summary", "Summarize this"),
         context: 33,
         shared: false,
       }),
@@ -87,7 +116,7 @@ describe("FormulaEditModal", () => {
     expect(screen.getByRole("heading", { name: /new platform formula/i })).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "Org Wide" } });
-    fireEvent.change(screen.getByLabelText(/^prompt$/i), { target: { value: "Do the thing" } });
+    authorTemplate("Body", "Do the thing");
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(() =>
@@ -95,7 +124,7 @@ describe("FormulaEditModal", () => {
         scope: "Platform",
         name: "Org Wide",
         description: null,
-        content: fromPrompt("Do the thing"),
+        content: authored("Body", "Do the thing"),
         context: 0,
         shared: false,
       }),
@@ -104,10 +133,9 @@ describe("FormulaEditModal", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  // A formula's body is a template now. This modal edits the common case - a formula that is just a prompt. A
-  // formula carrying real structure (headings, fields, several prompts) cannot be flattened into the textarea
-  // without destroying it, so it must be refused rather than silently mangled on save.
-  it("will not let a structured formula be saved through the single-prompt editor", () => {
+  // A structured formula is now first-class: it opens in the editor and can be edited, rather than being shown
+  // read-only because the editor couldn't represent it.
+  it("opens a structured formula in the editor rather than refusing it", () => {
     const structured = {
       ...existingFormula,
       content: {
@@ -118,9 +146,9 @@ describe("FormulaEditModal", () => {
     };
     renderModal({ formula: structured });
 
-    expect((screen.getByLabelText(/^prompt$/i) as HTMLTextAreaElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: /^save$/i }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText(/structured template/i)).toBeTruthy();
+    expect((screen.getByDisplayValue("Decisions") as HTMLInputElement).disabled).toBe(false);
+    expect(screen.getByDisplayValue("List them.")).toBeTruthy();
+    expect((screen.getByRole("button", { name: /^save$/i }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("prefills fields (including context) from an existing formula and updates it", async () => {
@@ -129,6 +157,7 @@ describe("FormulaEditModal", () => {
 
     expect(screen.getByDisplayValue("Existing")).toBeTruthy();
     expect(screen.getByDisplayValue("Desc")).toBeTruthy();
+    // A formula that was just a prompt opens as a headless section holding that prompt - editable, not read-only.
     expect(screen.getByDisplayValue("Old prompt")).toBeTruthy();
     expect((screen.getByLabelText(/transcript/i) as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText(/notes/i) as HTMLInputElement).checked).toBe(true);
@@ -142,7 +171,11 @@ describe("FormulaEditModal", () => {
       expect(api.updateFormula).toHaveBeenCalledWith("f1", {
         name: "Renamed",
         description: "Desc",
-        content: fromPrompt("Old prompt"),
+        content: {
+          sections: [
+            { level: 0, title: "", blocks: [{ kind: "prompt", text: "Old prompt", breakAfter: "paragraph" }] },
+          ],
+        },
         context: 11,
         shared: false,
       }),
@@ -176,7 +209,7 @@ describe("FormulaEditModal", () => {
     (api.createFormula as ReturnType<typeof vi.fn>).mockResolvedValue({});
     renderModal();
     fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "Shared One" } });
-    fireEvent.change(screen.getByLabelText(/^prompt$/i), { target: { value: "Do it" } });
+    authorTemplate("Body", "Do it");
     fireEvent.click(screen.getByLabelText(/share this formula/i));
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
@@ -191,7 +224,7 @@ describe("FormulaEditModal", () => {
     (api.createFormula as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("boom"));
     const { onClose } = renderModal();
     fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "X" } });
-    fireEvent.change(screen.getByLabelText(/^prompt$/i), { target: { value: "Y" } });
+    authorTemplate("Body", "Y");
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText("Error: boom")).toBeTruthy();
     expect(onClose).not.toHaveBeenCalled();

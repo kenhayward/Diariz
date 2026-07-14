@@ -77,7 +77,10 @@ export interface MeetingType {
   overview: string;
   icon: string;
   color: string;
-  content: TemplateContent;
+  /// The formula whose template generates the minutes. A meeting type carries no prompts of its own.
+  primaryFormulaId: string | null;
+  /// Formulas run alongside the minutes in the same pipeline; their results land in the Formulas tab.
+  additionalFormulaIds: string[];
   /// True for the seeded "General Meeting" default (used when a recording has no explicit type).
   isDefault: boolean;
 }
@@ -89,7 +92,8 @@ export interface MeetingTypeInput {
   overview: string;
   icon: string;
   color: string;
-  content: TemplateContent;
+  primaryFormulaId: string | null;
+  additionalFormulaIds: string[];
   isPlatform: boolean;
 }
 

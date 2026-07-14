@@ -33,6 +33,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<McpAccessToken> McpAccessTokens => Set<McpAccessToken>();
     public DbSet<ApiAccessToken> ApiAccessTokens => Set<ApiAccessToken>();
     public DbSet<MeetingType> MeetingTypes => Set<MeetingType>();
+    public DbSet<MeetingTypeFormula> MeetingTypeFormulas => Set<MeetingTypeFormula>();
     public DbSet<UserGroup> UserGroups => Set<UserGroup>();
     public DbSet<UserGroupMember> UserGroupMembers => Set<UserGroupMember>();
     public DbSet<Room> Rooms => Set<Room>();
@@ -544,7 +545,8 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
 
         // Meeting types (minutes templates). UserId null = a shared Platform type; non-null = a user's Personal
         // type (cascade-deleted with the user). Key is a stable slug for the seeded standards (unique; multiple
-        // NULLs coexist for user-created types under the Postgres unique index). ContentJson is jsonb on Postgres.
+        // NULLs coexist for user-created types under the Postgres unique index). A type carries no prompts of its
+        // own - it points at the Formula whose template generates the minutes.
         builder.Entity<MeetingType>(e =>
         {
             e.HasIndex(m => m.UserId);
@@ -554,11 +556,31 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.Property(m => m.Title).HasMaxLength(256);
             e.Property(m => m.Icon).HasMaxLength(64);
             e.Property(m => m.Color).HasMaxLength(32);
-            if (isNpgsql)
-                e.Property(m => m.ContentJson).HasColumnType("jsonb");
             e.HasOne(m => m.User)
                 .WithMany()
                 .HasForeignKey(m => m.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // RESTRICT: deleting a formula that a template uses as its primary would silently leave that template
+            // producing no minutes, for everyone. The controller turns the violation into a 400 naming the
+            // templates, so an admin repoints first.
+            e.HasOne(m => m.PrimaryFormula)
+                .WithMany()
+                .HasForeignKey(m => m.PrimaryFormulaId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Formulas a meeting type runs alongside the minutes. Cascade on both sides: unlike the primary, an
+        // additional formula going away is not a broken template - the link just disappears with it.
+        builder.Entity<MeetingTypeFormula>(e =>
+        {
+            e.HasIndex(f => new { f.MeetingTypeId, f.FormulaId }).IsUnique();
+            e.HasOne(f => f.MeetingType)
+                .WithMany(m => m.AdditionalFormulas)
+                .HasForeignKey(f => f.MeetingTypeId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(f => f.Formula)
+                .WithMany()
+                .HasForeignKey(f => f.FormulaId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

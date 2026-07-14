@@ -1,9 +1,13 @@
 namespace Diariz.Domain.Entities;
 
-/// <summary>A named, reusable minutes template. A meeting type carries a title, a template <see cref="GroupName"/>
-/// (for grouping in the picker), an icon + background colour, a free-text <see cref="Overview"/> that orients the
-/// model, and a structured content template stored as JSON on <see cref="ContentJson"/> (an ordered list of H1/H2
-/// sections whose blocks are boilerplate text, substituted recording values, or model prompts).
+/// <summary>A named, reusable minutes template. A meeting type is <b>presentation + selection</b>: a title, a
+/// template <see cref="GroupName"/> (for grouping in the picker), an icon + background colour, and a free-text
+/// <see cref="Overview"/> that orients the model.
+///
+/// <para>It carries <b>no prompts of its own</b>. The document it produces is defined by its
+/// <see cref="PrimaryFormulaId"/> - the formula whose template generates the minutes - plus any
+/// <see cref="AdditionalFormulas"/> run alongside in the same pipeline (their results land in the Formulas tab).
+/// A meeting type merely points at a formula and frames it.</para>
 ///
 /// <para><see cref="UserId"/> is nullable: <c>null</c> = a <b>Platform</b> type (created by a Platform Administrator,
 /// shared read-only to everyone, incl. the seeded standards); non-null = a user's own <b>Personal</b> type
@@ -38,8 +42,16 @@ public class MeetingType
     /// <summary>Background colour (hex) the icon is shown on.</summary>
     public string Color { get; set; } = string.Empty;
 
-    /// <summary>The structured minutes template as JSON (see <c>TemplateContent</c>). Saved atomically.</summary>
-    public string ContentJson { get; set; } = string.Empty;
+    /// <summary>The formula whose template generates the minutes. <c>null</c> falls back to the seeded General
+    /// type's formula. <b>ON DELETE RESTRICT</b>: a formula in use as a primary can't be deleted or disabled out
+    /// from under its templates - the alternative (SET NULL) would silently degrade everyone's minutes with no
+    /// signal.</summary>
+    public Guid? PrimaryFormulaId { get; set; }
+    public Formula? PrimaryFormula { get; set; }
+
+    /// <summary>Formulas run alongside the minutes in the same pipeline; their results appear in the recording's
+    /// Formulas tab. Ordered by <see cref="MeetingTypeFormula.Ordinal"/>.</summary>
+    public ICollection<MeetingTypeFormula> AdditionalFormulas { get; set; } = [];
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? UpdatedAt { get; set; }

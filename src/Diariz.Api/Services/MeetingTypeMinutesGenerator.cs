@@ -41,8 +41,9 @@ public sealed class MeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerator
         IReadOnlyList<MeetingNoteDto> notes,
         SummarizationRequestConfig config, int charBudget, CancellationToken ct = default)
     {
-        var type = await ResolveTypeAsync(recordingOwnerId, meetingTypeId, ct);
-        var content = TemplateContent.Parse(type.ContentJson);
+        // A meeting type carries no prompts of its own: the document it produces is its PRIMARY FORMULA's
+        // template. The type contributes only its framing (Overview).
+        var (overview, content) = await ResolveTemplateAsync(recordingOwnerId, meetingTypeId, ct);
 
         var mode = (await _db.PlatformSettings.FirstOrDefaultAsync(ct))?.MinutesGenerationMode
                    ?? MinutesGenerationMode.SingleCall;
@@ -81,7 +82,7 @@ public sealed class MeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerator
         }
 
         var input = new MinutesComposition(
-            content, type.Overview, name => ResolveField(name, context, actions, notesMarkdown),
+            content, overview, name => ResolveField(name, context, actions, notesMarkdown),
             segments, config, charBudget, preamble);
 
         return await strategy.GenerateAsync(input, ct);
@@ -97,18 +98,56 @@ public sealed class MeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerator
                "specifically from the transcript, and prefer their terminology:\n" + string.Join("\n", lines);
     }
 
-    /// <summary>The recording's chosen type when it exists and is usable by the owner (a Platform type or their own
-    /// Personal one); otherwise the seeded General default; otherwise the built-in General template.</summary>
-    private async Task<MeetingType> ResolveTypeAsync(Guid ownerId, Guid? meetingTypeId, CancellationToken ct)
+    /// <summary>The template to produce: the chosen type's framing plus its <b>primary formula's</b> content.
+    ///
+    /// <para>Falls back in order: the chosen type (when it exists and is usable by the owner - a Platform type or
+    /// their own Personal one), else the seeded General type, else the in-code General standard (nothing seeded
+    /// yet). A type whose <c>PrimaryFormulaId</c> is null keeps its own framing but borrows the General formula's
+    /// content, rather than producing an empty document.</para></summary>
+    private async Task<(string Overview, TemplateContent Content)> ResolveTemplateAsync(
+        Guid ownerId, Guid? meetingTypeId, CancellationToken ct)
     {
         if (meetingTypeId is { } id)
         {
             var chosen = await _db.MeetingTypes
+                .Include(m => m.PrimaryFormula)
                 .FirstOrDefaultAsync(m => m.Id == id && (m.UserId == null || m.UserId == ownerId), ct);
-            if (chosen is not null) return chosen;
+
+            if (chosen is not null)
+                return (chosen.Overview, chosen.PrimaryFormula is { } f
+                    ? TemplateContent.Parse(f.ContentJson)
+                    : await GeneralContentAsync(ct));
         }
-        var general = await _db.MeetingTypes.FirstOrDefaultAsync(m => m.Key == MeetingType.GeneralKey, ct);
-        return general ?? MeetingTypeSeeder.Standards.First(s => s.Key == MeetingType.GeneralKey);
+
+        var general = await _db.MeetingTypes
+            .Include(m => m.PrimaryFormula)
+            .FirstOrDefaultAsync(m => m.Key == MeetingType.GeneralKey, ct);
+
+        if (general is not null)
+            return (general.Overview, general.PrimaryFormula is { } gf
+                ? TemplateContent.Parse(gf.ContentJson)
+                : StandardGeneral().Content);
+
+        var std = StandardGeneral();
+        return (std.Overview, std.Content);
+    }
+
+    private async Task<TemplateContent> GeneralContentAsync(CancellationToken ct)
+    {
+        var general = await _db.MeetingTypes
+            .Include(m => m.PrimaryFormula)
+            .FirstOrDefaultAsync(m => m.Key == MeetingType.GeneralKey, ct);
+
+        return general?.PrimaryFormula is { } f
+            ? TemplateContent.Parse(f.ContentJson)
+            : StandardGeneral().Content;
+    }
+
+    /// <summary>The in-code General standard - the last resort when nothing has been seeded.</summary>
+    private static (string Overview, TemplateContent Content) StandardGeneral()
+    {
+        var std = MeetingTypeSeeder.Standards.First(s => s.Key == MeetingType.GeneralKey);
+        return (std.Overview, TemplateContent.Parse(std.ContentJson));
     }
 
     /// <summary>Field substitution is shared with the formula run pipeline - see <see cref="TemplateFields"/>.</summary>

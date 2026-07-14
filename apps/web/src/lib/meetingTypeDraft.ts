@@ -131,7 +131,10 @@ function legacyBreak(next: TemplateBlock | undefined): "none" | "paragraph" {
 /// The first problem with the template (mirrors the backend's validation), or null when it's savable.
 export function contentError(content: TemplateContent): string | null {
   for (const section of content.sections) {
-    if (!section.title.trim()) return "sectionTitleRequired";
+    // A level-0 section renders no heading, so it has nowhere to show a title and doesn't need one. (This is
+    // the shape a formula that is just a prompt takes - requiring a title would make every one of them
+    // unsaveable in the editor.) Mirrors TemplateContent.Validate on the server.
+    if (section.level > 0 && !section.title.trim()) return "sectionTitleRequired";
     for (const block of section.blocks) {
       if (block.kind === "field") {
         if (!block.field || !FIELD_OPTIONS.includes(block.field as (typeof FIELD_OPTIONS)[number]))

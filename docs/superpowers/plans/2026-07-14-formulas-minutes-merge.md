@@ -76,44 +76,41 @@ single-prompt-block content shape.
 
 ---
 
-## Phase 2 - Meeting types point at formulas *(the destructive one)*
+## Phase 2 - Meeting types point at formulas
 
-**Goal:** a meeting type stops owning prompts and starts naming formulas.
+**Split in two.** The destructive migration and the minutes behaviour change are separately reviewable and
+revertible, rather than buried in one large diff.
 
-1. **Schema.** `MeetingType.PrimaryFormulaId` (FK **RESTRICT**); `MeetingTypeFormulas` join table
-   (`MeetingTypeId` Cascade, `FormulaId` Cascade, `Ordinal`, unique on the pair);
-   `FormulaResults`/`SectionFormulaResults` **+ `IsUserEdited`**.
-2. **The conversion migration.** For every existing meeting type, create a formula preserving its scope *and any
-   admin edits*: Platform type -> a **Platform** formula; Personal type -> a **Personal** formula owned by the
-   same user; carrying its `ContentJson`, `Context = Transcript | Notes | Actions`, named `"<Title> minutes"`.
-   Set `PrimaryFormulaId`. Then **drop `MeetingType.ContentJson`**.
-   *The seeded 8 are converted too, rather than repointed at the new built-ins - so an admin's edit to a
-   standard survives, which the seeder is already careful never to clobber.*
-3. **`MaintenanceController.CurrentFormat` 1 -> 2.** Destructive drops + a semantic reshape; an older backup
-   must be hard-rejected, not restored into a schema where templates have no prompts and formulas no content.
-4. **Minutes generation** delegates to `ITemplateRunner` with the primary formula + `type.Overview`; the
-   **`Minutes` context bit is ignored for a primary** (it would ask the minutes to read themselves). Then it
-   enqueues one `FormulaRunJob` per additional formula, in `Ordinal` order, **after** the minutes are saved (so
-   an additional formula may legitimately read them).
-5. **Re-runs replace.** A run of F over R upserts R's existing result for F (keeping `Id` and `Ordinal`, so the
-   list doesn't reshuffle and deep-links survive) rather than appending. **The automatic pipeline skips a
-   result with `IsUserEdited`** - mirroring `MeetingMinutesProcessor`'s existing refusal to overwrite edited
-   minutes - while an **explicit manual run replaces it and clears the flag**, mirroring `ApplyMeetingType`.
-   **No unique index, no de-duplication on upgrade:** existing duplicate results are real user documents.
-6. **Validators.** Save-time **scope check** (a Platform template may reference only Platform/Diariz enabled
-   formulas) -> 400 naming the offending formula. **In-use check** on formula delete *and* disable -> 400 naming
-   the templates.
-7. **Converge the half-migrated scoping** flagged in the spec: `RecordingsController.ApplyMeetingType` and the
-   minutes generator still filter meeting types by `UserId` while the controllers filter by `RoomId`. This
-   phase touches both paths - fix them here rather than leaving a trap.
+### Phase 2A - the plumbing *(done)*
 
-**Tests.** Integration (real Postgres) for the conversion migration: scopes preserved, `PrimaryFormulaId` set,
-admin edits intact. Upsert + `IsUserEdited` skip. Both validators. Backup: a Format-1 archive is rejected.
+Meeting types stop owning a template and start naming a formula. **Minutes output is unchanged.**
 
-**Release:** functional enhancement -> **minor**. **Bumps `CurrentFormat`.** Server redeploy. Schema + synopsis
-docs.
+- `MeetingType.PrimaryFormulaId` (FK **RESTRICT**) + `MeetingTypeFormulas` (Cascade, unique on the pair);
+  `MeetingTypes.ContentJson` dropped.
+- **The conversion migration**: every meeting type's template becomes a Formula, *preserving scope* - a seeded
+  standard becomes a built-in `Diariz` formula, an admin Platform type a `Platform` one, a user's Personal type
+  a `Personal` one they own. Backfill **before** the drop (EF scaffolded it the other way round, which would
+  have destroyed every template on the instance).
+- **No `CurrentFormat` bump.** The spec assumed one, but the data is *carried forward*, not discarded - so an
+  older backup still restores and is rolled up by this migration. Same reasoning as Phase 1.
+- Save-time **scope validator** (a Platform type may reference only Platform/Diariz formulas) and **in-use
+  guard** (a formula generating some type's minutes can't be deleted *or disabled*).
+- The minutes generator now reads its template from the primary formula. Everything else - context, preamble,
+  strategies - is untouched, so the minutes are byte-identical.
+- The block editor moved out of the meeting-type modal into `TemplateContentEditor`, and now authors
+  **formulas** (which is what a template is). The meeting-type modal gets a primary-formula picker and an
+  additional-formulas multi-select. Import/export carries formula **names**, since ids mean nothing on another
+  instance.
 
----
+### Phase 2B - minutes become formula runs
+
+- Minutes run through the unified pipeline using the **primary formula's declared context**. This is the point
+  at which the minutes prompt changes: with `Transcript` selected the transcript arrives as
+  `[mm:ss] Speaker: Text` (the formula rendering) rather than `Speaker: Text`. That is the intended end state -
+  a formula decides what it sees - and it is why it lands on its own, visibly, rather than inside 2A.
+- **Additional formulas** run after the minutes are saved (so one may legitimately read them).
+- **Re-runs replace** the previous result for that formula + `IsUserEdited` on both result tables: the automatic
+  pipeline skips a hand-edited result, an explicit manual run replaces it.
 
 ## Phase 3 - Built-in content as files
 

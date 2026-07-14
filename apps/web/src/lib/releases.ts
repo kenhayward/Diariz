@@ -55,6 +55,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.139.0",
+    date: "2026-07-14",
+    pr: 310,
+    headline: "Meeting types now point at a formula",
+    summary:
+      "A meeting type used to carry its own template. It no longer does: it names the formula whose template generates the minutes, and any other formulas to run at the same time (their results land in the recording's Formulas tab). That means one place to write a document and one place to reuse it - a formula you have already written can now produce your minutes. Your existing meeting types are converted automatically, keeping exactly the template and the sharing they had, so the minutes they produce are unchanged. Formulas are also now built with the same block editor meeting templates always used, so you can give one headings, literal text, and substituted details like the date or attendees.",
+    added: [
+      "A meeting type names a primary formula (which generates the minutes) plus any additional formulas to run alongside it.",
+      "Formulas are authored with the structured block editor - headings, literal text, substituted meeting details, and model prompts.",
+    ],
+    changed: [
+      "Meeting types no longer hold a template of their own. Existing ones are converted to a formula automatically, preserving their template and who could see it.",
+      "A formula that generates the minutes for a meeting type can't be deleted or disabled until those types point somewhere else.",
+    ],
+  },
+  {
     version: "0.138.0",
     date: "2026-07-14",
     pr: 309,
