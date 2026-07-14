@@ -6,7 +6,7 @@ namespace Diariz.Api.Services;
 /// <summary>Everything a generation strategy needs to turn one meeting type's template into Markdown minutes for
 /// one recording.</summary>
 public record MinutesComposition(
-    MeetingTypeContent Content,
+    TemplateContent Content,
     string Overview,
     Func<string, string?> ResolveField,
     IReadOnlyList<SegmentDto> Segments,

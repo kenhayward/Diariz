@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
+import { barePrompt, fromPrompt, isStructured } from "../lib/formulaTemplate";
 import { FormulaContextBits, type Formula, type FormulaScope } from "../lib/types";
 import FlaskIcon from "./FlaskIcon";
 
@@ -34,7 +35,12 @@ export default function FormulaEditModal({
   const { t } = useTranslation("account");
   const [name, setName] = useState(formula?.name ?? "");
   const [description, setDescription] = useState(formula?.description ?? "");
-  const [prompt, setPrompt] = useState(formula?.prompt ?? "");
+  // A formula's body is a template now. Until the structured editor lands, this modal edits the common case:
+  // a formula that is just a prompt (one headless section, one prompt block). A formula that carries real
+  // structure cannot be flattened into this textarea without destroying it, so it is shown read-only instead
+  // of being silently mangled on save.
+  const structured = isStructured(formula?.content);
+  const [prompt, setPrompt] = useState(barePrompt(formula?.content) ?? "");
   const [context, setContext] = useState(formula?.context ?? 0);
   const [shared, setShared] = useState(formula?.shared ?? false);
   const [busy, setBusy] = useState(false);
@@ -52,7 +58,7 @@ export default function FormulaEditModal({
     setContext((c) => c ^ bit);
   }
 
-  const canSave = !!name.trim() && !!prompt.trim();
+  const canSave = !!name.trim() && !!prompt.trim() && !structured;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -64,7 +70,7 @@ export default function FormulaEditModal({
         await api.updateFormula(formula.id, {
           name: name.trim(),
           description: description.trim() || null,
-          prompt: prompt.trim(),
+          content: fromPrompt(prompt.trim()),
           context,
           shared,
         });
@@ -73,7 +79,7 @@ export default function FormulaEditModal({
           scope,
           name: name.trim(),
           description: description.trim() || null,
-          prompt: prompt.trim(),
+          content: fromPrompt(prompt.trim()),
           context,
           shared,
         });
@@ -120,10 +126,15 @@ export default function FormulaEditModal({
             rows={12}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            className={`${field} font-mono`}
+            disabled={structured}
+            className={`${field} font-mono disabled:opacity-60`}
           />
         </label>
-        <p className="text-xs text-gray-400 dark:text-gray-500">{t("formulaPromptHint")}</p>
+        {structured ? (
+          <p className="text-xs text-amber-600 dark:text-amber-400">{t("formulaStructuredHint")}</p>
+        ) : (
+          <p className="text-xs text-gray-400 dark:text-gray-500">{t("formulaPromptHint")}</p>
+        )}
 
         <div>
           <span className={`text-sm ${labelSpan}`}>{t("formulaContext")}</span>

@@ -116,14 +116,62 @@ public static class FormulaRunProcessor
 
     // -- Shared context/LLM primitives (also used by the synchronous FormulaRunner) --
 
-    /// <summary>Runs <paramref name="formula"/> over a single recording: build its flagged context, then stream a
-    /// completion with the formula prompt as the system message and the context as the user message.</summary>
+    /// <summary>Runs <paramref name="formula"/> over a single recording: build its flagged context, then compose the
+    /// formula's template against it - headings and boilerplate emitted verbatim, <c>field</c> blocks substituted
+    /// from the recording, and each <c>prompt</c> block answered by its own LLM call (the formula's prompt as the
+    /// system message, the context as the user message).
+    ///
+    /// A formula that is just a prompt is stored as one headless section holding one prompt block, so this composes
+    /// to exactly one call with that prompt - byte-identical to the pre-template behaviour. No special case needed:
+    /// the degenerate template *is* the old behaviour.</summary>
     internal static async Task<string> RunOverRecordingAsync(
         DiarizDbContext db, IChatStreamClient chat, SummarizationRequestConfig cfg,
         Formula formula, Guid recordingId, CancellationToken ct)
     {
+        var content = TemplateContent.Parse(formula.ContentJson);
         var context = await BuildRecordingContextAsync(db, recordingId, formula.Context, ct);
-        return await RunPromptAsync(chat, cfg, formula.Prompt, context, ct);
+        var fields = await BuildFieldResolverAsync(db, content, recordingId, ct);
+        return await ComposeAsync(chat, cfg, content, fields, context, ct);
+    }
+
+    /// <summary>Compose a formula's template, answering each prompt block against <paramref name="context"/>.</summary>
+    private static Task<string> ComposeAsync(
+        IChatStreamClient chat, SummarizationRequestConfig cfg, TemplateContent content,
+        Func<string, string?> resolveField, string context, CancellationToken ct) =>
+        MeetingTypeMinutesComposer.ComposeAsync(
+            content, resolveField, block => RunPromptAsync(chat, cfg, block.Text ?? "", context, ct));
+
+    /// <summary>A field resolver over the recording's metadata + canonical actions, for templates that actually use
+    /// a <c>field</c> block. A formula that uses none (every formula did, before templates) skips the load entirely,
+    /// so the common path costs nothing extra.
+    ///
+    /// Unlike the minutes pipeline, <c>notes</c> resolves to the raw note lines: the enhanced-notes pre-pass is a
+    /// minutes feature (it spends an extra LLM call expanding each line from the transcript) and is not something a
+    /// formula run should silently incur.</summary>
+    private static async Task<Func<string, string?>> BuildFieldResolverAsync(
+        DiarizDbContext db, TemplateContent content, Guid recordingId, CancellationToken ct)
+    {
+        if (!TemplateContent.Fields.Any(content.HasField)) return _ => null;
+
+        var rec = await db.Recordings
+            .Include(r => r.Speakers)
+            .Include(r => r.Actions)
+            .FirstOrDefaultAsync(r => r.Id == recordingId, ct);
+        if (rec is null) return _ => null;
+
+        var attendees = rec.Speakers.Select(s => s.DisplayName).ToList();
+        var actions = rec.Actions
+            .OrderBy(a => a.Ordinal)
+            .Select(a => new ExtractedAction(a.Text, a.Actor, a.Deadline))
+            .ToList();
+
+        var noteLines = content.HasField("notes") ? await LoadNoteLinesAsync(db, recordingId, ct) : [];
+        var notesMarkdown = noteLines.Count > 0
+            ? string.Join('\n', noteLines.Select(l => "- " + l.Trim()))
+            : null;
+
+        return name => TemplateFields.Resolve(
+            name, rec.CreatedAt, rec.Name ?? rec.Title, attendees, rec.DurationMs, actions, notesMarkdown);
     }
 
     /// <summary>Runs <paramref name="formula"/> over a FOLDER (section) as a map-reduce: run the formula on each
@@ -156,13 +204,16 @@ public static class FormulaRunProcessor
             orderby r.CreatedAt
             select new { r.Id, r.Name, r.Title }).ToListAsync(ct);
 
+        var content = TemplateContent.Parse(formula.ContentJson);
+
         // Map: run the formula per meeting, skipping any whose built context is empty (no transcript/artifacts).
         var items = new List<(string Name, string Output)>();
         foreach (var rec in recordings)
         {
             var context = await BuildRecordingContextAsync(db, rec.Id, formula.Context, ct);
             if (context == FormulaContextBuilder.EmptyContextFallback) continue; // skip empty meetings - no map call.
-            var output = await RunPromptAsync(chat, cfg, formula.Prompt, context, ct);
+            var fields = await BuildFieldResolverAsync(db, content, rec.Id, ct);
+            var output = await ComposeAsync(chat, cfg, content, fields, context, ct);
             items.Add((rec.Name ?? rec.Title, output));
         }
 
@@ -171,9 +222,12 @@ public static class FormulaRunProcessor
         if (items.Count == 1)
             return items[0].Output; // single meeting - no reduce.
 
-        // Reduce: run the same prompt over the concatenated per-meeting outputs (bounded, mirrors JoinItems).
+        // Reduce: compose the same template once more, this time over the concatenated per-meeting outputs
+        // (bounded, mirrors JoinItems). Field blocks resolve to null here - there is no single recording to
+        // resolve them against - and the composer drops empty blocks, so the document's headings and boilerplate
+        // are emitted exactly once, by the reduce, rather than being repeated per meeting.
         var combined = FolderSummaryPrompt.JoinItems(items, reduceCharBudget, "output");
-        return await RunPromptAsync(chat, cfg, formula.Prompt, combined, ct);
+        return await ComposeAsync(chat, cfg, content, _ => null, combined, ct);
     }
 
     /// <summary>Loads the recording by id with the includes named by <paramref name="flags"/> (Segments/Speakers

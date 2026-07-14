@@ -357,10 +357,17 @@ default timeout for its header phase and relies on client-disconnect for cancell
   **system prompt** grounds questions in the user's own meetings and (with tools) tells the model to search the
   transcripts before saying it doesn't know. With tools off, chat is the same single-pass stream as before.
   Tools run inside the API (no worker) — server-redeploy only.
-- **Formulas (async run pipeline).** A **`Formula`** is a saved prompt + a chosen context (`FormulaContext`, a
-  `[Flags]` combination of `Transcript`/`Notes`/`Attachments`/`Summary`/`Minutes`/`Actions`), run over a
-  recording to produce a **`FormulaResult`** — a persisted Markdown document (`Name`, `Text`, `Ordinal` for
-  display order). A `Formula` has a **`FormulaScope`**: `Personal` (owned by one user, `OwnerUserId` set,
+- **Formulas (async run pipeline).** A **`Formula`** is a saved **template** (`ContentJson`, the same
+  `TemplateContent` shape a meeting type's minutes template uses - sections of heading / boilerplate / field /
+  prompt / hr blocks) + a chosen context (`FormulaContext`, a `[Flags]` combination of
+  `Transcript`/`Notes`/`Attachments`/`Summary`/`Minutes`/`Actions`), run over a recording to produce a
+  **`FormulaResult`** — a persisted Markdown document (`Name`, `Text`, `Ordinal` for display order). A run
+  **composes** the template (`MeetingTypeMinutesComposer`, shared with the minutes pipeline, as is the field
+  substitution in `TemplateFields`): headings and boilerplate are emitted verbatim, `field` blocks are
+  substituted from the recording, and each `prompt` block is one LLM call (that prompt as the system message,
+  the assembled context as the user message). A formula that is *just* a prompt is stored as one **headless
+  (`level: 0`) section holding one prompt block**, so it composes to exactly one call with that prompt and no
+  heading around it - which is why making formulas structured changed no existing formula's output. A `Formula` has a **`FormulaScope`**: `Personal` (owned by one user, `OwnerUserId` set,
   always usable by its owner, cascade-deleted with the user), `Platform` (shared, admin-managed), or `Diariz`
   (shared, seeded built-ins, `IsBuiltIn = true`, can never be deleted). `Platform`/`Diariz` formulas carry an
   `Enabled` flag gating their availability. `FormulaResult.FormulaId` is **`ON DELETE SET NULL`** (a result
@@ -437,7 +444,7 @@ default timeout for its header phase and relies on client-disconnect for cancell
   (the section + its direct sub-sections, via `RoomRecordings` placement scoped to `section.RoomId` - the same
   resolution the folder read pages use), runs the formula on each included transcript's context (the "map",
   reusing `RunOverRecordingAsync`; empty meetings skipped, and the per-meeting outputs are ephemeral - never
-  persisted), then runs the **same** `formula.Prompt` over the concatenated `## {meeting}` outputs (the
+  persisted), then composes the **same** template over the concatenated `## {meeting}` outputs (the
   "reduce", within a char budget, mirroring `FolderSummaryPrompt`); a single included meeting short-circuits the
   reduce. It shares the Phase-1 async pipeline - the `FormulaRunJob` carries `SectionId` (with `RecordingId`
   null) and the `FormulaRunWorker`/`FormulaRunProcessor` flip the `SectionFormulaResult` row. Endpoints on

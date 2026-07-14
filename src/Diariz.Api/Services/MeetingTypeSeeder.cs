@@ -16,7 +16,7 @@ public static class MeetingTypeSeeder
     private static TemplateSection Sec(int level, string title, params TemplateBlock[] blocks) =>
         new(level, title, blocks);
     private static string Content(params TemplateSection[] sections) =>
-        new MeetingTypeContent(sections).Serialize();
+        new TemplateContent(sections).Serialize();
 
     /// <summary>The "General Meeting" default - reproduces the original minutes structure (metadata, purpose,
     /// themed discussion, decisions, open questions, next steps) and ends with the canonical actions table.</summary>
@@ -183,5 +183,5 @@ public static class MeetingTypeSeeder
 
     /// <summary>Canonical form of a template-content JSON string (parse + compact re-serialize), so content
     /// comparison survives jsonb's whitespace normalization.</summary>
-    private static string Canonical(string json) => MeetingTypeContent.Parse(json).Serialize();
+    private static string Canonical(string json) => TemplateContent.Parse(json).Serialize();
 }

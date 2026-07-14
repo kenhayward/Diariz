@@ -2,7 +2,7 @@ using System.Text;
 
 namespace Diariz.Api.Services;
 
-/// <summary>Assembles a meeting type's <see cref="MeetingTypeContent"/> into the final Markdown minutes. Pure
+/// <summary>Assembles a meeting type's <see cref="TemplateContent"/> into the final Markdown minutes. Pure
 /// except for the injected prompt resolver: headings come from sections, <c>boilerplate</c> is emitted verbatim,
 /// <c>field</c> blocks are substituted via <paramref name="resolveField"/> (a field joins inline to a preceding
 /// boilerplate/field, so "Date: " + date reads as one line), and each <c>prompt</c> block is replaced by the
@@ -11,7 +11,7 @@ namespace Diariz.Api.Services;
 public static class MeetingTypeMinutesComposer
 {
     public static async Task<string> ComposeAsync(
-        MeetingTypeContent content,
+        TemplateContent content,
         Func<string, string?> resolveField,
         Func<TemplateBlock, Task<string>> resolvePrompt)
     {
@@ -20,6 +20,16 @@ public static class MeetingTypeMinutesComposer
         {
             var body = await RenderBlocksAsync(section.Blocks ?? [], resolveField, resolvePrompt);
             if (string.IsNullOrWhiteSpace(body)) continue; // omit an empty section (heading included)
+
+            // Level 0 = a headless section: the body alone, no heading. It is what a bare prompt looks like as
+            // a template - a formula's output has never carried a heading of its own, and must not start doing
+            // so now that a formula IS a template. Any title on a level-0 section has nowhere to go, so it is
+            // ignored rather than rejected.
+            if (section.Level <= 0)
+            {
+                sections.Add(body);
+                continue;
+            }
 
             var heading = new string('#', Math.Clamp(section.Level, 1, 6)) + " " + section.Title.Trim();
             sections.Add($"{heading}\n\n{body}");

@@ -241,6 +241,10 @@ namespace Diariz.Domain.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
                     b.Property<int>("Context")
                         .HasColumnType("integer");
 
@@ -266,10 +270,6 @@ namespace Diariz.Domain.Migrations
 
                     b.Property<Guid?>("OwnerUserId")
                         .HasColumnType("uuid");
-
-                    b.Property<string>("Prompt")
-                        .IsRequired()
-                        .HasColumnType("text");
 
                     b.Property<int>("Scope")
                         .HasColumnType("integer");

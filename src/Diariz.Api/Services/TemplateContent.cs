@@ -6,7 +6,7 @@ namespace Diariz.Api.Services;
 /// <see cref="TemplateSection"/>s. Stored as one JSON blob on <c>MeetingType.ContentJson</c> (so the whole
 /// template saves atomically). Pure - (de)serialisation + validation live here so they can be unit-tested and
 /// reused by both the CRUD controller and the minutes generator.</summary>
-public record MeetingTypeContent(IReadOnlyList<TemplateSection> Sections)
+public record TemplateContent(IReadOnlyList<TemplateSection> Sections)
 {
     /// <summary>The recording values a <c>field</c> block may substitute. <c>action_items</c> renders the
     /// recording's canonical Action Items table (see <see cref="MeetingMinutesPrompt.RenderActionItems"/>);
@@ -21,16 +21,16 @@ public record MeetingTypeContent(IReadOnlyList<TemplateSection> Sections)
 
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
-    public static MeetingTypeContent Empty { get; } = new([]);
+    public static TemplateContent Empty { get; } = new([]);
 
     /// <summary>Parse the stored JSON. A null/blank/garbage value yields <see cref="Empty"/> rather than throwing,
     /// so a missing or corrupt template degrades to "no sections" instead of failing the whole request.</summary>
-    public static MeetingTypeContent Parse(string? json)
+    public static TemplateContent Parse(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return Empty;
         try
         {
-            var parsed = JsonSerializer.Deserialize<MeetingTypeContent>(json, JsonOpts);
+            var parsed = JsonSerializer.Deserialize<TemplateContent>(json, JsonOpts);
             return parsed is null ? Empty : parsed with { Sections = parsed.Sections ?? [] };
         }
         catch (JsonException)
@@ -47,16 +47,38 @@ public record MeetingTypeContent(IReadOnlyList<TemplateSection> Sections)
         (Sections ?? []).SelectMany(s =>
             (s.Blocks ?? []).Where(b => b.Kind == TemplateBlock.Prompt).Select(b => (s, b)));
 
-    /// <summary>Validate the template shape: heading levels 1-2, non-empty section titles, known block kinds, a
-    /// known substitution field, and non-empty text on boilerplate/prompt blocks. Returns the first problem found.</summary>
+    /// <summary>A bare prompt as a template: one headless (level-0) section holding one prompt block. This is the
+    /// shape every formula had before formulas became structured - it composes to exactly the prompt's output, with
+    /// no heading and no boilerplate around it.</summary>
+    public static TemplateContent FromPrompt(string prompt) =>
+        new([new TemplateSection(0, "", [new TemplateBlock(TemplateBlock.Prompt, Text: prompt)])]);
+
+    /// <summary>The prompt text when this template is <em>nothing but</em> a prompt (the <see cref="FromPrompt"/>
+    /// shape); null when it has any structure - a heading, a field, boilerplate, or a second prompt.
+    ///
+    /// The runner uses this to decide how to run: a template with structure is a <em>document</em> and goes through
+    /// the composer and a generation strategy; a bare prompt is just a question, and is asked directly. That
+    /// distinction is what keeps an existing formula's output byte-identical - wrapping its prompt in the minutes
+    /// strategies' skeleton and guardrails would change what it produces.</summary>
+    public string? BarePrompt()
+    {
+        if (Sections is not [{ Level: <= 0, Blocks: [{ Kind: TemplateBlock.Prompt } block] }]) return null;
+        return block.Text;
+    }
+
+    /// <summary>Validate the template shape: heading levels 0-3 (0 = a headless section, body only - see
+    /// <see cref="MeetingTypeMinutesComposer"/>), non-empty titles on the sections that actually show one, known
+    /// block kinds, a known substitution field, and non-empty text on boilerplate/prompt blocks. Returns the first
+    /// problem found.</summary>
     public (bool Ok, string? Error) Validate()
     {
         if (Sections is null) return (false, "Content has no sections.");
         foreach (var section in Sections)
         {
-            if (section.Level is not (1 or 2 or 3))
-                return (false, $"Section heading level must be 1, 2 or 3 (was {section.Level}).");
-            if (string.IsNullOrWhiteSpace(section.Title))
+            if (section.Level is not (0 or 1 or 2 or 3))
+                return (false, $"Section heading level must be 0, 1, 2 or 3 (was {section.Level}).");
+            // A level-0 section renders no heading, so it has nowhere to show a title and doesn't need one.
+            if (section.Level > 0 && string.IsNullOrWhiteSpace(section.Title))
                 return (false, "Every section needs a title.");
             foreach (var block in section.Blocks ?? [])
             {

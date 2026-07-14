@@ -48,7 +48,7 @@ public class FolderPromptTests
         var type = new MeetingType
         {
             Id = Guid.NewGuid(), Title = "1:1", Overview = "A manager-report sync.",
-            ContentJson = new MeetingTypeContent(
+            ContentJson = new TemplateContent(
             [
                 new TemplateSection(1, "Agenda", []),
                 new TemplateSection(2, "Follow-ups", []),

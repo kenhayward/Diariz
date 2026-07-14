@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
+import { barePrompt, templateOutline } from "../lib/formulaTemplate";
 import type { SharedFormula } from "../lib/types";
 import { initialsFromName } from "../lib/initials";
 import Avatar from "./Avatar";
@@ -138,7 +139,7 @@ export default function SharedFormulasBrowser({ onClose }: { onClose: () => void
                     </button>
                     {isOpen && (
                       <pre className="mt-2 max-h-48 overflow-y-auto rounded bg-gray-50 p-2 text-xs whitespace-pre-wrap dark:bg-gray-800 dark:text-gray-200">
-                        {f.prompt}
+                        {barePrompt(f.content) ?? templateOutline(f.content)}
                       </pre>
                     )}
                   </div>

@@ -1,3 +1,4 @@
+using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain.Entities;
 
@@ -23,7 +24,7 @@ public class FormulaModelTests
             Id = formulaId,
             Scope = FormulaScope.Diariz,
             Name = "Key Decisions",
-            Prompt = "Summarize the key decisions made.",
+            ContentJson = TemplateContent.FromPrompt("Summarize the key decisions made.").Serialize(),
             Context = FormulaContext.Transcript | FormulaContext.Summary,
             Enabled = true,
             IsBuiltIn = true,

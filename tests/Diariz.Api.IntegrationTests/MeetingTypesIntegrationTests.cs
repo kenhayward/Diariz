@@ -21,7 +21,7 @@ public class MeetingTypesIntegrationTests(ContainersFixture fx)
 
         await using var verify = fx.CreateDbContext();
         var general = await verify.MeetingTypes.SingleAsync(m => m.Key == MeetingType.GeneralKey);
-        var content = MeetingTypeContent.Parse(general.ContentJson);
+        var content = TemplateContent.Parse(general.ContentJson);
         Assert.NotEmpty(content.Sections);                 // jsonb round-tripped
         Assert.True(content.Validate().Ok);
     }
@@ -38,7 +38,7 @@ public class MeetingTypesIntegrationTests(ContainersFixture fx)
         await using (var db = fx.CreateDbContext())
         {
             var general = await db.MeetingTypes.SingleAsync(m => m.Key == MeetingType.GeneralKey);
-            var content = MeetingTypeContent.Parse(general.ContentJson);
+            var content = TemplateContent.Parse(general.ContentJson);
             general.ContentJson = (content with
             {
                 Sections = content.Sections.Where(s => s.Title != "Enhanced notes").ToList(),
@@ -50,14 +50,14 @@ public class MeetingTypesIntegrationTests(ContainersFixture fx)
         {
             // Sanity: jsonb reformatted the stored string (it no longer equals the compact serializer form).
             var stored = await db.MeetingTypes.SingleAsync(m => m.Key == MeetingType.GeneralKey);
-            Assert.False(MeetingTypeContent.Parse(stored.ContentJson).HasField("notes"));
+            Assert.False(TemplateContent.Parse(stored.ContentJson).HasField("notes"));
 
             await MeetingTypeSeeder.SeedAsync(db); // next boot upgrades it
         }
 
         await using var verify = fx.CreateDbContext();
         var upgraded = await verify.MeetingTypes.SingleAsync(m => m.Key == MeetingType.GeneralKey);
-        Assert.True(MeetingTypeContent.Parse(upgraded.ContentJson).HasField("notes"));
+        Assert.True(TemplateContent.Parse(upgraded.ContentJson).HasField("notes"));
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public class MeetingTypesIntegrationTests(ContainersFixture fx)
             var type = new MeetingType
             {
                 Id = Guid.NewGuid(), UserId = user.Id, GroupName = "Mine", Title = "Client call",
-                ContentJson = new MeetingTypeContent([]).Serialize(),
+                ContentJson = new TemplateContent([]).Serialize(),
             };
             var rec = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = "k", MeetingTypeId = type.Id };
             db.AddRange(user, type, rec);

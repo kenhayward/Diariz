@@ -41,7 +41,7 @@ public class RunFormulaToolTests
         var formula = new Formula
         {
             Id = Guid.NewGuid(), Scope = scope, OwnerUserId = ownerUserId, Name = name,
-            Prompt = "Summarise.", Context = FormulaContext.Summary, Enabled = enabled,
+            ContentJson = TemplateContent.FromPrompt("Summarise.").Serialize(), Context = FormulaContext.Summary, Enabled = enabled,
         };
         db.Formulas.Add(formula);
         db.SaveChanges();

@@ -29,6 +29,7 @@ vi.mock("../lib/api", () => ({
 }));
 
 import { api } from "../lib/api";
+import { fromPrompt } from "../lib/formulaTemplate";
 import ChatPanel from "./ChatPanel";
 
 const sharedRoom: RoomListItem = {
@@ -365,7 +366,8 @@ describe("ChatPanel", () => {
   describe("/formula command", () => {
     const formula = {
       id: "f1", scope: "Personal", ownerUserId: "u1", name: "Follow-up email",
-      description: null, prompt: "Draft a follow-up.", context: 1, enabled: true, isBuiltIn: false, shared: false,
+      description: null, content: fromPrompt("Draft a follow-up."), context: 1, enabled: true,
+      isBuiltIn: false, shared: false,
     };
 
     // A run row as the API really returns it: 202 Accepted with an empty body a worker fills in later.

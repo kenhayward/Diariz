@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fromPrompt } from "../lib/formulaTemplate";
 
 vi.mock("../lib/api", () => ({
   api: { createFormula: vi.fn(), updateFormula: vi.fn() },
@@ -23,7 +24,7 @@ const existingFormula: Formula = {
   ownerUserId: "u1",
   name: "Existing",
   description: "Desc",
-  prompt: "Old prompt",
+  content: fromPrompt("Old prompt"),
   context: 3, // Transcript (1) + Notes (2)
   enabled: true,
   isBuiltIn: false,
@@ -70,7 +71,7 @@ describe("FormulaEditModal", () => {
         scope: "Personal",
         name: "My Formula",
         description: null,
-        prompt: "Summarize this",
+        content: fromPrompt("Summarize this"),
         context: 33,
         shared: false,
       }),
@@ -94,13 +95,32 @@ describe("FormulaEditModal", () => {
         scope: "Platform",
         name: "Org Wide",
         description: null,
-        prompt: "Do the thing",
+        content: fromPrompt("Do the thing"),
         context: 0,
         shared: false,
       }),
     );
     expect(onSaved).toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
+  });
+
+  // A formula's body is a template now. This modal edits the common case - a formula that is just a prompt. A
+  // formula carrying real structure (headings, fields, several prompts) cannot be flattened into the textarea
+  // without destroying it, so it must be refused rather than silently mangled on save.
+  it("will not let a structured formula be saved through the single-prompt editor", () => {
+    const structured = {
+      ...existingFormula,
+      content: {
+        sections: [
+          { level: 1, title: "Decisions", blocks: [{ kind: "prompt" as const, text: "List them." }] },
+        ],
+      },
+    };
+    renderModal({ formula: structured });
+
+    expect((screen.getByLabelText(/^prompt$/i) as HTMLTextAreaElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /^save$/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/structured template/i)).toBeTruthy();
   });
 
   it("prefills fields (including context) from an existing formula and updates it", async () => {
@@ -122,7 +142,7 @@ describe("FormulaEditModal", () => {
       expect(api.updateFormula).toHaveBeenCalledWith("f1", {
         name: "Renamed",
         description: "Desc",
-        prompt: "Old prompt",
+        content: fromPrompt("Old prompt"),
         context: 11,
         shared: false,
       }),

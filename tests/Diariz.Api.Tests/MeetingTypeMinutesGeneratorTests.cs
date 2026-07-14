@@ -34,7 +34,7 @@ public class MeetingTypeMinutesGeneratorTests
         {
             Id = Guid.NewGuid(), UserId = owner, GroupName = "G", Title = "T",
             Overview = "Ctx", Icon = "document", Color = "#5C6BC0",
-            ContentJson = new MeetingTypeContent(
+            ContentJson = new TemplateContent(
                 [new TemplateSection(1, sectionTitle, [new TemplateBlock(TemplateBlock.Prompt, Text: "Write it.")])])
                 .Serialize(),
         };
@@ -121,7 +121,7 @@ public class MeetingTypeMinutesGeneratorTests
         var t = new MeetingType
         {
             Id = Guid.NewGuid(), UserId = null, GroupName = "G", Title = "T", Icon = "document", Color = "#5C6BC0",
-            ContentJson = new MeetingTypeContent(
+            ContentJson = new TemplateContent(
             [
                 new TemplateSection(1, "A", [new TemplateBlock(TemplateBlock.Prompt, Text: "one")]),
                 new TemplateSection(1, "B", [new TemplateBlock(TemplateBlock.Prompt, Text: "two")]),

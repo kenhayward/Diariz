@@ -1,4 +1,4 @@
-import type { MeetingTypeContent } from "./types";
+import type { TemplateContent } from "./types";
 
 /// The portable subset of a meeting type (minutes template) - everything except instance/permission fields
 /// (id, isPlatform, canEdit). This is what Export writes and Import reads.
@@ -8,7 +8,7 @@ export interface MeetingTypeExport {
   overview: string;
   icon: string;
   color: string;
-  content: MeetingTypeContent;
+  content: TemplateContent;
 }
 
 const MARKER = "diariz-meeting-type";
@@ -47,7 +47,7 @@ export function parseMeetingType(text: string): MeetingTypeExport {
     overview: str(o.overview),
     icon: str(o.icon) || DEFAULT_ICON,
     color: str(o.color) || DEFAULT_COLOR,
-    content: content as MeetingTypeContent,
+    content: content as TemplateContent,
   };
 }
 

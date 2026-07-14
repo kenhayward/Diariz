@@ -31,7 +31,7 @@ public class MeetingTypeSeederTests
         await MeetingTypeSeeder.SeedAsync(db);
 
         var general = await db.MeetingTypes.SingleAsync(t => t.Key == MeetingType.GeneralKey);
-        var content = MeetingTypeContent.Parse(general.ContentJson);
+        var content = TemplateContent.Parse(general.ContentJson);
         Assert.NotEmpty(content.Sections);
         Assert.True(content.Validate().Ok);
         // It renders the canonical actions table (parity with today's minutes).
@@ -64,7 +64,7 @@ public class MeetingTypeSeederTests
         await MeetingTypeSeeder.SeedAsync(db);
 
         var general = await db.MeetingTypes.SingleAsync(t => t.Key == MeetingType.GeneralKey);
-        Assert.True(MeetingTypeContent.Parse(general.ContentJson).HasField("notes"));
+        Assert.True(TemplateContent.Parse(general.ContentJson).HasField("notes"));
     }
 
     [Fact]
@@ -75,18 +75,18 @@ public class MeetingTypeSeederTests
 
         // Simulate a pre-notes deployment: strip the notes section back to the legacy shape.
         var general = await db.MeetingTypes.SingleAsync(t => t.Key == MeetingType.GeneralKey);
-        var content = MeetingTypeContent.Parse(general.ContentJson);
+        var content = TemplateContent.Parse(general.ContentJson);
         general.ContentJson = (content with
         {
             Sections = content.Sections.Where(s => s.Title != "Enhanced notes").ToList(),
         }).Serialize();
         await db.SaveChangesAsync();
-        Assert.False(MeetingTypeContent.Parse(general.ContentJson).HasField("notes")); // sanity: legacy shape
+        Assert.False(TemplateContent.Parse(general.ContentJson).HasField("notes")); // sanity: legacy shape
 
         await MeetingTypeSeeder.SeedAsync(db); // next boot upgrades it
 
         var upgraded = await db.MeetingTypes.SingleAsync(t => t.Key == MeetingType.GeneralKey);
-        Assert.True(MeetingTypeContent.Parse(upgraded.ContentJson).HasField("notes"));
+        Assert.True(TemplateContent.Parse(upgraded.ContentJson).HasField("notes"));
 
         await MeetingTypeSeeder.SeedAsync(db); // idempotent
         Assert.Equal(MeetingTypeSeeder.Standards.Count, await db.MeetingTypes.CountAsync());
@@ -100,7 +100,7 @@ public class MeetingTypeSeederTests
 
         // An admin customised the General template's content (any divergence from the seeds).
         var general = await db.MeetingTypes.SingleAsync(t => t.Key == MeetingType.GeneralKey);
-        var custom = new MeetingTypeContent(
+        var custom = new TemplateContent(
             [new TemplateSection(1, "My custom section", [new TemplateBlock(TemplateBlock.Prompt, Text: "Write.")])]).Serialize();
         general.ContentJson = custom;
         await db.SaveChangesAsync();

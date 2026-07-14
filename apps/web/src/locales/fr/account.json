@@ -33,6 +33,7 @@
   "formulaName": "Nom",
   "formulaDescription": "Description",
   "formulaPrompt": "Instruction",
+  "formulaStructuredHint": "Cette formule utilise un modèle structuré, qui ne peut pas encore être modifié comme un prompt unique. Son nom, sa description et son contexte restent modifiables.",
   "formulaPromptHint": "Markdown pris en charge.",
   "formulaContext": "Contexte",
   "formulaContextHint": "Choisissez les parties de l'enregistrement que cette formule peut voir.",

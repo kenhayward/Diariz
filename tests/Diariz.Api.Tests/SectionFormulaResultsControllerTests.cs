@@ -46,7 +46,7 @@ public class SectionFormulaResultsControllerTests
     private static Formula RunnableFormula(Guid formulaId, string name = "Key Decisions") => new()
     {
         Id = formulaId, Scope = FormulaScope.Personal, OwnerUserId = Guid.NewGuid(),
-        Name = name, Prompt = "P", Context = FormulaContext.Transcript, Enabled = true,
+        Name = name, ContentJson = TemplateContent.FromPrompt("P").Serialize(), Context = FormulaContext.Transcript, Enabled = true,
     };
 
     [Fact]

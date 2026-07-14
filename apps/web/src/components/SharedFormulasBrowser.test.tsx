@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fromPrompt } from "../lib/formulaTemplate";
 
 vi.mock("../lib/api", () => ({
   api: {
@@ -25,7 +26,7 @@ const sharedFormula = (over: Partial<SharedFormula> = {}): SharedFormula => ({
     ownerUserId: "u2",
     name: "Team Recap",
     description: "Recap the meeting",
-    prompt: "Summarize the transcript.",
+    content: fromPrompt("Summarize the transcript."),
     context: 1,
     enabled: true,
     isBuiltIn: false,

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth";
-import type { MeetingType, MeetingTypeContent, TemplateBlock, TemplateBlockKind } from "../lib/types";
+import type { MeetingType, TemplateContent, TemplateBlock, TemplateBlockKind } from "../lib/types";
 import { groupMeetingTypes } from "../lib/meetingTypes";
 import { serializeMeetingType, parseMeetingType, exportFilename } from "../lib/meetingTypeIo";
 import {
@@ -22,7 +22,7 @@ interface Draft {
   overview: string;
   icon: string;
   color: string;
-  content: MeetingTypeContent;
+  content: TemplateContent;
   isPlatform: boolean;
 }
 
@@ -172,7 +172,7 @@ export default function ManageMeetingTypesModal({ onClose }: { onClose: () => vo
   }
 
   const patch = (p: Partial<Draft>) => setDraft((d) => (d ? { ...d, ...p } : d));
-  const setContent = (content: MeetingTypeContent) => patch({ content });
+  const setContent = (content: TemplateContent) => patch({ content });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -372,8 +372,8 @@ function ContentEditor({
   onChange,
   t,
 }: {
-  content: MeetingTypeContent;
-  onChange: (c: MeetingTypeContent) => void;
+  content: TemplateContent;
+  onChange: (c: TemplateContent) => void;
   t: (k: string) => string;
 }) {
   const dragSection = useRef<number | null>(null);
