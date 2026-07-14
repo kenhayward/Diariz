@@ -1,8 +1,29 @@
 import { describe, it, expect } from "vitest";
 import {
   formatBytes, storagePercent, bytesToGb, gbToBytes, formatDuration,
-  formatLongDate, formatTimeHm, formatDurationHm, formatRelativeTime,
+  formatLongDate, formatTimeHm, formatDurationHm, formatDurationApprox, formatRelativeTime,
 } from "./format";
+
+describe("formatDurationApprox", () => {
+  it("reads as whole minutes under an hour", () => {
+    expect(formatDurationApprox(21 * 60_000)).toBe("21 min");
+    expect(formatDurationApprox(65_000)).toBe("1 min");
+  });
+
+  it("splits into hours and minutes past the hour", () => {
+    expect(formatDurationApprox(3_900_000)).toBe("1 h 5 min");
+    expect(formatDurationApprox(2 * 3_600_000)).toBe("2 h");
+  });
+
+  it("rounds a sub-minute recording up to a minute rather than showing '0 min'", () => {
+    expect(formatDurationApprox(20_000)).toBe("1 min");
+  });
+
+  it("is '0 min' only for a genuinely empty duration", () => {
+    expect(formatDurationApprox(0)).toBe("0 min");
+    expect(formatDurationApprox(-5)).toBe("0 min");
+  });
+});
 
 describe("formatDuration", () => {
   it("formats as m:ss under an hour, with no leading-zero minutes", () => {

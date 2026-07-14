@@ -57,6 +57,18 @@ export function formatDurationHm(ms: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
+/// Duration (ms) as a human phrase — "21 min", "1 h 5 min" — for the recording hub's chips and tile
+/// subtitles, where the clock format ("00:21") reads as a timestamp rather than a length. Rounds up to a
+/// minute so a short recording never reads "0 min". The units are left untranslated, as `formatBytes`
+/// leaves "KB": "min" and "h" are the same abbreviation in every locale the app ships.
+export function formatDurationApprox(ms: number): string {
+  const totalMin = Math.max(0, Math.round(ms / 1000) < 60 && ms > 0 ? 1 : Math.round(ms / 60_000));
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h === 0) return `${m} min`;
+  return m === 0 ? `${h} h` : `${h} h ${m} min`;
+}
+
 /// Percentage of quota used (0 when there's no quota), rounded to a whole number.
 export function storagePercent(usedBytes: number, quotaBytes: number): number {
   if (quotaBytes <= 0) return 0;

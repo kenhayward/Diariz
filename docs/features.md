@@ -27,13 +27,21 @@ plays or steps through just their segments, and reassigns them. Edits are kept *
 original words** — a ✎ marks revised rows and a **Show original / Show revised** toggle flips the whole
 transcript, so you can always get back to what the model said. Re-transcribe with a chosen model at any time
 (with optional **min/max speaker hints** for pyannote when voices are merged), **merge** consecutive
-same-speaker rows, and **email yourself** the formatted transcript. The transcript panel **pins to the top** as
-you scroll (its segments then scroll internally) and has a header **icon toolbar** with a play bar (which plays
-the whole recording) and a **Select mode** — tick segments (or click one) to **play, edit, translate, or delete**
-just the selection, while **Merge** always acts on the whole transcript.
-- **Tabbed recording page** — Overview (summary), Minutes, Actions, Notes, Speakers, Transcript, and Attachments
-are organised into horizontal tabs, each showing its own toolbar directly below the tab strip; the last-used tab
-is remembered.
+same-speaker rows, and **email yourself** the formatted transcript. The transcript **embeds its audio** in a
+**conversation-flow player**: the recording is laid out left to right as speaker-coloured blocks sized by how
+long each person talked, with silence left dark and a legend giving each speaker's share — so the shape of the
+meeting is legible at a glance — and the bar doubles as the scrubber (click or drag anywhere on it to seek).
+Its toolbar keeps a **Select mode** — tick segments (or click one) to **play, edit, translate, or delete** just
+the selection, while **Merge** always acts on the whole transcript.
+- **Recording hub** — opening a meeting lands on a hub rather than a strip of tabs. A **hero summary card**
+carries the **meeting type** (a dropdown that drives the minutes template and the formulas offered), the key
+facts as chips (date and time, duration, whether the audio is still available and how long it has left,
+language, the speakers, who recorded it, which rooms it's in), and the **summary itself shown inline** — no
+hover, no extra click. Below it is a grid of **tiles**: Transcript, Actions, Speakers, Notes, Files, and
+Formulas, each showing its **real count and a preview of what's inside** (the first actions, the latest note,
+the attached files, the formula runs), so you can see what a meeting holds without opening anything. Notes,
+Files, and Formulas can be **added or run straight from their tile**. Clicking a tile drills into that section
+with a **breadcrumb** back to the hub, and the section you were last in is remembered.
 - **Notes & enhanced notes.** Take your own note lines for a meeting — sparse trigger phrases, questions,
 observations. A **live notes panel** while recording stamps each line at the second you wrote it (crash-safe,
 lands on the recording's **Notes** tab after upload); you can also jot **prep notes on an upcoming Google Calendar

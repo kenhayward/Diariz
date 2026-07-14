@@ -6,13 +6,23 @@ import { api, apiErrorMessage } from "../lib/api";
 import { createHub } from "../lib/signalr";
 import { isProcessing } from "../lib/recordingStatus";
 import { useStatus } from "../lib/status";
-import KebabMenu from "../components/KebabMenu";
-import DetailToolbar from "../components/DetailToolbar";
 import ActionsTable from "../components/ActionsTable";
-import DetailTabs, { type DetailTab } from "../components/DetailTabs";
+import DetailSections, { type DetailSection } from "../components/detail/DetailSections";
+import DetailHeader from "../components/detail/DetailHeader";
+import RecordingHub from "../components/detail/RecordingHub";
+import ConversationFlowPlayer from "../components/detail/ConversationFlowPlayer";
+import {
+  ActionsGlyph,
+  FilesGlyph,
+  FormulasGlyph,
+  MinutesGlyph,
+  NotesGlyph,
+  SpeakersGlyph,
+  TranscriptGlyph,
+} from "../components/detail/SectionIcons";
+import { DETAIL_SECTION_KEY, initialSection, type SectionKey } from "../lib/detailSection";
 import MoveToSectionModal from "../components/MoveToSectionModal";
 import ShareToRoomModal from "../components/ShareToRoomModal";
-import RoomBadge from "../components/RoomBadge";
 import { useRoom } from "../lib/rooms";
 import DownloadTranscriptModal from "../components/DownloadTranscriptModal";
 import SummaryEditModal from "../components/SummaryEditModal";
@@ -39,9 +49,10 @@ import { recordingMenu } from "../components/recordingMenu";
 import { copyRichLink, transcriptUrl } from "../lib/clipboard";
 import { segmentIndexAtMs, parseMatchTimes } from "../lib/transcriptNav";
 import { speakerRanges, selectedRanges, rangeAt, nextRangeStart, type PlayRange } from "../lib/segmentPlayback";
-import { formatBytes, formatDate, formatDuration, formatLongDate, formatTimeHm, formatDurationHm } from "../lib/format";
+import { formatBytes, formatDate, formatDuration, formatDurationApprox } from "../lib/format";
 import { hasRevisions, segmentText } from "../lib/transcriptView";
 import { fetchLanguages } from "../lib/languages";
+import { selectedMeetingType } from "../lib/meetingTypes";
 import type { MeetingNote, SegmentDto, SpeakerInfo, SpeakerProfile, FormulaResult } from "../lib/types";
 
 // Feather-style icons for the panel toolbars and the per-speaker play control.
@@ -66,9 +77,6 @@ const MergeIcon = <svg {...iconProps}><path d="M6 3v6a6 6 0 0 0 6 6 6 6 0 0 0 6-
 const TrashIcon = <svg {...iconProps}><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>;
 const GlobeIcon = <svg {...iconProps}><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>;
 const EyeIcon = <svg {...iconProps}><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" /><circle cx="12" cy="12" r="3" /></svg>;
-
-/// localStorage key for the last-selected detail tab (shared across recordings).
-const DETAIL_TAB_KEY = "diariz.detailTab";
 
 function fmt(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -236,15 +244,16 @@ export default function RecordingDetail() {
     setSelectedFormulaResultId(null);
   }, [id]);
 
-  // Active detail tab, persisted globally (like the left "Meetings" panel) so it survives reloads and
-  // navigating between recordings. Defaults to Overview — but a chat transcript deep-link (?t=…) targets a
-  // segment in the Transcript tab, so open on that tab when the URL carries one.
-  const [tab, setTab] = useState<string>(() =>
-    searchParams.get("t") != null ? "transcript" : localStorage.getItem(DETAIL_TAB_KEY) ?? "overview",
+  // Active detail section, persisted globally (like the left "Meetings" panel) so it survives reloads and
+  // navigating between recordings. Defaults to the hub — but a chat transcript deep-link (?t=…) targets a
+  // segment in the Transcript, so open there when the URL carries one. `initialSection` also migrates the
+  // keys the old tab strip persisted ("overview" → hub, "attachments" → files).
+  const [tab, setTab] = useState<SectionKey>(() =>
+    initialSection(localStorage.getItem(DETAIL_SECTION_KEY), searchParams.get("t") != null),
   );
-  const selectTab = (key: string) => {
+  const selectTab = (key: SectionKey) => {
     setTab(key);
-    localStorage.setItem(DETAIL_TAB_KEY, key);
+    localStorage.setItem(DETAIL_SECTION_KEY, key);
   };
 
   // When opened from a chat transcript link (/recordings/:id?t=ms), switch to the Transcript tab (so the
@@ -359,6 +368,18 @@ export default function RecordingDetail() {
     () => new Set((rec?.speakers ?? []).filter((s) => s.isMultiSpeaker).map((s) => s.label)),
     [rec],
   );
+
+  // A diarization label's shown name, applying the same "Multiple Speakers" localisation the transcript
+  // and speaker rows use. The hub's avatars and the flow track's legend both name speakers, so they share it.
+  const speakerNameOf = (label: string) =>
+    multiSpeakerLabels.has(label)
+      ? t("workspace:multipleSpeakers")
+      : rec?.speakers.find((s) => s.label === label)?.displayName ?? label;
+
+  // The applied minutes template, for the Formulas tile's "From <template>" line. `MeetingTypeMenu` fetches
+  // the same list off the same query key, so this is served from cache rather than a second round trip.
+  const { data: meetingTypes = [] } = useQuery({ queryKey: ["meeting-types"], queryFn: api.listMeetingTypes });
+  const appliedMeetingType = selectedMeetingType(meetingTypes, rec?.meetingTypeId);
 
   async function assignSpeaker(label: string, profileId: string | null) {
     setActionError(null);
@@ -1022,82 +1043,11 @@ export default function RecordingDetail() {
     isProcessing: isProcessing(rec.status),
   }, t);
 
-  // The recording detail is organised into horizontal tabs; each tab carries its own toolbar (rendered in a
-  // bar directly below the strip) and its content. Everything above <DetailTabs> stays outside the tabs.
-  const detailTabs: DetailTab[] = [
-    {
-      key: "overview",
-      label: t("workspace:detailTabOverview"),
-      toolbar: (
-        <>
-          <ToolbarButton
-            label={t("workspace:editSummaryAction")}
-            icon={PencilIcon}
-            disabled={!hasTranscript}
-            onClick={() => setEditingSummary(true)}
-          />
-          <ToolbarButton
-            label={t("workspace:resummarise")}
-            icon={RefreshIcon}
-            disabled={!hasTranscript || isSummarizing}
-            onClick={summarize}
-          />
-        </>
-      ),
-      content: (
-        <div className="px-4 pb-4">
-          <dl className="mb-4 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
-            <dt className="text-gray-500 dark:text-gray-400">{t("workspace:meetingDateLabel")}</dt>
-            <dd className="text-gray-800 dark:text-gray-200">{formatLongDate(rec.createdAt, i18n.language)}</dd>
-            <dt className="text-gray-500 dark:text-gray-400">{t("workspace:meetingTimeLabel")}</dt>
-            <dd className="text-gray-800 dark:text-gray-200">{formatTimeHm(rec.createdAt)}</dd>
-            <dt className="text-gray-500 dark:text-gray-400">{t("workspace:durationLabel")}</dt>
-            <dd className="text-gray-800 dark:text-gray-200">{formatDurationHm(rec.durationMs)}</dd>
-            <dt className="text-gray-500 dark:text-gray-400">{t("workspace:audioStatusLabel")}</dt>
-            <dd className="text-gray-800 dark:text-gray-200">
-              {rec.hasAudio
-                ? t("workspace:audioAvailable")
-                : t("workspace:audioDeletedOn", { date: formatLongDate(rec.audioDeletedAt!, i18n.language) })}
-            </dd>
-            {rec.hasAudio && (rec.audioProtectedAt || rec.audioScheduledDeletionAt) && (
-              <>
-                <dt className="text-gray-500 dark:text-gray-400">{t("workspace:audioRetentionLabel")}</dt>
-                <dd className="text-gray-800 dark:text-gray-200">
-                  {rec.audioProtectedAt
-                    ? t("workspace:audioProtectedFromDeletion")
-                    : t("workspace:audioWillBeDeletedOn", {
-                        date: formatLongDate(rec.audioScheduledDeletionAt!, i18n.language),
-                      })}
-                </dd>
-              </>
-            )}
-            {rec.recordedByName && (
-              <>
-                <dt className="text-gray-500 dark:text-gray-400">{t("workspace:recordedByLabel")}</dt>
-                <dd className="text-gray-800 dark:text-gray-200">{rec.recordedByName}</dd>
-              </>
-            )}
-            {rec.rooms && rec.rooms.length > 0 && (
-              <>
-                <dt className="text-gray-500 dark:text-gray-400">{t("workspace:roomsLabel")}</dt>
-                <dd className="flex flex-wrap items-center gap-1.5 text-gray-800 dark:text-gray-200">
-                  {rec.rooms.map((room) => (
-                    <span
-                      key={room.id}
-                      className="inline-flex items-center gap-1.5 rounded-full border py-0.5 pl-1 pr-2 text-xs dark:border-gray-700"
-                    >
-                      <RoomBadge icon={room.icon} color={room.color} name={room.name} size="2xs" />
-                      {room.name}
-                      {room.isMain && (
-                        <span className="text-gray-400 dark:text-gray-500">{t("workspace:roomHomeTag")}</span>
-                      )}
-                    </span>
-                  ))}
-                </dd>
-              </>
-            )}
-          </dl>
-
+  // The linked-meeting block. It lived on the old Overview tab; the hero card has no slot for a whole
+  // invite, so it keeps its own card directly beneath the hub. Calendar is personal-only, so none of this
+  // shows while viewing the recording in a shared room.
+  const calendarBlock = (
+    <>
           {/* Linked meeting: full invite details (live, falling back to the stored snapshot) + manage actions.
               Calendar is personal-only, so it is hidden while viewing the recording in a shared room. */}
           {rec.calendarLink && !inSharedRoom && (
@@ -1162,23 +1112,44 @@ export default function RecordingDetail() {
             </div>
           )}
 
-          <h3 className="mb-1 text-base font-semibold text-gray-800 dark:text-gray-100">{t("workspace:sectionSummary")}</h3>
-          {rec.summary ? (
-            <>
-              {rec.summary.isUserEdited && (
-                <p className="mb-1 text-xs italic text-gray-400 dark:text-gray-500">{t("workspace:summaryEditedHint")}</p>
-              )}
-              <p className="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{rec.summary.text}</p>
-            </>
-          ) : (
-            <p className="text-sm text-gray-500 dark:text-gray-400">{t("workspace:overviewEmpty")}</p>
-          )}
-        </div>
-      ),
-    },
+    </>
+  );
+
+  // The hub: the detail page's landing view. Everything the old Overview tab carried is here — its facts
+  // as the hero's chip row, its summary inline in the hero, its calendar block beneath — plus a tile per
+  // section, each showing that section's real count and a preview of what is inside it.
+  const hubView = (
+    <div className="flex flex-col gap-3.5">
+      <RecordingHub
+        rec={rec}
+        notes={notes}
+        attachments={attachments}
+        formulaResults={formulaResults}
+        meetingTypeTitle={appliedMeetingType?.title ?? null}
+        speakerNameOf={speakerNameOf}
+        minutesRunning={minutesRunning}
+        hasTranscript={hasTranscript}
+        isSummarizing={isSummarizing}
+        showRooms={!inSharedRoom}
+        onOpenSection={selectTab}
+        onApplyMeetingType={applyMeetingType}
+        onEditSummary={() => setEditingSummary(true)}
+        onResummarise={summarize}
+        onNewNote={() => selectTab("notes")}
+        onAddFile={() => selectTab("files")}
+        onRunFormula={() => setFormulaRunOpen(true)}
+      />
+      {calendarBlock}
+    </div>
+  );
+
+  // The sections you drill into from the hub. Same shape the tab strip used, so the bodies carry over
+  // unchanged; only the chrome around them (a breadcrumb instead of a tab strip) is different.
+  const detailTabs: DetailSection[] = [
     {
       key: "minutes",
       label: t("workspace:detailTabMinutes"),
+      icon: <MinutesGlyph size={15} />,
       toolbar: (
         <>
           <MeetingTypeMenu
@@ -1234,6 +1205,7 @@ export default function RecordingDetail() {
     {
       key: "actions",
       label: t("workspace:detailTabActions"),
+      icon: <ActionsGlyph size={15} />,
       toolbar: (
         <ToolbarButton
           label={t("workspace:extractActionsAction")}
@@ -1255,6 +1227,7 @@ export default function RecordingDetail() {
     {
       key: "notes",
       label: t("workspace:detailTabNotes"),
+      icon: <NotesGlyph size={15} />,
       // Notes steer the minutes (and fill a template's Enhanced-notes section), so offer a re-run here.
       toolbar: (
         <ToolbarButton
@@ -1273,6 +1246,7 @@ export default function RecordingDetail() {
     {
       key: "speakers",
       label: t("workspace:detailTabSpeakers"),
+      icon: <SpeakersGlyph size={15} />,
       toolbar: (
         <>
           <ToolbarButton label={t("workspace:managePeople")} icon={UsersIcon} onClick={() => setPeopleOpen(true)} />
@@ -1357,35 +1331,17 @@ export default function RecordingDetail() {
     {
       key: "transcript",
       label: t("workspace:detailTabTranscript"),
+      icon: <TranscriptGlyph size={15} />,
+      meta: rec.current
+        ? t("workspace:hubTranscriptSubtitle", {
+            segments: rec.current.segments.length,
+            duration: formatDurationApprox(rec.durationMs),
+          })
+        : undefined,
+      // The old range-input mini-player that sat here has been replaced by the conversation-flow player in
+      // the section body below - it seeks the same audio element, but shows who is speaking while it does.
       toolbar: rec.current ? (
         <>
-          {/* Small play progress bar, left of the icon buttons (hidden on very narrow widths). */}
-          {rec.hasAudio && (
-            <div className="mr-1 hidden items-center gap-1 sm:flex">
-              <button
-                type="button"
-                onClick={togglePlayPause}
-                aria-label={audioPaused ? t("workspace:playAll") : t("workspace:pauseAudio")}
-                className="rounded p-1 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-              >
-                {audioPaused ? PlayIcon : PauseIcon}
-              </button>
-              <input
-                type="range"
-                min={0}
-                max={Math.max(1, rec.durationMs / 1000)}
-                step={0.1}
-                value={audioCur}
-                onChange={(e) => {
-                  const el = audioRef.current;
-                  if (el) el.currentTime = Number(e.target.value);
-                }}
-                aria-label={t("workspace:seek")}
-                className="h-1 w-24 cursor-pointer"
-              />
-              <span className="font-mono text-[10px] tabular-nums text-gray-400 dark:text-gray-500">{fmt(audioCur * 1000)}</span>
-            </div>
-          )}
           <ToolbarButton
             label={t("workspace:playSelected")}
             icon={PlayIcon}
@@ -1409,7 +1365,10 @@ export default function RecordingDetail() {
             />
           )}
           <ToolbarButton label={t("workspace:deleteSelected")} icon={TrashIcon} onClick={deleteSelected} disabled={selectedSegIds.size === 0} />
-          {hasRevisions(rec.current.segments) && (
+          {/* The flow player carries the original/revised toggle, but it only renders when there is audio to
+              play. Once the audio has been deleted the transcript remains, so keep the toggle here for that
+              case rather than losing it - and don't show two of them when the player is present. */}
+          {hasRevisions(rec.current.segments) && !rec.hasAudio && (
             <ToolbarButton label={t("workspace:toggleViewTitle")} icon={EyeIcon} active={showOriginal} onClick={() => setShowOriginal((v) => !v)} />
           )}
           {selectedSegIds.size > 0 && (
@@ -1419,6 +1378,22 @@ export default function RecordingDetail() {
       ) : undefined,
       content: rec.current ? (
         <div className="space-y-3 pb-2">
+          {/* Audio embedded in the flow: the conversation-flow track shows who spoke when and doubles as
+              the scrubber, so the transcript is read and scrubbed in one place. */}
+          {rec.hasAudio && (
+            <ConversationFlowPlayer
+              segments={rec.current.segments}
+              durationMs={rec.durationMs}
+              currentMs={audioCur * 1000}
+              playing={!audioPaused}
+              speakerNameOf={speakerNameOf}
+              showOriginal={showOriginal}
+              canToggleOriginal={hasRevisions(rec.current.segments)}
+              onToggle={togglePlayPause}
+              onSeek={(ms) => playFrom(ms)}
+              onToggleOriginal={() => setShowOriginal((v) => !v)}
+            />
+          )}
           {matchTimes.length > 1 && (
             <div className="sticky top-0 z-10 mb-2 flex items-center gap-2 rounded-md border bg-blue-50 px-3 py-1.5 text-xs text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
               <span className="font-medium">
@@ -1468,13 +1443,15 @@ export default function RecordingDetail() {
       ),
     },
     {
-      key: "attachments",
-      label: t("workspace:detailTabAttachments"),
+      key: "files",
+      label: t("workspace:detailTabFiles"),
+      icon: <FilesGlyph size={15} />,
       content: <AttachmentsManager recordingId={id} attachments={attachments} onChange={refreshAttachments} />,
     },
     {
       key: "formulas",
       label: t("workspace:detailTabFormulas"),
+      icon: <FormulasGlyph />,
       toolbar: (
         <FormulasToolbar
           selectedId={selectedFormulaResultId}
@@ -1517,43 +1494,28 @@ export default function RecordingDetail() {
           {t("workspace:dropToAttach")}
         </div>
       )}
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          {renaming ? (
-            <RecordingNameForm
-              initial={rec.name ?? ""}
-              onSave={saveRecordingName}
-              onCancel={() => setRenaming(false)}
-            />
-          ) : (
-            <h1 className="text-lg font-semibold dark:text-gray-100">{rec.name ?? rec.title}</h1>
-          )}
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {rec.source === "System" ? t("workspace:sourceSystem") : rec.source === "Upload" ? t("workspace:sourceUpload") : t("workspace:sourceMicrophone")} ·{" "}
-            {formatDate(rec.createdAt, i18n.language)}
-            {rec.durationMs > 0 ? ` · ${formatDuration(rec.durationMs)}` : ""} · {rec.status}
-            {rec.sizeBytes > 0 ? ` · ${formatBytes(rec.sizeBytes)}` : ""}
-            {rec.current?.language ? ` · ${rec.current.language}` : ""}
-            {rec.current?.processingMs ? ` · ${t("workspace:processedIn", { time: formatDuration(rec.current.processingMs) })}` : ""}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {/* Pipeline progress (summarising / extracting / translating / re-identifying / merging / etc.) is
-              shown only in the global status bar - see the useStatus() effects above - so it isn't duplicated
-              here or in a banner over the tabs. */}
-          <DetailToolbar
-            onRename={() => setRenaming(true)}
-            onCopyLink={copyLink}
-            onRetranscribe={() => setRetranscribeOpen(true)}
-            onMove={() => setMoving(true)}
-            onEmailTranscript={emailTranscript}
-            onDownloadTranscript={() => setDownloading(true)}
-            hasTranscript={hasTranscript}
-            hasAudio={rec.hasAudio}
-          />
-          <KebabMenu actions={menuActions} />
-        </div>
-      </div>
+      {/* Pipeline progress (summarising / extracting / translating / re-identifying / merging / etc.) is shown
+          only in the global status bar - see the useStatus() effects above - so it isn't duplicated here. */}
+      {renaming ? (
+        <RecordingNameForm initial={rec.name ?? ""} onSave={saveRecordingName} onCancel={() => setRenaming(false)} />
+      ) : (
+        <DetailHeader
+          title={rec.name ?? rec.title}
+          menu={menuActions}
+          hasAudio={rec.hasAudio}
+          hasTranscript={hasTranscript}
+          onPlay={() => playFrom(0)}
+          onCopyLink={copyLink}
+          onDownload={() => setDownloading(true)}
+        />
+      )}
+      <p className="-mt-1 text-xs text-gray-500 dark:text-gray-400">
+        {rec.source === "System" ? t("workspace:sourceSystem") : rec.source === "Upload" ? t("workspace:sourceUpload") : t("workspace:sourceMicrophone")} ·{" "}
+        {formatDate(rec.createdAt, i18n.language)}
+        {rec.durationMs > 0 ? ` · ${formatDuration(rec.durationMs)}` : ""} · {rec.status}
+        {rec.sizeBytes > 0 ? ` · ${formatBytes(rec.sizeBytes)}` : ""}
+        {rec.current?.processingMs ? ` · ${t("workspace:processedIn", { time: formatDuration(rec.current.processingMs) })}` : ""}
+      </p>
 
       {actionError && (
         <p className="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{actionError}</p>
@@ -1567,10 +1529,11 @@ export default function RecordingDetail() {
         <p className="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{rec.error}</p>
       )}
 
-      {/* Hidden audio element — the header bar + the per-speaker/segment Play buttons drive it (no native
-          controls). It lives here, outside the tabs, so it stays mounted on every tab: DetailTabs renders
-          only the active tab, so keeping it inside the Transcript tab meant audioRef was null on the
-          Speakers tab and Play silently no-op'd. */}
+      {/* Hidden audio element — the header's Play button, the transcript's flow player, and the
+          per-speaker/segment Play buttons all drive it (no native controls). It lives here, outside
+          <DetailSections>, so it stays mounted whichever section is showing: the router renders only the
+          active section, so keeping it inside the Transcript meant audioRef was null on the Speakers
+          section and Play silently no-op'd. */}
       {rec.hasAudio && (
         <audio
           ref={audioRef}
@@ -1581,7 +1544,7 @@ export default function RecordingDetail() {
         />
       )}
 
-      <DetailTabs tabs={detailTabs} active={tab} onSelect={selectTab} />
+      <DetailSections sections={detailTabs} active={tab} onSelect={selectTab} hub={hubView} />
 
       {editingSeg && (
         <SegmentEditModal

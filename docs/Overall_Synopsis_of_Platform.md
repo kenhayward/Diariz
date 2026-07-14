@@ -456,7 +456,7 @@ upcoming Google Calendar event**: prep notes are taken on the calendar-event pre
 (`/calendar-event/:id`, CRUD at `/api/calendar/events/{calendarId}/{eventId}/notes`) and are **adopted onto
 the recording automatically** when its calendar link forms (`MeetingNoteAdoption`, called inside the
 `LinkCalendar` chokepoint that both the auto-match save and manual linking use - one-way and additive).
-Recording-anchored lines live on the detail page's **Notes tab** (CRUD at `/api/recordings/{id}/notes`);
+Recording-anchored lines live on the detail page's **Notes section** (CRUD at `/api/recordings/{id}/notes`);
 lines can carry a **`CapturedAtMs`** recording-clock timestamp (immutable; stamped lines deep-link to that
 moment in the transcript via the existing `?t=` navigation). **Transcript weave:** a stamped note is rendered
 inline in the **Transcript tab** right after the segment being spoken when it was written (pure
