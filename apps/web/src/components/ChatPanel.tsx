@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
+import { awaitFormulaResult } from "../lib/formulaRun";
 import { parseRecordingLink, recordingLinkPath } from "../lib/transcriptNav";
 import { linkifyRecordings } from "../lib/linkify";
 import { renderMarkdown } from "../lib/markdown";
@@ -332,9 +333,34 @@ export default function ChatPanel() {
       }
       const formula = matches[0];
       const result = await api.runFormula(activeId, formula.id);
+      qc.invalidateQueries({ queryKey: ["formula-results", activeId] });
+
+      // The run is asynchronous: `runFormula` returns a "Generating" row with an empty body, which a worker
+      // fills in. Reading the text straight away (as this used to) printed the heading and nothing under it.
+      setCommandOutput(t("cmdFormulaRunning", { name: formula.name }));
+      const outcome = await awaitFormulaResult(result.id, () => api.listFormulaResults(activeId), {
+        intervalMs: 2000,
+        timeoutMs: 180_000,
+        sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+      });
+      qc.invalidateQueries({ queryKey: ["formula-results", activeId] });
+
+      if (outcome.kind === "failed") {
+        setCommandOutput(outcome.error ?? t("cmdFormulaFailed"));
+        return;
+      }
+      if (outcome.kind === "gone") {
+        setCommandOutput(t("cmdFormulaGone"));
+        return;
+      }
+      if (outcome.kind === "timeout") {
+        // The run isn't cancelled - it will still land in the recording's Formulas tab.
+        setCommandOutput(t("cmdFormulaStillRunning", { name: formula.name }));
+        return;
+      }
+
       const text = await api.getFormulaResultText(activeId, result.id);
       setCommandOutput(`${t("cmdFormulaRan", { name: formula.name })}\n\n${text}`);
-      qc.invalidateQueries({ queryKey: ["formula-results", activeId] });
     } catch (e) {
       setCommandOutput(apiErrorMessage(e, t("cmdFormulaFailed")));
     }

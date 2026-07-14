@@ -22,6 +22,7 @@ vi.mock("../lib/api", () => ({
     deleteChatConversation: vi.fn(),
     listFormulas: vi.fn(),
     runFormula: vi.fn(),
+    listFormulaResults: vi.fn(),
     getFormulaResultText: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => String(e),
@@ -367,12 +368,16 @@ describe("ChatPanel", () => {
       description: null, prompt: "Draft a follow-up.", context: 1, enabled: true, isBuiltIn: false, shared: false,
     };
 
+    // A run row as the API really returns it: 202 Accepted with an empty body a worker fills in later.
+    const row = (status: string, error: string | null = null) => ({
+      id: "res-1", recordingId: "rec-1", name: "Follow-up email", status, error,
+      createdByUserId: "u1", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z",
+    });
+
     beforeEach(() => {
       mock(api.listFormulas).mockResolvedValue([formula]);
-      mock(api.runFormula).mockResolvedValue({
-        id: "res-1", recordingId: "rec-1", name: "Follow-up email",
-        createdByUserId: "u1", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z",
-      });
+      mock(api.runFormula).mockResolvedValue(row("Generating"));
+      mock(api.listFormulaResults).mockResolvedValue([row("Ready")]);
       mock(api.getFormulaResultText).mockResolvedValue("**Thanks for joining.**");
     });
 
@@ -381,8 +386,36 @@ describe("ChatPanel", () => {
       await ask("/formula Follow-up email");
 
       await waitFor(() => expect(api.runFormula).toHaveBeenCalledWith("rec-1", "f1"));
-      expect(api.getFormulaResultText).toHaveBeenCalledWith("rec-1", "res-1");
       await waitFor(() => expect(screen.getByText(/Thanks for joining/)).toBeTruthy());
+      expect(api.getFormulaResultText).toHaveBeenCalledWith("rec-1", "res-1");
+    });
+
+    // The run is async: it returns a "Generating" row with an empty body. Reading the text straight away
+    // printed the "Ran the ... formula:" heading with nothing under it.
+    it("waits for the worker instead of printing an empty result", async () => {
+      mock(api.listFormulaResults)
+        .mockResolvedValueOnce([row("Generating")])
+        .mockResolvedValue([row("Ready")]);
+
+      renderPanel("/recordings/rec-1");
+      await ask("/formula Follow-up email");
+
+      // It shows progress rather than a bare heading while the worker runs...
+      await waitFor(() => expect(screen.getByText(/Running the "Follow-up email" formula/)).toBeTruthy());
+      // ...then the body, once the row goes Ready. The wait sleeps one 2s poll interval, hence the window.
+      await waitFor(() => expect(screen.getByText(/Thanks for joining/)).toBeTruthy(), { timeout: 5000 });
+      // Only fetched once the row went Ready - never against the empty Generating row.
+      expect(api.getFormulaResultText).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows the failure reason when the run fails", async () => {
+      mock(api.listFormulaResults).mockResolvedValue([row("Failed", "The LLM request timed out.")]);
+
+      renderPanel("/recordings/rec-1");
+      await ask("/formula Follow-up email");
+
+      await waitFor(() => expect(screen.getByText(/The LLM request timed out/)).toBeTruthy());
+      expect(api.getFormulaResultText).not.toHaveBeenCalled();
     });
 
     it("does not send the command text to the model", async () => {
