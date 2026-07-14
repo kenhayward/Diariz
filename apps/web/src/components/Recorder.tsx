@@ -30,6 +30,9 @@ import { useRoom } from "../lib/rooms";
 import { RoomPermission } from "../lib/types";
 import type { StatusTone } from "../lib/statusBar";
 import RecordHero from "./hub/RecordHero";
+import AudioSourceChip from "./hub/AudioSourceChip";
+import AudioSourcePopover from "./hub/AudioSourcePopover";
+import { useHubPopover } from "./hub/hubPopovers";
 import { AUDIO_ACCEPT_ATTR } from "../lib/audioFormats";
 import { useUpload } from "../lib/uploadContext";
 import {
@@ -154,7 +157,9 @@ export default function Recorder({
   const [devices, setDevices] = useState<InputDevice[]>([]);
   const [hasLabels, setHasLabels] = useState(false);
   const [constraints, setConstraints] = useState<AudioConstraints>(DEFAULT_CONSTRAINTS);
-  const [cogOpen, setCogOpen] = useState(false);
+  // Shared "one popover open at a time" state for the top-bar hub. The audio-source popover is id "source";
+  // used via a safe fallback when Recorder is rendered outside a HubPopoverProvider (e.g. unit tests).
+  const hub = useHubPopover();
   // True once we've asked the browser for mic access to reveal device labels (on first picker focus).
   // Used to show the "no microphone detected" hint only after an attempt that came back empty.
   const [labelsTried, setLabelsTried] = useState(false);
@@ -224,8 +229,6 @@ export default function Recorder({
   const activeSourceRef = useRef<AudioSourceKind>("mic");
   // Reports phase changes to the Electron tray; a no-op in a plain browser.
   const reportRef = useRef<(s: RecorderState) => void>(() => {});
-  // Wraps the ⚙ button + its popover, so an outside click / Escape can close it.
-  const cogRef = useRef<HTMLDivElement>(null);
 
   // Re-enumerate inputs (mount, hot-plug via devicechange, and after a grant unlocks labels). Also
   // re-resolves a specific-mic selection against the new list so an unplugged device falls back cleanly.
@@ -282,23 +285,6 @@ export default function Recorder({
     };
   }, [refreshDevices]);
 
-  // Close the audio-settings popover on an outside click or Escape (same pattern as KebabMenu).
-  useEffect(() => {
-    if (!cogOpen) return;
-    function onDown(e: MouseEvent) {
-      if (cogRef.current && !cogRef.current.contains(e.target as Node)) setCogOpen(false);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setCogOpen(false);
-    }
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [cogOpen]);
-
   function persistSource(sel: SourceSelection) {
     try {
       localStorage.setItem(SOURCE_KEY, JSON.stringify({ token: formatSourceToken(sel), label: sel.label }));
@@ -312,7 +298,6 @@ export default function Recorder({
     if (sel.kind === "device") sel.label = devices.find((d) => d.deviceId === sel.deviceId)?.label || undefined;
     setSelection(sel);
     persistSource(sel);
-    if (sel.kind === "none") setCogOpen(false); // no mic to tune
   }
 
   function toggleSystemAudio(on: boolean) {
@@ -779,93 +764,38 @@ export default function Recorder({
       }
     >
       <div className="flex items-center gap-2">
-        <select
-          value={formatSourceToken(selection)}
-          onChange={onSelectSource}
-          onFocus={ensureDeviceLabels}
-          disabled={recording}
-          aria-label={t("sourceMicrophone")}
-          className="rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-        >
-          {buildSourceOptions(
-            devices,
-            hasLabels,
-            {
-              micDefault: t("sourceMicDefault"),
-              noMic: t("sourceNoMic"),
-              numbered: (n) => t("sourceMicNumbered", { n }),
-            },
-            { canSystemAudio: CAN_SYSTEM_AUDIO },
-          ).map((o) => (
-            <option key={o.token} value={o.token}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-
-        {/* Add system audio to the capture (mixed with the mic, or on its own for "No microphone").
-            Shown only where getDisplayMedia can capture it. */}
-        {CAN_SYSTEM_AUDIO && (
-          <label className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-200">
-            <input
-              type="checkbox"
-              checked={systemAudio}
-              onChange={(e) => toggleSystemAudio(e.target.checked)}
-              disabled={recording}
-            />
-            {t("systemAudioToggle")}
-          </label>
-        )}
-
-        {/* Capture-constraint popover — mic only (no mic to tune when "No microphone" is selected). */}
-        <div className="relative" ref={cogRef}>
-          <button
-            type="button"
-            onClick={() => setCogOpen((o) => !o)}
-            disabled={recording || selection.kind === "none"}
-            title={t("audioSettings")}
-            aria-label={t("audioSettings")}
-            aria-expanded={cogOpen}
-            className="rounded border px-2 py-1 text-sm disabled:opacity-40 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
-          >
-            ⚙
-          </button>
-          {cogOpen && selection.kind !== "none" && (
-            <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded border bg-white p-3 text-sm shadow-lg dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  {t("audioSettings")}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setCogOpen(false)}
-                  aria-label={t("close")}
-                  title={t("close")}
-                  className="rounded px-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
-                >
-                  ✕
-                </button>
-              </div>
-              {(
-                [
-                  ["echoCancellation", t("constraintEcho")],
-                  ["noiseSuppression", t("constraintNoise")],
-                  ["autoGainControl", t("constraintAgc")],
-                  ["mono", t("constraintMono")],
-                ] as const
-              ).map(([key, label]) => (
-                <label key={key} className="flex items-center gap-2 py-1">
-                  <input
-                    type="checkbox"
-                    checked={constraints[key]}
-                    onChange={() => toggleConstraint(key)}
-                  />
-                  <span>{label}</span>
-                </label>
-              ))}
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("constraintsMicOnlyHint")}</p>
-            </div>
-          )}
+        {/* Single "Audio source" chip - opens the Audio source popover (mic select + system toggle +
+            processing chips). Anchored in a `relative` wrapper so the popover positions under the chip. */}
+        <div className="relative">
+          <AudioSourceChip
+            systemAudio={systemAudio}
+            expanded={hub.isOpen("source")}
+            disabled={recording}
+            onClick={() => hub.toggle("source")}
+          />
+          <AudioSourcePopover
+            open={hub.isOpen("source")}
+            onClose={hub.close}
+            selection={selection}
+            options={buildSourceOptions(
+              devices,
+              hasLabels,
+              {
+                micDefault: t("sourceMicDefault"),
+                noMic: t("sourceNoMic"),
+                numbered: (n) => t("sourceMicNumbered", { n }),
+              },
+              { canSystemAudio: CAN_SYSTEM_AUDIO },
+            )}
+            onSelectSource={onSelectSource}
+            onFocusSelect={ensureDeviceLabels}
+            recording={recording}
+            canSystemAudio={CAN_SYSTEM_AUDIO}
+            systemAudio={systemAudio}
+            onToggleSystemAudio={toggleSystemAudio}
+            constraints={constraints}
+            onToggleConstraint={toggleConstraint}
+          />
         </div>
 
         <RecordHero

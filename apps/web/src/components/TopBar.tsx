@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import Recorder from "./Recorder";
 import UserMenu from "./UserMenu";
 import ThemeSync from "./ThemeSync";
+import { HubPopoverProvider } from "./hub/hubPopovers";
 
 /// Persistent "command hub" bar: brand on the left, the record cluster centered by two flex spacers,
 /// the account avatar pinned right. Recorder + UserMenu keep their current internals for now (Unit 1
@@ -30,15 +31,19 @@ export default function TopBar() {
         </span>
       </Link>
 
-      <div style={{ flex: 1 }} />
+      {/* One popover open at a time across the cluster + avatar (audio-source now; auto-stop/notes/account
+          plug into the same context in later units). */}
+      <HubPopoverProvider>
+        <div style={{ flex: 1 }} />
 
-      <div data-tour="capture">
-        <Recorder compact onUploaded={() => qc.invalidateQueries({ queryKey: ["recordings"] })} />
-      </div>
+        <div data-tour="capture">
+          <Recorder compact onUploaded={() => qc.invalidateQueries({ queryKey: ["recordings"] })} />
+        </div>
 
-      <div style={{ flex: 1 }} />
+        <div style={{ flex: 1 }} />
 
-      <UserMenu />
+        <UserMenu />
+      </HubPopoverProvider>
       <ThemeSync />
     </header>
   );
