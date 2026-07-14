@@ -1,9 +1,9 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { api, apiErrorMessage } from "../lib/api";
+import { apiErrorMessage } from "../lib/api";
 import { renderMarkdown } from "../lib/markdown";
-import type { FormulaResult } from "../lib/types";
+import type { FormulaResultLike } from "../lib/types";
 import FormulasManager from "./FormulasManager";
 
 const WIDTH_KEY = "diariz.formulas.listWidth";
@@ -16,13 +16,19 @@ const MIN = 200,
 /// delta-based (width += cursor delta) rather than useResizableWidth's absolute clientX, because this panel
 /// is offset inside the detail column, not anchored to the viewport's left edge.
 export default function FormulasPanel({
-  recordingId,
+  loadText,
+  sourceKey,
   results,
   selectedId,
   onSelect,
 }: {
-  recordingId: string;
-  results: FormulaResult[];
+  /// Fetches the selected result's Markdown body by id - a recording- or section-scoped closure the caller
+  /// injects, so the panel is agnostic to the target.
+  loadText: (id: string) => Promise<string>;
+  /// A stable query-key prefix identifying the source (e.g. ["formula-result-text", recordingId]), so
+  /// recording and section results don't collide in the react-query cache.
+  sourceKey: unknown[];
+  results: FormulaResultLike[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
 }) {
@@ -66,19 +72,31 @@ export default function FormulasPanel({
         className="w-1 shrink-0 cursor-col-resize bg-gray-200 hover:bg-blue-400 dark:bg-gray-700"
       />
       <div className="min-w-0 flex-1 pl-3">
-        <ResultView recordingId={recordingId} selected={results.find((r) => r.id === selectedId) ?? null} />
+        <ResultView
+          loadText={loadText}
+          sourceKey={sourceKey}
+          selected={results.find((r) => r.id === selectedId) ?? null}
+        />
       </div>
     </div>
   );
 }
 
-function ResultView({ recordingId, selected }: { recordingId: string; selected: FormulaResult | null }) {
+function ResultView({
+  loadText,
+  sourceKey,
+  selected,
+}: {
+  loadText: (id: string) => Promise<string>;
+  sourceKey: unknown[];
+  selected: FormulaResultLike | null;
+}) {
   const { t } = useTranslation(["workspace", "common"]);
   // Only Ready results have a body to fetch; Generating/Failed results render a status message instead.
   const isReady = selected?.status === "Ready";
   const { data, isLoading, error } = useQuery({
-    queryKey: ["formula-result-text", recordingId, selected?.id],
-    queryFn: () => api.getFormulaResultText(recordingId, selected!.id),
+    queryKey: [...sourceKey, selected?.id],
+    queryFn: () => loadText(selected!.id),
     enabled: selected != null && isReady,
   });
 

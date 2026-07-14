@@ -431,6 +431,23 @@ default timeout for its header phase and relies on client-disconnect for cancell
   subscribed shared formulas. The web **`SharedFormulasBrowser`** modal (opened from a "Find shared formulas"
   button in the run picker) lists them with the sharer's avatar, a read-only prompt preview, and Add/Remove.
 
+  **Folder (section) formulas.** The same formulas also run over a **folder and its sub-sections** to produce a
+  **`SectionFormulaResult`** (mirrors `FormulaResult`, section-scoped). The run is a **map-reduce**:
+  `FormulaRunProcessor.RunOverSectionAsync` resolves the folder's recording set **room-aware, one level deep**
+  (the section + its direct sub-sections, via `RoomRecordings` placement scoped to `section.RoomId` - the same
+  resolution the folder read pages use), runs the formula on each included transcript's context (the "map",
+  reusing `RunOverRecordingAsync`; empty meetings skipped, and the per-meeting outputs are ephemeral - never
+  persisted), then runs the **same** `formula.Prompt` over the concatenated `## {meeting}` outputs (the
+  "reduce", within a char budget, mirroring `FolderSummaryPrompt`); a single included meeting short-circuits the
+  reduce. It shares the Phase-1 async pipeline - the `FormulaRunJob` carries `SectionId` (with `RecordingId`
+  null) and the `FormulaRunWorker`/`FormulaRunProcessor` flip the `SectionFormulaResult` row. Endpoints on
+  **`SectionFormulaResultsController`** at `api/sections/{id}/...`: **`POST .../formulas/{formulaId}/run`**
+  (validates section **membership** + formula run-access + LLM config, 400s a folder with no meetings, creates
+  a `Generating` row + enqueues + returns 202) and **`.../formula-results`** listing/reading/editing/deleting/
+  emailing/downloading. Run access = room **membership**; editing or deleting a folder result requires being its
+  **creator** or a member with **`ManageContents`**. The web **Formulas tab on the folder page** reuses the same
+  `FormulasToolbar`/`FormulasManager`/`FormulasPanel`/`FormulaRunModal` components with a section target.
+
 ## Meeting notes (the user's own notes)
 
 Users can jot their **own note lines** for a meeting - sparse trigger phrases, questions, observations - as

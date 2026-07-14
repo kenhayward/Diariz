@@ -823,6 +823,32 @@ export interface FormulaResult {
   origin: FormulaResultOrigin;
 }
 
+/// A formula's saved output on a section (folder). Same shape as `FormulaResult`, but scoped to a section
+/// (`sectionId`) rather than a recording. The generated Markdown body is fetched separately via
+/// `getSectionFormulaResultText`.
+export interface SectionFormulaResult {
+  id: string;
+  sectionId: string;
+  name: string;
+  status: "Generating" | "Ready" | "Failed";
+  error: string | null;
+  createdByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  origin: FormulaResultOrigin;
+}
+
+/// The fields shared by every formula result (recording or section), so components that only render the
+/// common metadata (FormulasManager, FormulasPanel) can accept either kind without caring about the target.
+export interface FormulaResultLike {
+  id: string;
+  name: string;
+  createdAt: string;
+  origin: FormulaResultOrigin;
+  status: FormulaResult["status"];
+  error: string | null;
+}
+
 /// FormulaContext bit flags - mirror src/Diariz.Domain/Entities/FormulaContext.cs (append-only; keep in sync).
 export const FormulaContextBits = {
   Transcript: 1,

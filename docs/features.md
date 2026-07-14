@@ -118,9 +118,12 @@ section.
 named **Markdown Result** — open it, edit it in the same rich editor as minutes, download it as `.md`, or email
 it to yourself. Formulas come in three scopes: Diariz-provided **starter formulas** seeded on every install
 (Follow-up email, Meeting recap, Decisions & risks, Tone & sentiment read), **Platform-wide** formulas shared
-with everyone, and your own **Personal** formulas — create and edit these in **Preferences → Formulas**. A new
-recording-level **Formulas tab** lists every formula you can use, runs one synchronously against your
-configured LLM, and keeps every past result for that recording. The tab is a resizable two-panel view - the
+with everyone, and your own **Personal** formulas — create and edit these in **Preferences → Formulas**. A
+recording-level **Formulas tab** lists every formula you can use, and a matching **Formulas tab on any folder
+(section) page** runs the same formula over **every meeting in that folder and its sub-sections** (a map-reduce:
+the formula runs on each transcript, then over the combined results). Runs happen **in the background** - the
+result appears right away as "Generating..." and fills in when ready (or shows a clear error), so you can run
+several at once without waiting. Each recording and each folder keeps its own past results. The tab is a resizable two-panel view - the
 list of results you have generated on the left (each with an **origin icon**: the Diariz logo for built-in and
 platform formulas, the author's avatar for your own), and the selected result's rendered document on the right,
 read in place. Creating, editing, deleting, or enabling/

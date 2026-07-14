@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { formatRelativeTime } from "../lib/format";
 import { initialsFromName } from "../lib/initials";
-import type { FormulaResult, FormulaResultOrigin } from "../lib/types";
+import type { FormulaResultLike, FormulaResultOrigin } from "../lib/types";
 import Avatar from "./Avatar";
 import FlaskIcon from "./FlaskIcon";
 
@@ -14,7 +14,7 @@ export default function FormulasManager({
   selectedId,
   onSelect,
 }: {
-  results: FormulaResult[];
+  results: FormulaResultLike[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
 }) {

@@ -1487,7 +1487,8 @@ export default function RecordingDetail() {
       ),
       content: (
         <FormulasPanel
-          recordingId={id}
+          loadText={(resultId) => api.getFormulaResultText(id, resultId)}
+          sourceKey={["formula-result-text", id]}
           results={formulaResults}
           selectedId={selectedFormulaResultId}
           onSelect={setSelectedFormulaResultId}
@@ -1644,7 +1645,7 @@ export default function RecordingDetail() {
 
       {formulaRunOpen && (
         <FormulaRunModal
-          recordingId={id}
+          target={{ kind: "recording", recordingId: id }}
           onClose={() => setFormulaRunOpen(false)}
           onRun={(result) => {
             refreshFormulas();

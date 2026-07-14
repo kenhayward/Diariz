@@ -40,6 +40,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<RoomRecording> RoomRecordings => Set<RoomRecording>();
     public DbSet<Formula> Formulas => Set<Formula>();
     public DbSet<FormulaResult> FormulaResults => Set<FormulaResult>();
+    public DbSet<SectionFormulaResult> SectionFormulaResults => Set<SectionFormulaResult>();
     public DbSet<FormulaSubscription> FormulaSubscriptions => Set<FormulaSubscription>();
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -322,6 +323,30 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             // account is deleted we keep B's document and merely drop the attribution (CreatedByUserId is
             // nullable). Postgres permits multiple cascade paths, so this is a deliberate retention choice,
             // not a workaround for a path conflict.
+            e.HasOne(r => r.CreatedBy)
+                .WithMany()
+                .HasForeignKey(r => r.CreatedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // The Markdown document produced by running a Formula over a folder (section). Cascades with the
+        // section (deleting a folder removes its results); SET NULL (not deleted) when its source Formula is
+        // later removed. Mirrors the FormulaResult block, section-scoped. Provider-agnostic (plain columns).
+        builder.Entity<SectionFormulaResult>(e =>
+        {
+            e.HasIndex(r => new { r.SectionId, r.Ordinal });
+            e.Property(r => r.Name).HasMaxLength(256);
+            e.HasOne(r => r.Section)
+                .WithMany()
+                .HasForeignKey(r => r.SectionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(r => r.Formula)
+                .WithMany()
+                .HasForeignKey(r => r.FormulaId)
+                .OnDelete(DeleteBehavior.SetNull);
+            // SetNull, not Cascade: a result authored by user A can live on a folder shared with user B. If A's
+            // account is deleted we keep the document and merely drop the attribution (CreatedByUserId is
+            // nullable). Postgres permits multiple cascade paths, so this is a deliberate retention choice.
             e.HasOne(r => r.CreatedBy)
                 .WithMany()
                 .HasForeignKey(r => r.CreatedByUserId)

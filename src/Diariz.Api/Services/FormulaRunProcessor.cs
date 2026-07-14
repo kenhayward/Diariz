@@ -40,23 +40,33 @@ public static class FormulaRunProcessor
         {
             string text;
             if (job.RecordingId is { } recordingId)
-            {
                 text = await RunOverRecordingAsync(db, chat, cfg, formula, recordingId, ct);
+            else if (job.SectionId is { } sectionId)
+                text = await RunOverSectionAsync(db, chat, cfg, formula, sectionId, reduceCharBudget, ct);
+            else
+                throw new InvalidOperationException("A formula run must target a recording or a folder.");
+
+            var now = DateTimeOffset.UtcNow;
+            if (job.SectionId.HasValue)
+            {
+                var result = await db.SectionFormulaResults.FirstOrDefaultAsync(r => r.Id == job.ResultId, ct);
+                if (result is null) return; // result row deleted while the job ran - nothing to flip.
+                result.Text = text;
+                result.Status = FormulaRunStatus.Ready;
+                result.Error = null;
+                result.UpdatedAt = now;
+                await db.SaveChangesAsync(ct);
             }
             else
             {
-                // Section branch added in Phase 2 - a section-scoped run is never enqueued yet.
-                throw new NotImplementedException("Section-scoped formula runs are not implemented yet.");
+                var result = await db.FormulaResults.FirstOrDefaultAsync(r => r.Id == job.ResultId, ct);
+                if (result is null) return; // result row deleted while the job ran - nothing to flip.
+                result.Text = text;
+                result.Status = FormulaRunStatus.Ready;
+                result.Error = null;
+                result.UpdatedAt = now;
+                await db.SaveChangesAsync(ct);
             }
-
-            var result = await db.FormulaResults.FirstOrDefaultAsync(r => r.Id == job.ResultId, ct);
-            if (result is null) return; // result row deleted while the job ran - nothing to flip.
-
-            result.Text = text;
-            result.Status = FormulaRunStatus.Ready;
-            result.Error = null;
-            result.UpdatedAt = DateTimeOffset.UtcNow;
-            await db.SaveChangesAsync(ct);
             await hub.NotifyFormulaStatusAsync(job.UserId, job.RecordingId, job.SectionId, job.ResultId,
                 nameof(FormulaRunStatus.Ready));
         }
@@ -76,13 +86,29 @@ public static class FormulaRunProcessor
     private static async Task FailAsync(
         DiarizDbContext db, IHubContext<TranscriptionHub> hub, FormulaRunJob job, string error, CancellationToken ct)
     {
-        var result = await db.FormulaResults.FirstOrDefaultAsync(r => r.Id == job.ResultId, ct);
-        if (result is not null)
+        var now = DateTimeOffset.UtcNow;
+        // A section-scoped job flips the SectionFormulaResult row; a recording job the FormulaResult row.
+        if (job.SectionId.HasValue)
         {
-            result.Status = FormulaRunStatus.Failed;
-            result.Error = error;
-            result.UpdatedAt = DateTimeOffset.UtcNow;
-            await db.SaveChangesAsync(ct);
+            var result = await db.SectionFormulaResults.FirstOrDefaultAsync(r => r.Id == job.ResultId, ct);
+            if (result is not null)
+            {
+                result.Status = FormulaRunStatus.Failed;
+                result.Error = error;
+                result.UpdatedAt = now;
+                await db.SaveChangesAsync(ct);
+            }
+        }
+        else
+        {
+            var result = await db.FormulaResults.FirstOrDefaultAsync(r => r.Id == job.ResultId, ct);
+            if (result is not null)
+            {
+                result.Status = FormulaRunStatus.Failed;
+                result.Error = error;
+                result.UpdatedAt = now;
+                await db.SaveChangesAsync(ct);
+            }
         }
         await hub.NotifyFormulaStatusAsync(job.UserId, job.RecordingId, job.SectionId, job.ResultId,
             nameof(FormulaRunStatus.Failed));
@@ -98,6 +124,56 @@ public static class FormulaRunProcessor
     {
         var context = await BuildRecordingContextAsync(db, recordingId, formula.Context, ct);
         return await RunPromptAsync(chat, cfg, formula.Prompt, context, ct);
+    }
+
+    /// <summary>Runs <paramref name="formula"/> over a FOLDER (section) as a map-reduce: run the formula on each
+    /// included transcript (map), then run the SAME prompt over the concatenated per-meeting outputs (reduce) to
+    /// produce one folder result. The per-meeting map outputs are ephemeral (never persisted) - only the caller's
+    /// SectionFormulaResult row is flipped. The included set is resolved room-aware (the section's room + its
+    /// placements), one level of nesting deep, ordered by CreatedAt - mirroring the SectionPage controller. Empty
+    /// meetings (no context) are skipped so they neither consume a map call nor pollute the reduce. A single
+    /// meeting returns its map output directly (no reduce call); zero meetings throw so the run is marked Failed.</summary>
+    internal static async Task<string> RunOverSectionAsync(
+        DiarizDbContext db, IChatStreamClient chat, SummarizationRequestConfig cfg,
+        Formula formula, Guid sectionId, int reduceCharBudget, CancellationToken ct)
+    {
+        var section = await db.Sections.FirstOrDefaultAsync(s => s.Id == sectionId, ct);
+        if (section is null)
+            throw new InvalidOperationException("The folder was removed before the run completed.");
+
+        var roomId = section.RoomId;
+        // The section id plus its child section ids (within the same room) - the placements that count as included.
+        var includedSectionIds = await db.Sections
+            .Where(s => s.RoomId == roomId && s.ParentId == sectionId)
+            .Select(s => s.Id).ToListAsync(ct);
+        includedSectionIds.Add(sectionId);
+
+        // Top-level query (not a filtered Include) so Npgsql and the in-memory provider agree on ordering.
+        var recordings = await (
+            from p in db.RoomRecordings
+            where p.RoomId == roomId && p.SectionId.HasValue && includedSectionIds.Contains(p.SectionId.Value)
+            join r in db.Recordings on p.RecordingId equals r.Id
+            orderby r.CreatedAt
+            select new { r.Id, r.Name, r.Title }).ToListAsync(ct);
+
+        // Map: run the formula per meeting, skipping any whose built context is empty (no transcript/artifacts).
+        var items = new List<(string Name, string Output)>();
+        foreach (var rec in recordings)
+        {
+            var context = await BuildRecordingContextAsync(db, rec.Id, formula.Context, ct);
+            if (context == FormulaContextBuilder.EmptyContextFallback) continue; // skip empty meetings - no map call.
+            var output = await RunPromptAsync(chat, cfg, formula.Prompt, context, ct);
+            items.Add((rec.Name ?? rec.Title, output));
+        }
+
+        if (items.Count == 0)
+            throw new InvalidOperationException("No meetings with content to run this formula over.");
+        if (items.Count == 1)
+            return items[0].Output; // single meeting - no reduce.
+
+        // Reduce: run the same prompt over the concatenated per-meeting outputs (bounded, mirrors JoinItems).
+        var combined = FolderSummaryPrompt.JoinItems(items, reduceCharBudget, "output");
+        return await RunPromptAsync(chat, cfg, formula.Prompt, combined, ct);
     }
 
     /// <summary>Loads the recording by id with the includes named by <paramref name="flags"/> (Segments/Speakers
