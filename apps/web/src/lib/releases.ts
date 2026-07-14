@@ -57,7 +57,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.136.0",
     date: "2026-07-14",
-    pr: 302,
+    pr: 303,
     headline: "A hub for every recording",
     summary:
       "Opening a meeting no longer drops you onto a strip of eight tabs. It opens a hub: a summary card carrying the meeting type, the key facts as chips, and the summary itself shown inline - over a grid of tiles for Transcript, Actions, Speakers, Notes, Files, and Formulas. Every tile shows its real count and a preview of what is inside, so you can see what a meeting holds without clicking into anything, and Notes, Files, and Formulas can be added or run straight from their tile. Clicking a tile drills into that section with a breadcrumb back. The transcript now embeds its audio: a conversation-flow bar shows who spoke when, colour-coded per speaker and sized by how long they talked, and doubles as the scrubber. The header is down to Play, Copy link, Download, and a More menu.",
