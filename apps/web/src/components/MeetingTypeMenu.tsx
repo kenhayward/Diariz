@@ -5,17 +5,23 @@ import { api } from "../lib/api";
 import { groupMeetingTypes, selectedMeetingType } from "../lib/meetingTypes";
 import MeetingTypeIcon from "./MeetingTypeIcon";
 
-/// The iconified meeting-type picker on the Minutes toolbar. Lists the user's types grouped by their template
-/// group, marks the currently-applied one (or the General default when the recording has no explicit type), and
-/// applies a chosen type immediately. Disabled while a run is in flight (<c>busy</c>) so the user can't stack runs.
+/// The iconified meeting-type picker. Lists the user's types grouped by their template group, marks the
+/// currently-applied one (or the General default when the recording has no explicit type), and applies a chosen
+/// type immediately. Disabled while a run is in flight (<c>busy</c>) so the user can't stack runs.
+///
+/// Two looks, one behaviour: `toolbar` is the quiet bordered button on the Minutes toolbar; `pill` is the
+/// purple chip the recording hub's hero card surfaces, where the meeting type is prominent because it drives
+/// both the minutes format and which formulas are offered.
 export default function MeetingTypeMenu({
   currentTypeId,
   busy,
   onApply,
+  variant = "toolbar",
 }: {
   currentTypeId: string | null | undefined;
   busy: boolean;
   onApply: (typeId: string) => void;
+  variant?: "toolbar" | "pill";
 }) {
   const { t } = useTranslation(["workspace"]);
   const { data: types } = useQuery({ queryKey: ["meeting-types"], queryFn: api.listMeetingTypes });
@@ -45,6 +51,11 @@ export default function MeetingTypeMenu({
 
   const disabled = busy || !types || types.length === 0;
 
+  const trigger =
+    variant === "pill"
+      ? "flex items-center gap-1.5 rounded-full border border-violet-400/40 bg-violet-500/15 px-3 py-1 text-xs font-semibold text-violet-700 hover:bg-violet-500/25 disabled:opacity-50 dark:text-violet-300"
+      : "flex items-center gap-1.5 rounded border px-2 py-1 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800";
+
   return (
     <div className="relative" ref={ref}>
       <button
@@ -54,7 +65,7 @@ export default function MeetingTypeMenu({
         aria-expanded={open}
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 rounded border px-2 py-1 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+        className={trigger}
         title={t("meetingTypeHint")}
       >
         {selected && <MeetingTypeIcon icon={selected.icon} color={selected.color} size={16} />}

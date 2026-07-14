@@ -133,10 +133,24 @@ function renderPage(rec: RecordingDetailType) {
   );
 }
 
-/// Wait for the page to have loaded (the tab strip appears once the recording resolves).
-const loaded = () => screen.findByRole("tab", { name: /overview/i });
-/// Switch to a tab by its label.
-const openTab = (name: RegExp) => fireEvent.click(screen.getByRole("tab", { name }));
+/// Wait for the page to have loaded (the hub's tiles appear once the recording resolves).
+const loaded = () => screen.findByRole("button", { name: "Transcript" });
+
+/// Drill into a section from the hub by clicking its tile. The names are matched exactly: several header
+/// and kebab actions also mention "transcript" ("Download transcript", "Email transcript"), so a loose
+/// regex would be ambiguous.
+const openTab = (name: string) => fireEvent.click(screen.getByRole("button", { name }));
+
+/// Minutes is the one section with no tile — the hero card links to it ("Open full minutes").
+const openMinutes = () => fireEvent.click(screen.getByRole("button", { name: /Open full minutes/ }));
+
+/// Back out of a section to the hub, via the breadcrumb.
+const backToHub = () => fireEvent.click(screen.getByRole("button", { name: /^Overview$/ }));
+
+/// Open the header's overflow menu. It holds every action (rename / retranscribe / move / email / ...);
+/// only Play, Copy link and Download are surfaced as buttons. Note the menu is "More actions", not
+/// "Actions" — that name now belongs to the hub's Actions tile.
+const openKebab = () => fireEvent.click(screen.getByRole("button", { name: "More actions" }));
 
 describe("RecordingDetail", () => {
   beforeEach(() => {
@@ -152,21 +166,46 @@ describe("RecordingDetail", () => {
     (api.emailMeetingMinutes as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   });
 
-  it("defaults to the Overview tab and shows the summary there", async () => {
+  it("lands on the hub and shows the summary inline in the hero card", async () => {
     renderPage({ ...base, summary: { model: "gpt", text: "The key decisions.", createdAt: base.createdAt } });
-    // Overview is the default tab, so the summary text is visible immediately (no expand step).
+    // The hub is the landing view, so the summary is visible immediately (no tab switch, no expand step).
     expect(await screen.findByText("The key decisions.")).toBeTruthy();
-    expect((await loaded()).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("heading", { name: "Summary" })).toBeTruthy();
   });
 
-  it("shows Meeting Date / Time / Duration and a Summary heading on the Overview tab", async () => {
+  it("shows the recording's date, time and duration as hero chips (the old Overview list)", async () => {
     renderPage({ ...base, durationMs: 3_900_000 }); // 1h 05m
     await loaded();
-    expect(screen.getByText("Meeting Date")).toBeTruthy();
-    expect(screen.getByText("Meeting Time")).toBeTruthy();
-    expect(screen.getByText("01:05")).toBeTruthy(); // duration hh:mm
-    // "Summary" appears both as the tab label and the in-tab heading.
-    expect(screen.getByRole("heading", { name: "Summary" })).toBeTruthy();
+    // The date and time now share one chip (so their text spans several nodes), and the duration reads as a
+    // human length rather than the old clock format.
+    const chip = (re: RegExp) =>
+      screen.getByText((_content, el) => el?.tagName === "SPAN" && re.test(el.textContent ?? ""));
+    expect(chip(/26th June 2026 · \d{2}:\d{2}/)).toBeTruthy();
+    expect(chip(/^1 h 5 min$/)).toBeTruthy();
+  });
+
+  it("offers a tile for every section, so nothing is discoverable only by clicking a tab", async () => {
+    renderPage(base);
+    await loaded();
+    for (const tile of ["Transcript", "Actions", "Speakers", "Notes", "Files", "Formulas"]) {
+      expect(screen.getByRole("button", { name: tile })).toBeTruthy();
+    }
+  });
+
+  it("returns to the hub from a section's breadcrumb", async () => {
+    renderPage(base);
+    await loaded();
+    openTab("Speakers");
+    expect(screen.queryByRole("button", { name: "Formulas" })).toBeNull(); // the hub's tiles are gone
+    backToHub();
+    expect(screen.getByRole("button", { name: "Formulas" })).toBeTruthy(); // and back
+  });
+
+  it("lands on the hub for someone whose last-used tab was the Overview that no longer exists", async () => {
+    localStorage.setItem("diariz.detailSection", "overview"); // the key the old tab strip persisted
+    renderPage(base);
+    // Migrated to the hub rather than opening a section that isn't there any more.
+    expect(await screen.findByRole("heading", { name: "Summary" })).toBeTruthy();
   });
 
   it("auto-saves the suggested meeting when Calendar is connected and the recording is unlinked", async () => {
@@ -272,10 +311,10 @@ describe("RecordingDetail", () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    // Despite the default being Overview, the deep-link forces the Transcript tab so the segment is shown.
-    const transcriptTab = await screen.findByRole("tab", { name: /transcript/i });
-    expect(transcriptTab.getAttribute("aria-selected")).toBe("true");
+    // Despite the hub being the default, the deep-link opens the Transcript so the segment is shown. The
+    // breadcrumb (not a tab strip) is what marks the active section now.
     expect(await screen.findByText("Hi")).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Transcript" })).toBeTruthy();
   });
 
   it("weaves the user's timed notes into the transcript with the user as the speaker", async () => {
@@ -302,7 +341,7 @@ describe("RecordingDetail", () => {
     await loaded();
     // Minutes content isn't shown until its tab is active.
     expect(screen.queryByText("We met and agreed.")).toBeNull();
-    openTab(/minutes/i);
+    openMinutes();
     expect(screen.getByText("We met and agreed.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /re-create minutes/i }));
     await waitFor(() => expect(api.generateMeetingMinutes).toHaveBeenCalledWith("rec-123"));
@@ -311,7 +350,7 @@ describe("RecordingDetail", () => {
   it("Email minutes with no attachments emails directly", async () => {
     renderPage({ ...base, meetingMinutes: minutes });
     await loaded();
-    openTab(/minutes/i);
+    openMinutes();
     fireEvent.click(screen.getByRole("button", { name: /email minutes to me/i }));
     await waitFor(() => expect(api.emailMeetingMinutes).toHaveBeenCalledWith("rec-123", false));
   });
@@ -322,7 +361,7 @@ describe("RecordingDetail", () => {
     ]);
     renderPage({ ...base, meetingMinutes: minutes });
     await loaded();
-    openTab(/minutes/i);
+    openMinutes();
 
     fireEvent.click(screen.getByRole("button", { name: /email minutes to me/i }));
     expect(api.emailMeetingMinutes).not.toHaveBeenCalled();
@@ -333,7 +372,7 @@ describe("RecordingDetail", () => {
   it("Minutes tab shows an empty state and disables Edit/Email when there are none", async () => {
     renderPage(base); // base.meetingMinutes is null
     await loaded();
-    openTab(/minutes/i);
+    openMinutes();
     expect(screen.getByText(/no meeting minutes yet/i)).toBeTruthy();
     expect((screen.getByRole("button", { name: /re-create minutes/i }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole("button", { name: /edit minutes/i }) as HTMLButtonElement).disabled).toBe(true);
@@ -344,7 +383,7 @@ describe("RecordingDetail", () => {
     renderPage(base);
     await loaded();
 
-    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    openKebab();
     fireEvent.click(screen.getByRole("menuitem", { name: /generate meeting minutes/i }));
 
     await waitFor(() => expect(api.generateMeetingMinutes).toHaveBeenCalledWith("rec-123"));
@@ -355,7 +394,7 @@ describe("RecordingDetail", () => {
     await waitFor(() => expect(api.getRecording).toHaveBeenCalledTimes(1));
     await loaded();
 
-    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    openKebab();
     fireEvent.click(screen.getByRole("menuitem", { name: /re-transcribe/i }));
     const dialog = screen.getByRole("dialog", { name: /re-transcribe/i });
     fireEvent.click(within(dialog).getByRole("button", { name: /^re-transcribe$/i }));
@@ -370,7 +409,7 @@ describe("RecordingDetail", () => {
     renderPage(base);
     await loaded();
 
-    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    openKebab();
     fireEvent.click(screen.getByRole("menuitem", { name: /summarise/i }));
 
     await waitFor(() => expect(api.summarize).toHaveBeenCalledWith("rec-123"));
@@ -393,7 +432,7 @@ describe("RecordingDetail", () => {
       },
     });
     await loaded();
-    openTab(/transcript/i);
+    openTab("Transcript");
 
     fireEvent.click(await screen.findByText("Hello there"));
     expect(api.audioUrl).not.toHaveBeenCalled();
@@ -407,7 +446,7 @@ describe("RecordingDetail", () => {
     renderPage(base);
     await loaded();
     expect(screen.queryByLabelText(/assign SPEAKER_00 to a person/i)).toBeNull();
-    openTab(/speakers/i);
+    openTab("Speakers");
     expect(screen.getByLabelText(/assign SPEAKER_00 to a person/i)).toBeTruthy();
   });
 
@@ -416,7 +455,7 @@ describe("RecordingDetail", () => {
     (api.mergeSegments as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     renderPage(base);
     await loaded();
-    openTab(/transcript/i);
+    openTab("Transcript");
 
     fireEvent.click(screen.getByRole("button", { name: /merge same-speaker rows/i }));
     await waitFor(() => expect(api.mergeSegments).toHaveBeenCalledWith("rec-123"));
@@ -427,7 +466,7 @@ describe("RecordingDetail", () => {
     renderPage(base);
     await loaded();
 
-    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    openKebab();
     fireEvent.click(screen.getByRole("menuitem", { name: /re-transcribe/i }));
     fireEvent.change(screen.getByLabelText(/minimum speakers/i), { target: { value: "2" } });
     const dialog = screen.getByRole("dialog", { name: /re-transcribe/i });
@@ -443,7 +482,7 @@ describe("RecordingDetail", () => {
     renderPage(base);
     await loaded();
 
-    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    openKebab();
     fireEvent.click(screen.getByRole("menuitem", { name: /re-identify speakers/i }));
 
     await waitFor(() => expect(api.reidentify).toHaveBeenCalledWith("rec-123"));
@@ -454,7 +493,7 @@ describe("RecordingDetail", () => {
     (api.reidentify as ReturnType<typeof vi.fn>).mockReturnValue(new Promise<void>((r) => (resolve = r)));
     renderPage(base);
     await loaded();
-    openTab(/speakers/i);
+    openTab("Speakers");
 
     const btn = () => screen.getByRole("button", { name: /re-identify speakers/i }) as HTMLButtonElement;
     expect(btn().disabled).toBe(false);
@@ -469,7 +508,7 @@ describe("RecordingDetail", () => {
     renderPage(base);
     await loaded();
 
-    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    openKebab();
     fireEvent.click(screen.getByRole("menuitem", { name: /email me the transcript/i }));
 
     await waitFor(() => expect(api.emailTranscript).toHaveBeenCalledWith("rec-123"));
@@ -482,7 +521,7 @@ describe("RecordingDetail", () => {
     ]);
     renderPage(base);
     await loaded();
-    openTab(/actions/i);
+    openTab("Actions");
 
     (api.getRecording as ReturnType<typeof vi.fn>).mockResolvedValue({
       ...base,
@@ -514,7 +553,7 @@ describe("RecordingDetail", () => {
       </QueryClientProvider>,
     );
     await loaded();
-    openTab(/actions/i);
+    openTab("Actions");
 
     fireEvent.click(screen.getByRole("button", { name: /extract action items/i }));
     // Progress is pushed to the global status bar, and there is no in-page banner duplicating it.
@@ -546,7 +585,7 @@ describe("RecordingDetail", () => {
     );
 
     await loaded();
-    openTab(/actions/i);
+    openTab("Actions");
     fireEvent.click(screen.getByRole("button", { name: /extract action items/i }));
     expect(await screen.findByText(/extracted 1 action/i)).toBeTruthy();
 
@@ -559,7 +598,7 @@ describe("RecordingDetail", () => {
   it("always offers the Actions tab with an extract button and Add action", async () => {
     renderPage(base);
     await loaded();
-    openTab(/actions/i);
+    openTab("Actions");
     expect(screen.getByRole("button", { name: /extract action items/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /add action/i })).toBeTruthy();
   });
@@ -568,7 +607,7 @@ describe("RecordingDetail", () => {
     (api.updateSegment as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     renderPage(base);
     await loaded();
-    openTab(/transcript/i);
+    openTab("Transcript");
 
     fireEvent.click(await screen.findByText("Hi"));
     fireEvent.click(screen.getByRole("button", { name: /edit segment/i }));
@@ -584,7 +623,7 @@ describe("RecordingDetail", () => {
     (api.deleteSegments as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     renderPage(base);
     await loaded();
-    openTab(/transcript/i);
+    openTab("Transcript");
 
     fireEvent.click(screen.getByRole("button", { name: /select segments/i }));
     fireEvent.click(await screen.findByText("Hi"));
@@ -601,7 +640,7 @@ describe("RecordingDetail", () => {
     ]);
     renderPage(base);
     await loaded();
-    openTab(/attachments/i);
+    openTab("Files");
 
     expect(screen.getByRole("button", { name: /add file/i })).toBeTruthy();
     expect((await screen.findByDisplayValue("doc.pdf"))).toBeTruthy();
@@ -617,7 +656,7 @@ describe("RecordingDetail", () => {
     ]);
     renderPage(base);
     await loaded();
-    openTab(/formulas/i);
+    openTab("Formulas");
 
     // Delete is disabled until a result is selected; selecting the row enables it and wires the id through.
     expect((screen.getByRole("button", { name: /^delete$/i }) as HTMLButtonElement).disabled).toBe(true);
@@ -633,7 +672,7 @@ describe("RecordingDetail", () => {
     ]);
     renderPage(base);
     await loaded();
-    openTab(/formulas/i);
+    openTab("Formulas");
 
     fireEvent.click(await screen.findByText("Action Items"));
     fireEvent.click(screen.getByRole("button", { name: /^download$/i }));
@@ -647,7 +686,7 @@ describe("RecordingDetail", () => {
     (api.createNotes as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     renderPage(base);
     await loaded();
-    openTab(/notes/i);
+    openTab("Notes");
 
     expect(await screen.findByText("Comp expectations")).toBeTruthy();
 
@@ -661,24 +700,22 @@ describe("RecordingDetail", () => {
     (api.generateMeetingMinutes as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     renderPage(base);
     await loaded();
-    openTab(/notes/i);
+    openTab("Notes");
 
     fireEvent.click(screen.getByRole("button", { name: /re-create minutes/i }));
     await waitFor(() => expect(api.generateMeetingMinutes).toHaveBeenCalledWith("rec-123"));
   });
 
-  it("clicking a note stamp switches to the transcript tab", async () => {
+  it("clicking a note stamp switches to the transcript", async () => {
     (api.listNotes as ReturnType<typeof vi.fn>).mockResolvedValue([
       { id: "n1", text: "Comp expectations", capturedAtMs: 61_000, ordinal: 0, createdAt: base.createdAt },
     ]);
     renderPage(base);
     await loaded();
-    openTab(/notes/i);
+    openTab("Notes");
 
     fireEvent.click(await screen.findByRole("button", { name: /jump to 1:01/i }));
-    await waitFor(() =>
-      expect(screen.getByRole("tab", { name: /transcript/i }).getAttribute("aria-selected")).toBe("true"),
-    );
+    await waitFor(() => expect(screen.getByRole("navigation", { name: "Transcript" })).toBeTruthy());
   });
 
   // Bug: the minutes picker spinner only cleared on a SignalR "completed" push. If that event is missed
@@ -708,7 +745,7 @@ describe("RecordingDetail", () => {
       </QueryClientProvider>,
     );
     await loaded();
-    openTab(/minutes/i);
+    openMinutes();
 
     // Kick off a re-create; the picker goes busy (spinner shown on the Meeting type button).
     fireEvent.click(screen.getByRole("button", { name: /re-create minutes/i }));
@@ -729,7 +766,7 @@ describe("RecordingDetail", () => {
   it("plays a speaker's audio from the Speakers tab (audio element is mounted off-tab)", async () => {
     renderPage(base);
     await loaded();
-    openTab(/speakers/i);
+    openTab("Speakers");
 
     fireEvent.click(screen.getByRole("button", { name: /play speaker_00's segments/i }));
     await waitFor(() => expect(api.audioUrl).toHaveBeenCalledWith("rec-123"));

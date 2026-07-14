@@ -16,6 +16,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | --- | --- |
 | **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume), system audio, or both mixed together on one device - system audio works in Chromium browsers ("Share audio") and seamlessly in the desktop app; schedule a recording to auto-stop at a set time or after 15/30/60 minutes; or upload files (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A). |
 | **Transcribe & diarize** | Server-side WhisperX (word-level timestamps) with pyannote speaker diarization; speaker-labelled, editable, playable segments you can re-transcribe any time. |
+| **Recording hub** | Every meeting opens on a hub: a summary card (meeting type, key facts, the summary inline) over tiles for transcript, actions, speakers, notes, files, and formulas - each showing its count and a preview, with new-note / add-file / run-formula available in place. The transcript embeds a conversation-flow player showing who spoke when, which doubles as the scrubber. |
 | **Speaker identification** | Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). |
 | **Notes** | Take your own note lines live during a meeting (timestamped, crash-safe); they appear inline in the transcript at the moment you wrote them, steer the minutes, and can be woven into an enhanced-notes section linking to the exact transcript moments. |
 | **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable, driven by reusable meeting-type templates with per-block layout control (H1-H3 headings, break, Markdown, horizontal rules, drag-to-reorder) and JSON import/export. |
@@ -53,6 +54,23 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.136.0",
+    date: "2026-07-14",
+    pr: 302,
+    headline: "A hub for every recording",
+    summary:
+      "Opening a meeting no longer drops you onto a strip of eight tabs. It opens a hub: a summary card carrying the meeting type, the key facts as chips, and the summary itself shown inline - over a grid of tiles for Transcript, Actions, Speakers, Notes, Files, and Formulas. Every tile shows its real count and a preview of what is inside, so you can see what a meeting holds without clicking into anything, and Notes, Files, and Formulas can be added or run straight from their tile. Clicking a tile drills into that section with a breadcrumb back. The transcript now embeds its audio: a conversation-flow bar shows who spoke when, colour-coded per speaker and sized by how long they talked, and doubles as the scrubber. The header is down to Play, Copy link, Download, and a More menu.",
+    added: [
+      "A recording hub replacing the tab strip: a hero summary card over capability tiles, each with a live count and a preview of the section's contents.",
+      "New note, add file, and run formula are available in place from their tile, without navigating into the section.",
+      "The transcript embeds a conversation-flow player: speaker-coloured blocks proportional to talk time, a speaker legend with each person's share, and click or drag anywhere on it to seek.",
+    ],
+    changed: [
+      "The recording header keeps only Play, Copy link, and Download; rename, re-transcribe, move, and email moved into the More menu (which already carried them).",
+      "The old Overview tab is gone: its date, duration, audio retention, language, speakers, recorded-by, and rooms are now chips on the hero card, and its summary is shown inline rather than under a separate tab.",
+    ],
+  },
   {
     version: "0.135.0",
     date: "2026-07-13",
