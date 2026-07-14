@@ -71,15 +71,27 @@ duplicates, and erases voiceprints (GDPR — biometric data).
 re-create them, or **email them to yourself** (optionally with the recording's attachments). The minutes also
 travel with the emailed transcript and the Markdown/text/RTF downloads. The Meeting Minutes panel is always
 available (collapsed) with a refresh button to generate them on any recording.
-- **Meeting types (minutes templates).** Minutes are driven by a **meeting type** — a reusable template of
-H1/H2/H3 sections whose blocks are **boilerplate text**, **substituted recording values** (date, attendees, the
-action-items table, …), **model prompts**, or a **horizontal rule** (a divider on its own line). A standard set
-ships (General, Customer, Cadence Call, 1:1, Interview, Town Hall, Webinar); pick one from the Minutes toolbar to
-re-run the minutes in that structure. A **Manage Meeting Types** editor creates/edits templates — **Personal** (a
-user's own) or **Platform** (admin-owned, shared read-only). Each block has a **Break-after** control (no break /
-line break / paragraph) so you decide exactly where content runs together or separates; text blocks are an
-**auto-growing Markdown** box, and a **drag handle** moves any block within a section or into another. Templates can be **exported to a JSON file and
-imported** back (naming the import, since it may duplicate one you have), so you can share them between accounts.
+- **Meeting types: minutes are a formula.** A **meeting type** is *presentation and selection* — a name, group,
+icon, colour, and the **framing** you give the model ("this is a customer call; keep it suitable to send back to
+them"). It carries **no prompts of its own**: it names the **formula** whose template generates the minutes, plus
+any **additional formulas** to run at the same time (their documents land in the recording's Formulas tab). So
+minutes and formulas are the **same machinery** — any formula you can use can produce your minutes, and the
+formula decides both the shape of the document and what the model is shown. A standard set ships (General,
+Customer, Cadence Call, Weekly, 1:1, Interview, Town Hall, Webinar), each with the built-in formula that generates
+it; pick one from the Minutes toolbar to re-run the minutes in that structure. A **Manage Meeting Types** editor
+creates/edits them — **Personal** (a user's own) or **Platform** (admin-owned, shared read-only) — and offers only
+formulas that type is allowed to use (a shared type can't point at someone's private formula, or nobody else would
+get minutes). A formula that generates some type's minutes **can't be deleted or disabled** until those types point
+elsewhere. Meeting types can be **exported to a JSON file and imported** back (they reference their formulas by
+name, and the import tells you if this instance hasn't got one), so you can share them between accounts.
+- **Templates are built from blocks.** A formula's template — and therefore a minutes template — is H1/H2/H3
+sections whose blocks are **literal text**, **substituted recording values** (date, attendees, the action-items
+table, your notes, …), **instructions to the model**, or a **horizontal rule**. Each block has a **Break-after**
+control (no break / line break / paragraph) so you decide exactly where content runs together or separates; text
+blocks are an **auto-growing Markdown** box, and a **drag handle** moves any block within a section or into
+another. A section can also be **headless**, which is what a formula that is simply one instruction looks like.
+The templates Diariz ships with are **plain markdown files** in the repository, so you can read and review the
+exact words the model is given.
 When a template substitutes the **attendees** field it names the identified people and then counts the rest
 (e.g. "Alice, Bob and 11 unidentified attendees"). A Platform Administrator can also pick how minutes generate:
 **one LLM call per section** (best structure) or a **single call** (fewer tokens).
@@ -124,17 +136,23 @@ action items / summaries / attendees / talk time / …, plus email-to-self) to a
 transcripts. Per-user and secure: tokens are shown once and stored only as a **SHA-256 hash**, work only for
 your own recordings, and both **tokens and web connections are revocable** any time in the same Preferences
 section.
-- **Formulas: run a saved prompt over a recording.** A **Formula** is a saved prompt plus a chosen **context**
-(any mix of transcript, notes, summary, minutes, and action items) that you run over a recording to generate a
-named **Markdown Result** — open it, edit it in the same rich editor as minutes, download it as `.md`, or email
-it to yourself. Formulas come in three scopes: Diariz-provided **starter formulas** seeded on every install
+- **Formulas: build a document, run it over a recording.** A **Formula** is a **template** plus a chosen
+**context**. The template is built from blocks - **headings**, **literal text**, **substituted meeting details**
+(date, time, title, attendees, duration, action items, your notes), **instructions to the model**, and horizontal
+rules - so it produces a properly laid-out document rather than whatever shape the model felt like. The context
+(any mix of transcript, notes, summary, minutes, and action items) is what the formula is allowed to see. Run it
+over a recording to generate a named **Markdown Result** — open it, edit it in the same rich editor as minutes,
+download it as `.md`, or email it to yourself. A formula that is simply one instruction is just a template with
+one block, so nothing has to be more complicated than it needs to be. Formulas come in three scopes: Diariz-provided **starter formulas** seeded on every install
 (Follow-up email, Meeting recap, Decisions & risks, Tone & sentiment read), **Platform-wide** formulas shared
 with everyone, and your own **Personal** formulas — create and edit these in **Preferences → Formulas**. A
 recording-level **Formulas tab** lists every formula you can use, and a matching **Formulas tab on any folder
 (section) page** runs the same formula over **every meeting in that folder and its sub-sections** (a map-reduce:
 the formula runs on each transcript, then over the combined results). Runs happen **in the background** - the
 result appears right away as "Generating..." and fills in when ready (or shows a clear error), so you can run
-several at once without waiting. Each recording and each folder keeps its own past results. The tab is a resizable two-panel view - the
+several at once without waiting. **Re-running a formula replaces its previous document** rather than piling up
+near-identical copies - and if you have **edited** a document by hand, an automatic re-run leaves it alone
+(running the formula yourself still regenerates it). Each recording and each folder keeps its own results. The tab is a resizable two-panel view - the
 list of results you have generated on the left (each with an **origin icon**: the Diariz logo for built-in and
 platform formulas, the author's avatar for your own), and the selected result's rendered document on the right,
 read in place. Creating, editing, deleting, or enabling/

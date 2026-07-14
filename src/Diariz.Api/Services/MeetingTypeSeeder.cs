@@ -4,146 +4,81 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Diariz.Api.Services;
 
-/// <summary>Seeds the standard Platform meeting types (minutes templates) the app ships with. Idempotent by
-/// <see cref="MeetingType.Key"/> and <b>insert-if-missing</b> - it never overwrites an existing type, so a
-/// Platform Administrator's edits to (or deletion of) a standard survive redeploys. Runs on every boot.</summary>
+/// <summary>Seeds the standard Platform meeting types (minutes templates) the app ships with, together with the
+/// Diariz formula that generates each one's minutes. Idempotent by <see cref="MeetingType.Key"/> and
+/// <b>insert-if-missing</b> - it never overwrites an existing type, so a Platform Administrator's edits to (or
+/// deletion of) a standard survive redeploys. Runs on every boot.
+///
+/// <para>The templates themselves are <b>markdown files</b> (<c>meeting-types/*.md</c>, loaded by
+/// <see cref="MeetingTypeCatalog"/> at boot into <see cref="Standards"/>) rather than hand-built in C#. The words
+/// the model is given are content, not code, and belong somewhere a reviewer can read them.</para></summary>
 public static class MeetingTypeSeeder
 {
-    // ---- content-building helpers (keep the template definitions readable) ----
-    private static TemplateBlock Text(string s) => new(TemplateBlock.Boilerplate, Text: s);
-    private static TemplateBlock Field(string f) => new(TemplateBlock.FieldKind, Field: f);
-    private static TemplateBlock Prompt(string s) => new(TemplateBlock.Prompt, Text: s);
-    private static TemplateSection Sec(int level, string title, params TemplateBlock[] blocks) =>
-        new(level, title, blocks);
-    private static string Content(params TemplateSection[] sections) =>
-        new TemplateContent(sections).Serialize();
+    /// <summary>The standard set, loaded from <c>meeting-types/*.md</c> at boot (see <c>Program.cs</c>). Empty until
+    /// then - and empty if the directory is missing, which is why <see cref="EmergencyGeneral"/> exists.</summary>
+    public static IReadOnlyList<StandardMeetingType> Standards { get; private set; } = [];
 
-    /// <summary>The "General Meeting" default - reproduces the original minutes structure (metadata, purpose,
-    /// themed discussion, decisions, open questions, next steps) and ends with the canonical actions table.</summary>
-    private static string GeneralContent() => Content(
-        Sec(1, "Meeting details",
-            Text("Date: "), Field("date"),
-            Text("Time: "), Field("time"),
-            Text("Attendees: "), Field("attendees"),
-            Text("Duration: "), Field("duration")),
-        Sec(1, "Purpose",
-            Prompt("State the purpose / context of the meeting in 1-2 lines.")),
-        Sec(1, "Discussion",
-            Prompt("Summarise the discussion grouped by theme (not chronologically), concise and decision-oriented. Omit this section if there was no substantive discussion.")),
-        Sec(1, "Decisions",
-            Prompt("List the decisions made. Omit this section if none were made.")),
-        Sec(1, "Open questions",
-            Prompt("List any open questions or parking-lot items. Omit this section if there are none.")),
-        Sec(1, "Next steps",
-            Prompt("Describe the next steps or next meeting in narrative form. Omit this section if there are none.")),
-        Sec(1, "Enhanced notes",
-            Field("notes")),
-        Sec(1, "Action items",
-            Field("action_items")));
+    /// <summary>Install the catalog loaded from disk. Called once at boot.</summary>
+    public static void UseStandards(IReadOnlyList<StandardMeetingType> standards) => Standards = standards;
 
-    /// <summary>The General template's content as seeded BEFORE the Enhanced-notes section existed. Kept so
+    /// <summary>The template used when nothing else can be found - no chosen type, no seeded General, and no content
+    /// files on disk. It is deliberately <b>not</b> a copy of the General standard (which would drift from the
+    /// file): it is a minimal, obviously-generic document, so a deployment missing its content directory still
+    /// produces usable minutes rather than none.</summary>
+    public static TemplateContent EmergencyGeneral { get; } = TemplateMarkdown.Parse(
+        """
+        # Summary
+        [[WRITE: Summarise the meeting in a short paragraph.]]
+
+        # Discussion
+        [[WRITE: Summarise the discussion, grouped by theme.]]
+
+        # Decisions
+        [[WRITE: List the decisions made. Omit this section if none were made.]]
+
+        # Action items
+        {{action_items}}
+        """);
+
+    /// <summary>The General template as seeded BEFORE the Enhanced-notes section existed. Kept so
     /// <see cref="SeedAsync"/> can recognise a never-edited legacy row and upgrade it - and only it.</summary>
-    private static string LegacyGeneralContent() => Content(
-        Sec(1, "Meeting details",
-            Text("Date: "), Field("date"),
-            Text("Time: "), Field("time"),
-            Text("Attendees: "), Field("attendees"),
-            Text("Duration: "), Field("duration")),
-        Sec(1, "Purpose",
-            Prompt("State the purpose / context of the meeting in 1-2 lines.")),
-        Sec(1, "Discussion",
-            Prompt("Summarise the discussion grouped by theme (not chronologically), concise and decision-oriented. Omit this section if there was no substantive discussion.")),
-        Sec(1, "Decisions",
-            Prompt("List the decisions made. Omit this section if none were made.")),
-        Sec(1, "Open questions",
-            Prompt("List any open questions or parking-lot items. Omit this section if there are none.")),
-        Sec(1, "Next steps",
-            Prompt("Describe the next steps or next meeting in narrative form. Omit this section if there are none.")),
-        Sec(1, "Action items",
-            Field("action_items")));
+    private static string LegacyGeneralContent() => TemplateMarkdown.Parse(
+        """
+        # Meeting details
+        Date: {{date}}
+        Time: {{time}}
+        Attendees: {{attendees}}
+        Duration: {{duration}}
 
-    /// <summary>The standard set. Each is a Platform type (<see cref="MeetingType.UserId"/> = null) whose minutes
-    /// are generated by a seeded Diariz formula carrying <see cref="StandardMeetingType.ContentJson"/>.</summary>
-    public static IReadOnlyList<StandardMeetingType> Standards { get; } =
-    [
-        Std(MeetingType.GeneralKey, "Standard", "General Meeting", "document", "#5C6BC0",
-            "A general-purpose meeting. Produce neutral, professional minutes suitable for forwarding.",
-            GeneralContent()),
+        # Purpose
+        [[WRITE: State the purpose / context of the meeting in 1-2 lines.]]
 
-        Std("customer", "Customer", "Customer Meeting", "handshake", "#0B8043",
-            "A meeting with an external customer or client. Capture their needs, commitments made, and follow-ups; keep the tone suitable for sharing back with the customer.",
-            Content(
-                Sec(1, "Meeting details", Text("Date: "), Field("date"), Text("Attendees: "), Field("attendees")),
-                Sec(1, "Customer context", Prompt("Summarise the customer's situation, goals, and any concerns they raised.")),
-                Sec(1, "Discussion", Prompt("Summarise what was discussed, grouped by topic.")),
-                Sec(1, "Commitments", Prompt("List what each side agreed to do. Omit if none.")),
-                Sec(1, "Action items", Field("action_items")))),
+        # Discussion
+        [[WRITE: Summarise the discussion grouped by theme (not chronologically), concise and decision-oriented. Omit this section if there was no substantive discussion.]]
 
-        Std("cadence-call", "Team", "Cadence Call", "refresh", "#F09300",
-            "A recurring team cadence / stand-up. Focus on progress, blockers, and what's next; keep it terse.",
-            Content(
-                Sec(1, "Cadence call", Text("Date: "), Field("date"), Text("Attendees: "), Field("attendees")),
-                Sec(1, "Progress", Prompt("Summarise progress reported since the last cadence, grouped by workstream or person.")),
-                Sec(1, "Blockers", Prompt("List blockers or risks raised. Omit if none.")),
-                Sec(1, "Action items", Field("action_items")))),
+        # Decisions
+        [[WRITE: List the decisions made. Omit this section if none were made.]]
 
-        Std("weekly-meeting", "Team", "Weekly Meeting", "calendar", "#3F51B5",
-            "A weekly team meeting. Capture updates, decisions, and follow-ups.",
-            Content(
-                Sec(1, "Weekly meeting", Text("Date: "), Field("date"), Text("Attendees: "), Field("attendees")),
-                Sec(1, "Updates", Prompt("Summarise the updates shared, grouped by topic or person.")),
-                Sec(1, "Decisions", Prompt("List decisions made. Omit if none.")),
-                Sec(1, "Action items", Field("action_items")))),
+        # Open questions
+        [[WRITE: List any open questions or parking-lot items. Omit this section if there are none.]]
 
-        Std("one-to-one", "Team", "1:1", "user", "#8E24AA",
-            "A one-to-one conversation. Keep it private and constructive; capture themes and agreed actions, not verbatim remarks.",
-            Content(
-                Sec(1, "1:1", Text("Date: "), Field("date"), Text("Participants: "), Field("attendees")),
-                Sec(1, "Topics", Prompt("Summarise the topics discussed at a high level, in neutral language.")),
-                Sec(1, "Agreed actions", Prompt("List what was agreed. Omit if none.")),
-                Sec(1, "Action items", Field("action_items")))),
+        # Next steps
+        [[WRITE: Describe the next steps or next meeting in narrative form. Omit this section if there are none.]]
 
-        Std("interview", "Hiring", "Interview", "clipboard", "#D81B60",
-            "A candidate interview. Summarise the candidate's responses and the interviewer's assessment objectively; avoid protected-characteristic commentary.",
-            Content(
-                Sec(1, "Interview", Text("Date: "), Field("date"), Text("Panel: "), Field("attendees")),
-                Sec(1, "Discussion", Prompt("Summarise the topics covered and the candidate's key responses.")),
-                Sec(1, "Assessment", Prompt("Summarise strengths and areas of concern raised, objectively and professionally.")),
-                Sec(1, "Action items", Field("action_items")))),
-
-        Std("town-hall", "Company", "Town Hall", "megaphone", "#039BE5",
-            "An all-hands / town-hall. Capture announcements, key messages, and Q&A themes for a broad audience.",
-            Content(
-                Sec(1, "Town hall", Text("Date: "), Field("date")),
-                Sec(1, "Announcements", Prompt("Summarise the announcements and key messages delivered.")),
-                Sec(1, "Q&A", Prompt("Summarise the questions asked and answers given, grouped by theme. Omit if none.")),
-                Sec(1, "Action items", Field("action_items")))),
-
-        Std("webinar", "Company", "Webinar", "video", "#E67C73",
-            "A webinar or presentation. Summarise the content presented and audience questions for attendees who missed it.",
-            Content(
-                Sec(1, "Webinar", Text("Date: "), Field("date")),
-                Sec(1, "Overview", Prompt("Summarise the topic and the main points presented.")),
-                Sec(1, "Key takeaways", Prompt("List the key takeaways in a few bullets.")),
-                Sec(1, "Q&A", Prompt("Summarise audience questions and answers. Omit if none.")),
-                Sec(1, "Action items", Field("action_items")))),
-    ];
-
-    private static StandardMeetingType Std(
-        string key, string group, string title, string icon, string color, string overview, string contentJson) =>
-        new(key, group, title, icon, color, overview, contentJson);
+        # Action items
+        {{action_items}}
+        """).Serialize();
 
     /// <summary>The formula name a standard's minutes template is seeded under. Stable, because the formula seeder
     /// is create-only and keys on Name - so an admin's edit to a standard's template survives a redeploy.</summary>
     public static string FormulaNameFor(StandardMeetingType std) => $"{std.Title} minutes";
 
     /// <summary>Insert any standard whose <see cref="MeetingType.Key"/> isn't already present, together with the
-    /// Diariz formula that generates its minutes, and link the two. Existing rows are left untouched, so a Platform
-    /// Administrator's edits to (or deletion of) a standard survive redeploys.
+    /// Diariz formula that generates its minutes, and link the two. Existing rows are left untouched.
     ///
-    /// <para>The formula is <c>IsBuiltIn</c>, so it cannot be deleted out from under the template it drives.
-    /// It is create-only by Name, mirroring <c>Seeder.SeedFormulasAsync</c> - an admin who reworks a standard's
-    /// template keeps their version.</para></summary>
+    /// <para>The formula is <c>IsBuiltIn</c>, so it cannot be deleted out from under the template it drives. It is
+    /// create-only by Name, mirroring <c>Seeder.SeedFormulasAsync</c> - an admin who reworks a standard's template
+    /// keeps their version.</para></summary>
     public static async Task SeedAsync(DiarizDbContext db, CancellationToken ct = default)
     {
         var have = (await db.MeetingTypes
@@ -189,9 +124,7 @@ public static class MeetingTypeSeeder
             Name = name,
             Description = std.Overview,
             ContentJson = std.ContentJson,
-            // What a minutes template needs to see: the transcript, the note-taker's lines (they steer every
-            // section), and the canonical actions (the `action_items` field renders them).
-            Context = FormulaContext.Transcript | FormulaContext.Notes | FormulaContext.Actions,
+            Context = std.Context,
             Enabled = true,
             IsBuiltIn = true,
         };
@@ -202,7 +135,7 @@ public static class MeetingTypeSeeder
 
     /// <summary>One-time additive upgrade: give the seeded General template the Enhanced notes section, but only
     /// when the admin has never edited it (content still equals the previous seed) - edits are sacred. The content
-    /// now lives on the type's primary formula, so that is what is compared and upgraded.
+    /// lives on the type's primary formula, so that is what is compared and upgraded.
     ///
     /// Compare CANONICALLY (parse + re-serialize), not byte-wise: ContentJson is a jsonb column and Postgres
     /// re-formats stored JSON (spaces after colons/commas), so raw string equality never matches the compact
@@ -216,7 +149,10 @@ public static class MeetingTypeSeeder
 
         if (Canonical(formula.ContentJson) != Canonical(LegacyGeneralContent())) return;
 
-        formula.ContentJson = Standards.First(s => s.Key == MeetingType.GeneralKey).ContentJson;
+        var current = Standards.FirstOrDefault(s => s.Key == MeetingType.GeneralKey);
+        if (current is null) return; // no content files - nothing to upgrade to.
+
+        formula.ContentJson = current.ContentJson;
         await db.SaveChangesAsync(ct);
     }
 
@@ -225,7 +161,8 @@ public static class MeetingTypeSeeder
     private static string Canonical(string json) => TemplateContent.Parse(json).Serialize();
 }
 
-/// <summary>One standard meeting type the app ships with: its presentation (title, group, icon, colour, overview)
-/// plus the template content its seeded Diariz formula carries.</summary>
+/// <summary>One standard meeting type the app ships with: its presentation (title, group, icon, colour, overview),
+/// the template its seeded Diariz formula carries, and the context that formula declares.</summary>
 public sealed record StandardMeetingType(
-    string Key, string GroupName, string Title, string Icon, string Color, string Overview, string ContentJson);
+    string Key, string GroupName, string Title, string Icon, string Color, string Overview, string ContentJson,
+    FormulaContext Context);

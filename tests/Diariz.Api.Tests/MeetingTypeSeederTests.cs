@@ -14,6 +14,10 @@ namespace Diariz.Api.Tests;
 /// seeder creates alongside it as a built-in Diariz formula.</summary>
 public class MeetingTypeSeederTests
 {
+    // The templates are markdown files now, so the seeder needs the catalog installed - exactly as Program.cs does
+    // at boot. These run against the CONTENT THAT SHIPS, not a fixture that resembles it.
+    public MeetingTypeSeederTests() => Standards.Install();
+
     /// <summary>The template the General type currently points at (its primary formula's content).</summary>
     private static async Task<Formula> GeneralFormula(DiarizDbContext db)
     {

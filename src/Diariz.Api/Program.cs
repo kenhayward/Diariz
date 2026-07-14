@@ -287,6 +287,11 @@ var formulasDir = Directory.Exists(Path.Combine(builder.Environment.ContentRootP
     ? Path.Combine(builder.Environment.ContentRootPath, "formulas")
     : Path.Combine(AppContext.BaseDirectory, "formulas");
 
+// The standard minutes templates, in the same markdown format. Loaded once at boot into MeetingTypeSeeder.
+var meetingTypesDir = Directory.Exists(Path.Combine(builder.Environment.ContentRootPath, "meeting-types"))
+    ? Path.Combine(builder.Environment.ContentRootPath, "meeting-types")
+    : Path.Combine(AppContext.BaseDirectory, "meeting-types");
+
 // ---- Localized export/email labels (runtime JSON, not compiled .resx) ----
 // Prefer the content root's locales/ (present in dev and copied to the published output), falling back to
 // the app base directory.
@@ -469,6 +474,7 @@ await using (var scope = app.Services.CreateAsyncScope())
     // would be silently re-promoted from their stale AspNetUserRoles row.
     await Seeder.SeedPlatformAuthorityAsync(db, seedUserId);
     await Seeder.SeedFormulasAsync(db, BuiltInFormulaCatalog.LoadFrom(formulasDir, app.Logger));
+    MeetingTypeSeeder.UseStandards(MeetingTypeCatalog.LoadFrom(meetingTypesDir, app.Logger));
     await MeetingTypeSeeder.SeedAsync(db);
 }
 
