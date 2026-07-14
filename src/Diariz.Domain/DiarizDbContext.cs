@@ -276,14 +276,17 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.Property(a => a.Name).HasMaxLength(512);
         });
 
-        // Saved prompt + chosen context, run over a recording to produce a Markdown result. Personal formulas
-        // have an OwnerUserId; Platform/Diariz scopes have none. Provider-agnostic (plain columns), so it
-        // stays outside the Npgsql guard and loads under the in-memory test provider too.
+        // Saved template + chosen context, run over a recording to produce a Markdown result. Personal formulas
+        // have an OwnerUserId; Platform/Diariz scopes have none. Provider-agnostic (plain columns) apart from
+        // ContentJson, so it otherwise stays outside the Npgsql guard and loads under the in-memory test provider.
         builder.Entity<Formula>(e =>
         {
             e.Property(f => f.Name).HasMaxLength(256);
             e.Property(f => f.Description).HasMaxLength(1024);
             e.Property(f => f.Enabled).HasDefaultValue(true);
+            // jsonb on Postgres, plain text elsewhere - same treatment as MeetingType.ContentJson.
+            if (isNpgsql)
+                e.Property(f => f.ContentJson).HasColumnType("jsonb");
             // Cascade: a Personal formula belongs to its owner, so deleting the account deletes it. Platform/
             // Diariz formulas have a null OwnerUserId and are unaffected. This is the only cascade path from
             // User to Formula, so there is no conflict.

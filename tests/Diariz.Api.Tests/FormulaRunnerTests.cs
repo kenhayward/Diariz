@@ -40,7 +40,7 @@ public class FormulaRunnerTests
         var formula = new Formula
         {
             Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = userId,
-            Name = "Key Decisions", Prompt = "Summarize the key decisions made.",
+            Name = "Key Decisions", ContentJson = TemplateContent.FromPrompt("Summarize the key decisions made.").Serialize(),
             Context = FormulaContext.Transcript, Enabled = true,
         };
         db.Formulas.Add(formula);
@@ -79,7 +79,7 @@ public class FormulaRunnerTests
         var formula = new Formula
         {
             Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = userId,
-            Name = "F", Prompt = "P", Context = FormulaContext.Transcript, Enabled = true,
+            Name = "F", ContentJson = TemplateContent.FromPrompt("P").Serialize(), Context = FormulaContext.Transcript, Enabled = true,
         };
         db.Formulas.Add(formula);
         await db.SaveChangesAsync();
@@ -106,7 +106,7 @@ public class FormulaRunnerTests
         var formula = new Formula
         {
             Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = otherUserId,
-            Name = "Not Mine", Prompt = "P", Context = FormulaContext.Transcript, Enabled = true,
+            Name = "Not Mine", ContentJson = TemplateContent.FromPrompt("P").Serialize(), Context = FormulaContext.Transcript, Enabled = true,
         };
         db.Formulas.Add(formula);
         await db.SaveChangesAsync();
@@ -126,7 +126,7 @@ public class FormulaRunnerTests
         var formula = new Formula
         {
             Id = Guid.NewGuid(), Scope = FormulaScope.Platform,
-            Name = "Disabled", Prompt = "P", Context = FormulaContext.Transcript, Enabled = false,
+            Name = "Disabled", ContentJson = TemplateContent.FromPrompt("P").Serialize(), Context = FormulaContext.Transcript, Enabled = false,
         };
         db.Formulas.Add(formula);
         await db.SaveChangesAsync();
@@ -147,7 +147,7 @@ public class FormulaRunnerTests
         var formula = new Formula
         {
             Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = callerId,
-            Name = "F", Prompt = "P", Context = FormulaContext.Transcript, Enabled = true,
+            Name = "F", ContentJson = TemplateContent.FromPrompt("P").Serialize(), Context = FormulaContext.Transcript, Enabled = true,
         };
         db.Formulas.Add(formula);
         await db.SaveChangesAsync();
@@ -178,7 +178,7 @@ public class FormulaRunnerTests
         var formula = new Formula
         {
             Id = Guid.NewGuid(), Scope = FormulaScope.Diariz,
-            Name = "F", Prompt = "P", Context = FormulaContext.Transcript, Enabled = true,
+            Name = "F", ContentJson = TemplateContent.FromPrompt("P").Serialize(), Context = FormulaContext.Transcript, Enabled = true,
         };
         db.Formulas.Add(formula);
         await db.SaveChangesAsync();
@@ -201,7 +201,7 @@ public class FormulaRunnerTests
         var formula = new Formula
         {
             Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = ownerA,
-            Name = "A's Shared", Prompt = "P", Context = FormulaContext.Transcript, Enabled = true, Shared = true,
+            Name = "A's Shared", ContentJson = TemplateContent.FromPrompt("P").Serialize(), Context = FormulaContext.Transcript, Enabled = true, Shared = true,
         };
         db.Formulas.Add(formula);
         db.FormulaSubscriptions.Add(new FormulaSubscription
@@ -229,7 +229,7 @@ public class FormulaRunnerTests
         var formula = new Formula
         {
             Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = ownerA,
-            Name = "A's Shared", Prompt = "P", Context = FormulaContext.Transcript, Enabled = true, Shared = true,
+            Name = "A's Shared", ContentJson = TemplateContent.FromPrompt("P").Serialize(), Context = FormulaContext.Transcript, Enabled = true, Shared = true,
         };
         db.Formulas.Add(formula);
         await db.SaveChangesAsync();
@@ -250,7 +250,7 @@ public class FormulaRunnerTests
         var formula = new Formula
         {
             Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = ownerA,
-            Name = "A's Private", Prompt = "P", Context = FormulaContext.Transcript, Enabled = true, Shared = false,
+            Name = "A's Private", ContentJson = TemplateContent.FromPrompt("P").Serialize(), Context = FormulaContext.Transcript, Enabled = true, Shared = false,
         };
         db.Formulas.Add(formula);
         await db.SaveChangesAsync();
@@ -270,7 +270,7 @@ public class FormulaRunnerTests
         var formula = new Formula
         {
             Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = userId,
-            Name = "F", Prompt = "P", Context = FormulaContext.Transcript, Enabled = true,
+            Name = "F", ContentJson = TemplateContent.FromPrompt("P").Serialize(), Context = FormulaContext.Transcript, Enabled = true,
         };
         db.Formulas.Add(formula);
         await db.SaveChangesAsync();

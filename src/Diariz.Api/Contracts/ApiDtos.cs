@@ -243,13 +243,13 @@ public record ShareRecordingRequest(Guid FromRoomId, Guid ToRoomId);
 /// Platform type). <see cref="Content"/> is the structured template (H1/H2 sections of blocks).</summary>
 public record MeetingTypeDto(
     Guid Id, bool IsPlatform, bool CanEdit, string GroupName, string Title, string Overview,
-    string Icon, string Color, Diariz.Api.Services.MeetingTypeContent Content, bool IsDefault = false);
+    string Icon, string Color, Diariz.Api.Services.TemplateContent Content, bool IsDefault = false);
 
 /// <summary>Create or update a meeting type. <paramref name="IsPlatform"/> requests a shared Platform type
 /// (honoured only for Platform Administrators; normal users always get a Personal type).</summary>
 public record MeetingTypeRequest(
     string GroupName, string Title, string Overview, string Icon, string Color,
-    Diariz.Api.Services.MeetingTypeContent Content, bool IsPlatform = false);
+    Diariz.Api.Services.TemplateContent Content, bool IsPlatform = false);
 
 /// <summary>Apply a meeting type to a recording (re-runs the minutes). Null = the General default.</summary>
 public record ApplyMeetingTypeRequest(Guid? MeetingTypeId);
@@ -496,14 +496,15 @@ public record SaveChatConversationResult(Guid Id, string Title);
 
 // ---- Formulas ----
 
-/// <summary>A saved prompt + context, as listed for the caller: their own Personal formulas plus every
+/// <summary>A saved template + context, as listed for the caller: their own Personal formulas plus every
 /// enabled Platform/Diariz formula. <paramref name="Scope"/> serialises as the enum name ("Personal" /
 /// "Platform" / "Diariz") via the global string-enum converter. <paramref name="Context"/> is the
 /// [Flags] bit value exposed as a plain int - NOT the enum itself, which the global converter would
 /// otherwise render as a comma-separated string the web can't do bit arithmetic on (see CLAUDE.md's
 /// "Flags enum serializes as string" gotcha).</summary>
 public record FormulaDto(
-    Guid Id, string Scope, Guid? OwnerUserId, string Name, string? Description, string Prompt,
+    Guid Id, string Scope, Guid? OwnerUserId, string Name, string? Description,
+    Diariz.Api.Services.TemplateContent Content,
     int Context, bool Enabled, bool IsBuiltIn, bool Shared);
 
 /// <summary>A formula shared by another user, for the discovery browser: the formula, the owner's display +
@@ -512,12 +513,16 @@ public record SharedFormulaDto(FormulaDto Formula, string? OwnerName, string? Ow
 
 /// <summary>Create request. <paramref name="Scope"/> is parsed to <see cref="FormulaScope"/>;
 /// <paramref name="Context"/> is the [Flags] bit value as an int.</summary>
-public record CreateFormulaRequest(string Scope, string Name, string? Description, string Prompt, int Context, bool Shared = false);
+public record CreateFormulaRequest(
+    string Scope, string Name, string? Description, Diariz.Api.Services.TemplateContent Content,
+    int Context, bool Shared = false);
 
 /// <summary>Partial update: null leaves a field unchanged, mirroring the tri-state pattern used by
 /// <see cref="UpdateUserSettingsRequest"/> (a value replaces it - none of these fields need a separate
 /// "clear" state, unlike the optional overrides in user settings).</summary>
-public record UpdateFormulaRequest(string? Name, string? Description, string? Prompt, int? Context, bool? Shared = null);
+public record UpdateFormulaRequest(
+    string? Name, string? Description, Diariz.Api.Services.TemplateContent? Content, int? Context,
+    bool? Shared = null);
 
 public record SetFormulaEnabledRequest(bool Enabled);
 

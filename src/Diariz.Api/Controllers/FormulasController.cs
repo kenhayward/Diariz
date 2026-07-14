@@ -103,7 +103,7 @@ public class FormulasController : ControllerBase
             OwnerUserId = scope == FormulaScope.Personal ? UserId : null,
             Name = req.Name,
             Description = req.Description,
-            Prompt = req.Prompt,
+            ContentJson = (req.Content ?? TemplateContent.Empty).Serialize(),
             Context = (FormulaContext)req.Context,
             Enabled = true,
             IsBuiltIn = false,
@@ -137,7 +137,7 @@ public class FormulasController : ControllerBase
 
         if (req.Name is not null) formula.Name = req.Name;
         if (req.Description is not null) formula.Description = req.Description;
-        if (req.Prompt is not null) formula.Prompt = req.Prompt;
+        if (req.Content is not null) formula.ContentJson = req.Content.Serialize();
         if (req.Context is not null) formula.Context = (FormulaContext)req.Context.Value;
         if (req.Shared is not null && formula.Scope == FormulaScope.Personal) formula.Shared = req.Shared.Value;
         formula.UpdatedAt = DateTimeOffset.UtcNow;
@@ -326,7 +326,7 @@ public class FormulasController : ControllerBase
     private ObjectResult Forbidden(string message) => StatusCode(StatusCodes.Status403Forbidden, message);
 
     private static FormulaDto ToDto(Formula f) => new(
-        f.Id, f.Scope.ToString(), f.OwnerUserId, f.Name, f.Description, f.Prompt,
+        f.Id, f.Scope.ToString(), f.OwnerUserId, f.Name, f.Description, TemplateContent.Parse(f.ContentJson),
         (int)f.Context, f.Enabled, f.IsBuiltIn, f.Shared);
 
     private static FormulaResultDto ToResultDto(FormulaResult r, FormulaResultOriginDto origin) => new(

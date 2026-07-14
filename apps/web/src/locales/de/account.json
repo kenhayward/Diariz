@@ -33,6 +33,7 @@
   "formulaName": "Name",
   "formulaDescription": "Beschreibung",
   "formulaPrompt": "Prompt",
+  "formulaStructuredHint": "Diese Formel verwendet eine strukturierte Vorlage, die noch nicht als einzelner Prompt bearbeitet werden kann. Name, Beschreibung und Kontext lassen sich weiterhin ändern.",
   "formulaPromptHint": "Markdown wird unterstützt.",
   "formulaContext": "Kontext",
   "formulaContextHint": "Wähle aus, welche Teile der Aufnahme diese Formel sehen kann.",

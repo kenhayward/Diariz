@@ -136,7 +136,10 @@ public static class Seeder
                 OwnerUserId = null,
                 Name = spec.Name,
                 Description = spec.Description,
-                Prompt = spec.Prompt,
+                // The built-in files still carry a plain prompt body; stored as the headless single-prompt
+                // template, which composes to exactly that prompt's output. (Structured built-in files land in
+                // a later phase - see the merge plan.)
+                ContentJson = TemplateContent.FromPrompt(spec.Prompt).Serialize(),
                 Context = spec.Context,
                 Enabled = true,
                 IsBuiltIn = true,

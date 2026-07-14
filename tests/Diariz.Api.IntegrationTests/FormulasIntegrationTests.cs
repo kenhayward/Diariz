@@ -59,7 +59,7 @@ public class FormulasIntegrationTests(ContainersFixture fx)
             db.Formulas.Add(new Formula
             {
                 Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = userId,
-                Name = "Recap", Prompt = "Recap the transcript.", Context = FormulaContext.Transcript, Enabled = true,
+                Name = "Recap", ContentJson = TemplateContent.FromPrompt("Recap the transcript.").Serialize(), Context = FormulaContext.Transcript, Enabled = true,
             });
             await db.SaveChangesAsync();
         }
@@ -98,7 +98,7 @@ public class FormulasIntegrationTests(ContainersFixture fx)
                 OwnerUserId = user,
                 Name = "Action Items",
                 Description = "Extract action items",
-                Prompt = "List all action items from the transcript.",
+                ContentJson = TemplateContent.FromPrompt("List all action items from the transcript.").Serialize(),
                 Context = FormulaContext.Transcript | FormulaContext.Notes,
                 Enabled = true,
                 IsBuiltIn = false,
@@ -177,7 +177,7 @@ public class FormulasIntegrationTests(ContainersFixture fx)
                 Id = formulaId,
                 Scope = FormulaScope.Platform,
                 Name = "Minutes",
-                Prompt = "Summarize.",
+                ContentJson = TemplateContent.FromPrompt("Summarize.").Serialize(),
                 Context = FormulaContext.Transcript,
             });
             db.FormulaResults.Add(new FormulaResult
@@ -222,7 +222,7 @@ public class FormulasIntegrationTests(ContainersFixture fx)
                 Scope = FormulaScope.Personal,
                 OwnerUserId = userA,
                 Name = "A's Formula",
-                Prompt = "Do a thing.",
+                ContentJson = TemplateContent.FromPrompt("Do a thing.").Serialize(),
                 Context = FormulaContext.Transcript,
             });
             db.FormulaResults.Add(new FormulaResult
@@ -269,7 +269,7 @@ public class FormulasIntegrationTests(ContainersFixture fx)
             db.Formulas.Add(new Formula
             {
                 Id = formulaId, Scope = FormulaScope.Personal, OwnerUserId = userA,
-                Name = "A's Shared", Prompt = "Do a thing.", Context = FormulaContext.Transcript, Shared = true,
+                Name = "A's Shared", ContentJson = TemplateContent.FromPrompt("Do a thing.").Serialize(), Context = FormulaContext.Transcript, Shared = true,
             });
             db.FormulaSubscriptions.Add(new FormulaSubscription
             {
@@ -302,7 +302,7 @@ public class FormulasIntegrationTests(ContainersFixture fx)
             db.Formulas.Add(new Formula
             {
                 Id = formulaId, Scope = FormulaScope.Personal, OwnerUserId = userA,
-                Name = "A's Shared", Prompt = "Do a thing.", Context = FormulaContext.Transcript, Shared = true,
+                Name = "A's Shared", ContentJson = TemplateContent.FromPrompt("Do a thing.").Serialize(), Context = FormulaContext.Transcript, Shared = true,
             });
             db.FormulaSubscriptions.Add(new FormulaSubscription
             {
@@ -335,7 +335,7 @@ public class FormulasIntegrationTests(ContainersFixture fx)
             db.Formulas.Add(new Formula
             {
                 Id = formulaId, Scope = FormulaScope.Personal, OwnerUserId = userA,
-                Name = "A's Shared", Prompt = "Do a thing.", Context = FormulaContext.Transcript, Shared = true,
+                Name = "A's Shared", ContentJson = TemplateContent.FromPrompt("Do a thing.").Serialize(), Context = FormulaContext.Transcript, Shared = true,
             });
             db.FormulaSubscriptions.Add(new FormulaSubscription
             {

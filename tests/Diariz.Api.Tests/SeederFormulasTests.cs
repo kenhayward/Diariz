@@ -63,12 +63,12 @@ public class SeederFormulasTests
         await Seeder.SeedFormulasAsync(db, TwoSpecs);
 
         var formula = await db.Formulas.SingleAsync(f => f.Name == "Beta");
-        formula.Prompt = "Custom admin-edited prompt.";
+        formula.ContentJson = TemplateContent.FromPrompt("Custom admin-edited prompt.").Serialize();
         await db.SaveChangesAsync();
 
         await Seeder.SeedFormulasAsync(db, TwoSpecs);
 
         var reloaded = await db.Formulas.SingleAsync(f => f.Name == "Beta");
-        Assert.Equal("Custom admin-edited prompt.", reloaded.Prompt);
+        Assert.Equal("Custom admin-edited prompt.", TemplateContent.Parse(reloaded.ContentJson).BarePrompt());
     }
 }

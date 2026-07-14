@@ -49,7 +49,7 @@ Follow this section structure:
     internal static string Outline(MeetingType? type)
     {
         if (type is null) return "- Summary\n- Discussion\n- Decisions\n- Action items";
-        var content = MeetingTypeContent.Parse(type.ContentJson);
+        var content = TemplateContent.Parse(type.ContentJson);
         var sb = new StringBuilder();
         foreach (var section in content.Sections)
         {

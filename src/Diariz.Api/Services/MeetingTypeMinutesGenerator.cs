@@ -42,7 +42,7 @@ public sealed class MeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerator
         SummarizationRequestConfig config, int charBudget, CancellationToken ct = default)
     {
         var type = await ResolveTypeAsync(recordingOwnerId, meetingTypeId, ct);
-        var content = MeetingTypeContent.Parse(type.ContentJson);
+        var content = TemplateContent.Parse(type.ContentJson);
 
         var mode = (await _db.PlatformSettings.FirstOrDefaultAsync(ct))?.MinutesGenerationMode
                    ?? MinutesGenerationMode.SingleCall;
@@ -111,26 +111,8 @@ public sealed class MeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerator
         return general ?? MeetingTypeSeeder.Standards.First(s => s.Key == MeetingType.GeneralKey);
     }
 
+    /// <summary>Field substitution is shared with the formula run pipeline - see <see cref="TemplateFields"/>.</summary>
     private static string? ResolveField(
-        string name, MeetingMinutesContext ctx, IReadOnlyList<ExtractedAction> actions,
-        string? notesMarkdown) => name switch
-    {
-        "date" => ctx.MeetingDate?.ToString("yyyy-MM-dd"),
-        "time" => ctx.MeetingDate?.ToString("HH:mm"),
-        "title" => string.IsNullOrWhiteSpace(ctx.Title) ? null : ctx.Title.Trim(),
-        "attendees" => AttendeeFormatter.Summarize(ctx.Attendees),
-        "duration" => FormatDuration(ctx.DurationMs),
-        "action_items" => NullIfEmpty(MeetingMinutesPrompt.RenderActionItems(actions)),
-        "notes" => notesMarkdown,
-        _ => null,
-    };
-
-    private static string? NullIfEmpty(string s) => string.IsNullOrWhiteSpace(s) ? null : s;
-
-    private static string? FormatDuration(long? ms)
-    {
-        if (ms is null or <= 0) return null;
-        var t = TimeSpan.FromMilliseconds(ms.Value);
-        return t.TotalHours >= 1 ? $"{(int)t.TotalHours}h {t.Minutes:D2}m" : $"{t.Minutes}m {t.Seconds:D2}s";
-    }
+        string name, MeetingMinutesContext ctx, IReadOnlyList<ExtractedAction> actions, string? notesMarkdown) =>
+        TemplateFields.Resolve(name, ctx.MeetingDate, ctx.Title, ctx.Attendees, ctx.DurationMs, actions, notesMarkdown);
 }

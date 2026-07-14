@@ -82,6 +82,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddFormulas` | `Formulas` (a saved prompt + chosen context; `Scope` int 0=Personal/1=Platform/2=Diariz; `OwnerUserId` FK `ON DELETE CASCADE`, set only for Personal - a user's personal formulas die with the account; `Context` int **[Flags]**; `Enabled` bool default true; `IsBuiltIn` blocks delete) + `FormulaResults` (the generated Markdown per recording; cascade on `Recording`, `ON DELETE SET NULL` on `Formula`, nullable `CreatedByUserId` `ON DELETE SET NULL` - the document survives its author's account deletion with attribution dropped, index `(RecordingId, Ordinal)`) — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddFormulaSharing` | `Formulas.Shared` (bool, not-null, **default false** - only meaningful for Personal scope: when true the formula is discoverable platform-wide) + `FormulaSubscriptions` (a subscriber's live link to a shared Personal formula; `FormulaId` FK `ON DELETE CASCADE`, `UserId` FK `ON DELETE CASCADE`, unique index `(FormulaId, UserId)`) — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddFormulaResultStatus` | `FormulaResults.Status` (int enum `Generating/Ready/Failed`, not-null, default 0) + `FormulaResults.Error` (text, null), for the async run lifecycle; existing rows backfilled to `Ready` — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddFormulaContent` | `Formulas.ContentJson` (**jsonb**, default `{"sections":[]}`) replaces `Formulas.Prompt`: the column is added, **backfilled from `Prompt`** (each prompt wrapped as one headless level-0 section holding one prompt block, via `jsonb_build_object` so any quotes/newlines stay escaped), and only then is `Prompt` dropped. A formula becomes a structured template, the same shape a meeting type uses. `Down` recovers the first prompt block (lossy for a genuinely structured formula - break-glass, not an inverse). Destructive column drop, but the data is preserved by the backfill and older backups restore fine onto it, so **no `MaintenanceController.CurrentFormat` bump** |
 | `AddSectionFormulaResults` | `SectionFormulaResults` table (a formula run over a folder + its sub-sections; `SectionId` FK `ON DELETE CASCADE`, `FormulaId`/`CreatedByUserId` FK `ON DELETE SET NULL`, `Status`/`Error` like `FormulaResults`, index `(SectionId, Ordinal)`) — additive new table, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
@@ -299,7 +300,7 @@ Indexes: `(RecordingId, Ordinal)`, `(UserId, CalendarId, EventId)`. CRUD at
 `/api/recordings/{id}/notes` and `/api/calendar/events/{calendarId}/{eventId}/notes`.
 
 #### `Formulas`
-A saved prompt + a chosen context, run over a recording to produce a Markdown `FormulaResult`. `Scope`
+A saved **template** + a chosen context, run over a recording to produce a Markdown `FormulaResult`. `Scope`
 determines visibility/ownership: `Personal` (owned by one user, `OwnerUserId` set), `Platform` (shared,
 admin-managed, no owner), or `Diariz` (seeded, `IsBuiltIn = true`, cannot be deleted).
 
@@ -310,7 +311,7 @@ admin-managed, no owner), or `Diariz` (seeded, `IsBuiltIn = true`, cannot be del
 | `OwnerUserId` | uuid FK → AspNetUsers, null | set only for `Personal`; **`ON DELETE CASCADE`** (a user's personal formulas die with the account); null for Platform/Diariz |
 | `Name` | varchar(256) | |
 | `Description` | varchar(1024) null | |
-| `Prompt` | text | |
+| `ContentJson` | **jsonb** | the structured template (sections/blocks - the same `TemplateContent` shape `MeetingTypes.ContentJson` uses). A formula that is just a prompt is stored as **one headless (`level: 0`) section holding one prompt block**, which composes to exactly that prompt's output - no heading added. Postgres jsonb; plain text under the in-memory provider |
 | `Context` | int **[Flags]** | which parts of the recording the run may see: `Transcript`=1, `Notes`=2, `Attachments`=4, `Summary`=8, `Minutes`=16, `Actions`=32 (append-only) |
 | `Enabled` | bool, **DB default true** | Platform/Diariz availability toggle |
 | `Shared` | bool, **DB default false** | only meaningful for `Personal` scope: when true, other users can discover this formula and subscribe to it (a live link - see `FormulaSubscriptions`) |

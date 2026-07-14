@@ -22,7 +22,7 @@ public class MeetingTypesCrudTests
         return new(db, new UserPermissions(db), new Diariz.Api.Services.RoomScope(db)) { ControllerContext = Http.Context(userId) };
     }
 
-    private static MeetingTypeContent OneSection() =>
+    private static TemplateContent OneSection() =>
         new([new TemplateSection(1, "Summary", [new TemplateBlock(TemplateBlock.Prompt, Text: "Summarise.")])]);
 
     private static MeetingTypeRequest Req(bool isPlatform = false, string icon = "document", string color = "#5C6BC0") =>
@@ -45,7 +45,7 @@ public class MeetingTypesCrudTests
         Assert.True(dto.CanEdit);
         var row = await db.MeetingTypes.SingleAsync();
         Assert.Equal(me, row.UserId);
-        Assert.Equal("Summarise.", MeetingTypeContent.Parse(row.ContentJson).Sections[0].Blocks[0].Text);
+        Assert.Equal("Summarise.", TemplateContent.Parse(row.ContentJson).Sections[0].Blocks[0].Text);
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public class MeetingTypesCrudTests
     public async Task Create_rejects_malformed_content()
     {
         using var db = TestDb.Create();
-        var bad = new MeetingTypeContent([new TemplateSection(4, "Bad", [])]); // level 4 (H1-H3 only)
+        var bad = new TemplateContent([new TemplateSection(4, "Bad", [])]); // level 4 (H1-H3 only)
         var req = new MeetingTypeRequest("Standard", "My type", "", "document", "#5C6BC0", bad);
         Assert.IsType<BadRequestObjectResult>((await Build(db, Guid.NewGuid()).Create(req)).Result);
     }
@@ -106,7 +106,7 @@ public class MeetingTypesCrudTests
         var t = new MeetingType
         {
             Id = Guid.NewGuid(), UserId = owner, RoomId = roomId, GroupName = "G", Title = "T", Icon = "document",
-            Color = "#5C6BC0", ContentJson = new MeetingTypeContent([]).Serialize(),
+            Color = "#5C6BC0", ContentJson = new TemplateContent([]).Serialize(),
         };
         db.MeetingTypes.Add(t);
         await db.SaveChangesAsync();
@@ -123,7 +123,7 @@ public class MeetingTypesCrudTests
         var dto = Ok(await Build(db, me).Update(id, Req()));
 
         Assert.Equal("My type", dto.Title);
-        var saved = MeetingTypeContent.Parse((await db.MeetingTypes.SingleAsync()).ContentJson);
+        var saved = TemplateContent.Parse((await db.MeetingTypes.SingleAsync()).ContentJson);
         Assert.Equal("Summarise.", saved.Sections[0].Blocks[0].Text); // whole content replaced atomically
     }
 

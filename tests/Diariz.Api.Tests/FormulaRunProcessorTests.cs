@@ -33,7 +33,7 @@ public class FormulaRunProcessorTests
         var formula = new Formula
         {
             Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = userId,
-            Name = "Key Decisions", Prompt = "Summarize the key decisions made.",
+            Name = "Key Decisions", ContentJson = TemplateContent.FromPrompt("Summarize the key decisions made.").Serialize(),
             Context = FormulaContext.Transcript, Enabled = true,
         };
         var result = new FormulaResult
@@ -98,7 +98,7 @@ public class FormulaRunProcessorTests
         var formula = new Formula
         {
             Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = userId,
-            Name = "Key Decisions", Prompt = "Summarize the key decisions made.",
+            Name = "Key Decisions", ContentJson = TemplateContent.FromPrompt("Summarize the key decisions made.").Serialize(),
             Context = FormulaContext.Transcript, Enabled = true,
         };
         var result = new SectionFormulaResult

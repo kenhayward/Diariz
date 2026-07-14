@@ -3,9 +3,9 @@ import {
   addSection, removeSection, updateSection, moveSection,
   addBlock, removeBlock, updateBlock, moveBlock, moveBlockCrossSection, normalizeBreaks, contentError,
 } from "./meetingTypeDraft";
-import type { MeetingTypeContent } from "./types";
+import type { TemplateContent } from "./types";
 
-const base: MeetingTypeContent = {
+const base: TemplateContent = {
   sections: [
     { level: 1, title: "A", blocks: [{ kind: "boilerplate", text: "x" }] },
     { level: 1, title: "B", blocks: [] },
@@ -58,7 +58,7 @@ describe("block operations (within a section)", () => {
   });
 
   it("removes and reorders blocks", () => {
-    const c: MeetingTypeContent = {
+    const c: TemplateContent = {
       sections: [{ level: 1, title: "S", blocks: [{ kind: "boilerplate", text: "1" }, { kind: "prompt", text: "2" }] }],
     };
     expect(moveBlock(c, 0, 0, 1).sections[0].blocks.map((b) => b.text)).toEqual(["2", "1"]);
@@ -67,7 +67,7 @@ describe("block operations (within a section)", () => {
 });
 
 describe("moveBlockCrossSection", () => {
-  const two: MeetingTypeContent = {
+  const two: TemplateContent = {
     sections: [
       { level: 1, title: "A", blocks: [{ kind: "boilerplate", text: "a0" }, { kind: "boilerplate", text: "a1" }] },
       { level: 1, title: "B", blocks: [{ kind: "boilerplate", text: "b0" }] },
@@ -98,7 +98,7 @@ describe("moveBlockCrossSection", () => {
 
 describe("normalizeBreaks", () => {
   it("back-fills a missing breakAfter from the legacy rule (glue before a field)", () => {
-    const content: MeetingTypeContent = {
+    const content: TemplateContent = {
       sections: [{
         level: 1, title: "S",
         blocks: [
@@ -113,7 +113,7 @@ describe("normalizeBreaks", () => {
   });
 
   it("keeps an already-set breakAfter", () => {
-    const content: MeetingTypeContent = {
+    const content: TemplateContent = {
       sections: [{ level: 1, title: "S", blocks: [{ kind: "boilerplate", text: "x", breakAfter: "line" }] }],
     };
     expect(normalizeBreaks(content).sections[0].blocks[0].breakAfter).toBe("line");

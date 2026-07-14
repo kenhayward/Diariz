@@ -33,6 +33,7 @@
   "formulaName": "Name",
   "formulaDescription": "Description",
   "formulaPrompt": "Prompt",
+  "formulaStructuredHint": "This formula uses a structured template, which can't be edited as a single prompt yet. Its name, description and context can still be changed.",
   "formulaPromptHint": "Markdown supported.",
   "formulaContext": "Context",
   "formulaContextHint": "Choose which parts of the recording this formula can see.",

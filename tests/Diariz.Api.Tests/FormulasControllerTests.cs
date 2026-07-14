@@ -21,19 +21,19 @@ public class FormulasControllerTests
     private static Formula Personal(Guid owner, string name = "Mine") => new()
     {
         Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = owner,
-        Name = name, Prompt = "Do a thing.", Context = FormulaContext.Transcript, Enabled = true,
+        Name = name, ContentJson = TemplateContent.FromPrompt("Do a thing.").Serialize(), Context = FormulaContext.Transcript, Enabled = true,
     };
 
     private static Formula Platform(string name = "Shared", bool enabled = true) => new()
     {
         Id = Guid.NewGuid(), Scope = FormulaScope.Platform, OwnerUserId = null,
-        Name = name, Prompt = "Do a thing.", Context = FormulaContext.Transcript, Enabled = enabled,
+        Name = name, ContentJson = TemplateContent.FromPrompt("Do a thing.").Serialize(), Context = FormulaContext.Transcript, Enabled = enabled,
     };
 
     private static Formula Diariz(string name = "Built-in", bool isBuiltIn = true) => new()
     {
         Id = Guid.NewGuid(), Scope = FormulaScope.Diariz, OwnerUserId = null,
-        Name = name, Prompt = "Do a thing.", Context = FormulaContext.Transcript, Enabled = true, IsBuiltIn = isBuiltIn,
+        Name = name, ContentJson = TemplateContent.FromPrompt("Do a thing.").Serialize(), Context = FormulaContext.Transcript, Enabled = true, IsBuiltIn = isBuiltIn,
     };
 
     // ---- Create ----
@@ -46,7 +46,7 @@ public class FormulasControllerTests
         var controller = Build(db, userId);
 
         var result = await controller.Create(new CreateFormulaRequest(
-            "Personal", "My Formula", "desc", "Summarize.", (int)FormulaContext.Transcript));
+            "Personal", "My Formula", "desc", TemplateContent.FromPrompt("Summarize."), (int)FormulaContext.Transcript));
 
         var dto = Assert.IsType<FormulaDto>(Assert.IsType<CreatedResult>(result.Result).Value);
         Assert.Equal("Personal", dto.Scope);
@@ -64,7 +64,7 @@ public class FormulasControllerTests
         var controller = Build(db, Guid.NewGuid());
 
         var result = await controller.Create(new CreateFormulaRequest(
-            "Platform", "Shared Formula", null, "Summarize.", (int)FormulaContext.Transcript));
+            "Platform", "Shared Formula", null, TemplateContent.FromPrompt("Summarize."), (int)FormulaContext.Transcript));
 
         var status = Assert.IsType<ObjectResult>(result.Result);
         Assert.Equal(403, status.StatusCode);
@@ -79,7 +79,7 @@ public class FormulasControllerTests
         var controller = Build(db, userId);
 
         var result = await controller.Create(new CreateFormulaRequest(
-            "Platform", "Shared Formula", null, "Summarize.", (int)FormulaContext.Transcript));
+            "Platform", "Shared Formula", null, TemplateContent.FromPrompt("Summarize."), (int)FormulaContext.Transcript));
 
         var dto = Assert.IsType<FormulaDto>(Assert.IsType<CreatedResult>(result.Result).Value);
         Assert.Equal("Platform", dto.Scope);
@@ -94,7 +94,7 @@ public class FormulasControllerTests
 
         // 64 sets a bit above the highest valid FormulaContext flag (Actions = 32; valid mask = 63).
         var result = await controller.Create(new CreateFormulaRequest(
-            "Personal", "My Formula", null, "Summarize.", 64));
+            "Personal", "My Formula", null, TemplateContent.FromPrompt("Summarize."), 64));
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
         Assert.Equal("Invalid context.", badRequest.Value);
@@ -403,7 +403,7 @@ public class FormulasControllerTests
     private static Formula RunnableFormula(Guid formulaId, string name = "Key Decisions") => new()
     {
         Id = formulaId, Scope = FormulaScope.Personal, OwnerUserId = Guid.NewGuid(),
-        Name = name, Prompt = "P", Context = FormulaContext.Transcript, Enabled = true,
+        Name = name, ContentJson = TemplateContent.FromPrompt("P").Serialize(), Context = FormulaContext.Transcript, Enabled = true,
     };
 
     [Fact]
@@ -530,7 +530,7 @@ public class FormulasControllerTests
         var controller = Build(db, userId);
 
         var result = await controller.Create(new CreateFormulaRequest(
-            "Personal", "My Formula", null, "Summarize.", (int)FormulaContext.Transcript, Shared: true));
+            "Personal", "My Formula", null, TemplateContent.FromPrompt("Summarize."), (int)FormulaContext.Transcript, Shared: true));
 
         var dto = Assert.IsType<FormulaDto>(Assert.IsType<CreatedResult>(result.Result).Value);
         Assert.True(dto.Shared);
@@ -545,7 +545,7 @@ public class FormulasControllerTests
         var controller = Build(db, userId);
 
         var result = await controller.Create(new CreateFormulaRequest(
-            "Platform", "Shared Formula", null, "Summarize.", (int)FormulaContext.Transcript, Shared: true));
+            "Platform", "Shared Formula", null, TemplateContent.FromPrompt("Summarize."), (int)FormulaContext.Transcript, Shared: true));
 
         var dto = Assert.IsType<FormulaDto>(Assert.IsType<CreatedResult>(result.Result).Value);
         Assert.False(dto.Shared);

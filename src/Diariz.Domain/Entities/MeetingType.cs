@@ -38,7 +38,7 @@ public class MeetingType
     /// <summary>Background colour (hex) the icon is shown on.</summary>
     public string Color { get; set; } = string.Empty;
 
-    /// <summary>The structured minutes template as JSON (see <c>MeetingTypeContent</c>). Saved atomically.</summary>
+    /// <summary>The structured minutes template as JSON (see <c>TemplateContent</c>). Saved atomically.</summary>
     public string ContentJson { get; set; } = string.Empty;
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

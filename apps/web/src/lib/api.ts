@@ -8,6 +8,7 @@ declare module "axios" {
 }
 
 import type {
+  TemplateContent,
   AdminUser,
   Attachment,
   AttachmentDraft,
@@ -1151,7 +1152,7 @@ export const api = {
     scope: FormulaScope;
     name: string;
     description?: string | null;
-    prompt: string;
+    content: TemplateContent;
     context: number;
     shared?: boolean;
   }): Promise<Formula> {
@@ -1162,7 +1163,7 @@ export const api = {
   /// Partial update: omitted fields are left unchanged.
   async updateFormula(
     id: string,
-    body: { name?: string; description?: string | null; prompt?: string; context?: number; shared?: boolean },
+    body: { name?: string; description?: string | null; content?: TemplateContent; context?: number; shared?: boolean },
   ): Promise<Formula> {
     const { data } = await http.put<Formula>(`/api/formulas/${id}`, body);
     return data;

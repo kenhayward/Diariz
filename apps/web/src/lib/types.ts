@@ -63,7 +63,7 @@ export interface TemplateSection {
   title: string;
   blocks: TemplateBlock[];
 }
-export interface MeetingTypeContent {
+export interface TemplateContent {
   sections: TemplateSection[];
 }
 /// A meeting type (minutes template). `isPlatform` = a shared, admin-owned type; `canEdit` = the caller may
@@ -77,7 +77,7 @@ export interface MeetingType {
   overview: string;
   icon: string;
   color: string;
-  content: MeetingTypeContent;
+  content: TemplateContent;
   /// True for the seeded "General Meeting" default (used when a recording has no explicit type).
   isDefault: boolean;
 }
@@ -89,7 +89,7 @@ export interface MeetingTypeInput {
   overview: string;
   icon: string;
   color: string;
-  content: MeetingTypeContent;
+  content: TemplateContent;
   isPlatform: boolean;
 }
 
@@ -776,7 +776,7 @@ export interface AttachmentDraft {
 /// (seeded built-in, admin-toggleable but never deletable).
 export type FormulaScope = "Personal" | "Platform" | "Diariz";
 
-/// A saved prompt + context. `context` is the FormulaContext [Flags] bit value as a plain number - NOT the
+/// A saved template + context. `context` is the FormulaContext [Flags] bit value as a plain number - NOT the
 /// enum name (see CLAUDE.md's "Flags enum serializes as string" gotcha).
 export interface Formula {
   id: string;
@@ -784,7 +784,9 @@ export interface Formula {
   ownerUserId: string | null;
   name: string;
   description: string | null;
-  prompt: string;
+  /// The structured template (the same shape a meeting type's minutes template uses). A formula that is just a
+  /// prompt is one headless (level-0) section holding one prompt block - see `lib/formulaTemplate.ts`.
+  content: TemplateContent;
   context: number;
   enabled: boolean;
   isBuiltIn: boolean;

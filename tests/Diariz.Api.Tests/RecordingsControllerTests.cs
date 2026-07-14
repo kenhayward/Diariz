@@ -2760,7 +2760,7 @@ public class RecordingsControllerTests
         var t = new MeetingType
         {
             Id = Guid.NewGuid(), UserId = null, GroupName = "Standard", Title = "Cadence",
-            Icon = "refresh", Color = "#F09300", ContentJson = new MeetingTypeContent([]).Serialize(),
+            Icon = "refresh", Color = "#F09300", ContentJson = new TemplateContent([]).Serialize(),
         };
         db.MeetingTypes.Add(t);
         db.SaveChanges();
@@ -2810,7 +2810,7 @@ public class RecordingsControllerTests
         var other = new MeetingType
         {
             Id = Guid.NewGuid(), UserId = Guid.NewGuid(), GroupName = "G", Title = "T",
-            Icon = "document", Color = "#5C6BC0", ContentJson = new MeetingTypeContent([]).Serialize(),
+            Icon = "document", Color = "#5C6BC0", ContentJson = new TemplateContent([]).Serialize(),
         };
         db.MeetingTypes.Add(other);
         await db.SaveChangesAsync();

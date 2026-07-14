@@ -33,6 +33,7 @@
   "formulaName": "Nombre",
   "formulaDescription": "Descripción",
   "formulaPrompt": "Instrucción",
+  "formulaStructuredHint": "Esta fórmula usa una plantilla estructurada, que todavía no se puede editar como un solo prompt. Su nombre, descripción y contexto sí se pueden cambiar.",
   "formulaPromptHint": "Se admite Markdown.",
   "formulaContext": "Contexto",
   "formulaContextHint": "Elige qué partes de la grabación puede ver esta fórmula.",

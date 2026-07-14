@@ -29,10 +29,10 @@ public class FormulaResultOriginsTests
         var owner = await AddUser(db, "Ada Lovelace", "ada@x.test", "https://pic/ada.png");
         var noName = await AddUser(db, null, "grace@x.test", null);
 
-        var diariz = new Formula { Id = Guid.NewGuid(), Scope = FormulaScope.Diariz, Name = "Recap", Prompt = "p", IsBuiltIn = true };
-        var platform = new Formula { Id = Guid.NewGuid(), Scope = FormulaScope.Platform, Name = "Policy", Prompt = "p" };
-        var personal = new Formula { Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = owner.Id, Name = "Mine", Prompt = "p" };
-        var personalNoName = new Formula { Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = noName.Id, Name = "Theirs", Prompt = "p" };
+        var diariz = new Formula { Id = Guid.NewGuid(), Scope = FormulaScope.Diariz, Name = "Recap", ContentJson = TemplateContent.FromPrompt("p").Serialize(), IsBuiltIn = true };
+        var platform = new Formula { Id = Guid.NewGuid(), Scope = FormulaScope.Platform, Name = "Policy", ContentJson = TemplateContent.FromPrompt("p").Serialize() };
+        var personal = new Formula { Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = owner.Id, Name = "Mine", ContentJson = TemplateContent.FromPrompt("p").Serialize() };
+        var personalNoName = new Formula { Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = noName.Id, Name = "Theirs", ContentJson = TemplateContent.FromPrompt("p").Serialize() };
         db.Formulas.AddRange(diariz, platform, personal, personalNoName);
         await db.SaveChangesAsync();
 

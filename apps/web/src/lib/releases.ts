@@ -55,6 +55,18 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.138.0",
+    date: "2026-07-14",
+    pr: 309,
+    headline: "Formulas are now built from templates",
+    summary:
+      "A formula used to be one box of free text. It is now built the same way a meeting-minutes template is - from headings, literal text, substituted details like the meeting date or attendees, and instructions for the model - so a formula can produce a properly laid-out document rather than whatever shape the model felt like. Nothing you have already saved changes: a formula that is just a prompt still runs exactly as it did and produces exactly the same result. The editor for building a formula out of blocks arrives in a later release; for now formulas are still written as a prompt, and the plumbing underneath is shared with meeting minutes.",
+    changed: [
+      "A formula's body is now a structured template rather than a single block of prompt text. Existing formulas are converted automatically and produce identical results.",
+      "Formula results can now carry headings, literal text, and substituted meeting details (date, time, attendees, duration, action items) - the same building blocks meeting-minutes templates use.",
+    ],
+  },
+  {
     version: "0.137.1",
     date: "2026-07-14",
     pr: 308,

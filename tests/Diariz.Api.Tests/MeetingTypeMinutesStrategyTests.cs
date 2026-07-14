@@ -13,10 +13,10 @@ public class MeetingTypeMinutesStrategyTests
 
     private static readonly SummarizationRequestConfig Config = new("https://llm.test/v1", "sk", "m", 60);
 
-    private static MinutesComposition Compose(MeetingTypeContent content, Func<string, string?>? fields = null) =>
+    private static MinutesComposition Compose(TemplateContent content, Func<string, string?>? fields = null) =>
         new(content, "Overview text", fields ?? (_ => ""), Segments, Config, 16000, "PREAMBLE");
 
-    private static MeetingTypeContent TwoPrompts() => new(
+    private static TemplateContent TwoPrompts() => new(
     [
         new TemplateSection(1, "Purpose", [new TemplateBlock(TemplateBlock.Prompt, Text: "State the purpose.")]),
         new TemplateSection(1, "Decisions", [new TemplateBlock(TemplateBlock.Prompt, Text: "List decisions.")]),
@@ -45,7 +45,7 @@ public class MeetingTypeMinutesStrategyTests
     [Fact]
     public async Task PerSection_substitutes_fields_deterministically_without_a_call()
     {
-        var content = new MeetingTypeContent(
+        var content = new TemplateContent(
         [
             new TemplateSection(1, "Details",
                 [new TemplateBlock(TemplateBlock.Boilerplate, Text: "Date: "),

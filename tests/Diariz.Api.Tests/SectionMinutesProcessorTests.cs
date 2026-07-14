@@ -102,7 +102,7 @@ public class SectionMinutesProcessorTests
         var type = new MeetingType
         {
             Id = Guid.NewGuid(), UserId = userId, Title = "Retro", Overview = "A sprint retro.",
-            ContentJson = new MeetingTypeContent([new TemplateSection(1, "What went well", [])]).Serialize(),
+            ContentJson = new TemplateContent([new TemplateSection(1, "What went well", [])]).Serialize(),
         };
         db.MeetingTypes.Add(type);
         await db.SaveChangesAsync();

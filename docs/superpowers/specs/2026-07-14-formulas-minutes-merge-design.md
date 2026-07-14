@@ -136,9 +136,8 @@ ITemplateRunner.RunAsync(
 This is today's `MeetingTypeMinutesGenerator.GenerateAsync`, generalised:
 
 1. Parse `formula.ContentJson` -> `TemplateContent`.
-2. Build the **context** from `formula.Context` via the existing **`FormulaContextBuilder.Build`**. *This is
-   the key generalisation:* the minutes strategies currently hard-code "the transcript" as the user message,
-   and must instead take the flag-assembled context string.
+2. Build the **context**. See the correction below - the two pipelines assemble it differently, and that
+   difference must not be papered over.
 3. Pick the strategy from `PlatformSettings.MinutesGenerationMode` (**unchanged**): `SingleCall`
    (a `[[WRITE: …]]` skeleton, one call) or `PerSection` (one call per prompt block, 4-way parallel).
 4. Preamble = `minutes-section-preamble.md` + the **note-steering block** when the context includes `Notes`
@@ -146,6 +145,31 @@ This is today's `MeetingTypeMinutesGenerator.GenerateAsync`, generalised:
 5. **Enhanced-notes pre-pass** when `content.HasField("notes")` - unchanged, still degrades safely on failure.
 6. Compose via **`MeetingTypeMinutesComposer`** - already generic (content + field resolver + prompt resolver),
    reused as-is bar the level-0 change.
+
+> ### Correction (found while implementing Phase 1)
+>
+> This spec originally said the strategies should take the flag-assembled context from
+> `FormulaContextBuilder`, and called that "the key generalisation". **That would have silently changed the
+> minutes prompt.** The two pipelines render the transcript differently:
+>
+> | | Helper | Output | Budget |
+> |---|---|---|---|
+> | Minutes | `PromptTranscript.Build` | `Speaker: Text` | transcript-specific char budget |
+> | Formulas | `TranscriptFormatter.ToPlainText` | `[mm:ss] Speaker: Text` | whole context capped at 48k |
+>
+> Routing minutes through the formula context builder would add an `[mm:ss]` stamp to **every line of every
+> minutes transcript** and change the truncation rule - thousands of extra tokens on a long meeting, and a real
+> change to what the model sees. That is not a re-plumbing; it is a prompt change, and it deserves its own
+> review, not a free ride inside a refactor.
+>
+> **So: context assembly stays with the caller.** Minutes keep `PromptTranscript`; formulas keep
+> `FormulaContextBuilder`. The unification is the content model, the composer, and the field substitution
+> (`TemplateFields`) - all genuinely shared. Converging the transcript rendering is a deliberate follow-up, not
+> part of the merge.
+>
+> **Consequently Phase 1 does not move minutes at all.** Minutes only *become* formula runs once a meeting type
+> names a primary formula - which is Phase 2. Phase 1 is: a formula's body becomes a template, and a formula run
+> composes it. That is a strictly smaller, safer change, and it keeps the byte-identical bar honest.
 
 **Reuse, do not rewrite:** `MeetingTypeMinutesComposer`, both `IMeetingTypeMinutesStrategy` implementations,
 `FormulaContextBuilder`, `NotesEnhancer`/`NotesComposer`, `PromptTemplateProvider`. `FormulaRunProcessor` keeps

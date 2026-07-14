@@ -121,7 +121,7 @@ public class MeetingTypesController : ControllerBase
         if (string.IsNullOrWhiteSpace(req.GroupName)) return "A group name is required.";
         if (!MeetingTypeIcons.IsValid(req.Icon)) return "Unknown icon.";
         if (!IsHexColor(req.Color)) return "The colour must be a hex value like #5C6BC0.";
-        var (ok, error) = (req.Content ?? MeetingTypeContent.Empty).Validate();
+        var (ok, error) = (req.Content ?? TemplateContent.Empty).Validate();
         return ok ? null : error;
     }
 
@@ -136,6 +136,6 @@ public class MeetingTypesController : ControllerBase
         var canEdit = isPlatform ? isPlatformAdmin : m.RoomId == roomId;
         return new MeetingTypeDto(
             m.Id, isPlatform, canEdit, m.GroupName, m.Title, m.Overview, m.Icon, m.Color,
-            MeetingTypeContent.Parse(m.ContentJson), m.Key == MeetingType.GeneralKey);
+            TemplateContent.Parse(m.ContentJson), m.Key == MeetingType.GeneralKey);
     }
 }
