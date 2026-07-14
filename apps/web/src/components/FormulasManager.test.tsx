@@ -90,4 +90,29 @@ describe("FormulasManager", () => {
     // Personal (no picture) -> initials bubble "AL"
     expect(screen.getByText("AL")).toBeTruthy();
   });
+
+  // An API older than 0.130.2 doesn't send `origin` at all. Dereferencing it threw, and because the
+  // throw happened during render it took out the whole recording-detail panel behind the ErrorBoundary
+  // ("Something went wrong showing this page") - a hard crash over one missing decorative field.
+  it("still renders a result whose origin is missing, rather than crashing the page", () => {
+    const noOrigin = [result({ id: "r1", name: "Recap", origin: undefined as never })];
+    render(<FormulasManager results={noOrigin} selectedId={null} onSelect={vi.fn()} />);
+    expect(screen.getByText("Recap")).toBeTruthy();
+    // Provenance is unknown, so it shows the unknown-person placeholder rather than claiming an origin.
+    expect(screen.getByText("?")).toBeTruthy();
+  });
+
+  it("still renders a failed result whose origin is missing", () => {
+    const noOrigin = [
+      result({ id: "r1", name: "Recap", status: "Failed", error: "Model timed out", origin: undefined as never }),
+    ];
+    render(<FormulasManager results={noOrigin} selectedId={null} onSelect={vi.fn()} />);
+    expect(screen.getByText(/model timed out/i)).toBeTruthy();
+  });
+
+  it("keeps a missing origin from claiming the result is official", () => {
+    const noOrigin = [result({ id: "r1", name: "Recap", origin: undefined as never })];
+    const { container } = render(<FormulasManager results={noOrigin} selectedId={null} onSelect={vi.fn()} />);
+    expect(container.querySelector('img[src="/logo.png"]')).toBeNull();
+  });
 });

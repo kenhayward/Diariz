@@ -55,6 +55,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.136.1",
+    date: "2026-07-14",
+    pr: 304,
+    headline: "A formula result with no author no longer breaks the page",
+    summary:
+      "The Formulas list draws a small icon showing who a result came from - the Diariz logo for a built-in or platform formula, the person's avatar for a personal one. If that authorship information was missing from a result, drawing the icon failed and took the whole recording page down with it (\"Something went wrong showing this page\"), even though everything else on the page was fine. A result with no author now simply shows an unknown-person placeholder, and the page carries on.",
+    fixed: [
+      "A formula result missing its origin (authorship) no longer crashes the recording-detail page; it falls back to an unknown-person icon instead.",
+    ],
+  },
+  {
     version: "0.136.0",
     date: "2026-07-14",
     pr: 303,
