@@ -71,7 +71,9 @@ public class FormulaRunnerTests
     }
 
     [Fact]
-    public async Task RunAsync_FirstResultOnARecording_GetsOrdinalZero_SecondGetsOrdinalOne()
+    // Re-running the SAME formula replaces its result rather than appending a duplicate - and keeps the row's id
+    // and position, so the list doesn't reshuffle and an open link to the result stays valid.
+    public async Task RunAsync_RunningTheSameFormulaAgain_ReplacesItsResult()
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
@@ -89,8 +91,37 @@ public class FormulaRunnerTests
         var first = await runner.RunAsync(userId, rec.Id, formula.Id);
         var second = await runner.RunAsync(userId, rec.Id, formula.Id);
 
+        Assert.Equal(first.Id, second.Id);          // the same document, re-generated
+        Assert.Equal(0, second.Ordinal);            // it did not move
+        Assert.Single(db.FormulaResults.Where(r => r.RecordingId == rec.Id).ToList());
+    }
+
+    [Fact]
+    public async Task RunAsync_DifferentFormulas_EachGetTheirOwnResult()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, _) = await SeedRecordingWithTranscript(db, userId);
+
+        Formula Make(string name) => new()
+        {
+            Id = Guid.NewGuid(), Scope = FormulaScope.Personal, OwnerUserId = userId,
+            Name = name, ContentJson = TemplateContent.FromPrompt("P").Serialize(),
+            Context = FormulaContext.Transcript, Enabled = true,
+        };
+        var a = Make("A");
+        var b = Make("B");
+        db.Formulas.AddRange(a, b);
+        await db.SaveChangesAsync();
+
+        var runner = MakeRunner(db, new FakeChatStreamClient(), new FakeSummarizationSettingsResolver());
+
+        var first = await runner.RunAsync(userId, rec.Id, a.Id);
+        var second = await runner.RunAsync(userId, rec.Id, b.Id);
+
         Assert.Equal(0, first.Ordinal);
         Assert.Equal(1, second.Ordinal);
+        Assert.Equal(2, db.FormulaResults.Count(r => r.RecordingId == rec.Id));
     }
 
     [Fact]

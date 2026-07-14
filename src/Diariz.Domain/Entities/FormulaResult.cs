@@ -15,6 +15,12 @@ public class FormulaResult
     public int Ordinal { get; set; }
     public FormulaRunStatus Status { get; set; } = FormulaRunStatus.Generating;
     public string? Error { get; set; }
+
+    /// <summary>The user hand-edited this document. An <b>automatic</b> re-run (a meeting type's additional
+    /// formulas, re-firing whenever the minutes regenerate) must never overwrite it - the same rule
+    /// <c>MeetingMinutes.IsUserEdited</c> has always had. An <b>explicit</b> manual run does replace it, and
+    /// clears this - the user asked for it.</summary>
+    public bool IsUserEdited { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

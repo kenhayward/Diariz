@@ -4,14 +4,18 @@ using Diariz.Domain.Entities;
 namespace Diariz.Api.Services;
 
 /// <summary>Everything a generation strategy needs to turn one meeting type's template into Markdown minutes for
-/// one recording.</summary>
+/// one recording.
+///
+/// <para><see cref="Context"/> is the <b>assembled</b> context - the user message, built from the primary
+/// formula's declared <c>FormulaContext</c> flags. The strategies used to build the transcript themselves; they
+/// no longer decide what the model sees, because a meeting type's document IS a formula and a formula declares
+/// its own context.</para></summary>
 public record MinutesComposition(
     TemplateContent Content,
     string Overview,
     Func<string, string?> ResolveField,
-    IReadOnlyList<SegmentDto> Segments,
+    string Context,
     SummarizationRequestConfig Config,
-    int CharBudget,
     string Preamble);
 
 /// <summary>Turns a <see cref="MinutesComposition"/> into the final Markdown. Two implementations differ only in
@@ -70,7 +74,6 @@ public sealed class PerSectionMinutesStrategy : IMeetingTypeMinutesStrategy
 
     public async Task<string> GenerateAsync(MinutesComposition input, CancellationToken ct = default)
     {
-        var transcript = PromptTranscript.Build(input.Segments, input.CharBudget);
         var blocks = input.Content.PromptBlocks().ToList();
 
         // One call per prompt block, capped concurrency; results kept in document order.
@@ -89,7 +92,7 @@ public sealed class PerSectionMinutesStrategy : IMeetingTypeMinutesStrategy
                 var messages = new[]
                 {
                     new ChatMessage("system", system),
-                    new ChatMessage("user", $"## Transcript:\n{transcript}"),
+                    new ChatMessage("user", input.Context),
                 };
                 outputs[i] = await _client.GenerateAsync(input.Config, messages, ct);
             }
@@ -120,7 +123,6 @@ public sealed class SingleCallMinutesStrategy : IMeetingTypeMinutesStrategy
             input.Content, input.ResolveField,
             block => Task.FromResult($"[[WRITE: {block.Text}]]"));
 
-        var transcript = PromptTranscript.Build(input.Segments, input.CharBudget);
         var system =
             $"{input.Preamble}\n\nMEETING CONTEXT\n{input.Overview}\n\n" +
             "Produce the meeting minutes by following the DOCUMENT TEMPLATE below. Emit all headings and " +
@@ -131,7 +133,7 @@ public sealed class SingleCallMinutesStrategy : IMeetingTypeMinutesStrategy
         var messages = new[]
         {
             new ChatMessage("system", system),
-            new ChatMessage("user", $"## Transcript:\n{transcript}"),
+            new ChatMessage("user", input.Context),
         };
         return await _client.GenerateAsync(input.Config, messages, ct);
     }

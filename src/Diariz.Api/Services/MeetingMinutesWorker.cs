@@ -80,8 +80,9 @@ public class MeetingMinutesWorker : BackgroundService
                 var ctx = scope.ServiceProvider.GetRequiredService<DiarizDbContext>();
                 var generator = scope.ServiceProvider.GetRequiredService<IMeetingTypeMinutesGenerator>();
                 var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
+                var queue = scope.ServiceProvider.GetRequiredService<IJobQueue>();
                 await MeetingMinutesProcessor.ProcessAsync(
-                    ctx, generator, resolver, _hub, job, _opts.TranscriptCharBudget, _log, ct);
+                    ctx, generator, resolver, _hub, queue, job, _opts.TranscriptCharBudget, _log, ct);
             }
         }
         catch (Exception ex)

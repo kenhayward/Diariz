@@ -99,19 +99,8 @@ public class SectionFormulaResultsController : ControllerBase
         if (included == 0)
             return BadRequest("This folder has no meetings to run a formula over.");
 
-        var ordinal = (await _db.SectionFormulaResults.Where(r => r.SectionId == sectionId)
-            .Select(r => (int?)r.Ordinal).MaxAsync(ct) ?? -1) + 1;
-        var result = new SectionFormulaResult
-        {
-            Id = Guid.NewGuid(),
-            SectionId = sectionId,
-            CreatedByUserId = UserId,
-            FormulaId = formula.Id,
-            Name = formula.Name,
-            Ordinal = ordinal,
-            Status = FormulaRunStatus.Generating,
-        };
-        _db.SectionFormulaResults.Add(result);
+        // An explicit run replaces this folder's existing result for the formula rather than appending a duplicate.
+        var result = (await FormulaResultUpsert.ForSectionAsync(_db, sectionId, formula, UserId, automatic: false, ct))!;
         await _db.SaveChangesAsync(ct);
 
         await _queue.EnqueueFormulaRunAsync(new FormulaRunJob(null, sectionId, result.Id, formula.Id, UserId), ct);
@@ -165,6 +154,9 @@ public class SectionFormulaResultsController : ControllerBase
             return Forbidden("Only the creator or a member who can manage contents can edit this result.");
 
         result.Text = req.Text;
+        // Mark it hand-edited: an AUTOMATIC re-run (a meeting type's additional formulas, re-firing when the
+        // minutes regenerate) must never overwrite the user's own words. An explicit run still will.
+        result.IsUserEdited = true;
         result.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync();
         var origins = await FormulaResultOrigins.ResolveAsync(

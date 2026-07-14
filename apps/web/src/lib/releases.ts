@@ -55,6 +55,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.140.0",
+    date: "2026-07-14",
+    pr: 311,
+    headline: "Minutes are a formula run",
+    summary:
+      "Meeting minutes and formulas are now genuinely the same machinery. The formula a meeting type points at decides not just the shape of the minutes but what the model is shown - so a minutes template can now be given the summary or the action items to work from, not just the transcript, and the transcript itself arrives with timestamps so the model can place what it reads. Any other formulas the meeting type lists run at the same time, and their documents appear in the recording's Formulas tab. Re-running a formula now replaces its previous document instead of leaving a pile of near-identical copies - and if you have edited one by hand, the automatic run leaves it alone. Running it yourself still regenerates it.",
+    added: [
+      "The formulas a meeting type lists alongside its minutes now run automatically whenever the minutes are generated; their documents appear in the recording's Formulas tab.",
+      "A minutes template can now be given the summary or the action items to work from, not just the transcript - it is the formula that decides.",
+    ],
+    changed: [
+      "The transcript sent to the model when generating minutes now carries timestamps, so it can place what it reads.",
+      "Re-running a formula replaces its previous document rather than adding another copy. A document you have edited by hand is left alone by automatic runs; running the formula yourself still regenerates it.",
+    ],
+  },
+  {
     version: "0.139.0",
     date: "2026-07-14",
     pr: 310,

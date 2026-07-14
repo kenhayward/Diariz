@@ -60,7 +60,7 @@ public class MeetingMinutesProcessorTests
         var hub = new FakeHubContext();
 
         await MeetingMinutesProcessor.ProcessAsync(
-            db, generator, resolver, hub, Job(rec, tr), charBudget: 16000, NullLogger.Instance);
+            db, generator, resolver, hub, new FakeJobQueue(), Job(rec, tr), charBudget: 16000, NullLogger.Instance);
 
         var minutes = await db.MeetingMinutes.SingleAsync(m => m.TranscriptionId == tr.Id);
         Assert.Equal("# Cadence Call\n\nMinutes.", minutes.Text);
@@ -95,7 +95,7 @@ public class MeetingMinutesProcessorTests
 
         await MeetingMinutesProcessor.ProcessAsync(
             db, new FakeMeetingTypeMinutesGenerator { Result = "# Fresh" }, new FakeSummarizationSettingsResolver(),
-            new FakeHubContext(), Job(rec, tr), 16000, NullLogger.Instance);
+            new FakeHubContext(), new FakeJobQueue(), Job(rec, tr), 16000, NullLogger.Instance);
 
         Assert.Equal("# Fresh", (await db.MeetingMinutes.SingleAsync(m => m.TranscriptionId == tr.Id)).Text);
     }
@@ -113,7 +113,7 @@ public class MeetingMinutesProcessorTests
         var generator = new FakeMeetingTypeMinutesGenerator { Result = "# LLM" };
 
         await MeetingMinutesProcessor.ProcessAsync(
-            db, generator, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
+            db, generator, new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
             Job(rec, tr), 16000, NullLogger.Instance);
 
         Assert.Equal("my edit", (await db.MeetingMinutes.SingleAsync(m => m.TranscriptionId == tr.Id)).Text);
@@ -128,7 +128,7 @@ public class MeetingMinutesProcessorTests
         var generator = new FakeMeetingTypeMinutesGenerator { ThrowOnCall = new InvalidOperationException("LLM down") };
 
         await MeetingMinutesProcessor.ProcessAsync(
-            db, generator, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
+            db, generator, new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
             Job(rec, tr), 16000, NullLogger.Instance);
 
         Assert.Empty(await db.MeetingMinutes.ToListAsync());
@@ -143,7 +143,7 @@ public class MeetingMinutesProcessorTests
         var generator = new FakeMeetingTypeMinutesGenerator();
 
         await MeetingMinutesProcessor.ProcessAsync(
-            db, generator, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
+            db, generator, new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
             Job(rec, tr), 16000, NullLogger.Instance);
 
         Assert.Equal(0, generator.Calls);

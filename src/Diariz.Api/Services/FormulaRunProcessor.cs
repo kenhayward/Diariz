@@ -129,7 +129,7 @@ public static class FormulaRunProcessor
         Formula formula, Guid recordingId, CancellationToken ct)
     {
         var content = TemplateContent.Parse(formula.ContentJson);
-        var context = await BuildRecordingContextAsync(db, recordingId, formula.Context, ct);
+        var context = await BuildRecordingContextAsync(db, recordingId, formula.Context, ct: ct);
         var fields = await BuildFieldResolverAsync(db, content, recordingId, ct);
         return await ComposeAsync(chat, cfg, content, fields, context, ct);
     }
@@ -210,7 +210,7 @@ public static class FormulaRunProcessor
         var items = new List<(string Name, string Output)>();
         foreach (var rec in recordings)
         {
-            var context = await BuildRecordingContextAsync(db, rec.Id, formula.Context, ct);
+            var context = await BuildRecordingContextAsync(db, rec.Id, formula.Context, ct: ct);
             if (context == FormulaContextBuilder.EmptyContextFallback) continue; // skip empty meetings - no map call.
             var fields = await BuildFieldResolverAsync(db, content, rec.Id, ct);
             var output = await ComposeAsync(chat, cfg, content, fields, context, ct);
@@ -237,7 +237,8 @@ public static class FormulaRunProcessor
     /// calls this for recordings the caller doesn't personally own). Returns the builder's empty-context fallback
     /// if the recording is missing or yields nothing.</summary>
     internal static async Task<string> BuildRecordingContextAsync(
-        DiarizDbContext db, Guid recordingId, FormulaContext flags, CancellationToken ct)
+        DiarizDbContext db, Guid recordingId, FormulaContext flags,
+        int charBudget = FormulaContextBuilder.DefaultCharBudget, CancellationToken ct = default)
     {
         IQueryable<Recording> query = db.Recordings;
 
@@ -262,7 +263,7 @@ public static class FormulaRunProcessor
         var noteLines = flags.HasFlag(FormulaContext.Notes)
             ? await LoadNoteLinesAsync(db, recordingId, ct)
             : [];
-        return FormulaContextBuilder.Build(flags, BuildContextData(rec, noteLines));
+        return FormulaContextBuilder.Build(flags, BuildContextData(rec, noteLines), charBudget);
     }
 
     /// <summary>Streams a single completion (formula prompt as system, context as user) into a string. A

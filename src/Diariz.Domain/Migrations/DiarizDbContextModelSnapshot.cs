@@ -305,6 +305,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<Guid?>("FormulaId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("IsUserEdited")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -1091,6 +1094,9 @@ namespace Diariz.Domain.Migrations
 
                     b.Property<Guid?>("FormulaId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("IsUserEdited")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Name")
                         .IsRequired()

@@ -325,19 +325,9 @@ public class FormulasController : ControllerBase
             return BadRequest("Formulas need an AI endpoint. Set one in Settings.");
         }
 
-        var ordinal = (await _db.FormulaResults.Where(r => r.RecordingId == recordingId)
-            .Select(r => (int?)r.Ordinal).MaxAsync(ct) ?? -1) + 1;
-        var result = new FormulaResult
-        {
-            Id = Guid.NewGuid(),
-            RecordingId = recordingId,
-            CreatedByUserId = UserId,
-            FormulaId = formula.Id,
-            Name = formula.Name,
-            Ordinal = ordinal,
-            Status = FormulaRunStatus.Generating,
-        };
-        _db.FormulaResults.Add(result);
+        // An explicit run replaces this recording's existing result for the formula (never appends a duplicate),
+        // and does overwrite a hand-edited one - the user asked for it.
+        var result = (await FormulaResultUpsert.ForRecordingAsync(_db, recordingId, formula, UserId, automatic: false, ct))!;
         await _db.SaveChangesAsync(ct);
 
         await _queue.EnqueueFormulaRunAsync(new FormulaRunJob(recordingId, null, result.Id, formula.Id, UserId), ct);
