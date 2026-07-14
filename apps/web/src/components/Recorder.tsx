@@ -29,7 +29,13 @@ import { useStatus } from "../lib/status";
 import { useRoom } from "../lib/rooms";
 import { RoomPermission } from "../lib/types";
 import type { StatusTone } from "../lib/statusBar";
-import InputLevelMeter from "./InputLevelMeter";
+import RecordHero from "./hub/RecordHero";
+import AudioSourceChip from "./hub/AudioSourceChip";
+import AudioSourcePopover from "./hub/AudioSourcePopover";
+import AutoStopPopover from "./hub/AutoStopPopover";
+import NotesPopover from "./hub/NotesPopover";
+import HubIconButton from "./hub/HubIconButton";
+import { useHubPopover } from "./hub/hubPopovers";
 import { AUDIO_ACCEPT_ATTR } from "../lib/audioFormats";
 import { useUpload } from "../lib/uploadContext";
 import {
@@ -48,7 +54,6 @@ import {
   clearPendingNotes,
   type PendingNotes,
 } from "../lib/pendingNotes";
-import LiveNotesPanel from "./LiveNotesPanel";
 import type { MeetingNote, RecordingSource } from "../lib/types";
 
 const SOURCE_KEY = "diariz.recorder.source";
@@ -60,61 +65,35 @@ const AUTOSTOP_KEY = "diariz.recorder.autoStop";
 // checkbox + the "No microphone" dropdown option; false in Firefox/Safari.
 const CAN_SYSTEM_AUDIO = supportsDisplayAudio() || isElectron;
 
-// Transport glyphs (16x16), drawn in `currentColor` so each button's own text colour applies. Record is
-// a microphone, pause two bars, resume a play triangle, stop a filled square, upload the arrow-into-tray.
-// The buttons are icon-only: the label lives on aria-label + title.
-function TransportIcon({ children }: { children: ReactNode }) {
+// Command-hub icon-button glyphs (Feather/Lucide-style, 18px, drawn in `currentColor` so the button's own
+// text colour applies). Auto-stop = clock, Upload = tray/upload-arrow, Notes = pencil. The buttons are
+// icon-only: the label lives on aria-label + title. (The record/pause/resume/stop glyphs live in RecordHero.)
+function HubIcon({ children }: { children: ReactNode }) {
   return (
-    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true" focusable="false"
+      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       {children}
     </svg>
   );
 }
 
-const IconRecord = () => (
-  <TransportIcon>
-    <rect x="6" y="1.75" width="4" height="7.5" rx="2" fill="currentColor" />
-    <path
-      d="M3.75 7.5a4.25 4.25 0 0 0 8.5 0M8 11.75V14M5.75 14h4.5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </TransportIcon>
-);
-
-const IconPause = () => (
-  <TransportIcon>
-    <rect x="4.5" y="3.5" width="2.5" height="9" rx="0.75" fill="currentColor" />
-    <rect x="9" y="3.5" width="2.5" height="9" rx="0.75" fill="currentColor" />
-  </TransportIcon>
-);
-
-const IconPlay = () => (
-  <TransportIcon>
-    <path d="M5.5 3.4l6.5 4.6-6.5 4.6z" fill="currentColor" />
-  </TransportIcon>
-);
-
-const IconStop = () => (
-  <TransportIcon>
-    <rect x="4" y="4" width="8" height="8" rx="1" fill="currentColor" />
-  </TransportIcon>
+const IconClock = () => (
+  <HubIcon>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7.5V12l3 2" />
+  </HubIcon>
 );
 
 const IconUpload = () => (
-  <TransportIcon>
-    <path
-      d="M8 10.5V2.5M5 5.5l3-3 3 3M2.5 10.5v2.5h11v-2.5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </TransportIcon>
+  <HubIcon>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
+  </HubIcon>
+);
+
+const IconPencil = () => (
+  <HubIcon>
+    <path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+  </HubIcon>
 );
 
 function loadSavedSource(): PersistedSource | null {
@@ -187,14 +166,16 @@ export default function Recorder({
   const [devices, setDevices] = useState<InputDevice[]>([]);
   const [hasLabels, setHasLabels] = useState(false);
   const [constraints, setConstraints] = useState<AudioConstraints>(DEFAULT_CONSTRAINTS);
-  const [cogOpen, setCogOpen] = useState(false);
+  // Shared "one popover open at a time" state for the top-bar hub. The audio-source popover is id "source";
+  // used via a safe fallback when Recorder is rendered outside a HubPopoverProvider (e.g. unit tests).
+  const hub = useHubPopover();
   // True once we've asked the browser for mic access to reveal device labels (on first picker focus).
   // Used to show the "no microphone detected" hint only after an attempt that came back empty.
   const [labelsTried, setLabelsTried] = useState(false);
   const [recording, setRecording] = useState(false);
   // Paused mid-recording: capture is suspended (nothing recorded, mic muted) but the recorder is still live.
   const [paused, setPaused] = useState(false);
-  // True once the input has been near-silent for a sustained period while recording (see InputLevelMeter).
+  // True once the input has been near-silent for a sustained period while recording (see HubLevelMeter).
   const [silent, setSilent] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   // Auto-stop: schedule the current recording to end after N minutes or at a set clock time. The chosen
@@ -214,7 +195,6 @@ export default function Recorder({
   // Live notes taken while recording: local lines (fake ids) stamped with the *recorded* clock, mirrored to
   // IndexedDB so a crash never loses them, and attached to the recording after upload.
   const [liveLines, setLiveLines] = useState<MeetingNote[]>([]);
-  const [notesOpen, setNotesOpen] = useState(false);
   // Lines whose audio uploaded but whose attach failed (durable, with the recording id) - drives the retry banner.
   const [notesAttach, setNotesAttach] = useState<PendingNotes | null>(null);
 
@@ -257,8 +237,6 @@ export default function Recorder({
   const activeSourceRef = useRef<AudioSourceKind>("mic");
   // Reports phase changes to the Electron tray; a no-op in a plain browser.
   const reportRef = useRef<(s: RecorderState) => void>(() => {});
-  // Wraps the ⚙ button + its popover, so an outside click / Escape can close it.
-  const cogRef = useRef<HTMLDivElement>(null);
 
   // Re-enumerate inputs (mount, hot-plug via devicechange, and after a grant unlocks labels). Also
   // re-resolves a specific-mic selection against the new list so an unplugged device falls back cleanly.
@@ -315,23 +293,6 @@ export default function Recorder({
     };
   }, [refreshDevices]);
 
-  // Close the audio-settings popover on an outside click or Escape (same pattern as KebabMenu).
-  useEffect(() => {
-    if (!cogOpen) return;
-    function onDown(e: MouseEvent) {
-      if (cogRef.current && !cogRef.current.contains(e.target as Node)) setCogOpen(false);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setCogOpen(false);
-    }
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [cogOpen]);
-
   function persistSource(sel: SourceSelection) {
     try {
       localStorage.setItem(SOURCE_KEY, JSON.stringify({ token: formatSourceToken(sel), label: sel.label }));
@@ -345,7 +306,6 @@ export default function Recorder({
     if (sel.kind === "device") sel.label = devices.find((d) => d.deviceId === sel.deviceId)?.label || undefined;
     setSelection(sel);
     persistSource(sel);
-    if (sel.kind === "none") setCogOpen(false); // no mic to tune
   }
 
   function toggleSystemAudio(on: boolean) {
@@ -485,22 +445,28 @@ export default function Recorder({
     mirrorLines(liveLinesRef.current.filter((l) => l.id !== id));
   }
 
-  function closeNotes() {
-    setNotesOpen(false);
+  // The notes popover's open state lives in the shared hub (id "notes"); this only persists the *preference*
+  // so a fresh recording reopens it (or not) per the user's last choice. Kept in sync with the pencil toggle
+  // + the popover's close button below.
+  function persistNotesOpen(open: boolean) {
     try {
-      localStorage.setItem(NOTES_OPEN_KEY, "false");
+      localStorage.setItem(NOTES_OPEN_KEY, open ? "true" : "false");
     } catch {
       /* non-fatal */
     }
   }
 
-  function openNotes() {
-    setNotesOpen(true);
-    try {
-      localStorage.setItem(NOTES_OPEN_KEY, "true");
-    } catch {
-      /* non-fatal */
-    }
+  // Pencil-button toggle: flip the notes popover and remember the resulting preference.
+  function toggleNotes() {
+    const willOpen = !hub.isOpen("notes");
+    hub.toggle("notes");
+    persistNotesOpen(willOpen);
+  }
+
+  // The popover's own close (X / backdrop-independent): close it and remember "closed".
+  function closeNotes() {
+    hub.close();
+    persistNotesOpen(false);
   }
 
   /// Attach lines to the created recording. Success clears the durable stash; failure keeps the lines (with
@@ -604,7 +570,9 @@ export default function Recorder({
       liveLinesRef.current = [];
       setLiveLines([]);
       if (userId) void clearPendingNotes(userId);
-      setNotesOpen(localStorage.getItem(NOTES_OPEN_KEY) !== "false");
+      // Auto-open the notes popover per the remembered preference. `stop()` resets the hub, so at record
+      // start nothing else is open and `toggle` reliably *opens* notes.
+      if (localStorage.getItem(NOTES_OPEN_KEY) !== "false" && !hub.isOpen("notes")) hub.toggle("notes");
       reportRef.current({ phase: "recording", source: coarse });
       // A mic grant unlocks device labels — re-enumerate so specifics appear next time.
       if (coarse !== "system") void refreshDevices();
@@ -652,6 +620,9 @@ export default function Recorder({
     setRecording(false);
     setPaused(false);
     setSilent(false);
+    // Reset any open hub popover (the notes popover only lives while recording) so the next recording's
+    // auto-open toggle starts from a clean "nothing open" state.
+    hub.close();
     recorderRef.current?.stop();
   }
 
@@ -772,6 +743,13 @@ export default function Recorder({
 
   const secs = Math.floor(elapsed / 1000);
   const mmss = `${String(Math.floor(secs / 60)).padStart(2, "0")}:${String(secs % 60).padStart(2, "0")}`;
+  // The "stops at HH:MM" hint (shown inside the Auto-stop popover) once a stop is scheduled.
+  const scheduledHint =
+    scheduledStopAt != null
+      ? t("autoStopScheduled", {
+          time: new Date(scheduledStopAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        })
+      : null;
 
   // Errors, warnings and hints go to the app-wide status bar rather than inline: the TopBar is a
   // fixed-height header, so an extra line here pushed the whole bar off screen. One message at a time,
@@ -812,137 +790,85 @@ export default function Recorder({
       }
     >
       <div className="flex items-center gap-2">
-        <select
-          value={formatSourceToken(selection)}
-          onChange={onSelectSource}
-          onFocus={ensureDeviceLabels}
-          disabled={recording}
-          aria-label={t("sourceMicrophone")}
-          className="rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-        >
-          {buildSourceOptions(
-            devices,
-            hasLabels,
-            {
-              micDefault: t("sourceMicDefault"),
-              noMic: t("sourceNoMic"),
-              numbered: (n) => t("sourceMicNumbered", { n }),
-            },
-            { canSystemAudio: CAN_SYSTEM_AUDIO },
-          ).map((o) => (
-            <option key={o.token} value={o.token}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-
-        {/* Add system audio to the capture (mixed with the mic, or on its own for "No microphone").
-            Shown only where getDisplayMedia can capture it. */}
-        {CAN_SYSTEM_AUDIO && (
-          <label className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-200">
-            <input
-              type="checkbox"
-              checked={systemAudio}
-              onChange={(e) => toggleSystemAudio(e.target.checked)}
-              disabled={recording}
-            />
-            {t("systemAudioToggle")}
-          </label>
-        )}
-
-        {/* Capture-constraint popover — mic only (no mic to tune when "No microphone" is selected). */}
-        <div className="relative" ref={cogRef}>
-          <button
-            type="button"
-            onClick={() => setCogOpen((o) => !o)}
-            disabled={recording || selection.kind === "none"}
-            title={t("audioSettings")}
-            aria-label={t("audioSettings")}
-            aria-expanded={cogOpen}
-            className="rounded border px-2 py-1 text-sm disabled:opacity-40 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
-          >
-            ⚙
-          </button>
-          {cogOpen && selection.kind !== "none" && (
-            <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded border bg-white p-3 text-sm shadow-lg dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  {t("audioSettings")}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setCogOpen(false)}
-                  aria-label={t("close")}
-                  title={t("close")}
-                  className="rounded px-1 text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
-                >
-                  ✕
-                </button>
-              </div>
-              {(
-                [
-                  ["echoCancellation", t("constraintEcho")],
-                  ["noiseSuppression", t("constraintNoise")],
-                  ["autoGainControl", t("constraintAgc")],
-                  ["mono", t("constraintMono")],
-                ] as const
-              ).map(([key, label]) => (
-                <label key={key} className="flex items-center gap-2 py-1">
-                  <input
-                    type="checkbox"
-                    checked={constraints[key]}
-                    onChange={() => toggleConstraint(key)}
-                  />
-                  <span>{label}</span>
-                </label>
-              ))}
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t("constraintsMicOnlyHint")}</p>
-            </div>
-          )}
+        {/* Single "Audio source" chip - opens the Audio source popover (mic select + system toggle +
+            processing chips). Anchored in a `relative` wrapper so the popover positions under the chip. */}
+        <div className="relative">
+          <AudioSourceChip
+            systemAudio={systemAudio}
+            expanded={hub.isOpen("source")}
+            disabled={recording}
+            onClick={() => hub.toggle("source")}
+          />
+          <AudioSourcePopover
+            open={hub.isOpen("source")}
+            onClose={hub.close}
+            selection={selection}
+            options={buildSourceOptions(
+              devices,
+              hasLabels,
+              {
+                micDefault: t("sourceMicDefault"),
+                noMic: t("sourceNoMic"),
+                numbered: (n) => t("sourceMicNumbered", { n }),
+              },
+              { canSystemAudio: CAN_SYSTEM_AUDIO },
+            )}
+            onSelectSource={onSelectSource}
+            onFocusSelect={ensureDeviceLabels}
+            recording={recording}
+            canSystemAudio={CAN_SYSTEM_AUDIO}
+            systemAudio={systemAudio}
+            onToggleSystemAudio={toggleSystemAudio}
+            constraints={constraints}
+            onToggleConstraint={toggleConstraint}
+          />
         </div>
 
-        {recording ? (
-          <>
-            <button
-              type="button"
-              onClick={paused ? resume : pause}
-              title={paused ? t("recResume") : t("recPause")}
-              aria-label={paused ? t("recResume") : t("recPause")}
-              className="flex items-center justify-center rounded border p-2 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
-            >
-              {paused ? <IconPlay /> : <IconPause />}
-            </button>
-            <button
-              onClick={stop}
-              title={t("recStop")}
-              aria-label={t("recStop")}
-              className="flex items-center justify-center rounded bg-red-600 p-2 text-white"
-            >
-              <IconStop />
-            </button>
-          </>
-        ) : (
-          <button
-            onClick={() => start()}
-            disabled={busy || (selection.kind === "none" && !systemAudio) || !canRecord}
-            title={!canRecord ? t("recNoPermission") : busy ? t("recUploading") : t("recRecord")}
-            aria-label={busy ? t("recUploading") : t("recRecord")}
-            className="flex items-center justify-center rounded bg-gray-900 p-2 text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
-          >
-            <IconRecord />
-          </button>
-        )}
+        <RecordHero
+          recording={recording}
+          paused={paused}
+          mmss={mmss}
+          stream={streamRef.current}
+          canRecord={canRecord}
+          busy={busy}
+          startDisabled={selection.kind === "none" && !systemAudio}
+          onStart={() => start()}
+          onPause={pause}
+          onResume={resume}
+          onStop={stop}
+          onSilentChange={setSilent}
+        />
 
-        <button
-          type="button"
+        {/* Auto-stop: clock icon button -> Auto-stop popover. Same choice/time state as the old select. */}
+        <div className="relative">
+          <HubIconButton
+            label={t("autoStopLabel")}
+            onClick={() => hub.toggle("stop")}
+            disabled={busy || !canRecord}
+            expanded={hub.isOpen("stop")}
+          >
+            <IconClock />
+          </HubIconButton>
+          <AutoStopPopover
+            open={hub.isOpen("stop")}
+            onClose={hub.close}
+            choice={autoStopChoice}
+            time={autoStopTime}
+            onChoice={onAutoStopChoice}
+            onTime={onAutoStopTime}
+            scheduledHint={scheduledHint}
+          />
+        </div>
+
+        {/* Upload: icon button (restyled) + the unchanged hidden file input. */}
+        <HubIconButton
+          label={t("recUpload")}
+          title={!canRecord ? t("recNoPermission") : t("recUploadTitle")}
           onClick={() => fileRef.current?.click()}
           disabled={recording || busy || !canRecord}
-          title={!canRecord ? t("recNoPermission") : t("recUploadTitle")}
-          aria-label={t("recUpload")}
-          className="flex items-center justify-center rounded border p-2 disabled:opacity-50 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
         >
           <IconUpload />
-        </button>
+        </HubIconButton>
         <input
           ref={fileRef}
           type="file"
@@ -953,60 +879,25 @@ export default function Recorder({
           data-testid="upload-input"
         />
 
-        {/* Schedule the current recording to auto-stop (then the normal upload+transcription runs). */}
-        <select
-          value={autoStopChoice}
-          onChange={(e) => onAutoStopChoice(e.target.value as AutoStopChoice)}
-          disabled={busy || !canRecord}
-          aria-label={t("autoStopLabel")}
-          title={t("autoStopLabel")}
-          className="rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-        >
-          <option value="off">{t("autoStopOff")}</option>
-          <option value="in15">{t("autoStopIn15")}</option>
-          <option value="in30">{t("autoStopIn30")}</option>
-          <option value="in60">{t("autoStopIn60")}</option>
-          <option value="at">{t("autoStopAt")}</option>
-        </select>
-        {autoStopChoice === "at" && (
-          <input
-            type="time"
-            value={autoStopTime}
-            onChange={(e) => onAutoStopTime(e.target.value)}
-            aria-label={t("autoStopAtAria")}
-            className="rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          />
-        )}
-
+        {/* Notes: pencil icon button (recording-only) -> Notes popover. */}
         {recording && (
-          <>
-            {paused ? (
-              <span role="status" className="font-mono text-sm text-amber-600">
-                ❚❚ {mmss} · {t("recPaused")}
-              </span>
-            ) : (
-              <span className="font-mono text-sm text-red-600">● {mmss}</span>
-            )}
-            {scheduledStopAt != null && (
-              <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
-                {t("autoStopScheduled", {
-                  time: new Date(scheduledStopAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                })}
-              </span>
-            )}
-            {/* Meter (and its silence detection) only runs while actively capturing. */}
-            {!paused && <InputLevelMeter stream={streamRef.current} onSilentChange={setSilent} />}
-            {/* Live notes toggle: reopen the panel after it was closed. */}
-            {!notesOpen && (
-              <button
-                type="button"
-                onClick={openNotes}
-                className="rounded border px-2 py-1 text-xs dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
-              >
-                {t("liveNotesToggle")}
-              </button>
-            )}
-          </>
+          <div className="relative">
+            <HubIconButton
+              label={t("liveNotesToggle")}
+              onClick={toggleNotes}
+              expanded={hub.isOpen("notes")}
+            >
+              <IconPencil />
+            </HubIconButton>
+            <NotesPopover
+              open={hub.isOpen("notes")}
+              onClose={closeNotes}
+              lines={liveLines}
+              onAdd={addLiveNote}
+              onEdit={editLiveNote}
+              onDelete={deleteLiveNote}
+            />
+          </div>
         )}
       </div>
 
@@ -1054,17 +945,6 @@ export default function Recorder({
             </div>
           )}
         </div>
-      )}
-
-      {/* Live notes panel: floats below the TopBar while recording (incl. paused). */}
-      {recording && notesOpen && (
-        <LiveNotesPanel
-          lines={liveLines}
-          onAdd={addLiveNote}
-          onEdit={editLiveNote}
-          onDelete={deleteLiveNote}
-          onClose={closeNotes}
-        />
       )}
     </div>
   );

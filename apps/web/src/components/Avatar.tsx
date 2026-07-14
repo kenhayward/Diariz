@@ -2,7 +2,8 @@ import { useState } from "react";
 
 /// A round avatar for the signed-in user: the Google profile picture when available, otherwise an initials
 /// bubble. Falls back to initials if the image fails to load (e.g. a stale/expired Google URL). `size`
-/// picks the diameter: "sm" (h-8, the header avatar) or "lg" (h-16, the Preferences left panel).
+/// picks the diameter: "sm" (h-8, the header avatar), "md" (46px, the command-hub avatar) or "lg" (h-16,
+/// the Preferences left panel).
 export default function Avatar({
   initials,
   pictureUrl,
@@ -10,10 +11,17 @@ export default function Avatar({
 }: {
   initials: string;
   pictureUrl?: string | null;
-  size?: "xs" | "sm" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
 }) {
   const [failed, setFailed] = useState(false);
-  const box = size === "lg" ? "h-16 w-16 text-lg" : size === "xs" ? "h-6 w-6 text-[10px]" : "h-8 w-8 text-xs";
+  const box =
+    size === "lg"
+      ? "h-16 w-16 text-lg"
+      : size === "md"
+        ? "h-[46px] w-[46px] text-sm"
+        : size === "xs"
+          ? "h-6 w-6 text-[10px]"
+          : "h-8 w-8 text-xs";
 
   if (pictureUrl && !failed) {
     return (

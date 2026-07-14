@@ -5,6 +5,96 @@
 
 :root {
   color-scheme: light dark;
+
+  /* Top-bar "command hub" token layer. Light values here; dark overrides under `.dark` below.
+     Blue/red accents and the meter gradient are theme-neutral and carry over from these defaults. */
+  --hub-bar-bg: #ffffff;
+  --hub-bar-border-top: rgba(47, 107, 237, 0.2);
+  --hub-bar-border-bottom: rgba(15, 23, 42, 0.08);
+  --hub-surface: #f1f5f9;
+  --hub-surface-hover: rgba(15, 23, 42, 0.05);
+  --hub-popover-bg: #ffffff;
+  --hub-popover-border: rgba(15, 23, 42, 0.1);
+  --hub-popover-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
+  --hub-border: rgba(15, 23, 42, 0.1);
+  --hub-border-hover: rgba(47, 107, 237, 0.45);
+  --hub-avatar-border: rgba(15, 23, 42, 0.12);
+  --hub-text: #0f172a;
+  --hub-text-2: #334155;
+  --hub-muted: #64748b;
+  --hub-muted-2: #94a3b8;
+  --hub-placeholder: #94a3b8;
+  --hub-blue: #2f6bed;
+  --hub-blue-soft-bg: rgba(47, 107, 237, 0.1);
+  --hub-blue-soft-border: rgba(47, 107, 237, 0.3);
+  --hub-blue-text: #1e40af;
+  --hub-red: #e5484d;
+  --hub-red-hover: #ef5a5f;
+  --hub-red-text: #dc2626;
+  --hub-red-soft-bg: rgba(229, 72, 77, 0.08);
+  --hub-red-soft-border: rgba(229, 72, 77, 0.3);
+  --hub-green: #16a34a;
+  --hub-green-text: #15803d;
+  --hub-green-soft-bg: rgba(34, 197, 94, 0.12);
+  --hub-green-soft-border: rgba(34, 197, 94, 0.3);
+  --hub-meter-gradient: linear-gradient(180deg, #e5484d, #f2c94c, #22c55e);
+}
+
+.dark {
+  --hub-bar-bg: #0a1120;
+  --hub-bar-border-top: rgba(120, 150, 220, 0.18);
+  --hub-bar-border-bottom: rgba(255, 255, 255, 0.05);
+  --hub-surface: #131d31;
+  --hub-surface-hover: rgba(255, 255, 255, 0.06);
+  --hub-popover-bg: #0e1729;
+  --hub-popover-border: rgba(255, 255, 255, 0.11);
+  --hub-popover-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  --hub-border: rgba(255, 255, 255, 0.1);
+  --hub-border-hover: rgba(120, 150, 220, 0.5);
+  --hub-avatar-border: rgba(255, 255, 255, 0.14);
+  --hub-text: #eef2f8;
+  --hub-text-2: #c7d0e0;
+  --hub-muted: #7c8aa3;
+  --hub-muted-2: #6b7890;
+  --hub-placeholder: #5e6b82;
+  --hub-blue-soft-bg: rgba(47, 107, 237, 0.14);
+  --hub-blue-text: #cfe0ff;
+  --hub-red-text: #ff8b8f;
+  --hub-red-soft-bg: rgba(229, 72, 77, 0.12);
+  --hub-green: #22c55e;
+  --hub-green-text: #22c55e;
+  --hub-green-soft-bg: rgba(34, 197, 94, 0.14);
+  --hub-green-soft-border: rgba(34, 197, 94, 0.22);
+}
+
+/* Command-hub animations (referenced by the bar's recording state + popovers in later units). */
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+@keyframes meter {
+  0%,
+  100% {
+    transform: scaleY(0.25);
+  }
+  50% {
+    transform: scaleY(1);
+  }
 }
 
 body {

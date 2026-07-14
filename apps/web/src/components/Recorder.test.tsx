@@ -166,13 +166,14 @@ describe("Recorder transport controls", () => {
     (getStream as Mock).mockResolvedValue(fakeSession);
   });
 
-  // The transport buttons are icon-only: the glyph carries the meaning, the label lives on aria-label
-  // (and title) so screen readers + hover tooltips still name them.
+  // The circular transport buttons (pause/resume/stop) are icon-only: the glyph carries the meaning, the
+  // label lives on aria-label (and title) so screen readers + hover tooltips still name them. The record
+  // hero is now a labelled pill (icon + "Start recording" text) but keeps the accessible name "Record".
   const iconOnly = (btn: HTMLElement) => btn.querySelector("svg") !== null && btn.textContent === "";
 
-  it("renders Record and Upload as icons with accessible names", async () => {
+  it("renders Record (hero pill) and Upload (icon) with accessible names", async () => {
     render(<Recorder onUploaded={() => {}} />);
-    expect(iconOnly(await screen.findByRole("button", { name: /^record$/i }))).toBe(true);
+    expect(await screen.findByRole("button", { name: /^record$/i })).toBeTruthy();
     expect(iconOnly(screen.getByRole("button", { name: /^upload$/i }))).toBe(true);
   });
 
@@ -209,6 +210,23 @@ describe("Recorder source selection", () => {
     (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: false });
   });
 
+  // The mic select, system-audio toggle and processing chips now live inside the Audio source popover,
+  // opened from the "Audio source" chip. Most source assertions open it first.
+  const openSource = async () =>
+    fireEvent.click(await screen.findByRole("button", { name: /audio source/i }));
+
+  it("opens the audio source popover from the chip", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    // Closed by default: no popover, no mic combobox in the DOM.
+    expect(screen.queryByTestId("audio-source-popover")).toBeNull();
+    expect(screen.queryByRole("combobox", { name: /^microphone$/i })).toBeNull();
+
+    await openSource();
+
+    expect(screen.getByTestId("audio-source-popover")).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: /^microphone$/i })).toBeTruthy();
+  });
+
   it("lists Microphone (default), then specific mics, then No microphone (system available)", async () => {
     (listInputDevices as Mock).mockResolvedValue({
       devices: [
@@ -218,6 +236,7 @@ describe("Recorder source selection", () => {
       hasLabels: true,
     });
     render(<Recorder onUploaded={() => {}} />);
+    await openSource();
 
     await screen.findByRole("option", { name: "USB Headset" });
     const select = screen.getByRole("combobox", { name: /^microphone$/i });
@@ -236,6 +255,7 @@ describe("Recorder source selection", () => {
     });
     (getStream as Mock).mockResolvedValue(fakeSession);
     render(<Recorder onUploaded={() => {}} />);
+    await openSource();
 
     // Wait for the async device load to populate the options before selecting — otherwise a slow
     // runner can click Record before the label is known, resolving the source without its label.
@@ -261,17 +281,18 @@ describe("Recorder source selection", () => {
       hasLabels: true,
     });
     render(<Recorder onUploaded={() => {}} />);
+    await openSource();
 
     const select = (await screen.findByRole("combobox", { name: /^microphone$/i })) as HTMLSelectElement;
     await waitFor(() => expect(select.value).toBe("dev:bbb"));
   });
 
-  it("feeds cog constraint changes into capture", async () => {
+  it("feeds processing-chip constraint changes into capture", async () => {
     (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
     (getStream as Mock).mockResolvedValue(fakeSession);
     render(<Recorder onUploaded={() => {}} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /audio settings/i }));
+    await openSource();
     fireEvent.click(screen.getByRole("checkbox", { name: /noise suppression/i }));
     fireEvent.click(screen.getByRole("button", { name: /record/i }));
 
@@ -283,17 +304,18 @@ describe("Recorder source selection", () => {
     );
   });
 
-  it("disables the audio-settings cog when No Microphone is selected", async () => {
+  it("disables the processing chips when No Microphone is selected", async () => {
     (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
     render(<Recorder onUploaded={() => {}} />);
+    await openSource();
 
     fireEvent.change(await screen.findByRole("combobox", { name: /^microphone$/i }), { target: { value: "none" } });
-    const cog = screen.getByRole("button", { name: /audio settings/i }) as HTMLButtonElement;
-    expect(cog.disabled).toBe(true);
+    expect((screen.getByRole("checkbox", { name: /mono/i }) as HTMLInputElement).disabled).toBe(true);
   });
 
   it("shows the System audio checkbox where supported", async () => {
     render(<Recorder onUploaded={() => {}} />);
+    await openSource();
     expect(await screen.findByRole("checkbox", { name: /system audio/i })).toBeTruthy();
   });
 
@@ -303,7 +325,7 @@ describe("Recorder source selection", () => {
     render(<Recorder onUploaded={() => {}} />);
 
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
-    await screen.findByText(/●/);
+    await screen.findByRole("button", { name: /^stop$/i });
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
 
     await waitFor(() => expect(api.upload).toHaveBeenCalled());
@@ -318,7 +340,7 @@ describe("Recorder source selection", () => {
     render(<Recorder onUploaded={() => {}} />);
 
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
-    await screen.findByText(/●/);
+    await screen.findByRole("button", { name: /^stop$/i });
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
 
     await waitFor(() => expect(api.upload).toHaveBeenCalled());
@@ -333,7 +355,7 @@ describe("Recorder source selection", () => {
     render(<Recorder onUploaded={() => {}} />);
 
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
-    await screen.findByText(/●/);
+    await screen.findByRole("button", { name: /^stop$/i });
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
 
     await waitFor(() => expect(api.upload).toHaveBeenCalled());
@@ -345,10 +367,11 @@ describe("Recorder source selection", () => {
     (getCombinedStream as Mock).mockResolvedValue(fakeSession);
     (api.upload as Mock).mockResolvedValue({ id: "r1" });
     render(<Recorder onUploaded={() => {}} />);
+    await openSource();
 
     fireEvent.click(await screen.findByRole("checkbox", { name: /system audio/i }));
     fireEvent.click(screen.getByRole("button", { name: /record/i }));
-    await screen.findByText(/●/);
+    await screen.findByRole("button", { name: /^stop$/i });
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
 
     await waitFor(() => expect(api.upload).toHaveBeenCalled());
@@ -360,11 +383,12 @@ describe("Recorder source selection", () => {
     (getStream as Mock).mockResolvedValue(fakeSession);
     (api.upload as Mock).mockResolvedValue({ id: "r1" });
     render(<Recorder onUploaded={() => {}} />);
+    await openSource();
 
     fireEvent.change(await screen.findByRole("combobox", { name: /^microphone$/i }), { target: { value: "none" } });
     fireEvent.click(screen.getByRole("checkbox", { name: /system audio/i }));
     fireEvent.click(screen.getByRole("button", { name: /record/i }));
-    await screen.findByText(/●/);
+    await screen.findByRole("button", { name: /^stop$/i });
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
 
     await waitFor(() => expect(api.upload).toHaveBeenCalled());
@@ -375,6 +399,7 @@ describe("Recorder source selection", () => {
 
   it("disables Record when No Microphone and system audio is off", async () => {
     render(<Recorder onUploaded={() => {}} />);
+    await openSource();
     fireEvent.change(await screen.findByRole("combobox", { name: /^microphone$/i }), { target: { value: "none" } });
     expect((screen.getByRole("button", { name: /record/i }) as HTMLButtonElement).disabled).toBe(true);
   });
@@ -386,10 +411,11 @@ describe("Recorder source selection", () => {
     (getStream as Mock).mockResolvedValue(fakeSession);
     (api.upload as Mock).mockResolvedValue({ id: "r1" });
     render(<Recorder onUploaded={() => {}} />);
+    await openSource();
 
     fireEvent.click(await screen.findByRole("checkbox", { name: /system audio/i }));
     fireEvent.click(screen.getByRole("button", { name: /record/i }));
-    await screen.findByText(/●/); // still recording (mic only)
+    await screen.findByRole("button", { name: /^stop$/i }); // still recording (mic only)
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
 
     await waitFor(() => expect(api.upload).toHaveBeenCalled());
@@ -424,23 +450,25 @@ describe("Recorder source selection", () => {
     await waitFor(() => expect(setStatus).toHaveBeenCalledWith(null));
   });
 
-  it("closes the audio-settings popover on an outside click", async () => {
+  it("closes the audio source popover on a backdrop click", async () => {
     (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
     render(<Recorder onUploaded={() => {}} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /audio settings/i }));
+    await openSource();
     expect(screen.getByRole("checkbox", { name: /mono/i })).toBeTruthy();
 
-    fireEvent.mouseDown(document.body);
+    fireEvent.click(screen.getByTestId("hub-popover-backdrop"));
     await waitFor(() => expect(screen.queryByRole("checkbox", { name: /mono/i })).toBeNull());
   });
 
-  it("closes the audio-settings popover via its close button", async () => {
+  it("closes the audio source popover on Escape", async () => {
     (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
     render(<Recorder onUploaded={() => {}} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /audio settings/i }));
-    fireEvent.click(screen.getByRole("button", { name: /close/i }));
+    await openSource();
+    expect(screen.getByRole("checkbox", { name: /mono/i })).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("checkbox", { name: /mono/i })).toBeNull());
   });
 
@@ -456,6 +484,7 @@ describe("Recorder source selection", () => {
       hasLabels: true,
     });
     render(<Recorder onUploaded={() => {}} />);
+    await openSource();
 
     expect(await screen.findByRole("option", { name: "USB Headset" })).toBeTruthy();
   });
@@ -465,6 +494,7 @@ describe("Recorder source selection", () => {
       .mockResolvedValueOnce({ devices: [], hasLabels: false }) // mount: no labels yet
       .mockResolvedValue({ devices: [{ deviceId: "bbb", label: "USB Headset" }], hasLabels: true }); // after grant
     render(<Recorder onUploaded={() => {}} />);
+    await openSource();
 
     fireEvent.focus(await screen.findByRole("combobox", { name: /^microphone$/i }));
 
@@ -478,6 +508,7 @@ describe("Recorder source selection", () => {
       Object.assign(new Error("x"), { name: "NotFoundError" }),
     );
     render(<Recorder onUploaded={() => {}} />);
+    await openSource();
 
     fireEvent.focus(await screen.findByRole("combobox", { name: /^microphone$/i }));
 
@@ -495,6 +526,7 @@ describe("Recorder source selection", () => {
   it("no longer shows the bespoke 'allow microphone' link", async () => {
     (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: false });
     render(<Recorder onUploaded={() => {}} />);
+    await openSource();
     await screen.findByRole("combobox", { name: /^microphone$/i });
     expect(screen.queryByRole("button", { name: /allow microphone/i })).toBeNull();
   });
@@ -541,6 +573,13 @@ describe("Recorder auto-stop", () => {
     (getStream as Mock).mockResolvedValue(fakeSession);
   });
 
+  // The auto-stop control is now a clock icon button (accessible name "auto-stop") that opens the
+  // Auto-stop popover; the choices are option rows inside it, not a native <select>.
+  const chooseAutoStop = (name: RegExp) => {
+    fireEvent.click(screen.getByRole("button", { name: /^auto-stop$/i }));
+    fireEvent.click(screen.getByRole("button", { name }));
+  };
+
   it("auto-stops the recording and uploads when the scheduled time is reached", async () => {
     vi.useFakeTimers();
     try {
@@ -552,8 +591,8 @@ describe("Recorder auto-stop", () => {
         await vi.runOnlyPendingTimersAsync();
       });
 
-      // Choose "in 15 minutes", then start recording.
-      fireEvent.change(screen.getByLabelText(/auto-stop/i), { target: { value: "in15" } });
+      // Choose "in 15 minutes" from the auto-stop popover, then start recording.
+      chooseAutoStop(/stop in 15 minutes/i);
       fireEvent.click(screen.getByLabelText(/^record$/i));
       // Flush start()'s awaited getStream promise under fake timers.
       await act(async () => {
@@ -586,7 +625,7 @@ describe("Recorder auto-stop", () => {
         await vi.runOnlyPendingTimersAsync();
       });
 
-      fireEvent.change(screen.getByLabelText(/auto-stop/i), { target: { value: "in15" } });
+      chooseAutoStop(/stop in 15 minutes/i);
       fireEvent.click(screen.getByLabelText(/^record$/i));
       await act(async () => {
         await vi.runOnlyPendingTimersAsync();

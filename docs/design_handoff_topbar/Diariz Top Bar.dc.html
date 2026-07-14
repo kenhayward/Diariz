@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<style>
+  body{margin:0;background:#050912;font-family:system-ui,"Segoe UI",sans-serif}
+  a{color:#8fb0ff}a:hover{color:#b3caff}
+  @keyframes meter{0%,100%{transform:scaleY(.25)}50%{transform:scaleY(1)}}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+  @keyframes popIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</helmet>
+
+<div style="position:relative;width:100%;min-height:220px;background:#050912">
+  <div style="position:relative;width:100%;height:80px;display:flex;align-items:center;gap:16px;padding:0 22px;box-sizing:border-box;background:#0a1120;border-top:2px solid rgba(120,150,220,.18);border-bottom:1px solid rgba(255,255,255,.05)">
+    <!-- logo -->
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="width:34px;height:34px;border-radius:9px;background:conic-gradient(from 210deg,#2f6bed,#22c55e,#f59e0b,#2f6bed);display:flex;align-items:flex-end;justify-content:center;gap:2px;padding-bottom:8px;box-shadow:0 2px 8px rgba(47,107,237,.4)"><div style="width:2.5px;height:8px;background:#fff;border-radius:2px"></div><div style="width:2.5px;height:14px;background:#fff;border-radius:2px"></div><div style="width:2.5px;height:6px;background:#fff;border-radius:2px"></div></div>
+      <div style="font:700 21px/1 system-ui;color:#fff;letter-spacing:-.01em">Diariz</div>
+    </div>
+    <div style="flex:1"></div>
+
+    <!-- HERO -->
+    <sc-if value="{{ idle }}" hint-placeholder-val="{{ true }}">
+      <button onClick="{{ toggleRec }}" style="height:52px;display:flex;align-items:center;gap:13px;padding:0 8px;border-radius:26px;background:#131d31;border:1px solid rgba(255,255,255,.12);cursor:pointer" style-hover="border-color:rgba(120,150,220,.5)">
+        <span style="width:36px;height:36px;border-radius:50%;background:#e5484d;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(229,72,77,.5)"><span style="width:13px;height:13px;border-radius:50%;background:#fff"></span></span>
+        <span style="font:600 16px/1 system-ui;color:#fff;padding-right:14px">Start recording</span>
+      </button>
+    </sc-if>
+    <sc-if value="{{ rec }}" hint-placeholder-val="{{ false }}">
+      <div style="height:52px;display:flex;align-items:center;gap:14px;padding:0 8px 0 16px;border-radius:26px;background:rgba(229,72,77,.12);border:1px solid rgba(229,72,77,.3)">
+        <span style="width:9px;height:9px;border-radius:50%;background:#ff5b60;animation:blink 1.2s infinite"></span>
+        <span style="font:600 18px/1 ui-monospace,Menlo,monospace;color:#ff8b8f;font-variant-numeric:tabular-nums">{{ elapsed }}</span>
+        <div style="display:flex;align-items:flex-end;gap:2px;height:22px">
+          <div style="width:3px;height:100%;border-radius:2px;background:linear-gradient(180deg,#e5484d,#f2c94c,#22c55e);transform-origin:bottom;animation:meter .7s ease-in-out infinite"></div>
+          <div style="width:3px;height:100%;border-radius:2px;background:linear-gradient(180deg,#e5484d,#f2c94c,#22c55e);transform-origin:bottom;animation:meter .7s ease-in-out infinite;animation-delay:-.2s"></div>
+          <div style="width:3px;height:100%;border-radius:2px;background:linear-gradient(180deg,#e5484d,#f2c94c,#22c55e);transform-origin:bottom;animation:meter .7s ease-in-out infinite;animation-delay:-.38s"></div>
+          <div style="width:3px;height:100%;border-radius:2px;background:linear-gradient(180deg,#e5484d,#f2c94c,#22c55e);transform-origin:bottom;animation:meter .7s ease-in-out infinite;animation-delay:-.5s"></div>
+          <div style="width:3px;height:100%;border-radius:2px;background:linear-gradient(180deg,#e5484d,#f2c94c,#22c55e);transform-origin:bottom;animation:meter .7s ease-in-out infinite;animation-delay:-.29s"></div>
+        </div>
+        <button title="Pause" style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(255,255,255,.08);border:0;color:#eef2f8;cursor:pointer" style-hover="background:rgba(255,255,255,.16)"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg></button>
+        <button onClick="{{ toggleRec }}" title="Stop" style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#e5484d;border:0;color:#fff;cursor:pointer;box-shadow:0 3px 12px rgba(229,72,77,.5)" style-hover="background:#ef5a5f"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"></rect></svg></button>
+      </div>
+    </sc-if>
+
+    <!-- source chip -->
+    <button onClick="{{ openSource }}" style="height:44px;display:flex;align-items:center;gap:10px;padding:0 14px;border-radius:11px;background:#131d31;border:1px solid rgba(255,255,255,.1);color:#eef2f8;font:500 14.5px/1 system-ui;cursor:pointer" style-hover="border-color:rgba(120,150,220,.5)">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8fb0ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 10a7 7 0 0 0 14 0"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
+      Audio source
+      <span style="font:500 12px/1 system-ui;color:#22c55e;padding:2px 7px;border-radius:6px;background:rgba(34,197,94,.14)">+System</span>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7c8aa3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+    </button>
+
+    <button onClick="{{ openStop }}" title="Auto-stop" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:11px;background:transparent;border:1px solid rgba(255,255,255,.1);color:#c7d0e0;cursor:pointer" style-hover="background:rgba(255,255,255,.06)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15 14"></polyline></svg></button>
+    <button title="Upload a file" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:11px;background:transparent;border:1px solid rgba(255,255,255,.1);color:#c7d0e0;cursor:pointer" style-hover="background:rgba(255,255,255,.06)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg></button>
+    <sc-if value="{{ rec }}" hint-placeholder-val="{{ false }}">
+      <button onClick="{{ openNotes }}" title="Notes" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:11px;background:transparent;border:1px solid rgba(255,255,255,.1);color:#c7d0e0;cursor:pointer" style-hover="background:rgba(255,255,255,.06)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"></path></svg></button>
+    </sc-if>
+
+    <div style="flex:1"></div>
+    <button onClick="{{ openAcct }}" style="width:46px;height:46px;border-radius:50%;padding:0;border:2px solid rgba(255,255,255,.14);background:linear-gradient(135deg,#6b8cae,#3a5068);cursor:pointer" style-hover="border-color:rgba(120,150,220,.6)"></button>
+  </div>
+
+  <!-- combined source popover -->
+  <sc-if value="{{ open.source }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;top:88px;right:250px;width:352px;z-index:50;background:#0e1729;border:1px solid rgba(255,255,255,.11);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.6);padding:16px;animation:popIn .14s ease">
+      <div style="font:600 11px/1 system-ui;letter-spacing:.09em;text-transform:uppercase;color:#7c8aa3;margin-bottom:10px">Microphone</div>
+      <button style="width:100%;height:44px;display:flex;align-items:center;gap:10px;padding:0 12px;border-radius:10px;background:#131d31;border:1px solid rgba(255,255,255,.1);color:#eef2f8;font:500 14.5px/1 system-ui;cursor:pointer">Microphone (default)<div style="flex:1"></div><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7c8aa3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
+      <label style="display:flex;align-items:center;gap:12px;margin-top:12px;padding:10px;border-radius:10px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.22);color:#eef2f8;font:500 14.5px/1 system-ui;cursor:pointer"><span style="width:20px;height:20px;border-radius:6px;background:#22c55e;display:flex;align-items:center;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#08130a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></span>Capture system audio</label>
+      <div style="font:600 11px/1 system-ui;letter-spacing:.09em;text-transform:uppercase;color:#7c8aa3;margin:18px 0 10px">Processing</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <span style="display:flex;align-items:center;gap:7px;padding:8px 11px;border-radius:9px;background:rgba(47,107,237,.14);border:1px solid rgba(47,107,237,.3);color:#cfe0ff;font:500 13.5px/1 system-ui;cursor:pointer"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#5b8dff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>Echo cancel</span>
+        <span style="display:flex;align-items:center;gap:7px;padding:8px 11px;border-radius:9px;background:rgba(47,107,237,.14);border:1px solid rgba(47,107,237,.3);color:#cfe0ff;font:500 13.5px/1 system-ui;cursor:pointer"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#5b8dff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>Noise suppress</span>
+        <span style="display:flex;align-items:center;gap:7px;padding:8px 11px;border-radius:9px;background:rgba(47,107,237,.14);border:1px solid rgba(47,107,237,.3);color:#cfe0ff;font:500 13.5px/1 system-ui;cursor:pointer"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#5b8dff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>Auto gain</span>
+        <span style="padding:8px 11px;border-radius:9px;background:transparent;border:1px solid rgba(255,255,255,.14);color:#8a95a9;font:500 13.5px/1 system-ui;cursor:pointer">Mono</span>
+      </div>
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08);font:400 12px/1.4 system-ui;color:#6b7890">Processing applies to microphone capture only.</div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ open.stop }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;top:88px;right:158px;width:280px;z-index:50;background:#0e1729;border:1px solid rgba(255,255,255,.11);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.6);padding:10px;animation:popIn .14s ease">
+      <div style="font:600 11px/1 system-ui;letter-spacing:.09em;text-transform:uppercase;color:#7c8aa3;padding:6px 8px 10px">Auto-stop recording</div>
+      <div style="display:flex;align-items:center;padding:11px 10px;border-radius:9px;background:rgba(47,107,237,.14);color:#eef2f8;font:500 14.5px/1 system-ui;cursor:pointer">No auto-stop<div style="flex:1"></div><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5b8dff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+      <div style="padding:11px 10px;border-radius:9px;color:#c7d0e0;font:500 14.5px/1 system-ui;cursor:pointer" style-hover="background:rgba(255,255,255,.05)">Stop in 15 minutes</div>
+      <div style="padding:11px 10px;border-radius:9px;color:#c7d0e0;font:500 14.5px/1 system-ui;cursor:pointer" style-hover="background:rgba(255,255,255,.05)">Stop in 30 minutes</div>
+      <div style="padding:11px 10px;border-radius:9px;color:#c7d0e0;font:500 14.5px/1 system-ui;cursor:pointer" style-hover="background:rgba(255,255,255,.05)">Stop in 1 hour</div>
+      <div style="padding:11px 10px;border-radius:9px;color:#8fb0ff;font:500 14.5px/1 system-ui;cursor:pointer;border-top:1px solid rgba(255,255,255,.07);margin-top:4px" style-hover="background:rgba(255,255,255,.05)">Stop at a set time…</div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ open.notes }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;top:88px;right:70px;width:400px;z-index:50;background:#0e1729;border:1px solid rgba(255,255,255,.11);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.6);padding:18px;animation:popIn .14s ease">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font:700 17px/1 system-ui;color:#fff">Notes while recording</div><span style="width:9px;height:9px;border-radius:50%;background:#ff5b60;animation:blink 1.2s infinite"></span></div>
+      <div style="font:400 13px/1.5 system-ui;color:#7c8aa3;margin-bottom:14px">Each line is stamped at the moment you press Enter.</div>
+      <div style="display:flex;gap:10px"><div style="flex:1;height:44px;border-radius:10px;background:#131d31;border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;padding:0 14px;color:#5e6b82;font:400 15px/1 system-ui">Add a note…</div><button style="width:64px;border-radius:10px;background:#2f6bed;border:0;color:#fff;font:600 14px/1 system-ui;cursor:pointer">Add</button></div>
+      <div style="margin-top:14px;font:400 13px/1.55 system-ui;color:#6b7890">No notes yet. Jot trigger phrases here — they steer the meeting minutes.</div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ open.acct }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;top:88px;right:16px;width:308px;z-index:50;background:#0e1729;border:1px solid rgba(255,255,255,.11);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.6);overflow:hidden;animation:popIn .14s ease">
+      <div style="padding:18px;display:flex;gap:13px;align-items:center;border-bottom:1px solid rgba(255,255,255,.07)"><div style="width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#6b8cae,#3a5068);border:2px solid rgba(255,255,255,.14);flex:none"></div><div><div style="font:700 16px/1.2 system-ui;color:#fff">Platform Administrator</div><div style="font:400 13px/1.2 system-ui;color:#7c8aa3;margin-top:3px">admin@diariz.app</div></div></div>
+      <div style="padding:14px 18px;display:flex;flex-direction:column;gap:12px;border-bottom:1px solid rgba(255,255,255,.07)"><div><div style="display:flex;justify-content:space-between;font:500 12.5px/1 system-ui;color:#aab6ca;margin-bottom:6px"><span>Storage</span><span style="color:#7c8aa3">1.9 / 50 GB</span></div><div style="height:5px;border-radius:3px;background:rgba(255,255,255,.08)"><div style="width:4%;height:100%;border-radius:3px;background:#2f6bed"></div></div></div><div style="display:flex;justify-content:space-between;font:500 12.5px/1 system-ui;color:#aab6ca"><span>Transcription used</span><span style="color:#7c8aa3">42:38</span></div></div>
+      <div style="padding:6px"><div style="padding:10px 12px;border-radius:9px;color:#eef2f8;font:500 14.5px/1 system-ui;cursor:pointer" style-hover="background:rgba(255,255,255,.06)">Preferences</div><div style="padding:10px 12px;border-radius:9px;color:#eef2f8;font:500 14.5px/1 system-ui;cursor:pointer" style-hover="background:rgba(255,255,255,.06)">Settings</div><div style="padding:10px 12px;border-radius:9px;color:#eef2f8;font:500 14.5px/1 system-ui;cursor:pointer" style-hover="background:rgba(255,255,255,.06)">Manage users</div><div style="padding:10px 12px;border-radius:9px;color:#eef2f8;font:500 14.5px/1 system-ui;cursor:pointer" style-hover="background:rgba(255,255,255,.06)">Manage platform formulas</div><div style="padding:10px 12px;border-radius:9px;color:#eef2f8;font:500 14.5px/1 system-ui;cursor:pointer" style-hover="background:rgba(255,255,255,.06)">Show guided tour</div><div style="padding:10px 12px;border-radius:9px;color:#eef2f8;font:500 14.5px/1 system-ui;cursor:pointer" style-hover="background:rgba(255,255,255,.06)">About</div></div>
+      <div style="padding:6px;border-top:1px solid rgba(255,255,255,.07)"><div style="padding:10px 12px;border-radius:9px;color:#ff7b7f;font:600 14.5px/1 system-ui;cursor:pointer" style-hover="background:rgba(229,72,77,.1)">Sign out</div></div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ anyPop }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeAll }}" style="position:fixed;inset:0;z-index:40;background:rgba(4,8,15,.45)"></div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { rec:false, sec:0, pop:null };
+  timer = null;
+
+  toggleRec(){
+    const on = !this.state.rec;
+    this.setState({ rec:on, sec:0 });
+    if(this.timer){ clearInterval(this.timer); this.timer=null; }
+    if(on){ this.timer = setInterval(()=>this.setState(s=>({sec:s.sec+1})),1000); }
+  }
+  setPop(k){ this.setState(s=>({ pop: s.pop===k ? null : k })); }
+  componentWillUnmount(){ if(this.timer) clearInterval(this.timer); }
+
+  renderVals(){
+    const p=this.state.pop;
+    const fmt=n=>String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');
+    return {
+      rec:this.state.rec, idle:!this.state.rec,
+      elapsed:fmt(this.state.sec),
+      toggleRec:()=>this.toggleRec(),
+      open:{source:p==='source',stop:p==='stop',notes:p==='notes',acct:p==='acct'},
+      openSource:()=>this.setPop('source'),
+      openStop:()=>this.setPop('stop'),
+      openNotes:()=>this.setPop('notes'),
+      openAcct:()=>this.setPop('acct'),
+      anyPop:!!p,
+      closeAll:()=>this.setState({pop:null})
+    };
+  }
+}
+</script>
+</body>
+</html>

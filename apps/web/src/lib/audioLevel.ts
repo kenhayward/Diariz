@@ -1,5 +1,5 @@
 // Pure math for the recorder's input-level meter. Kept free of Web Audio / rAF so it's unit-testable
-// (mirrors segmentPlayback.ts). InputLevelMeter.tsx owns the AudioContext/AnalyserNode shell and feeds
+// (mirrors segmentPlayback.ts). HubLevelMeter.tsx owns the AudioContext/AnalyserNode shell and feeds
 // the raw analyser bytes through these functions.
 
 /**
