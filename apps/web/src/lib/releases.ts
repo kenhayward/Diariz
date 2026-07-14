@@ -55,6 +55,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.137.1",
+    date: "2026-07-14",
+    pr: 308,
+    headline: "/formula in chat now shows its result",
+    summary:
+      "Running a formula from chat with /formula <name> printed the \"Ran the ... formula:\" line and then nothing at all. Formula runs became asynchronous a few releases ago - the run now returns straight away and a background worker writes the document - but the chat command was still reading the result the instant it asked for it, before anything had been written. It now waits for the run to finish and shows the document, tells you why if the run failed, and if it is taking a long time says so and points you at the recording's Formulas tab, where the result still appears when it lands.",
+    fixed: [
+      "/formula <name> in chat printed an empty result: it read the document before the background worker had written it. It now waits for the run and shows the result, or the failure reason.",
+    ],
+  },
+  {
     version: "0.137.0",
     date: "2026-07-14",
     pr: 306,
