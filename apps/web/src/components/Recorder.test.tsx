@@ -573,6 +573,13 @@ describe("Recorder auto-stop", () => {
     (getStream as Mock).mockResolvedValue(fakeSession);
   });
 
+  // The auto-stop control is now a clock icon button (accessible name "auto-stop") that opens the
+  // Auto-stop popover; the choices are option rows inside it, not a native <select>.
+  const chooseAutoStop = (name: RegExp) => {
+    fireEvent.click(screen.getByRole("button", { name: /^auto-stop$/i }));
+    fireEvent.click(screen.getByRole("button", { name }));
+  };
+
   it("auto-stops the recording and uploads when the scheduled time is reached", async () => {
     vi.useFakeTimers();
     try {
@@ -584,8 +591,8 @@ describe("Recorder auto-stop", () => {
         await vi.runOnlyPendingTimersAsync();
       });
 
-      // Choose "in 15 minutes", then start recording.
-      fireEvent.change(screen.getByLabelText(/auto-stop/i), { target: { value: "in15" } });
+      // Choose "in 15 minutes" from the auto-stop popover, then start recording.
+      chooseAutoStop(/stop in 15 minutes/i);
       fireEvent.click(screen.getByLabelText(/^record$/i));
       // Flush start()'s awaited getStream promise under fake timers.
       await act(async () => {
@@ -618,7 +625,7 @@ describe("Recorder auto-stop", () => {
         await vi.runOnlyPendingTimersAsync();
       });
 
-      fireEvent.change(screen.getByLabelText(/auto-stop/i), { target: { value: "in15" } });
+      chooseAutoStop(/stop in 15 minutes/i);
       fireEvent.click(screen.getByLabelText(/^record$/i));
       await act(async () => {
         await vi.runOnlyPendingTimersAsync();

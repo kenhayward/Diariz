@@ -32,6 +32,9 @@ import type { StatusTone } from "../lib/statusBar";
 import RecordHero from "./hub/RecordHero";
 import AudioSourceChip from "./hub/AudioSourceChip";
 import AudioSourcePopover from "./hub/AudioSourcePopover";
+import AutoStopPopover from "./hub/AutoStopPopover";
+import NotesPopover from "./hub/NotesPopover";
+import HubIconButton from "./hub/HubIconButton";
 import { useHubPopover } from "./hub/hubPopovers";
 import { AUDIO_ACCEPT_ATTR } from "../lib/audioFormats";
 import { useUpload } from "../lib/uploadContext";
@@ -51,7 +54,6 @@ import {
   clearPendingNotes,
   type PendingNotes,
 } from "../lib/pendingNotes";
-import LiveNotesPanel from "./LiveNotesPanel";
 import type { MeetingNote, RecordingSource } from "../lib/types";
 
 const SOURCE_KEY = "diariz.recorder.source";
@@ -63,28 +65,35 @@ const AUTOSTOP_KEY = "diariz.recorder.autoStop";
 // checkbox + the "No microphone" dropdown option; false in Firefox/Safari.
 const CAN_SYSTEM_AUDIO = supportsDisplayAudio() || isElectron;
 
-// Transport glyph (16x16), drawn in `currentColor` so the button's own text colour applies. The Upload
-// button is icon-only: the label lives on aria-label + title. (The record/pause/resume/stop glyphs moved
-// into the RecordHero component along with the record cluster.)
-function TransportIcon({ children }: { children: ReactNode }) {
+// Command-hub icon-button glyphs (Feather/Lucide-style, 18px, drawn in `currentColor` so the button's own
+// text colour applies). Auto-stop = clock, Upload = tray/upload-arrow, Notes = pencil. The buttons are
+// icon-only: the label lives on aria-label + title. (The record/pause/resume/stop glyphs live in RecordHero.)
+function HubIcon({ children }: { children: ReactNode }) {
   return (
-    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true" focusable="false"
+      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       {children}
     </svg>
   );
 }
 
+const IconClock = () => (
+  <HubIcon>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7.5V12l3 2" />
+  </HubIcon>
+);
+
 const IconUpload = () => (
-  <TransportIcon>
-    <path
-      d="M8 10.5V2.5M5 5.5l3-3 3 3M2.5 10.5v2.5h11v-2.5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </TransportIcon>
+  <HubIcon>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
+  </HubIcon>
+);
+
+const IconPencil = () => (
+  <HubIcon>
+    <path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+  </HubIcon>
 );
 
 function loadSavedSource(): PersistedSource | null {
@@ -186,7 +195,6 @@ export default function Recorder({
   // Live notes taken while recording: local lines (fake ids) stamped with the *recorded* clock, mirrored to
   // IndexedDB so a crash never loses them, and attached to the recording after upload.
   const [liveLines, setLiveLines] = useState<MeetingNote[]>([]);
-  const [notesOpen, setNotesOpen] = useState(false);
   // Lines whose audio uploaded but whose attach failed (durable, with the recording id) - drives the retry banner.
   const [notesAttach, setNotesAttach] = useState<PendingNotes | null>(null);
 
@@ -437,22 +445,28 @@ export default function Recorder({
     mirrorLines(liveLinesRef.current.filter((l) => l.id !== id));
   }
 
-  function closeNotes() {
-    setNotesOpen(false);
+  // The notes popover's open state lives in the shared hub (id "notes"); this only persists the *preference*
+  // so a fresh recording reopens it (or not) per the user's last choice. Kept in sync with the pencil toggle
+  // + the popover's close button below.
+  function persistNotesOpen(open: boolean) {
     try {
-      localStorage.setItem(NOTES_OPEN_KEY, "false");
+      localStorage.setItem(NOTES_OPEN_KEY, open ? "true" : "false");
     } catch {
       /* non-fatal */
     }
   }
 
-  function openNotes() {
-    setNotesOpen(true);
-    try {
-      localStorage.setItem(NOTES_OPEN_KEY, "true");
-    } catch {
-      /* non-fatal */
-    }
+  // Pencil-button toggle: flip the notes popover and remember the resulting preference.
+  function toggleNotes() {
+    const willOpen = !hub.isOpen("notes");
+    hub.toggle("notes");
+    persistNotesOpen(willOpen);
+  }
+
+  // The popover's own close (X / backdrop-independent): close it and remember "closed".
+  function closeNotes() {
+    hub.close();
+    persistNotesOpen(false);
   }
 
   /// Attach lines to the created recording. Success clears the durable stash; failure keeps the lines (with
@@ -556,7 +570,9 @@ export default function Recorder({
       liveLinesRef.current = [];
       setLiveLines([]);
       if (userId) void clearPendingNotes(userId);
-      setNotesOpen(localStorage.getItem(NOTES_OPEN_KEY) !== "false");
+      // Auto-open the notes popover per the remembered preference. `stop()` resets the hub, so at record
+      // start nothing else is open and `toggle` reliably *opens* notes.
+      if (localStorage.getItem(NOTES_OPEN_KEY) !== "false" && !hub.isOpen("notes")) hub.toggle("notes");
       reportRef.current({ phase: "recording", source: coarse });
       // A mic grant unlocks device labels — re-enumerate so specifics appear next time.
       if (coarse !== "system") void refreshDevices();
@@ -604,6 +620,9 @@ export default function Recorder({
     setRecording(false);
     setPaused(false);
     setSilent(false);
+    // Reset any open hub popover (the notes popover only lives while recording) so the next recording's
+    // auto-open toggle starts from a clean "nothing open" state.
+    hub.close();
     recorderRef.current?.stop();
   }
 
@@ -724,6 +743,13 @@ export default function Recorder({
 
   const secs = Math.floor(elapsed / 1000);
   const mmss = `${String(Math.floor(secs / 60)).padStart(2, "0")}:${String(secs % 60).padStart(2, "0")}`;
+  // The "stops at HH:MM" hint (shown inside the Auto-stop popover) once a stop is scheduled.
+  const scheduledHint =
+    scheduledStopAt != null
+      ? t("autoStopScheduled", {
+          time: new Date(scheduledStopAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        })
+      : null;
 
   // Errors, warnings and hints go to the app-wide status bar rather than inline: the TopBar is a
   // fixed-height header, so an extra line here pushed the whole bar off screen. One message at a time,
@@ -813,16 +839,36 @@ export default function Recorder({
           onSilentChange={setSilent}
         />
 
-        <button
-          type="button"
+        {/* Auto-stop: clock icon button -> Auto-stop popover. Same choice/time state as the old select. */}
+        <div className="relative">
+          <HubIconButton
+            label={t("autoStopLabel")}
+            onClick={() => hub.toggle("stop")}
+            disabled={busy || !canRecord}
+            expanded={hub.isOpen("stop")}
+          >
+            <IconClock />
+          </HubIconButton>
+          <AutoStopPopover
+            open={hub.isOpen("stop")}
+            onClose={hub.close}
+            choice={autoStopChoice}
+            time={autoStopTime}
+            onChoice={onAutoStopChoice}
+            onTime={onAutoStopTime}
+            scheduledHint={scheduledHint}
+          />
+        </div>
+
+        {/* Upload: icon button (restyled) + the unchanged hidden file input. */}
+        <HubIconButton
+          label={t("recUpload")}
+          title={!canRecord ? t("recNoPermission") : t("recUploadTitle")}
           onClick={() => fileRef.current?.click()}
           disabled={recording || busy || !canRecord}
-          title={!canRecord ? t("recNoPermission") : t("recUploadTitle")}
-          aria-label={t("recUpload")}
-          className="flex items-center justify-center rounded border p-2 disabled:opacity-50 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
         >
           <IconUpload />
-        </button>
+        </HubIconButton>
         <input
           ref={fileRef}
           type="file"
@@ -833,51 +879,25 @@ export default function Recorder({
           data-testid="upload-input"
         />
 
-        {/* Schedule the current recording to auto-stop (then the normal upload+transcription runs). */}
-        <select
-          value={autoStopChoice}
-          onChange={(e) => onAutoStopChoice(e.target.value as AutoStopChoice)}
-          disabled={busy || !canRecord}
-          aria-label={t("autoStopLabel")}
-          title={t("autoStopLabel")}
-          className="rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-        >
-          <option value="off">{t("autoStopOff")}</option>
-          <option value="in15">{t("autoStopIn15")}</option>
-          <option value="in30">{t("autoStopIn30")}</option>
-          <option value="in60">{t("autoStopIn60")}</option>
-          <option value="at">{t("autoStopAt")}</option>
-        </select>
-        {autoStopChoice === "at" && (
-          <input
-            type="time"
-            value={autoStopTime}
-            onChange={(e) => onAutoStopTime(e.target.value)}
-            aria-label={t("autoStopAtAria")}
-            className="rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          />
-        )}
-
+        {/* Notes: pencil icon button (recording-only) -> Notes popover. */}
         {recording && (
-          <>
-            {scheduledStopAt != null && (
-              <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
-                {t("autoStopScheduled", {
-                  time: new Date(scheduledStopAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                })}
-              </span>
-            )}
-            {/* Live notes toggle: reopen the panel after it was closed. */}
-            {!notesOpen && (
-              <button
-                type="button"
-                onClick={openNotes}
-                className="rounded border px-2 py-1 text-xs dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
-              >
-                {t("liveNotesToggle")}
-              </button>
-            )}
-          </>
+          <div className="relative">
+            <HubIconButton
+              label={t("liveNotesToggle")}
+              onClick={toggleNotes}
+              expanded={hub.isOpen("notes")}
+            >
+              <IconPencil />
+            </HubIconButton>
+            <NotesPopover
+              open={hub.isOpen("notes")}
+              onClose={closeNotes}
+              lines={liveLines}
+              onAdd={addLiveNote}
+              onEdit={editLiveNote}
+              onDelete={deleteLiveNote}
+            />
+          </div>
         )}
       </div>
 
@@ -925,17 +945,6 @@ export default function Recorder({
             </div>
           )}
         </div>
-      )}
-
-      {/* Live notes panel: floats below the TopBar while recording (incl. paused). */}
-      {recording && notesOpen && (
-        <LiveNotesPanel
-          lines={liveLines}
-          onAdd={addLiveNote}
-          onEdit={editLiveNote}
-          onDelete={deleteLiveNote}
-          onClose={closeNotes}
-        />
       )}
     </div>
   );
