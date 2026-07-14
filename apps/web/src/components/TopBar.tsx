@@ -23,8 +23,9 @@ export default function TopBar() {
     >
       <Link to="/" className="flex shrink-0 items-center" style={{ gap: 12 }}>
         <img src="/logo.png" alt="" style={{ width: 34, height: 34, borderRadius: 9 }} />
+        {/* The wordmark collapses to just the mark at very narrow widths; the mark keeps the home link. */}
         <span
-          className="text-[var(--hub-text)]"
+          className="hidden text-[var(--hub-text)] sm:inline"
           style={{ fontFamily: "system-ui", fontWeight: 700, fontSize: 21, letterSpacing: "-.01em" }}
         >
           Diariz

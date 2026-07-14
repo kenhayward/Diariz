@@ -224,7 +224,10 @@ export default function RecordHero({
       >
         <span style={{ width: 13, height: 13, borderRadius: "50%", background: "#fff" }} />
       </span>
+      {/* The "Start recording" label collapses at narrow widths, leaving just the red circle button; the
+          button's aria-label keeps the accessible name "Record" in every layout. */}
       <span
+        className="hidden md:inline"
         style={{
           fontFamily: "system-ui",
           fontWeight: 600,

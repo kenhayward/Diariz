@@ -63,7 +63,12 @@ export default function AudioSourceChip({
       }}
     >
       <IconMic />
-      <span style={{ fontFamily: "system-ui", fontWeight: 500, fontSize: 14.5, color: "var(--hub-text)" }}>
+      {/* The text label collapses at narrow widths - the mic icon (+ "+System" pill + chevron) carry the
+          chip; the button's aria-label keeps the accessible name "Audio source" in every layout. */}
+      <span
+        className="hidden md:inline"
+        style={{ fontFamily: "system-ui", fontWeight: 500, fontSize: 14.5, color: "var(--hub-text)" }}
+      >
         {t("audioSourceChip")}
       </span>
       {systemAudio && (
