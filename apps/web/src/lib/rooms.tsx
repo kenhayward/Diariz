@@ -1,7 +1,8 @@
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useMatch } from "react-router-dom";
+import { useMatch, useNavigate, useLocation } from "react-router-dom";
 import { api } from "./api";
+import { rememberRoom, landingRoomPath } from "./roomPersistence";
 import type { RoomListItem } from "./types";
 
 /// The room the workspace is currently showing, plus the caller's authority inside it and the folder they have
@@ -59,6 +60,20 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   }, [rooms, roomId]);
 
   const permissions = currentRoom?.permissions ?? 0;
+
+  // Remember where you were, and put you back there on a bare landing at "/". The URL still wins whenever it
+  // names a room - this only fills the gap when it doesn't. `replace` so the redirect isn't a history entry
+  // the back button has to fight through.
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  useEffect(() => {
+    if (currentRoom) rememberRoom(currentRoom.id);
+  }, [currentRoom]);
+  useEffect(() => {
+    if (pathname !== "/") return; // only a bare landing; any real route already says where to be
+    const target = landingRoomPath(rooms);
+    if (target) navigate(target, { replace: true });
+  }, [pathname, rooms, navigate]);
 
   const value = useMemo<RoomState>(
     () => ({

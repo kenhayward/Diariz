@@ -359,8 +359,12 @@ public record PermissionsDto(bool ManageRooms, bool ManageUsers, bool ManagePlat
 /// <summary>A room the caller belongs to. <paramref name="Permissions"/> is the caller's effective
 /// <see cref="RoomPermission"/> grid as an <b>int</b> bitmask - a [Flags] enum would serialize as "A, B" under
 /// the global string-enum converter and break the web's bit arithmetic (see flags-enum-serializes-as-string).</summary>
+/// <param name="SectionCount">Folders in this room.</param>
+/// <param name="RecordingCount">Recordings placed in this room. A recording shared into several rooms counts
+/// in each: the number answers "what will I find in here", not "how many distinct recordings exist".</param>
 public record RoomListItemDto(
-    Guid Id, string Name, RoomKind Kind, string? Icon, string? Color, bool IsPersonal, int Permissions);
+    Guid Id, string Name, RoomKind Kind, string? Icon, string? Color, bool IsPersonal, int Permissions,
+    int SectionCount = 0, int RecordingCount = 0);
 
 /// <summary>Create/rename a shared room. Name is required and unique among shared rooms.</summary>
 public record RoomInput(string Name, string? Description, string? Icon, string? Color);

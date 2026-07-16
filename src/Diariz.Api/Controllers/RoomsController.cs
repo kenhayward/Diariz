@@ -23,8 +23,24 @@ public class RoomsController(IRoomScope rooms, DiarizDbContext db) : ControllerB
     public async Task<IActionResult> List(CancellationToken ct = default)
     {
         var list = await rooms.RoomsForUserAsync(UserId, ct);
+
+        // The switcher shows "N sections . M recordings" for every room, which is cross-room and so cannot be
+        // derived on the client without one fetch per room. Two grouped counts over the caller's rooms, not a
+        // query each: plain EF, so this stays provider-agnostic.
+        var ids = list.Select(r => r.Id).ToList();
+        var sectionCounts = await db.Sections.Where(s => ids.Contains(s.RoomId))
+            .GroupBy(s => s.RoomId)
+            .Select(g => new { RoomId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.RoomId, x => x.Count, ct);
+        var recordingCounts = await db.RoomRecordings.Where(p => ids.Contains(p.RoomId))
+            .GroupBy(p => p.RoomId)
+            .Select(g => new { RoomId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.RoomId, x => x.Count, ct);
+
         return Ok(list.Select(r => new RoomListItemDto(
-            r.Id, r.Name, r.Kind, r.Icon, r.Color, r.IsPersonal, (int)r.Permissions)));
+            r.Id, r.Name, r.Kind, r.Icon, r.Color, r.IsPersonal, (int)r.Permissions,
+            sectionCounts.TryGetValue(r.Id, out var sc) ? sc : 0,
+            recordingCounts.TryGetValue(r.Id, out var rc) ? rc : 0)));
     }
 
     /// <summary>A shared room with its membership, for the Manage Rooms editor. Members only (a stranger gets a

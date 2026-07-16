@@ -348,3 +348,38 @@ describe("SearchBar - grouped hit breadcrumbs", () => {
     expect(await screen.findByText("Customers")).toBeTruthy();
   });
 });
+
+describe("SearchBar - keyboard", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (api.search as ReturnType<typeof vi.fn>).mockResolvedValue(empty);
+  });
+
+  it("focuses the field on Ctrl-K", () => {
+    renderBar({});
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    expect(document.activeElement).toBe(screen.getByRole("searchbox"));
+  });
+
+  it("focuses the field on Cmd-K", () => {
+    renderBar({});
+    fireEvent.keyDown(window, { key: "k", metaKey: true });
+    expect(document.activeElement).toBe(screen.getByRole("searchbox"));
+  });
+
+  // A bare "k" is a character someone is typing, not a shortcut.
+  it("ignores k without a modifier", () => {
+    renderBar({});
+    fireEvent.keyDown(window, { key: "k" });
+    expect(document.activeElement).not.toBe(screen.getByRole("searchbox"));
+  });
+
+  it("does not steal the browser's own Ctrl-K when already typing in the field", () => {
+    const onQueryChange = renderBar({});
+    type("budget");
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    // Still focused, and the query is untouched - the shortcut is a no-op rather than a reset.
+    expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("budget");
+    expect(onQueryChange).not.toHaveBeenLastCalledWith("");
+  });
+});

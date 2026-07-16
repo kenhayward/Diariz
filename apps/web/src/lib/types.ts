@@ -509,6 +509,11 @@ export interface RoomListItem {
   color: string | null;
   isPersonal: boolean;
   permissions: number;
+  /// Folders in this room.
+  sectionCount: number;
+  /// Recordings placed in this room. A recording shared into several rooms counts in each - the number says
+  /// what you'll find in there, not how many distinct recordings exist.
+  recordingCount: number;
 }
 
 /// RoomPermission flags - mirror src/Diariz.Domain/Entities/RoomPermission.cs (append-only; keep in sync).

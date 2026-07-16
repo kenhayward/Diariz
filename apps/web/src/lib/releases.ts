@@ -30,7 +30,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Connect Claude (MCP)** | Connect Claude to your own meetings via OAuth (claude.ai) or a personal token (Claude Desktop/Code), including a \`run_formula\` tool to run your saved Formulas. |
 | **Translate** | Translate a whole transcript or a single segment, stored as revisions you can flip back. |
 | **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) to a recording or directly to a folder, edit Markdown attachments in place, save a chat conversation as an attachment with /attach, and optionally feed them to chat. |
-| **Rooms** | A private Personal Room per account plus shareable Rooms: invite users and groups with per-member permissions. Each Shared Room has its **own folder structure** (sections/sub-sections, drag-and-drop, per-room order) and its own List/Calendar/Actions/Tags scoped to it; record or upload files straight into a room (your Personal Room keeps the original), and search + chat over every room you belong to. Your Google Calendar and its linking stay personal. Manage rooms from the switcher. |
+| **Rooms** | A private Personal Room per account plus shareable Rooms: invite users and groups with per-member permissions. Each Shared Room has its **own folder structure** (sections/sub-sections, drag-and-drop, per-room order) and its own List/Calendar/Actions/Tags scoped to it; record or upload files straight into a room (your Personal Room keeps the original), and search + chat over every room you belong to. Your Google Calendar and its linking stay personal. The switcher shows each room's folder and meeting counts (shared ones labelled), ticks the one you are in, and remembers where you were. Manage rooms from the switcher. |
 | **Organise & merge** | Sections and sub-sections with drag-and-drop; the meetings list drills in one folder at a time (coloured folder rows with counts, a breadcrumb back out, browser back pops a level) so it stays readable however many recordings you have, with **Open section page** as a separate target from browsing deeper; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
@@ -54,6 +54,20 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.144.0",
+    date: "2026-07-16",
+    pr: 317,
+    headline: "The room switcher tells you what is in each room",
+    summary:
+      "The room switcher listed your rooms by name and nothing else, which is fine with one room and unhelpful with several. Each room now shows what is actually in it - how many folders and how many meetings - and a shared room says so, since that is the one thing a name cannot tell you and it decides who else can read what is inside. A tick marks the room you are in. Diariz also remembers the room you were last in and puts you back there when you return, and Cmd-K (Ctrl-K on Windows) jumps straight to the search box from anywhere.",
+    added: [
+      "Each room in the switcher shows its folder and meeting counts, and shared rooms are labelled shared.",
+      "A tick marks the room you are currently in.",
+      "Diariz remembers the room you were last in and returns you to it.",
+      "Cmd-K / Ctrl-K focuses the search box from anywhere; Escape clears it.",
+    ],
+  },
   {
     version: "0.143.0",
     date: "2026-07-16",

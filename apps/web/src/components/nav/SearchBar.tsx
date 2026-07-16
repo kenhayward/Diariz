@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
@@ -40,10 +40,25 @@ export default function SearchBar({
   const [value, setValue] = useState("");
   const [debounced, setDebounced] = useState("");
 
+  const inputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     const id = setTimeout(() => setDebounced(value.trim()), DEBOUNCE_MS);
     return () => clearTimeout(id);
   }, [value]);
+
+  // Cmd/Ctrl-K focuses search from anywhere in the app - the convention everywhere else, and the panel is
+  // where you start most things. preventDefault stops the browser's own find-ish binding taking it instead.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key.toLowerCase() !== "k" || !(e.metaKey || e.ctrlKey)) return;
+      e.preventDefault();
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Scope + filters are per-search: clearing the box is the way back to the drill, so neither may outlive
   // the search that set them, or the next query would silently inherit a scope nobody asked for.
@@ -105,6 +120,7 @@ export default function SearchBar({
             )
           )}
           <input
+            ref={inputRef}
             type="search"
             role="searchbox"
             value={value}

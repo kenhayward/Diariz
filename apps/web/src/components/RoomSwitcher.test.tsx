@@ -12,9 +12,11 @@ vi.mock("../auth", () => ({ useAuth: () => authState }));
 
 const personal: RoomListItem = {
   id: "p1", name: "Ada Lovelace", kind: 0, icon: null, color: null, isPersonal: true, permissions: 63,
+  sectionCount: 3, recordingCount: 34,
 };
 const shared: RoomListItem = {
   id: "s1", name: "Engineering", kind: 1, icon: null, color: "#123456", isPersonal: false, permissions: 2,
+  sectionCount: 5, recordingCount: 210,
 };
 
 let roomsValue: { rooms: RoomListItem[]; currentRoom: RoomListItem | undefined };
@@ -79,5 +81,41 @@ describe("RoomSwitcher", () => {
     fireEvent.click(screen.getByRole("button", { name: /switch room/i }));
     fireEvent.click(within(screen.getByRole("menu")).getByText(/manage rooms/i));
     expect(screen.getByTestId("manage-rooms-modal")).toBeTruthy();
+  });
+
+  // ---- The switcher's detail line + current-room marker ----
+
+  it("shows each room's section and recording counts", () => {
+    renderSwitcher();
+    fireEvent.click(screen.getByRole("button", { name: /switch room/i }));
+    const menu = screen.getByRole("menu");
+    expect(within(menu).getByText(/3 sections . 34 recordings/i)).toBeTruthy();
+  });
+
+  // "shared" is the one thing you cannot tell from a name, and it decides who else can read what is in there.
+  it("marks a shared room's count line as shared, and a personal one not", () => {
+    renderSwitcher();
+    fireEvent.click(screen.getByRole("button", { name: /switch room/i }));
+    const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
+    expect(items[0].textContent).not.toMatch(/shared/i); // personal
+    expect(items[1].textContent).toMatch(/shared/i);
+  });
+
+  it("marks which room is current", () => {
+    renderSwitcher();
+    fireEvent.click(screen.getByRole("button", { name: /switch room/i }));
+    const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
+    expect(items[0].getAttribute("aria-current")).toBe("true");
+    expect(items[1].getAttribute("aria-current")).toBeNull();
+  });
+
+  it("singularises a count of one", () => {
+    roomsValue = {
+      rooms: [{ ...personal, sectionCount: 1, recordingCount: 1 }],
+      currentRoom: personal,
+    };
+    renderSwitcher();
+    fireEvent.click(screen.getByRole("button", { name: /switch room/i }));
+    expect(within(screen.getByRole("menu")).getByText(/1 section . 1 recording/i)).toBeTruthy();
   });
 });
