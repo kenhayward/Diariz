@@ -218,17 +218,26 @@ describe("RecordingsPanel", () => {
       expect(screen.queryByText("Account review")).toBeNull();
     });
 
-    // The two targets the design insists stay distinct: the row browses, the link opens the page.
+    // The two targets the design insists stay distinct: the row browses, the link opens the page. The
+    // link keeps `?in=` so opening the page leaves you where you were browsing.
     it("opens the folder page from the breadcrumb link, not by drilling", async () => {
       renderList("/?in=customers");
       const link = await screen.findByRole("link", { name: /open section page/i });
-      expect(link.getAttribute("href")).toBe("/sections/customers");
+      expect(link.getAttribute("href")).toBe("/sections/customers?in=customers");
     });
 
     it("pops a level from the breadcrumb back button", async () => {
       renderList("/?in=ambu");
       fireEvent.click(await screen.findByRole("button", { name: /^back$/i }));
       expect(await screen.findByText("Account review")).toBeTruthy();
+    });
+
+    // Opening a recording must not throw away where you were browsing. Every link in the panel has to
+    // carry `?in=` across, or the list pops back to the root behind the recording you just opened.
+    it("keeps the drill position when opening a recording", async () => {
+      renderList("/?in=customers");
+      const link = await screen.findByRole("link", { name: /account review/i });
+      expect(link.getAttribute("href")).toBe("/recordings/cust-r?in=customers");
     });
 
     it("labels the recordings filed directly in the current folder", async () => {

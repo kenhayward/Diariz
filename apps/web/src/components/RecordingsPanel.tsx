@@ -20,7 +20,7 @@ import { computeReorder } from "../lib/reorder";
 import { useDragAutoScroll } from "../lib/dragAutoScroll";
 import { buildRecordingTree, reorderBeforeSection, appendSectionUnder, type SectionNode } from "../lib/recordingTree";
 import { childrenOf, breadcrumbOf, recordingCountOf } from "../lib/drillView";
-import { useDrillSectionId } from "../lib/drillRoute";
+import { useDrillSectionId, useDrillSearch } from "../lib/drillRoute";
 import { SECTION_MIME } from "../lib/dragTypes";
 import DrillBreadcrumb from "./nav/DrillBreadcrumb";
 import SectionRow from "./nav/SectionRow";
@@ -1004,6 +1004,9 @@ export function RecordingRow({
   const basePath = useRoomBasePath();
   const sharedRoomId = useSharedRoomId();
   const activeRecordingId = useActiveRecordingId();
+  // The row links back into the drill level it was rendered from. Empty outside the List tab (the
+  // Calendar/Tags lists aren't drilled), so those links are unchanged.
+  const drillSearch = useDrillSearch();
   const [renaming, setRenaming] = useState(false);
   const [moving, setMoving] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -1102,7 +1105,8 @@ export function RecordingRow({
           <RenameForm initial={r.name ?? ""} onSave={saveName} onCancel={() => setRenaming(false)} />
         ) : (
           <NavLink
-            to={`${basePath}/recordings/${r.id}`}
+            // Keeps `?in=` so opening a recording doesn't pop the list back to the root behind it.
+            to={{ pathname: `${basePath}/recordings/${r.id}`, search: drillSearch }}
             draggable={false}
             onClick={() => onNavigate?.()}
             // Single-line row: name + right-aligned duration. Source + date (and the full, untruncated name)

@@ -20,6 +20,21 @@ export interface DrillRoute {
   drillOut: () => void;
 }
 
+/// The drill position as a query string to hang on a link (`"?in=<id>"`, or `""` at the top level).
+///
+/// Every link out of the panel needs this. A bare `to="/recordings/:id"` drops `?in=`, which pops the list
+/// back to the root behind the page you just opened - you lose your place by using the thing you were
+/// browsing towards.
+///
+/// Carries **only** `in`, never the whole of `location.search`: the URL also holds params that are about
+/// one specific page - `?ts=` is a transcript match time - and forwarding those to a different recording
+/// would scrub it to a timestamp that means nothing there.
+export function useDrillSearch(): string {
+  const [params] = useSearchParams();
+  const inParam = params.get("in");
+  return inParam ? `?in=${encodeURIComponent(inParam)}` : "";
+}
+
 export function useDrillSectionId(): DrillRoute {
   // A single unconditional hook. Do not be tempted into `useMatch(...) ?? useMatch(...)` here: joining
   // hook calls with `??` skips one whenever the first matches, which is the Rules-of-Hooks crash of

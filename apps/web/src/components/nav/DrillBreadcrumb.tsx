@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { breadcrumbOf } from "../../lib/drillView";
+import { useDrillSearch } from "../../lib/drillRoute";
 import { sectionColor } from "../../lib/sectionColors";
 import { ArrowLeftIcon, FolderIcon } from "../icons";
 import type { SectionDto } from "../../lib/types";
@@ -25,6 +26,7 @@ export default function DrillBreadcrumb({
   onDrill: (sectionId: string | null) => void;
 }) {
   const { t } = useTranslation("workspace");
+  const drillSearch = useDrillSearch();
   if (sectionId === null) return null;
 
   const chain = breadcrumbOf(sections, sectionId);
@@ -63,8 +65,11 @@ export default function DrillBreadcrumb({
       </div>
 
       {current && (
+        // Carry the drill across: a bare path would drop `?in=`, popping the list back to the root
+        // behind the very page you just opened. Opening a folder's page and browsing it are independent
+        // - that is the whole point of keeping them as separate targets.
         <Link
-          to={`${basePath}/sections/${current.id}`}
+          to={{ pathname: `${basePath}/sections/${current.id}`, search: drillSearch }}
           className="mt-0.5 shrink-0 text-[11px] text-blue-600 hover:underline dark:text-blue-400"
         >
           {t("drillOpenSectionPage")}

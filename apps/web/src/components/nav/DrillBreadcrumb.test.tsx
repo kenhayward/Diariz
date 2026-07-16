@@ -11,7 +11,7 @@ const sections = [section("customers", "Customers"), section("ambu", "Ambu", "cu
 
 function renderCrumb(sectionId: string | null, onDrill = vi.fn()) {
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[sectionId ? `/?in=${sectionId}` : "/"]}>
       <DrillBreadcrumb sections={sections} sectionId={sectionId} basePath="" onDrill={onDrill} />
     </MemoryRouter>,
   );
@@ -57,8 +57,17 @@ describe("DrillBreadcrumb", () => {
   it("links Open section page to the folder's page, not a drill", () => {
     const onDrill = renderCrumb("ambu");
     const link = screen.getByRole("link", { name: /open section page/i });
-    expect(link.getAttribute("href")).toBe("/sections/ambu");
+    expect(link.getAttribute("href")).toContain("/sections/ambu");
     expect(onDrill).not.toHaveBeenCalled();
+  });
+
+  // Opening the page must not throw away where you were browsing: the drill lives in ?in=, and a bare
+  // `to="/sections/:id"` drops the query, popping the panel back to the root behind the page you opened.
+  it("keeps the drill position when opening the folder page", () => {
+    renderCrumb("ambu");
+    expect(screen.getByRole("link", { name: /open section page/i }).getAttribute("href")).toBe(
+      "/sections/ambu?in=ambu",
+    );
   });
 
   it("keeps the room prefix on the section page link in a shared room", () => {
