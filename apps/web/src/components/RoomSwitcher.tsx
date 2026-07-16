@@ -7,6 +7,7 @@ import type { RoomListItem } from "../lib/types";
 import Avatar from "./Avatar";
 import RoomBadge from "./RoomBadge";
 import ManageRoomsModal from "./ManageRoomsModal";
+import { HomeIcon } from "./icons";
 
 /// A small icon for a room: the signed-in user's avatar for their Personal room, else the shared room's chosen
 /// icon (or a colour swatch with its first letter when none was picked).
@@ -74,16 +75,40 @@ export default function RoomSwitcher({ onCollapse, chevron }: { onCollapse: () =
             role="menu"
             className="absolute left-0 z-50 mt-1 w-56 overflow-hidden rounded-lg border bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-900"
           >
+            <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+              {t("yourRooms")}
+            </p>
             {rooms.map((r) => (
               <button
                 key={r.id}
                 type="button"
                 role="menuitem"
+                // Marks the room you're in without a second visual language: the checkmark is the only
+                // decoration, so scanning the list is about the names.
+                aria-current={r.id === currentRoom?.id ? "true" : undefined}
                 onClick={() => select(r)}
                 className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-gray-100"
               >
                 <RoomIcon room={r} />
-                <span className="truncate">{r.name}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{r.name}</span>
+                  {/* What's actually in there. "shared" leads the line because it is the one thing a name
+                      can't tell you, and it decides who else can read what's inside. */}
+                  <span className="block truncate text-[10px] text-gray-500 dark:text-gray-400">
+                    {[
+                      r.isPersonal ? null : t("roomSharedPrefix"),
+                      t("roomCounts", { count: r.sectionCount }),
+                      t("roomRecordings", { count: r.recordingCount }),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                </span>
+                {r.id === currentRoom?.id && (
+                  <span aria-hidden="true" className="shrink-0 text-xs text-blue-600 dark:text-blue-400">
+                    ✓
+                  </span>
+                )}
               </button>
             ))}
             {permissions.manageRooms && (
@@ -98,7 +123,9 @@ export default function RoomSwitcher({ onCollapse, chevron }: { onCollapse: () =
                   }}
                   className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-gray-100"
                 >
-                  <span aria-hidden="true">⌂</span>
+                  <span className="shrink-0 text-gray-500 dark:text-gray-400">
+                    <HomeIcon size={14} />
+                  </span>
                   <span className="truncate">{t("manageRooms")}</span>
                 </button>
               </>

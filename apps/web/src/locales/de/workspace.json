@@ -552,5 +552,11 @@
   "searchFilterDate": "Datum",
   "searchFilterSpeaker": "Sprecher",
   "searchFilterAny": "Alle",
-  "searchFilterDateSince": "Seit {{date}}"
+  "searchFilterDateSince": "Seit {{date}}",
+  "roomCounts_one": "{{count}} Abschnitt",
+  "roomCounts_other": "{{count}} Abschnitte",
+  "roomRecordings_one": "{{count}} Aufnahme",
+  "roomRecordings_other": "{{count}} Aufnahmen",
+  "roomSharedPrefix": "geteilt",
+  "yourRooms": "Deine Räume"
 }

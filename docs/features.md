@@ -200,10 +200,13 @@ targets. Recordings with no folder simply sit at the top level. Browse them as a
 - **Rooms.** Every account has a private **Personal Room** (your existing space). Holders of the
 **manage-rooms** permission can also create **Shared Rooms** - workspaces you invite **users and groups** into,
 each member carrying their own **permission grid** (add recordings, manage contents, remove others' recordings,
-share out, edit others' recordings, manage the room). A **room switcher** sits above the recordings list, and
-**Manage Rooms** (in the switcher) creates, renames, restyles (icon + colour) and deletes rooms and edits their
-membership; deleting a room needs its name typed to confirm. The room lives in the URL (`/rooms/:roomId`), so
-switching keeps a clean, linkable address - and **browses that room**: picking a Shared Room shows the recordings
+share out, edit others' recordings, manage the room). A **room switcher** sits above the recordings list: each
+room shows **how many folders and meetings** are in it (a shared room's line says *shared*, the one thing a name
+cannot tell you), and a **tick** marks the room you are in. **Manage Rooms** (in the switcher) creates, renames,
+restyles (icon + colour) and deletes rooms and edits their membership; deleting a room needs its name typed to
+confirm. The room lives in the URL (`/rooms/:roomId`), so switching keeps a clean, linkable address - and Diariz
+**remembers the room you were last in**, returning you to it when you come back (the URL still wins whenever it
+names one) - and **browses that room**: picking a Shared Room shows the recordings
 shared into it. A Shared Room has its **own folder structure**: members with **manage-contents** can create
 sections and sub-sections in it, file recordings into them (via the recording's Move-to-folder action or by
 **drag-and-drop**), and **drag to reorder** recordings within a section - each room keeps its own order, separate

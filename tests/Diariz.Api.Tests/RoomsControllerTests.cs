@@ -270,4 +270,102 @@ public class RoomsControllerTests
         Assert.Equal(403, ((ObjectResult)await controller.RemoveRecording(roomId, recId)).StatusCode);
         Assert.True(await db.RoomRecordings.AnyAsync(p => p.RoomId == roomId && p.RecordingId == recId));
     }
+
+    // ---- Counts (the room switcher's "N sections . M recordings" line) ----
+    // These are per-room and cross-room, so unlike the drill-in list's counts they cannot be derived on the
+    // client without one fetch per room. Plain EF, no raw SQL, so the in-memory provider is enough.
+
+    [Fact]
+    public async Task List_ReportsSectionAndRecordingCountsPerRoom()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var controller = Build(db, me);
+        var scope = new Diariz.Api.Services.RoomScope(db);
+        var personal = await scope.PersonalRoomIdAsync(me);
+
+        db.Sections.Add(new Section { Id = Guid.NewGuid(), UserId = me, RoomId = personal, Name = "A" });
+        db.Sections.Add(new Section { Id = Guid.NewGuid(), UserId = me, RoomId = personal, Name = "B" });
+        for (var i = 0; i < 3; i++)
+        {
+            var rec = new Recording { Id = Guid.NewGuid(), UserId = me, Title = $"r{i}", Source = RecordingSource.Upload };
+            db.Recordings.Add(rec);
+            db.RoomRecordings.Add(new RoomRecording { RoomId = personal, RecordingId = rec.Id });
+        }
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<OkObjectResult>(await controller.List());
+        var only = Assert.Single(Assert.IsAssignableFrom<IEnumerable<RoomListItemDto>>(result.Value));
+        Assert.Equal(2, only.SectionCount);
+        Assert.Equal(3, only.RecordingCount);
+    }
+
+    /// An empty room must report zeroes, not be omitted or left null - the switcher shows the line either way.
+    [Fact]
+    public async Task List_ReportsZeroCountsForAnEmptyRoom()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var controller = Build(db, me);
+
+        var result = Assert.IsType<OkObjectResult>(await controller.List());
+        var only = Assert.Single(Assert.IsAssignableFrom<IEnumerable<RoomListItemDto>>(result.Value));
+        Assert.Equal(0, only.SectionCount);
+        Assert.Equal(0, only.RecordingCount);
+    }
+
+    /// The counts describe each room, not the caller's totals: a recording in my personal room must not be
+    /// counted against a shared room I am also in.
+    [Fact]
+    public async Task List_CountsAreScopedToEachRoom_NotTheCallersTotals()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var controller = Build(db, me);
+        var scope = new Diariz.Api.Services.RoomScope(db);
+        var personal = await scope.PersonalRoomIdAsync(me);
+        var shared = await scope.CreateSharedRoomAsync("Eng", null, null, null);
+        await scope.SetMemberAsync(shared, RoomPrincipalType.User, me, RoomPermission.ManageContents);
+
+        db.Sections.Add(new Section { Id = Guid.NewGuid(), UserId = me, RoomId = personal, Name = "Mine" });
+        var mine = new Recording { Id = Guid.NewGuid(), UserId = me, Title = "mine", Source = RecordingSource.Upload };
+        db.Recordings.Add(mine);
+        db.RoomRecordings.Add(new RoomRecording { RoomId = personal, RecordingId = mine.Id });
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<OkObjectResult>(await controller.List());
+        var rooms = Assert.IsAssignableFrom<IEnumerable<RoomListItemDto>>(result.Value).ToList();
+
+        var p = rooms.Single(r => r.IsPersonal);
+        var s = rooms.Single(r => !r.IsPersonal);
+        Assert.Equal(1, p.SectionCount);
+        Assert.Equal(1, p.RecordingCount);
+        Assert.Equal(0, s.SectionCount);
+        Assert.Equal(0, s.RecordingCount);
+    }
+
+    /// A recording shared into two rooms counts once in each - the count answers "what will I find in here",
+    /// not "how many distinct recordings exist".
+    [Fact]
+    public async Task List_CountsASharedRecordingInEveryRoomItIsPlacedIn()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var controller = Build(db, me);
+        var scope = new Diariz.Api.Services.RoomScope(db);
+        var personal = await scope.PersonalRoomIdAsync(me);
+        var shared = await scope.CreateSharedRoomAsync("Eng", null, null, null);
+        await scope.SetMemberAsync(shared, RoomPrincipalType.User, me, RoomPermission.ManageContents);
+
+        var rec = new Recording { Id = Guid.NewGuid(), UserId = me, Title = "both", Source = RecordingSource.Upload };
+        db.Recordings.Add(rec);
+        db.RoomRecordings.Add(new RoomRecording { RoomId = personal, RecordingId = rec.Id });
+        db.RoomRecordings.Add(new RoomRecording { RoomId = shared, RecordingId = rec.Id });
+        await db.SaveChangesAsync();
+
+        var result = Assert.IsType<OkObjectResult>(await controller.List());
+        var rooms = Assert.IsAssignableFrom<IEnumerable<RoomListItemDto>>(result.Value).ToList();
+        Assert.Equal(1, rooms.Single(r => r.IsPersonal).RecordingCount);
+        Assert.Equal(1, rooms.Single(r => !r.IsPersonal).RecordingCount);
+    }
 }

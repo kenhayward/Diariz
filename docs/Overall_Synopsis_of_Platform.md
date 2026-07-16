@@ -720,11 +720,19 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   - **Rooms surface in the UI (Phase 3).** `GET /api/rooms` (`RoomsController` → `RoomScope.RoomsForUserAsync`)
     lists the rooms the caller belongs to (today: just their Personal room) with the caller's effective
     `RoomPermission` grid as an **int bitmask** (`RoomListItemDto.Permissions` - a `[Flags]` enum would serialise
-    as `"A, B"` and break the web's bit arithmetic). The web `RoomProvider` (`apps/web/src/lib/rooms.tsx`, mounted
-    in `WorkspaceLayout`) reads that list, derives the current room from a `/rooms/:roomId` URL segment (via
-    `useMatch`, defaulting to the personal room), and exposes the room, its permission grid (`can(perm)`, failing
-    closed while loading), the folder the user is viewing, and the **resolved placement target** for a new
-    recording. A **room switcher** replaces the old "Meetings" panel header; `Record`/`Upload` disable without
+    as `"A, B"` and break the web's bit arithmetic), plus `SectionCount`/`RecordingCount` for the switcher's
+    detail line (two grouped counts over the caller's rooms, not a query per room; a recording shared into
+    several rooms counts in each - the number answers "what will I find in here"). These are the **only**
+    server-side counts in the nav: the drill-in list's counts derive client-side from the already-fetched
+    recordings, but the switcher's are cross-room and cannot. The web `RoomProvider`
+    (`apps/web/src/lib/rooms.tsx`, mounted in `WorkspaceLayout`) reads that list, derives the current room from
+    a `/rooms/:roomId` URL segment (via `useMatch`, defaulting to the personal room), and exposes the room, its
+    permission grid (`can(perm)`, failing closed while loading), the folder the user is viewing, and the
+    **resolved placement target** for a new recording. It also **remembers the last room** (`lib/roomPersistence`,
+    localStorage `diariz.rooms.currentRoomId`) and redirects a bare landing at `/` to it - the URL still wins
+    whenever it names a room; this only fills the gap when it doesn't. A remembered *personal* room never
+    redirects (its detail routes **are** the top-level ones, so `/rooms/<personal-id>` would be a redundant
+    second URL for the same place), nor does one the caller has since left. A **room switcher** replaces the old "Meetings" panel header; `Record`/`Upload` disable without
     `CreateRecording` (always granted in a personal room, so unchanged today). A nested `rooms/:roomId` route
     group mirrors the four workspace children; the legacy top-level children stay working as the personal-room
     default. Per-room link rewrites + query-key isolation are no-ops with one room and land in Phase 4.
