@@ -55,6 +55,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.140.2",
+    date: "2026-07-16",
+    pr: 313,
+    headline: "Groundwork for the new meetings panel",
+    summary:
+      "Internal groundwork, with no change to how anything looks or behaves today. The left-hand meetings panel is being rebuilt to browse one folder at a time instead of showing every folder expanded at once - which is what makes it unusable once you have hundreds of recordings. This release lands the pieces that rebuild needs and nothing else: the folder colours, the logic that works out what belongs at each level of the drill-down, and the icons the new panel will use. The panel itself is unchanged until the next release.",
+    added: [
+      "Each folder now has a stable colour derived from its identity, so it keeps the same colour as folders around it are added, renamed or removed.",
+    ],
+  },
+  {
     version: "0.140.1",
     date: "2026-07-14",
     pr: 312,

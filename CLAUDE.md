@@ -287,8 +287,10 @@ npm test           # vitest (jsdom); npm run test:watch for the watch loop
 ```
 Vitest config is in `vitest.config.ts` (kept separate from `vite.config.ts` so the production
 build doesn't depend on vitest). Tests are `src/**/*.test.ts(x)`, excluded from the build's `tsc`
-via `tsconfig.json`. No DOM/component testing library is wired yet — add `@testing-library/react`
-(+ the react plugin in `vitest.config.ts`) when you start testing components.
+via `tsconfig.json`. Component testing is wired: `@testing-library/react` + the react plugin in
+`vitest.config.ts`, with `src/test-setup.ts` booting i18n (pinned to `en`). The established pattern is
+`vi.mock` of `../lib/api` / `../lib/signalr` / `../lib/rooms`, rendering inside `MemoryRouter` +
+`QueryClientProvider` + `SelectionProvider` — see `components/RecordingsPanel.test.tsx`.
 
 ### Desktop (Electron — Windows system-tray + macOS menu-bar app)
 ```bash
