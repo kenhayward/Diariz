@@ -32,7 +32,10 @@ same-speaker rows, and **email yourself** the formatted transcript. The transcri
 long each person talked, with silence left dark and a legend giving each speaker's share — so the shape of the
 meeting is legible at a glance — and the bar doubles as the scrubber (click or drag anywhere on it to seek).
 Its toolbar keeps a **Select mode** — tick segments (or click one) to **play, edit, translate, or delete** just
-the selection, while **Merge** always acts on the whole transcript.
+the selection, while **Merge** always acts on the whole transcript. **Play selected** turns into **Pause** while
+that selection plays, so you can stop it without waiting for it to finish. The **speaker label at the start of
+every row** is the same assignment dropdown as the Speakers panel, so you can name a voice (or enrol a new
+person) at the moment you hear them, without leaving the transcript.
 - **Recording hub** — opening a meeting lands on a hub rather than a strip of tabs. A **hero summary card**
 carries the **meeting type** (a dropdown that drives the minutes template and the formulas offered), the key
 facts as chips (date and time, duration, whether the audio is still available and how long it has left,

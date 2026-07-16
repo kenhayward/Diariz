@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import SpeakerAssign from "./SpeakerAssign";
 import type { SpeakerProfile } from "../lib/types";
@@ -91,6 +91,28 @@ describe("SpeakerAssign", () => {
     openInput();
     fireEvent.click(screen.getByRole("option", { name: "Unassigned" }));
     expect(onAssign).toHaveBeenCalledWith(null);
+  });
+
+  it("falls back to the given display name (not 'Unassigned') when no profile is assigned", () => {
+    setup({ displayName: "SPEAKER_00" });
+    expect(screen.getByRole("button", { name: /assign speaker_00/i }).textContent).toContain("SPEAKER_00");
+  });
+
+  it("shows a spinner while an async create is in flight, then closes", async () => {
+    let finish!: () => void;
+    const onCreate = vi.fn(() => new Promise<void>((r) => (finish = r)));
+    setup({ onCreate });
+    openInput();
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "Zara" } });
+    fireEvent.click(screen.getByRole("option", { name: /create "zara"/i }));
+
+    // Still open, showing progress rather than snapping shut before the person exists.
+    expect(await screen.findByRole("status")).toBeTruthy();
+    expect(screen.queryByRole("option", { name: /create "zara"/i })).toBeNull();
+
+    await act(async () => finish());
+    await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
+    expect(screen.queryByRole("combobox")).toBeNull(); // closed once the create resolved
   });
 
   it("closes on Escape", () => {

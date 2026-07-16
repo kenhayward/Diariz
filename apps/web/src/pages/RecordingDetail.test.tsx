@@ -442,6 +442,62 @@ describe("RecordingDetail", () => {
     await waitFor(() => expect(play).toHaveBeenCalled());
   });
 
+  it("Play selected turns into Pause while the selection plays, and clicking it stops playback", async () => {
+    vi.spyOn(window.HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    const pause = vi.spyOn(window.HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+    renderPage(base);
+    await loaded();
+    openTab("Transcript");
+
+    fireEvent.click(await screen.findByText("Hi"));
+    fireEvent.click(screen.getByRole("button", { name: /play selected/i }));
+
+    const pauseBtn = await screen.findByRole("button", { name: /pause selected/i });
+    fireEvent.click(pauseBtn);
+    expect(pause).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /play selected/i })).toBeTruthy();
+  });
+
+  it("the selection play button reads Play again when the transcript is re-entered", async () => {
+    vi.spyOn(window.HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    renderPage(base);
+    await loaded();
+    openTab("Transcript");
+
+    fireEvent.click(await screen.findByText("Hi"));
+    fireEvent.click(screen.getByRole("button", { name: /play selected/i }));
+    await screen.findByRole("button", { name: /pause selected/i });
+
+    backToHub();
+    openTab("Transcript");
+    expect(await screen.findByRole("button", { name: /play selected/i })).toBeTruthy();
+  });
+
+  it("assigns a speaker from the transcript row's dropdown without selecting the segment", async () => {
+    (api.listSpeakerProfiles as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: "p2", name: "Bob", sampleCount: 1 }]);
+    (api.assignSpeaker as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    renderPage(base);
+    await loaded();
+    openTab("Transcript");
+
+    // The row's speaker column is the same typeahead as the Speakers tab, so a speaker can be named while
+    // reading the transcript.
+    fireEvent.click(await screen.findByRole("button", { name: "Assign SPEAKER_00 to a person" }));
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "Bob" } });
+    fireEvent.click(screen.getByRole("option", { name: "Bob" }));
+
+    await waitFor(() => expect(api.assignSpeaker).toHaveBeenCalledWith("rec-123", "SPEAKER_00", "p2"));
+    // Using the dropdown must not double as clicking the row (which would select the segment).
+    expect(screen.getByRole("button", { name: /play selected/i }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("shows the current speaker name on the transcript row's dropdown", async () => {
+    renderPage(base);
+    await loaded();
+    openTab("Transcript");
+    expect((await screen.findByRole("button", { name: "Assign SPEAKER_00 to a person" })).textContent).toContain("Alice");
+  });
+
   it("shows the speaker assign typeahead on the Speakers tab", async () => {
     renderPage(base);
     await loaded();
