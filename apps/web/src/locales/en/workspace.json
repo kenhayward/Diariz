@@ -540,5 +540,12 @@
   "mtImportMissingFormulas": "Imported, but this instance has no formula named: {{names}}. Pick one before generating minutes.",
   "mtSaveError": "Could not save the template.",
   "mtDeleteConfirm": "Delete this template? Recordings using it fall back to the General default.",
-  "mtDeleteError": "Could not delete the template."
+  "mtDeleteError": "Could not delete the template.",
+  "searchPlaceholder": "Search...",
+  "searchScopeIn": "in {{name}}",
+  "searchScopeEverywhere": "Everywhere",
+  "searchClear": "Clear search",
+  "searchNoMatches": "No matches.",
+  "searchEverywhere": "Search everywhere ›",
+  "searchCountIn": "{{count}} in {{name}}"
 }

@@ -24,7 +24,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Tag cloud** | Every meeting is auto-tagged with weighted topics; a Tags tab shows a weighted cloud and the meetings behind each tag. |
 | **Chat over transcripts** | Stream answers over one meeting, a folder (its summary/minutes/actions), several selected, or all meetings - context inferred from what you're viewing - via your OpenAI-compatible model, with attachments and saved conversations. |
 | **Formulas** | Build a document from headings, literal text, substituted meeting details and instructions to the model; choose what it may see (transcript, notes, summary, minutes, actions) and run it over a recording - or a whole folder and its sub-sections - to generate a Markdown document you can edit, download, or email. Runs in the background (\"Generating...\" then fills in); re-running one replaces its previous document, and a document you edited by hand is left alone. Personal, platform-wide, or built-in; from the Formulas tab (on a recording or a folder), \`/formula\` in chat, or Claude via MCP; share a personal one so others can find and add it (a live link); admins manage the shared ones. |
-| **Search** | Keyword search across your library, upgraded to semantic (meaning-based) search when an embeddings endpoint is configured. |
+| **Search** | A search box above the meetings list, scoped by default to the folder you are browsing: typing takes the list over, each hit shows the matching words in context plus the folder it lives in, and clicking one opens the transcript at that moment. Matching folders show up too. Keyword search across your library, upgraded to semantic (meaning-based) search when an embeddings endpoint is configured. |
 | **Chat tools** | The assistant searches your library with built-in tools (who-said-what, attendees, talk time, summaries, email-to-self) and links to the exact segment. |
 | **Voice dictation** | Speak your chat questions - transcribed into the chat box in Chrome/Edge or via a server speech-to-text endpoint. |
 | **Connect Claude (MCP)** | Connect Claude to your own meetings via OAuth (claude.ai) or a personal token (Claude Desktop/Code), including a \`run_formula\` tool to run your saved Formulas. |
@@ -54,6 +54,20 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.142.0",
+    date: "2026-07-16",
+    pr: 315,
+    headline: "Search your meetings from the panel",
+    summary:
+      "There is now a search box above the meetings list. Diariz could already search your transcripts properly - the same hybrid keyword-and-meaning search the assistant uses - but only the assistant could reach it. Now you can. Typing takes the list over with results; each hit shows the matching words in context, the folder the meeting lives in, and clicking it opens the transcript at the exact moment those words were said. Folders whose name matches turn up too, and take you straight there. Search covers the folder you are browsing by default - the chip in the box tells you which - so results stay relevant to where you are. Clearing the box drops you back exactly where you were, folder and all.",
+    added: [
+      "A search box above the meetings list. It searches the folder you are in by default, and the chip tells you the scope.",
+      "Results show the matching words in context with the term highlighted, plus the folder path, so a hit tells you where it lives.",
+      "Clicking a result opens the transcript at the moment the words were said.",
+      "Folders whose name matches your search appear alongside the meetings and take you straight into them.",
+    ],
+  },
   {
     version: "0.141.0",
     date: "2026-07-16",

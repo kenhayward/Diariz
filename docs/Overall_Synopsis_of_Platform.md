@@ -283,6 +283,21 @@ default timeout for its header phase and relies on client-disconnect for cancell
   no transcripts are pre-loaded, and the system prompt tells the model to answer by searching the whole library
   and citing the meetings it draws from. Finer filters (dates, people, folders) are typed in plain language and
   resolved by the model - there are no filter widgets. **Milestone 3 (RAG) is shipped.**
+- **Search as a REST endpoint (`GET /api/search`).** `SearchController` is the **second consumer** of
+  `ITranscriptSearch`, alongside `Tools/*`. The distinction matters: the tools render **markdown** for a model to
+  read (`ToolFormat`), whereas this returns **structured JSON** for the web left-nav's search bar -
+  `SearchResponse(Query, Scope, Folders[], Recordings[])`, one hit per recording (best passage), each carrying the
+  snippet, its `SnippetStartMs` (so the client deep-links to the moment via `?ts=`), and the folder breadcrumb.
+  Snippets are **plain text** - highlighting is the client's job, so no markup is ever shipped.
+  Params: `q` (required; empty → 400), `roomId`, `sectionId` (that folder **and its sub-folders**), `everywhere`
+  (spans every room the caller can see and **wins over** the other two), `from`/`to`, `speaker`, `limit`
+  (default 20, clamped to `TranscriptSearch.MaxLimit`).
+  Two non-obvious rules: (1) a **folder scope resolves to recording ids** and an *empty* result **short-circuits** -
+  `TranscriptSearch` reads an empty `recordingScope` as *unscoped*, so passing it through would search the whole
+  library instead of an empty folder; (2) `SearchAsync` gained an optional `roomId` that **intersects**
+  `RoomScope.RoomIdsForUserAsync` rather than replacing it, so a room the caller isn't in yields an empty array
+  (`= ANY('{}')`) and the gate **fails closed** with no extra authorization check. Folder-name matching is plain
+  EF in the controller (not the raw-SQL engine) so it translates on every provider and stays unit-testable.
 - **Editable prompt templates.** The summarise, action-extraction, and meeting-minutes instruction prompts each
   live as a Markdown file under `prompts/` (`summarise.md` / `extract-actions.md` / `meeting-minutes.md`), read
   via a single `IPromptTemplateProvider` (`prompts/<name>.md`) **on each use** so edits (or a volume mount) apply

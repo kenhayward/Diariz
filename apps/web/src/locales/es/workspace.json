@@ -540,5 +540,12 @@
   "mtImportMissingFormulas": "Importado, pero esta instancia no tiene ninguna fórmula llamada: {{names}}. Elige una antes de generar el acta.",
   "mtSaveError": "No se pudo guardar la plantilla.",
   "mtDeleteConfirm": "¿Eliminar esta plantilla? Las grabaciones que la usen volverán al valor General predeterminado.",
-  "mtDeleteError": "No se pudo eliminar la plantilla."
+  "mtDeleteError": "No se pudo eliminar la plantilla.",
+  "searchPlaceholder": "Buscar...",
+  "searchScopeIn": "en {{name}}",
+  "searchScopeEverywhere": "En todas partes",
+  "searchClear": "Borrar búsqueda",
+  "searchNoMatches": "Sin coincidencias.",
+  "searchEverywhere": "Buscar en todas partes ›",
+  "searchCountIn": "{{count}} en {{name}}"
 }

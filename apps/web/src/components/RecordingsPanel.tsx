@@ -24,6 +24,7 @@ import { useDrillSectionId, useDrillSearch } from "../lib/drillRoute";
 import { SECTION_MIME } from "../lib/dragTypes";
 import DrillBreadcrumb from "./nav/DrillBreadcrumb";
 import SectionRow from "./nav/SectionRow";
+import SearchBar from "./nav/SearchBar";
 import MonthCalendar from "./MonthCalendar";
 import { recordingDayKeys, dayKey, eventDayKeys, visibleGridRange, dayItems } from "../lib/calendar";
 import { useUpload } from "../lib/uploadContext";
@@ -114,6 +115,10 @@ export default function RecordingsPanel() {
   // top level, since the loose recordings there belong to the room rather than to any folder.
   const currentLevelName =
     breadcrumbOf(sections, drill.sectionId).slice(-1)[0]?.name ?? currentRoom?.name ?? "";
+  // A live search takes the list body over. It is only ever component state: the drill stays in the URL, so
+  // clearing the query drops straight back to where the user was browsing, with nothing to restore.
+  const [searchQuery, setSearchQuery] = useState("");
+  const searching = searchQuery.length > 0;
   const [opError, setOpError] = useState<string | null>(null);
 
   // List vs Calendar tab (persisted). The calendar shows the month, focused on today, and lists the
@@ -359,12 +364,25 @@ export default function RecordingsPanel() {
           // min-w-0 lets this flex child shrink to the panel width so long recording names truncate
           // instead of forcing the column wider than the panel.
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            {/* Pinned: search is always reachable, whatever level you're on. */}
+            <SearchBar
+              roomId={roomId}
+              sectionId={drill.sectionId}
+              scopeName={currentLevelName}
+              onQueryChange={setSearchQuery}
+              onDrill={(id) => drill.drillTo(id)}
+            />
+            {/* The breadcrumb stays put during a search: the drill is not disturbed by typing, and the user
+                can see where they will land the moment they clear the query. */}
             <DrillBreadcrumb
               sections={sections}
               sectionId={drill.sectionId}
               basePath={basePath}
               onDrill={drill.drillTo}
             />
+            {/* The results replace the list body outright rather than hiding it: nothing below is reachable
+                or readable during a search, and clearing rebuilds it from the URL anyway. */}
+            {!searching && (
             <div
               ref={listScrollRef}
               className="min-h-0 min-w-0 flex-1 overflow-y-auto"
@@ -422,6 +440,7 @@ export default function RecordingsPanel() {
                 <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("drillEmpty")}</p>
               )}
             </div>
+            )}
           </div>
         ) : tab === "calendar" ? (
           // Calendar: the month grid stays fixed at the top; only the selected day's list scrolls.

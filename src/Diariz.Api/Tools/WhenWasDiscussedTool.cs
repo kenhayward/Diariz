@@ -36,7 +36,7 @@ public sealed class WhenWasDiscussedTool : IChatTool
         if (topic is null) return "Provide a 'topic' to locate.";
         var scope = ToolFormat.ResolveScope(args, ctx);
         var limit = ToolFormat.ReadLimit(args, TranscriptSearch.MaxLimit, TranscriptSearch.MaxLimit);
-        var hits = await _search.SearchAsync(ctx.UserId, topic, null, scope, limit, ct);
+        var hits = await _search.SearchAsync(ctx.UserId, topic, null, scope, limit, ct: ct);
         if (hits.Count == 0) return $"No mentions of \"{topic}\" were found.";
 
         // Order the matches chronologically (recording date, then offset within it).

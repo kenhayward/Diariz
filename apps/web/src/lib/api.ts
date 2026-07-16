@@ -65,6 +65,7 @@ import type {
   UserProfile,
   UserSettings,
   UserStorage,
+  SearchResponse,
 } from "./types";
 
 const TOKEN_KEY = "diariz.token";
@@ -692,6 +693,25 @@ export const api = {
   async listSections(roomId?: string | null): Promise<SectionDto[]> {
     const { data } = await http.get<SectionDto[]>("/api/sections", {
       params: roomId ? { roomId } : undefined,
+    });
+    return data;
+  },
+
+  /// Search transcripts and folder names. Scope: `sectionId` limits to that folder and its sub-folders,
+  /// `roomId` to one room, and `everywhere` spans every room the caller can see (and wins over both).
+  async search(params: {
+    q: string;
+    roomId?: string | null;
+    sectionId?: string | null;
+    everywhere?: boolean;
+    speaker?: string | null;
+    from?: string | null;
+    to?: string | null;
+    limit?: number;
+  }): Promise<SearchResponse> {
+    const { data } = await http.get<SearchResponse>("/api/search", {
+      // Drop the empties rather than sending `?roomId=null`, which the model binder would reject.
+      params: Object.fromEntries(Object.entries(params).filter(([, v]) => v !== null && v !== undefined)),
     });
     return data;
   },
