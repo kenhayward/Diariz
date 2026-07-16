@@ -547,5 +547,10 @@
   "searchClear": "Effacer la recherche",
   "searchNoMatches": "Aucun résultat.",
   "searchEverywhere": "Rechercher partout ›",
-  "searchCountIn": "{{count}} dans {{name}}"
+  "searchCountIn": "{{count}} dans {{name}}",
+  "searchFilterSection": "Section",
+  "searchFilterDate": "Date",
+  "searchFilterSpeaker": "Intervenant",
+  "searchFilterAny": "Tous",
+  "searchFilterDateSince": "Depuis {{date}}"
 }

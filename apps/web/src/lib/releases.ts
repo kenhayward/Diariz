@@ -24,7 +24,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Tag cloud** | Every meeting is auto-tagged with weighted topics; a Tags tab shows a weighted cloud and the meetings behind each tag. |
 | **Chat over transcripts** | Stream answers over one meeting, a folder (its summary/minutes/actions), several selected, or all meetings - context inferred from what you're viewing - via your OpenAI-compatible model, with attachments and saved conversations. |
 | **Formulas** | Build a document from headings, literal text, substituted meeting details and instructions to the model; choose what it may see (transcript, notes, summary, minutes, actions) and run it over a recording - or a whole folder and its sub-sections - to generate a Markdown document you can edit, download, or email. Runs in the background (\"Generating...\" then fills in); re-running one replaces its previous document, and a document you edited by hand is left alone. Personal, platform-wide, or built-in; from the Formulas tab (on a recording or a folder), \`/formula\` in chat, or Claude via MCP; share a personal one so others can find and add it (a live link); admins manage the shared ones. |
-| **Search** | A search box above the meetings list, scoped by default to the folder you are browsing: typing takes the list over, each hit shows the matching words in context plus the folder it lives in, and clicking one opens the transcript at that moment. Matching folders show up too. Keyword search across your library, upgraded to semantic (meaning-based) search when an embeddings endpoint is configured. |
+| **Search** | A search box above the meetings list, scoped by default to the folder you are browsing: typing takes the list over, each hit shows the matching words in context plus the folder it lives in, and clicking one opens the transcript at that moment. Matching folders show up too. **Search everywhere** widens it to every room you can see, grouping the results by folder with Section / Date / Speaker chips to narrow them. Keyword search across your library, upgraded to semantic (meaning-based) search when an embeddings endpoint is configured. |
 | **Chat tools** | The assistant searches your library with built-in tools (who-said-what, attendees, talk time, summaries, email-to-self) and links to the exact segment. |
 | **Voice dictation** | Speak your chat questions - transcribed into the chat box in Chrome/Edge or via a server speech-to-text endpoint. |
 | **Connect Claude (MCP)** | Connect Claude to your own meetings via OAuth (claude.ai) or a personal token (Claude Desktop/Code), including a \`run_formula\` tool to run your saved Formulas. |
@@ -54,6 +54,19 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.143.0",
+    date: "2026-07-16",
+    pr: 316,
+    headline: "Search everywhere, and narrow it down",
+    summary:
+      "Panel search started out looking only in the folder you were browsing, which is fast and usually right - but not when you cannot remember where you filed something. There is now a Search everywhere link next to the result count: one tap widens the search to every room you can see, and the chip changes to Everywhere so you know what you are looking at. Global results are grouped under the folder each meeting lives in, coloured to match, so a long list still tells you where things are. Section, Date and Speaker chips appear alongside to narrow it down - their options are built from the results you actually got, so no chip ever leads to an empty list. Clearing the search puts you back in your folder, scope and filters and all.",
+    added: [
+      "Search everywhere, one tap from a scoped search, spanning every room you can see. The chip shows which scope you are in.",
+      "Global results are grouped under the folder each meeting lives in, with a count and the folder's colour.",
+      "Section, Date and Speaker chips narrow a global search. The options come from the results you got, so none of them lead nowhere.",
+    ],
+  },
   {
     version: "0.142.0",
     date: "2026-07-16",
