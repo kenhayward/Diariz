@@ -183,3 +183,168 @@ describe("SearchBar", () => {
     expect(await screen.findByText(/no matches/i)).toBeTruthy();
   });
 });
+
+/// Phase 3: promoting a scoped search to every room, and narrowing the result set with chips.
+describe("SearchBar - search everywhere", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (api.search as ReturnType<typeof vi.fn>).mockResolvedValue(empty);
+  });
+
+  const hit = (over: Record<string, unknown>) => ({
+    recordingId: "r", name: "Rec", createdAt: "2026-06-26T12:00:00Z", durationMs: 1000,
+    sectionId: null, sectionName: null, breadcrumb: [], snippet: "text", snippetStartMs: 0,
+    speakerName: null, score: 0.5, ...over,
+  });
+
+  it("offers Search everywhere while scoped", async () => {
+    renderBar({ sectionId: "customers" });
+    type("budget");
+    expect(await screen.findByRole("button", { name: /search everywhere/i })).toBeTruthy();
+  });
+
+  it("promotes to every room, dropping the folder scope", async () => {
+    renderBar({ sectionId: "customers" });
+    type("budget");
+    fireEvent.click(await screen.findByRole("button", { name: /search everywhere/i }));
+
+    await waitFor(() =>
+      expect(api.search).toHaveBeenCalledWith(expect.objectContaining({ q: "budget", everywhere: true })),
+    );
+  });
+
+  it("swaps the folder chip for an Everywhere chip once promoted", async () => {
+    renderBar({ sectionId: "customers" });
+    type("budget");
+    fireEvent.click(await screen.findByRole("button", { name: /search everywhere/i }));
+
+    expect(await screen.findByText(/everywhere/i)).toBeTruthy();
+    expect(screen.queryByText(/in customers/i)).toBeNull();
+  });
+
+  // Clearing the query is the way back to the drill, so the scope must not outlive the search that set it.
+  it("drops back to the folder scope when the search is cleared", async () => {
+    renderBar({ sectionId: "customers" });
+    type("budget");
+    fireEvent.click(await screen.findByRole("button", { name: /search everywhere/i }));
+    fireEvent.click(screen.getByRole("button", { name: /clear search/i }));
+
+    type("again");
+    await waitFor(() =>
+      expect(api.search).toHaveBeenLastCalledWith(expect.objectContaining({ everywhere: false })),
+    );
+  });
+
+  it("groups results by folder with a count once everywhere", async () => {
+    (api.search as ReturnType<typeof vi.fn>).mockResolvedValue({
+      query: "budget", scope: "everywhere", folders: [],
+      recordings: [
+        hit({ recordingId: "a", name: "Renewal call", sectionId: "cust", sectionName: "Customers", score: 0.9 }),
+        hit({ recordingId: "b", name: "Pricing chat", sectionId: "cust", sectionName: "Customers", score: 0.8 }),
+        hit({ recordingId: "c", name: "Label spec", sectionId: "pack", sectionName: "Packaging", score: 0.4 }),
+      ],
+    });
+    renderBar({ sectionId: "customers" });
+    type("budget");
+    fireEvent.click(await screen.findByRole("button", { name: /search everywhere/i }));
+
+    const customers = await screen.findByRole("heading", { name: /customers/i });
+    expect(customers.textContent).toContain("2");
+    expect(screen.getByRole("heading", { name: /packaging/i })).toBeTruthy();
+  });
+
+  it("filters the results by a folder chip", async () => {
+    (api.search as ReturnType<typeof vi.fn>).mockResolvedValue({
+      query: "budget", scope: "everywhere", folders: [],
+      recordings: [
+        hit({ recordingId: "a", name: "Renewal call", sectionId: "cust", sectionName: "Customers", score: 0.9 }),
+        hit({ recordingId: "c", name: "Label spec", sectionId: "pack", sectionName: "Packaging", score: 0.4 }),
+      ],
+    });
+    renderBar({});
+    type("budget");
+    fireEvent.click(await screen.findByRole("button", { name: /search everywhere/i }));
+    expect(await screen.findByText("Label spec")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /^section$/i }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /customers/i }));
+
+    expect(screen.getByText("Renewal call")).toBeTruthy();
+    expect(screen.queryByText("Label spec")).toBeNull();
+  });
+
+  it("filters the results by a speaker chip", async () => {
+    (api.search as ReturnType<typeof vi.fn>).mockResolvedValue({
+      query: "budget", scope: "everywhere", folders: [],
+      recordings: [
+        hit({ recordingId: "a", name: "Alice one", speakerName: "Alice", score: 0.9 }),
+        hit({ recordingId: "b", name: "Bob one", speakerName: "Bob", score: 0.4 }),
+      ],
+    });
+    renderBar({});
+    type("budget");
+    fireEvent.click(await screen.findByRole("button", { name: /search everywhere/i }));
+    expect(await screen.findByText("Bob one")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /^speaker$/i }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /alice/i }));
+
+    expect(screen.getByText("Alice one")).toBeTruthy();
+    expect(screen.queryByText("Bob one")).toBeNull();
+  });
+
+  it("shows no filter chips while scoped to a folder", async () => {
+    renderBar({ sectionId: "customers" });
+    type("budget");
+    await waitFor(() => expect(api.search).toHaveBeenCalled());
+    expect(screen.queryByRole("button", { name: /^section$/i })).toBeNull();
+  });
+});
+
+describe("SearchBar - grouped hit breadcrumbs", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const base = {
+    recordingId: "a", name: "Renewal call", createdAt: "2026-06-26T12:00:00Z", durationMs: 0,
+    snippet: "text", snippetStartMs: 0, speakerName: null, score: 0.9,
+  };
+
+  // The group header already says "Customers"; repeating it on every row under it is noise.
+  it("omits a hit's breadcrumb when it only repeats the group header", async () => {
+    (api.search as ReturnType<typeof vi.fn>).mockResolvedValue({
+      query: "x", scope: "everywhere", folders: [],
+      recordings: [{ ...base, sectionId: "cust", sectionName: "Customers", breadcrumb: ["Customers"] }],
+    });
+    renderBar({});
+    type("x");
+    fireEvent.click(await screen.findByRole("button", { name: /search everywhere/i }));
+    await screen.findByRole("heading", { name: /customers/i });
+
+    // The heading is the only "Customers" on screen - the row does not repeat it.
+    expect(screen.getAllByText(/customers/i)).toHaveLength(1);
+  });
+
+  // A nested folder's parents are not in the header, so the path still earns its place.
+  it("keeps the breadcrumb when it names parents the group header does not", async () => {
+    (api.search as ReturnType<typeof vi.fn>).mockResolvedValue({
+      query: "x", scope: "everywhere", folders: [],
+      recordings: [{ ...base, sectionId: "ambu", sectionName: "Ambu", breadcrumb: ["Customers", "Ambu"] }],
+    });
+    renderBar({});
+    type("x");
+    fireEvent.click(await screen.findByRole("button", { name: /search everywhere/i }));
+
+    expect(await screen.findByText(/Customers › Ambu/)).toBeTruthy();
+  });
+
+  // Scoped results are a flat list with no headers, so the path is the only thing saying where a hit lives.
+  it("keeps the breadcrumb in a flat scoped result", async () => {
+    (api.search as ReturnType<typeof vi.fn>).mockResolvedValue({
+      query: "x", scope: "folder", folders: [],
+      recordings: [{ ...base, sectionId: "cust", sectionName: "Customers", breadcrumb: ["Customers"] }],
+    });
+    renderBar({});
+    type("x");
+    expect(await screen.findByText("Customers")).toBeTruthy();
+  });
+});

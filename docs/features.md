@@ -108,6 +108,11 @@ sub-folders.
 clearing drops you back exactly where you were browsing. It searches the **folder you are in** by default (the
 chip tells you which), and each hit shows the matching words in context, the folder it lives in, and clicking
 it opens the transcript **at that moment**. Folders whose name matches appear too, and take you straight there.
+**Search everywhere** (next to the result count) widens the search to **every room you can see**: the chip
+switches to *Everywhere*, results are **grouped under the folder** each meeting lives in (coloured to match,
+with a count), and **Section / Date / Speaker** chips narrow them. The chip options are built from the results
+you actually got, so none of them lead to an empty list. Scope and filters last only as long as the search -
+clearing the box returns you to your folder.
 - **Semantic (RAG) search** (opt-in): configure an embeddings endpoint and transcripts are embedded into a
 pgvector index; the panel search, chat and the tools then search by **meaning as well as keywords** (hybrid
 vector + trigram, fused with Reciprocal Rank Fusion), so a conceptual question finds the right moment even when
