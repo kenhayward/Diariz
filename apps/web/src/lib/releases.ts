@@ -31,7 +31,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Translate** | Translate a whole transcript or a single segment, stored as revisions you can flip back. |
 | **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) to a recording or directly to a folder, edit Markdown attachments in place, save a chat conversation as an attachment with /attach, and optionally feed them to chat. |
 | **Rooms** | A private Personal Room per account plus shareable Rooms: invite users and groups with per-member permissions. Each Shared Room has its **own folder structure** (sections/sub-sections, drag-and-drop, per-room order) and its own List/Calendar/Actions/Tags scoped to it; record or upload files straight into a room (your Personal Room keeps the original), and search + chat over every room you belong to. Your Google Calendar and its linking stay personal. Manage rooms from the switcher. |
-| **Organise & merge** | Sections and sub-sections with drag-and-drop; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
+| **Organise & merge** | Sections and sub-sections with drag-and-drop; the meetings list drills in one folder at a time (coloured folder rows with counts, a breadcrumb back out, browser back pops a level) so it stays readable however many recordings you have, with **Open section page** as a separate target from browsing deeper; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
 | **API access** | Generate a personal API token (when enabled) to call the REST API as yourself, with a built-in API reference. |
@@ -54,6 +54,24 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.141.0",
+    date: "2026-07-16",
+    pr: 314,
+    headline: "The meetings list now drills in one folder at a time",
+    summary:
+      "The left-hand meetings list used to show every folder expanded at once. That is fine with a handful of recordings and unusable with hundreds: the list scrolls forever and you lose your place. It now shows one level at a time. You start at your folders plus any loose recordings, click a folder to go into it, and a breadcrumb walks you back out - browser back works too, and the folder you were in survives a reload, so you can share or bookmark a link that lands where you were. Each folder row carries its own colour and a count of everything inside it, including its sub-folders. Opening a folder's page is now a separate, explicit control (\"Open section page\") on the breadcrumb, so clicking a folder browses into it rather than navigating away. Nothing else about the list changed: the toolbar, select mode, merge, delete, and drag-and-drop all work as before.",
+    added: [
+      "The meetings list drills into one folder at a time, with a breadcrumb back out. Browser back pops a level, and your place survives a reload.",
+      "Folder rows show a colour and a count of every recording inside, including in sub-folders.",
+      "Open section page, on the breadcrumb, opens a folder's own page - separate from clicking the folder to browse into it.",
+    ],
+    changed: [
+      "Folders no longer collapse and expand, because their contents are now a level you go into rather than a fold-out. Recordings with no folder are simply the top level's own items instead of a separate Ungrouped group.",
+      "Select-all now covers the recordings at the level you are looking at, rather than sitting on a folder heading whose recordings may not be on screen.",
+      "Dragging a recording onto a collapsed folder heading is gone along with the headings; use the recording's Move to section action, which does the same thing.",
+    ],
+  },
   {
     version: "0.140.2",
     date: "2026-07-16",

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { NavLink, useNavigate, useMatch } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -19,6 +19,11 @@ import { formatDuration } from "../lib/format";
 import { computeReorder } from "../lib/reorder";
 import { useDragAutoScroll } from "../lib/dragAutoScroll";
 import { buildRecordingTree, reorderBeforeSection, appendSectionUnder, type SectionNode } from "../lib/recordingTree";
+import { childrenOf, breadcrumbOf, recordingCountOf } from "../lib/drillView";
+import { useDrillSectionId, useDrillSearch } from "../lib/drillRoute";
+import { SECTION_MIME } from "../lib/dragTypes";
+import DrillBreadcrumb from "./nav/DrillBreadcrumb";
+import SectionRow from "./nav/SectionRow";
 import MonthCalendar from "./MonthCalendar";
 import { recordingDayKeys, dayKey, eventDayKeys, visibleGridRange, dayItems } from "../lib/calendar";
 import { useUpload } from "../lib/uploadContext";
@@ -46,13 +51,9 @@ const statusColor: Record<RecordingStatus, string> = {
   Failed: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
 };
 
-const COLLAPSE_KEY = "diariz.recordings.collapsedGroups";
-const UNGROUPED_KEY = "__ungrouped__";
 const TAB_KEY = "diariz.recordings.tab";
 const TAG_LIMIT_KEY = "diariz.recordings.tagLimit";
 type PanelTab = "list" | "calendar" | "actions" | "tags";
-/// Drag payload type marking a section-header drag (vs a recording's "text/plain" id or a file drop).
-const SECTION_MIME = "application/x-diariz-section";
 
 function sourceLabel(s: RecordingSource, t: TFunction): string {
   if (s === "System") return t("workspace:sourceSystem");
@@ -105,6 +106,14 @@ export default function RecordingsPanel() {
 
   const tree = useMemo(() => buildRecordingTree(recordings, sections), [recordings, sections]);
   const selection = useSelection();
+  const basePath = useRoomBasePath();
+  // Where the drill-in list is: `?in=<sectionId>`, or the room's top level. Held in the URL so browser
+  // back pops a level and the position survives a reload — see `useDrillSectionId`.
+  const drill = useDrillSectionId();
+  // What to call the level you're in, for its "directly in ..." label. The room's name stands in at the
+  // top level, since the loose recordings there belong to the room rather than to any folder.
+  const currentLevelName =
+    breadcrumbOf(sections, drill.sectionId).slice(-1)[0]?.name ?? currentRoom?.name ?? "";
   const [opError, setOpError] = useState<string | null>(null);
 
   // List vs Calendar tab (persisted). The calendar shows the month, focused on today, and lists the
@@ -200,23 +209,6 @@ export default function RecordingsPanel() {
       return { year: d.getFullYear(), month: d.getMonth() };
     });
   }
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
-    try {
-      return new Set<string>(JSON.parse(localStorage.getItem(COLLAPSE_KEY) ?? "[]"));
-    } catch {
-      return new Set<string>();
-    }
-  });
-  function toggleGroup(key: string) {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...next]));
-      return next;
-    });
-  }
-
   /// Apply a drag-and-drop: set the dragged recording's group + order within the current room, then refresh.
   /// Order and folders are per-room, so this needs manage-contents (the personal-room owner always has it).
   async function drop(sectionId: string | null, groupIds: string[], draggedId: string, beforeId: string | null) {
@@ -283,9 +275,6 @@ export default function RecordingsPanel() {
 
   if (isLoading) return <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>;
 
-  // Show section headings whenever any (real or just-created) section exists; a flat list otherwise.
-  const showHeadings = tree.sections.length > 0;
-
   // Select mode: a checkbox that selects/deselects every recording directly in this section at once.
   const selectAllFor = (node: SectionNode) => {
     const ids = node.items.map((i) => i.id);
@@ -324,49 +313,13 @@ export default function RecordingsPanel() {
     );
   };
 
-  // Render one section node (top-level or a sub-section). The wrapping div is the drop target: a section
-  // payload nests the dragged section here (top-level only); a recording payload appends to this section.
-  const renderSection = (node: SectionNode, nested: boolean): React.ReactNode => {
-    const ids = node.items.map((i) => i.id);
-    const isCollapsed = collapsed.has(node.id);
-    return (
-      <div
-        key={node.id}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.stopPropagation();
-          const draggedSection = e.dataTransfer.getData(SECTION_MIME);
-          if (draggedSection) {
-            if (!nested) nestSection(node.id, draggedSection); // nest a section into this top-level section
-            return;
-          }
-          const dragged = e.dataTransfer.getData("text/plain");
-          if (dragged) drop(node.id, ids, dragged, null);
-        }}
-      >
-        {showHeadings && (
-          <SectionHeading
-            id={node.id}
-            name={node.name}
-            count={node.items.length}
-            collapsed={isCollapsed}
-            nested={nested}
-            onToggle={() => toggleGroup(node.id)}
-            leading={selectAllFor(node)}
-            onSectionDropBefore={(draggedId) => dropSectionBefore(node.id, draggedId)}
-            onSectionDropNest={(draggedId) => nestSection(node.id, draggedId)}
-          />
-        )}
-        {!isCollapsed && (
-          <>
-            {/* Recordings sit slightly indented under their section heading; deeper under a sub-section. */}
-            {node.items.length > 0 && rowList(node.id, node.items, nested ? "pl-10" : "pl-6")}
-            {node.children.map((child) => renderSection(child, true))}
-          </>
-        )}
-      </div>
-    );
-  };
+  // The one level the drill-in list is showing: the folders inside `drill.sectionId` plus the recordings
+  // filed directly in it. At the root that is the top-level folders plus the ungrouped recordings — which
+  // is why "Ungrouped" is no longer a special case, it is just the root's own items.
+  const level = childrenOf(tree, drill.sectionId);
+  const levelIds = level.items.map((i) => i.id);
+  // Only top-level folders may take sub-folders (the domain caps the hierarchy at two levels).
+  const childrenCanNest = drill.sectionId === null;
 
   return (
     // Flex column so the toolbar stays pinned at the top while only the list below it scrolls (mirrors
@@ -403,46 +356,72 @@ export default function RecordingsPanel() {
         {tab === "list" ? (
           // min-w-0 lets this flex child shrink to the panel width so long recording names truncate
           // instead of forcing the column wider than the panel.
-          <div ref={listScrollRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-            <UploadStatusList items={upload.items} onClear={upload.clearFinished} />
-            {dragging && (
-              <p className="px-3 py-2 text-center text-xs font-medium text-blue-600 dark:text-blue-400">
-                {t("dropToUpload")}
-              </p>
-            )}
-            {recordings.length === 0 && !dragging && (
-              <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("noRecordings")}</p>
-            )}
-            {opError && <p className="px-3 py-1 text-xs text-red-600 dark:text-red-400">{opError}</p>}
-            {tree.sections.map((node) => renderSection(node, false))}
-            {tree.ungrouped.length > 0 && (
-              <div
-                // Dropping a recording here ungroups it; dropping a section here promotes it to top-level.
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.stopPropagation();
-                  const draggedSection = e.dataTransfer.getData(SECTION_MIME);
-                  if (draggedSection) {
-                    nestSection(null, draggedSection);
-                    return;
-                  }
-                  const dragged = e.dataTransfer.getData("text/plain");
-                  if (dragged) drop(null, tree.ungrouped.map((i) => i.id), dragged, null);
-                }}
-              >
-                {showHeadings && (
-                  <GroupHeadingButton
-                    name={t("ungrouped")}
-                    count={tree.ungrouped.length}
-                    collapsed={collapsed.has(UNGROUPED_KEY)}
-                    onToggle={() => toggleGroup(UNGROUPED_KEY)}
-                    withBg
-                    leading={selectAllFor({ id: UNGROUPED_KEY, name: t("ungrouped"), items: tree.ungrouped, children: [] })}
-                  />
-                )}
-                {!collapsed.has(UNGROUPED_KEY) && rowList(null, tree.ungrouped, showHeadings ? "pl-6" : "pl-3")}
-              </div>
-            )}
+          // min-w-0 lets this flex child shrink to the panel width so long recording names truncate
+          // instead of forcing the column wider than the panel.
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <DrillBreadcrumb
+              sections={sections}
+              sectionId={drill.sectionId}
+              basePath={basePath}
+              onDrill={drill.drillTo}
+            />
+            <div
+              ref={listScrollRef}
+              className="min-h-0 min-w-0 flex-1 overflow-y-auto"
+              // Dropping onto the level's background files the dragged item here: a recording moves into
+              // this folder (or out to Ungrouped at the root), a folder is reparented to this level.
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                const draggedSection = e.dataTransfer.getData(SECTION_MIME);
+                if (draggedSection) {
+                  if (childrenCanNest) nestSection(null, draggedSection); // root: promote to top level
+                  return;
+                }
+                const dragged = e.dataTransfer.getData("text/plain");
+                if (dragged) drop(drill.sectionId, levelIds, dragged, null);
+              }}
+            >
+              <UploadStatusList items={upload.items} onClear={upload.clearFinished} />
+              {dragging && (
+                <p className="px-3 py-2 text-center text-xs font-medium text-blue-600 dark:text-blue-400">
+                  {t("dropToUpload")}
+                </p>
+              )}
+              {recordings.length === 0 && !dragging && (
+                <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("noRecordings")}</p>
+              )}
+              {opError && <p className="px-3 py-1 text-xs text-red-600 dark:text-red-400">{opError}</p>}
+
+              {level.sections.map((node) => (
+                <SectionRow
+                  key={node.id}
+                  id={node.id}
+                  name={node.name}
+                  count={recordingCountOf(tree, node.id)}
+                  canNest={childrenCanNest}
+                  onDrill={() => drill.drillTo(node.id)}
+                  onSectionDropBefore={(draggedId) => dropSectionBefore(node.id, draggedId)}
+                  onSectionDropNest={(draggedId) => nestSection(node.id, draggedId)}
+                  onRecordingDrop={(draggedId) => drop(node.id, node.items.map((i) => i.id), draggedId, null)}
+                />
+              ))}
+
+              {level.items.length > 0 && (
+                <div className="flex items-center gap-2 px-2 pb-1 pt-2">
+                  {selectAllFor({ id: drill.sectionId ?? "__root__", name: currentLevelName, items: level.items, children: [] })}
+                  <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                    {t("drillDirectlyIn", { name: currentLevelName })} · {level.items.length}
+                  </p>
+                </div>
+              )}
+              {rowList(drill.sectionId, level.items)}
+
+              {/* A folder you drilled into that holds nothing at all — distinct from a library with no
+                  recordings yet, which the noRecordings message above covers. */}
+              {recordings.length > 0 && level.sections.length === 0 && level.items.length === 0 && (
+                <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("drillEmpty")}</p>
+              )}
+            </div>
           </div>
         ) : tab === "calendar" ? (
           // Calendar: the month grid stays fixed at the top; only the selected day's list scrolls.
@@ -908,80 +887,6 @@ function UploadStatusList({ items, onClear }: { items: UploadItem[]; onClear: ()
     </div>
   );
 }
-
-/// A clickable group header (chevron + name + count) that collapses/expands the group.
-/// `withBg` makes it a full-width bar (used for the headingless Ungrouped group); inside a
-/// SectionHeading the surrounding row already provides the background.
-function GroupHeadingButton({
-  name,
-  count,
-  collapsed,
-  onToggle,
-  withBg = false,
-  leading,
-  to,
-}: {
-  name: string;
-  count: number;
-  collapsed: boolean;
-  onToggle: () => void;
-  withBg?: boolean;
-  /// Optional control rendered left of the chevron (the group select-all checkbox in Select mode). Kept
-  /// outside the toggle button so it isn't a nested interactive element.
-  leading?: React.ReactNode;
-  /// When set (a real section), the name navigates to the folder page and the chevron is a *separate*
-  /// larger-hit-target collapse toggle. When absent (Ungrouped), the whole label toggles collapse.
-  to?: string;
-}) {
-  const { t } = useTranslation("workspace");
-  const chevron = (
-    <span aria-hidden className="text-[11px] leading-none text-indigo-400">{collapsed ? "▸" : "▾"}</span>
-  );
-  return (
-    <div
-      className={`flex min-w-0 items-center gap-1 ${
-        withBg ? "w-full bg-indigo-50 px-3 py-0.5 dark:bg-indigo-950/40" : "flex-1"
-      }`}
-    >
-      {leading}
-      {to ? (
-        <>
-          {/* Bigger hit-target chevron: collapse/expand only, decoupled from selecting the folder. */}
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-expanded={!collapsed}
-            aria-label={collapsed ? t("expandGroup", { name }) : t("collapseGroup", { name })}
-            className="-my-0.5 flex shrink-0 items-center justify-center rounded px-1.5 py-1 hover:bg-indigo-100 dark:hover:bg-indigo-900/60"
-          >
-            {chevron}
-          </button>
-          {/* The name opens the folder page (and shows as selected via the row highlight). */}
-          <NavLink to={to} className="flex min-w-0 flex-1 items-center gap-1 text-left" draggable={false}>
-            <h3 className="truncate text-xs font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
-              {name}
-            </h3>
-            <span className="text-[10px] font-normal text-indigo-400 dark:text-indigo-500">({count})</span>
-          </NavLink>
-        </>
-      ) : (
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-expanded={!collapsed}
-          className="flex min-w-0 flex-1 items-center gap-1 text-left"
-        >
-          {chevron}
-          <h3 className="truncate text-xs font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
-            {name}
-          </h3>
-          <span className="text-[10px] font-normal text-indigo-400 dark:text-indigo-500">({count})</span>
-        </button>
-      )}
-    </div>
-  );
-}
-
 /// The group-level select-all checkbox shown in Select mode: checked when every recording in the group is
 /// selected, indeterminate when only some are. Toggling selects/deselects the whole group at once.
 function GroupSelectCheckbox({
@@ -1013,149 +918,6 @@ function GroupSelectCheckbox({
       onChange={() => onChange(!all)}
       className="shrink-0"
     />
-  );
-}
-
-function SectionHeading({
-  id,
-  name,
-  count,
-  collapsed,
-  nested,
-  onToggle,
-  leading,
-  onSectionDropBefore,
-  onSectionDropNest,
-}: {
-  id: string;
-  name: string;
-  count: number;
-  collapsed: boolean;
-  /// A sub-section header: indented under its parent (rows below it still span the full panel width).
-  nested: boolean;
-  onToggle: () => void;
-  leading?: React.ReactNode;
-  /// A section header was dropped onto this sub-section — reorder it before this one (within its parent).
-  onSectionDropBefore: (draggedSectionId: string) => void;
-  /// A section header was dropped onto this top-level section — nest it under here as a sub-section.
-  onSectionDropNest: (draggedSectionId: string) => void;
-}) {
-  const { t } = useTranslation("workspace");
-  const qc = useQueryClient();
-  const basePath = useRoomBasePath();
-  const sharedRoomId = useSharedRoomId();
-  const [renaming, setRenaming] = useState(false);
-  // Highlight the row when its folder page is open (the "selected folder" state).
-  const active = useMatch(`${basePath}/sections/:id`)?.params.id === id;
-  const refresh = () => {
-    qc.invalidateQueries({ queryKey: ["recordings"] });
-    qc.invalidateQueries({ queryKey: ["sections"] });
-  };
-
-  async function save(newName: string) {
-    const n = newName.trim();
-    if (n && n !== name) {
-      await api.renameSection(id, n);
-      refresh();
-    }
-    setRenaming(false);
-  }
-
-  const actions = [
-    { label: t("recordings:rename"), onClick: () => setRenaming(true) },
-    // Only top-level sections can hold sub-sections (the hierarchy is two levels deep).
-    ...(nested
-      ? []
-      : [
-          {
-            label: t("newSubSection"),
-            onClick: async () => {
-              const sub = window.prompt(t("newSubSectionPlaceholder", { parent: name }))?.trim();
-              if (!sub) return;
-              await api.createSection(sub, id, sharedRoomId);
-              refresh();
-            },
-          },
-        ]),
-    {
-      label: t("recordings:delete"),
-      danger: true,
-      onClick: async () => {
-        if (!window.confirm(t("confirmDeleteSection", { name }))) return;
-        await api.deleteSection(id);
-        refresh();
-      },
-    },
-  ];
-
-  return (
-    // The whole header row is the drag source (no separate handle) — it highlights on hover, mirroring the
-    // recording rows. Dragging is disabled while renaming so text can be selected in the input.
-    <div
-      className={`flex items-center justify-between py-0.5 pr-3 ${
-        active
-          ? "bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50"
-          : "bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60"
-      } ${nested ? "pl-7" : "pl-3"}`}
-      draggable={!renaming}
-      onDragStart={(e) => {
-        e.dataTransfer.setData(SECTION_MIME, id);
-        e.dataTransfer.effectAllowed = "move";
-      }}
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => {
-        const draggedSection = e.dataTransfer.getData(SECTION_MIME);
-        if (draggedSection) {
-          e.stopPropagation();
-          // Dropping a section onto a top-level header nests it; onto a sub-section header reorders it.
-          if (nested) onSectionDropBefore(draggedSection);
-          else onSectionDropNest(draggedSection);
-        }
-      }}
-    >
-      {/* Select-all checkbox first (matching the recording rows). */}
-      {leading}
-      {renaming ? (
-        <SectionRenameForm initial={name} onSave={save} onCancel={() => setRenaming(false)} />
-      ) : (
-        <GroupHeadingButton name={name} count={count} collapsed={collapsed} onToggle={onToggle} to={`${basePath}/sections/${id}`} />
-      )}
-      <KebabMenu actions={actions} label={t("sectionActions")} />
-    </div>
-  );
-}
-
-function SectionRenameForm({
-  initial,
-  onSave,
-  onCancel,
-}: {
-  initial: string;
-  onSave: (name: string) => void;
-  onCancel: () => void;
-}) {
-  const { t } = useTranslation("workspace");
-  const [value, setValue] = useState(initial);
-  return (
-    <form
-      className="flex min-w-0 flex-1 items-center gap-1"
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSave(value);
-      }}
-    >
-      <input
-        autoFocus
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => e.key === "Escape" && onCancel()}
-        aria-label={t("sectionNameAria")}
-        className="min-w-0 flex-1 rounded border px-2 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-      />
-      <button type="submit" className="rounded border px-2 py-0.5 text-xs hover:bg-white/50 dark:border-gray-700 dark:hover:bg-gray-800">
-        {t("common:save")}
-      </button>
-    </form>
   );
 }
 
@@ -1242,6 +1004,9 @@ export function RecordingRow({
   const basePath = useRoomBasePath();
   const sharedRoomId = useSharedRoomId();
   const activeRecordingId = useActiveRecordingId();
+  // The row links back into the drill level it was rendered from. Empty outside the List tab (the
+  // Calendar/Tags lists aren't drilled), so those links are unchanged.
+  const drillSearch = useDrillSearch();
   const [renaming, setRenaming] = useState(false);
   const [moving, setMoving] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -1340,7 +1105,8 @@ export function RecordingRow({
           <RenameForm initial={r.name ?? ""} onSave={saveName} onCancel={() => setRenaming(false)} />
         ) : (
           <NavLink
-            to={`${basePath}/recordings/${r.id}`}
+            // Keeps `?in=` so opening a recording doesn't pop the list back to the root behind it.
+            to={{ pathname: `${basePath}/recordings/${r.id}`, search: drillSearch }}
             draggable={false}
             onClick={() => onNavigate?.()}
             // Single-line row: name + right-aligned duration. Source + date (and the full, untruncated name)

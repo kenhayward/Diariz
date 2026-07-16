@@ -71,12 +71,14 @@ const rec: RecordingSummary = {
   calendarEventId: null,
 };
 
-function renderList() {
+/// `entry` seeds the URL: the drill position lives in `?in=<sectionId>`, so a test that starts inside a
+/// folder just starts at that URL.
+function renderList(entry = "/") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <SelectionProvider>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[entry]}>
           <RecordingsPanel />
         </MemoryRouter>
       </SelectionProvider>
@@ -174,19 +176,106 @@ describe("RecordingsPanel", () => {
     expect(link.getAttribute("href")).toBe("/recordings/rec-1");
   });
 
-  it("collapses and expands a group when its header is clicked", async () => {
-    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: "sec1", name: "Work" }]);
-    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([{ ...rec, sectionId: "sec1", sectionName: "Work" }]);
-    renderList();
+  // The drill-in list shows one level at a time. These replace the old collapse/expand tests: there is no
+  // collapse any more, because a folder's contents are a level you push into rather than a fold-out.
+  describe("drill-in", () => {
+    const drillSections = [
+      { id: "customers", name: "Customers", parentId: null, position: 0 },
+      { id: "ambu", name: "Ambu", parentId: "customers", position: 0 },
+    ];
+    const drillRecordings = [
+      { ...rec, id: "root-r", name: "Loose one", sectionId: null, sectionName: null },
+      { ...rec, id: "cust-r", name: "Account review", sectionId: "customers", sectionName: "Customers" },
+      { ...rec, id: "ambu-r", name: "Deep in ambu", sectionId: "ambu", sectionName: "Ambu" },
+    ];
+    beforeEach(() => {
+      (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue(drillSections);
+      (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue(drillRecordings);
+    });
 
-    expect(await screen.findByText("Weekly Standup")).toBeTruthy();
-    const header = screen.getByRole("button", { name: /work/i });
+    // The point of the redesign: the list never grows past one level, however deep the tree is.
+    it("shows only the current level - not recordings nested deeper", async () => {
+      renderList();
+      expect(await screen.findByText("Loose one")).toBeTruthy(); // ungrouped, directly at root
+      expect(screen.getByText("Customers")).toBeTruthy(); // a folder row
+      expect(screen.queryByText("Account review")).toBeNull();
+      expect(screen.queryByText("Deep in ambu")).toBeNull();
+    });
 
-    fireEvent.click(header); // collapse
-    await waitFor(() => expect(screen.queryByText("Weekly Standup")).toBeNull());
+    it("drills into a folder when its row body is clicked", async () => {
+      renderList();
+      fireEvent.click(await screen.findByRole("button", { name: /open customers/i }));
 
-    fireEvent.click(header); // expand
-    expect(await screen.findByText("Weekly Standup")).toBeTruthy();
+      expect(await screen.findByText("Account review")).toBeTruthy();
+      expect(screen.getByText("Ambu")).toBeTruthy(); // the sub-folder, as a row
+      expect(screen.queryByText("Loose one")).toBeNull(); // the root level is gone
+      expect(screen.queryByText("Deep in ambu")).toBeNull(); // still one level down
+    });
+
+    it("drills two levels deep", async () => {
+      renderList("/?in=ambu");
+      expect(await screen.findByText("Deep in ambu")).toBeTruthy();
+      expect(screen.queryByText("Account review")).toBeNull();
+    });
+
+    // The two targets the design insists stay distinct: the row browses, the link opens the page. The
+    // link keeps `?in=` so opening the page leaves you where you were browsing.
+    it("opens the folder page from the breadcrumb link, not by drilling", async () => {
+      renderList("/?in=customers");
+      const link = await screen.findByRole("link", { name: /open section page/i });
+      expect(link.getAttribute("href")).toBe("/sections/customers?in=customers");
+    });
+
+    it("pops a level from the breadcrumb back button", async () => {
+      renderList("/?in=ambu");
+      fireEvent.click(await screen.findByRole("button", { name: /^back$/i }));
+      expect(await screen.findByText("Account review")).toBeTruthy();
+    });
+
+    // Opening a recording must not throw away where you were browsing. Every link in the panel has to
+    // carry `?in=` across, or the list pops back to the root behind the recording you just opened.
+    it("keeps the drill position when opening a recording", async () => {
+      renderList("/?in=customers");
+      const link = await screen.findByRole("link", { name: /account review/i });
+      expect(link.getAttribute("href")).toBe("/recordings/cust-r?in=customers");
+    });
+
+    it("labels the recordings filed directly in the current folder", async () => {
+      renderList("/?in=customers");
+      expect(await screen.findByText(/directly in customers/i)).toBeTruthy();
+    });
+
+    // Ungrouped stops being a special case: the root is just a level whose direct items happen to be the
+    // recordings with no folder.
+    it("shows ungrouped recordings as the root level's own items", async () => {
+      renderList();
+      expect(await screen.findByText("Loose one")).toBeTruthy();
+      expect(screen.queryByRole("heading", { name: "Ungrouped" })).toBeNull();
+    });
+
+    it("counts recordings underneath a folder, including its sub-folders", async () => {
+      renderList();
+      // Customers holds one directly + one in Ambu.
+      expect(await screen.findByText("2")).toBeTruthy();
+    });
+
+    // "This folder is empty" is about the folder you're in; an empty *library* still gets the
+    // "No recordings yet" prompt, which tells you what to do about it.
+    it("says a drilled-into folder is empty while the library has recordings elsewhere", async () => {
+      (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { id: "empty", name: "Empty Group", parentId: null, position: 0 },
+      ]);
+      (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([rec]); // ungrouped, at the root
+      renderList("/?in=empty");
+      expect(await screen.findByText(/this folder is empty/i)).toBeTruthy();
+    });
+
+    it("keeps the New recordings prompt for an empty library", async () => {
+      (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+      (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+      renderList();
+      expect(await screen.findByText(/no recordings yet/i)).toBeTruthy();
+    });
   });
 
   it("shows the name on the row and moves source · date into the hover title", async () => {
@@ -258,18 +347,22 @@ describe("RecordingsPanel", () => {
     await waitFor(() => expect(api.deleteAudioBulk).toHaveBeenCalledWith(["rec-1"]));
   });
 
-  it("groups recordings under section headings with Ungrouped last", async () => {
+  // Was "groups recordings under section headings with Ungrouped last". The drill-in list has no headings
+  // and no Ungrouped group - folders are rows you push into, and loose recordings are the root's own
+  // items, listed after the folder rows. See the "drill-in" block for the replacement coverage.
+  it("lists folders first, then the recordings filed at this level", async () => {
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "sec-1", name: "Work", parentId: null, position: 0 },
+    ]);
     (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
       { ...rec, id: "a", name: "Grouped one", sectionId: "sec-1", sectionName: "Work" },
       { ...rec, id: "b", name: "Loose one", sectionId: null, sectionName: null },
     ]);
     renderList();
 
-    const work = await screen.findByRole("heading", { name: "Work" });
-    const ungrouped = screen.getByRole("heading", { name: "Ungrouped" });
-    expect(work).toBeTruthy();
-    // Ungrouped heading comes after the Work heading in document order.
-    expect(work.compareDocumentPosition(ungrouped) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const work = await screen.findByRole("button", { name: /open work/i });
+    const loose = screen.getByText("Loose one");
+    expect(work.compareDocumentPosition(loose) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("creates a section from the New section control", async () => {
@@ -284,24 +377,28 @@ describe("RecordingsPanel", () => {
     await waitFor(() => expect(api.createSection).toHaveBeenCalledWith("Therapy", null, undefined));
   });
 
-  it("shows a section heading even when it has no recordings yet", async () => {
+  it("shows a folder row even when it has no recordings yet", async () => {
     (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: "sec-1", name: "Empty Group" }]);
     (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([rec]); // rec is ungrouped
-    renderList();
 
-    expect(await screen.findByRole("heading", { name: "Empty Group" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Ungrouped" })).toBeTruthy();
+    renderList();
+    expect(await screen.findByRole("button", { name: /open empty group/i })).toBeTruthy();
+    // ...and the loose recording still lists at the root alongside it.
+    expect(screen.getByText("Weekly Standup")).toBeTruthy();
   });
 
-  it("deletes a section from its heading menu (recordings fall back to Ungrouped)", async () => {
+  it("deletes a section from its folder-row menu (recordings fall back to Ungrouped)", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     (api.deleteSection as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "sec-1", name: "Work", parentId: null, position: 0 },
+    ]);
     (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
       { ...rec, id: "a", sectionId: "sec-1", sectionName: "Work" },
       { ...rec, id: "b", sectionId: null, sectionName: null },
     ]);
     renderList();
-    await screen.findByRole("heading", { name: "Work" });
+    await screen.findByRole("button", { name: /open work/i });
 
     fireEvent.click(screen.getByRole("button", { name: /section actions/i }));
     fireEvent.click(screen.getByRole("menuitem", { name: /delete/i }));
@@ -414,23 +511,32 @@ describe("RecordingsPanel", () => {
     }
   });
 
-  it("shows each group's recording count in brackets", async () => {
+  it("shows each folder's recording count on its row", async () => {
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "sec-1", name: "Work", parentId: null, position: 0 },
+    ]);
     (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
       { ...rec, id: "a", name: "Grouped", sectionId: "sec-1", sectionName: "Work" },
       { ...rec, id: "b", name: "Loose", sectionId: null, sectionName: null },
     ]);
     renderList();
-    await screen.findByRole("heading", { name: "Work" });
-    // Work (1) and Ungrouped (1).
-    expect(screen.getAllByText("(1)").length).toBeGreaterThanOrEqual(2);
+    const work = await screen.findByRole("button", { name: /open work/i });
+    expect(work.textContent).toContain("1");
   });
 
-  it("selects every recording in a group from its header checkbox", async () => {
+  // Was "selects every recording in a group from its header checkbox". The select-all moved from the
+  // group header to the "directly in ..." label, because that is where a level's own recordings are: at
+  // the root you can no longer see a folder's recordings, so a select-all on the folder row would be
+  // selecting rows that aren't on screen. Drill in and the capability is unchanged.
+  it("selects every recording at the current level from the select-all checkbox", async () => {
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "sec-1", name: "Work", parentId: null, position: 0 },
+    ]);
     (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
       { ...rec, id: "a", name: "Alpha", sectionId: "sec-1", sectionName: "Work" },
       { ...rec, id: "b", name: "Bravo", sectionId: "sec-1", sectionName: "Work" },
     ]);
-    renderList();
+    renderList("/?in=sec-1");
     await screen.findByText("Alpha");
 
     fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
@@ -440,7 +546,7 @@ describe("RecordingsPanel", () => {
     expect((screen.getByRole("checkbox", { name: /select bravo/i }) as HTMLInputElement).checked).toBe(true);
   });
 
-  it("nests a sub-section under its parent section", async () => {
+  it("reaches a sub-section and its recordings by drilling through the parent", async () => {
     (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
       { id: "cust", name: "Customers", parentId: null, position: 0 },
       { id: "acme", name: "Acme", parentId: "cust", position: 0 },
@@ -450,24 +556,32 @@ describe("RecordingsPanel", () => {
     ]);
     renderList();
 
-    expect(await screen.findByRole("heading", { name: "Customers" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Acme" })).toBeTruthy(); // sub-section header
-    expect(screen.getByText("Acme call")).toBeTruthy(); // recording under the sub-section
+    // Root: only the parent folder. The sub-folder and its recording are a level down.
+    fireEvent.click(await screen.findByRole("button", { name: /open customers/i }));
+    // Inside Customers: the sub-folder row, still not its recording.
+    fireEvent.click(await screen.findByRole("button", { name: /open acme/i }));
+    expect(await screen.findByText("Acme call")).toBeTruthy();
   });
 
-  it("offers a New sub-section action on a top-level section only", async () => {
+  it("offers a New sub-section action on a top-level folder only", async () => {
     (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
       { id: "cust", name: "Customers", parentId: null, position: 0 },
       { id: "acme", name: "Acme", parentId: "cust", position: 0 },
     ]);
     (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    renderList();
-    await screen.findByRole("heading", { name: "Customers" });
 
-    // The top-level section's menu offers New sub-section…
-    const menus = screen.getAllByRole("button", { name: /section actions/i });
-    fireEvent.click(menus[0]); // Customers (first heading)
+    // A top-level folder's menu offers New sub-section...
+    const { unmount } = renderList();
+    await screen.findByRole("button", { name: /open customers/i });
+    fireEvent.click(screen.getByRole("button", { name: /section actions/i }));
     expect(screen.getByRole("menuitem", { name: /new sub-section/i })).toBeTruthy();
+    unmount();
+
+    // ...but a sub-folder's does not, since the hierarchy is capped at two levels.
+    renderList("/?in=cust");
+    await screen.findByRole("button", { name: /open acme/i });
+    fireEvent.click(screen.getByRole("button", { name: /section actions/i }));
+    expect(screen.queryByRole("menuitem", { name: /new sub-section/i })).toBeNull();
   });
 
   it("Merge transcripts is enabled only for 2+ and calls the API with the selection", async () => {
@@ -630,12 +744,12 @@ describe("RecordingsPanel", () => {
     ]);
     (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     renderList();
-    await screen.findByRole("heading", { name: "Customers" });
+    await screen.findByRole("button", { name: /open customers/i });
 
-    // Drop the "Loose" section onto the "Customers" header → Loose becomes a sub-section of Customers.
-    // The whole row is the drop target now (no drag handle); the drop bubbles up from the heading.
-    const header = screen.getByRole("heading", { name: "Customers" });
-    fireEvent.drop(header, {
+    // Drop the "Loose" folder onto the "Customers" row → Loose becomes a sub-section of Customers.
+    // The whole row is the drop target (no drag handle).
+    const row = screen.getByRole("button", { name: /open customers/i }).parentElement!;
+    fireEvent.drop(row, {
       dataTransfer: { getData: (type: string) => (type === "application/x-diariz-section" ? "loose" : "") },
     });
     await waitFor(() => expect(api.reorderSections).toHaveBeenCalledWith("cust", ["loose"], undefined));

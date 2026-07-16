@@ -182,8 +182,12 @@ it came from. The per-transcript table gains the same Done checkbox + Completed 
 summary, and actions) or a single segment. Translations are stored as **revisions** over the model's
 original words (so you can always flip back), and exports/email/chat use them.
 - **Organise** recordings into **sections and sub-sections** (one level of nesting) with drag-and-drop
-ordering and cross-group moves; select a whole group at once to build chat context. Browse them as a
-**list or a calendar** (days with recordings are highlighted; click one to see that day's recordings).
+ordering and cross-group moves; select a whole level at once to build chat context. The list **drills in
+one folder at a time** rather than showing every folder expanded: a folder row shows its colour, the count
+of everything inside, and takes you in; a breadcrumb walks you back out (browser back pops a level too),
+and **Open section page** opens the folder's own page - browsing deeper and opening the page are separate
+targets. Recordings with no folder simply sit at the top level. Browse them as a **list or a calendar**
+(days with recordings are highlighted; click one to see that day's recordings).
 - **Rooms.** Every account has a private **Personal Room** (your existing space). Holders of the
 **manage-rooms** permission can also create **Shared Rooms** - workspaces you invite **users and groups** into,
 each member carrying their own **permission grid** (add recordings, manage contents, remove others' recordings,
