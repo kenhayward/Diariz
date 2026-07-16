@@ -104,10 +104,14 @@ server-default) OpenAI-compatible LLM endpoint, with the API key encrypted at re
 box. When a **folder** is open, chat is about that folder — its roll-up **summary, minutes, and aggregated
 actions** are the context, and "Include attachments" pulls in every attachment across the folder and its
 sub-folders.
+- **Search the panel** - a search box sits above the meetings list. Typing takes the list over with results and
+clearing drops you back exactly where you were browsing. It searches the **folder you are in** by default (the
+chip tells you which), and each hit shows the matching words in context, the folder it lives in, and clicking
+it opens the transcript **at that moment**. Folders whose name matches appear too, and take you straight there.
 - **Semantic (RAG) search** (opt-in): configure an embeddings endpoint and transcripts are embedded into a
-pgvector index; chat and the tools then search by **meaning as well as keywords** (hybrid vector + trigram,
-fused with Reciprocal Rank Fusion), so a conceptual question finds the right moment even when the words don't
-match. Without an embeddings endpoint, search stays keyword-only.
+pgvector index; the panel search, chat and the tools then search by **meaning as well as keywords** (hybrid
+vector + trigram, fused with Reciprocal Rank Fusion), so a conceptual question finds the right moment even when
+the words don't match. Without an embeddings endpoint, search stays keyword-only.
 - **Chat tools** (opt-in, per-user): the assistant can call **built-in tools** that search your **whole
 transcript library** — *who said a phrase*, *what a person said about a topic*, *search transcripts*, *when a
 topic was discussed*, *count mentions*, *list recordings* (by date / name / speaker / topic), *list action

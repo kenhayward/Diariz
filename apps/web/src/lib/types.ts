@@ -864,3 +864,46 @@ export const FormulaContextBits = {
   Minutes: 16,
   Actions: 32,
 } as const;
+
+// ---- Search ----
+/// A folder whose name matched the query. Mirrors FolderHitDto.
+export interface FolderHit {
+  id: string;
+  name: string;
+  parentId: string | null;
+  roomId: string;
+  roomName: string;
+  /// Ancestor names, root-first, excluding this folder's own name.
+  breadcrumb: string[];
+  /// Everything underneath, including sub-folders' recordings.
+  recordingCount: number;
+}
+
+/// A recording whose transcript matched, with its best-matching passage. Mirrors RecordingSearchHitDto.
+/// `snippet` is plain text - the client highlights the query itself, so the server never ships markup.
+export interface RecordingSearchHit {
+  recordingId: string;
+  name: string;
+  createdAt: string;
+  durationMs: number;
+  sectionId: string | null;
+  sectionName: string | null;
+  /// The folder path, root-first. Empty when the recording is in no folder.
+  breadcrumb: string[];
+  snippet: string | null;
+  /// Where the snippet sits in the recording, for deep-linking to the moment.
+  snippetStartMs: number;
+  speakerName: string | null;
+  score: number;
+}
+
+export interface SearchResponse {
+  query: string;
+  /// What was actually searched: "folder" | "room" | "everywhere".
+  scope: string;
+  folders: FolderHit[];
+  recordings: RecordingSearchHit[];
+}
+
+/// The scope a search runs in. `folder` is the drill position, `everywhere` spans every room.
+export type SearchScope = "folder" | "everywhere";

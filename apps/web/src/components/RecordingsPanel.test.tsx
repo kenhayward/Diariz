@@ -25,6 +25,7 @@ vi.mock("../lib/api", () => ({
   api: {
     listRecordings: vi.fn(),
     listSections: vi.fn().mockResolvedValue([]),
+    search: vi.fn().mockResolvedValue({ query: "", scope: "folder", folders: [], recordings: [] }),
     createSection: vi.fn(),
     reorderRecordings: vi.fn(),
     retranscribe: vi.fn(),
@@ -238,6 +239,32 @@ describe("RecordingsPanel", () => {
       renderList("/?in=customers");
       const link = await screen.findByRole("link", { name: /account review/i });
       expect(link.getAttribute("href")).toBe("/recordings/cust-r?in=customers");
+    });
+
+    // The takeover: typing replaces the list body, but must not disturb the drill. Because the drill lives
+    // in the URL and the query is component state, clearing restores the exact level with no restore code.
+    it("swaps the list for results while searching, keeps the breadcrumb, and restores on clear", async () => {
+      (api.search as ReturnType<typeof vi.fn>).mockResolvedValue({
+        query: "budget", scope: "folder", folders: [],
+        recordings: [
+          {
+            recordingId: "hit-1", name: "A search hit", createdAt: new Date().toISOString(), durationMs: 0,
+            sectionId: null, sectionName: null, breadcrumb: [],
+            snippet: "the budget", snippetStartMs: 0, speakerName: null, score: 0.5,
+          },
+        ],
+      });
+      renderList("/?in=customers");
+      expect(await screen.findByText("Account review")).toBeTruthy(); // drilled in
+
+      fireEvent.change(screen.getByRole("searchbox"), { target: { value: "budget" } });
+
+      expect(await screen.findByText("A search hit")).toBeTruthy();
+      expect(screen.queryByText("Account review")).toBeNull(); // list body taken over
+      expect(screen.getByRole("link", { name: /open section page/i })).toBeTruthy(); // breadcrumb survives
+
+      fireEvent.click(screen.getByRole("button", { name: /clear search/i }));
+      expect(await screen.findByText("Account review")).toBeTruthy(); // exactly where we were
     });
 
     it("labels the recordings filed directly in the current folder", async () => {

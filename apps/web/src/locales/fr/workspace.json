@@ -540,5 +540,12 @@
   "mtImportMissingFormulas": "Importé, mais cette instance n'a aucune formule nommée : {{names}}. Choisissez-en une avant de générer le compte rendu.",
   "mtSaveError": "Impossible d’enregistrer le modèle.",
   "mtDeleteConfirm": "Supprimer ce modèle ? Les enregistrements qui l’utilisent reviennent au modèle General par défaut.",
-  "mtDeleteError": "Impossible de supprimer le modèle."
+  "mtDeleteError": "Impossible de supprimer le modèle.",
+  "searchPlaceholder": "Rechercher...",
+  "searchScopeIn": "dans {{name}}",
+  "searchScopeEverywhere": "Partout",
+  "searchClear": "Effacer la recherche",
+  "searchNoMatches": "Aucun résultat.",
+  "searchEverywhere": "Rechercher partout ›",
+  "searchCountIn": "{{count}} dans {{name}}"
 }

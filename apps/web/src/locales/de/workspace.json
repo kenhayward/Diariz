@@ -540,5 +540,12 @@
   "mtImportMissingFormulas": "Importiert, aber diese Instanz hat keine Formel namens: {{names}}. Wähle eine, bevor du das Protokoll erzeugst.",
   "mtSaveError": "Vorlage konnte nicht gespeichert werden.",
   "mtDeleteConfirm": "Diese Vorlage löschen? Aufnahmen, die sie verwenden, fallen auf die General-Standardvorlage zurück.",
-  "mtDeleteError": "Vorlage konnte nicht gelöscht werden."
+  "mtDeleteError": "Vorlage konnte nicht gelöscht werden.",
+  "searchPlaceholder": "Suchen...",
+  "searchScopeEverywhere": "Überall",
+  "searchScopeIn": "in {{name}}",
+  "searchClear": "Suche löschen",
+  "searchNoMatches": "Keine Treffer.",
+  "searchEverywhere": "Überall suchen ›",
+  "searchCountIn": "{{count}} in {{name}}"
 }

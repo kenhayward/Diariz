@@ -410,16 +410,20 @@ public sealed class FakeTranscriptSearch : ITranscriptSearch
     public List<SpeakerCount> Counts { get; set; } = new();
     public List<SpeakerDuration> TalkTime { get; set; } = new();
 
-    public (Guid UserId, string Phrase, string? Speaker, IReadOnlyList<Guid>? Scope, int Limit)? LastSearch { get; private set; }
+    public (Guid UserId, string Phrase, string? Speaker, IReadOnlyList<Guid>? Scope, int Limit, Guid? RoomId)? LastSearch { get; private set; }
+    /// <summary>How many times the engine was actually asked. Lets a test assert the caller *short-circuited*
+    /// rather than searching - "returned nothing" and "never searched" are very different bugs.</summary>
+    public int SearchCalls { get; private set; }
     public (Guid UserId, DateTimeOffset? From, DateTimeOffset? To, string? Name, string? Speaker, string? Contains, int Limit)? LastList { get; private set; }
     public (Guid UserId, string Phrase, string? Speaker, IReadOnlyList<Guid>? Scope)? LastCount { get; private set; }
     public (Guid UserId, IReadOnlyList<Guid>? Scope)? LastTalkTime { get; private set; }
 
     public Task<IReadOnlyList<TranscriptHit>> SearchAsync(
         Guid userId, string phrase, string? speakerName,
-        IReadOnlyList<Guid>? recordingScope, int limit, CancellationToken ct = default)
+        IReadOnlyList<Guid>? recordingScope, int limit, Guid? roomId = null, CancellationToken ct = default)
     {
-        LastSearch = (userId, phrase, speakerName, recordingScope, limit);
+        SearchCalls++;
+        LastSearch = (userId, phrase, speakerName, recordingScope, limit, roomId);
         return Task.FromResult<IReadOnlyList<TranscriptHit>>(Hits);
     }
 

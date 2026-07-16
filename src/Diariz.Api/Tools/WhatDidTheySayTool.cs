@@ -38,7 +38,7 @@ public sealed class WhatDidTheySayTool : IChatTool
         if (topic is null) return "Provide a 'topic' to look for.";
         var scope = ToolFormat.ResolveScope(args, ctx);
         var limit = ToolFormat.ReadLimit(args, TranscriptSearch.MaxLimit, TranscriptSearch.MaxLimit);
-        var hits = await _search.SearchAsync(ctx.UserId, topic, speaker, scope, limit, ct);
+        var hits = await _search.SearchAsync(ctx.UserId, topic, speaker, scope, limit, ct: ct);
         return ToolFormat.FormatHits(hits);
     }
 }

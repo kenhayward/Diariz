@@ -35,7 +35,7 @@ public sealed class WhoSaidThatTool : IChatTool
         if (phrase is null) return "Provide a 'phrase' to search for.";
         var scope = ToolFormat.ResolveScope(args, ctx);
         var limit = ToolFormat.ReadLimit(args, TranscriptSearch.MaxLimit, TranscriptSearch.MaxLimit);
-        var hits = await _search.SearchAsync(ctx.UserId, phrase, null, scope, limit, ct);
+        var hits = await _search.SearchAsync(ctx.UserId, phrase, null, scope, limit, ct: ct);
         return ToolFormat.FormatHits(hits);
     }
 }

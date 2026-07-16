@@ -36,7 +36,7 @@ public sealed class SearchTranscriptsTool : IChatTool
         if (query is null) return "Provide a 'query' to search for.";
         var scope = ToolFormat.ResolveScope(args, ctx);
         var limit = ToolFormat.ReadLimit(args, TranscriptSearch.MaxLimit, TranscriptSearch.MaxLimit);
-        var hits = await _search.SearchAsync(ctx.UserId, query, null, scope, limit, ct);
+        var hits = await _search.SearchAsync(ctx.UserId, query, null, scope, limit, ct: ct);
         return ToolFormat.FormatHits(hits);
     }
 }

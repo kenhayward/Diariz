@@ -35,10 +35,12 @@ public interface ITranscriptSearch
 {
     /// <summary>Segments/passages whose text matches <paramref name="phrase"/> lexically and/or semantically,
     /// ranked by fused relevance. Optionally restricted to <paramref name="recordingScope"/> and a
-    /// <paramref name="speakerName"/> (a speaker filter forces the lexical-only path).</summary>
+    /// <paramref name="speakerName"/> (a speaker filter forces the lexical-only path).
+    /// <paramref name="roomId"/> narrows the search to a single room; the default (null) searches every room
+    /// the caller can see, which is the long-standing behaviour the chat/MCP tools rely on.</summary>
     Task<IReadOnlyList<TranscriptHit>> SearchAsync(
         Guid userId, string phrase, string? speakerName,
-        IReadOnlyList<Guid>? recordingScope, int limit, CancellationToken ct = default);
+        IReadOnlyList<Guid>? recordingScope, int limit, Guid? roomId = null, CancellationToken ct = default);
 
     /// <summary>Recordings filtered by optional date range / name / speaker / <paramref name="contains"/> topic.
     /// When <paramref name="contains"/> is set, only recordings whose transcript fuzzy-matches it are returned,
@@ -102,7 +104,7 @@ public sealed class TranscriptSearch : ITranscriptSearch
 
     public async Task<IReadOnlyList<TranscriptHit>> SearchAsync(
         Guid userId, string phrase, string? speakerName,
-        IReadOnlyList<Guid>? recordingScope, int limit, CancellationToken ct = default)
+        IReadOnlyList<Guid>? recordingScope, int limit, Guid? roomId = null, CancellationToken ct = default)
     {
         phrase = (phrase ?? "").Trim();
         if (phrase.Length == 0) return [];
@@ -110,6 +112,11 @@ public sealed class TranscriptSearch : ITranscriptSearch
         var scope = recordingScope is { Count: > 0 } ? recordingScope.Distinct().ToArray() : null;
         var hasSpeaker = !string.IsNullOrWhiteSpace(speakerName);
         var roomIds = (await _rooms.RoomIdsForUserAsync(userId, ct)).ToArray();
+        // Narrow to one room by INTERSECTING the caller's rooms - never by replacing them. A room id the
+        // caller is not a member of therefore yields an empty array (`= ANY('{}')` matches nothing), so this
+        // fails closed with no separate authorization check and cannot be used to reach someone else's room.
+        // Do not "simplify" this to `new[] { roomId.Value }`: that would be an access-control hole.
+        if (roomId is Guid rid) roomIds = roomIds.Where(r => r == rid).ToArray();
 
         var lexical = await LexicalSearchAsync(roomIds, phrase, speakerName, scope, limit, hasSpeaker, ct);
 
