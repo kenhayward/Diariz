@@ -237,6 +237,9 @@ export default function RecordingDetail() {
   // Mini player (the small header progress bar): current time + play/pause state of the shared <audio>.
   const [audioCur, setAudioCur] = useState(0);
   const [audioPaused, setAudioPaused] = useState(true);
+  // True while "Play selected" owns the audio, so its toolbar button can offer Pause. Cleared by anything
+  // that takes the audio away from the selection (the flow player, a seek, the end of the last range).
+  const [selectionPlaying, setSelectionPlaying] = useState(false);
   // Reset segment selection when navigating to a different recording.
   useEffect(() => {
     setSelectMode(false);
@@ -254,6 +257,9 @@ export default function RecordingDetail() {
   const selectTab = (key: SectionKey) => {
     setTab(key);
     localStorage.setItem(DETAIL_SECTION_KEY, key);
+    // Entering a section starts from Play: the selection button shouldn't come back reading Pause for audio
+    // the user started in a previous visit.
+    setSelectionPlaying(false);
   };
 
   // When opened from a chat transcript link (/recordings/:id?t=ms), switch to the Transcript tab (so the
@@ -385,7 +391,7 @@ export default function RecordingDetail() {
     setActionError(null);
     try {
       await api.assignSpeaker(id, label, profileId);
-      qc.invalidateQueries({ queryKey: ["recording", id] });
+      await qc.invalidateQueries({ queryKey: ["recording", id] });
     } catch (e) {
       setActionError(apiErrorMessage(e, t("workspace:errAssignSpeaker")));
     }
@@ -398,8 +404,12 @@ export default function RecordingDetail() {
     setActionError(null);
     try {
       await api.createSpeakerProfile(name, id, label);
-      qc.invalidateQueries({ queryKey: ["recording", id] });
-      qc.invalidateQueries({ queryKey: ["speaker-profiles"] });
+      // Awaited so the typeahead's spinner covers the refetch too - the new person isn't really "there"
+      // until the reloaded lists show them.
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["recording", id] }),
+        qc.invalidateQueries({ queryKey: ["speaker-profiles"] }),
+      ]);
     } catch (e) {
       setActionError(apiErrorMessage(e, t("workspace:errCreatePerson")));
     }
@@ -410,12 +420,21 @@ export default function RecordingDetail() {
     setActionError(null);
     try {
       await api.markMultiSpeaker(id, label);
-      qc.invalidateQueries({ queryKey: ["recording", id] });
+      await qc.invalidateQueries({ queryKey: ["recording", id] });
     } catch (e) {
       setActionError(apiErrorMessage(e, t("workspace:errAssignSpeaker")));
     }
   }
 
+
+  // The transcript rows carry the same assignment typeahead as the Speakers tab, driving the same handlers.
+  const segmentAssign: SegmentAssign = {
+    profiles,
+    infoOf: (label) => rec?.speakers.find((s) => s.label === label),
+    onAssign: assignSpeaker,
+    onCreate: newPerson,
+    onMulti: markMulti,
+  };
 
   async function saveRecordingName(name: string) {
     await api.renameRecording(id, name.trim() || null);
@@ -819,6 +838,7 @@ export default function RecordingDetail() {
   function exitSpeakerMode() {
     speakerRangesRef.current = [];
     setPlayingSpeaker(null);
+    setSelectionPlaying(false);
   }
 
   // Audition a single speaker: play only their (merged) segments, skipping everyone else's audio.
@@ -881,16 +901,25 @@ export default function RecordingDetail() {
       speakerRangesRef.current = ranges;
       el.currentTime = ranges[0].start / 1000;
       await el.play();
+      setSelectionPlaying(true);
     } catch (e) {
       exitSpeakerMode();
       setActionError(apiErrorMessage(e, t("workspace:errPlayAudio")));
     }
   }
 
-  // Mini-player play/pause toggle (loads the audio lazily on first use).
+  /// Stop a selection that is playing (the toolbar's Play selected doubles as Pause while it runs).
+  function pauseSelected() {
+    audioRef.current?.pause();
+    exitSpeakerMode();
+  }
+
+  // Mini-player play/pause toggle (loads the audio lazily on first use). It takes the audio over from a
+  // playing selection, so the toolbar's Pause reverts to Play.
   async function togglePlayPause() {
     const el = audioRef.current;
     if (!el) return;
+    setSelectionPlaying(false);
     try {
       if (!el.src) el.src = await api.audioUrl(id);
       if (el.paused) await el.play();
@@ -1288,10 +1317,11 @@ export default function RecordingDetail() {
       toolbar: rec.current ? (
         <>
           <ToolbarButton
-            label={t("workspace:playSelected")}
-            icon={PlayIcon}
-            onClick={playSelected}
-            disabled={!rec.hasAudio || selectedSegIds.size === 0}
+            label={selectionPlaying ? t("workspace:pauseSelected") : t("workspace:playSelected")}
+            icon={selectionPlaying ? PauseIcon : PlayIcon}
+            active={selectionPlaying}
+            onClick={selectionPlaying ? pauseSelected : playSelected}
+            disabled={!rec.hasAudio || (!selectionPlaying && selectedSegIds.size === 0)}
           />
           <ToolbarButton label={t("workspace:mergeRows")} icon={MergeIcon} onClick={mergeSegments} />
           <ToolbarButton
@@ -1373,6 +1403,7 @@ export default function RecordingDetail() {
                   key={row.seg.id}
                   seg={row.seg}
                   speakerName={multiSpeakerLabels.has(row.seg.speaker) ? t("workspace:multipleSpeakers") : row.seg.speakerDisplay}
+                  assign={segmentAssign}
                   active={row.index === activeIdx}
                   selected={selectedSegIds.has(row.seg.id)}
                   selectMode={selectMode}
@@ -1484,7 +1515,10 @@ export default function RecordingDetail() {
           ref={audioRef}
           onTimeUpdate={onTimeUpdate}
           onPlay={() => setAudioPaused(false)}
-          onPause={() => setAudioPaused(true)}
+          onPause={() => {
+            setAudioPaused(true);
+            setSelectionPlaying(false); // whatever paused it, the toolbar's Pause has nothing left to stop
+          }}
           className="hidden"
         />
       )}
@@ -1943,9 +1977,21 @@ function NoteRow({ note, speaker }: { note: MeetingNote; speaker: string }) {
   );
 }
 
+/// What a transcript row needs to offer the Speakers-tab assignment typeahead in its speaker column, so a
+/// speaker can be named while reading/playing the transcript. Omitted (Speakers tab, where the speaker row
+/// above already carries the typeahead) → the row shows a plain label as before.
+export type SegmentAssign = {
+  profiles: SpeakerProfile[];
+  infoOf: (label: string) => SpeakerInfo | undefined;
+  onAssign: (label: string, profileId: string | null) => void | Promise<void>;
+  onCreate: (label: string, name: string) => void | Promise<void>;
+  onMulti: (label: string) => void | Promise<void>;
+};
+
 function SegmentRow({
   seg,
   speakerName,
+  assign,
   active,
   selected,
   selectMode,
@@ -1955,6 +2001,7 @@ function SegmentRow({
   seg: SegmentDto;
   /// The speaker name to show (localised "Multiple Speakers" overrides the server display).
   speakerName: string;
+  assign?: SegmentAssign;
   /// Currently playing (highlighted by the audio position).
   active: boolean;
   /// Picked in the transcript selection (drives the toolbar's bulk actions).
@@ -1983,7 +2030,26 @@ function SegmentRow({
         <input type="checkbox" checked={selected} readOnly tabIndex={-1} aria-hidden className="mt-1 shrink-0 pointer-events-none" />
       )}
       <span className="w-12 shrink-0 font-mono text-xs text-gray-400 dark:text-gray-500">{fmt(seg.startMs)}</span>
-      <span className="w-28 shrink-0 text-sm font-medium text-gray-700 dark:text-gray-200">{speakerName}</span>
+      {assign ? (
+        // The typeahead is a click target inside a clickable row, so it stops propagation (which would
+        // otherwise select the segment). Closed, it renders as one button - cheap enough per row.
+        <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+          <SpeakerAssign
+            label={seg.speaker}
+            width="w-40"
+            subtle
+            profiles={assign.profiles}
+            displayName={speakerName}
+            profileId={assign.infoOf(seg.speaker)?.profileId ?? null}
+            isMulti={assign.infoOf(seg.speaker)?.isMultiSpeaker ?? false}
+            onAssign={(profileId) => assign.onAssign(seg.speaker, profileId)}
+            onCreate={(name) => assign.onCreate(seg.speaker, name)}
+            onMulti={() => assign.onMulti(seg.speaker)}
+          />
+        </div>
+      ) : (
+        <span className="w-28 shrink-0 text-sm font-medium text-gray-700 dark:text-gray-200">{speakerName}</span>
+      )}
       {/* Auto-expands vertically to show the full (possibly merged) block of text. */}
       <span className="flex-1 whitespace-pre-wrap break-words text-sm dark:text-gray-200">
         {segmentText(seg, showOriginal)}

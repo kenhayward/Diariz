@@ -17,7 +17,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume), system audio, or both mixed together on one device - system audio works in Chromium browsers ("Share audio") and seamlessly in the desktop app; schedule a recording to auto-stop at a set time or after 15/30/60 minutes; or upload files (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A). |
 | **Transcribe & diarize** | Server-side WhisperX (word-level timestamps) with pyannote speaker diarization; speaker-labelled, editable, playable segments you can re-transcribe any time. |
 | **Recording hub** | Every meeting opens on a hub: a summary card (meeting type, key facts, the summary inline) over tiles for transcript, actions, speakers, notes, files, and formulas - each showing its count and a preview, with new-note / add-file / run-formula available in place. The transcript embeds a conversation-flow player showing who spoke when, which doubles as the scrubber. |
-| **Speaker identification** | Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). |
+| **Speaker identification** | Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). Assign a speaker from the Speakers tab or straight from the label on any transcript row, as you read or listen. |
 | **Notes** | Take your own note lines live during a meeting (timestamped, crash-safe); they appear inline in the transcript at the moment you wrote them, steer the minutes, and can be woven into an enhanced-notes section linking to the exact transcript moments. |
 | **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable. A meeting type carries no prompts of its own: it names the **formula** that generates its minutes, plus any others to run alongside (their documents appear in the Formulas tab). Minutes and formulas are the same machinery - any formula you can use can produce your minutes. Templates are built from blocks (H1-H3 headings, literal text, substituted details, model prompts, rules, drag-to-reorder) with JSON import/export. |
 | **Action items** | Auto-extracted with owner and deadline, tracked across every meeting with completion and a person filter, linking back to the transcript. |
@@ -54,6 +54,21 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.145.0",
+    date: "2026-07-16",
+    pr: 318,
+    headline: "Name speakers from the transcript, and stop a playing selection",
+    summary:
+      "Three fixes to the flow of reading a transcript. The speaker label at the start of every transcript row is now the same assignment dropdown as the Speakers tab, so you can name or enrol a person at the moment you hear them speak - no switching tabs and losing your place. **Play selected** turns into **Pause** while it is playing, so a long selection no longer has to run to the end before you get control back. And picking **Create \"...\"** for a new person now shows a spinner while it works, instead of looking like nothing happened for a few seconds.",
+    added: [
+      "The speaker label on each transcript row is a speaker-assignment dropdown - assign, create, mark as multiple speakers, or unassign without leaving the transcript.",
+    ],
+    changed: [
+      "Play selected becomes Pause while the selection is playing; clicking it stops playback. It reverts to Play when the flow player takes over, when the selection finishes, and whenever you re-enter the Transcript.",
+      "The speaker assignment dropdown stays open with a spinner while it saves, so creating a person shows progress until the person and the reloaded lists are actually there.",
+    ],
+  },
   {
     version: "0.144.0",
     date: "2026-07-16",
