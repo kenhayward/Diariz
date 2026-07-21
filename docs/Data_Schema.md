@@ -858,8 +858,9 @@ in `Services/AudioStorage.cs`.
 
 ### Durability / volumes
 
-In Docker Compose, MinIO data persists in the **`miniodata`** named volume (host MinIO ports are remapped to
-**9002** S3 / **9003** console). Companion volumes: **`pgdata`** (Postgres), **`apikeys`** (the Data
+In Docker Compose, MinIO data persists in the **`miniodata`** named volume (the S3 API is remapped to host
+**9002**; the console is not published). Companion volumes: **`pgdata`** (Postgres, reachable from the host
+on **5433** for external tooling), **`apikeys`** (the Data
 Protection keyring that decrypts `UserSettings.SummaryApiKeyEncrypted`, mounted at `/keys`), and
 **`workercache`** (model weights). Back up `pgdata` + `miniodata` together — a transcript row in Postgres is
 meaningless without its audio blob, and vice-versa, and losing `apikeys` makes stored per-user API keys

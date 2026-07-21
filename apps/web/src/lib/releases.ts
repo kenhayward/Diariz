@@ -55,6 +55,18 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.145.1",
+    date: "2026-07-21",
+    pr: 319,
+    headline: "Reach the database from another machine for testing",
+    summary:
+      "An operator change, with nothing to see in the app. The Postgres container previously kept its port to itself - only the API and worker could reach it, from inside the Docker network - so connecting psql or pgAdmin from another machine meant editing the compose file by hand. It now publishes on host port **5433**, chosen so it does not collide with a Postgres already running on the server's usual 5432. Both the port and the address it binds to are settable in `.env` (`POSTGRES_PORT`, `POSTGRES_BIND`), so you can move it or restrict it to the host. Nothing inside the platform uses this - the API and worker still talk to `postgres:5432` over the private network - and no application behaviour changes.",
+    added: [
+      "Postgres is published on host port 5433 for external tools (psql, pgAdmin, test harnesses).",
+      "POSTGRES_PORT and POSTGRES_BIND in .env set the host port and bind address; POSTGRES_BIND=127.0.0.1 keeps the database host-only.",
+    ],
+  },
+  {
     version: "0.145.0",
     date: "2026-07-16",
     pr: 318,

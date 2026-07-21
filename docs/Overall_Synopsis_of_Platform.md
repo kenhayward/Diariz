@@ -46,15 +46,21 @@ Infrastructure (via Docker Compose, project name **`diariz`**):
 |---|---|---|---|
 | API | 8080 | 8080 | 8080 |
 | Web (nginx, proxies `/api` + `/hubs` + `/mcp`) | 80 | **8081** | Vite dev server **5173** (proxies to 8080) |
-| Postgres | 5432 | 5432 | 5432 |
-| Redis | 6379 | 6379 | 6379 |
+| Postgres | 5432 | **5433** | 5432 |
+| Redis | 6379 | not published | 6379 |
 | MinIO S3 API | 9000 | **9002** | — |
 | MinIO console | 9001 | not published | — |
 
-The MinIO S3 API is remapped on the host (9002) to avoid clashing with other local MinIO instances; the web
-console (container 9001) is **not published** - the app never uses it (the API reaches MinIO in-network at
-`minio:9000`), so port-forward or `docker exec` if you need it. In-container, services address each other by
-Compose service name (`minio:9000`, `redis:6379`, `postgres:5432`, `api:8080`).
+Two host ports are deliberately remapped so a Compose stack can sit alongside other local instances of the
+same service: the **MinIO S3 API** (9002) and **Postgres** (**5433**, so it does not clash with a Postgres
+already on the host's 5432). Postgres is published purely for external tooling - psql, pgAdmin, a test
+harness on another machine - and is overridable per host via `POSTGRES_PORT` / `POSTGRES_BIND` in `.env`.
+Note that a published port binds `0.0.0.0` by default **and bypasses the host firewall** (Docker writes its
+own DNAT rules), so an exposed database needs a strong `POSTGRES_PASSWORD`; `POSTGRES_BIND=127.0.0.1`
+restricts it to the host. The MinIO web console (container 9001) is **not published** - the app never uses
+it (the API reaches MinIO in-network at `minio:9000`), so port-forward or `docker exec` if you need it.
+In-container, services address each other by Compose service name (`minio:9000`, `redis:6379`,
+`postgres:5432`, `api:8080`) - publishing a port changes nothing about that private path.
 
 ## Architecture at a glance
 

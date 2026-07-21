@@ -368,10 +368,13 @@ out the `deploy.resources` GPU block and set `WORKER_DEVICE=cpu WORKER_COMPUTE_T
   copy — user feedback on fancy dashes is negative. (Code, comments, and internal docs are unaffected.)
 - **Tests:** harnesses exist for all three stacks — .NET (`tests/Diariz.Api.Tests` + integration),
   web (`vitest`), and the Python worker (`pytest`, see the Worker section). No CI runs them on push yet.
-- **Ports:** API `8080`; web UI (Docker/nginx) `8081`; web dev server `5173`; Postgres `5432`;
-  Redis `6379`; **MinIO S3 API is remapped on the host** — `9002→9000` (avoids clashing with other local MinIO
-  instances). The MinIO console (`9001`) is **not published** — the app never uses it (the API reaches MinIO at
-  `minio:9000`). In-container, services use the compose service names (`minio:9000`, `redis:6379`, `postgres:5432`).
+- **Ports:** API `8080`; web UI (Docker/nginx) `8081`; web dev server `5173`. Two infra ports are **remapped on
+  the host** to avoid clashing with other local instances: **MinIO S3 API** `9002→9000` and **Postgres**
+  `5433→5432` (the latter published only for external tooling — psql/pgAdmin/test harnesses — and overridable
+  via `POSTGRES_PORT`/`POSTGRES_BIND` in `deploy/.env`; a published port bypasses the host firewall, so
+  `POSTGRES_BIND=127.0.0.1` keeps it host-only). Redis and the MinIO console (`9001`) are **not published** —
+  the app never uses them from the host. In-container, services use the compose service names
+  (`minio:9000`, `redis:6379`, `postgres:5432`).
 - **MinIO/S3 quirk:** `AmazonS3Config` uses `ForcePathStyle` + region `us-east-1`. A prior bug
   required removing `DisablePayloadSigning` on `PutObject` for MinIO uploads to work — be cautious
   changing S3 request options in `Services/AudioStorage.cs`.
