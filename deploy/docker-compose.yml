@@ -14,6 +14,13 @@ services:
       POSTGRES_DB: diariz
       POSTGRES_USER: diariz
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-diariz}
+    # Published for external tooling (psql / pgAdmin / test harnesses) on a NON-default host port so it
+    # doesn't clash with a Postgres already running on the host's 5432. The app never uses this - the API
+    # and worker reach Postgres in-network at postgres:5432. Docker publishes to 0.0.0.0 by default AND
+    # bypasses the host firewall (it writes its own DNAT rules), so this really is LAN-reachable: set a
+    # strong POSTGRES_PASSWORD, or set POSTGRES_BIND=127.0.0.1 to keep it host-only and tunnel over SSH.
+    ports:
+      - "${POSTGRES_BIND:-0.0.0.0}:${POSTGRES_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

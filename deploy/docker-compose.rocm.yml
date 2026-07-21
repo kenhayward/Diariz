@@ -24,6 +24,9 @@ services:
       POSTGRES_DB: diariz
       POSTGRES_USER: diariz
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-diariz}
+    # Published for external tooling on a NON-default host port - see docker-compose.yml for the full note.
+    ports:
+      - "${POSTGRES_BIND:-0.0.0.0}:${POSTGRES_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
