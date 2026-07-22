@@ -4,6 +4,7 @@ using Diariz.Api.IntegrationTests.Infrastructure;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain.Entities;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace Diariz.Api.IntegrationTests;
@@ -14,7 +15,7 @@ namespace Diariz.Api.IntegrationTests;
 public class MeetingNotesIntegrationTests(ContainersFixture fx)
 {
     private static MeetingNotesController Controller(Diariz.Domain.DiarizDbContext db, Guid userId) =>
-        new(db) { ControllerContext = Http.Context(userId) };
+        new(db, new RoomScope(db)) { ControllerContext = Http.Context(userId) };
 
     private async Task<(Guid userId, Guid recId)> SeedUserAndRecording()
     {
@@ -105,5 +106,63 @@ public class MeetingNotesIntegrationTests(ContainersFixture fx)
 
         await using var verify = fx.CreateDbContext();
         Assert.False(await verify.MeetingNotes.AnyAsync(n => n.UserId == user));
+    }
+
+    /// <summary>The permission boundary: the owner can read and mutate; a room co-viewer can read (List) but
+    /// is rejected on every mutating route; a stranger with no room in common is rejected on everything -
+    /// all against real Postgres.</summary>
+    [Fact]
+    public async Task PermissionBoundary_OwnerCoViewerAndStranger_OnRealPostgres()
+    {
+        var (owner, rec) = await SeedUserAndRecording();
+        var viewerId = Guid.NewGuid();
+        var strangerId = Guid.NewGuid();
+
+        Guid noteId;
+        await using (var db = fx.CreateDbContext())
+        {
+            var created = (await Controller(db, owner).Create(rec, new CreateMeetingNotesRequest([new("x")]))).Value!;
+            noteId = created[0].Id;
+
+            db.Users.Add(new ApplicationUser { Id = viewerId, UserName = $"{viewerId}@x.test", Email = $"{viewerId}@x.test" });
+            db.Users.Add(new ApplicationUser { Id = strangerId, UserName = $"{strangerId}@x.test", Email = $"{strangerId}@x.test" });
+            await db.SaveChangesAsync();
+
+            var rooms = new RoomScope(db);
+            var roomId = await rooms.CreateSharedRoomAsync($"Engineering {Guid.NewGuid():N}", null, null, null);
+            await rooms.SetMemberAsync(roomId, RoomPrincipalType.User, viewerId, RoomPermission.CreateRecording);
+            await rooms.ShareIntoRoomAsync(rec, roomId, owner, sectionId: null);
+        }
+
+        // Owner: reads and mutates freely.
+        await using (var db = fx.CreateDbContext())
+        {
+            Assert.Single((await Controller(db, owner).List(rec)).Value!);
+            Assert.IsType<NoContentResult>(await Controller(db, owner).Update(rec, noteId, new UpdateMeetingNoteRequest("y")));
+        }
+
+        // Co-viewer: List succeeds, every mutating route 404s.
+        await using (var db = fx.CreateDbContext())
+        {
+            var viewer = Controller(db, viewerId);
+            Assert.Single((await viewer.List(rec)).Value!);
+            Assert.IsType<NotFoundResult>((await viewer.Create(rec, new CreateMeetingNotesRequest([new("z")]))).Result);
+            Assert.IsType<NotFoundResult>(await viewer.Update(rec, noteId, new UpdateMeetingNoteRequest("z")));
+            Assert.IsType<NotFoundResult>(await viewer.Delete(rec, noteId));
+        }
+
+        // Stranger: rejected on everything.
+        await using (var db = fx.CreateDbContext())
+        {
+            var stranger = Controller(db, strangerId);
+            Assert.IsType<NotFoundResult>((await stranger.List(rec)).Result);
+            Assert.IsType<NotFoundResult>((await stranger.Create(rec, new CreateMeetingNotesRequest([new("z")]))).Result);
+            Assert.IsType<NotFoundResult>(await stranger.Update(rec, noteId, new UpdateMeetingNoteRequest("z")));
+            Assert.IsType<NotFoundResult>(await stranger.Delete(rec, noteId));
+        }
+
+        // The note survived the co-viewer/stranger's rejected mutation attempts, still "y" from the owner's edit.
+        await using var verify = fx.CreateDbContext();
+        Assert.Equal("y", (await verify.MeetingNotes.FindAsync(noteId))!.Text);
     }
 }

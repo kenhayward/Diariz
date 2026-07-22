@@ -14,7 +14,12 @@ namespace Diariz.Api.Controllers;
 /// <summary>Screen captures taken during a recording from the desktop client. Each capture stores two
 /// blobs (full PNG plus JPEG thumbnail) and counts toward the owner's storage quota. The content and thumb
 /// endpoints accept the bearer via <c>access_token</c> (see Program.cs) so an &lt;img&gt; tag can load them
-/// directly - an image request cannot carry an Authorization header.</summary>
+/// directly - an image request cannot carry an Authorization header.
+///
+/// Read routes (list/content/thumb) are open to anyone who can read the recording - the owner, or a member
+/// of a room it is placed in (see <see cref="IRoomScope.CanReadRecordingAsync"/>), so a room co-viewer sees
+/// the same captures woven into the transcript as the owner does. Mutating routes (create/delete) stay
+/// strictly owner-only.</summary>
 [ApiController]
 [Authorize]
 [Route("api/recordings/{recordingId:guid}/screenshots")]
@@ -24,20 +29,28 @@ public class ScreenshotsController : ControllerBase
     private readonly IAudioStorage _storage;
     private readonly IStorageUsage _usage;
     private readonly ScreenshotOptions _options;
+    private readonly IRoomScope _rooms;
 
     public ScreenshotsController(
-        DiarizDbContext db, IAudioStorage storage, IStorageUsage usage, IOptions<ScreenshotOptions> options)
+        DiarizDbContext db, IAudioStorage storage, IStorageUsage usage, IOptions<ScreenshotOptions> options,
+        IRoomScope rooms)
     {
         _db = db;
         _storage = storage;
         _usage = usage;
         _options = options.Value;
+        _rooms = rooms;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
+    /// <summary>Owner-only gate for the mutating routes (create/delete).</summary>
     private Task<bool> OwnsAsync(Guid recordingId) =>
         _db.Recordings.AnyAsync(r => r.Id == recordingId && r.UserId == UserId);
+
+    /// <summary>Read gate for list/content/thumb: the owner, or a member of a room the recording is placed
+    /// in.</summary>
+    private Task<bool> CanReadAsync(Guid recordingId) => _rooms.CanReadRecordingAsync(UserId, recordingId);
 
     private static ScreenshotDto ToDto(MeetingScreenshot s) =>
         new(s.Id, s.CapturedAtMs, s.Width, s.Height, s.SizeBytes, s.Ordinal, s.CreatedAt);
@@ -45,7 +58,7 @@ public class ScreenshotsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<ScreenshotDto>>> List(Guid recordingId)
     {
-        if (!await OwnsAsync(recordingId)) return NotFound();
+        if (!await CanReadAsync(recordingId)) return NotFound();
         return await _db.MeetingScreenshots
             .Where(s => s.RecordingId == recordingId)
             .OrderBy(s => s.CapturedAtMs)
@@ -123,7 +136,7 @@ public class ScreenshotsController : ControllerBase
 
     private async Task<IActionResult> StreamAsync(Guid recordingId, Guid screenshotId, bool thumbnail)
     {
-        if (!await OwnsAsync(recordingId)) return NotFound();
+        if (!await CanReadAsync(recordingId)) return NotFound();
         var shot = await _db.MeetingScreenshots
             .FirstOrDefaultAsync(s => s.Id == screenshotId && s.RecordingId == recordingId);
         if (shot is null) return NotFound();

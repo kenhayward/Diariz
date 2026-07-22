@@ -514,7 +514,10 @@ upcoming Google Calendar event**: prep notes are taken on the calendar-event pre
 (`/calendar-event/:id`, CRUD at `/api/calendar/events/{calendarId}/{eventId}/notes`) and are **adopted onto
 the recording automatically** when its calendar link forms (`MeetingNoteAdoption`, called inside the
 `LinkCalendar` chokepoint that both the auto-match save and manual linking use - one-way and additive).
-Recording-anchored lines live on the detail page's **Notes section** (CRUD at `/api/recordings/{id}/notes`);
+Recording-anchored lines live on the detail page's **Notes section** (CRUD at `/api/recordings/{id}/notes`;
+`GET` is gated on `IRoomScope.CanReadRecordingAsync` - the owner, or a member of a room the recording is placed
+in - while create/update/delete stay owner-only, so a room co-viewer reads a recording's notes but cannot
+change them);
 lines can carry a **`CapturedAtMs`** recording-clock timestamp (immutable; stamped lines deep-link to that
 moment in the transcript via the existing `?t=` navigation). **Transcript weave:** a stamped note is rendered
 inline in the **Transcript tab** right after the segment being spoken when it was written (pure
@@ -580,15 +583,16 @@ the web app):
 | `hotkey:load` | hotkey window → main (invoke) | none → returns the stored accelerator (or the default) |
 | `hotkey:save` | hotkey window → main (invoke) | a candidate accelerator → `{ ok, error? }`; only saves one that is both well-formed and provably registrable |
 
-**Endpoints** (`ScreenshotsController`, `api/recordings/{recordingId}/screenshots`, owner-only like every
-recording route):
+**Endpoints** (`ScreenshotsController`, `api/recordings/{recordingId}/screenshots`). Read routes (list/content/
+thumb) are gated on `IRoomScope.CanReadRecordingAsync` - the owner, or a member of a room the recording is
+placed in; create/delete stay owner-only (`Recording.UserId == caller`):
 
-- `GET /` - list a recording's captures, ordered by `CapturedAtMs`.
+- `GET /` - list a recording's captures, ordered by `CapturedAtMs`. **Read gate.**
 - `POST /` - store one capture: multipart `full` (PNG) + `thumb` (JPEG) + `capturedAtMs`/`width`/`height`;
   enforces a combined-size cap (`Screenshots:MaxBytes`, default 20 MB) and the owner's storage quota before
-  writing either blob.
-- `GET /{screenshotId}/content` / `GET /{screenshotId}/thumb` - stream the full image / thumbnail.
-- `DELETE /{screenshotId}` - deletes both blobs before the row, then the row.
+  writing either blob. **Owner-only.**
+- `GET /{screenshotId}/content` / `GET /{screenshotId}/thumb` - stream the full image / thumbnail. **Read gate.**
+- `DELETE /{screenshotId}` - deletes both blobs before the row, then the row. **Owner-only.**
 
 **`?access_token=` image URLs.** An `<img>` tag cannot set an Authorization header, so
 `api.screenshotContentUrl`/`screenshotThumbUrl` append the bearer as an `access_token` query parameter,
@@ -836,7 +840,15 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
     never the main room). `RecordingsController.Get` is visible to the recorder **or** a member of any room the
     recording is placed in, and returns its **recorded-by** + the **rooms** the caller can see (home first); the
     web Overview renders those two lines, and the toolbar/kebab gain **Share to room** / **Remove from room**
-    (Delete hidden outside the home room; its confirm names the shared rooms). **Search now spans rooms:**
+    (Delete hidden outside the home room; its confirm names the shared rooms). That same "recorder-or-room-member"
+    rule is now extracted onto `IRoomScope.CanReadRecordingAsync(userId, recordingId)` - a single, testable "can
+    read this recording" predicate every per-recording sub-resource shares rather than re-deriving its own.
+    **`ScreenshotsController`** (list/content/thumb) and **`MeetingNotesController`** (list) call it for their read
+    routes, so a room co-viewer sees a shared recording's screenshots and notes woven into the transcript exactly
+    as the owner does; every mutating route on both controllers (create/update/delete) stays gated on plain
+    ownership (`Recording.UserId == caller`), unaffected by room membership. The web hides the add/edit/delete
+    controls for a non-owner (`RecordingDetail.tsx` compares `useAuth().id` against the detail's
+    `recordedByUserId`) rather than rendering a control the API would reject. **Search now spans rooms:**
     `TranscriptSearch`'s five arms gate on a `RoomRecordings` semi-join over `RoomScope.RoomIdsForUserAsync`
     (a non-minting read), so chat + MCP tools find recordings shared into any room the caller belongs to. The
     filtered vector scan is **not yet benchmarked** on a large corpus; the denormalise-`RoomId`-onto-chunk

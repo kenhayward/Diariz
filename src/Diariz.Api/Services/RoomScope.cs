@@ -55,6 +55,13 @@ public interface IRoomScope
 
     Task<bool> IsMemberAsync(Guid userId, Guid roomId, CancellationToken ct = default);
 
+    /// <summary>The single "can read" rule for a recording: true when <paramref name="userId"/> owns it, or is
+    /// a member of any room it is placed in (false, including for a recording that doesn't exist). This is the
+    /// rule <see cref="Diariz.Api.Controllers.RecordingsController.Get"/> applies inline (it also needs the
+    /// list of visible rooms for its response) - per-recording sub-resources that only need the yes/no answer
+    /// (screenshots, meeting notes, ...) call this instead of re-deriving it.</summary>
+    Task<bool> CanReadRecordingAsync(Guid userId, Guid recordingId, CancellationToken ct = default);
+
     /// <summary>Throws <see cref="RoomForbiddenException"/> unless the caller holds <paramref name="required"/>.</summary>
     Task RequireAsync(Guid userId, Guid roomId, RoomPermission required, CancellationToken ct = default);
 
@@ -279,6 +286,21 @@ public class RoomScope(DiarizDbContext db) : IRoomScope
         if (room.Kind == RoomKind.Personal) return room.OwnerUserId == userId;
 
         return (await MemberRowsAsync(userId, roomId, ct)).Count > 0;
+    }
+
+    public async Task<bool> CanReadRecordingAsync(Guid userId, Guid recordingId, CancellationToken ct = default)
+    {
+        var ownerId = await db.Recordings
+            .Where(r => r.Id == recordingId)
+            .Select(r => (Guid?)r.UserId)
+            .FirstOrDefaultAsync(ct);
+        if (ownerId is null) return false; // no such recording
+        if (ownerId == userId) return true;
+
+        var placements = await RoomsForRecordingAsync(recordingId, ct);
+        foreach (var p in placements)
+            if (await IsMemberAsync(userId, p.RoomId, ct)) return true;
+        return false;
     }
 
     public async Task RequireAsync(Guid userId, Guid roomId, RoomPermission required, CancellationToken ct = default)

@@ -155,14 +155,16 @@ public class RecordingsController : ControllerBase
 
         if (rec is null) return NotFound();
 
-        // Visible to the recorder, or to a member of any room it is placed in. The rooms line lists only the
-        // rooms the caller can actually see (a member should not learn about rooms they are not in).
+        // Visible to the recorder, or to a member of any room it is placed in - the same "can read" rule
+        // IRoomScope.CanReadRecordingAsync codifies for per-recording sub-resources (screenshots, meeting
+        // notes, ...). The rooms line lists only the rooms the caller can actually see (a member should not
+        // learn about rooms they are not in), so it is still built by hand here.
         var placements = await _rooms.RoomsForRecordingAsync(id);
         var visibleRooms = new List<RecordingRoomDto>();
         foreach (var p in placements)
             if (await _rooms.IsMemberAsync(UserId, p.RoomId))
                 visibleRooms.Add(new RecordingRoomDto(p.RoomId, p.Name, p.Icon, p.Color, p.IsMainRoom));
-        if (rec.UserId != UserId && visibleRooms.Count == 0) return NotFound();
+        if (!await _rooms.CanReadRecordingAsync(UserId, id)) return NotFound();
 
         var recordedByName = await _db.Users
             .Where(u => u.Id == rec.UserId)

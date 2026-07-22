@@ -20,6 +20,12 @@ public class ScreenshotsControllerTests
     private static IFormFile Jpg(int bytes = 16) =>
         new FormFile(new MemoryStream(new byte[bytes]), 0, bytes, "thumb", "shot.jpg") { Headers = new HeaderDictionary() };
 
+    private static ScreenshotsController Build(DiarizDbContext db, Guid userId, IAudioStorage? storage = null) =>
+        new(db, storage ?? new FakeAudioStorage(), new StorageUsage(db), Options.Create(new ScreenshotOptions()), new RoomScope(db))
+        {
+            ControllerContext = Http.Context(userId),
+        };
+
     private static (ScreenshotsController Controller, DiarizDbContext Db, FakeAudioStorage Storage, Guid UserId, Guid RecordingId)
         Setup(long quotaBytes = 1024 * 1024)
     {
@@ -32,7 +38,7 @@ public class ScreenshotsControllerTests
 
         var storage = new FakeAudioStorage();
         var controller = new ScreenshotsController(
-            db, storage, new StorageUsage(db), Options.Create(new ScreenshotOptions()))
+            db, storage, new StorageUsage(db), Options.Create(new ScreenshotOptions()), new RoomScope(db))
         {
             ControllerContext = Http.Context(userId),
         };
@@ -105,7 +111,8 @@ public class ScreenshotsControllerTests
         db.Recordings.Add(new Recording { Id = recordingId, UserId = userId, Title = "t" });
         db.SaveChanges();
         var controller = new ScreenshotsController(
-            db, new FakeAudioStorage(), new StorageUsage(db), Options.Create(new ScreenshotOptions { MaxBytes = 32 }))
+            db, new FakeAudioStorage(), new StorageUsage(db), Options.Create(new ScreenshotOptions { MaxBytes = 32 }),
+            new RoomScope(db))
         {
             ControllerContext = Http.Context(userId),
         };
@@ -138,5 +145,90 @@ public class ScreenshotsControllerTests
         Assert.IsType<NoContentResult>(result);
         Assert.Empty(db.MeetingScreenshots);
         Assert.Empty(storage.Objects);
+    }
+
+    // ---- Room co-viewer read access (screenshots are woven into the transcript, so anyone who can read the
+    // recording via room membership must see its captures too - but only the owner may add/delete). ----
+
+    /// <summary>Shares the setup recording into a fresh room and adds <paramref name="viewerId"/> as a member
+    /// (any permission - membership alone is the read gate), returning the created capture's id.</summary>
+    private static async Task<Guid> ShareWithCoViewerAsync(DiarizDbContext db, Guid ownerId, Guid recordingId, Guid viewerId)
+    {
+        Users.Ensure(db, viewerId);
+        var rooms = new RoomScope(db);
+        var roomId = await rooms.CreateSharedRoomAsync("Engineering", null, null, null);
+        await rooms.SetMemberAsync(roomId, RoomPrincipalType.User, viewerId, RoomPermission.CreateRecording);
+        await rooms.ShareIntoRoomAsync(recordingId, roomId, ownerId, sectionId: null);
+        return roomId;
+    }
+
+    [Fact]
+    public async Task List_ForARoomCoViewer_Succeeds()
+    {
+        var (owner, db, _, ownerId, recordingId) = Setup();
+        await owner.Create(recordingId, Png(), Jpg(), 1_000, 10, 10);
+        var viewerId = Guid.NewGuid();
+        await ShareWithCoViewerAsync(db, ownerId, recordingId, viewerId);
+
+        var list = await Build(db, viewerId).List(recordingId);
+
+        Assert.Single(list.Value!);
+    }
+
+    [Fact]
+    public async Task ContentAndThumb_ForARoomCoViewer_Succeed()
+    {
+        var (owner, db, storage, ownerId, recordingId) = Setup();
+        var created = Assert.IsType<ScreenshotDto>(
+            (await owner.Create(recordingId, Png(), Jpg(), 0, 10, 10)).Value);
+        var viewerId = Guid.NewGuid();
+        await ShareWithCoViewerAsync(db, ownerId, recordingId, viewerId);
+        var viewer = Build(db, viewerId, storage); // same storage instance the owner uploaded into
+
+        Assert.IsType<FileStreamResult>(await viewer.Content(recordingId, created.Id));
+        Assert.IsType<FileStreamResult>(await viewer.Thumb(recordingId, created.Id));
+    }
+
+    [Fact]
+    public async Task Create_ForARoomCoViewer_ReturnsNotFound()
+    {
+        var (owner, db, _, ownerId, recordingId) = Setup();
+        var viewerId = Guid.NewGuid();
+        await ShareWithCoViewerAsync(db, ownerId, recordingId, viewerId);
+
+        var result = await Build(db, viewerId).Create(recordingId, Png(), Jpg(), 0, 10, 10);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Delete_ForARoomCoViewer_ReturnsNotFound()
+    {
+        var (owner, db, _, ownerId, recordingId) = Setup();
+        var created = Assert.IsType<ScreenshotDto>(
+            (await owner.Create(recordingId, Png(), Jpg(), 0, 10, 10)).Value);
+        var viewerId = Guid.NewGuid();
+        await ShareWithCoViewerAsync(db, ownerId, recordingId, viewerId);
+
+        var result = await Build(db, viewerId).Delete(recordingId, created.Id);
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task AllEndpoints_ReturnNotFound_ForAStrangerWithNoRoomInCommon()
+    {
+        var (owner, db, _, ownerId, recordingId) = Setup();
+        var created = Assert.IsType<ScreenshotDto>(
+            (await owner.Create(recordingId, Png(), Jpg(), 0, 10, 10)).Value);
+        var stranger = Guid.NewGuid();
+        Users.Ensure(db, stranger);
+        var strangerController = Build(db, stranger);
+
+        Assert.IsType<NotFoundResult>((await strangerController.List(recordingId)).Result);
+        Assert.IsType<NotFoundResult>(await strangerController.Content(recordingId, created.Id));
+        Assert.IsType<NotFoundResult>(await strangerController.Thumb(recordingId, created.Id));
+        Assert.IsType<NotFoundResult>((await strangerController.Create(recordingId, Png(), Jpg(), 0, 10, 10)).Result);
+        Assert.IsType<NotFoundResult>(await strangerController.Delete(recordingId, created.Id));
     }
 }

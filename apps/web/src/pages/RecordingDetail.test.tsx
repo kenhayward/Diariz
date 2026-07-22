@@ -16,8 +16,13 @@ vi.mock("../lib/signalr", () => ({
   createHub: () => ({ start: () => Promise.resolve(), stop: () => Promise.resolve(), on: () => {} }),
 }));
 
-// The transcript weaves the current user's notes in, so the page reads useAuth for the note "speaker".
-vi.mock("../auth", () => ({ useAuth: () => ({ fullName: "Test User", email: "t@x.test" }) }));
+// The transcript weaves the current user's notes in, so the page reads useAuth for the note "speaker" - and
+// for `id` (the caller's user id), to tell an owner from a room co-viewer. Mutable so a test can render as
+// someone other than the recording's owner.
+const authState: { id: string | null; fullName: string | null; email: string | null } = {
+  id: "u-owner", fullName: "Test User", email: "t@x.test",
+};
+vi.mock("../auth", () => ({ useAuth: () => authState }));
 // RecordingDetail reads the current room to gate Share / Remove-from-room / Delete + the calendar surface;
 // mutable so a test can view the recording inside a shared room.
 const roomState: {
@@ -119,6 +124,7 @@ const base: RecordingDetailType = {
   actionsExtracted: false,
   hasAudio: true,
   calendarLink: null,
+  recordedByUserId: "u-owner",
 } as unknown as RecordingDetailType;
 
 const minutes = { model: "gpt", text: "## Overview\n\nWe met and agreed.", createdAt: base.createdAt, isUserEdited: false };
@@ -159,6 +165,7 @@ const openKebab = () => fireEvent.click(screen.getByRole("button", { name: "More
 describe("RecordingDetail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    authState.id = "u-owner"; // default: viewing as the recording's owner
     roomState.currentRoom = undefined; // default: personal-room context
     localStorage.clear(); // the selected tab persists in localStorage — reset between tests
     (api.retranscribe as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
@@ -765,6 +772,35 @@ describe("RecordingDetail", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /re-create minutes/i }));
     await waitFor(() => expect(api.generateMeetingMinutes).toHaveBeenCalledWith("rec-123"));
+  });
+
+  it("hides the note add box, edit and delete controls for a room co-viewer (not the recording's owner)", async () => {
+    authState.id = "u-viewer"; // rec.recordedByUserId is "u-owner"
+    (api.listNotes as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "n1", text: "Comp expectations", capturedAtMs: 61_000, ordinal: 0, createdAt: base.createdAt },
+    ]);
+    renderPage(base);
+    await loaded();
+    openTab("Notes");
+
+    expect(await screen.findByText("Comp expectations")).toBeTruthy(); // still readable
+    expect(screen.queryByPlaceholderText(/add a note/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /edit note/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /delete note/i })).toBeNull();
+  });
+
+  it("hides the screenshot delete control (but keeps download) for a room co-viewer", async () => {
+    authState.id = "u-viewer"; // rec.recordedByUserId is "u-owner"
+    (api.listScreenshots as ReturnType<typeof vi.fn>).mockResolvedValue(shots);
+    renderPage(base);
+    await loaded();
+    openTab("Notes");
+
+    fireEvent.click(await screen.findByRole("button", { name: /screenshot at 1:05/i }));
+    await screen.findByRole("dialog");
+
+    expect(screen.queryByRole("button", { name: /delete screenshot/i })).toBeNull();
+    expect(screen.getByRole("link", { name: /download screenshot/i })).toBeTruthy();
   });
 
   it("clicking a note stamp switches to the transcript", async () => {

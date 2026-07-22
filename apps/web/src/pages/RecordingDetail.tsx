@@ -226,8 +226,10 @@ export default function RecordingDetail() {
     }
   }
 
-  // The current user's name, shown as the "speaker" on their notes woven into the transcript.
-  const { fullName, email } = useAuth();
+  // The current user's name, shown as the "speaker" on their notes woven into the transcript. `id` (the
+  // caller's user id) tells the recording's owner apart from a room co-viewer, who can read its notes and
+  // screenshots but never add/edit/delete them (the API 404s those routes for anyone but the owner).
+  const { id: myId, fullName, email } = useAuth();
   const audioRef = useRef<HTMLAudioElement>(null);
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
   // Per-speaker audition: the label currently playing and that speaker's (merged) play ranges.
@@ -1019,6 +1021,10 @@ export default function RecordingDetail() {
 
   if (!rec) return <p className="text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>;
 
+  // Only the recording's owner may add/edit/delete its notes and screenshots - a room co-viewer reads the
+  // same woven-in transcript but the mutating routes are owner-only (404 for anyone else).
+  const isOwner = myId != null && rec.recordedByUserId === myId;
+
   const hasTranscript = (rec.current?.segments.length ?? 0) > 0;
   const isSummarizing = rec.status === "Summarizing" || summarizing;
 
@@ -1230,7 +1236,13 @@ export default function RecordingDetail() {
       ),
       content: (
         <div className="px-4 pb-4 space-y-3">
-          <NotesSection notes={notes} onAdd={addNote} onEdit={editNote} onDelete={removeNote} onJump={jumpToMs} />
+          <NotesSection
+            notes={notes}
+            onAdd={isOwner ? addNote : undefined}
+            onEdit={isOwner ? editNote : undefined}
+            onDelete={isOwner ? removeNote : undefined}
+            onJump={jumpToMs}
+          />
           <ScreenshotsSection recordingId={id} shots={shots} onOpen={setOpenShot} />
         </div>
       ),
@@ -1634,7 +1646,7 @@ export default function RecordingDetail() {
           onIndexChange={setOpenShot}
           onClose={() => setOpenShot(null)}
           onJump={jumpToMs}
-          onDelete={removeShot}
+          onDelete={isOwner ? removeShot : undefined}
         />
       )}
 

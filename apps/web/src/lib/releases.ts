@@ -31,7 +31,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Connect Claude (MCP)** | Connect Claude to your own meetings via OAuth (claude.ai) or a personal token (Claude Desktop/Code), including a \`run_formula\` tool to run your saved Formulas. |
 | **Translate** | Translate a whole transcript or a single segment, stored as revisions you can flip back. |
 | **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) to a recording or directly to a folder, edit Markdown attachments in place, save a chat conversation as an attachment with /attach, and optionally feed them to chat. |
-| **Rooms** | A private Personal Room per account plus shareable Rooms: invite users and groups with per-member permissions. Each Shared Room has its **own folder structure** (sections/sub-sections, drag-and-drop, per-room order) and its own List/Calendar/Actions/Tags scoped to it; record or upload files straight into a room (your Personal Room keeps the original), and search + chat over every room you belong to. Your Google Calendar and its linking stay personal. The switcher shows each room's folder and meeting counts (shared ones labelled), ticks the one you are in, and remembers where you were. Manage rooms from the switcher. |
+| **Rooms** | A private Personal Room per account plus shareable Rooms: invite users and groups with per-member permissions. Each Shared Room has its **own folder structure** (sections/sub-sections, drag-and-drop, per-room order) and its own List/Calendar/Actions/Tags scoped to it; record or upload files straight into a room (your Personal Room keeps the original), and search + chat over every room you belong to. A member who can read a shared recording sees its notes and screenshots too - only the owner can add, edit, or delete them. Your Google Calendar and its linking stay personal. The switcher shows each room's folder and meeting counts (shared ones labelled), ticks the one you are in, and remembers where you were. Manage rooms from the switcher. |
 | **Organise & merge** | Sections and sub-sections with drag-and-drop; the meetings list drills in one folder at a time (coloured folder rows with counts, a breadcrumb back out, browser back pops a level) so it stays readable however many recordings you have, with **Open section page** as a separate target from browsing deeper; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
@@ -71,6 +71,7 @@ export const RELEASES: Release[] = [
     ],
     changed: [
       "Screenshot images count toward your storage quota, alongside recordings and attachments",
+      "Room members who can already read a shared recording now see its screenshots and notes too (previously owner-only); only the owner can add, edit, or delete them",
     ],
     fixed: [
       "A note or screenshot between two turns by the same speaker no longer lets those turns merge past it",

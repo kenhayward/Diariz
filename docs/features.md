@@ -231,7 +231,9 @@ and Tags** tabs all work in a Shared Room too, each scoped to the recordings sha
 meeting into that room automatically, while the original stays in your Personal Room - so a shared room can only ever **unshare** a
 recording, never delete it. You can also **Share to room** an existing recording (or **Remove from room**) from
 its toolbar; the recording's Overview shows a **Rooms** line (home room first) and a **Recorded by** line, and
-Delete only appears in the home room (its confirmation names the shared rooms it will also vanish from). **Chat and
+Delete only appears in the home room (its confirmation names the shared rooms it will also vanish from). A room
+member who can read a shared recording sees its **notes and screenshots** too, woven into the transcript exactly
+as the owner sees them - only the owner can add, edit, or delete them. **Chat and
 the Claude (MCP) tools search across every room you belong to**, so a meeting shared into a room you are in turns
 up in your searches. Deleting a user **keeps** their shared recordings and **orphans** their Personal Room rather
 than destroying its history. Voiceprints, saved chats and meeting-type templates are room-scoped too.
