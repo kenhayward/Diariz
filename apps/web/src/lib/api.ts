@@ -49,6 +49,7 @@ import type {
   RoomMemberInput,
   RoomInput,
   SavedChatContext,
+  Screenshot,
   SectionDto,
   SectionDetail,
   SectionNoteItem,
@@ -624,6 +625,44 @@ export const api = {
 
   async deleteEventNote(calendarId: string, eventId: string, noteId: string): Promise<void> {
     await http.delete(`/api/calendar/events/${encodeURIComponent(calendarId)}/${encodeURIComponent(eventId)}/notes/${noteId}`);
+  },
+
+  // ---- Meeting screenshots (captures taken during a recording) ----
+
+  async listScreenshots(recordingId: string): Promise<Screenshot[]> {
+    const { data } = await http.get<Screenshot[]>(`/api/recordings/${recordingId}/screenshots`);
+    return data;
+  },
+
+  /// Upload one capture (full PNG plus JPEG thumbnail) with the clock offset it was taken at.
+  async createScreenshot(
+    recordingId: string,
+    shot: { capturedAtMs: number; width: number; height: number; full: Blob; thumb: Blob },
+  ): Promise<Screenshot> {
+    const form = new FormData();
+    form.append("full", shot.full, "screenshot.png");
+    form.append("thumb", shot.thumb, "screenshot.thumb.jpg");
+    form.append("capturedAtMs", String(shot.capturedAtMs));
+    form.append("width", String(shot.width));
+    form.append("height", String(shot.height));
+    const { data } = await http.post<Screenshot>(`/api/recordings/${recordingId}/screenshots`, form);
+    return data;
+  },
+
+  async deleteScreenshot(recordingId: string, screenshotId: string): Promise<void> {
+    await http.delete(`/api/recordings/${recordingId}/screenshots/${screenshotId}`);
+  },
+
+  /// Self-authenticating image URLs. An <img> request can't set an Authorization header, so the
+  /// bearer rides along as `access_token` - the same mechanism attachmentContentUrl uses.
+  screenshotContentUrl(recordingId: string, screenshotId: string): string {
+    const token = encodeURIComponent(getToken() ?? "");
+    return `${baseURL}/api/recordings/${recordingId}/screenshots/${screenshotId}/content?access_token=${token}`;
+  },
+
+  screenshotThumbUrl(recordingId: string, screenshotId: string): string {
+    const token = encodeURIComponent(getToken() ?? "");
+    return `${baseURL}/api/recordings/${recordingId}/screenshots/${screenshotId}/thumb?access_token=${token}`;
   },
 
   /// Every action across the recordings the user can see (the "Actions" tab). With a roomId it is scoped to
