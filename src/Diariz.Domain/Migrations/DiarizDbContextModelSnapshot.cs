@@ -527,6 +527,55 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("MeetingNotes");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.MeetingScreenshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BlobKey")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<long>("CapturedAtMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Height")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("RecordingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ThumbBlobKey")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Width")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("RecordingId", "CapturedAtMs");
+
+                    b.ToTable("MeetingScreenshots");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.MeetingType", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2045,6 +2094,25 @@ namespace Diariz.Domain.Migrations
                         .WithMany()
                         .HasForeignKey("RecordingId")
                         .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Recording");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.MeetingScreenshot", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.Recording", "Recording")
+                        .WithMany()
+                        .HasForeignKey("RecordingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
                         .WithMany()
