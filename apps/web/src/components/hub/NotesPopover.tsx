@@ -96,32 +96,75 @@ export default function NotesPopover({
           <NotesSection notes={lines} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} />
         </div>
         {onChangeCaptureArea && (
-          <div className="space-y-1 border-t pt-2 dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium dark:text-gray-300">
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              borderTop: "1px solid var(--hub-border)",
+              paddingTop: 8,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontFamily: "system-ui", fontWeight: 600, fontSize: 12, color: "var(--hub-text-2)" }}>
                 {t("screenshots")} ({shots.length})
               </span>
               <button
                 type="button"
                 onClick={onChangeCaptureArea}
-                className="rounded border px-1.5 py-0.5 text-xs hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                style={{
+                  fontFamily: "system-ui",
+                  fontWeight: 500,
+                  fontSize: 12,
+                  padding: "2px 6px",
+                  borderRadius: 6,
+                  border: "1px solid var(--hub-border)",
+                  background: "transparent",
+                  color: "var(--hub-text-2)",
+                  cursor: "pointer",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hub-surface-hover)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
               >
                 {t("screenshotCaptureArea")}
               </button>
             </div>
-            <ul className="flex flex-wrap gap-1">
+            <ul style={{ display: "flex", flexWrap: "wrap", gap: 4, margin: 0, padding: 0, listStyle: "none" }}>
               {previews.map((url, i) => (
-                <li key={url} className="relative">
+                <li key={url} style={{ position: "relative" }}>
                   <img
                     src={url}
                     alt={t("screenshotAlt", { time: fmt(shots[i].capturedAtMs) })}
-                    className="h-14 w-auto rounded border dark:border-gray-700"
+                    style={{
+                      display: "block",
+                      height: 56,
+                      width: "auto",
+                      borderRadius: 6,
+                      border: "1px solid var(--hub-border)",
+                    }}
                   />
                   <button
                     type="button"
                     aria-label={t("screenshotDelete")}
                     onClick={() => onDeleteShot(i)}
-                    className="absolute -right-1 -top-1 rounded-full bg-white px-1 text-xs text-red-600 shadow dark:bg-gray-900 dark:text-red-400"
+                    style={{
+                      position: "absolute",
+                      top: -4,
+                      right: -4,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 16,
+                      height: 16,
+                      borderRadius: "50%",
+                      border: "none",
+                      background: "var(--hub-popover-bg)",
+                      color: "var(--hub-red-text)",
+                      fontSize: 11,
+                      lineHeight: 1,
+                      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.3)",
+                      cursor: "pointer",
+                    }}
                   >
                     ✕
                   </button>
