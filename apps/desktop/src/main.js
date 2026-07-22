@@ -31,6 +31,8 @@ const {
   notificationForCaptureFailure,
   notificationForHotkeyUnavailable,
   acceleratorFromKeyDescriptor,
+  unsupportedKeyCaptureMessage,
+  hotkeyUnavailableSaveError,
 } = require("./screenshotState");
 
 // In dev we load the Vite dev server directly and skip first-run setup.
@@ -754,14 +756,20 @@ function showHotkeyWindow() {
 ipcMain.handle("hotkey:load", () => normalizeAccelerator(store.get("captureHotkey")) ?? DEFAULT_ACCELERATOR);
 
 // The sandboxed hotkey window can't require screenshotState.js itself, so it sends the
-// raw KeyboardEvent descriptor (modifier booleans + e.key) here and gets back the
+// raw KeyboardEvent descriptor (modifier booleans + e.code) here and gets back the
 // accelerator formatted in Electron's own key vocabulary plus whether it currently
-// validates - the DOM-to-Electron key translation (acceleratorFromKeyDescriptor) is the
-// fix for DOM key names (e.g. Space, ArrowUp) not matching Electron's accelerator table.
-// This lets the window show the user exactly what will be saved, and flag an unusable key
-// immediately at capture time rather than only as a save-time error.
+// validates. The descriptor carries `code` (the physical key), not `key` (the possibly
+// shift-produced character) - `key` for Ctrl+Shift+3 is "#" and for Ctrl+Shift+9 is "(" on
+// a US layout, so building from `key` let the shifted character sail through as a
+// plausible-looking accelerator that only failed later at globalShortcut.register.
+// `acceleratorFromKeyDescriptor` also flags a physical key Electron has no accelerator
+// name for at all (`unsupported`) so this returns a clear message immediately instead of
+// letting it through to fail the same way.
 ipcMain.handle("hotkey:describe", (_event, descriptor) => {
-  const accelerator = acceleratorFromKeyDescriptor(descriptor);
+  const { accelerator, unsupported } = acceleratorFromKeyDescriptor(descriptor);
+  if (unsupported) {
+    return { accelerator, valid: false, message: unsupportedKeyCaptureMessage() };
+  }
   return { accelerator, valid: isValidAccelerator(accelerator) };
 });
 
@@ -787,7 +795,7 @@ ipcMain.handle("hotkey:save", (_event, accelerator) => {
       if (previous) store.set("captureHotkey", previous);
       else store.delete("captureHotkey");
       applyShortcut();
-      return { ok: false, error: "That combination is already in use by another application." };
+      return { ok: false, error: hotkeyUnavailableSaveError() };
     }
     return { ok: true };
   }
@@ -802,7 +810,7 @@ ipcMain.handle("hotkey:save", (_event, accelerator) => {
   if (!registrable) {
     if (previous) store.set("captureHotkey", previous);
     else store.delete("captureHotkey");
-    return { ok: false, error: "That combination is already in use by another application." };
+    return { ok: false, error: hotkeyUnavailableSaveError() };
   }
   return { ok: true };
 });
