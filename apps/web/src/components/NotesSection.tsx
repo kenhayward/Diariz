@@ -1,11 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { formatDuration } from "../lib/format";
 import type { MeetingNote } from "../lib/types";
-
-const fmt = (ms: number) => {
-  const s = Math.floor(ms / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-};
 
 /// A dumb list-editor for the user's own note lines: optional mm:ss stamp badge (click -> onJump), inline
 /// edit, delete, and an Enter-to-add box. Persistence is the parent's job (recording- or event-backed).
@@ -65,14 +61,14 @@ export default function NotesSection({
               <button
                 type="button"
                 onClick={() => onJump(n.capturedAtMs!)}
-                aria-label={t("notesJump", { time: fmt(n.capturedAtMs) })}
+                aria-label={t("notesJump", { time: formatDuration(n.capturedAtMs) })}
                 className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[11px] text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
               >
-                {fmt(n.capturedAtMs)}
+                {formatDuration(n.capturedAtMs)}
               </button>
             ) : n.capturedAtMs != null ? (
               <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[11px] text-gray-500 dark:bg-gray-800 dark:text-gray-400">
-                {fmt(n.capturedAtMs)}
+                {formatDuration(n.capturedAtMs)}
               </span>
             ) : null}
             {editing === n.id ? (

@@ -2,13 +2,9 @@ import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import HubPopover from "./HubPopover";
 import NotesSection from "../NotesSection";
+import { formatDuration } from "../../lib/format";
 import type { MeetingNote } from "../../lib/types";
 import type { PendingShot } from "../../lib/pendingScreenshots";
-
-const fmt = (ms: number) => {
-  const s = Math.floor(ms / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-};
 
 const IconClose = () => (
   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true" focusable="false"
@@ -134,7 +130,7 @@ export default function NotesPopover({
                 <li key={url} style={{ position: "relative" }}>
                   <img
                     src={url}
-                    alt={t("screenshotAlt", { time: fmt(shots[i].capturedAtMs) })}
+                    alt={t("screenshotAlt", { time: formatDuration(shots[i].capturedAtMs) })}
                     style={{
                       display: "block",
                       height: 56,

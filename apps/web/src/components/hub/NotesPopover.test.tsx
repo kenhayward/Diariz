@@ -55,6 +55,12 @@ describe("NotesPopover screenshots", () => {
     expect(images[0].getAttribute("alt")).not.toBe(images[1].getAttribute("alt"));
   });
 
+  it("rolls a capture's alt-text stamp over into h:mm:ss past one hour, matching the transcript/strip format", () => {
+    renderPopover({ shots: [shot(3_904_000)], onChangeCaptureArea: () => {} }); // 1h 05m 04s
+
+    expect(screen.getByRole("img").getAttribute("alt")).toContain("1:05:04");
+  });
+
   it("offers changing the capture area", () => {
     const onChangeCaptureArea = vi.fn();
     renderPopover({ shots: [shot(1_000)], onChangeCaptureArea });

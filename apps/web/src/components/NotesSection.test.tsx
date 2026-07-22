@@ -16,6 +16,18 @@ describe("NotesSection", () => {
     expect(onJump).toHaveBeenCalledWith(61_000);
   });
 
+  it("rolls stamps over into h:mm:ss past one hour", () => {
+    render(
+      <NotesSection
+        notes={[note({ capturedAtMs: 3_904_000 })]} // 1h 05m 04s
+        onAdd={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("1:05:04")).toBeTruthy();
+  });
+
   it("shows no stamp for unstamped lines", () => {
     render(<NotesSection notes={[note({ capturedAtMs: null })]} onAdd={vi.fn()} onEdit={vi.fn()} onDelete={vi.fn()} />);
     expect(screen.queryByRole("button", { name: /jump to/i })).toBeNull();
