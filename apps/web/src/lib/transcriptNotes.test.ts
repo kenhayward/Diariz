@@ -43,3 +43,39 @@ describe("weaveTranscript", () => {
     expect(rows.every((r) => r.kind === "segment")).toBe(true);
   });
 });
+
+describe("weaveTranscript with screenshots", () => {
+  const segments = [
+    { startMs: 0, id: "s0" },
+    { startMs: 10_000, id: "s1" },
+  ];
+
+  it("anchors a screenshot after the segment that was being spoken", () => {
+    const rows = weaveTranscript(segments, [], [{ capturedAtMs: 4_000, id: "p0" }]);
+
+    expect(rows.map((r) => r.kind)).toEqual(["segment", "screenshot", "segment"]);
+  });
+
+  it("puts a screenshot taken before the first segment at the very top", () => {
+    const rows = weaveTranscript(segments, [], [{ capturedAtMs: 0, id: "p0" }]);
+
+    expect(rows[0].kind).toBe("segment");
+    expect(rows[1].kind).toBe("screenshot");
+  });
+
+  it("orders notes and screenshots sharing an anchor by capture time", () => {
+    const rows = weaveTranscript(
+      segments,
+      [{ capturedAtMs: 5_000, id: "n0" }],
+      [{ capturedAtMs: 3_000, id: "p0" }],
+    );
+
+    expect(rows.map((r) => r.kind)).toEqual(["segment", "screenshot", "note", "segment"]);
+  });
+
+  it("ignores screenshots when none are passed", () => {
+    const rows = weaveTranscript(segments, [{ capturedAtMs: 1_000, id: "n0" }]);
+
+    expect(rows.map((r) => r.kind)).toEqual(["segment", "note", "segment"]);
+  });
+});
