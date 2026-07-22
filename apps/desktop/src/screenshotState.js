@@ -60,21 +60,44 @@ function notificationForCaptureFailure(reason) {
   return { title: "Diariz", body };
 }
 
+// Raw split on "+", with no filtering - used to detect a stray double separator or a
+// leading/trailing "+" (an empty segment), which `parts()` used to silently discard
+// rather than reject. Now that a real IPC channel (the hotkey window) feeds this raw
+// user input, "Control++9" must not quietly collapse into a valid-looking accelerator.
+function rawSegments(input) {
+  return String(input ?? "").split("+");
+}
+
+/// Native-notification copy for when the configured screenshot hotkey could not be held
+/// (another application already owns that combination). Distinct from
+/// notificationForCaptureFailure, which covers a failed capture attempt rather than a
+/// failed registration; pulled out to a pure model for the same reason every other
+/// user-facing notification in this shell is (notificationFor, notificationForUpdate,
+/// notificationForAuthError) - so its copy gets unit coverage instead of living inline.
+function notificationForHotkeyUnavailable() {
+  return { title: "Diariz", body: "Screenshot hotkey unavailable - already in use by another app" };
+}
+
 function parts(input) {
-  return String(input ?? "")
-    .split("+")
+  return rawSegments(input)
     .map((p) => p.trim())
     .filter((p) => p.length > 0);
 }
 
-/// A usable accelerator is at least one modifier plus exactly one non-modifier key.
-/// Anything else would either fail to register or steal a bare keystroke globally.
+/// A usable accelerator is at least one modifier plus exactly one non-modifier key, with
+/// no empty segments (a stray/duplicate "+") and no modifier repeated. Anything else
+/// would either fail to register, steal a bare keystroke globally, or silently reinterpret
+/// malformed input as something the user didn't actually type.
 function isValidAccelerator(input) {
-  const segs = parts(input);
+  const raw = rawSegments(input);
+  if (raw.some((p) => p.trim().length === 0)) return false;
+  const segs = raw.map((p) => p.trim());
   if (segs.length < 2) return false;
   const mods = segs.filter((s) => MODIFIERS.has(s.toLowerCase()));
   const keys = segs.filter((s) => !MODIFIERS.has(s.toLowerCase()));
-  return mods.length >= 1 && keys.length === 1;
+  if (mods.length < 1 || keys.length !== 1) return false;
+  const modsLower = mods.map((m) => m.toLowerCase());
+  return new Set(modsLower).size === modsLower.length;
 }
 
 /// Canonical form of an accelerator, or null when it isn't usable.
@@ -94,4 +117,5 @@ module.exports = {
   normalizeAccelerator,
   shouldStartCapture,
   notificationForCaptureFailure,
+  notificationForHotkeyUnavailable,
 };

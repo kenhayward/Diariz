@@ -11,6 +11,7 @@ const {
   canCapture,
   shouldStartCapture,
   notificationForCaptureFailure,
+  notificationForHotkeyUnavailable,
 } = require("./screenshotState");
 
 test("the default accelerator is a valid one", () => {
@@ -100,4 +101,41 @@ test("normalizeAccelerator tidies casing and spacing", () => {
 
 test("normalizeAccelerator returns null for an invalid combination", () => {
   assert.equal(normalizeAccelerator("Shift"), null);
+});
+
+// This window is the first place raw user input (over IPC from the renderer) reaches
+// normalizeAccelerator/isValidAccelerator - every prior caller passed an internal
+// constant or a value normalizeAccelerator had already produced. A stray double
+// separator must not silently collapse into a valid-looking accelerator, and a
+// repeated modifier must not validate just because it's present at least once.
+
+test("a stray double separator is rejected rather than silently collapsed", () => {
+  assert.equal(isValidAccelerator("Control++9"), false);
+  assert.equal(normalizeAccelerator("Control++9"), null);
+});
+
+test("a leading separator is rejected", () => {
+  assert.equal(isValidAccelerator("+Control+9"), false);
+  assert.equal(normalizeAccelerator("+Control+9"), null);
+});
+
+test("a trailing separator is rejected", () => {
+  assert.equal(isValidAccelerator("Control+9+"), false);
+  assert.equal(normalizeAccelerator("Control+9+"), null);
+});
+
+test("a duplicated modifier is rejected rather than counted by membership", () => {
+  assert.equal(isValidAccelerator("Shift+Shift+9"), false);
+  assert.equal(normalizeAccelerator("Shift+Shift+9"), null);
+});
+
+test("a duplicated modifier is rejected case-insensitively", () => {
+  assert.equal(isValidAccelerator("shift+Shift+9"), false);
+});
+
+test("notificationForHotkeyUnavailable gives a titled, dash-free message", () => {
+  const note = notificationForHotkeyUnavailable();
+  assert.equal(note.title, "Diariz");
+  assert.ok(note.body.length > 0);
+  assert.ok(!/[–—]/.test(note.body), "no em or en dashes in user-facing text");
 });

@@ -28,6 +28,7 @@ const {
   canCapture,
   shouldStartCapture,
   notificationForCaptureFailure,
+  notificationForHotkeyUnavailable,
 } = require("./screenshotState");
 
 // In dev we load the Vite dev server directly and skip first-run setup.
@@ -39,6 +40,7 @@ const ICON = nativeImage.createFromPath(path.join(__dirname, "..", "build", "ico
 let tray = null;
 let mainWindow = null;
 let setupWindow = null;
+let hotkeyWindow = null;
 let isQuitting = false;
 
 // Tray-driven recording state. `ready` flips true once the web app's recorder has
@@ -714,14 +716,82 @@ function applyShortcut() {
   } else if (!shortcutWarned) {
     shortcutWarned = true;
     if (Notification.isSupported()) {
-      new Notification({
-        title: "Diariz",
-        body: "Screenshot hotkey unavailable - already in use by another app",
-      }).show();
+      new Notification(notificationForHotkeyUnavailable()).show();
     }
   }
   return ok;
 }
+
+// ---- Screenshot hotkey window ----
+
+function showHotkeyWindow() {
+  if (hotkeyWindow) {
+    hotkeyWindow.focus();
+    return;
+  }
+  hotkeyWindow = new BrowserWindow({
+    width: 420,
+    height: 280,
+    resizable: false,
+    title: "Diariz - Screenshot hotkey",
+    icon: ICON,
+    webPreferences: {
+      preload: path.join(__dirname, "hotkey-preload.js"),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+    },
+  });
+  hotkeyWindow.setMenuBarVisibility(false);
+  hotkeyWindow.loadFile(path.join(__dirname, "hotkey.html"));
+  hotkeyWindow.on("closed", () => {
+    hotkeyWindow = null;
+  });
+}
+
+ipcMain.handle("hotkey:load", () => normalizeAccelerator(store.get("captureHotkey")) ?? DEFAULT_ACCELERATOR);
+
+// Save only if the combination is both well-formed AND actually registrable - otherwise
+// the user would set a hotkey that silently never fires because another app owns it.
+// Registrability must be proven regardless of whether a recording is running right now:
+//   - While `canCapture(recorder)` holds, `applyShortcut()` re-registering with the new
+//     stored value IS the live registration - the same predicate that gates the tray menu
+//     and the capture handler itself, so this window's behaviour can't drift from the
+//     shortcut's actual lifecycle.
+//   - While idle, nothing should be held (see applyShortcut's contract), so registrability
+//     is proven with a transient probe register/unregister instead - proving the
+//     combination works without leaving anything registered while idle.
+ipcMain.handle("hotkey:save", (_event, accelerator) => {
+  const normalized = normalizeAccelerator(accelerator);
+  if (!normalized) return { ok: false, error: "Use at least one modifier (Ctrl, Alt, Shift) plus one key." };
+
+  const previous = store.get("captureHotkey");
+  store.set("captureHotkey", normalized);
+
+  if (canCapture(recorder)) {
+    if (!applyShortcut()) {
+      if (previous) store.set("captureHotkey", previous);
+      else store.delete("captureHotkey");
+      applyShortcut();
+      return { ok: false, error: "That combination is already in use by another application." };
+    }
+    return { ok: true };
+  }
+
+  let registrable;
+  try {
+    registrable = globalShortcut.register(normalized, () => {});
+    if (registrable) globalShortcut.unregister(normalized);
+  } catch {
+    registrable = false;
+  }
+  if (!registrable) {
+    if (previous) store.set("captureHotkey", previous);
+    else store.delete("captureHotkey");
+    return { ok: false, error: "That combination is already in use by another application." };
+  }
+  return { ok: true };
+});
 
 // ---- Tray ----
 
@@ -773,6 +843,7 @@ function refreshTray() {
         click: toggleOpenAtLogin,
       },
       { label: "Check for Updates…", click: () => checkForUpdates(true) },
+      { label: "Screenshot Hotkey...", click: () => showHotkeyWindow() },
       { label: "Settings…", click: () => showSetupWindow() },
       { label: "Quit", click: () => { isQuitting = true; app.quit(); } },
     ]),
