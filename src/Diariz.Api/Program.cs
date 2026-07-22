@@ -116,13 +116,15 @@ builder.Services.AddAuthentication(SmartAuthScheme)
             OnMessageReceived = ctx =>
             {
                 // Allow query-string auth for connections that can't set an Authorization header:
-                // the SignalR WS handshake, the <audio> element streaming a recording, and opening an
-                // attachment in a new browser tab.
+                // the SignalR WS handshake, the <audio> element streaming a recording, opening an
+                // attachment in a new browser tab, and an <img> tag loading a meeting screenshot (full
+                // image or thumbnail).
                 var token = ctx.Request.Query["access_token"];
                 var path = ctx.HttpContext.Request.Path;
                 var isRecordingAsset = path.StartsWithSegments("/api/recordings")
                     && (path.Value!.EndsWith("/audio", StringComparison.OrdinalIgnoreCase)
-                        || path.Value!.EndsWith("/content", StringComparison.OrdinalIgnoreCase));
+                        || path.Value!.EndsWith("/content", StringComparison.OrdinalIgnoreCase)
+                        || path.Value!.EndsWith("/thumb", StringComparison.OrdinalIgnoreCase));
                 // Folder-direct attachment files open in a new tab too (same reason as recording /content).
                 var isSectionAsset = path.StartsWithSegments("/api/sections")
                     && path.Value!.EndsWith("/content", StringComparison.OrdinalIgnoreCase);
