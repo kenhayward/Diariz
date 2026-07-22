@@ -63,7 +63,7 @@ import { loadPendingRecording, clearPendingRecording } from "../lib/pendingRecor
 import { savePendingNotes, clearPendingNotes } from "../lib/pendingNotes";
 import { savePendingScreenshots, loadPendingScreenshots, clearPendingScreenshots } from "../lib/pendingScreenshots";
 import type { PendingScreenshots } from "../lib/pendingScreenshots";
-import Recorder from "./Recorder";
+import Recorder, { MAX_LIVE_SCREENSHOTS } from "./Recorder";
 
 // jsdom has no MediaRecorder; a minimal stub lets start() run without capturing real audio.
 class FakeMediaRecorder {
@@ -1049,12 +1049,16 @@ describe("live screenshots", () => {
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
     await screen.findByRole("button", { name: /^stop$/i });
 
-    for (let i = 0; i < 200; i++) {
-      capture({ width: i, height: i });
-      await waitFor(() => expect(savePendingScreenshots).toHaveBeenCalledTimes(i + 1));
-    }
+    // mirrorShots updates the ref and calls savePendingScreenshots synchronously, so all 200 captures can
+    // be fired in one act() and asserted once - no need to await each one individually.
+    act(() => {
+      for (let i = 0; i < MAX_LIVE_SCREENSHOTS; i++) {
+        capture({ width: i, height: i });
+      }
+    });
+    expect(savePendingScreenshots).toHaveBeenCalledTimes(MAX_LIVE_SCREENSHOTS);
     const atCap = (savePendingScreenshots as Mock).mock.calls.at(-1)![0] as PendingScreenshots;
-    expect(atCap.shots).toHaveLength(200);
+    expect(atCap.shots).toHaveLength(MAX_LIVE_SCREENSHOTS);
 
     capture({ width: 999, height: 999 }); // the 201st capture - must be dropped, not mirrored to the stash
     await waitFor(() =>
@@ -1062,8 +1066,8 @@ describe("live screenshots", () => {
         sticky: true,
       }),
     );
-    expect(savePendingScreenshots).toHaveBeenCalledTimes(200); // no 201st write
-  }, 20000);
+    expect(savePendingScreenshots).toHaveBeenCalledTimes(MAX_LIVE_SCREENSHOTS); // no 201st write
+  });
 });
 
 describe("in-app capture button", () => {

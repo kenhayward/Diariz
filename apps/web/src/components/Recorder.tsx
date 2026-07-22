@@ -85,7 +85,7 @@ const AUTOSTOP_KEY = "diariz.recorder.autoStop";
 // still bounding the worst case to a fixed ceiling instead of growing forever. Past the cap, a capture is
 // dropped (not silently discarded - the user is told) rather than restructuring the stash's shape, which
 // is a tracked follow-up (see FIX 10 in the code-review report).
-const MAX_LIVE_SCREENSHOTS = 200;
+export const MAX_LIVE_SCREENSHOTS = 200;
 
 // Whether this environment can capture system audio at all (Chromium/desktop). Drives the System audio
 // checkbox + the "No microphone" dropdown option; false in Firefox/Safari.
