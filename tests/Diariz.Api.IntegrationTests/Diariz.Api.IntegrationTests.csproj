@@ -19,6 +19,10 @@
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.*" />
     <PackageReference Include="Testcontainers.Redis" Version="4.*" />
     <PackageReference Include="Testcontainers.Minio" Version="4.*" />
+    <!-- WebApplicationFactory: boots the real Program.cs pipeline (auth middleware, routing, [Authorize])
+         against the containers above, for HTTP-level allowlist coverage that direct-controller integration
+         tests bypass. -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.*" />
   </ItemGroup>
 
   <ItemGroup>

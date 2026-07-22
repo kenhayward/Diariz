@@ -501,3 +501,8 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok", version = appVersion
 
 app.Run();
 
+// Exposes the top-level-statement entry point to WebApplicationFactory<Program> in
+// Diariz.Api.IntegrationTests (top-level statements otherwise generate an internal Program class that is
+// invisible outside this assembly). Purely a testability marker - no runtime behavior.
+public partial class Program;
+
