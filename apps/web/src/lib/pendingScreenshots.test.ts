@@ -5,6 +5,9 @@ import {
   clearPendingScreenshots,
   type PendingScreenshots,
 } from "./pendingScreenshots";
+import { useNodeBlobForIndexedDb } from "./testNodeBlob";
+
+useNodeBlobForIndexedDb();
 
 const stash = (userId: string): PendingScreenshots => ({
   userId,

@@ -1,14 +1,11 @@
 // jsdom has no IndexedDB implementation; the pendingNotes/pendingScreenshots stashes need one to run
 // under vitest. Registered globally as a side effect, same as i18n below.
+//
+// Note: jsdom/V8's structuredClone strips Blob payloads stashed via IndexedDB down to empty objects
+// (see keyedStash.test.ts / testNodeBlob.ts for the full explanation). That workaround is deliberately
+// NOT applied here - it swaps the global Blob implementation, which breaks jsdom's FormData brand check
+// used by real upload code. It is opted into per-file by the handful of tests that need it.
 import "fake-indexeddb/auto";
-
-// fake-indexeddb clones stored values with the platform's structuredClone, which V8 only knows how to
-// serialize for objects it recognizes as "host objects" - jsdom's own Blob class isn't one, so a Blob
-// stashed via IndexedDB comes back as an empty plain object (no .type, no .arrayBuffer()). Swapping in
-// Node's native Blob (structurally/behaviourally identical for our uses) makes it survive the clone.
-// See https://github.com/jsdom/jsdom/issues/3363 and the fake-indexeddb README's "structuredClone" note.
-import { Blob as NodeBlob } from "node:buffer";
-globalThis.Blob = NodeBlob as unknown as typeof Blob;
 
 // Initialise i18next (side-effect) before any test renders a component that calls useTranslation, and
 // pin the language to English so assertions against English UI text are stable.

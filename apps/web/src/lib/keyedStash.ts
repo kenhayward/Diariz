@@ -13,7 +13,11 @@ export interface KeyedStash<T> {
   clear(key: string): Promise<void>;
 }
 
-function openDb(dbName: string, storeName: string, keyPath: string): Promise<IDBDatabase> | null {
+function openDb<T>(
+  dbName: string,
+  storeName: string,
+  keyPath: keyof T & string,
+): Promise<IDBDatabase> | null {
   if (typeof indexedDB === "undefined") return null;
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(dbName, 1);
@@ -28,8 +32,13 @@ function openDb(dbName: string, storeName: string, keyPath: string): Promise<IDB
 }
 
 /// Builds a stash backed by its own IndexedDB database. `keyPath` is the field on `T` that identifies a
-/// record (each save fully replaces any existing record under that key's value).
-export function createKeyedStash<T>(dbName: string, storeName: string, keyPath: string): KeyedStash<T> {
+/// record (each save fully replaces any existing record under that key's value) - constrained to an
+/// actual key of `T` so a typo'd field name is a compile error rather than a silent no-op at runtime.
+export function createKeyedStash<T>(
+  dbName: string,
+  storeName: string,
+  keyPath: keyof T & string,
+): KeyedStash<T> {
   async function withStore<R>(
     mode: IDBTransactionMode,
     fn: (store: IDBObjectStore) => IDBRequest,

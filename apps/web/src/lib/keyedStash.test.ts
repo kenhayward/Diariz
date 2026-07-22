@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { createKeyedStash } from "./keyedStash";
+import { useNodeBlobForIndexedDb } from "./testNodeBlob";
 
 interface Widget {
   userId: string;
   count: number;
   blob: Blob;
 }
+
+useNodeBlobForIndexedDb();
 
 describe("keyedStash", () => {
   it("returns null when nothing is stashed for the key", async () => {
