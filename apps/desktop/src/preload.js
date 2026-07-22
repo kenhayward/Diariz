@@ -25,6 +25,23 @@ contextBridge.exposeInMainWorld("diariz", {
   /// state: { phase: "idle"|"recording"|"uploading"|"error", source?, error? }.
   reportRecorderState: (state) => ipcRenderer.send("recorder:state", state),
 
+  /// True when this shell can capture screenshots (used to show the capture affordances).
+  canCaptureScreenshot: true,
+
+  /// Ask main to capture now. The first capture of a recording opens the area picker.
+  captureScreenshot: () => ipcRenderer.invoke("screenshot:capture"),
+
+  /// Forget this recording's capture area and re-open the picker.
+  changeCaptureArea: () => ipcRenderer.invoke("screenshot:change-area"),
+
+  /// Subscribe to captured images. `cb` receives { full, thumb, width, height } where
+  /// `full` and `thumb` are ArrayBuffers (PNG and JPEG). Returns an unsubscribe function.
+  onScreenshotCaptured: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on("screenshot:captured", listener);
+    return () => ipcRenderer.removeListener("screenshot:captured", listener);
+  },
+
   /// Start Google sign-in (opens the system browser; the result returns via onAuthToken).
   startGoogleSignIn: () => ipcRenderer.invoke("auth:start-google"),
 

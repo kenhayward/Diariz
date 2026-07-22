@@ -2,12 +2,26 @@
 
 const path = require("node:path");
 const crypto = require("node:crypto");
-const { app, BrowserWindow, Tray, Menu, Notification, desktopCapturer, ipcMain, shell, nativeImage } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  Tray,
+  Menu,
+  Notification,
+  desktopCapturer,
+  ipcMain,
+  shell,
+  nativeImage,
+  screen,
+  globalShortcut,
+} = require("electron");
 const Store = require("electron-store");
 const { normalizeServerUrl } = require("./url");
 const { trayRecorderItems, trayTooltip, notificationFor } = require("./recorderState");
 const { updateRestartItem, notificationForUpdate, isNewerVersion } = require("./updateState");
 const { buildStartUrl, codeFromArgv, notificationForAuthError } = require("./desktopAuth");
+const { cropRectFor, resizeDims } = require("./captureTarget");
+const { trayScreenshotItems, DEFAULT_ACCELERATOR, normalizeAccelerator } = require("./screenshotState");
 
 // In dev we load the Vite dev server directly and skip first-run setup.
 const DEV_URL = process.env.DIARIZ_DEV ? "http://localhost:5173" : null;
@@ -196,7 +210,10 @@ function applyRecorderState(next) {
   const prev = recorder;
   const note = notificationFor(prev, next);
 
-  if (next.phase === "recording" && prev.phase !== "recording") recordingStartedAt = Date.now();
+  if (next.phase === "recording" && prev.phase !== "recording") {
+    recordingStartedAt = Date.now();
+    captureTarget = null; // each recording chooses its own capture area
+  }
   recorder = { ...recorder, phase: next.phase, source: next.source ?? null };
   // The renderer's mount ping carries ready:true; active phases imply readiness too.
   if (typeof next.ready === "boolean") recorder.ready = next.ready;
@@ -213,6 +230,7 @@ function applyRecorderState(next) {
   }
 
   if (next.phase === "error") recorder.phase = "idle";
+  applyShortcut();
   refreshTray();
 }
 
@@ -407,6 +425,153 @@ function toggleOpenAtLogin() {
   refreshTray();
 }
 
+// ---- Screenshot capture ----
+
+const MAX_LONG_EDGE = 2560;
+const THUMB_LONG_EDGE = 320;
+
+// The capture area chosen for the CURRENT recording: { displayId, selection } or null.
+// Cleared on every transition into "recording" so each meeting picks fresh (a stale
+// rectangle from a previous monitor layout would silently capture the wrong thing).
+let captureTarget = null;
+// Open picker windows, keyed by display id, plus the promise waiting on a choice.
+let pickerWindows = new Map();
+let pickerResolve = null;
+
+function closePickers() {
+  for (const win of pickerWindows.values()) if (!win.isDestroyed()) win.destroy();
+  pickerWindows = new Map();
+}
+
+/// Show a full-screen overlay on every display and resolve with the chosen target
+/// ({ displayId, selection }) or null if the user cancelled.
+function openPicker() {
+  closePickers();
+  return new Promise((resolve) => {
+    pickerResolve = resolve;
+    // The overlay's only cancel path is an Escape keydown handler inside its own
+    // window, so one of the overlays MUST hold OS keyboard focus once shown - pick
+    // the display the cursor is already on so Escape reaches it immediately.
+    const cursorDisplay = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    for (const display of screen.getAllDisplays()) {
+      const win = new BrowserWindow({
+        x: display.bounds.x,
+        y: display.bounds.y,
+        width: display.bounds.width,
+        height: display.bounds.height,
+        frame: false,
+        transparent: true,
+        alwaysOnTop: true,
+        skipTaskbar: true,
+        resizable: false,
+        movable: false,
+        fullscreenable: false,
+        focusable: true,
+        webPreferences: {
+          preload: path.join(__dirname, "picker-preload.js"),
+          contextIsolation: true,
+          sandbox: true,
+          nodeIntegration: false,
+        },
+      });
+      win.setAlwaysOnTop(true, "screen-saver");
+      win.loadFile(path.join(__dirname, "picker.html"));
+      pickerWindows.set(display.id, win);
+    }
+    const focusWin = pickerWindows.get(cursorDisplay.id);
+    if (focusWin) focusWin.focus();
+  });
+}
+
+function settlePicker(value) {
+  const resolve = pickerResolve;
+  pickerResolve = null;
+  closePickers();
+  if (resolve) resolve(value);
+}
+
+ipcMain.on("picker:choose", (event, selection) => {
+  let displayId = null;
+  for (const [id, win] of pickerWindows) if (win.webContents === event.sender) displayId = id;
+  if (displayId === null) return settlePicker(null);
+  settlePicker({ displayId, selection });
+});
+
+ipcMain.on("picker:cancel", () => settlePicker(null));
+
+/// Grab the target display at full resolution, crop to the chosen area, and return
+/// { full, thumb, width, height } - or null if the display has gone away.
+async function grab(target) {
+  const display = screen.getAllDisplays().find((d) => d.id === target.displayId);
+  if (!display) return null; // monitor unplugged since the area was chosen
+
+  const scale = display.scaleFactor || 1;
+  const sources = await desktopCapturer.getSources({
+    types: ["screen"],
+    thumbnailSize: {
+      width: Math.round(display.bounds.width * scale),
+      height: Math.round(display.bounds.height * scale),
+    },
+  });
+  const source = sources.find((s) => String(s.display_id) === String(display.id)) ?? sources[0];
+  if (!source) return null;
+
+  let image = source.thumbnail;
+  const crop = cropRectFor(display, target.selection);
+  if (crop && crop.width > 0 && crop.height > 0) image = image.crop(crop);
+
+  const size = image.getSize();
+  const capped = resizeDims(size.width, size.height, MAX_LONG_EDGE);
+  const fullImage = capped.width === size.width ? image : image.resize(capped);
+  const thumbDims = resizeDims(capped.width, capped.height, THUMB_LONG_EDGE);
+  const thumbImage = fullImage.resize(thumbDims);
+
+  return {
+    full: fullImage.toPNG(),
+    thumb: thumbImage.toJPEG(80),
+    width: capped.width,
+    height: capped.height,
+  };
+}
+
+/// Capture now: pick an area first if this recording hasn't chosen one, then grab and
+/// push the bytes to the renderer (which owns the recording clock).
+async function captureScreenshot() {
+  if (recorder.phase !== "recording" || !mainWindow) return;
+  if (!captureTarget) {
+    captureTarget = await openPicker();
+    if (!captureTarget) return; // cancelled - no capture, no error
+  }
+  const shot = await grab(captureTarget);
+  if (!shot) {
+    captureTarget = null; // display gone: re-prompt on the next capture
+    return;
+  }
+  mainWindow.webContents.send("screenshot:captured", shot);
+}
+
+async function changeCaptureArea() {
+  captureTarget = null;
+  if (recorder.phase !== "recording") return;
+  captureTarget = await openPicker();
+}
+
+ipcMain.handle("screenshot:capture", () => captureScreenshot());
+ipcMain.handle("screenshot:change-area", () => changeCaptureArea());
+
+/// The hotkey is registered only while recording, so Diariz never holds a global key
+/// while idle. Returns false when the combination is already taken by other software.
+function applyShortcut() {
+  globalShortcut.unregisterAll();
+  if (recorder.phase !== "recording") return true;
+  const accelerator = normalizeAccelerator(store.get("captureHotkey")) ?? DEFAULT_ACCELERATOR;
+  try {
+    return globalShortcut.register(accelerator, () => void captureScreenshot());
+  } catch {
+    return false;
+  }
+}
+
 // ---- Tray ----
 
 function refreshTray() {
@@ -420,6 +585,15 @@ function refreshTray() {
       else if (item.id === "record-system") startRecording("system");
       else if (item.id === "record-both") startRecording("both");
       else if (item.id === "stop") stopRecording();
+    },
+  }));
+
+  const shotItems = trayScreenshotItems(recorder).map((item) => ({
+    label: item.label,
+    enabled: item.enabled,
+    click: () => {
+      if (item.id === "capture") void captureScreenshot();
+      else if (item.id === "change-area") void changeCaptureArea();
     },
   }));
 
@@ -439,6 +613,7 @@ function refreshTray() {
       ...(restart ? [{ label: restart.label, click: restartToUpdate }] : []),
       { type: "separator" },
       ...recordItems,
+      ...shotItems,
       { type: "separator" },
       {
         label: process.platform === "darwin" ? "Open at Login" : "Start with Windows",
@@ -532,6 +707,9 @@ if (!app.requestSingleInstanceLock()) {
   app.on("before-quit", () => {
     isQuitting = true;
   });
+
+  // The shortcut is scoped to a recording; make sure it never outlives the app either.
+  app.on("will-quit", () => globalShortcut.unregisterAll());
 
   // Tray-resident: keep running when all windows are closed/hidden.
   app.on("window-all-closed", () => {});
