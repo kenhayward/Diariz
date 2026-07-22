@@ -61,11 +61,12 @@ export const RELEASES: Release[] = [
     pr: 321,
     headline: "Hide folder-page edit controls a co-viewer can't use",
     summary:
-      "A shared folder's Notes, Actions, and Attachments tabs aggregate rows from every recording in the folder, some of which belong to other room members. Edit, complete, and delete are owner-only on the server, but the folder page was offering those controls on every row regardless of whose recording it came from, so a co-viewer would click Edit or Delete and get an error. The page now checks each row's recording owner (the same check the recording page already uses) and only shows edit/delete/complete-toggle on rows you own; other rows still show their text, and a shared attachment link still opens (no permission needed to follow a URL), but its own edit/remove controls are hidden too.",
+      "A shared folder's Notes, Actions, and Attachments tabs aggregate rows from every recording in the folder, some of which belong to other room members. Edit, complete, and delete are owner-only on the server, but the folder page was offering those controls on every row regardless of whose recording it came from, so a co-viewer would click Edit or Delete and get an error. The page now checks each row's recording owner (the same check the recording page already uses) and only shows edit/delete/complete-toggle on rows you own; other rows still show their text, and a shared attachment link still opens (no permission needed to follow a URL), but its own edit/remove controls are hidden too. Separately, a folder's own attachments (filed directly against the folder, not aggregated from its recordings) were unusable in any shared room at all - every route required the folder to sit in the caller's personal room, so it 404'd even for whoever created it. That check now follows the same room-membership-plus-ManageContents rule folder create/rename/delete already use, and the Attachments tab's add/rename/remove/edit controls are hidden for a room member who lacks ManageContents (they can still open and read every attachment).",
     fixed: [
       "The folder page's Notes tab no longer offers edit/delete on a row from someone else's recording",
       "The folder page's Actions tab no longer offers edit/delete/complete on a row from someone else's recording",
       "The folder page's Attachments tab no longer offers open/edit/remove on a file-attachment row from someone else's recording",
+      "A folder's own attachments (add/list/rename/remove/edit) now work in a shared room instead of 404ing for everyone; write controls need ManageContents, read stays open to any room member",
     ],
   },
   {

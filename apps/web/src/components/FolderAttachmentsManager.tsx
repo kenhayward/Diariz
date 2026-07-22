@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import { isMarkdownAttachment } from "../lib/attachments";
 import { formatBytes } from "../lib/format";
+import { useRoom } from "../lib/rooms";
+import { RoomPermission } from "../lib/types";
 import type { Attachment } from "../lib/types";
 import MarkdownAttachmentEditModal from "./MarkdownAttachmentEditModal";
 
@@ -25,6 +27,12 @@ export default function FolderAttachmentsManager({
   onChange: () => void;
 }) {
   const { t } = useTranslation("workspace");
+  // Write (add/rename/edit/remove) needs ManageContents in the folder's room; the personal room's owner
+  // holds every permission, so this is a no-op there. Read (Open/Edit-view) stays available to any viewer
+  // who can see the page at all - the same read/write split the server enforces (see
+  // SectionAttachmentsController.ViewableSectionAsync / ManageableSectionAsync).
+  const { can } = useRoom();
+  const canManage = can(RoomPermission.ManageContents);
   const fileInput = useRef<HTMLInputElement>(null);
   const [url, setUrl] = useState("");
   const [urlName, setUrlName] = useState("");
@@ -69,44 +77,46 @@ export default function FolderAttachmentsManager({
         <p className="mb-2 rounded bg-red-50 p-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{error}</p>
       )}
 
-      {/* Add controls */}
-      <div className="mb-3 space-y-2 border-b pb-3 dark:border-gray-700">
-        <div className="flex items-center gap-2">
-          <input ref={fileInput} type="file" multiple hidden onChange={(e) => void onFiles(e.target.files)} />
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => fileInput.current?.click()}
-            className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-          >
-            {t("addFile")}
-          </button>
+      {/* Add controls - write, so ManageContents-gated */}
+      {canManage && (
+        <div className="mb-3 space-y-2 border-b pb-3 dark:border-gray-700">
+          <div className="flex items-center gap-2">
+            <input ref={fileInput} type="file" multiple hidden onChange={(e) => void onFiles(e.target.files)} />
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => fileInput.current?.click()}
+              className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+            >
+              {t("addFile")}
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder={t("urlAddressPlaceholder")}
+              aria-label={t("urlAddressPlaceholder")}
+              className="flex-1 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            />
+            <input
+              value={urlName}
+              onChange={(e) => setUrlName(e.target.value)}
+              placeholder={t("urlNamePlaceholder")}
+              aria-label={t("urlNamePlaceholder")}
+              className="w-40 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            />
+            <button
+              type="button"
+              disabled={busy || !url.trim()}
+              onClick={addUrl}
+              className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+            >
+              {t("addUrl")}
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder={t("urlAddressPlaceholder")}
-            aria-label={t("urlAddressPlaceholder")}
-            className="flex-1 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          />
-          <input
-            value={urlName}
-            onChange={(e) => setUrlName(e.target.value)}
-            placeholder={t("urlNamePlaceholder")}
-            aria-label={t("urlNamePlaceholder")}
-            className="w-40 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          />
-          <button
-            type="button"
-            disabled={busy || !url.trim()}
-            onClick={addUrl}
-            className="rounded border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-          >
-            {t("addUrl")}
-          </button>
-        </div>
-      </div>
+      )}
 
       {attachments.length === 0 ? (
         <p className="py-4 text-sm text-gray-500 dark:text-gray-400">{t("noAttachments")}</p>
@@ -123,38 +133,48 @@ export default function FolderAttachmentsManager({
             {attachments.map((a) => (
               <tr key={a.id} className="border-t dark:border-gray-700">
                 <td className="py-1 pr-2">
-                  <input
-                    defaultValue={a.name}
-                    aria-label={t("attachmentName")}
-                    onBlur={(e) => {
-                      const v = e.target.value.trim();
-                      if (v && v !== a.name) void run(() => api.renameFolderAttachment(sectionId, a.id, v), "errRenameAttachment");
-                    }}
-                    className="w-full rounded border px-2 py-1 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                  />
+                  {canManage ? (
+                    <input
+                      defaultValue={a.name}
+                      aria-label={t("attachmentName")}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim();
+                        if (v && v !== a.name) void run(() => api.renameFolderAttachment(sectionId, a.id, v), "errRenameAttachment");
+                      }}
+                      className="w-full rounded border px-2 py-1 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                    />
+                  ) : (
+                    <span className="dark:text-gray-100">{a.name}</span>
+                  )}
                 </td>
                 <td className="py-1 pr-2 whitespace-nowrap text-gray-500 dark:text-gray-400">
                   {a.kind === "Url" ? t("attachmentUrlType") : formatBytes(a.sizeBytes)}
                 </td>
                 <td className="py-1 text-right whitespace-nowrap">
+                  {/* Markdown's in-app editor allows Save (write, ManageContents-gated) - a non-manager falls
+                      back to a plain Open, which streams the raw content over the read-gated GET route. */}
                   <button
                     type="button"
-                    onClick={() => (isMarkdownAttachment(a) ? setEditing(a) : openFolderAttachment(sectionId, a))}
+                    onClick={() =>
+                      canManage && isMarkdownAttachment(a) ? setEditing(a) : openFolderAttachment(sectionId, a)
+                    }
                     className="mr-2 text-blue-600 hover:underline dark:text-blue-400"
                   >
-                    {isMarkdownAttachment(a) ? t("editAttachment") : t("openAttachment")}
+                    {canManage && isMarkdownAttachment(a) ? t("editAttachment") : t("openAttachment")}
                   </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => {
-                      if (window.confirm(t("confirmDeleteAttachment")))
-                        void run(() => api.deleteFolderAttachment(sectionId, a.id), "errDeleteAttachment");
-                    }}
-                    className="text-red-600 hover:underline dark:text-red-400"
-                  >
-                    {t("removeAttachment")}
-                  </button>
+                  {canManage && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        if (window.confirm(t("confirmDeleteAttachment")))
+                          void run(() => api.deleteFolderAttachment(sectionId, a.id), "errDeleteAttachment");
+                      }}
+                      className="text-red-600 hover:underline dark:text-red-400"
+                    >
+                      {t("removeAttachment")}
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

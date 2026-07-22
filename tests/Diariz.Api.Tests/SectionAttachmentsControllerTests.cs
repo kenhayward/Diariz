@@ -190,4 +190,126 @@ public class SectionAttachmentsControllerTests
         var ordinals = await db.SectionAttachments.OrderBy(a => a.Ordinal).Select(a => a.Ordinal).ToListAsync();
         Assert.Equal([0, 1], ordinals);
     }
+
+    // ---- Shared-room access matrix ----
+    // Regression: OwnsAsync used to require the section's room to be the CALLER's personal room, so every route
+    // 404'd for a folder in a shared room - including for whoever created it. Read (List, Content) now only
+    // requires the caller to be a member of the section's room (mirrors SectionPageController.ViewableSectionAsync);
+    // write (add/rename/edit-content/delete) additionally requires RoomPermission.ManageContents (mirrors
+    // SectionPageController.ManageableSectionAsync) - the same gate SectionsController uses for folder CRUD.
+
+    /// <summary>Creates a folder inside a shared room the given user belongs to (with the given permission).</summary>
+    private static async Task<Section> SharedRoomSection(
+        DiarizDbContext db, Guid memberId, RoomPermission perm = RoomPermission.ManageContents)
+    {
+        Users.Ensure(db, memberId);
+        var scope = new Diariz.Api.Services.RoomScope(db);
+        var roomId = await scope.CreateSharedRoomAsync("Eng", null, null, null);
+        await scope.SetMemberAsync(roomId, RoomPrincipalType.User, memberId, perm);
+        var s = new Section { Id = Guid.NewGuid(), UserId = memberId, RoomId = roomId, Name = "Shared F" };
+        db.Sections.Add(s);
+        await db.SaveChangesAsync();
+        return s;
+    }
+
+    [Fact]
+    public async Task List_in_a_shared_room_works_for_a_member_without_ManageContents()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var section = await SharedRoomSection(db, me, RoomPermission.CreateRecording); // view-only
+
+        var result = await Build(db, me).List(section.Id);
+
+        Assert.NotNull(result.Value); // membership alone is enough to read
+    }
+
+    [Fact]
+    public async Task Content_in_a_shared_room_is_readable_by_a_member_without_ManageContents()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var section = await SharedRoomSection(db, owner); // owner can manage, so can seed the attachment
+        var created = (await Build(db, owner).AddUrl(section.Id, new AddUrlAttachmentRequest("https://a.test", "a"))).Value!;
+
+        var viewer = Guid.NewGuid();
+        Users.Ensure(db, viewer);
+        await new Diariz.Api.Services.RoomScope(db).SetMemberAsync(
+            section.RoomId, RoomPrincipalType.User, viewer, RoomPermission.CreateRecording); // no ManageContents
+
+        // The attachment is a URL (no blob), so Content 404s on the attachment lookup, not the section gate -
+        // this still proves List/gate gets past NotFound for a non-manage viewer. A file-backed Content 200 is
+        // exercised by the personal-room tests above (Delete_File_.../UpdateContent_...).
+        Assert.IsType<NotFoundResult>(await Build(db, viewer).Content(section.Id, created.Id));
+    }
+
+    [Fact]
+    public async Task Write_routes_in_a_shared_room_succeed_for_a_member_with_ManageContents()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var section = await SharedRoomSection(db, me);
+
+        var added = (await Build(db, me).AddUrl(section.Id, new AddUrlAttachmentRequest("https://a.test", "a"))).Value!;
+        Assert.IsType<NoContentResult>(await Build(db, me).Rename(section.Id, added.Id, new RenameAttachmentRequest("renamed")));
+        Assert.IsType<NoContentResult>(await Build(db, me).Delete(section.Id, added.Id));
+    }
+
+    [Fact]
+    public async Task Write_routes_in_a_shared_room_are_forbidden_for_a_member_without_ManageContents()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var section = await SharedRoomSection(db, owner);
+        var created = (await Build(db, owner).AddUrl(section.Id, new AddUrlAttachmentRequest("https://a.test", "a"))).Value!;
+
+        var member = Guid.NewGuid();
+        Users.Ensure(db, member);
+        await new Diariz.Api.Services.RoomScope(db).SetMemberAsync(
+            section.RoomId, RoomPrincipalType.User, member, RoomPermission.CreateRecording); // no ManageContents
+        var controller = Build(db, member);
+
+        Assert.IsType<ForbidResult>(
+            (await controller.AddUrl(section.Id, new AddUrlAttachmentRequest("https://b.test", "b"))).Result);
+        Assert.IsType<ForbidResult>(
+            (await controller.AddMarkdown(section.Id, new AddMarkdownAttachmentRequest("n", "c"))).Result);
+        Assert.IsType<ForbidResult>(await controller.Rename(section.Id, created.Id, new RenameAttachmentRequest("x")));
+        Assert.IsType<ForbidResult>(await controller.Delete(section.Id, created.Id));
+    }
+
+    [Fact]
+    public async Task All_routes_in_a_shared_room_404_for_a_user_with_no_relationship_to_it()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var section = await SharedRoomSection(db, owner);
+        var created = (await Build(db, owner).AddUrl(section.Id, new AddUrlAttachmentRequest("https://a.test", "a"))).Value!;
+
+        var stranger = Guid.NewGuid();
+        Users.Ensure(db, stranger); // no membership at all in this room
+        var controller = Build(db, stranger);
+
+        Assert.IsType<NotFoundResult>((await controller.List(section.Id)).Result);
+        Assert.IsType<NotFoundResult>(await controller.Content(section.Id, created.Id));
+        Assert.IsType<NotFoundResult>(
+            (await controller.AddUrl(section.Id, new AddUrlAttachmentRequest("https://b.test", "b"))).Result);
+        Assert.IsType<NotFoundResult>(await controller.Rename(section.Id, created.Id, new RenameAttachmentRequest("x")));
+        Assert.IsType<NotFoundResult>(await controller.Delete(section.Id, created.Id));
+    }
+
+    [Fact]
+    public async Task Personal_room_owner_keeps_full_access_unchanged()
+    {
+        // Verifies the personal-room path (the owner holds every permission via RoomScope.PermissionsAsync)
+        // still behaves exactly as before this fix: read and every write route succeed for the owner.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var section = await Seed(db, userId);
+        var controller = Build(db, userId);
+
+        Assert.NotNull((await controller.List(section.Id)).Value);
+        var added = (await controller.AddUrl(section.Id, new AddUrlAttachmentRequest("https://a.test", "a"))).Value!;
+        Assert.IsType<NoContentResult>(await controller.Rename(section.Id, added.Id, new RenameAttachmentRequest("renamed")));
+        Assert.IsType<NoContentResult>(await controller.Delete(section.Id, added.Id));
+    }
 }

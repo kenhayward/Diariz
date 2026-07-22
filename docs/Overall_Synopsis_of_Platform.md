@@ -262,6 +262,12 @@ default timeout for its header phase and relies on client-disconnect for cancell
   `{userId}/section-attachments/…`, counted toward the quota by `StorageUsage`). The folder page's Attachments
   tab shows these as a second, **addable** list above the transcript-aggregated one. Files open in a new tab
   via `/content` (the `access_token` query-auth allowance in `Program.cs` was extended to `/api/sections/…/content`).
+  Access is gated by room permission, not by the folder owner: **read** (list, content) only requires the
+  caller to be a **member** of the section's room; **write** (add/rename/edit-content/delete) additionally
+  requires **`ManageContents`** - the same gate `SectionsController` uses for folder create/rename/delete, and
+  the personal room's owner holds every permission so that path is unaffected. The web hides the add/rename/
+  remove controls (and the Markdown in-app editor's Save) for a member who lacks `ManageContents`, leaving
+  Open available to any member.
 - **Semantic search index (RAG, M3 - backend).** A **fifth Redis stream `embedding-jobs`** (group `embedders`)
   with its own `EmbeddingWorker` (singleton `BackgroundService`) builds the semantic-search index. Per job,
   `EmbeddingProcessor` windows the transcription's segments into overlapping passages (`TranscriptChunker`,
