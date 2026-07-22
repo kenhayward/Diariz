@@ -305,6 +305,14 @@ public class AttachmentOptions
     public long MaxBytes { get; set; } = 50L * 1024 * 1024; // 50 MB
 }
 
+/// <summary>Limits for meeting screenshots (bound from the "Screenshots" section).</summary>
+public class ScreenshotOptions
+{
+    public const string Section = "Screenshots";
+    /// <summary>Maximum combined bytes (full image plus thumbnail) for one capture.</summary>
+    public long MaxBytes { get; set; } = 20L * 1024 * 1024;
+}
+
 /// <summary>Automatic speaker identification (matching new recordings' speakers to enrolled voiceprints).</summary>
 public class IdentificationOptions
 {

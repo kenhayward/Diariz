@@ -281,6 +281,18 @@ export interface MeetingNote {
   createdAt: string;
 }
 
+/// A screen capture taken during a recording (desktop client only). capturedAtMs is the offset into the
+/// recording clock; immutable after capture. Image bytes come from the content and thumb URLs.
+export interface Screenshot {
+  id: string;
+  capturedAtMs: number;
+  width: number;
+  height: number;
+  sizeBytes: number;
+  ordinal: number;
+  createdAt: string;
+}
+
 /// An action across the whole library (the "Actions" tab), carrying its source recording so the row can
 /// link back to that transcript.
 export interface ActionListItem {

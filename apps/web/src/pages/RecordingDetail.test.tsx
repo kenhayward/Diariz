@@ -16,8 +16,13 @@ vi.mock("../lib/signalr", () => ({
   createHub: () => ({ start: () => Promise.resolve(), stop: () => Promise.resolve(), on: () => {} }),
 }));
 
-// The transcript weaves the current user's notes in, so the page reads useAuth for the note "speaker".
-vi.mock("../auth", () => ({ useAuth: () => ({ fullName: "Test User", email: "t@x.test" }) }));
+// The transcript weaves the current user's notes in, so the page reads useAuth for the note "speaker" - and
+// for `id` (the caller's user id), to tell an owner from a room co-viewer. Mutable so a test can render as
+// someone other than the recording's owner.
+const authState: { id: string | null; fullName: string | null; email: string | null } = {
+  id: "u-owner", fullName: "Test User", email: "t@x.test",
+};
+vi.mock("../auth", () => ({ useAuth: () => authState }));
 // RecordingDetail reads the current room to gate Share / Remove-from-room / Delete + the calendar surface;
 // mutable so a test can view the recording inside a shared room.
 const roomState: {
@@ -68,6 +73,10 @@ vi.mock("../lib/api", () => ({
     createNotes: vi.fn(),
     updateNote: vi.fn(),
     deleteNote: vi.fn(),
+    listScreenshots: vi.fn().mockResolvedValue([]),
+    deleteScreenshot: vi.fn(),
+    screenshotThumbUrl: (rec: string, sid: string) => `/api/recordings/${rec}/screenshots/${sid}/thumb`,
+    screenshotContentUrl: (rec: string, sid: string) => `/api/recordings/${rec}/screenshots/${sid}/content`,
     listFormulaResults: vi.fn().mockResolvedValue([]),
     listFormulas: vi.fn().mockResolvedValue([]),
     runFormula: vi.fn(),
@@ -115,6 +124,7 @@ const base: RecordingDetailType = {
   actionsExtracted: false,
   hasAudio: true,
   calendarLink: null,
+  recordedByUserId: "u-owner",
 } as unknown as RecordingDetailType;
 
 const minutes = { model: "gpt", text: "## Overview\n\nWe met and agreed.", createdAt: base.createdAt, isUserEdited: false };
@@ -155,6 +165,7 @@ const openKebab = () => fireEvent.click(screen.getByRole("button", { name: "More
 describe("RecordingDetail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    authState.id = "u-owner"; // default: viewing as the recording's owner
     roomState.currentRoom = undefined; // default: personal-room context
     localStorage.clear(); // the selected tab persists in localStorage — reset between tests
     (api.retranscribe as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
@@ -162,6 +173,7 @@ describe("RecordingDetail", () => {
     (api.audioUrl as ReturnType<typeof vi.fn>).mockResolvedValue("blob:audio");
     (api.listSpeakerProfiles as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (api.listAttachments as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (api.listScreenshots as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (api.generateMeetingMinutes as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.emailMeetingMinutes as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   });
@@ -762,6 +774,35 @@ describe("RecordingDetail", () => {
     await waitFor(() => expect(api.generateMeetingMinutes).toHaveBeenCalledWith("rec-123"));
   });
 
+  it("hides the note add box, edit and delete controls for a room co-viewer (not the recording's owner)", async () => {
+    authState.id = "u-viewer"; // rec.recordedByUserId is "u-owner"
+    (api.listNotes as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "n1", text: "Comp expectations", capturedAtMs: 61_000, ordinal: 0, createdAt: base.createdAt },
+    ]);
+    renderPage(base);
+    await loaded();
+    openTab("Notes");
+
+    expect(await screen.findByText("Comp expectations")).toBeTruthy(); // still readable
+    expect(screen.queryByPlaceholderText(/add a note/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /edit note/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /delete note/i })).toBeNull();
+  });
+
+  it("hides the screenshot delete control (but keeps download) for a room co-viewer", async () => {
+    authState.id = "u-viewer"; // rec.recordedByUserId is "u-owner"
+    (api.listScreenshots as ReturnType<typeof vi.fn>).mockResolvedValue(shots);
+    renderPage(base);
+    await loaded();
+    openTab("Notes");
+
+    fireEvent.click(await screen.findByRole("button", { name: /screenshot at 1:05/i }));
+    await screen.findByRole("dialog");
+
+    expect(screen.queryByRole("button", { name: /delete screenshot/i })).toBeNull();
+    expect(screen.getByRole("link", { name: /download screenshot/i })).toBeTruthy();
+  });
+
   it("clicking a note stamp switches to the transcript", async () => {
     (api.listNotes as ReturnType<typeof vi.fn>).mockResolvedValue([
       { id: "n1", text: "Comp expectations", capturedAtMs: 61_000, ordinal: 0, createdAt: base.createdAt },
@@ -772,6 +813,97 @@ describe("RecordingDetail", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /jump to 1:01/i }));
     await waitFor(() => expect(screen.getByRole("navigation", { name: "Transcript" })).toBeTruthy());
+  });
+
+  const shots = [
+    { id: "shot-1", capturedAtMs: 65_000, width: 10, height: 10, sizeBytes: 1, ordinal: 0, createdAt: base.createdAt },
+    { id: "shot-2", capturedAtMs: 125_000, width: 10, height: 10, sizeBytes: 1, ordinal: 1, createdAt: base.createdAt },
+  ];
+
+  it("weaves screenshots into the transcript, opening the modal at the clicked capture's own index", async () => {
+    (api.listScreenshots as ReturnType<typeof vi.fn>).mockResolvedValue(shots);
+    renderPage(base);
+    await loaded();
+    openTab("Transcript");
+
+    // Both captures are woven in after the recording's one segment, in capture-time order. The inline
+    // transcript thumbnail's alt text now shares the same unpadded m:ss format as the Notes-tab strip and
+    // the modal (this page used to have its own zero-padded fmt just for screenshots).
+    const thumb1 = await screen.findByRole("button", { name: /screenshot at 1:05/i });
+    const thumb2 = screen.getByRole("button", { name: /screenshot at 2:05/i });
+
+    // Click the second thumbnail first - the modal must open on shot-2, not always the first capture.
+    fireEvent.click(thumb2);
+    expect((await screen.findByRole("dialog")).textContent).toMatch(/2:05/);
+    fireEvent.click(screen.getByRole("button", { name: /close screenshot/i }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    fireEvent.click(thumb1);
+    expect((await screen.findByRole("dialog")).textContent).toMatch(/1:05/);
+  });
+
+  it("shows a visible timestamp on the screenshot's transcript row, like NoteRow's", async () => {
+    (api.listScreenshots as ReturnType<typeof vi.fn>).mockResolvedValue(shots);
+    renderPage(base);
+    await loaded();
+    openTab("Transcript");
+
+    const thumb1 = await screen.findByRole("button", { name: /screenshot at 1:05/i });
+    const thumb2 = screen.getByRole("button", { name: /screenshot at 2:05/i });
+
+    // A plain leading timestamp (matching NoteRow's own), not just present in the thumbnail's aria-label/alt.
+    expect(within(thumb1.closest("li")!).getByText("1:05")).toBeTruthy();
+    expect(within(thumb2.closest("li")!).getByText("2:05")).toBeTruthy();
+  });
+
+  it("shows the Screenshots section collapsed in the Notes tab, with the capture count", async () => {
+    (api.listScreenshots as ReturnType<typeof vi.fn>).mockResolvedValue(shots);
+    renderPage(base);
+    await loaded();
+    openTab("Notes");
+
+    const group = await screen.findByRole("group");
+    expect(group.getAttribute("open")).toBeNull();
+    expect(within(group).getByText(/Screenshots \(2\)/)).toBeTruthy();
+  });
+
+  it("hides the Screenshots section entirely on the Notes tab when there are no captures", async () => {
+    renderPage(base); // beforeEach leaves listScreenshots resolving []
+    await loaded();
+    openTab("Notes");
+
+    await screen.findByPlaceholderText(/add a note/i); // wait for the tab's content to settle before asserting absence
+    expect(screen.queryByText(/Screenshots \(/)).toBeNull();
+  });
+
+  it("opens a capture from the Notes tab strip and jumps playback to its moment", async () => {
+    (api.listScreenshots as ReturnType<typeof vi.fn>).mockResolvedValue(shots);
+    renderPage(base);
+    await loaded();
+    openTab("Notes");
+
+    fireEvent.click(await screen.findByRole("button", { name: /screenshot at 2:05/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /jump to 2:05/i }));
+
+    // jumpToMs is the page's existing note-jump helper - it switches to the Transcript section.
+    await waitFor(() => expect(screen.getByRole("navigation", { name: "Transcript" })).toBeTruthy());
+  });
+
+  it("deletes the open capture, closing the modal and refreshing the list", async () => {
+    (api.listScreenshots as ReturnType<typeof vi.fn>).mockResolvedValue(shots);
+    (api.deleteScreenshot as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    renderPage(base);
+    await loaded();
+    openTab("Notes");
+
+    fireEvent.click(await screen.findByRole("button", { name: /screenshot at 1:05/i }));
+    await screen.findByRole("dialog");
+    fireEvent.click(screen.getByRole("button", { name: /delete screenshot/i }));
+
+    await waitFor(() => expect(api.deleteScreenshot).toHaveBeenCalledWith("rec-123", "shot-1"));
+    // Deleting always closes rather than re-clamping the index, so no stale index can point past the
+    // end of the (post-delete) array while the refetch is still in flight.
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   // Bug: the minutes picker spinner only cleared on a SignalR "completed" push. If that event is missed

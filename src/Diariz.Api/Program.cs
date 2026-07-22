@@ -40,6 +40,7 @@ builder.Services.Configure<AppPublicOptions>(builder.Configuration.GetSection(Ap
 builder.Services.Configure<IdentificationOptions>(builder.Configuration.GetSection(IdentificationOptions.Section));
 builder.Services.Configure<UploadOptions>(builder.Configuration.GetSection(UploadOptions.Section));
 builder.Services.Configure<AttachmentOptions>(builder.Configuration.GetSection(AttachmentOptions.Section));
+builder.Services.Configure<ScreenshotOptions>(builder.Configuration.GetSection(ScreenshotOptions.Section));
 builder.Services.Configure<McpOptions>(builder.Configuration.GetSection(McpOptions.Section));
 builder.Services.Configure<McpOAuthOptions>(builder.Configuration.GetSection(McpOAuthOptions.Section));
 
@@ -115,13 +116,15 @@ builder.Services.AddAuthentication(SmartAuthScheme)
             OnMessageReceived = ctx =>
             {
                 // Allow query-string auth for connections that can't set an Authorization header:
-                // the SignalR WS handshake, the <audio> element streaming a recording, and opening an
-                // attachment in a new browser tab.
+                // the SignalR WS handshake, the <audio> element streaming a recording, opening an
+                // attachment in a new browser tab, and an <img> tag loading a meeting screenshot (full
+                // image or thumbnail).
                 var token = ctx.Request.Query["access_token"];
                 var path = ctx.HttpContext.Request.Path;
                 var isRecordingAsset = path.StartsWithSegments("/api/recordings")
                     && (path.Value!.EndsWith("/audio", StringComparison.OrdinalIgnoreCase)
-                        || path.Value!.EndsWith("/content", StringComparison.OrdinalIgnoreCase));
+                        || path.Value!.EndsWith("/content", StringComparison.OrdinalIgnoreCase)
+                        || path.Value!.EndsWith("/thumb", StringComparison.OrdinalIgnoreCase));
                 // Folder-direct attachment files open in a new tab too (same reason as recording /content).
                 var isSectionAsset = path.StartsWithSegments("/api/sections")
                     && path.Value!.EndsWith("/content", StringComparison.OrdinalIgnoreCase);
@@ -497,4 +500,9 @@ var appVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Ver
 app.MapGet("/health", () => Results.Ok(new { status = "ok", version = appVersion }));
 
 app.Run();
+
+// Exposes the top-level-statement entry point to WebApplicationFactory<Program> in
+// Diariz.Api.IntegrationTests (top-level statements otherwise generate an internal Program class that is
+// invisible outside this assembly). Purely a testability marker - no runtime behavior.
+public partial class Program;
 

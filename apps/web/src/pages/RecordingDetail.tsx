@@ -31,6 +31,8 @@ import MeetingMinutesEditModal from "../components/MeetingMinutesEditModal";
 import EmailMinutesModal from "../components/EmailMinutesModal";
 import MeetingTypeMenu from "../components/MeetingTypeMenu";
 import NotesSection from "../components/NotesSection";
+import ScreenshotModal from "../components/ScreenshotModal";
+import ScreenshotsSection from "../components/ScreenshotsSection";
 import ManageMeetingTypesModal from "../components/ManageMeetingTypesModal";
 import { renderMarkdown } from "../lib/markdown";
 import { weaveTranscript } from "../lib/transcriptNotes";
@@ -139,6 +141,21 @@ export default function RecordingDetail() {
     queryFn: () => api.listNotes(id),
     enabled: Boolean(id),
   });
+  // Captures taken during the recording; woven into the transcript and listed in the Notes tab.
+  const { data: shots = [], refetch: refetchShots } = useQuery({
+    queryKey: ["screenshots", id],
+    queryFn: () => api.listScreenshots(id),
+    enabled: Boolean(id),
+  });
+  const [openShot, setOpenShot] = useState<number | null>(null);
+
+  async function removeShot(shotId: string) {
+    await api.deleteScreenshot(id, shotId);
+    // Close rather than re-clamp: the modal's own index (post-delete) would otherwise dangle past the
+    // end of the array for the instant between the delete and the refetch resolving.
+    setOpenShot(null);
+    await refetchShots();
+  }
   // The user's native language drives the "Translate to …" action; resolve its display name.
   const { data: profile } = useQuery({ queryKey: ["user-profile"], queryFn: api.getProfile });
   const { data: languages = [] } = useQuery({ queryKey: ["languages"], queryFn: fetchLanguages });
@@ -209,8 +226,10 @@ export default function RecordingDetail() {
     }
   }
 
-  // The current user's name, shown as the "speaker" on their notes woven into the transcript.
-  const { fullName, email } = useAuth();
+  // The current user's name, shown as the "speaker" on their notes woven into the transcript. `id` (the
+  // caller's user id) tells the recording's owner apart from a room co-viewer, who can read its notes and
+  // screenshots but never add/edit/delete them (the API 404s those routes for anyone but the owner).
+  const { id: myId, fullName, email } = useAuth();
   const audioRef = useRef<HTMLAudioElement>(null);
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
   // Per-speaker audition: the label currently playing and that speaker's (merged) play ranges.
@@ -1002,6 +1021,10 @@ export default function RecordingDetail() {
 
   if (!rec) return <p className="text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>;
 
+  // Only the recording's owner may add/edit/delete its notes and screenshots - a room co-viewer reads the
+  // same woven-in transcript but the mutating routes are owner-only (404 for anyone else).
+  const isOwner = myId != null && rec.recordedByUserId === myId;
+
   const hasTranscript = (rec.current?.segments.length ?? 0) > 0;
   const isSummarizing = rec.status === "Summarizing" || summarizing;
 
@@ -1212,8 +1235,15 @@ export default function RecordingDetail() {
         />
       ),
       content: (
-        <div className="px-4 pb-4">
-          <NotesSection notes={notes} onAdd={addNote} onEdit={editNote} onDelete={removeNote} onJump={jumpToMs} />
+        <div className="px-4 pb-4 space-y-3">
+          <NotesSection
+            notes={notes}
+            onAdd={isOwner ? addNote : undefined}
+            onEdit={isOwner ? editNote : undefined}
+            onDelete={isOwner ? removeNote : undefined}
+            onJump={jumpToMs}
+          />
+          <ScreenshotsSection recordingId={id} shots={shots} onOpen={setOpenShot} />
         </div>
       ),
     },
@@ -1395,9 +1425,32 @@ export default function RecordingDetail() {
             </div>
           )}
           <ul className="space-y-2">
-            {weaveTranscript(rec.current.segments, notes).map((row) =>
+            {weaveTranscript(rec.current.segments, notes, shots).map((row) =>
               row.kind === "note" ? (
                 <NoteRow key={`note-${row.note.id}`} note={row.note} speaker={fullName ?? email ?? t("workspace:noteSpeakerYou")} />
+              ) : row.kind === "screenshot" ? (
+                <li key={`shot-${row.shot.id}`} className="flex items-start gap-2">
+                  {/* Same leading-timestamp treatment as NoteRow's - a plain (non-interactive) stamp, since
+                      NoteRow's own timestamp isn't a click-to-jump control either. Uses the same time format
+                      as the Notes-tab strip and the modal (formatDuration), not this page's own `fmt`, so the
+                      same capture reads identically everywhere it appears. */}
+                  <span className="w-12 shrink-0 font-mono text-xs text-gray-400 dark:text-gray-500">
+                    {formatDuration(row.shot.capturedAtMs)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setOpenShot(shots.findIndex((s) => s.id === row.shot.id))}
+                    className="overflow-hidden rounded border hover:ring-2 hover:ring-blue-400 dark:border-gray-700"
+                    aria-label={t("workspace:screenshotAlt", { time: formatDuration(row.shot.capturedAtMs) })}
+                  >
+                    <img
+                      src={api.screenshotThumbUrl(id, row.shot.id)}
+                      alt={t("workspace:screenshotAlt", { time: formatDuration(row.shot.capturedAtMs) })}
+                      loading="lazy"
+                      className="h-24 w-auto"
+                    />
+                  </button>
+                </li>
               ) : (
                 <SegmentRow
                   key={row.seg.id}
@@ -1583,6 +1636,18 @@ export default function RecordingDetail() {
       {peopleOpen && <PreferencesModal initialTab="voiceprints" onClose={() => setPeopleOpen(false)} />}
       {linkModalOpen && (
         <CalendarLinkModal recordingId={id} aroundDate={rec.createdAt} onClose={() => setLinkModalOpen(false)} />
+      )}
+
+      {openShot !== null && (
+        <ScreenshotModal
+          recordingId={id}
+          shots={shots}
+          index={openShot}
+          onIndexChange={setOpenShot}
+          onClose={() => setOpenShot(null)}
+          onJump={jumpToMs}
+          onDelete={isOwner ? removeShot : undefined}
+        />
       )}
 
       {formulaRunOpen && (

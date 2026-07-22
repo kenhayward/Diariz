@@ -59,6 +59,17 @@ stays separate. Your notes then **shape the meeting minutes** (every section wei
 and a template can include an **Enhanced notes** section where each line is expanded from the transcript — your
 words kept verbatim in bold beside the expansion, with links to the exact transcript moments (anything the meeting
 never covered is kept and marked "not discussed", never silently dropped).
+- **Meeting screenshots (desktop app).** Capture the screen while a recording is running, from a
+**configurable global hotkey**, the **tray menu**, or a button in the app itself. The first capture of each
+meeting opens a picker overlay so you choose **a whole monitor or a dragged rectangle**; every later capture
+in that meeting reuses the same area, and a "Change capture area" action lets you redefine it mid-meeting
+(the choice resets for the next recording). A live strip of this meeting's captures sits in the recorder's
+notes popover, so a mis-aimed capture area is caught during the meeting instead of after it. Each capture
+stores a full PNG (long edge capped at 2560 pixels) plus a JPEG thumbnail, and both count toward your
+storage quota. Screenshots then appear **inline in the transcript** at the moment they were taken, as
+thumbnails that open a full-size viewer with previous/next, jump-to-moment, download, and delete; the Notes
+tab also lists a recording's captures in a collapsed Screenshots section. A note or screenshot sitting
+between two turns by the same speaker now stops those turns from being merged past it.
 - **User API access.** When a Platform Administrator enables it (Settings → Integration), generate a **personal
 API token** (Preferences → Developers) to call the Diariz **REST API** directly as yourself — acting with your own
 permissions, over your own data — and browse a **built-in API reference** (Developers → View API reference).
@@ -220,7 +231,9 @@ and Tags** tabs all work in a Shared Room too, each scoped to the recordings sha
 meeting into that room automatically, while the original stays in your Personal Room - so a shared room can only ever **unshare** a
 recording, never delete it. You can also **Share to room** an existing recording (or **Remove from room**) from
 its toolbar; the recording's Overview shows a **Rooms** line (home room first) and a **Recorded by** line, and
-Delete only appears in the home room (its confirmation names the shared rooms it will also vanish from). **Chat and
+Delete only appears in the home room (its confirmation names the shared rooms it will also vanish from). A room
+member who can read a shared recording sees its **notes and screenshots** too, woven into the transcript exactly
+as the owner sees them - only the owner can add, edit, or delete them. **Chat and
 the Claude (MCP) tools search across every room you belong to**, so a meeting shared into a room you are in turns
 up in your searches. Deleting a user **keeps** their shared recordings and **orphans** their Personal Room rather
 than destroying its history. Voiceprints, saved chats and meeting-type templates are room-scoped too.

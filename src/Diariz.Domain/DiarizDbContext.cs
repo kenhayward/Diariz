@@ -26,6 +26,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<RecordingAction> RecordingActions => Set<RecordingAction>();
     public DbSet<RecordingTag> RecordingTags => Set<RecordingTag>();
     public DbSet<MeetingNote> MeetingNotes => Set<MeetingNote>();
+    public DbSet<MeetingScreenshot> MeetingScreenshots => Set<MeetingScreenshot>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<RecordingCalendarLink> RecordingCalendarLinks => Set<RecordingCalendarLink>();
     public DbSet<IcsCalendarSource> IcsCalendarSources => Set<IcsCalendarSource>();
@@ -261,6 +262,18 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.Property(n => n.EventId).HasMaxLength(256);
             e.HasOne(n => n.User).WithMany().HasForeignKey(n => n.UserId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(n => n.Recording).WithMany().HasForeignKey(n => n.RecordingId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Screen captures taken during a recording from the desktop client. Provider-agnostic (plain
+        // columns, no vector/jsonb), so it stays outside the Npgsql guard and loads under the in-memory
+        // test provider too.
+        builder.Entity<MeetingScreenshot>(e =>
+        {
+            e.HasIndex(s => new { s.RecordingId, s.CapturedAtMs });
+            e.Property(s => s.BlobKey).HasMaxLength(512);
+            e.Property(s => s.ThumbBlobKey).HasMaxLength(512);
+            e.HasOne(s => s.User).WithMany().HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(s => s.Recording).WithMany().HasForeignKey(s => s.RecordingId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<Attachment>(e =>

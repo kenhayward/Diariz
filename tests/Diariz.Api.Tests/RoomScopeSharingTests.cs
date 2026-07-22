@@ -82,4 +82,55 @@ public class RoomScopeSharingTests
         Assert.Contains(personalRoomId, ids);
         Assert.Contains(sharedId, ids);
     }
+
+    /// <summary>The single "can read" rule shared by RecordingsController.Get and every per-recording
+    /// sub-resource (screenshots, meeting notes, ...): the owner, or any member of a room the recording is
+    /// placed in, may read it - everyone else may not.</summary>
+    [Fact]
+    public async Task CanReadRecording_TrueForOwner()
+    {
+        using var db = TestDb.Create();
+        var scope = new RoomScope(db);
+        var (userId, recId, _) = await SeedRecording(db);
+
+        Assert.True(await scope.CanReadRecordingAsync(userId, recId));
+    }
+
+    [Fact]
+    public async Task CanReadRecording_TrueForARoomCoViewer()
+    {
+        using var db = TestDb.Create();
+        var scope = new RoomScope(db);
+        var (owner, recId, _) = await SeedRecording(db);
+        var coViewer = Guid.NewGuid();
+        Users.Ensure(db, coViewer);
+        var sharedId = await scope.CreateSharedRoomAsync("Engineering", null, null, null);
+        await scope.SetMemberAsync(sharedId, RoomPrincipalType.User, coViewer, RoomPermission.CreateRecording);
+        await scope.ShareIntoRoomAsync(recId, sharedId, owner, sectionId: null);
+
+        Assert.True(await scope.CanReadRecordingAsync(coViewer, recId));
+    }
+
+    [Fact]
+    public async Task CanReadRecording_FalseForAStrangerWithNoRoomInCommon()
+    {
+        using var db = TestDb.Create();
+        var scope = new RoomScope(db);
+        var (_, recId, _) = await SeedRecording(db);
+        var stranger = Guid.NewGuid();
+        Users.Ensure(db, stranger);
+
+        Assert.False(await scope.CanReadRecordingAsync(stranger, recId));
+    }
+
+    [Fact]
+    public async Task CanReadRecording_FalseForANonExistentRecording()
+    {
+        using var db = TestDb.Create();
+        var scope = new RoomScope(db);
+        var stranger = Guid.NewGuid();
+        Users.Ensure(db, stranger);
+
+        Assert.False(await scope.CanReadRecordingAsync(stranger, Guid.NewGuid()));
+    }
 }

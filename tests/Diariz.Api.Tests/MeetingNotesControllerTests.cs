@@ -1,5 +1,6 @@
 using Diariz.Api.Contracts;
 using Diariz.Api.Controllers;
+using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
@@ -11,7 +12,7 @@ namespace Diariz.Api.Tests;
 public class MeetingNotesControllerTests
 {
     private static MeetingNotesController Build(DiarizDbContext db, Guid userId) =>
-        new(db) { ControllerContext = Http.Context(userId) };
+        new(db, new RoomScope(db)) { ControllerContext = Http.Context(userId) };
 
     private static async Task<(Guid userId, Guid recId)> Seed(DiarizDbContext db)
     {
@@ -95,5 +96,73 @@ public class MeetingNotesControllerTests
         Assert.IsType<NotFoundResult>((await Build(db, stranger).Create(rec, new CreateMeetingNotesRequest([new("x")]))).Result);
         Assert.IsType<NotFoundResult>(await Build(db, stranger).Update(rec, Guid.NewGuid(), new UpdateMeetingNoteRequest("y")));
         Assert.IsType<NotFoundResult>(await Build(db, stranger).Delete(rec, Guid.NewGuid()));
+    }
+
+    // ---- Room co-viewer read access (notes are woven into the transcript, so anyone who can read the
+    // recording via room membership must see its lines too - but only the owner may add/edit/delete). ----
+
+    private static async Task<Guid> ShareWithCoViewerAsync(DiarizDbContext db, Guid ownerId, Guid recordingId, Guid viewerId)
+    {
+        Users.Ensure(db, viewerId);
+        var rooms = new RoomScope(db);
+        var roomId = await rooms.CreateSharedRoomAsync("Engineering", null, null, null);
+        await rooms.SetMemberAsync(roomId, RoomPrincipalType.User, viewerId, RoomPermission.CreateRecording);
+        await rooms.ShareIntoRoomAsync(recordingId, roomId, ownerId, sectionId: null);
+        return roomId;
+    }
+
+    [Fact]
+    public async Task List_ForARoomCoViewer_Succeeds()
+    {
+        var db = TestDb.Create();
+        var (owner, rec) = await Seed(db);
+        await Build(db, owner).Create(rec, new CreateMeetingNotesRequest([new("x")]));
+        var viewer = Guid.NewGuid();
+        await ShareWithCoViewerAsync(db, owner, rec, viewer);
+
+        var list = (await Build(db, viewer).List(rec)).Value!;
+
+        Assert.Single(list);
+    }
+
+    [Fact]
+    public async Task Create_ForARoomCoViewer_ReturnsNotFound()
+    {
+        var db = TestDb.Create();
+        var (owner, rec) = await Seed(db);
+        var viewer = Guid.NewGuid();
+        await ShareWithCoViewerAsync(db, owner, rec, viewer);
+
+        var result = await Build(db, viewer).Create(rec, new CreateMeetingNotesRequest([new("x")]));
+
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task UpdateAndDelete_ForARoomCoViewer_ReturnNotFound()
+    {
+        var db = TestDb.Create();
+        var (owner, rec) = await Seed(db);
+        var created = (await Build(db, owner).Create(rec, new CreateMeetingNotesRequest([new("x")]))).Value![0];
+        var viewer = Guid.NewGuid();
+        await ShareWithCoViewerAsync(db, owner, rec, viewer);
+
+        Assert.IsType<NotFoundResult>(await Build(db, viewer).Update(rec, created.Id, new UpdateMeetingNoteRequest("y")));
+        Assert.IsType<NotFoundResult>(await Build(db, viewer).Delete(rec, created.Id));
+    }
+
+    [Fact]
+    public async Task AllEndpoints_Return404_ForAStrangerWithNoRoomInCommon()
+    {
+        var db = TestDb.Create();
+        var (owner, rec) = await Seed(db);
+        var created = (await Build(db, owner).Create(rec, new CreateMeetingNotesRequest([new("x")]))).Value![0];
+        var stranger = Guid.NewGuid();
+        Users.Ensure(db, stranger);
+
+        Assert.IsType<NotFoundResult>((await Build(db, stranger).List(rec)).Result);
+        Assert.IsType<NotFoundResult>((await Build(db, stranger).Create(rec, new CreateMeetingNotesRequest([new("x")]))).Result);
+        Assert.IsType<NotFoundResult>(await Build(db, stranger).Update(rec, created.Id, new UpdateMeetingNoteRequest("y")));
+        Assert.IsType<NotFoundResult>(await Build(db, stranger).Delete(rec, created.Id));
     }
 }

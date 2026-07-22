@@ -155,14 +155,15 @@ public class RecordingsController : ControllerBase
 
         if (rec is null) return NotFound();
 
-        // Visible to the recorder, or to a member of any room it is placed in. The rooms line lists only the
-        // rooms the caller can actually see (a member should not learn about rooms they are not in).
-        var placements = await _rooms.RoomsForRecordingAsync(id);
-        var visibleRooms = new List<RecordingRoomDto>();
-        foreach (var p in placements)
-            if (await _rooms.IsMemberAsync(UserId, p.RoomId))
-                visibleRooms.Add(new RecordingRoomDto(p.RoomId, p.Name, p.Icon, p.Color, p.IsMainRoom));
-        if (rec.UserId != UserId && visibleRooms.Count == 0) return NotFound();
+        // Visible to the recorder, or to a member of any room it is placed in - the same "can read" rule
+        // IRoomScope.CanReadRecordingAsync codifies for per-recording sub-resources (screenshots, meeting
+        // notes, ...). ReadAccessForRecordingAsync is the single walk that answers both this gate and the
+        // room list below (a member should not learn about rooms they are not in) - one call, one walk.
+        var access = await _rooms.ReadAccessForRecordingAsync(UserId, id);
+        if (!access.CanRead) return NotFound();
+        var visibleRooms = access.VisibleRooms
+            .Select(p => new RecordingRoomDto(p.RoomId, p.Name, p.Icon, p.Color, p.IsMainRoom))
+            .ToList();
 
         var recordedByName = await _db.Users
             .Where(u => u.Id == rec.UserId)
@@ -463,14 +464,19 @@ public class RecordingsController : ControllerBase
             return string.IsNullOrEmpty(sp.DisplayName) ? $"l:{label}" : $"n:{sp.DisplayName}";
         }
 
-        // A note-taker's note sits between two segments; don't let a same-speaker merge swallow that boundary
-        // (or the note would jump to after the whole merged block). Flag the segment after each note's anchor.
+        // A note or a screenshot sits between two segments; don't let a same-speaker merge swallow that
+        // boundary (the note or image would jump to after the whole merged block). Flag the segment after
+        // each anchor. Both kinds of capture use the same rule, so they share one break set.
         var noteTimes = await _db.MeetingNotes
             .Where(n => n.RecordingId == id && n.CapturedAtMs != null)
             .Select(n => n.CapturedAtMs!.Value)
             .ToListAsync();
+        var shotTimes = await _db.MeetingScreenshots
+            .Where(s => s.RecordingId == id)
+            .Select(s => s.CapturedAtMs)
+            .ToListAsync();
         var breakBefore = TranscriptNoteAnchor.BreakBeforeIndices(
-            segments.Select(s => s.StartMs).ToList(), noteTimes);
+            segments.Select(s => s.StartMs).ToList(), noteTimes.Concat(shotTimes));
 
         var merged = SegmentMerger.Merge(segments
             .Select((s, i) => new SegmentMerger.Part(
@@ -992,10 +998,13 @@ public class RecordingsController : ControllerBase
         if (rec is null) return NotFound();
 
         // Remove the blobs first: a dangling DB row is safer (and retriable) than an orphaned blob.
-        // The DB cascade clears Transcriptions -> Segments + Summary, Speakers, and Attachment rows — but
-        // not their object-storage blobs, so the uploaded-attachment files must be deleted explicitly too.
+        // The DB cascade clears Transcriptions -> Segments + Summary, Speakers, Attachment and
+        // MeetingScreenshot rows - but not their object-storage blobs, so the uploaded-attachment files
+        // and the screenshot images must be deleted explicitly too.
         await _storage.DeleteAsync(rec.BlobKey);
         foreach (var key in await FileAttachmentKeysAsync(rec.Id))
+            await _storage.DeleteAsync(key);
+        foreach (var key in await ScreenshotKeysAsync(rec.Id))
             await _storage.DeleteAsync(key);
         _db.Recordings.Remove(rec);
         await _db.SaveChangesAsync();
@@ -1008,6 +1017,16 @@ public class RecordingsController : ControllerBase
             .Where(a => a.RecordingId == recordingId && a.BlobKey != null)
             .Select(a => a.BlobKey!)
             .ToListAsync();
+
+    /// <summary>Object-storage keys of a recording's screenshots - full image and thumbnail alike.</summary>
+    private async Task<List<string>> ScreenshotKeysAsync(Guid recordingId)
+    {
+        var shots = await _db.MeetingScreenshots
+            .Where(s => s.RecordingId == recordingId)
+            .Select(s => new { s.BlobKey, s.ThumbBlobKey })
+            .ToListAsync();
+        return shots.SelectMany(s => new[] { s.BlobKey, s.ThumbBlobKey }).ToList();
+    }
 
     /// <summary>Delete just the audio blob, keeping the transcript and metadata. Frees the recording's
     /// bytes against the owner's quota (SizeBytes -> 0) and flags <see cref="Recording.AudioDeletedAt"/>.
@@ -1193,8 +1212,13 @@ public class RecordingsController : ControllerBase
         if (audioSources.Count == 0)
         {
             // No audio to stitch — finish synchronously: the merged transcript + actions are already on the
-            // survivor; just drop the source recordings (their audio is already gone).
+            // survivor; just drop the source recordings (their audio is already gone). Attachments were
+            // reassigned onto the survivor above, but screenshots are not - free their blobs first (the DB
+            // cascade only clears the MeetingScreenshot rows), same as the async path's worker callback.
             survivor.Status = RecordingStatus.Transcribed;
+            foreach (var sourceId in sourceIds)
+                foreach (var key in await ScreenshotKeysAsync(sourceId))
+                    await _storage.DeleteAsync(key);
             _db.Recordings.RemoveRange(ordered.Skip(1));
             await _db.SaveChangesAsync();
             await _hub.NotifyStatusAsync(UserId, survivor.Id, survivor.Status.ToString());

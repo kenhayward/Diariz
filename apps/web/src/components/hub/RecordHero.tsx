@@ -75,6 +75,9 @@ export type RecordHeroProps = {
   canRecord: boolean;
   /** True while an upload is in flight (also disables the idle pill). */
   busy: boolean;
+  /** Overrides the busy title/aria-label (e.g. to show screenshot-attach progress) - falls back to the
+   * generic "Uploading…" when unset, so existing callers are unaffected. */
+  busyLabel?: string;
   /** True when the current source selection can't start a recording (e.g. "No microphone" + no system audio). */
   startDisabled: boolean;
   onStart: () => void;
@@ -95,6 +98,7 @@ export default function RecordHero({
   stream,
   canRecord,
   busy,
+  busyLabel,
   startDisabled,
   onStart,
   onPause,
@@ -179,7 +183,8 @@ export default function RecordHero({
   }
 
   const disabled = busy || startDisabled || !canRecord;
-  const title = !canRecord ? t("recNoPermission") : busy ? t("recUploading") : t("recRecord");
+  const uploadingLabel = busyLabel ?? t("recUploading");
+  const title = !canRecord ? t("recNoPermission") : busy ? uploadingLabel : t("recRecord");
 
   return (
     <button
@@ -187,7 +192,7 @@ export default function RecordHero({
       onClick={onStart}
       disabled={disabled}
       title={title}
-      aria-label={busy ? t("recUploading") : t("recRecord")}
+      aria-label={busy ? uploadingLabel : t("recRecord")}
       style={{
         display: "flex",
         alignItems: "center",

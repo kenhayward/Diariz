@@ -284,6 +284,11 @@ public record UpdateRecordingActionRequest(string? Text, string? Actor, string? 
 /// the recording clock (null = pre-meeting/post-hoc); immutable after capture.</summary>
 public record MeetingNoteDto(Guid Id, string Text, long? CapturedAtMs, int Ordinal, DateTimeOffset CreatedAt);
 
+/// <summary>A screen capture taken during a recording. Bytes are fetched separately from the content and
+/// thumb endpoints; this carries only what the list and the transcript row need.</summary>
+public record ScreenshotDto(
+    Guid Id, long CapturedAtMs, int Width, int Height, long SizeBytes, int Ordinal, DateTimeOffset CreatedAt);
+
 /// <summary>Bulk-append request: the live panel attaches all its lines after upload; single adds send one.</summary>
 public record CreateMeetingNotesRequest(IReadOnlyList<CreateMeetingNoteLine> Lines);
 public record CreateMeetingNoteLine(string Text, long? CapturedAtMs = null);

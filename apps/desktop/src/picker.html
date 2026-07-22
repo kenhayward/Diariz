@@ -1,0 +1,94 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Choose capture area</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; cursor: crosshair; user-select: none; }
+  body { background: rgba(0, 0, 0, 0.35); font: 14px system-ui, sans-serif; color: #fff; }
+  #hint {
+    position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.75); padding: 10px 16px; border-radius: 8px; white-space: nowrap;
+  }
+  #sel {
+    position: fixed; display: none; border: 2px solid #4da3ff;
+    background: rgba(77, 163, 255, 0.15); pointer-events: none;
+  }
+</style>
+<div id="hint">Drag to capture an area, click for the whole screen, Esc to cancel</div>
+<div id="sel"></div>
+<script>
+  const sel = document.getElementById("sel");
+  let start = null;
+  // One-shot guard: the overlay contract is exactly one choose()/cancel() message.
+  // Once true, every handler below is a no-op.
+  let done = false;
+
+  // Below this many pixels a drag is treated as a click (whole screen) rather than a
+  // tiny unusable rectangle.
+  const CLICK_THRESHOLD = 6;
+
+  function rectFrom(a, b) {
+    return {
+      x: Math.min(a.x, b.x),
+      y: Math.min(a.y, b.y),
+      width: Math.abs(a.x - b.x),
+      height: Math.abs(a.y - b.y),
+    };
+  }
+
+  function resetDrag() {
+    start = null;
+    sel.style.display = "none";
+  }
+
+  addEventListener("pointerdown", (e) => {
+    if (done) return;
+    start = { x: e.clientX, y: e.clientY };
+    sel.style.display = "block";
+    // Keep receiving pointermove/pointerup on this window even if the cursor
+    // crosses onto another display's overlay before the button is released.
+    try {
+      e.target.setPointerCapture(e.pointerId);
+    } catch (err) {
+      // If setPointerCapture throws (e.g., InvalidPointerId), degrade to
+      // same-window-only tracking instead of propagating.
+    }
+  });
+
+  addEventListener("pointermove", (e) => {
+    if (done || !start) return;
+    const r = rectFrom(start, { x: e.clientX, y: e.clientY });
+    sel.style.left = r.x + "px";
+    sel.style.top = r.y + "px";
+    sel.style.width = r.width + "px";
+    sel.style.height = r.height + "px";
+  });
+
+  addEventListener("pointerup", (e) => {
+    if (done || !start) return;
+    const r = rectFrom(start, { x: e.clientX, y: e.clientY });
+    if (e.target.hasPointerCapture && e.target.hasPointerCapture(e.pointerId)) {
+      e.target.releasePointerCapture(e.pointerId);
+    }
+    resetDrag();
+    done = true;
+    if (r.width < CLICK_THRESHOLD || r.height < CLICK_THRESHOLD) window.picker.choose({ kind: "screen" });
+    else window.picker.choose({ kind: "region", rect: r });
+  });
+
+  addEventListener("pointercancel", (e) => {
+    if (done) return;
+    if (e.target.hasPointerCapture && e.target.hasPointerCapture(e.pointerId)) {
+      e.target.releasePointerCapture(e.pointerId);
+    }
+    resetDrag();
+    done = true;
+    window.picker.cancel();
+  });
+
+  addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || done) return;
+    resetDrag();
+    done = true;
+    window.picker.cancel();
+  });
+</script>

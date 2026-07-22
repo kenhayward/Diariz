@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self';" />
+    <title>Screenshot hotkey</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        font-family: "Segoe UI", system-ui, sans-serif;
+        margin: 0; padding: 24px;
+        background: Canvas; color: CanvasText;
+      }
+      h1 { font-size: 16px; margin: 0 0 4px; }
+      p.help { font-size: 12px; opacity: 0.7; margin: 0 0 16px; }
+      label { display: block; font-size: 13px; margin-bottom: 6px; }
+      input {
+        width: 100%; box-sizing: border-box; padding: 8px 10px;
+        font-size: 14px; border: 1px solid GrayText; border-radius: 6px;
+        background: Field; color: FieldText; cursor: pointer;
+      }
+      .error { color: #d33; font-size: 12px; min-height: 16px; margin-top: 8px; }
+      .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+      button {
+        padding: 8px 14px; font-size: 13px; border-radius: 6px;
+        border: 1px solid GrayText; background: ButtonFace; color: ButtonText; cursor: pointer;
+      }
+      button.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+      button:disabled { opacity: 0.5; cursor: default; }
+    </style>
+  </head>
+  <body>
+    <h1>Screenshot hotkey</h1>
+    <p class="help">
+      Click the field below, then press the key combination to use for capturing a screenshot while a recording is
+      running.
+    </p>
+    <label for="combo">Hotkey</label>
+    <input id="combo" readonly placeholder="Click here, then press a combination" autocomplete="off" spellcheck="false" />
+    <div class="error" id="error"></div>
+    <div class="row">
+      <button id="save" class="primary" disabled>Save</button>
+    </div>
+    <script src="hotkey.js"></script>
+  </body>
+</html>

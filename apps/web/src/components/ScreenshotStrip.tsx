@@ -1,0 +1,46 @@
+import { useTranslation } from "react-i18next";
+import { api } from "../lib/api";
+import { formatDuration } from "../lib/format";
+import type { Screenshot } from "../lib/types";
+
+/// A row of capture thumbnails, used by the Notes tab's collapsed Screenshots section
+/// (`ScreenshotsSection`). The live recorder popover and the transcript's screenshot rows each hand-roll
+/// their own thumbnail markup rather than reusing this component (a three-way extraction is a tracked
+/// follow-up). Purely presentational: clicking a thumbnail hands the index to the parent, which owns
+/// whether/where a ScreenshotModal opens.
+export default function ScreenshotStrip({
+  recordingId,
+  shots,
+  onOpen,
+}: {
+  recordingId: string;
+  shots: Screenshot[];
+  onOpen: (index: number) => void;
+}) {
+  const { t } = useTranslation("workspace");
+
+  if (shots.length === 0)
+    return <p className="text-xs text-gray-400 dark:text-gray-500">{t("screenshotsEmpty")}</p>;
+
+  return (
+    <ul className="flex flex-wrap gap-2">
+      {shots.map((shot, i) => (
+        <li key={shot.id}>
+          <button
+            type="button"
+            onClick={() => onOpen(i)}
+            aria-label={t("screenshotAlt", { time: formatDuration(shot.capturedAtMs) })}
+            className="block overflow-hidden rounded border hover:border-blue-400 dark:border-gray-700 dark:hover:border-blue-500"
+          >
+            <img
+              src={api.screenshotThumbUrl(recordingId, shot.id)}
+              alt={t("screenshotAlt", { time: formatDuration(shot.capturedAtMs) })}
+              loading="lazy"
+              className="h-20 w-auto"
+            />
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}

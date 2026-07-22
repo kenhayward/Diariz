@@ -2,12 +2,38 @@
 
 const path = require("node:path");
 const crypto = require("node:crypto");
-const { app, BrowserWindow, Tray, Menu, Notification, desktopCapturer, ipcMain, shell, nativeImage } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  Tray,
+  Menu,
+  Notification,
+  desktopCapturer,
+  ipcMain,
+  shell,
+  nativeImage,
+  screen,
+  globalShortcut,
+} = require("electron");
 const Store = require("electron-store");
 const { normalizeServerUrl } = require("./url");
 const { trayRecorderItems, trayTooltip, notificationFor } = require("./recorderState");
 const { updateRestartItem, notificationForUpdate, isNewerVersion } = require("./updateState");
 const { buildStartUrl, codeFromArgv, notificationForAuthError } = require("./desktopAuth");
+const { cropRectFor, resizeDims, clampRect } = require("./captureTarget");
+const {
+  trayScreenshotItems,
+  DEFAULT_ACCELERATOR,
+  normalizeAccelerator,
+  isValidAccelerator,
+  canCapture,
+  shouldStartCapture,
+  notificationForCaptureFailure,
+  notificationForHotkeyUnavailable,
+  acceleratorFromKeyDescriptor,
+  unsupportedKeyCaptureMessage,
+  hotkeyUnavailableSaveError,
+} = require("./screenshotState");
 
 // In dev we load the Vite dev server directly and skip first-run setup.
 const DEV_URL = process.env.DIARIZ_DEV ? "http://localhost:5173" : null;
@@ -18,6 +44,7 @@ const ICON = nativeImage.createFromPath(path.join(__dirname, "..", "build", "ico
 let tray = null;
 let mainWindow = null;
 let setupWindow = null;
+let hotkeyWindow = null;
 let isQuitting = false;
 
 // Tray-driven recording state. `ready` flips true once the web app's recorder has
@@ -196,7 +223,16 @@ function applyRecorderState(next) {
   const prev = recorder;
   const note = notificationFor(prev, next);
 
-  if (next.phase === "recording" && prev.phase !== "recording") recordingStartedAt = Date.now();
+  if (next.phase === "recording" && prev.phase !== "recording") {
+    recordingStartedAt = Date.now();
+    captureTarget = null; // each recording chooses its own capture area
+  } else if (prev.phase === "recording" && next.phase !== "recording") {
+    // Recording ended (stopped, errored, or the renderer dropped out) while the capture
+    // overlay was up - don't strand an always-on-top window over every display; any
+    // selection made after this point would be discarded by the post-await phase
+    // re-check anyway.
+    dismissPickerIfOpen();
+  }
   recorder = { ...recorder, phase: next.phase, source: next.source ?? null };
   // The renderer's mount ping carries ready:true; active phases imply readiness too.
   if (typeof next.ready === "boolean") recorder.ready = next.ready;
@@ -213,12 +249,17 @@ function applyRecorderState(next) {
   }
 
   if (next.phase === "error") recorder.phase = "idle";
+  applyShortcut();
   refreshTray();
 }
 
 function setRecorderReady(ready) {
   if (recorder.ready === ready) return;
   recorder.ready = ready;
+  // `ready` flipping false (reload, window close) must drop a held shortcut immediately -
+  // `recorder.phase` alone goes stale here, so re-evaluate the gate now, not just on the
+  // next phase report.
+  applyShortcut();
   refreshTray();
 }
 
@@ -407,6 +448,373 @@ function toggleOpenAtLogin() {
   refreshTray();
 }
 
+// ---- Screenshot capture ----
+
+const MAX_LONG_EDGE = 2560;
+const THUMB_LONG_EDGE = 320;
+
+// The capture area chosen for the CURRENT recording: { displayId, selection } or null.
+// Cleared on every transition into "recording" so each meeting picks fresh (a stale
+// rectangle from a previous monitor layout would silently capture the wrong thing).
+let captureTarget = null;
+// Open picker windows, keyed by display id, plus the promise waiting on a choice.
+let pickerWindows = new Map();
+let pickerResolve = null;
+// The in-flight picker promise, if any. Guards against re-entrancy: a held-down global
+// hotkey auto-repeats, and the tray click is also reachable while a picker is already
+// showing, so a second `openPicker()` call must reuse the first invocation's promise
+// rather than destroying its windows and orphaning it forever.
+let pickerPromise = null;
+
+// Capture re-entrancy/rate-limit bookkeeping, consulted by the pure `shouldStartCapture`
+// predicate in screenshotState.js. `inFlight` covers the entire pick-grab-send sequence
+// (not just the grab), so a held hotkey can never start a second capture while the first
+// is still choosing an area or encoding an image; `lastCaptureAt` bounds how soon a *new*
+// capture can start after the last one finished.
+let captureInFlight = false;
+let lastCaptureAt = 0;
+
+function closePickers() {
+  for (const win of pickerWindows.values()) if (!win.isDestroyed()) win.destroy();
+  pickerWindows = new Map();
+}
+
+/// Show a full-screen overlay on every display and resolve with the chosen target
+/// ({ displayId, selection }) or null if the user cancelled. If a picker is already
+/// showing, returns its existing promise instead of starting a second one.
+function openPicker() {
+  if (pickerPromise) return pickerPromise;
+  closePickers(); // defensive: clear any stray windows from a picker that didn't settle cleanly
+  const attempt = new Promise((resolve, reject) => {
+    try {
+      pickerResolve = resolve;
+      // The overlay's only cancel path is an Escape keydown handler inside its own
+      // window, so one of the overlays MUST hold OS keyboard focus once shown - pick
+      // the display the cursor is already on so Escape reaches it immediately.
+      const cursorDisplay = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+      for (const display of screen.getAllDisplays()) {
+        const isCursorDisplay = display.id === cursorDisplay.id;
+        const win = new BrowserWindow({
+          x: display.bounds.x,
+          y: display.bounds.y,
+          width: display.bounds.width,
+          height: display.bounds.height,
+          frame: false,
+          transparent: true,
+          alwaysOnTop: true,
+          skipTaskbar: true,
+          resizable: false,
+          movable: false,
+          fullscreenable: false,
+          focusable: true,
+          show: false,
+          webPreferences: {
+            preload: path.join(__dirname, "picker-preload.js"),
+            contextIsolation: true,
+            sandbox: true,
+            nodeIntegration: false,
+          },
+        });
+        // Focusing synchronously right after creation can be dropped if the native
+        // window isn't realized yet, leaving Escape unreachable. Wait for
+        // ready-to-show, then show the cursor's display active (and focused) and the
+        // rest inactive, so nothing steals foreground focus from the intended overlay.
+        win.once("ready-to-show", () => {
+          if (isCursorDisplay) {
+            win.show();
+            win.focus();
+          } else {
+            win.showInactive();
+          }
+        });
+        // Self-heal: if this overlay never manages to show anything (picker.html fails
+        // to load), close it rather than leaving a dead window around forever. Once
+        // every picker window has been destroyed - by this, by the user closing them,
+        // or by settlePicker itself - resolve with null instead of hanging, so a picker
+        // that never settles can't wedge every future capture attempt.
+        win.webContents.on("did-fail-load", () => {
+          if (!win.isDestroyed()) win.destroy();
+        });
+        win.on("closed", () => {
+          pickerWindows.delete(display.id);
+          if (pickerResolve && pickerWindows.size === 0) settlePicker(null);
+        });
+        win.setAlwaysOnTop(true, "screen-saver");
+        win.loadFile(path.join(__dirname, "picker.html"));
+        pickerWindows.set(display.id, win);
+      }
+    } catch (err) {
+      reject(err);
+    }
+  });
+  // If the executor above threw (e.g. screen.getCursorScreenPoint()/new BrowserWindow
+  // failing), clear the guard so the NEXT attempt gets a fresh picker instead of reusing
+  // a promise that is rejected forever.
+  pickerPromise = attempt.catch((err) => {
+    pickerPromise = null;
+    pickerResolve = null;
+    throw err;
+  });
+  return pickerPromise;
+}
+
+function settlePicker(value) {
+  const resolve = pickerResolve;
+  pickerResolve = null;
+  pickerPromise = null;
+  closePickers();
+  if (resolve) resolve(value);
+}
+
+function dismissPickerIfOpen() {
+  if (pickerResolve) settlePicker(null);
+}
+
+ipcMain.on("picker:choose", (event, selection) => {
+  let displayId = null;
+  for (const [id, win] of pickerWindows) if (win.webContents === event.sender) displayId = id;
+  if (displayId === null) return settlePicker(null);
+  settlePicker({ displayId, selection });
+});
+
+ipcMain.on("picker:cancel", () => settlePicker(null));
+
+/// Grab the target display at full resolution, crop to the chosen area, and return
+/// { full, thumb, width, height } - or null if the display has gone away.
+async function grab(target) {
+  const display = screen.getAllDisplays().find((d) => d.id === target.displayId);
+  if (!display) return null; // monitor unplugged since the area was chosen
+
+  const scale = display.scaleFactor || 1;
+  const sources = await desktopCapturer.getSources({
+    types: ["screen"],
+    thumbnailSize: {
+      width: Math.round(display.bounds.width * scale),
+      height: Math.round(display.bounds.height * scale),
+    },
+  });
+  // `display_id` is not contractually populated by desktopCapturer across platforms.
+  // Falling back to `sources[0]` would silently grab whatever screen happens to be first
+  // and then crop it with the TARGET display's geometry - wrong monitor, no visible
+  // error. When nothing matches, return null so the caller clears the target and
+  // re-prompts, exactly like the unplugged-display case above.
+  const source = sources.find((s) => String(s.display_id) === String(display.id));
+  if (!source) return null;
+
+  let image = source.thumbnail;
+  const crop = cropRectFor(display, target.selection);
+  if (crop) {
+    // `thumbnailSize` is a request, not a guarantee - desktopCapturer returns the
+    // screen's true pixel size (aspect-fit, never upscaled), which need not equal
+    // `bounds.width * scaleFactor` (fractional Windows scaling is the common case).
+    // Clamp the crop to what was actually grabbed rather than trusting the assumed size.
+    const clamped = clampRect(crop, image.getSize());
+    if (clamped.width <= 0 || clamped.height <= 0) return null; // degenerate crop - treat as a failed capture, not an empty image
+    image = image.crop(clamped);
+  }
+
+  const size = image.getSize();
+  const capped = resizeDims(size.width, size.height, MAX_LONG_EDGE);
+  const fullImage = capped.width === size.width ? image : image.resize(capped);
+  const thumbDims = resizeDims(capped.width, capped.height, THUMB_LONG_EDGE);
+  const thumbImage = fullImage.resize(thumbDims);
+
+  return {
+    full: fullImage.toPNG(),
+    thumb: thumbImage.toJPEG(80),
+    width: capped.width,
+    height: capped.height,
+  };
+}
+
+/// Native notification for a failed capture attempt - the established pattern
+/// elsewhere in this file (see notifyUpdate/reportAuthError) for surfacing a failure the
+/// user can actually see, instead of a silent/unhandled rejection or a silent no-op.
+/// Copy lives in screenshotState.js's notificationForCaptureFailure, alongside this
+/// shell's other pure notification models.
+function notifyCaptureFailed(reason) {
+  if (Notification.isSupported()) {
+    new Notification(notificationForCaptureFailure(reason)).show();
+  }
+}
+
+/// Capture now: pick an area first if this recording hasn't chosen one, then grab and
+/// push the bytes to the renderer (which owns the recording clock). Guarded against
+/// re-entrancy: a held-down global hotkey auto-repeats at roughly 30Hz, so without a
+/// guard every repeat would either start its own full-resolution grab (steady state,
+/// target already chosen) or pile onto the picker and all fire at once when it settles.
+/// `captureInFlight` covers the whole pick-grab-send sequence, and the cooldown after it
+/// clears absorbs the auto-repeat tail without swallowing a deliberate second press.
+async function captureScreenshot() {
+  if (!canCapture(recorder) || !mainWindow) return;
+  if (!shouldStartCapture({ inFlight: captureInFlight, lastCaptureAt }, Date.now())) return;
+  captureInFlight = true;
+  try {
+    if (!captureTarget) {
+      captureTarget = await openPicker();
+      if (!captureTarget) return; // cancelled - no capture, no error
+    }
+    // The picker await is unbounded (the user may sit on the overlay) and grab() is
+    // another await - re-assert the gate right before touching the renderer rather than
+    // trusting the check from the top of the function.
+    if (!canCapture(recorder) || !mainWindow) return;
+    const shot = await grab(captureTarget);
+    if (!shot) {
+      captureTarget = null; // display gone, or crop degenerated: re-prompt on the next capture
+      notifyCaptureFailed("unavailable");
+      return;
+    }
+    if (!canCapture(recorder) || !mainWindow) return;
+    mainWindow.webContents.send("screenshot:captured", shot);
+  } catch {
+    // desktopCapturer rejecting (permission revoked, compositor hiccup, macOS Screen
+    // Recording denied), nativeImage.crop on a bad rect, or send() on a torn-down
+    // webContents must not become a silent unhandled rejection.
+    notifyCaptureFailed("error");
+  } finally {
+    captureInFlight = false;
+    lastCaptureAt = Date.now();
+  }
+}
+
+async function changeCaptureArea() {
+  captureTarget = null;
+  if (!canCapture(recorder)) return;
+  try {
+    captureTarget = await openPicker();
+    if (!canCapture(recorder)) captureTarget = null; // recording ended while the picker was open
+  } catch {
+    notifyCaptureFailed("error");
+  }
+}
+
+ipcMain.handle("screenshot:capture", () => captureScreenshot());
+ipcMain.handle("screenshot:change-area", () => changeCaptureArea());
+
+// Track whether the user has already been notified that the accelerator couldn't be
+// registered, so a failed registration doesn't renotify on every tray refresh - only
+// once per recording attempt.
+let shortcutWarned = false;
+
+/// The hotkey is registered only while `canCapture` holds - recording AND the renderer's
+/// recorder ready to drive - so Diariz never holds a global key while idle, and matches
+/// exactly the gate `captureScreenshot`/`trayScreenshotItems` use (`ready` can go
+/// stale-false - reload, window close - independently of `phase`, and must drop the
+/// shortcut immediately rather than waiting for the next phase report). Returns false
+/// when the combination is already taken by other software.
+function applyShortcut() {
+  globalShortcut.unregisterAll();
+  if (!canCapture(recorder)) {
+    shortcutWarned = false; // leaving the armed state - the next recording gets a fresh warning
+    return true;
+  }
+  const accelerator = normalizeAccelerator(store.get("captureHotkey")) ?? DEFAULT_ACCELERATOR;
+  let ok;
+  try {
+    ok = globalShortcut.register(accelerator, () => void captureScreenshot());
+  } catch {
+    ok = false;
+  }
+  if (ok) {
+    shortcutWarned = false;
+  } else if (!shortcutWarned) {
+    shortcutWarned = true;
+    if (Notification.isSupported()) {
+      new Notification(notificationForHotkeyUnavailable()).show();
+    }
+  }
+  return ok;
+}
+
+// ---- Screenshot hotkey window ----
+
+function showHotkeyWindow() {
+  if (hotkeyWindow) {
+    hotkeyWindow.focus();
+    return;
+  }
+  hotkeyWindow = new BrowserWindow({
+    width: 420,
+    height: 280,
+    resizable: false,
+    title: "Diariz - Screenshot hotkey",
+    icon: ICON,
+    webPreferences: {
+      preload: path.join(__dirname, "hotkey-preload.js"),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+    },
+  });
+  hotkeyWindow.setMenuBarVisibility(false);
+  hotkeyWindow.loadFile(path.join(__dirname, "hotkey.html"));
+  hotkeyWindow.on("closed", () => {
+    hotkeyWindow = null;
+  });
+}
+
+ipcMain.handle("hotkey:load", () => normalizeAccelerator(store.get("captureHotkey")) ?? DEFAULT_ACCELERATOR);
+
+// The sandboxed hotkey window can't require screenshotState.js itself, so it sends the
+// raw KeyboardEvent descriptor (modifier booleans + e.code) here and gets back the
+// accelerator formatted in Electron's own key vocabulary plus whether it currently
+// validates. The descriptor carries `code` (the physical key), not `key` (the possibly
+// shift-produced character) - `key` for Ctrl+Shift+3 is "#" and for Ctrl+Shift+9 is "(" on
+// a US layout, so building from `key` let the shifted character sail through as a
+// plausible-looking accelerator that only failed later at globalShortcut.register.
+// `acceleratorFromKeyDescriptor` also flags a physical key Electron has no accelerator
+// name for at all (`unsupported`) so this returns a clear message immediately instead of
+// letting it through to fail the same way.
+ipcMain.handle("hotkey:describe", (_event, descriptor) => {
+  const { accelerator, unsupported } = acceleratorFromKeyDescriptor(descriptor);
+  if (unsupported) {
+    return { accelerator, valid: false, message: unsupportedKeyCaptureMessage() };
+  }
+  return { accelerator, valid: isValidAccelerator(accelerator) };
+});
+
+// Save only if the combination is both well-formed AND actually registrable - otherwise
+// the user would set a hotkey that silently never fires because another app owns it.
+// Registrability must be proven regardless of whether a recording is running right now:
+//   - While `canCapture(recorder)` holds, `applyShortcut()` re-registering with the new
+//     stored value IS the live registration - the same predicate that gates the tray menu
+//     and the capture handler itself, so this window's behaviour can't drift from the
+//     shortcut's actual lifecycle.
+//   - While idle, nothing should be held (see applyShortcut's contract), so registrability
+//     is proven with a transient probe register/unregister instead - proving the
+//     combination works without leaving anything registered while idle.
+ipcMain.handle("hotkey:save", (_event, accelerator) => {
+  const normalized = normalizeAccelerator(accelerator);
+  if (!normalized) return { ok: false, error: "Use at least one modifier (Ctrl, Alt, Shift) plus one key." };
+
+  const previous = store.get("captureHotkey");
+  store.set("captureHotkey", normalized);
+
+  if (canCapture(recorder)) {
+    if (!applyShortcut()) {
+      if (previous) store.set("captureHotkey", previous);
+      else store.delete("captureHotkey");
+      applyShortcut();
+      return { ok: false, error: hotkeyUnavailableSaveError() };
+    }
+    return { ok: true };
+  }
+
+  let registrable;
+  try {
+    registrable = globalShortcut.register(normalized, () => {});
+    if (registrable) globalShortcut.unregister(normalized);
+  } catch {
+    registrable = false;
+  }
+  if (!registrable) {
+    if (previous) store.set("captureHotkey", previous);
+    else store.delete("captureHotkey");
+    return { ok: false, error: hotkeyUnavailableSaveError() };
+  }
+  return { ok: true };
+});
+
 // ---- Tray ----
 
 function refreshTray() {
@@ -420,6 +828,15 @@ function refreshTray() {
       else if (item.id === "record-system") startRecording("system");
       else if (item.id === "record-both") startRecording("both");
       else if (item.id === "stop") stopRecording();
+    },
+  }));
+
+  const shotItems = trayScreenshotItems(recorder).map((item) => ({
+    label: item.label,
+    enabled: item.enabled,
+    click: () => {
+      if (item.id === "capture") void captureScreenshot();
+      else if (item.id === "change-area") void changeCaptureArea();
     },
   }));
 
@@ -439,6 +856,7 @@ function refreshTray() {
       ...(restart ? [{ label: restart.label, click: restartToUpdate }] : []),
       { type: "separator" },
       ...recordItems,
+      ...shotItems,
       { type: "separator" },
       {
         label: process.platform === "darwin" ? "Open at Login" : "Start with Windows",
@@ -447,6 +865,7 @@ function refreshTray() {
         click: toggleOpenAtLogin,
       },
       { label: "Check for Updates…", click: () => checkForUpdates(true) },
+      { label: "Screenshot Hotkey…", click: () => showHotkeyWindow() },
       { label: "Settings…", click: () => showSetupWindow() },
       { label: "Quit", click: () => { isQuitting = true; app.quit(); } },
     ]),
@@ -531,6 +950,13 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on("before-quit", () => {
     isQuitting = true;
+  });
+
+  // The shortcut is scoped to a recording; make sure it never outlives the app either.
+  // Any open picker overlay is symmetric cleanup - don't leave it running past quit.
+  app.on("will-quit", () => {
+    globalShortcut.unregisterAll();
+    closePickers();
   });
 
   // Tray-resident: keep running when all windows are closed/hidden.

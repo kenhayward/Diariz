@@ -20,6 +20,12 @@ public record RoomListEntry(
 public record RecordingRoomPlacement(
     Guid RoomId, string Name, RoomKind Kind, string? Icon, string? Color, bool IsMainRoom);
 
+/// <summary>The result of the single "can read" walk over a recording's placements: whether
+/// <paramref name="CanRead"/>, plus the placements that made it true (or, for an owner, that are simply visible
+/// to them) - so a caller that needs both (<see cref="Diariz.Api.Controllers.RecordingsController.Get"/>) can
+/// get them from one walk instead of two.</summary>
+public record RecordingReadAccess(bool CanRead, IReadOnlyList<RecordingRoomPlacement> VisibleRooms);
+
 /// <summary>Resolves rooms and the caller's authority inside them.
 ///
 /// Effective permissions are the union of the caller's own <see cref="RoomMember"/> row and the rows of every
@@ -54,6 +60,19 @@ public interface IRoomScope
     Task<RoomPermission> PermissionsAsync(Guid userId, Guid roomId, CancellationToken ct = default);
 
     Task<bool> IsMemberAsync(Guid userId, Guid roomId, CancellationToken ct = default);
+
+    /// <summary>The single "can read" rule for a recording: true when <paramref name="userId"/> owns it, or is
+    /// a member of any room it is placed in (false, including for a recording that doesn't exist).
+    /// Per-recording sub-resources that only need the yes/no answer (screenshots, meeting notes, ...) call this;
+    /// it is a thin wrapper over <see cref="ReadAccessForRecordingAsync"/>, the shared implementation, so the
+    /// rule cannot drift between the two.</summary>
+    Task<bool> CanReadRecordingAsync(Guid userId, Guid recordingId, CancellationToken ct = default);
+
+    /// <summary>The same "can read" rule as <see cref="CanReadRecordingAsync"/>, plus the placements the walk
+    /// found visible to <paramref name="userId"/> - for <see cref="Diariz.Api.Controllers.RecordingsController.Get"/>,
+    /// which needs both the boolean and the room list for its response and would otherwise have to walk the
+    /// recording's placements twice (once to build the room list, once inside CanReadRecordingAsync).</summary>
+    Task<RecordingReadAccess> ReadAccessForRecordingAsync(Guid userId, Guid recordingId, CancellationToken ct = default);
 
     /// <summary>Throws <see cref="RoomForbiddenException"/> unless the caller holds <paramref name="required"/>.</summary>
     Task RequireAsync(Guid userId, Guid roomId, RoomPermission required, CancellationToken ct = default);
@@ -279,6 +298,29 @@ public class RoomScope(DiarizDbContext db) : IRoomScope
         if (room.Kind == RoomKind.Personal) return room.OwnerUserId == userId;
 
         return (await MemberRowsAsync(userId, roomId, ct)).Count > 0;
+    }
+
+    public async Task<bool> CanReadRecordingAsync(Guid userId, Guid recordingId, CancellationToken ct = default) =>
+        (await ReadAccessForRecordingAsync(userId, recordingId, ct)).CanRead;
+
+    public async Task<RecordingReadAccess> ReadAccessForRecordingAsync(
+        Guid userId, Guid recordingId, CancellationToken ct = default)
+    {
+        var ownerId = await db.Recordings
+            .Where(r => r.Id == recordingId)
+            .Select(r => (Guid?)r.UserId)
+            .FirstOrDefaultAsync(ct);
+        if (ownerId is null) return new RecordingReadAccess(false, []); // no such recording
+
+        // Walked once regardless of ownership: the response also needs the rooms visible to THIS caller (an
+        // owner is not necessarily a member of every room their recording is shared into - the room list only
+        // shows what they can actually see), so the loop isn't skippable even when ownerId == userId.
+        var placements = await RoomsForRecordingAsync(recordingId, ct);
+        var visible = new List<RecordingRoomPlacement>();
+        foreach (var p in placements)
+            if (await IsMemberAsync(userId, p.RoomId, ct)) visible.Add(p);
+
+        return new RecordingReadAccess(ownerId == userId || visible.Count > 0, visible);
     }
 
     public async Task RequireAsync(Guid userId, Guid roomId, RoomPermission required, CancellationToken ct = default)
