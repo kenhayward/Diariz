@@ -54,7 +54,12 @@ import {
   clearPendingNotes,
   type PendingNotes,
 } from "../lib/pendingNotes";
-import { canCaptureScreenshots, onScreenshotCaptured, type CapturedShot } from "../lib/trayScreenshots";
+import {
+  canCaptureScreenshots,
+  onScreenshotCaptured,
+  requestChangeArea,
+  type CapturedShot,
+} from "../lib/trayScreenshots";
 import {
   savePendingScreenshots,
   loadPendingScreenshots,
@@ -206,9 +211,12 @@ export default function Recorder({
   // Lines whose audio uploaded but whose attach failed (durable, with the recording id) - drives the retry banner.
   const [notesAttach, setNotesAttach] = useState<PendingNotes | null>(null);
   // Screenshots captured while recording: stamped with the *recorded* clock, mirrored to IndexedDB so a
-  // crash never loses them, and attached to the recording after upload (exactly like live notes). No
-  // popover renders these yet (unlike liveLines), so a ref is enough - there is nothing to re-render for.
+  // crash never loses them, and attached to the recording after upload (exactly like live notes). The
+  // notes popover shows a live thumbnail strip of these, so - like liveLines - both a ref (read inside
+  // upload()/attachScreenshots(), which may run before state has flushed) and state (to re-render the
+  // strip) are kept in step via mirrorShots.
   const liveShotsRef = useRef<PendingShot[]>([]);
+  const [liveShots, setLiveShots] = useState<PendingShot[]>([]);
   // Captures whose audio uploaded but whose attach failed - drives the retry banner.
   const [shotsAttach, setShotsAttach] = useState<PendingScreenshots | null>(null);
 
@@ -523,6 +531,7 @@ export default function Recorder({
   /// Update the captures and mirror them to IndexedDB (recordingId null = still recording).
   function mirrorShots(shots: PendingShot[]) {
     liveShotsRef.current = shots;
+    setLiveShots(shots);
     if (userId) void savePendingScreenshots({ userId, recordingId: null, updatedAt: Date.now(), shots });
   }
 
@@ -537,6 +546,13 @@ export default function Recorder({
         thumb: shot.thumb,
       },
     ]);
+  }
+
+  /// The popover's per-capture delete button. Filters the *current* ref, not a value captured at render
+  /// time, so a rapid string of deletes (or a delete racing an incoming capture) always removes the
+  /// right item rather than one computed against a stale array.
+  function deleteLiveShot(index: number) {
+    mirrorShots(liveShotsRef.current.filter((_, i) => i !== index));
   }
 
   /// Attach captures to the created recording. Success clears the durable stash; failure keeps them (with
@@ -558,6 +574,7 @@ export default function Recorder({
       }
       if (userId) await clearPendingScreenshots(userId);
       liveShotsRef.current = [];
+      setLiveShots([]);
       setShotsAttach(null);
     } catch {
       const remaining = shots.slice(uploaded);
@@ -661,6 +678,7 @@ export default function Recorder({
       // Same for screenshots: a previous recording whose audio upload never even started (so attach was
       // never reached) would otherwise leak its captures into this new take.
       liveShotsRef.current = [];
+      setLiveShots([]);
       if (userId) void clearPendingScreenshots(userId);
       // Auto-open the notes popover per the remembered preference. `stop()` resets the hub, so at record
       // start nothing else is open and `toggle` reliably *opens* notes.
@@ -805,6 +823,7 @@ export default function Recorder({
     setLiveLines([]);
     if (userId) await clearPendingScreenshots(userId);
     liveShotsRef.current = [];
+    setLiveShots([]);
   }
 
   // Upload existing audio files (the "Upload" button). The shared upload queue handles validation,
@@ -1003,6 +1022,9 @@ export default function Recorder({
               onAdd={addLiveNote}
               onEdit={editLiveNote}
               onDelete={deleteLiveNote}
+              shots={liveShots}
+              onDeleteShot={deleteLiveShot}
+              onChangeCaptureArea={canCaptureScreenshots() ? requestChangeArea : undefined}
             />
           </div>
         )}
