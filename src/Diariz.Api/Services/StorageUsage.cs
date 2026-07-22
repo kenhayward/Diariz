@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Diariz.Api.Services;
 
 /// <summary>Computes a user's used storage as the total bytes of their recorded audio plus any uploaded
-/// attachment files (DB rows/derived data don't count toward the quota).</summary>
+/// attachment files and meeting screenshots (DB rows/derived data don't count toward the quota).</summary>
 public interface IStorageUsage
 {
     Task<long> UsedBytesAsync(Guid userId, CancellationToken ct = default);
@@ -23,6 +23,9 @@ public class StorageUsage(DiarizDbContext db) : IStorageUsage
         var sectionAttachments = await db.SectionAttachments
             .Where(a => a.Section!.UserId == userId)
             .SumAsync(a => a.SizeBytes, ct);
-        return audio + attachments + sectionAttachments;
+        var screenshots = await db.MeetingScreenshots
+            .Where(s => s.UserId == userId)
+            .SumAsync(s => s.SizeBytes, ct);
+        return audio + attachments + sectionAttachments + screenshots;
     }
 }

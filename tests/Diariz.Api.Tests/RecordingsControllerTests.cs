@@ -1633,6 +1633,37 @@ public class RecordingsControllerTests
         Assert.False(storage.Objects.ContainsKey(f2));
     }
 
+    [Fact]
+    public async Task Delete_RemovesScreenshotBlobsToo()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        storage.Objects[rec.BlobKey] = Encoding.UTF8.GetBytes("audio");
+        db.MeetingScreenshots.Add(new MeetingScreenshot
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            RecordingId = rec.Id,
+            CapturedAtMs = 0,
+            BlobKey = "shot.png",
+            ThumbBlobKey = "shot.thumb.jpg",
+            SizeBytes = 10,
+        });
+        storage.Objects["shot.png"] = [];
+        storage.Objects["shot.thumb.jpg"] = [];
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId, new FakeJobQueue(), storage);
+
+        var result = await controller.Delete(rec.Id);
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.False(storage.Objects.ContainsKey("shot.png"));
+        Assert.False(storage.Objects.ContainsKey("shot.thumb.jpg"));
+        Assert.Empty(storage.Objects); // nothing left orphaned - audio and both screenshot blobs gone
+    }
+
     // ---- Transcript download ----
 
     private static async Task<Recording> SeedTranscribedRecording(

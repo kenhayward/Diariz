@@ -41,4 +41,48 @@ public class StorageUsageTests
 
         Assert.Equal(0, await new StorageUsage(db).UsedBytesAsync(mine));
     }
+
+    [Fact]
+    public async Task UsedBytes_IncludesScreenshotBytes()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var recordingId = Guid.NewGuid();
+        db.Recordings.Add(new Recording { Id = recordingId, UserId = userId, Title = "t", SizeBytes = 1_000 });
+        db.MeetingScreenshots.Add(new MeetingScreenshot
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            RecordingId = recordingId,
+            CapturedAtMs = 0,
+            BlobKey = "k.png",
+            ThumbBlobKey = "k.thumb.jpg",
+            SizeBytes = 250,
+        });
+        await db.SaveChangesAsync();
+
+        var used = await new StorageUsage(db).UsedBytesAsync(userId);
+
+        Assert.Equal(1_250, used);
+    }
+
+    [Fact]
+    public async Task UsedBytes_IgnoresAnotherUsersScreenshots()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.MeetingScreenshots.Add(new MeetingScreenshot
+        {
+            Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            RecordingId = Guid.NewGuid(),
+            CapturedAtMs = 0,
+            BlobKey = "k.png",
+            ThumbBlobKey = "k.thumb.jpg",
+            SizeBytes = 900,
+        });
+        await db.SaveChangesAsync();
+
+        Assert.Equal(0, await new StorageUsage(db).UsedBytesAsync(userId));
+    }
 }

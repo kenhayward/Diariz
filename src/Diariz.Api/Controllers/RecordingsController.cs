@@ -992,10 +992,13 @@ public class RecordingsController : ControllerBase
         if (rec is null) return NotFound();
 
         // Remove the blobs first: a dangling DB row is safer (and retriable) than an orphaned blob.
-        // The DB cascade clears Transcriptions -> Segments + Summary, Speakers, and Attachment rows — but
-        // not their object-storage blobs, so the uploaded-attachment files must be deleted explicitly too.
+        // The DB cascade clears Transcriptions -> Segments + Summary, Speakers, Attachment and
+        // MeetingScreenshot rows - but not their object-storage blobs, so the uploaded-attachment files
+        // and the screenshot images must be deleted explicitly too.
         await _storage.DeleteAsync(rec.BlobKey);
         foreach (var key in await FileAttachmentKeysAsync(rec.Id))
+            await _storage.DeleteAsync(key);
+        foreach (var key in await ScreenshotKeysAsync(rec.Id))
             await _storage.DeleteAsync(key);
         _db.Recordings.Remove(rec);
         await _db.SaveChangesAsync();
@@ -1008,6 +1011,16 @@ public class RecordingsController : ControllerBase
             .Where(a => a.RecordingId == recordingId && a.BlobKey != null)
             .Select(a => a.BlobKey!)
             .ToListAsync();
+
+    /// <summary>Object-storage keys of a recording's screenshots - full image and thumbnail alike.</summary>
+    private async Task<List<string>> ScreenshotKeysAsync(Guid recordingId)
+    {
+        var shots = await _db.MeetingScreenshots
+            .Where(s => s.RecordingId == recordingId)
+            .Select(s => new { s.BlobKey, s.ThumbBlobKey })
+            .ToListAsync();
+        return shots.SelectMany(s => new[] { s.BlobKey, s.ThumbBlobKey }).ToList();
+    }
 
     /// <summary>Delete just the audio blob, keeping the transcript and metadata. Frees the recording's
     /// bytes against the owner's quota (SizeBytes -> 0) and flags <see cref="Recording.AudioDeletedAt"/>.
