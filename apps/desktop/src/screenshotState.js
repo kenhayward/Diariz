@@ -108,6 +108,77 @@ function normalizeAccelerator(input) {
     .join("+");
 }
 
+// DOM KeyboardEvent.key values that don't match the token Electron's accelerator parser
+// expects (see electron/shell/common/keyboard_util.cc's KeyboardCodeFromKeyIdentifier
+// table, the ground truth for what globalShortcut.register actually accepts). Only real
+// mismatches are listed here - everything else (letters, digits, punctuation, F-keys,
+// Home/End/PageUp/PageDown/Escape/Enter/Tab/Backspace/Delete/Insert/...) already reaches
+// Electron's parser as the same characters (it lowercases before matching), so no
+// translation is needed for those.
+//   - " " (Space): the spacebar's `key` is the literal space character, not a name.
+//   - Arrow keys: DOM reports "ArrowUp"/"ArrowDown"/"ArrowLeft"/"ArrowRight"; Electron's
+//     table only has "Up"/"Down"/"Left"/"Right".
+//   - Volume keys: DOM's "AudioVolumeUp"/"AudioVolumeDown"/"AudioVolumeMute" vs.
+//     Electron's "VolumeUp"/"VolumeDown"/"VolumeMute".
+//   - Media track keys: DOM's "MediaTrackNext"/"MediaTrackPrevious" vs. Electron's
+//     "MediaNextTrack"/"MediaPreviousTrack" (word order swapped; MediaStop and
+//     MediaPlayPause already agree, so they aren't listed).
+//   - "+" (Plus): a real key (Shift+= on most layouts) whose `key` is the literal "+"
+//     character - Electron accepts it as-is too, but joining it with "+" (this module's
+//     segment separator) would produce a string indistinguishable from a stray/duplicate
+//     separator, so it's translated to Electron's own "Plus" alias instead.
+// Deliberately not attempting to cover every DOM key name (e.g. dead keys, IME
+// composition keys, "Unidentified") - those aren't accelerator-capable keys at all, and
+// inventing a mapping Electron doesn't actually support would just move the failure from
+// "rejected at capture" to "silently wrong".
+const DOM_KEY_TO_ACCELERATOR_KEY = new Map([
+  [" ", "Space"],
+  ["ArrowUp", "Up"],
+  ["ArrowDown", "Down"],
+  ["ArrowLeft", "Left"],
+  ["ArrowRight", "Right"],
+  ["AudioVolumeUp", "VolumeUp"],
+  ["AudioVolumeDown", "VolumeDown"],
+  ["AudioVolumeMute", "VolumeMute"],
+  ["MediaTrackNext", "MediaNextTrack"],
+  ["MediaTrackPrevious", "MediaPreviousTrack"],
+  ["+", "Plus"],
+]);
+
+/// Translate one captured DOM `KeyboardEvent.key` into the token Electron's accelerator
+/// parser expects. Keys not in the mismatch table above already agree with Electron's
+/// vocabulary, so they fall back to the same single-char-uppercase / capitalize rule
+/// `normalizeAccelerator` uses for its segments.
+function acceleratorKeyFromDomKey(domKey) {
+  const mapped = DOM_KEY_TO_ACCELERATOR_KEY.get(domKey);
+  if (mapped) return mapped;
+  return domKey.length === 1 ? domKey.toUpperCase() : domKey;
+}
+
+// DOM names for the modifier keys themselves - reported as `key` when only a modifier is
+// held down. Treated as "no key pressed yet" so a still-held modifier can't leak into the
+// key slot of the accelerator being built.
+const MODIFIER_DOM_KEYS = new Set(["Control", "Shift", "Alt", "Meta"]);
+
+/// Build a not-yet-validated accelerator string from the raw descriptor a keydown handler
+/// observes: the four `KeyboardEvent` modifier booleans plus `key`. This is the one path
+/// raw renderer input takes on its way to `isValidAccelerator`/`normalizeAccelerator` -
+/// kept here (rather than inlined in the sandboxed hotkey window, which cannot require
+/// this module) so the DOM-key translation gets the same unit coverage as the rest of the
+/// accelerator rules. Pass an empty object (or omit `key`) to describe "nothing pressed
+/// yet"; the result is always well-formed as a set of "+"-joined segments (never a stray
+/// or duplicate separator), so any invalidity `isValidAccelerator` reports afterwards is a
+/// genuine "not enough" (no key yet, or no modifier) rather than a parsing artifact.
+function acceleratorFromKeyDescriptor({ ctrlKey, metaKey, altKey, shiftKey, key } = {}) {
+  const mods = [];
+  if (ctrlKey) mods.push("Control");
+  if (metaKey) mods.push("Command");
+  if (altKey) mods.push("Alt");
+  if (shiftKey) mods.push("Shift");
+  if (key == null || MODIFIER_DOM_KEYS.has(key)) return mods.join("+");
+  return [...mods, acceleratorKeyFromDomKey(key)].join("+");
+}
+
 module.exports = {
   DEFAULT_ACCELERATOR,
   CAPTURE_COOLDOWN_MS,
@@ -118,4 +189,6 @@ module.exports = {
   shouldStartCapture,
   notificationForCaptureFailure,
   notificationForHotkeyUnavailable,
+  acceleratorKeyFromDomKey,
+  acceleratorFromKeyDescriptor,
 };

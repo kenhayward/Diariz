@@ -25,10 +25,12 @@ const {
   trayScreenshotItems,
   DEFAULT_ACCELERATOR,
   normalizeAccelerator,
+  isValidAccelerator,
   canCapture,
   shouldStartCapture,
   notificationForCaptureFailure,
   notificationForHotkeyUnavailable,
+  acceleratorFromKeyDescriptor,
 } = require("./screenshotState");
 
 // In dev we load the Vite dev server directly and skip first-run setup.
@@ -750,6 +752,18 @@ function showHotkeyWindow() {
 }
 
 ipcMain.handle("hotkey:load", () => normalizeAccelerator(store.get("captureHotkey")) ?? DEFAULT_ACCELERATOR);
+
+// The sandboxed hotkey window can't require screenshotState.js itself, so it sends the
+// raw KeyboardEvent descriptor (modifier booleans + e.key) here and gets back the
+// accelerator formatted in Electron's own key vocabulary plus whether it currently
+// validates - the DOM-to-Electron key translation (acceleratorFromKeyDescriptor) is the
+// fix for DOM key names (e.g. Space, ArrowUp) not matching Electron's accelerator table.
+// This lets the window show the user exactly what will be saved, and flag an unusable key
+// immediately at capture time rather than only as a save-time error.
+ipcMain.handle("hotkey:describe", (_event, descriptor) => {
+  const accelerator = acceleratorFromKeyDescriptor(descriptor);
+  return { accelerator, valid: isValidAccelerator(accelerator) };
+});
 
 // Save only if the combination is both well-formed AND actually registrable - otherwise
 // the user would set a hotkey that silently never fires because another app owns it.

@@ -12,6 +12,8 @@ const {
   shouldStartCapture,
   notificationForCaptureFailure,
   notificationForHotkeyUnavailable,
+  acceleratorKeyFromDomKey,
+  acceleratorFromKeyDescriptor,
 } = require("./screenshotState");
 
 test("the default accelerator is a valid one", () => {
@@ -138,4 +140,97 @@ test("notificationForHotkeyUnavailable gives a titled, dash-free message", () =>
   assert.equal(note.title, "Diariz");
   assert.ok(note.body.length > 0);
   assert.ok(!/[–—]/.test(note.body), "no em or en dashes in user-facing text");
+});
+
+// acceleratorKeyFromDomKey / acceleratorFromKeyDescriptor - the hotkey capture window
+// reports raw DOM KeyboardEvent data (ctrlKey/metaKey/altKey/shiftKey + e.key). DOM key
+// names don't always match Electron's accelerator vocabulary (see
+// electron/shell/common/keyboard_util.cc's KeyboardCodeFromKeyIdentifier table): the
+// spacebar reports as a literal " " character and the arrow keys report as
+// "ArrowUp"/"ArrowDown"/"ArrowLeft"/"ArrowRight" rather than Electron's "Up"/"Down"/
+// "Left"/"Right". Translating that mismatch is the fix for this review finding.
+
+test("acceleratorKeyFromDomKey maps the space key to Electron's Space token", () => {
+  assert.equal(acceleratorKeyFromDomKey(" "), "Space");
+});
+
+test("acceleratorKeyFromDomKey maps DOM arrow key names to Electron's short names", () => {
+  assert.equal(acceleratorKeyFromDomKey("ArrowUp"), "Up");
+  assert.equal(acceleratorKeyFromDomKey("ArrowDown"), "Down");
+  assert.equal(acceleratorKeyFromDomKey("ArrowLeft"), "Left");
+  assert.equal(acceleratorKeyFromDomKey("ArrowRight"), "Right");
+});
+
+test("acceleratorKeyFromDomKey maps DOM volume key names to Electron's names", () => {
+  assert.equal(acceleratorKeyFromDomKey("AudioVolumeUp"), "VolumeUp");
+  assert.equal(acceleratorKeyFromDomKey("AudioVolumeDown"), "VolumeDown");
+  assert.equal(acceleratorKeyFromDomKey("AudioVolumeMute"), "VolumeMute");
+});
+
+test("acceleratorKeyFromDomKey maps DOM media track key names to Electron's word order", () => {
+  assert.equal(acceleratorKeyFromDomKey("MediaTrackNext"), "MediaNextTrack");
+  assert.equal(acceleratorKeyFromDomKey("MediaTrackPrevious"), "MediaPreviousTrack");
+});
+
+test("acceleratorKeyFromDomKey maps a literal plus character to Electron's Plus token (avoids colliding with the + separator)", () => {
+  assert.equal(acceleratorKeyFromDomKey("+"), "Plus");
+});
+
+test("acceleratorKeyFromDomKey passes through a key that already matches Electron's vocabulary", () => {
+  assert.equal(acceleratorKeyFromDomKey("F5"), "F5");
+  assert.equal(acceleratorKeyFromDomKey("Escape"), "Escape");
+  assert.equal(acceleratorKeyFromDomKey("9"), "9");
+  assert.equal(acceleratorKeyFromDomKey("a"), "A");
+});
+
+test("acceleratorFromKeyDescriptor builds Control+Shift+Space from a raw Ctrl+Shift+Space press, and it validates", () => {
+  const accelerator = acceleratorFromKeyDescriptor({ ctrlKey: true, shiftKey: true, key: " " });
+  assert.equal(accelerator, "Control+Shift+Space");
+  assert.equal(isValidAccelerator(accelerator), true);
+});
+
+test("acceleratorFromKeyDescriptor builds Control+Shift+Up from a raw Ctrl+Shift+ArrowUp press, and it validates", () => {
+  const accelerator = acceleratorFromKeyDescriptor({ ctrlKey: true, shiftKey: true, key: "ArrowUp" });
+  assert.equal(accelerator, "Control+Shift+Up");
+  assert.equal(isValidAccelerator(accelerator), true);
+});
+
+test("acceleratorFromKeyDescriptor builds Control+Shift+9 from a raw Ctrl+Shift+9 press (the default shape), and it validates", () => {
+  const accelerator = acceleratorFromKeyDescriptor({ ctrlKey: true, shiftKey: true, key: "9" });
+  assert.equal(accelerator, "Control+Shift+9");
+  assert.equal(isValidAccelerator(accelerator), true);
+});
+
+test("acceleratorFromKeyDescriptor builds Control+Shift+F5 from a raw Ctrl+Shift+F5 press, and it validates", () => {
+  const accelerator = acceleratorFromKeyDescriptor({ ctrlKey: true, shiftKey: true, key: "F5" });
+  assert.equal(accelerator, "Control+Shift+F5");
+  assert.equal(isValidAccelerator(accelerator), true);
+});
+
+test("acceleratorFromKeyDescriptor reports a bare modifier press as modifiers-only, which does not validate", () => {
+  const accelerator = acceleratorFromKeyDescriptor({ ctrlKey: true, key: "Control" });
+  assert.equal(accelerator, "Control");
+  assert.equal(isValidAccelerator(accelerator), false);
+});
+
+test("acceleratorFromKeyDescriptor reports a key with no modifier held, which does not validate", () => {
+  const accelerator = acceleratorFromKeyDescriptor({ key: "9" });
+  assert.equal(accelerator, "9");
+  assert.equal(isValidAccelerator(accelerator), false);
+});
+
+test("acceleratorFromKeyDescriptor with nothing pressed yet produces an empty, invalid string", () => {
+  const accelerator = acceleratorFromKeyDescriptor({});
+  assert.equal(accelerator, "");
+  assert.equal(isValidAccelerator(accelerator), false);
+});
+
+test("acceleratorFromKeyDescriptor never produces a malformed string the validator would wrongly accept", () => {
+  // Regression guard: the fix for Space/arrows must not reopen the empty-segment or
+  // duplicate-modifier holes the previous pass closed.
+  assert.equal(isValidAccelerator("Control++9"), false);
+  assert.equal(isValidAccelerator("+Control+9"), false);
+  assert.equal(isValidAccelerator("Control+9+"), false);
+  assert.equal(isValidAccelerator("Shift+Shift+9"), false);
+  assert.equal(isValidAccelerator("shift+Shift+9"), false);
 });
