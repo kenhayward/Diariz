@@ -35,7 +35,11 @@ contextBridge.exposeInMainWorld("diariz", {
   changeCaptureArea: () => ipcRenderer.invoke("screenshot:change-area"),
 
   /// Subscribe to captured images. `cb` receives { full, thumb, width, height } where
-  /// `full` and `thumb` are ArrayBuffers (PNG and JPEG). Returns an unsubscribe function.
+  /// `full` and `thumb` are Uint8Arrays (PNG and JPEG) - Electron's structured-clone IPC
+  /// turns the main process's Node Buffers into Uint8Array on arrival here, not
+  /// ArrayBuffer. `new Blob([uint8Array], { type })` accepts a Uint8Array directly, so
+  /// no conversion is needed before handing these to the renderer's Blob/URL APIs.
+  /// Returns an unsubscribe function.
   onScreenshotCaptured: (cb) => {
     const listener = (_event, payload) => cb(payload);
     ipcRenderer.on("screenshot:captured", listener);

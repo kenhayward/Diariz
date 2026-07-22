@@ -4,9 +4,13 @@ const test = require("node:test");
 const assert = require("node:assert");
 const {
   DEFAULT_ACCELERATOR,
+  CAPTURE_COOLDOWN_MS,
   trayScreenshotItems,
   isValidAccelerator,
   normalizeAccelerator,
+  canCapture,
+  shouldStartCapture,
+  notificationForCaptureFailure,
 } = require("./screenshotState");
 
 test("the default accelerator is a valid one", () => {
@@ -21,12 +25,61 @@ test("no screenshot items exist while uploading", () => {
   assert.deepEqual(trayScreenshotItems({ phase: "uploading" }), []);
 });
 
-test("capture and change-area items appear while recording", () => {
-  const items = trayScreenshotItems({ phase: "recording", source: "mic" });
+test("capture and change-area items appear while recording and ready", () => {
+  const items = trayScreenshotItems({ phase: "recording", source: "mic", ready: true });
   assert.deepEqual(items.map((i) => i.id), ["capture", "change-area"]);
   assert.ok(items.every((i) => i.enabled));
   assert.equal(items[0].label, "Capture Screenshot");
   assert.equal(items[1].label, "Change Capture Area...");
+});
+
+test("no screenshot items exist while recording but not ready (e.g. a mid-recording renderer reload)", () => {
+  assert.deepEqual(trayScreenshotItems({ phase: "recording", source: "mic", ready: false }), []);
+});
+
+test("canCapture requires both the recording phase and a ready renderer", () => {
+  assert.equal(canCapture({ phase: "recording", ready: true }), true);
+  assert.equal(canCapture({ phase: "recording", ready: false }), false);
+  assert.equal(canCapture({ phase: "idle", ready: true }), false);
+  assert.equal(canCapture(null), false);
+  assert.equal(canCapture(undefined), false);
+});
+
+test("shouldStartCapture allows a first capture when nothing is in flight and none has run yet", () => {
+  assert.equal(shouldStartCapture({ inFlight: false, lastCaptureAt: 0 }, 1_000), true);
+});
+
+test("shouldStartCapture blocks while a capture is already in flight", () => {
+  assert.equal(shouldStartCapture({ inFlight: true, lastCaptureAt: 0 }, 1_000), false);
+});
+
+test("shouldStartCapture blocks a repeat inside the cooldown window (defeats hotkey auto-repeat)", () => {
+  const now = 10_000;
+  assert.equal(shouldStartCapture({ inFlight: false, lastCaptureAt: now }, now + CAPTURE_COOLDOWN_MS - 1), false);
+});
+
+test("shouldStartCapture allows a capture once the cooldown has fully elapsed", () => {
+  const now = 10_000;
+  assert.equal(shouldStartCapture({ inFlight: false, lastCaptureAt: now }, now + CAPTURE_COOLDOWN_MS), true);
+});
+
+test("shouldStartCapture allows two deliberate captures a full second apart", () => {
+  const now = 10_000;
+  assert.ok(CAPTURE_COOLDOWN_MS < 1_000, "cooldown must be under a second so deliberate presses are never swallowed");
+  assert.equal(shouldStartCapture({ inFlight: false, lastCaptureAt: now }, now + 1_000), true);
+});
+
+test("notificationForCaptureFailure gives a titled, dash-free message for a thrown error", () => {
+  const note = notificationForCaptureFailure("error");
+  assert.equal(note.title, "Diariz");
+  assert.ok(note.body.length > 0);
+  assert.ok(!/[–—]/.test(note.body), "no em or en dashes in user-facing text");
+});
+
+test("notificationForCaptureFailure gives a distinct message when the display is unavailable", () => {
+  const note = notificationForCaptureFailure("unavailable");
+  assert.ok(!/[–—]/.test(note.body), "no em or en dashes in user-facing text");
+  assert.notEqual(note.body, notificationForCaptureFailure("error").body);
 });
 
 test("an accelerator with no modifier is rejected", () => {
