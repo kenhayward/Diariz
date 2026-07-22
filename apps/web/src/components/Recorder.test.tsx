@@ -61,7 +61,8 @@ import {
 } from "../lib/audioSource";
 import { loadPendingRecording, clearPendingRecording } from "../lib/pendingRecording";
 import { savePendingNotes, clearPendingNotes } from "../lib/pendingNotes";
-import { savePendingScreenshots, clearPendingScreenshots } from "../lib/pendingScreenshots";
+import { savePendingScreenshots, loadPendingScreenshots, clearPendingScreenshots } from "../lib/pendingScreenshots";
+import type { PendingScreenshots } from "../lib/pendingScreenshots";
 import Recorder from "./Recorder";
 
 // jsdom has no MediaRecorder; a minimal stub lets start() run without capturing real audio.
@@ -130,6 +131,32 @@ describe("Recorder recovery", () => {
     await waitFor(() => expect(clearPendingRecording).toHaveBeenCalledWith("u1"));
     expect(onUploaded).toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("button", { name: /upload now/i })).toBeNull());
+  });
+
+  it("attaches screenshots stashed during a failed take once the audio recovers", async () => {
+    // A prior take's audio upload failed (e.g. an expired session) but captures had already been taken
+    // and mirrored to the screenshot stash with recordingId: null. uploadPending() must adopt them onto
+    // the recovered recording, exactly as it already does for notes - not abandon them.
+    (loadPendingRecording as Mock).mockResolvedValue(pending);
+    (api.upload as Mock).mockResolvedValue({ id: "rec-recovered" });
+    (api.createScreenshot as Mock).mockResolvedValue({});
+    (loadPendingScreenshots as Mock).mockResolvedValue({
+      userId: "u1",
+      recordingId: null,
+      updatedAt: Date.now(),
+      shots: [{ capturedAtMs: 4200, width: 800, height: 600, full: new Blob(["a"]), thumb: new Blob(["b"]) }],
+    });
+
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /upload now/i }));
+
+    await waitFor(() =>
+      expect(api.createScreenshot).toHaveBeenCalledWith(
+        "rec-recovered",
+        expect.objectContaining({ capturedAtMs: 4200, width: 800, height: 600 }),
+      ),
+    );
+    await waitFor(() => expect(clearPendingScreenshots).toHaveBeenCalledWith("u1"));
   });
 
   it("discards an unsaved recording after confirmation", async () => {
@@ -886,6 +913,54 @@ describe("live screenshots", () => {
     fireEvent.click(screen.getByRole("button", { name: /attach screenshots/i }));
     await waitFor(() => expect(api.createScreenshot).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.queryByText(/screenshots were saved but could not be attached/i)).toBeNull());
+  });
+
+  it("keeps a capture taken while paused, stamped at the paused clock position", async () => {
+    // A paused recording is still live: a capture taken between pause() and resume() must be kept (not
+    // dropped) and stamped with the recorded clock frozen at the moment of pause - wall-clock time that
+    // passes while paused must not leak into capturedAtMs.
+    vi.useFakeTimers();
+    try {
+      installShell();
+      render(<Recorder onUploaded={() => {}} />);
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      fireEvent.click(screen.getByLabelText(/^record$/i));
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      // 5 seconds into the recording, pause.
+      await act(async () => {
+        vi.advanceTimersByTime(5_000);
+      });
+      fireEvent.click(screen.getByRole("button", { name: /^pause$/i }));
+
+      // Capture #1 right at pause - kept (not dropped) and stamped at the paused clock position.
+      await act(async () => {
+        capture({ width: 111, height: 111 });
+      });
+      const firstCall = (savePendingScreenshots as Mock).mock.calls.at(-1)![0] as PendingScreenshots;
+      expect(firstCall.recordingId).toBeNull();
+      expect(firstCall.shots).toHaveLength(1);
+      const pausedCapturedAtMs = firstCall.shots[0].capturedAtMs;
+
+      // Time keeps moving in the real world while still paused - the recorded clock must not.
+      await act(async () => {
+        vi.advanceTimersByTime(10_000);
+      });
+      await act(async () => {
+        capture({ width: 222, height: 222 });
+      });
+
+      const secondCall = (savePendingScreenshots as Mock).mock.calls.at(-1)![0] as PendingScreenshots;
+      expect(secondCall.shots).toHaveLength(2); // both captures kept, none dropped
+      expect(secondCall.shots.at(-1)!.capturedAtMs).toBe(pausedCapturedAtMs); // clock frozen, not advanced by the 10s paused wait
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("clears a stale, never-attached stash when a new recording starts", async () => {

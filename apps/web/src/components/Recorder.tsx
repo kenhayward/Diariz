@@ -777,6 +777,16 @@ export default function Recorder({
       } else {
         await attachNotes(created.id);
       }
+      // Same adoption for screenshots stashed with the failed take (recordingId null = never attached) -
+      // otherwise they'd stay orphaned in IndexedDB and the next start() would discard them outright.
+      if (liveShotsRef.current.length === 0 && userId) {
+        const shotStash = await loadPendingScreenshots(userId);
+        if (shotStash && shotStash.recordingId === null && shotStash.shots.length > 0) {
+          await attachScreenshots(created.id, { ...shotStash, recordingId: created.id });
+        }
+      } else {
+        await attachScreenshots(created.id);
+      }
       onUploaded();
     } catch (e) {
       setError(apiErrorMessage(e, t("errUpload")));
