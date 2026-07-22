@@ -40,6 +40,7 @@ builder.Services.Configure<AppPublicOptions>(builder.Configuration.GetSection(Ap
 builder.Services.Configure<IdentificationOptions>(builder.Configuration.GetSection(IdentificationOptions.Section));
 builder.Services.Configure<UploadOptions>(builder.Configuration.GetSection(UploadOptions.Section));
 builder.Services.Configure<AttachmentOptions>(builder.Configuration.GetSection(AttachmentOptions.Section));
+builder.Services.Configure<ScreenshotOptions>(builder.Configuration.GetSection(ScreenshotOptions.Section));
 builder.Services.Configure<McpOptions>(builder.Configuration.GetSection(McpOptions.Section));
 builder.Services.Configure<McpOAuthOptions>(builder.Configuration.GetSection(McpOAuthOptions.Section));
 
