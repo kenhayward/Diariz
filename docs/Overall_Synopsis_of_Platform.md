@@ -542,6 +542,74 @@ recording*. Failure posture: an enhancer failure renders the raw stamped lines a
 generate; a `notes` field with no notes renders "No notes were taken for this meeting." Design:
 `docs/superpowers/specs/2026-07-07-enhanced-notes-design.md`.
 
+## Meeting screenshots (desktop capture)
+
+The **Windows desktop app** can capture the screen while a recording is running (**`MeetingScreenshot`**, a
+row per capture; entity in `src/Diariz.Domain/Entities/MeetingScreenshot.cs`, migration
+`AddMeetingScreenshots`). A capture is triggered from a **configurable global hotkey**, the tray menu, or a
+button in the web app itself - all three funnel through the same main-process `captureScreenshot()`, which
+is a no-op unless a recording is actually running (`canCapture(recorder)`).
+
+**Capture-area contract: main owns the capture and the area, the renderer owns the pause-aware clock.**
+`apps/desktop/src/main.js` picks the target and grabs the pixels - it has no idea what time it is in the
+meeting. On the **first** capture of a recording it opens a full-screen overlay per display
+(`picker.html`/`picker-preload.js`) so the user chooses **a whole monitor or a dragged rectangle**; that
+target (`{ displayId, selection }`) is cached in memory and reused for every later capture in that
+recording, and is cleared on every transition into "recording" so a stale rectangle from a previous monitor
+layout can never silently capture the wrong thing. A tray/recorder "Change capture area" action
+(`screenshot:change-area`) forgets the cached target and reopens the picker mid-meeting. The grabbed image
+is resized so its **long edge is capped at 2560px** (`MAX_LONG_EDGE`) and a **320px-long-edge JPEG
+thumbnail** is derived from it, then both are pushed to the renderer as raw bytes - main never touches the
+recording clock or uploads anything. The **renderer** (`Recorder.tsx`) is the only side that knows about
+pauses: it stamps each arriving capture with the current *recorded* time via the same pause-aware
+`recorderTiming` helper `MeetingNote` lines use, mirrors it to IndexedDB (`lib/pendingScreenshots.ts`) so a
+crash never loses an unattached capture, and uploads it to `POST /api/recordings/{id}/screenshots` once the
+recording row exists (an attach failure keeps the capture durable behind a retry banner, exactly like the
+notes stash).
+
+**IPC channels** (main ⇄ renderer/picker/hotkey windows, `contextBridge`-exposed, never raw `ipcRenderer` in
+the web app):
+
+| Channel | Direction | Payload |
+|---|---|---|
+| `screenshot:capture` | renderer → main (invoke) | none - captures now, opening the picker first if this recording has no target yet |
+| `screenshot:change-area` | renderer → main (invoke) | none - forgets the cached target and reopens the picker |
+| `screenshot:captured` | main → renderer (event) | `{ full, thumb, width, height }` (PNG/JPEG bytes as `Uint8Array`) |
+| `picker:choose` | picker window → main (send) | the user's selection (`{ displayId, selection }` or a whole-monitor pick) |
+| `picker:cancel` | picker window → main (send) | none - the overlay was dismissed (Escape) without a choice |
+| `hotkey:load` | hotkey window → main (invoke) | none → returns the stored accelerator (or the default) |
+| `hotkey:save` | hotkey window → main (invoke) | a candidate accelerator → `{ ok, error? }`; only saves one that is both well-formed and provably registrable |
+
+**Endpoints** (`ScreenshotsController`, `api/recordings/{recordingId}/screenshots`, owner-only like every
+recording route):
+
+- `GET /` - list a recording's captures, ordered by `CapturedAtMs`.
+- `POST /` - store one capture: multipart `full` (PNG) + `thumb` (JPEG) + `capturedAtMs`/`width`/`height`;
+  enforces a combined-size cap (`Screenshots:MaxBytes`, default 20 MB) and the owner's storage quota before
+  writing either blob.
+- `GET /{screenshotId}/content` / `GET /{screenshotId}/thumb` - stream the full image / thumbnail.
+- `DELETE /{screenshotId}` - deletes both blobs before the row, then the row.
+
+**`?access_token=` image URLs.** An `<img>` tag cannot set an Authorization header, so
+`api.screenshotContentUrl`/`screenshotThumbUrl` append the bearer as an `access_token` query parameter,
+exactly the same mechanism already used for the audio stream, attachment content, and SignalR's WS
+handshake (`Program.cs`'s `OnMessageReceived` allow-lists the `/content`/`/thumb` suffixes under
+`/api/recordings` alongside `/audio`).
+
+Screenshot images count toward the owner's storage quota (`StorageUsage` sums `MeetingScreenshot.SizeBytes`
+alongside recordings and attachments). Deleting a recording deletes its screenshot blobs explicitly (the DB
+cascade only clears the rows). **Merge is asymmetric with attachments:** attachments are reassigned onto the
+survivor, but screenshots are not - a merged-away source's screenshot blobs are freed (both the synchronous
+no-audio path in `RecordingsController` and the async `WorkerMergeCallbackController` path) rather than
+carried forward, since a screenshot's captured-time offset is meaningless once its source recording's audio
+has been spliced into a different timeline.
+
+**Transcript weave.** A screenshot anchors into the transcript the same way a stamped `MeetingNote` does
+(`weaveTranscript`, greatest `StartMs ≤ CapturedAtMs`) and participates in the same same-speaker merge-break
+rule: `RecordingsController` unions note and screenshot capture times before calling
+`TranscriptNoteAnchor.BreakBeforeIndices`, so a screenshot between two same-speaker turns stops `SegmentMerger`
+from collapsing them past it, exactly like a note does.
+
 ## MCP server (connect Claude to transcripts)
 
 Diariz hosts a **Model Context Protocol server in-process** (the official `ModelContextProtocol.AspNetCore`

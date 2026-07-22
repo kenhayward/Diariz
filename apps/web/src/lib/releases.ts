@@ -19,6 +19,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Recording hub** | Every meeting opens on a hub: a summary card (meeting type, key facts, the summary inline) over tiles for transcript, actions, speakers, notes, files, and formulas - each showing its count and a preview, with new-note / add-file / run-formula available in place. The transcript embeds a conversation-flow player showing who spoke when, which doubles as the scrubber. |
 | **Speaker identification** | Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). Assign a speaker from the Speakers tab or straight from the label on any transcript row, as you read or listen. |
 | **Notes** | Take your own note lines live during a meeting (timestamped, crash-safe); they appear inline in the transcript at the moment you wrote them, steer the minutes, and can be woven into an enhanced-notes section linking to the exact transcript moments. |
+| **Meeting screenshots** | Capture the screen during a recording from the desktop app - a hotkey, the tray menu, or the app itself - choosing a screen or a rectangle on the first capture and reusing it after; captures appear in the transcript at the moment they were taken, as a full-size viewer, and in a Notes-tab section. |
 | **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable. A meeting type carries no prompts of its own: it names the **formula** that generates its minutes, plus any others to run alongside (their documents appear in the Formulas tab). Minutes and formulas are the same machinery - any formula you can use can produce your minutes. Templates are built from blocks (H1-H3 headings, literal text, substituted details, model prompts, rules, drag-to-reorder) with JSON import/export. |
 | **Action items** | Auto-extracted with owner and deadline, tracked across every meeting with completion and a person filter, linking back to the transcript. |
 | **Tag cloud** | Every meeting is auto-tagged with weighted topics; a Tags tab shows a weighted cloud and the meetings behind each tag. |
@@ -54,6 +55,27 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.146.0",
+    date: "2026-07-22",
+    pr: 0, // replace with the real PR number
+    headline: "Capture screenshots during a meeting",
+    summary:
+      "The Windows desktop app can now capture the screen while you record. The first capture in a meeting asks which screen or which rectangle to use, and every later capture in that meeting reuses it (change it any time from the tray or the recorder). Screenshots appear inline in the transcript at the moment they were taken, as thumbnails you can click to view full size with previous/next, a jump back to that moment, download, and delete. The Notes tab lists them in a collapsed Screenshots section, and a live strip in the recorder's notes popover lets you catch a mis-aimed capture area during the meeting instead of after it.",
+    added: [
+      "Capture a screenshot while recording, from a configurable global hotkey, the tray menu, or the app",
+      "Choose a whole screen or a rectangle on the first capture of each meeting, and change it mid-meeting",
+      "Screenshots appear inline in the transcript at their captured time, with a full-size viewer (previous/next, jump to moment, download, delete)",
+      "A live strip of this meeting's captures in the recorder's notes popover",
+      "A collapsed Screenshots section in the Notes tab lists a recording's captures",
+    ],
+    changed: [
+      "Screenshot images count toward your storage quota, alongside recordings and attachments",
+    ],
+    fixed: [
+      "A note or screenshot between two turns by the same speaker no longer lets those turns merge past it",
+    ],
+  },
   {
     version: "0.145.1",
     date: "2026-07-21",

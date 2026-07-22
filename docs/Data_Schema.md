@@ -86,6 +86,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `MeetingTypesPointAtFormulas` | `MeetingTypes.PrimaryFormulaId` (uuid FK → Formulas, **RESTRICT**) + `MeetingTypeFormulas` (the additional formulas run alongside the minutes; `MeetingTypeId`/`FormulaId` FK **Cascade**, `Ordinal`, unique on the pair) replace `MeetingTypes.ContentJson`: the column and table are added, **every meeting type's template is converted into a Formula** (preserving scope - a seeded standard becomes a built-in `Diariz` formula, an admin Platform type a `Platform` one, a user's Personal type a `Personal` one they own) and linked, and only then is `ContentJson` dropped. `Down` copies the primary formula's template back before unlinking (break-glass, not an inverse). The data is carried forward rather than discarded, so an older backup still restores and is rolled up by this migration - **no `MaintenanceController.CurrentFormat` bump** |
 | `AddFormulaContent` | `Formulas.ContentJson` (**jsonb**, default `{"sections":[]}`) replaces `Formulas.Prompt`: the column is added, **backfilled from `Prompt`** (each prompt wrapped as one headless level-0 section holding one prompt block, via `jsonb_build_object` so any quotes/newlines stay escaped), and only then is `Prompt` dropped. A formula becomes a structured template, the same shape a meeting type uses. `Down` recovers the first prompt block (lossy for a genuinely structured formula - break-glass, not an inverse). Destructive column drop, but the data is preserved by the backfill and older backups restore fine onto it, so **no `MaintenanceController.CurrentFormat` bump** |
 | `AddSectionFormulaResults` | `SectionFormulaResults` table (a formula run over a folder + its sub-sections; `SectionId` FK `ON DELETE CASCADE`, `FormulaId`/`CreatedByUserId` FK `ON DELETE SET NULL`, `Status`/`Error` like `FormulaResults`, index `(SectionId, Ordinal)`) — additive new table, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddMeetingScreenshots` | `MeetingScreenshots` (screen captures taken during a recording from the desktop app; cascade FKs from both `AspNetUsers` and `Recordings`, index `(RecordingId, CapturedAtMs)`) — additive new table, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
 
@@ -300,6 +301,33 @@ event keys cleared, ordinals appended after existing lines (one-way, additive; u
 
 Indexes: `(RecordingId, Ordinal)`, `(UserId, CalendarId, EventId)`. CRUD at
 `/api/recordings/{id}/notes` and `/api/calendar/events/{calendarId}/{eventId}/notes`.
+
+#### `MeetingScreenshots`
+A screen capture taken during a recording from the **desktop client** (Windows only, for now). Two blobs
+per row: the full PNG and a small JPEG thumbnail. `CapturedAtMs` is the offset into the *recorded* (pause-
+aware) clock stamped by the recorder - an immutable capture fact, so unlike `MeetingNote.CapturedAtMs` it is
+non-nullable here.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `UserId` | uuid FK → AspNetUsers | owner (the recording's owner at capture time); **cascade** |
+| `RecordingId` | uuid FK → Recordings | **cascade** |
+| `CapturedAtMs` | bigint | offset into the recording clock (pause-aware); not user-editable |
+| `BlobKey` | varchar(512) | object-storage key of the full PNG |
+| `ThumbBlobKey` | varchar(512) | object-storage key of the JPEG thumbnail |
+| `Width` / `Height` | int | pixel dimensions of the full image (long edge capped at 2560) |
+| `SizeBytes` | bigint | full plus thumbnail bytes combined; counts toward the owner's storage quota |
+| `Ordinal` | int | 0-based sort order within the recording |
+| `CreatedAt` | timestamptz | |
+
+Indexes: `(RecordingId, CapturedAtMs)` (transcript-weave lookups and list ordering), `UserId`. CRUD +
+streaming at `/api/recordings/{id}/screenshots` (`GET`/`POST`, `GET {id}/content`, `GET {id}/thumb`,
+`DELETE {id}`); the content/thumb routes accept the bearer as an `access_token` query parameter so an
+`<img>` tag can load them directly. Deleting a recording deletes both blobs of every screenshot explicitly
+(the cascade above only removes the rows); merging a recording away does the same rather than reassigning
+its screenshots to the survivor (unlike attachments), since a capture's clock offset has no meaning once its
+source recording's audio has been spliced into a different timeline.
 
 #### `Formulas`
 A saved **template** + a chosen context, run over a recording to produce a Markdown `FormulaResult`. `Scope`
@@ -818,10 +846,16 @@ rendered on demand by the API from the database.
   the API streams them back same-origin (inline) and counts their bytes toward the user's quota.
 - **Folder-direct attachment files** use key `{userId}/section-attachments/{attachmentId}{ext}` (stored on
   `SectionAttachment.BlobKey`); same streaming + quota behaviour, keyed on the folder instead of a recording.
-- **Blob lifecycle on delete/merge:** deleting a recording also deletes its attachment-file blobs (the DB
-  cascade only removes the rows). Merging **moves** the merged-away recordings' attachments onto the survivor
-  (rows reparented, blobs kept), so nothing is orphaned; the audio-merge worker callback also defensively
-  frees any attachment blob still on a source it removes.
+- **Meeting screenshots** use **two** keys per capture: `{userId}/screenshots/{id}.png` (the full image,
+  stored on `MeetingScreenshot.BlobKey`) and `{userId}/screenshots/{id}.thumb.jpg` (the thumbnail, on
+  `MeetingScreenshot.ThumbBlobKey`). Both are streamed back the same way audio/attachments are (same-origin,
+  never a presigned MinIO URL) and count toward the owner's quota.
+- **Blob lifecycle on delete/merge:** deleting a recording also deletes its attachment-file and
+  screenshot blobs (the DB cascade only removes the rows). Merging **moves** the merged-away recordings'
+  attachments onto the survivor (rows reparented, blobs kept), so nothing is orphaned; screenshots are
+  **not** reassigned - their blobs are freed instead, both from the synchronous no-audio merge path and from
+  the audio-merge worker callback, which also defensively frees any attachment blob still on a source it
+  removes.
 
 ### Access pattern (who reads/writes)
 
