@@ -179,6 +179,76 @@ describe("SectionDetail formulas tab", () => {
   });
 });
 
+describe("SectionDetail formula-result mutation gating", () => {
+  // Mirrors SectionFormulaResultsController.CanEditAsync: the result's creator OR a member with ManageContents
+  // in the FOLDER'S OWN room (section.roomId) - resolved against the folder's real room, never useRoom()'s
+  // URL-derived one (which falls back to the caller's personal room, holding every permission, on the
+  // room-less legacy /sections/:id link - see the folder-attachment gating tests above for that trap).
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    (api.listSectionFormulaResults as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (api.getSectionFormulaResultText as ReturnType<typeof vi.fn>).mockResolvedValue("body");
+    (api.listFormulas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  });
+
+  it("enables Delete for the result's creator, even without ManageContents in the folder's room", async () => {
+    roomsState.rooms = [
+      { id: "personal-1", name: "You", kind: 0, icon: null, color: null, isPersonal: true, permissions: 63, sectionCount: 0, recordingCount: 0 },
+      { id: "shared-1", name: "Eng", kind: 1, icon: null, color: null, isPersonal: false, permissions: RoomPermission.CreateRecording, sectionCount: 0, recordingCount: 0 },
+    ];
+    (api.listSectionFormulaResults as ReturnType<typeof vi.fn>).mockResolvedValue([
+      result({ createdByUserId: "u1" }), // "u1" is the caller (useAuth mock)
+    ]);
+    renderPage({ ...base, roomId: "shared-1" });
+    await loaded();
+    openTab(/formulas/i);
+
+    fireEvent.click(await screen.findByText("Risk Register"));
+    expect((screen.getByRole("button", { name: /^open$/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /^download$/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /^email$/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /^delete$/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("disables Delete for a non-creator without ManageContents in the folder's room", async () => {
+    roomsState.rooms = [
+      { id: "personal-1", name: "You", kind: 0, icon: null, color: null, isPersonal: true, permissions: 63, sectionCount: 0, recordingCount: 0 },
+      { id: "shared-1", name: "Eng", kind: 1, icon: null, color: null, isPersonal: false, permissions: RoomPermission.CreateRecording, sectionCount: 0, recordingCount: 0 },
+    ];
+    (api.listSectionFormulaResults as ReturnType<typeof vi.fn>).mockResolvedValue([
+      result({ createdByUserId: "u-someone-else" }),
+    ]);
+    renderPage({ ...base, roomId: "shared-1" }); // note: room-less legacy URL, real room resolved from section.roomId
+    await loaded();
+    openTab(/formulas/i);
+
+    fireEvent.click(await screen.findByText("Risk Register"));
+    // Reads stay available.
+    expect((screen.getByRole("button", { name: /^open$/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /^download$/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /^email$/i }) as HTMLButtonElement).disabled).toBe(false);
+    // The mutation is not.
+    expect((screen.getByRole("button", { name: /^delete$/i }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("enables Delete for a non-creator who holds ManageContents in the folder's room", async () => {
+    roomsState.rooms = [
+      { id: "personal-1", name: "You", kind: 0, icon: null, color: null, isPersonal: true, permissions: 63, sectionCount: 0, recordingCount: 0 },
+      { id: "shared-1", name: "Eng", kind: 1, icon: null, color: null, isPersonal: false, permissions: RoomPermission.ManageContents, sectionCount: 0, recordingCount: 0 },
+    ];
+    (api.listSectionFormulaResults as ReturnType<typeof vi.fn>).mockResolvedValue([
+      result({ createdByUserId: "u-someone-else" }),
+    ]);
+    renderPage({ ...base, roomId: "shared-1" });
+    await loaded();
+    openTab(/formulas/i);
+
+    fireEvent.click(await screen.findByText("Risk Register"));
+    expect((screen.getByRole("button", { name: /^delete$/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
 describe("SectionDetail folder-attachment room gating", () => {
   beforeEach(() => {
     vi.clearAllMocks();

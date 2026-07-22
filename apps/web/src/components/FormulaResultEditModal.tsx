@@ -6,9 +6,10 @@ import MeetingMinutesEditModal from "./MeetingMinutesEditModal";
 
 /// View/edit a formula result's generated Markdown. Mirrors MarkdownAttachmentEditModal: fetches the
 /// current content, then either opens the TipTap editor (the `editable` default) or renders it read-only
-/// via renderMarkdown. Phase 1 always passes `editable=true` (the recording owner is always the result's
-/// creator), but the prop exists now so a future viewer role (e.g. a shared-room member who is neither the
-/// creator nor the owner) just needs to compute and pass `false` - no shape change here.
+/// via renderMarkdown. RecordingDetail/SectionDetail compute `editable` per result - the creator OR (per
+/// side) the recording's owner / a room member with ManageContents - mirroring the server's own edit gate
+/// (FormulaResultsController.CanEdit / SectionFormulaResultsController.CanEditAsync), so Save is never shown
+/// to a caller whose PUT would 403.
 export default function FormulaResultEditModal({
   name,
   load,

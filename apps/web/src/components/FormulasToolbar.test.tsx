@@ -2,7 +2,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import FormulasToolbar from "./FormulasToolbar";
 
-function setup(selectedId: string | null) {
+function setup(selectedId: string | null, canManageSelected = true) {
   const handlers = {
     onRun: vi.fn(),
     onOpen: vi.fn(),
@@ -10,7 +10,7 @@ function setup(selectedId: string | null) {
     onEmail: vi.fn(),
     onDelete: vi.fn(),
   };
-  render(<FormulasToolbar selectedId={selectedId} {...handlers} />);
+  render(<FormulasToolbar selectedId={selectedId} canManageSelected={canManageSelected} {...handlers} />);
   return handlers;
 }
 
@@ -36,6 +36,14 @@ describe("FormulasToolbar", () => {
     expect(disabled(/download/i)).toBe(false);
     expect(disabled(/email/i)).toBe(false);
     expect(disabled(/delete/i)).toBe(false);
+  });
+
+  it("disables only Delete (not Open/Download/Email) when selected but the caller cannot manage the result", () => {
+    setup("res-1", false);
+    expect(disabled(/^open$/i)).toBe(false);
+    expect(disabled(/download/i)).toBe(false);
+    expect(disabled(/email/i)).toBe(false);
+    expect(disabled(/delete/i)).toBe(true);
   });
 
   it("invokes the matching handler for each button", () => {

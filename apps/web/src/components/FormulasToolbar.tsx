@@ -2,11 +2,15 @@ import { useTranslation } from "react-i18next";
 import ToolbarButton, { iconProps } from "./ToolbarButton";
 import FlaskIcon from "./FlaskIcon";
 
-/// Toolbar for the Formulas tab: Run formula (always enabled) · Open / Download / Email / Delete (gated on
-/// exactly one selected result - the tab's select-then-toolbar, modeled on ActionsToolbar/the transcript
-/// segment toolbar). Selection is a single id lifted to RecordingDetail and shared with FormulasManager.
+/// Toolbar for the Formulas tab: Run formula (always enabled) · Open / Download / Email (read - gated only on
+/// a result being selected) · Delete (a mutation - additionally gated on `canManageSelected`, since the server
+/// only lets the result's creator or someone with room-manage permission delete it: mirrors
+/// `SectionFormulaResultsController.CanEditAsync` / `FormulaResultsController.CanEdit`). Modeled on
+/// ActionsToolbar/the transcript segment toolbar. Selection is a single id lifted to RecordingDetail/
+/// SectionDetail and shared with FormulasManager.
 export default function FormulasToolbar({
   selectedId,
+  canManageSelected,
   onRun,
   onOpen,
   onDownload,
@@ -14,6 +18,10 @@ export default function FormulasToolbar({
   onDelete,
 }: {
   selectedId: string | null;
+  /// Whether the CALLER may mutate the currently selected result (creator, or - per side - room ManageContents
+  /// / recording ownership). Ignored when nothing is selected. Only gates Delete: Open/Download/Email are
+  /// reads, available to anyone who can already see the result.
+  canManageSelected: boolean;
   onRun: () => void;
   onOpen: () => void;
   onDownload: () => void;
@@ -31,7 +39,7 @@ export default function FormulasToolbar({
       <ToolbarButton label={t("openFormula")} icon={<OpenIcon />} onClick={onOpen} disabled={!hasSelection} />
       <ToolbarButton label={t("downloadFormula")} icon={<DownloadIcon />} onClick={onDownload} disabled={!hasSelection} />
       <ToolbarButton label={t("emailFormula")} icon={<MailIcon />} onClick={onEmail} disabled={!hasSelection} />
-      <ToolbarButton label={t("deleteFormula")} icon={<TrashIcon />} onClick={onDelete} disabled={!hasSelection} />
+      <ToolbarButton label={t("deleteFormula")} icon={<TrashIcon />} onClick={onDelete} disabled={!hasSelection || !canManageSelected} />
       {hasSelection && <span className="ml-1 text-xs text-blue-700 dark:text-blue-300">1</span>}
     </>
   );

@@ -747,6 +747,56 @@ describe("RecordingDetail", () => {
     await waitFor(() => expect(api.downloadFormulaResult).toHaveBeenCalledWith("rec-123", "fr1"));
   });
 
+  // Formula-result mutation gating mirrors FormulaResultsController.CanEdit: the result's creator OR the
+  // recording's owner (recordedByUserId) - NOT a room permission (the recording-side rule has no ManageContents
+  // check at all, unlike the section side). Open/Download/Email stay enabled regardless - they're reads.
+  it("enables Delete for the result's creator, even when they are not the recording's owner", async () => {
+    authState.id = "u-creator"; // rec.recordedByUserId is "u-owner"
+    (api.listFormulaResults as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "fr1", recordingId: "rec-123", name: "Action Items", status: "Ready", error: null, createdByUserId: "u-creator", createdAt: base.createdAt, updatedAt: base.createdAt, origin: { kind: "personal", personName: "You", personPictureUrl: null } },
+    ]);
+    renderPage(base);
+    await loaded();
+    openTab("Formulas");
+
+    fireEvent.click(await screen.findByText("Action Items"));
+    expect((screen.getByRole("button", { name: /^open$/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /^download$/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /^email$/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /^delete$/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("disables Delete for a room co-viewer who neither created the result nor owns the recording", async () => {
+    authState.id = "u-viewer"; // rec.recordedByUserId is "u-owner"
+    (api.listFormulaResults as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "fr1", recordingId: "rec-123", name: "Action Items", status: "Ready", error: null, createdByUserId: "u-creator", createdAt: base.createdAt, updatedAt: base.createdAt, origin: { kind: "personal", personName: "You", personPictureUrl: null } },
+    ]);
+    renderPage(base);
+    await loaded();
+    openTab("Formulas");
+
+    fireEvent.click(await screen.findByText("Action Items"));
+    // Reads stay available.
+    expect((screen.getByRole("button", { name: /^open$/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /^download$/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /^email$/i }) as HTMLButtonElement).disabled).toBe(false);
+    // The mutation is not.
+    expect((screen.getByRole("button", { name: /^delete$/i }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("enables Delete for the recording's owner, even for a result they did not create", async () => {
+    authState.id = "u-owner"; // rec.recordedByUserId is "u-owner"
+    (api.listFormulaResults as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "fr1", recordingId: "rec-123", name: "Action Items", status: "Ready", error: null, createdByUserId: "u-creator", createdAt: base.createdAt, updatedAt: base.createdAt, origin: { kind: "personal", personName: "You", personPictureUrl: null } },
+    ]);
+    renderPage(base);
+    await loaded();
+    openTab("Formulas");
+
+    fireEvent.click(await screen.findByText("Action Items"));
+    expect((screen.getByRole("button", { name: /^delete$/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("shows the Notes tab, lists notes, and adds one on Enter", async () => {
     (api.listNotes as ReturnType<typeof vi.fn>).mockResolvedValue([
       { id: "n1", text: "Comp expectations", capturedAtMs: 61_000, ordinal: 0, createdAt: base.createdAt },

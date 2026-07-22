@@ -106,6 +106,16 @@ export default function SectionDetail() {
   const canManageFolder = !!sectionRoom && (sectionRoom.permissions & RoomPermission.ManageContents) !== 0;
   const roomBasePath = sectionRoom && !sectionRoom.isPersonal ? `/rooms/${sectionRoom.id}` : "";
 
+  // Formula-result mutation gate: mirrors SectionFormulaResultsController.CanEditAsync - the result's creator
+  // OR a member with ManageContents in the folder's OWN room (canManageFolder above, already resolved against
+  // section.roomId rather than the URL-derived room). Open/Download/Email are reads (the server only gates
+  // List/Get/Download/Email on section membership, not per-result), so only Delete (and the "Open" modal's
+  // Save, via `editable` below) needs this.
+  const canManageFormulaResult = (r: { createdByUserId: string | null }) =>
+    (myId != null && r.createdByUserId === myId) || canManageFolder;
+  const selectedFormulaResult = formulaResults.find((r) => r.id === selectedFormulaResultId) ?? null;
+  const canManageSelectedFormulaResult = !!selectedFormulaResult && canManageFormulaResult(selectedFormulaResult);
+
   const refetchSection = () => qc.invalidateQueries({ queryKey: ["section", id] });
   const run = async (fn: () => Promise<unknown>, fallback: string, invalidate: unknown[]) => {
     setError(null);
@@ -326,6 +336,7 @@ export default function SectionDetail() {
     toolbar: (
       <FormulasToolbar
         selectedId={selectedFormulaResultId}
+        canManageSelected={canManageSelectedFormulaResult}
         onRun={() => setFormulaRunOpen(true)}
         onOpen={openFormulaResult}
         onDownload={downloadFormulaResult}
@@ -421,6 +432,7 @@ export default function SectionDetail() {
           save={(md) => api.updateSectionFormulaResult(id, editingFormulaResult.id, md).then(() => undefined)}
           onSaved={refreshFormulas}
           onClose={() => setEditingFormulaResult(null)}
+          editable={canManageFormulaResult(editingFormulaResult)}
         />
       )}
       {managingFormulas && (
