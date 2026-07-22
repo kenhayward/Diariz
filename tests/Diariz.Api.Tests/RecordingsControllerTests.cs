@@ -2702,6 +2702,52 @@ public class RecordingsControllerTests
     }
 
     [Fact]
+    public async Task Merge_SyncPath_FreesSourceScreenshotBlobs_ButLeavesSurvivorsScreenshotsAlone()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        // No audio on either → synchronous merge that deletes the source row.
+        var early = await SeedMergeable(db, userId, DateTimeOffset.UtcNow.AddMinutes(-5), 1000, "Hello");
+        var later = await SeedMergeable(db, userId, DateTimeOffset.UtcNow, 2000, "World");
+        foreach (var r in new[] { early, later }) { r.AudioDeletedAt = DateTimeOffset.UtcNow; r.SizeBytes = 0; }
+
+        // A screenshot still hanging off the merged-away source must have both its blobs freed.
+        var laterFullKey = $"{userId}/screenshots/{Guid.NewGuid()}.png";
+        var laterThumbKey = $"{userId}/screenshots/{Guid.NewGuid()}-thumb.jpg";
+        db.MeetingScreenshots.Add(new MeetingScreenshot
+        {
+            Id = Guid.NewGuid(), UserId = userId, RecordingId = later.Id,
+            BlobKey = laterFullKey, ThumbBlobKey = laterThumbKey, CapturedAtMs = 1500,
+        });
+
+        // The survivor's own screenshot blobs must NOT be touched by the merge.
+        var earlyFullKey = $"{userId}/screenshots/{Guid.NewGuid()}.png";
+        var earlyThumbKey = $"{userId}/screenshots/{Guid.NewGuid()}-thumb.jpg";
+        db.MeetingScreenshots.Add(new MeetingScreenshot
+        {
+            Id = Guid.NewGuid(), UserId = userId, RecordingId = early.Id,
+            BlobKey = earlyFullKey, ThumbBlobKey = earlyThumbKey, CapturedAtMs = 500,
+        });
+        await db.SaveChangesAsync();
+
+        storage.Objects[laterFullKey] = Encoding.UTF8.GetBytes("png");
+        storage.Objects[laterThumbKey] = Encoding.UTF8.GetBytes("jpg");
+        storage.Objects[earlyFullKey] = Encoding.UTF8.GetBytes("png2");
+        storage.Objects[earlyThumbKey] = Encoding.UTF8.GetBytes("jpg2");
+        var controller = Build(db, userId, new FakeJobQueue(), storage);
+
+        var result = await controller.Merge(new MergeRecordingsRequest([later.Id, early.Id]));
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Null(await db.Recordings.FindAsync(later.Id));           // source removed synchronously
+        Assert.False(storage.Objects.ContainsKey(laterFullKey));        // source screenshot's full image freed
+        Assert.False(storage.Objects.ContainsKey(laterThumbKey));       // source screenshot's thumbnail freed
+        Assert.True(storage.Objects.ContainsKey(earlyFullKey));         // survivor's screenshot untouched
+        Assert.True(storage.Objects.ContainsKey(earlyThumbKey));        // survivor's thumbnail untouched
+    }
+
+    [Fact]
     public async Task Merge_AsyncPath_MovesSourceAttachmentsOntoSurvivor_BeforeEnqueue()
     {
         using var db = TestDb.Create();

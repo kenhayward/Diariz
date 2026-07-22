@@ -1206,8 +1206,13 @@ public class RecordingsController : ControllerBase
         if (audioSources.Count == 0)
         {
             // No audio to stitch — finish synchronously: the merged transcript + actions are already on the
-            // survivor; just drop the source recordings (their audio is already gone).
+            // survivor; just drop the source recordings (their audio is already gone). Attachments were
+            // reassigned onto the survivor above, but screenshots are not - free their blobs first (the DB
+            // cascade only clears the MeetingScreenshot rows), same as the async path's worker callback.
             survivor.Status = RecordingStatus.Transcribed;
+            foreach (var sourceId in sourceIds)
+                foreach (var key in await ScreenshotKeysAsync(sourceId))
+                    await _storage.DeleteAsync(key);
             _db.Recordings.RemoveRange(ordered.Skip(1));
             await _db.SaveChangesAsync();
             await _hub.NotifyStatusAsync(UserId, survivor.Id, survivor.Status.ToString());
