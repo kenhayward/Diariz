@@ -3,10 +3,11 @@ import { api } from "../lib/api";
 import { formatDuration } from "../lib/format";
 import type { Screenshot } from "../lib/types";
 
-/// A row of capture thumbnails. Used both in the live recorder popover (immediate feedback that the
-/// capture area is right) and in the Notes tab's collapsed section - kept free of assumptions about
-/// its surroundings so both callers can drop it in as-is. Purely presentational: clicking a thumbnail
-/// hands the index to the parent, which owns whether/where a ScreenshotModal opens.
+/// A row of capture thumbnails, used by the Notes tab's collapsed Screenshots section
+/// (`ScreenshotsSection`). The live recorder popover and the transcript's screenshot rows each hand-roll
+/// their own thumbnail markup rather than reusing this component (a three-way extraction is a tracked
+/// follow-up). Purely presentational: clicking a thumbnail hands the index to the parent, which owns
+/// whether/where a ScreenshotModal opens.
 export default function ScreenshotStrip({
   recordingId,
   shots,
