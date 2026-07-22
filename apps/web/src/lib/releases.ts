@@ -56,6 +56,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.146.1",
+    date: "2026-07-22",
+    pr: 0,
+    headline: "Hide folder-page edit controls a co-viewer can't use",
+    summary:
+      "A shared folder's Notes, Actions, and Attachments tabs aggregate rows from every recording in the folder, some of which belong to other room members. Edit, complete, and delete are owner-only on the server, but the folder page was offering those controls on every row regardless of whose recording it came from, so a co-viewer would click Edit or Delete and get an error. The page now checks each row's recording owner (the same check the recording page already uses) and only shows edit/delete/complete-toggle on rows you own; other rows still show their text, and a shared attachment link still opens (no permission needed to follow a URL), but its own edit/remove controls are hidden too.",
+    fixed: [
+      "The folder page's Notes tab no longer offers edit/delete on a row from someone else's recording",
+      "The folder page's Actions tab no longer offers edit/delete/complete on a row from someone else's recording",
+      "The folder page's Attachments tab no longer offers open/edit/remove on a file-attachment row from someone else's recording",
+    ],
+  },
+  {
     version: "0.146.0",
     date: "2026-07-22",
     pr: 320,

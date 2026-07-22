@@ -7,15 +7,22 @@ import type { ActionListItem } from "../lib/types";
 type Patch = { text?: string; actor?: string; deadline?: string };
 
 /// The folder Actions tab: every action across the folder's recordings (and sub-folders), with a read-only
-/// **Meeting** column linking back to the source recording. Edit + delete are allowed (reusing the per-item
-/// endpoints); adding is not (actions belong to a recording, not a folder).
+/// **Meeting** column linking back to the source recording. Edit/complete/delete reuse the per-item endpoints
+/// (owner-only - see `RecordingActionsController`/`ActionsController.Complete`), so they're only offered on a
+/// row whose source recording belongs to `myUserId`; a room co-viewer's rows (from someone else's recording)
+/// show as plain read-only text and a disabled checkbox. Adding is not offered (actions belong to a recording,
+/// not a folder).
 export default function FolderActionsTable({
   items,
+  myUserId,
   onUpdate,
   onToggleComplete,
   onDelete,
 }: {
   items: ActionListItem[];
+  /// The signed-in user's id (`useAuth().id`), compared against each row's `recordedByUserId` - mirrors
+  /// RecordingDetail's `isOwner` check, just applied per row since rows here span many recordings.
+  myUserId: string | null;
   onUpdate: (recordingId: string, id: string, patch: Patch) => void;
   onToggleComplete: (id: string, completed: boolean) => void;
   onDelete: (recordingId: string, id: string) => void;
@@ -42,7 +49,16 @@ export default function FolderActionsTable({
         </thead>
         <tbody>
           {items.map((a, i) => (
-            <Row key={a.id} action={a} row={i + 1} basePath={basePath} onUpdate={onUpdate} onToggleComplete={onToggleComplete} onDelete={onDelete} />
+            <Row
+              key={a.id}
+              action={a}
+              row={i + 1}
+              basePath={basePath}
+              isOwner={myUserId != null && a.recordedByUserId === myUserId}
+              onUpdate={onUpdate}
+              onToggleComplete={onToggleComplete}
+              onDelete={onDelete}
+            />
           ))}
         </tbody>
       </table>
@@ -51,11 +67,12 @@ export default function FolderActionsTable({
 }
 
 function Row({
-  action, row, basePath, onUpdate, onToggleComplete, onDelete,
+  action, row, basePath, isOwner, onUpdate, onToggleComplete, onDelete,
 }: {
   action: ActionListItem;
   row: number;
   basePath: string;
+  isOwner: boolean;
   onUpdate: (recordingId: string, id: string, patch: Patch) => void;
   onToggleComplete: (id: string, completed: boolean) => void;
   onDelete: (recordingId: string, id: string) => void;
@@ -73,31 +90,46 @@ function Row({
         <input
           type="checkbox"
           checked={action.completed}
-          onChange={() => onToggleComplete(action.id, !action.completed)}
+          disabled={!isOwner}
+          onChange={() => isOwner && onToggleComplete(action.id, !action.completed)}
           aria-label={t("markCompleteAria", { row })}
           className="mt-1.5"
         />
       </td>
       <td className="py-1 pr-2">
-        <Cell label={t("actionCellAria", { row })} value={action.text} strike={action.completed} commit={(v) => onUpdate(action.recordingId, action.id, { text: v })} />
+        {isOwner ? (
+          <Cell label={t("actionCellAria", { row })} value={action.text} strike={action.completed} commit={(v) => onUpdate(action.recordingId, action.id, { text: v })} />
+        ) : (
+          <span className={`block w-full px-2 py-1 text-sm dark:text-gray-200 ${action.completed ? "text-gray-400 line-through dark:text-gray-500" : ""}`}>{action.text}</span>
+        )}
       </td>
       <td className="py-1 pr-2">
-        <Cell label={t("actorCellAria", { row })} value={action.actor} commit={(v) => onUpdate(action.recordingId, action.id, { actor: v })} />
+        {isOwner ? (
+          <Cell label={t("actorCellAria", { row })} value={action.actor} commit={(v) => onUpdate(action.recordingId, action.id, { actor: v })} />
+        ) : (
+          <span className="block w-full px-2 py-1 text-sm dark:text-gray-200">{action.actor}</span>
+        )}
       </td>
       <td className="py-1 pr-2">
-        <Cell label={t("deadlineCellAria", { row })} value={action.deadline} commit={(v) => onUpdate(action.recordingId, action.id, { deadline: v })} />
+        {isOwner ? (
+          <Cell label={t("deadlineCellAria", { row })} value={action.deadline} commit={(v) => onUpdate(action.recordingId, action.id, { deadline: v })} />
+        ) : (
+          <span className="block w-full px-2 py-1 text-sm dark:text-gray-200">{action.deadline}</span>
+        )}
       </td>
       <td className="py-1 pr-2 text-xs text-gray-500 dark:text-gray-400">{completedDate}</td>
       <td className="py-1 text-right">
-        <button
-          type="button"
-          aria-label={t("removeActionAria", { row })}
-          title={t("common:remove")}
-          onClick={() => onDelete(action.recordingId, action.id)}
-          className="rounded px-1 text-gray-400 hover:bg-gray-100 hover:text-red-600 dark:hover:bg-gray-800 dark:hover:text-red-400"
-        >
-          ✕
-        </button>
+        {isOwner && (
+          <button
+            type="button"
+            aria-label={t("removeActionAria", { row })}
+            title={t("common:remove")}
+            onClick={() => onDelete(action.recordingId, action.id)}
+            className="rounded px-1 text-gray-400 hover:bg-gray-100 hover:text-red-600 dark:hover:bg-gray-800 dark:hover:text-red-400"
+          >
+            ✕
+          </button>
+        )}
       </td>
     </tr>
   );

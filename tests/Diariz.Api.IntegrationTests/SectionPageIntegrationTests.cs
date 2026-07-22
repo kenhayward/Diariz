@@ -130,4 +130,33 @@ public class SectionPageIntegrationTests(ContainersFixture fx)
         Assert.Equal("Do it", Assert.Single(items).Text);
         Assert.Equal("R", items[0].RecordingName);
     }
+
+    /// <summary>The Notes aggregation join (MeetingNotes + Recordings + RoomRecordings) must translate under
+    /// real Postgres, and its projected <c>RecordedByUserId</c> must be the RECORDING's owner - what
+    /// <c>MeetingNotesController.OwnsAsync</c> actually gates mutation on - not the note's own denormalized
+    /// <c>UserId</c>. Seeds a note whose own UserId deliberately differs from the recording owner to pin that.</summary>
+    [Fact]
+    public async Task Notes_aggregation_returns_the_recordings_owner_under_postgres()
+    {
+        var ownerId = await SeedUser();
+        var noteAuthorId = await SeedUser(); // a different user id than the recording owner
+        var sectionId = Guid.NewGuid();
+        var recId = Guid.NewGuid();
+        await using (var db = fx.CreateDbContext())
+        {
+            db.Sections.Add(new Section { Id = sectionId, UserId = ownerId, RoomId = await RoomOf(db, ownerId), Name = "F" });
+            db.Recordings.Add(new Recording { Id = recId, UserId = ownerId, Title = "R", BlobKey = "k" });
+            db.MeetingNotes.Add(new MeetingNote
+            {
+                Id = Guid.NewGuid(), UserId = noteAuthorId, RecordingId = recId, Text = "note", Ordinal = 0,
+            });
+            await db.SaveChangesAsync();
+            await new RoomScope(db).PlaceInMainRoomAsync(recId, ownerId, sectionId);
+        }
+
+        await using var db2 = fx.CreateDbContext();
+        var notes = (await Build(db2, ownerId).Notes(sectionId)).Value!;
+        Assert.Equal("note", Assert.Single(notes).Text);
+        Assert.Equal(ownerId, notes[0].RecordedByUserId); // the recording's owner, not noteAuthorId
+    }
 }

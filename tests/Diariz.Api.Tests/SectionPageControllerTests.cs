@@ -121,6 +121,9 @@ public class SectionPageControllerTests
         Assert.Contains(items, i => i is { Text: "Do A", RecordingName: "Kickoff" });
         Assert.Contains(items, i => i is { Text: "Do B", RecordingName: "Untitled Review" }); // Name ?? Title
         Assert.DoesNotContain(items, i => i.Text == "Secret");
+        // RecordedByUserId mirrors RecordingActionsController.OwnsAsync's gate (r.UserId), so the web can hide
+        // edit/delete for rows it isn't allowed to mutate.
+        Assert.All(items, i => Assert.Equal(userId, i.RecordedByUserId));
     }
 
     [Fact]
@@ -130,7 +133,12 @@ public class SectionPageControllerTests
         var userId = Guid.NewGuid();
         var section = await Section(db, userId);
         var rec = await Recording(db, userId, section.Id, name: "Sync");
-        db.MeetingNotes.Add(new MeetingNote { Id = Guid.NewGuid(), UserId = userId, RecordingId = rec.Id, Text = "note", Ordinal = 0 });
+        // The note's own denormalized UserId is deliberately a DIFFERENT guid than the recording's owner, to
+        // prove the projection surfaces the recording's owner (r.UserId, what MeetingNotesController.OwnsAsync
+        // actually gates on) rather than the note's own UserId - they happen to coincide in real usage (notes
+        // are only ever adopted onto their own owner's recording), but this test pins the correct source.
+        var noteAuthor = Guid.NewGuid();
+        db.MeetingNotes.Add(new MeetingNote { Id = Guid.NewGuid(), UserId = noteAuthor, RecordingId = rec.Id, Text = "note", Ordinal = 0 });
         db.Attachments.Add(new Attachment { Id = Guid.NewGuid(), RecordingId = rec.Id, Kind = AttachmentKind.File, Name = "spec.pdf", SizeBytes = 10, Ordinal = 0 });
         await db.SaveChangesAsync();
 
@@ -139,8 +147,10 @@ public class SectionPageControllerTests
 
         Assert.Equal("note", Assert.Single(notes).Text);
         Assert.Equal("Sync", notes[0].RecordingName);
+        Assert.Equal(userId, notes[0].RecordedByUserId); // the recording's owner, not noteAuthor
         Assert.Equal("spec.pdf", Assert.Single(atts).Name);
         Assert.Equal("Sync", atts[0].RecordingName);
+        Assert.Equal(userId, atts[0].RecordedByUserId);
     }
 
     [Fact]

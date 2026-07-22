@@ -127,7 +127,7 @@ public class SectionPageController : ControllerBase
             orderby r.CreatedAt descending, a.Ordinal
             select new ActionListItemDto(
                 a.Id, a.RecordingId, r.Name ?? r.Title, a.Text, a.Actor, a.Deadline,
-                a.Ordinal, a.Completed, a.CompletedAt, a.CreatedAt)).ToListAsync();
+                a.Ordinal, a.Completed, a.CompletedAt, a.CreatedAt, r.UserId)).ToListAsync();
     }
 
     [HttpGet("{id:guid}/notes")]
@@ -144,7 +144,8 @@ public class SectionPageController : ControllerBase
             where p.RoomId == roomId && p.SectionId.HasValue && allIds.Contains(p.SectionId.Value)
             orderby r.CreatedAt descending, n.Ordinal
             select new SectionNoteListItemDto(
-                n.Id, r.Id, r.Name ?? r.Title, n.Text, n.CapturedAtMs, n.Ordinal, n.CreatedAt)).ToListAsync();
+                n.Id, r.Id, r.Name ?? r.Title, n.Text, n.CapturedAtMs, n.Ordinal, n.CreatedAt, r.UserId))
+            .ToListAsync();
     }
 
     [HttpGet("{id:guid}/attachments")]
@@ -161,7 +162,8 @@ public class SectionPageController : ControllerBase
             where p.RoomId == roomId && p.SectionId.HasValue && allIds.Contains(p.SectionId.Value)
             orderby r.CreatedAt descending, a.Ordinal
             select new SectionAttachmentListItemDto(
-                a.Id, r.Id, r.Name ?? r.Title, a.Kind, a.Name, a.ContentType, a.SizeBytes, a.Url, a.Ordinal))
+                a.Id, r.Id, r.Name ?? r.Title, a.Kind, a.Name, a.ContentType, a.SizeBytes, a.Url, a.Ordinal,
+                r.UserId))
             .ToListAsync();
     }
 

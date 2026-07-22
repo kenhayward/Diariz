@@ -94,15 +94,20 @@ public record SectionDetailDto(
     Guid Id, string Name, Guid? ParentId,
     SectionStatsDto Stats, FolderSummaryDto? Summary, FolderMinutesDto? Minutes, Guid? MeetingTypeId);
 
-/// <summary>One note aggregated for the folder Notes tab, carrying its source recording's display name.</summary>
+/// <summary>One note aggregated for the folder Notes tab, carrying its source recording's display name and
+/// owner (<c>RecordedByUserId</c> = the recording's <c>UserId</c>, mirroring the <c>OwnsAsync</c> gate on
+/// <see cref="MeetingNotesController"/>'s mutating routes) so the web can hide edit/delete for rows it isn't
+/// allowed to mutate - a room co-viewer's rows come from other people's recordings.</summary>
 public record SectionNoteListItemDto(
     Guid Id, Guid RecordingId, string RecordingName, string Text,
-    long? CapturedAtMs, int Ordinal, DateTimeOffset CreatedAt);
+    long? CapturedAtMs, int Ordinal, DateTimeOffset CreatedAt, Guid RecordedByUserId);
 
-/// <summary>One attachment aggregated for the folder Attachments tab, carrying its source recording name.</summary>
+/// <summary>One attachment aggregated for the folder Attachments tab, carrying its source recording name and
+/// owner (see <see cref="SectionNoteListItemDto.RecordedByUserId"/> - same rationale, mirrors
+/// <see cref="AttachmentsController"/>'s owner-only gate).</summary>
 public record SectionAttachmentListItemDto(
     Guid Id, Guid RecordingId, string RecordingName, AttachmentKind Kind,
-    string Name, string? ContentType, long SizeBytes, string? Url, int Ordinal);
+    string Name, string? ContentType, long SizeBytes, string? Url, int Ordinal, Guid RecordedByUserId);
 
 // ---- Recordings ----
 public record RecordingSummaryDto(
@@ -296,10 +301,13 @@ public record CreateMeetingNoteLine(string Text, long? CapturedAtMs = null);
 public record UpdateMeetingNoteRequest(string Text);
 
 /// <summary>An action across the user's whole library, carrying its source recording (id + display name)
-/// so the Actions tab can link back to the transcript.</summary>
+/// so the Actions tab can link back to the transcript. <c>RecordedByUserId</c> is the recording's owner
+/// (see <see cref="SectionNoteListItemDto.RecordedByUserId"/> - same rationale, mirrors
+/// <see cref="RecordingActionsController"/>'s owner-only gate) so the folder page's aggregated Actions tab can
+/// hide edit/delete/complete for rows belonging to someone else's recording.</summary>
 public record ActionListItemDto(
     Guid Id, Guid RecordingId, string RecordingName, string Text, string Actor, string Deadline,
-    int Ordinal, bool Completed, DateTimeOffset? CompletedAt, DateTimeOffset CreatedAt);
+    int Ordinal, bool Completed, DateTimeOffset? CompletedAt, DateTimeOffset CreatedAt, Guid RecordedByUserId);
 /// <summary>Mark a set of actions complete (or not). Ids not owned by the caller are ignored.</summary>
 public record CompleteActionsRequest(IReadOnlyList<Guid> Ids, bool Completed);
 

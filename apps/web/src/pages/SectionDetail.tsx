@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "../auth";
 import { api, apiErrorMessage } from "../lib/api";
 import { formatDurationHm, formatDate } from "../lib/format";
 import { folderUrl, copyRichLink } from "../lib/clipboard";
@@ -36,6 +37,9 @@ export default function SectionDetail() {
   const { id } = useParams<{ id: string }>();
   const { t, i18n } = useTranslation(["workspace", "common", "recordings"]);
   const qc = useQueryClient();
+  // Rows aggregated on this page span many recordings, possibly owned by other room members - each row's
+  // edit/delete controls are gated per-row against this (mirrors RecordingDetail's isOwner check).
+  const { id: myId } = useAuth();
 
   const [tab, setTab] = useState<string>(() => localStorage.getItem(TAB_KEY) ?? "overview");
   const selectTab = (k: string) => { setTab(k); try { localStorage.setItem(TAB_KEY, k); } catch { /* non-fatal */ } };
@@ -244,6 +248,7 @@ export default function SectionDetail() {
     content: (
       <FolderActionsTable
         items={actions ?? []}
+        myUserId={myId}
         onUpdate={(recId, actionId, patch) => run(() => api.updateAction(recId, actionId, patch), "workspace:errUpdateAction", ["section-actions", id])}
         onToggleComplete={(actionId, completed) => run(() => api.completeActions([actionId], completed), "workspace:errUpdateAction", ["section-actions", id])}
         onDelete={(recId, actionId) => run(() => api.deleteAction(recId, actionId), "workspace:errRemoveAction", ["section-actions", id])}
@@ -256,6 +261,7 @@ export default function SectionDetail() {
     content: (
       <FolderNotesList
         items={notes ?? []}
+        myUserId={myId}
         onEdit={(recId, noteId, text) => run(() => api.updateNote(recId, noteId, text), "workspace:errUpdateNote", ["section-notes", id])}
         onDelete={(recId, noteId) => run(() => api.deleteNote(recId, noteId), "workspace:errUpdateNote", ["section-notes", id])}
       />
@@ -286,6 +292,7 @@ export default function SectionDetail() {
         </h3>
         <FolderAttachmentsList
           items={attachments ?? []}
+          myUserId={myId}
           onChange={() => qc.invalidateQueries({ queryKey: ["section-attachments", id] })}
           onRemove={(a: SectionAttachmentItem) => {
             if (!window.confirm(t("workspace:confirmDeleteAttachment"))) return;
