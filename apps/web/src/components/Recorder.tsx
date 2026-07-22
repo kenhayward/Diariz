@@ -62,8 +62,10 @@ import {
   type CapturedShot,
 } from "../lib/trayScreenshots";
 import {
-  savePendingScreenshots,
+  addPendingScreenshot,
   loadPendingScreenshots,
+  removePendingScreenshot,
+  setPendingScreenshotsRecordingId,
   clearPendingScreenshots,
   type PendingScreenshots,
   type PendingShot,
@@ -75,16 +77,18 @@ const CONSTRAINTS_KEY = "diariz.recorder.audioConstraints";
 const SYSTEM_AUDIO_KEY = "diariz.recorder.systemAudio";
 const AUTOSTOP_KEY = "diariz.recorder.autoStop";
 
-// A hard ceiling on captures kept per recording (see mirrorShots/addLiveShot). Each mirror rewrites the
-// *entire* growing array of full-resolution PNG Blobs to IndexedDB, so an unbounded stash would let a
-// marathon meeting - or a runaway held hotkey/tray click - run up tens of gigabytes of cumulative writes
-// and hundreds of megabytes of Blobs pinned in memory for the meeting's duration. At a representative
-// ~3 MB per capture (full PNG + JPEG thumb), 200 captures caps memory/storage at roughly 600 MB and
-// cumulative IndexedDB churn at roughly 200*201/2 * 3 MB =~ 60 GB by the time the cap is hit - well beyond
-// any realistic meeting's capture count (a capture every couple of minutes for six-plus hours), while
-// still bounding the worst case to a fixed ceiling instead of growing forever. Past the cap, a capture is
-// dropped (not silently discarded - the user is told) rather than restructuring the stash's shape, which
-// is a tracked follow-up (see FIX 10 in the code-review report).
+// A hard ceiling on captures kept per recording (see addLiveShot). pendingScreenshots stashes each
+// capture as its own IndexedDB record (addPendingScreenshot/removePendingScreenshot), so - unlike the old
+// whole-array-per-capture stash - storage *writes* no longer grow with the square of the capture count;
+// this cap is no longer a write-churn guard. It still bounds *memory*: every stashed capture's full PNG
+// + JPEG thumbnail Blob stays referenced for the meeting's duration (`liveShotsRef`/`liveShots`, needed
+// for the live strip and for attach-on-stop), so an unbounded stash would let a marathon meeting - or a
+// runaway held hotkey/tray click - pin an unbounded amount of image data in the renderer. At a
+// representative ~3 MB per capture (full PNG + JPEG thumb), 200 captures caps that at roughly 600 MB -
+// well beyond any realistic meeting's capture count (a capture every couple of minutes for six-plus
+// hours), while still bounding the worst case to a fixed ceiling instead of growing forever. Past the
+// cap, a capture is dropped (not silently discarded - the user is told) rather than growing without
+// bound.
 export const MAX_LIVE_SCREENSHOTS = 200;
 
 // Whether this environment can capture system audio at all (Chromium/desktop). Drives the System audio
@@ -230,11 +234,11 @@ export default function Recorder({
   const [liveLines, setLiveLines] = useState<MeetingNote[]>([]);
   // Lines whose audio uploaded but whose attach failed (durable, with the recording id) - drives the retry banner.
   const [notesAttach, setNotesAttach] = useState<PendingNotes | null>(null);
-  // Screenshots captured while recording: stamped with the *recorded* clock, mirrored to IndexedDB so a
-  // crash never loses them, and attached to the recording after upload (exactly like live notes). The
-  // notes popover shows a live thumbnail strip of these, so - like liveLines - both a ref (read inside
-  // upload()/attachScreenshots(), which may run before state has flushed) and state (to re-render the
-  // strip) are kept in step via mirrorShots.
+  // Screenshots captured while recording: stamped with the *recorded* clock, stashed to IndexedDB one
+  // capture at a time so a crash never loses them, and attached to the recording after upload (exactly
+  // like live notes). The notes popover shows a live thumbnail strip of these, so - like liveLines - both
+  // a ref (read inside upload()/attachScreenshots(), which may run before state has flushed) and state (to
+  // re-render the strip) are kept in step by addLiveShot/deleteLiveShot.
   const liveShotsRef = useRef<PendingShot[]>([]);
   const [liveShots, setLiveShots] = useState<PendingShot[]>([]);
   // Captures whose audio uploaded but whose attach failed - drives the retry banner.
@@ -552,42 +556,51 @@ export default function Recorder({
   // capture and never dedupes one; it only stamps, stashes and attaches what arrives. This mirrors the live
   // notes handling above exactly.
 
-  /// Update the captures and mirror them to IndexedDB (recordingId null = still recording).
-  function mirrorShots(shots: PendingShot[]) {
-    liveShotsRef.current = shots;
-    setLiveShots(shots);
-    if (userId) void savePendingScreenshots({ userId, recordingId: null, updatedAt: Date.now(), shots });
-  }
-
+  /// Add exactly one new capture: update the ref/state synchronously (the live strip, and attach-on-stop
+  /// read the ref before any IndexedDB write could resolve) and stash *only this one record* to
+  /// IndexedDB - not a rewrite of the whole growing array (see MAX_LIVE_SCREENSHOTS's comment for why
+  /// that used to be an O(n^2) write-churn bug). The id is assigned here (like note lines' ids) so the
+  /// stash write can happen fire-and-forget without racing the synchronous state update.
   function addLiveShot(shot: CapturedShot) {
     if (liveShotsRef.current.length >= MAX_LIVE_SCREENSHOTS) {
       setNotice(t("screenshotLimitReached", { max: MAX_LIVE_SCREENSHOTS }));
       return;
     }
-    mirrorShots([
-      ...liveShotsRef.current,
-      {
-        capturedAtMs: timing.elapsedMs(timingRef.current, Date.now()),
-        width: shot.width,
-        height: shot.height,
-        full: shot.full,
-        thumb: shot.thumb,
-      },
-    ]);
+    const stamped: PendingShot = {
+      id: crypto.randomUUID(),
+      capturedAtMs: timing.elapsedMs(timingRef.current, Date.now()),
+      width: shot.width,
+      height: shot.height,
+      full: shot.full,
+      thumb: shot.thumb,
+    };
+    const next = [...liveShotsRef.current, stamped];
+    liveShotsRef.current = next;
+    setLiveShots(next);
+    if (userId) void addPendingScreenshot(userId, stamped);
   }
 
   /// The popover's per-capture delete button. Filters the *current* ref, not a value captured at render
   /// time, so a rapid string of deletes (or a delete racing an incoming capture) always removes the
-  /// right item rather than one computed against a stale array.
+  /// right item rather than one computed against a stale array. Removes just that one record from
+  /// IndexedDB, not a rewrite of the remaining set.
   function deleteLiveShot(index: number) {
-    mirrorShots(liveShotsRef.current.filter((_, i) => i !== index));
+    const shot = liveShotsRef.current[index];
+    if (!shot) return;
+    const next = liveShotsRef.current.filter((_, i) => i !== index);
+    liveShotsRef.current = next;
+    setLiveShots(next);
+    if (userId) void removePendingScreenshot(userId, shot.id);
   }
 
-  /// Attach captures to the created recording. Success clears the durable stash; failure keeps them (with
-  /// the recording id) and surfaces the retry banner. A screenshot failure never fails the upload itself.
-  /// Uploads one at a time (unlike notes' single bulk call) because each is a multipart request; on a
-  /// failure partway through, only the *un-uploaded remainder* is re-stashed, so a retry can't re-post
-  /// captures the server already has.
+  /// Attach captures to the created recording. Success clears the durable stash; failure keeps the
+  /// un-uploaded remainder (with the recording id) and surfaces the retry banner. A screenshot failure
+  /// never fails the upload itself. Uploads one at a time (unlike notes' single bulk call) because each
+  /// is a multipart request; each capture is already its own durable IndexedDB record (stashed when
+  /// captured, or loaded individually for a retry), so a failure partway through needs no re-stash of the
+  /// remainder - only the capture(s) that *did* upload are removed as they go, so what's left in the
+  /// store already *is* the un-uploaded remainder, and a retry can't re-post captures the server already
+  /// has.
   async function attachScreenshots(recordingId: string, fromRetry?: PendingScreenshots) {
     const shots = fromRetry ? fromRetry.shots : liveShotsRef.current;
     if (shots.length === 0) {
@@ -604,6 +617,7 @@ export default function Recorder({
         await api.createScreenshot(recordingId, shot);
         uploaded++;
         setAttachProgress({ done: uploaded, total: shots.length });
+        if (userId) await removePendingScreenshot(userId, shot.id);
       }
       if (userId) await clearPendingScreenshots(userId);
       liveShotsRef.current = [];
@@ -611,9 +625,8 @@ export default function Recorder({
       setShotsAttach(null);
     } catch {
       const remaining = shots.slice(uploaded);
-      const stash: PendingScreenshots = { userId: userId ?? "", recordingId, shots: remaining, updatedAt: Date.now() };
-      if (userId) await savePendingScreenshots(stash);
-      setShotsAttach(stash);
+      if (userId) await setPendingScreenshotsRecordingId(userId, recordingId);
+      setShotsAttach({ userId: userId ?? "", recordingId, shots: remaining, updatedAt: Date.now() });
     } finally {
       setAttachProgress(null);
     }

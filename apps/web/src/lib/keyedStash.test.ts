@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { createKeyedStash } from "./keyedStash";
+import { createKeyedStash, createMultiKeyedStash } from "./keyedStash";
 import { useNodeBlobForIndexedDb } from "./testNodeBlob";
 
 interface Widget {
   userId: string;
   count: number;
   blob: Blob;
+}
+
+interface Item {
+  id: string;
+  userId: string;
+  value: number;
 }
 
 useNodeBlobForIndexedDb();
@@ -93,6 +99,85 @@ describe("keyedStash", () => {
       await expect(stash.save({ userId: "u5", count: 1, blob: new Blob([]) })).resolves.toBeUndefined();
       await expect(stash.load("u5")).resolves.toBeNull();
       await expect(stash.clear("u5")).resolves.toBeUndefined();
+    } finally {
+      globalThis.indexedDB = original;
+    }
+  });
+});
+
+describe("createMultiKeyedStash", () => {
+  it("lists nothing for a key with no records", async () => {
+    const stash = createMultiKeyedStash<Item>("multi-db-1", "items", "id", "userId");
+
+    expect(await stash.list("nobody")).toEqual([]);
+  });
+
+  it("adds one record at a time without touching the others under the same key", async () => {
+    const stash = createMultiKeyedStash<Item>("multi-db-2", "items", "id", "userId");
+
+    await stash.add({ id: "a", userId: "u1", value: 1 });
+    await stash.add({ id: "b", userId: "u1", value: 2 });
+
+    const listed = await stash.list("u1");
+    expect(listed.map((i) => i.value).sort()).toEqual([1, 2]);
+  });
+
+  it("keeps records under different keys separate", async () => {
+    const stash = createMultiKeyedStash<Item>("multi-db-3", "items", "id", "userId");
+
+    await stash.add({ id: "a", userId: "u2", value: 1 });
+    await stash.add({ id: "b", userId: "u3", value: 2 });
+
+    expect((await stash.list("u2")).map((i) => i.id)).toEqual(["a"]);
+    expect((await stash.list("u3")).map((i) => i.id)).toEqual(["b"]);
+  });
+
+  it("removes exactly one record by its primary key, leaving its neighbours", async () => {
+    const stash = createMultiKeyedStash<Item>("multi-db-4", "items", "id", "userId");
+    await stash.add({ id: "a", userId: "u4", value: 1 });
+    await stash.add({ id: "b", userId: "u4", value: 2 });
+
+    await stash.remove("a");
+
+    const listed = await stash.list("u4");
+    expect(listed.map((i) => i.id)).toEqual(["b"]);
+  });
+
+  it("clears every record for a key without touching other keys", async () => {
+    const stash = createMultiKeyedStash<Item>("multi-db-5", "items", "id", "userId");
+    await stash.add({ id: "a", userId: "u5", value: 1 });
+    await stash.add({ id: "b", userId: "u5", value: 2 });
+    await stash.add({ id: "c", userId: "u6", value: 3 });
+
+    await stash.clear("u5");
+
+    expect(await stash.list("u5")).toEqual([]);
+    expect((await stash.list("u6")).map((i) => i.id)).toEqual(["c"]);
+  });
+
+  it("replaces a record with the same primary key rather than duplicating it", async () => {
+    const stash = createMultiKeyedStash<Item>("multi-db-6", "items", "id", "userId");
+    await stash.add({ id: "a", userId: "u7", value: 1 });
+
+    await stash.add({ id: "a", userId: "u7", value: 99 });
+
+    const listed = await stash.list("u7");
+    expect(listed).toHaveLength(1);
+    expect(listed[0].value).toBe(99);
+  });
+
+  it("degrades to no-ops when IndexedDB is unavailable", async () => {
+    const original = globalThis.indexedDB;
+    // @ts-expect-error simulating an environment without IndexedDB
+    delete globalThis.indexedDB;
+
+    try {
+      const stash = createMultiKeyedStash<Item>("multi-db-7", "items", "id", "userId");
+
+      await expect(stash.add({ id: "a", userId: "u8", value: 1 })).resolves.toBeUndefined();
+      await expect(stash.list("u8")).resolves.toEqual([]);
+      await expect(stash.remove("a")).resolves.toBeUndefined();
+      await expect(stash.clear("u8")).resolves.toBeUndefined();
     } finally {
       globalThis.indexedDB = original;
     }

@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import NotesPopover, { type NotesPopoverProps } from "./NotesPopover";
 import type { PendingShot } from "../../lib/pendingScreenshots";
 
+let nextShotId = 0;
 const shot = (capturedAtMs: number): PendingShot => ({
+  id: `shot-${nextShotId++}`,
   capturedAtMs,
   width: 10,
   height: 10,

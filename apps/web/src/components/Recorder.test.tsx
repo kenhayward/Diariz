@@ -15,8 +15,10 @@ vi.mock("../lib/pendingNotes", () => ({
   clearPendingNotes: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../lib/pendingScreenshots", () => ({
-  savePendingScreenshots: vi.fn().mockResolvedValue(undefined),
+  addPendingScreenshot: vi.fn().mockResolvedValue(undefined),
   loadPendingScreenshots: vi.fn().mockResolvedValue(null),
+  removePendingScreenshot: vi.fn().mockResolvedValue(undefined),
+  setPendingScreenshotsRecordingId: vi.fn().mockResolvedValue(undefined),
   clearPendingScreenshots: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../lib/uploadContext", () => ({ useUpload: () => ({ uploadFiles: vi.fn() }) }));
@@ -61,8 +63,14 @@ import {
 } from "../lib/audioSource";
 import { loadPendingRecording, clearPendingRecording } from "../lib/pendingRecording";
 import { savePendingNotes, clearPendingNotes } from "../lib/pendingNotes";
-import { savePendingScreenshots, loadPendingScreenshots, clearPendingScreenshots } from "../lib/pendingScreenshots";
-import type { PendingScreenshots } from "../lib/pendingScreenshots";
+import {
+  addPendingScreenshot,
+  loadPendingScreenshots,
+  removePendingScreenshot,
+  setPendingScreenshotsRecordingId,
+  clearPendingScreenshots,
+} from "../lib/pendingScreenshots";
+import type { PendingShot } from "../lib/pendingScreenshots";
 import Recorder, { MAX_LIVE_SCREENSHOTS } from "./Recorder";
 
 // jsdom has no MediaRecorder; a minimal stub lets start() run without capturing real audio.
@@ -135,8 +143,8 @@ describe("Recorder recovery", () => {
 
   it("attaches screenshots stashed during a failed take once the audio recovers", async () => {
     // A prior take's audio upload failed (e.g. an expired session) but captures had already been taken
-    // and mirrored to the screenshot stash with recordingId: null. uploadPending() must adopt them onto
-    // the recovered recording, exactly as it already does for notes - not abandon them.
+    // and stashed with recordingId: null. uploadPending() must adopt them onto the recovered recording,
+    // exactly as it already does for notes - not abandon them.
     (loadPendingRecording as Mock).mockResolvedValue(pending);
     (api.upload as Mock).mockResolvedValue({ id: "rec-recovered" });
     (api.createScreenshot as Mock).mockResolvedValue({});
@@ -144,7 +152,7 @@ describe("Recorder recovery", () => {
       userId: "u1",
       recordingId: null,
       updatedAt: Date.now(),
-      shots: [{ capturedAtMs: 4200, width: 800, height: 600, full: new Blob(["a"]), thumb: new Blob(["b"]) }],
+      shots: [{ id: "shot-1", capturedAtMs: 4200, width: 800, height: 600, full: new Blob(["a"]), thumb: new Blob(["b"]) }],
     });
 
     render(<Recorder onUploaded={() => {}} />);
@@ -156,6 +164,8 @@ describe("Recorder recovery", () => {
         expect.objectContaining({ capturedAtMs: 4200, width: 800, height: 600 }),
       ),
     );
+    // The recovered capture is removed as its own record once it lands, not re-saved as a whole set.
+    await waitFor(() => expect(removePendingScreenshot).toHaveBeenCalledWith("u1", "shot-1"));
     await waitFor(() => expect(clearPendingScreenshots).toHaveBeenCalledWith("u1"));
   });
 
@@ -867,7 +877,7 @@ describe("live screenshots", () => {
     await screen.findByRole("button", { name: /^stop$/i });
 
     // No shell was installed, so there is nothing to emit and nothing should have been stashed.
-    expect(savePendingScreenshots).not.toHaveBeenCalled();
+    expect(addPendingScreenshot).not.toHaveBeenCalled();
   });
 
   it("ignores a capture that arrives while not recording", async () => {
@@ -877,10 +887,12 @@ describe("live screenshots", () => {
 
     capture();
 
-    expect(savePendingScreenshots).not.toHaveBeenCalled();
+    expect(addPendingScreenshot).not.toHaveBeenCalled();
   });
 
-  it("stamps a capture with the recorded clock and mirrors it to the stash while recording", async () => {
+  it("stamps a capture with the recorded clock and stashes exactly that one capture", async () => {
+    // The whole point of the per-item stash: adding a capture writes only that capture, not the whole
+    // growing set - so the call carries a single shot object, not an array.
     installShell();
     render(<Recorder onUploaded={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
@@ -889,13 +901,29 @@ describe("live screenshots", () => {
     capture({ width: 640, height: 480 });
 
     await waitFor(() =>
-      expect(savePendingScreenshots).toHaveBeenCalledWith(
-        expect.objectContaining({
-          recordingId: null,
-          shots: [expect.objectContaining({ width: 640, height: 480, capturedAtMs: expect.any(Number) })],
-        }),
+      expect(addPendingScreenshot).toHaveBeenCalledWith(
+        "u1",
+        expect.objectContaining({ width: 640, height: 480, capturedAtMs: expect.any(Number), id: expect.any(String) }),
       ),
     );
+  });
+
+  it("stashes a second capture without rewriting the first (one write per capture, not the whole set)", async () => {
+    installShell();
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+
+    capture({ width: 111, height: 111 });
+    await waitFor(() => expect(addPendingScreenshot).toHaveBeenCalledTimes(1));
+    capture({ width: 222, height: 222 });
+    await waitFor(() => expect(addPendingScreenshot).toHaveBeenCalledTimes(2));
+
+    // Each call carries exactly one capture - never a growing array of everything captured so far.
+    for (const call of (addPendingScreenshot as Mock).mock.calls) {
+      const arg = call[1] as PendingShot;
+      expect(Array.isArray((arg as unknown as { shots?: unknown }).shots)).toBe(false);
+    }
   });
 
   it("attaches stashed captures to the uploaded recording and clears the stash", async () => {
@@ -904,7 +932,7 @@ describe("live screenshots", () => {
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
     await screen.findByRole("button", { name: /^stop$/i });
     capture();
-    await waitFor(() => expect(savePendingScreenshots).toHaveBeenCalled());
+    await waitFor(() => expect(addPendingScreenshot).toHaveBeenCalled());
 
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
 
@@ -914,36 +942,35 @@ describe("live screenshots", () => {
         expect.objectContaining({ width: 800, height: 600 }),
       ),
     );
+    // The uploaded capture is removed as its own record once it lands.
+    const shotArg = (addPendingScreenshot as Mock).mock.calls[0][1] as PendingShot;
+    await waitFor(() => expect(removePendingScreenshot).toHaveBeenCalledWith("u1", shotArg.id));
     await waitFor(() => expect(clearPendingScreenshots).toHaveBeenCalledWith("u1"));
   });
 
-  it("re-stashes only the un-uploaded remainder when a later capture in the batch fails", async () => {
+  it("removes only the un-uploaded remainder's un-attached state when a later capture in the batch fails", async () => {
     installShell();
     (api.createScreenshot as Mock).mockResolvedValueOnce({}).mockRejectedValueOnce(new Error("boom"));
     render(<Recorder onUploaded={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
     await screen.findByRole("button", { name: /^stop$/i });
     capture({ width: 111, height: 111 });
-    await waitFor(() => expect(savePendingScreenshots).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(addPendingScreenshot).toHaveBeenCalledTimes(1));
     capture({ width: 222, height: 222 });
-    await waitFor(() =>
-      expect(savePendingScreenshots).toHaveBeenLastCalledWith(
-        expect.objectContaining({ shots: [expect.anything(), expect.anything()] }),
-      ),
-    );
+    await waitFor(() => expect(addPendingScreenshot).toHaveBeenCalledTimes(2));
+    const firstShot = (addPendingScreenshot as Mock).mock.calls[0][1] as PendingShot;
+    const secondShot = (addPendingScreenshot as Mock).mock.calls[1][1] as PendingShot;
 
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
 
     await waitFor(() => expect(api.createScreenshot).toHaveBeenCalledTimes(2));
-    // Only the second (un-uploaded) capture is kept for retry - the first already reached the server.
-    await waitFor(() =>
-      expect(savePendingScreenshots).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          recordingId: "rec-new",
-          shots: [expect.objectContaining({ width: 222, height: 222 })],
-        }),
-      ),
-    );
+    // Only the first (successfully-uploaded) capture is removed from the durable store - the second
+    // (un-uploaded) one is left in place, so a retry can't re-post what already reached the server and
+    // doesn't need to rediscover what's left: it was never removed.
+    await waitFor(() => expect(removePendingScreenshot).toHaveBeenCalledWith("u1", firstShot.id));
+    expect(removePendingScreenshot).not.toHaveBeenCalledWith("u1", secondShot.id);
+    // The recordingId meta is set so a future retry/recovery knows where the remainder belongs.
+    await waitFor(() => expect(setPendingScreenshotsRecordingId).toHaveBeenCalledWith("u1", "rec-new"));
   });
 
   it("keeps captures durable and offers a retry when the attach fails, without failing the upload", async () => {
@@ -954,16 +981,14 @@ describe("live screenshots", () => {
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
     await screen.findByRole("button", { name: /^stop$/i });
     capture();
-    await waitFor(() => expect(savePendingScreenshots).toHaveBeenCalled());
+    await waitFor(() => expect(addPendingScreenshot).toHaveBeenCalled());
 
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
 
     // The audio upload still succeeds even though the screenshot attach threw.
     await waitFor(() => expect(onUploaded).toHaveBeenCalled());
     expect(await screen.findByText(/screenshots were saved but could not be attached/i)).toBeTruthy();
-    await waitFor(() =>
-      expect(savePendingScreenshots).toHaveBeenCalledWith(expect.objectContaining({ recordingId: "rec-new" })),
-    );
+    await waitFor(() => expect(setPendingScreenshotsRecordingId).toHaveBeenCalledWith("u1", "rec-new"));
 
     // Retry succeeds and the banner clears.
     fireEvent.click(screen.getByRole("button", { name: /attach screenshots/i }));
@@ -998,10 +1023,8 @@ describe("live screenshots", () => {
       await act(async () => {
         capture({ width: 111, height: 111 });
       });
-      const firstCall = (savePendingScreenshots as Mock).mock.calls.at(-1)![0] as PendingScreenshots;
-      expect(firstCall.recordingId).toBeNull();
-      expect(firstCall.shots).toHaveLength(1);
-      const pausedCapturedAtMs = firstCall.shots[0].capturedAtMs;
+      const firstShot = (addPendingScreenshot as Mock).mock.calls.at(-1)![1] as PendingShot;
+      const pausedCapturedAtMs = firstShot.capturedAtMs;
 
       // Time keeps moving in the real world while still paused - the recorded clock must not.
       await act(async () => {
@@ -1011,9 +1034,9 @@ describe("live screenshots", () => {
         capture({ width: 222, height: 222 });
       });
 
-      const secondCall = (savePendingScreenshots as Mock).mock.calls.at(-1)![0] as PendingScreenshots;
-      expect(secondCall.shots).toHaveLength(2); // both captures kept, none dropped
-      expect(secondCall.shots.at(-1)!.capturedAtMs).toBe(pausedCapturedAtMs); // clock frozen, not advanced by the 10s paused wait
+      expect(addPendingScreenshot).toHaveBeenCalledTimes(2); // both captures kept, none dropped
+      const secondShot = (addPendingScreenshot as Mock).mock.calls.at(-1)![1] as PendingShot;
+      expect(secondShot.capturedAtMs).toBe(pausedCapturedAtMs); // clock frozen, not advanced by the 10s paused wait
     } finally {
       vi.useRealTimers();
     }
@@ -1028,7 +1051,7 @@ describe("live screenshots", () => {
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
     await screen.findByRole("button", { name: /^stop$/i });
     capture();
-    await waitFor(() => expect(savePendingScreenshots).toHaveBeenCalled());
+    await waitFor(() => expect(addPendingScreenshot).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
     await waitFor(() => expect(api.upload).toHaveBeenCalledTimes(1));
 
@@ -1040,33 +1063,52 @@ describe("live screenshots", () => {
     await waitFor(() => expect(clearPendingScreenshots).toHaveBeenCalledWith("u1"));
   });
 
-  it("stops growing the capture stash past a sane cap and tells the user the capture was not kept", async () => {
-    // Guards against unbounded growth (a runaway held hotkey, or a marathon meeting): past the cap, the
-    // stash simply stops accepting new captures rather than silently degrading (see FIX 10 in the report
-    // for the threshold's justification).
+  it("deletes exactly the right capture from the durable store when removed from the live strip", async () => {
     installShell();
     render(<Recorder onUploaded={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
     await screen.findByRole("button", { name: /^stop$/i });
 
-    // mirrorShots updates the ref and calls savePendingScreenshots synchronously, so all 200 captures can
-    // be fired in one act() and asserted once - no need to await each one individually.
+    capture({ width: 111, height: 111 });
+    await waitFor(() => expect(addPendingScreenshot).toHaveBeenCalledTimes(1));
+    capture({ width: 222, height: 222 });
+    await waitFor(() => expect(addPendingScreenshot).toHaveBeenCalledTimes(2));
+    const firstShot = (addPendingScreenshot as Mock).mock.calls[0][1] as PendingShot;
+    const secondShot = (addPendingScreenshot as Mock).mock.calls[1][1] as PendingShot;
+
+    // The notes/screenshots popover auto-opens on Record (per the remembered preference, default open) -
+    // delete the first (index 0) capture from the live strip.
+    fireEvent.click((await screen.findAllByRole("button", { name: /delete/i }))[0]);
+
+    await waitFor(() => expect(removePendingScreenshot).toHaveBeenCalledWith("u1", firstShot.id));
+    expect(removePendingScreenshot).not.toHaveBeenCalledWith("u1", secondShot.id);
+  });
+
+  it("stops growing the capture stash past a sane cap and tells the user the capture was not kept", async () => {
+    // Guards against unbounded growth (a runaway held hotkey, or a marathon meeting): past the cap, the
+    // stash simply stops accepting new captures rather than silently degrading (see MAX_LIVE_SCREENSHOTS'
+    // comment in Recorder.tsx for the current, memory-based justification).
+    installShell();
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+
+    // addLiveShot updates the ref/state and fires addPendingScreenshot synchronously (fire-and-forget),
+    // so all 200 captures can be fired in one act() and asserted once - no need to await each individually.
     act(() => {
       for (let i = 0; i < MAX_LIVE_SCREENSHOTS; i++) {
         capture({ width: i, height: i });
       }
     });
-    expect(savePendingScreenshots).toHaveBeenCalledTimes(MAX_LIVE_SCREENSHOTS);
-    const atCap = (savePendingScreenshots as Mock).mock.calls.at(-1)![0] as PendingScreenshots;
-    expect(atCap.shots).toHaveLength(MAX_LIVE_SCREENSHOTS);
+    expect(addPendingScreenshot).toHaveBeenCalledTimes(MAX_LIVE_SCREENSHOTS);
 
-    capture({ width: 999, height: 999 }); // the 201st capture - must be dropped, not mirrored to the stash
+    capture({ width: 999, height: 999 }); // the 201st capture - must be dropped, not stashed
     await waitFor(() =>
       expect(setStatus).toHaveBeenCalledWith(expect.stringMatching(/limit/i), expect.any(String), {
         sticky: true,
       }),
     );
-    expect(savePendingScreenshots).toHaveBeenCalledTimes(MAX_LIVE_SCREENSHOTS); // no 201st write
+    expect(addPendingScreenshot).toHaveBeenCalledTimes(MAX_LIVE_SCREENSHOTS); // no 201st write
   });
 });
 
@@ -1191,9 +1233,9 @@ describe("screenshot attach progress feedback", () => {
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
     await screen.findByRole("button", { name: /^stop$/i });
     capture({ width: 1, height: 1 });
-    await waitFor(() => expect(savePendingScreenshots).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(addPendingScreenshot).toHaveBeenCalledTimes(1));
     capture({ width: 2, height: 2 });
-    await waitFor(() => expect(savePendingScreenshots).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(addPendingScreenshot).toHaveBeenCalledTimes(2));
 
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
     await waitFor(() => expect(api.createScreenshot).toHaveBeenCalledTimes(1));
