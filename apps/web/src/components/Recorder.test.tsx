@@ -159,6 +159,33 @@ describe("Recorder recovery", () => {
     await waitFor(() => expect(clearPendingScreenshots).toHaveBeenCalledWith("u1"));
   });
 
+  it("does not show a false error banner when recovering a pending upload hits a storage hiccup in the attach step", async () => {
+    // Milder sibling of the duplicate-offer bug (see "live screenshots" below): here setPending(null) has
+    // already run by the time the attach/recovery step throws, so the audio can't be re-offered - but an
+    // unguarded throw would still surface a spurious error banner for an upload that actually succeeded.
+    (loadPendingRecording as Mock).mockResolvedValue(pending);
+    (api.upload as Mock).mockResolvedValue({ id: "rec-recovered" });
+    // The component calls loadPendingScreenshots both on mount (its own recovery-banner check, whose
+    // `.then()` has no `.catch()`) and inside uploadPending's attach/recovery step (the one this test
+    // targets) - let the mount call succeed and only reject the second, so the hiccup lands exactly where
+    // FIX 2 guards it rather than tripping an unrelated unhandled rejection from the mount effect.
+    let screenshotLoadCalls = 0;
+    (loadPendingScreenshots as Mock).mockImplementation(() =>
+      ++screenshotLoadCalls === 1 ? Promise.resolve(null) : Promise.reject(new Error("storage hiccup")),
+    );
+    try {
+      const onUploaded = vi.fn();
+
+      render(<Recorder onUploaded={onUploaded} />);
+      fireEvent.click(await screen.findByRole("button", { name: /upload now/i }));
+
+      await waitFor(() => expect(onUploaded).toHaveBeenCalled());
+      expect(screen.queryByText(/upload failed/i)).toBeNull();
+    } finally {
+      (loadPendingScreenshots as Mock).mockResolvedValue(null);
+    }
+  });
+
   it("discards an unsaved recording after confirmation", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     (loadPendingRecording as Mock).mockResolvedValue(pending);
@@ -752,6 +779,35 @@ describe("live notes", () => {
     await waitFor(() => expect(screen.queryByText(/could not be attached/i)).toBeNull());
   });
 
+  it("does not re-offer the already-uploaded audio when a storage hiccup breaks note-attach recovery", async () => {
+    // A pathological double failure: the notes attach API call fails, AND the durable-stash write inside
+    // attachNotes' own catch block also throws (e.g. keyedStash's openDb() escaping - see keyedStash.test.ts).
+    // The audio itself uploaded fine; a storage hiccup two steps downstream of that must never be mistaken
+    // for the upload having failed (which would offer the already-uploaded recording back for a duplicate
+    // upload).
+    (api.createNotes as Mock).mockRejectedValueOnce(new Error("boom"));
+    // The first call is mirrorLines' fire-and-forget mirror-to-stash on adding the note (unrelated to this
+    // scenario); the second is the one inside attachNotes' own catch block, which is what must not escape.
+    (savePendingNotes as Mock)
+      .mockRejectedValueOnce(new Error("storage hiccup (mirror)"))
+      .mockRejectedValueOnce(new Error("storage hiccup (attach catch)"));
+    const onUploaded = vi.fn();
+    render(<Recorder onUploaded={onUploaded} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByText(/notes while recording/i);
+    const box = screen.getByPlaceholderText(/add a note/i);
+    fireEvent.change(box, { target: { value: "x" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    // The audio upload must still be treated as a success...
+    await waitFor(() => expect(onUploaded).toHaveBeenCalled());
+    // ...and the recording must never be re-offered as an unsaved/failed upload.
+    expect(screen.queryByRole("button", { name: /upload now/i })).toBeNull();
+    expect(screen.queryByTestId("recorder-popover")).toBeNull();
+  });
+
   it("closing the panel persists the preference; toggle reopens it", async () => {
     render(<Recorder onUploaded={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
@@ -982,5 +1038,184 @@ describe("live screenshots", () => {
     fireEvent.click(await screen.findByRole("button", { name: /record/i }));
 
     await waitFor(() => expect(clearPendingScreenshots).toHaveBeenCalledWith("u1"));
+  });
+
+  it("stops growing the capture stash past a sane cap and tells the user the capture was not kept", async () => {
+    // Guards against unbounded growth (a runaway held hotkey, or a marathon meeting): past the cap, the
+    // stash simply stops accepting new captures rather than silently degrading (see FIX 10 in the report
+    // for the threshold's justification).
+    installShell();
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+
+    for (let i = 0; i < 200; i++) {
+      capture({ width: i, height: i });
+      await waitFor(() => expect(savePendingScreenshots).toHaveBeenCalledTimes(i + 1));
+    }
+    const atCap = (savePendingScreenshots as Mock).mock.calls.at(-1)![0] as PendingScreenshots;
+    expect(atCap.shots).toHaveLength(200);
+
+    capture({ width: 999, height: 999 }); // the 201st capture - must be dropped, not mirrored to the stash
+    await waitFor(() =>
+      expect(setStatus).toHaveBeenCalledWith(expect.stringMatching(/limit/i), expect.any(String), {
+        sticky: true,
+      }),
+    );
+    expect(savePendingScreenshots).toHaveBeenCalledTimes(200); // no 201st write
+  }, 20000);
+});
+
+describe("in-app capture button", () => {
+  function installShellWithCapture() {
+    const captureScreenshot = vi.fn();
+    (window as unknown as { diariz?: unknown }).diariz = {
+      canCaptureScreenshot: true,
+      captureScreenshot,
+      onScreenshotCaptured: () => () => {},
+    };
+    return captureScreenshot;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
+    (getStream as Mock).mockResolvedValue(fakeSession);
+  });
+
+  afterEach(() => {
+    delete (window as unknown as { diariz?: unknown }).diariz;
+  });
+
+  it("is absent in a plain browser (no shell), even while recording", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+
+    expect(screen.queryByRole("button", { name: /capture screenshot/i })).toBeNull();
+  });
+
+  it("is absent before recording starts, even when the shell can capture", async () => {
+    installShellWithCapture();
+    render(<Recorder onUploaded={() => {}} />);
+    await screen.findByRole("button", { name: /^record$/i });
+
+    expect(screen.queryByRole("button", { name: /capture screenshot/i })).toBeNull();
+  });
+
+  it("appears while recording when the shell can capture", async () => {
+    installShellWithCapture();
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+
+    expect(await screen.findByRole("button", { name: /capture screenshot/i })).toBeTruthy();
+  });
+
+  it("disappears again once the recording stops", async () => {
+    installShellWithCapture();
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /capture screenshot/i });
+
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: /capture screenshot/i })).toBeNull());
+  });
+
+  it("requests a capture from the shell when clicked", async () => {
+    const captureScreenshot = installShellWithCapture();
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+
+    fireEvent.click(await screen.findByRole("button", { name: /capture screenshot/i }));
+
+    expect(captureScreenshot).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("screenshot attach progress feedback", () => {
+  // A fake Electron shell, same shape as the "live screenshots" describe above.
+  let emit: ((payload: unknown) => void) | null = null;
+  function installShell() {
+    emit = null;
+    (window as unknown as { diariz?: unknown }).diariz = {
+      canCaptureScreenshot: true,
+      onScreenshotCaptured: (cb: (payload: unknown) => void) => {
+        emit = cb;
+        return () => {
+          emit = null;
+        };
+      },
+    };
+  }
+  const capture = (overrides: Partial<{ width: number; height: number }> = {}) =>
+    emit!({ full: new Uint8Array([1]), thumb: new Uint8Array([2]), width: 800, height: 600, ...overrides });
+
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((res) => {
+      resolve = res;
+    });
+    return { promise, resolve };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.upload as Mock).mockResolvedValue({ id: "rec-new" });
+  });
+
+  afterEach(() => {
+    delete (window as unknown as { diariz?: unknown }).diariz;
+  });
+
+  // The idle record pill doubles as the busy indicator (title/aria-label = "Uploading…") once Stop is
+  // pressed - the only user-visible status surface while upload() runs. This is the "existing status-text
+  // mechanism" FIX 3 works within, rather than adding a new one.
+  const heroTitle = () => screen.getByRole("button", { name: /record|uploading|screenshot/i }).getAttribute("title");
+
+  it("distinguishes uploading captures from the generic 'Uploading' text, with progress counts", async () => {
+    installShell();
+    const first = deferred<object>();
+    const second = deferred<object>();
+    (api.createScreenshot as Mock).mockImplementationOnce(() => first.promise).mockImplementationOnce(() => second.promise);
+
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    capture({ width: 1, height: 1 });
+    await waitFor(() => expect(savePendingScreenshots).toHaveBeenCalledTimes(1));
+    capture({ width: 2, height: 2 });
+    await waitFor(() => expect(savePendingScreenshots).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+    await waitFor(() => expect(api.createScreenshot).toHaveBeenCalledTimes(1));
+
+    // The audio has already uploaded (createScreenshot only runs after it) - the busy text must say so
+    // and show progress, not just repeat the generic "Uploading…" of the audio phase. The first capture
+    // is in flight but not yet resolved, so progress reads 0 of 2 done.
+    await waitFor(() => expect(heroTitle()).not.toBe("Uploading…"));
+    await waitFor(() => expect(heroTitle()).toMatch(/0\s*\/\s*2/));
+
+    first.resolve({});
+    await waitFor(() => expect(api.createScreenshot).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(heroTitle()).toMatch(/1\s*\/\s*2/));
+
+    second.resolve({});
+    await waitFor(() => expect(screen.getByRole("button", { name: /record/i })).toBeTruthy());
+  });
+
+  it("does not show attach progress for an ordinary audio-only upload (no captures taken)", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+    expect(api.createScreenshot).not.toHaveBeenCalled();
   });
 });

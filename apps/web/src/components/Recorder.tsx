@@ -57,6 +57,7 @@ import {
 import {
   canCaptureScreenshots,
   onScreenshotCaptured,
+  requestCapture,
   requestChangeArea,
   type CapturedShot,
 } from "../lib/trayScreenshots";
@@ -73,6 +74,18 @@ const SOURCE_KEY = "diariz.recorder.source";
 const CONSTRAINTS_KEY = "diariz.recorder.audioConstraints";
 const SYSTEM_AUDIO_KEY = "diariz.recorder.systemAudio";
 const AUTOSTOP_KEY = "diariz.recorder.autoStop";
+
+// A hard ceiling on captures kept per recording (see mirrorShots/addLiveShot). Each mirror rewrites the
+// *entire* growing array of full-resolution PNG Blobs to IndexedDB, so an unbounded stash would let a
+// marathon meeting - or a runaway held hotkey/tray click - run up tens of gigabytes of cumulative writes
+// and hundreds of megabytes of Blobs pinned in memory for the meeting's duration. At a representative
+// ~3 MB per capture (full PNG + JPEG thumb), 200 captures caps memory/storage at roughly 600 MB and
+// cumulative IndexedDB churn at roughly 200*201/2 * 3 MB =~ 60 GB by the time the cap is hit - well beyond
+// any realistic meeting's capture count (a capture every couple of minutes for six-plus hours), while
+// still bounding the worst case to a fixed ceiling instead of growing forever. Past the cap, a capture is
+// dropped (not silently discarded - the user is told) rather than restructuring the stash's shape, which
+// is a tracked follow-up (see FIX 10 in the code-review report).
+const MAX_LIVE_SCREENSHOTS = 200;
 
 // Whether this environment can capture system audio at all (Chromium/desktop). Drives the System audio
 // checkbox + the "No microphone" dropdown option; false in Firefox/Safari.
@@ -106,6 +119,13 @@ const IconUpload = () => (
 const IconPencil = () => (
   <HubIcon>
     <path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+  </HubIcon>
+);
+
+const IconCamera = () => (
+  <HubIcon>
+    <path d="M9 4l-1.5 2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.5L15 4H9z" />
+    <circle cx="12" cy="13" r="3.5" />
   </HubIcon>
 );
 
@@ -219,6 +239,10 @@ export default function Recorder({
   const [liveShots, setLiveShots] = useState<PendingShot[]>([]);
   // Captures whose audio uploaded but whose attach failed - drives the retry banner.
   const [shotsAttach, setShotsAttach] = useState<PendingScreenshots | null>(null);
+  // Progress through attachScreenshots' sequential per-capture uploads (one multipart POST per shot), so a
+  // long meeting's worth of captures shows "n/total" instead of an undifferentiated spinner indistinguishable
+  // from the (already-finished) audio upload. Null outside of an attach; drives RecordHero's busy label.
+  const [attachProgress, setAttachProgress] = useState<{ done: number; total: number } | null>(null);
 
   const userId = userIdFromToken(getToken());
 
@@ -536,6 +560,10 @@ export default function Recorder({
   }
 
   function addLiveShot(shot: CapturedShot) {
+    if (liveShotsRef.current.length >= MAX_LIVE_SCREENSHOTS) {
+      setNotice(t("screenshotLimitReached", { max: MAX_LIVE_SCREENSHOTS }));
+      return;
+    }
     mirrorShots([
       ...liveShotsRef.current,
       {
@@ -567,10 +595,15 @@ export default function Recorder({
       return;
     }
     let uploaded = 0;
+    // Drives RecordHero's busy label with "n/total" for the length of this call - a long meeting's worth
+    // of sequential per-capture POSTs would otherwise sit behind the same undifferentiated "Uploading…"
+    // the (already-finished) audio phase used, with no way to tell the attach isn't stuck.
+    setAttachProgress({ done: 0, total: shots.length });
     try {
       for (const shot of shots) {
         await api.createScreenshot(recordingId, shot);
         uploaded++;
+        setAttachProgress({ done: uploaded, total: shots.length });
       }
       if (userId) await clearPendingScreenshots(userId);
       liveShotsRef.current = [];
@@ -581,6 +614,8 @@ export default function Recorder({
       const stash: PendingScreenshots = { userId: userId ?? "", recordingId, shots: remaining, updatedAt: Date.now() };
       if (userId) await savePendingScreenshots(stash);
       setShotsAttach(stash);
+    } finally {
+      setAttachProgress(null);
     }
   }
 
@@ -764,8 +799,21 @@ export default function Recorder({
       setPending(null);
       // Attach any live notes / screenshots to the new recording (failure keeps them durable + shows the
       // retry banner; a screenshot failure never fails the audio upload itself, which already succeeded).
-      await attachNotes(created.id);
-      await attachScreenshots(created.id);
+      // Each is guarded independently, in its own try/catch, rather than sharing this function's outer
+      // catch: attachNotes/attachScreenshots already swallow their *own* API failures, but an unexpected
+      // exception underneath them (e.g. a storage-layer hiccup while recording the retry stash) must
+      // still never be mistaken for the audio upload itself having failed - it already succeeded, so
+      // re-offering it below as an unsaved recording would invite a duplicate upload.
+      try {
+        await attachNotes(created.id);
+      } catch (e) {
+        console.error("Attaching notes failed unexpectedly:", e);
+      }
+      try {
+        await attachScreenshots(created.id);
+      } catch (e) {
+        console.error("Attaching screenshots failed unexpectedly:", e);
+      }
       onUploaded();
       reportRef.current({ phase: "idle" });
     } catch (e) {
@@ -786,24 +834,35 @@ export default function Recorder({
       const created = await api.upload(pending.blob, pending.title, pending.durationMs, pending.source);
       if (userId) await clearPendingRecording(userId);
       setPending(null);
-      // Recovered audio adopts any note lines stashed with it (recordingId null = never attached).
-      if (liveLinesRef.current.length === 0 && userId) {
-        const stash = await loadPendingNotes(userId);
-        if (stash && stash.recordingId === null && stash.lines.length > 0) {
-          await attachNotes(created.id, { ...stash, recordingId: created.id });
+      // Recovered audio adopts any note lines stashed with it (recordingId null = never attached). Milder
+      // than upload()'s case (setPending(null) has already run, so a failure here can only produce a false
+      // error banner, not a duplicate-offer) but guarded the same way: an unexpected exception in this
+      // recovery/attach path must never be blamed on the audio upload, which already succeeded.
+      try {
+        if (liveLinesRef.current.length === 0 && userId) {
+          const stash = await loadPendingNotes(userId);
+          if (stash && stash.recordingId === null && stash.lines.length > 0) {
+            await attachNotes(created.id, { ...stash, recordingId: created.id });
+          }
+        } else {
+          await attachNotes(created.id);
         }
-      } else {
-        await attachNotes(created.id);
+      } catch (e) {
+        console.error("Attaching notes failed unexpectedly:", e);
       }
       // Same adoption for screenshots stashed with the failed take (recordingId null = never attached) -
       // otherwise they'd stay orphaned in IndexedDB and the next start() would discard them outright.
-      if (liveShotsRef.current.length === 0 && userId) {
-        const shotStash = await loadPendingScreenshots(userId);
-        if (shotStash && shotStash.recordingId === null && shotStash.shots.length > 0) {
-          await attachScreenshots(created.id, { ...shotStash, recordingId: created.id });
+      try {
+        if (liveShotsRef.current.length === 0 && userId) {
+          const shotStash = await loadPendingScreenshots(userId);
+          if (shotStash && shotStash.recordingId === null && shotStash.shots.length > 0) {
+            await attachScreenshots(created.id, { ...shotStash, recordingId: created.id });
+          }
+        } else {
+          await attachScreenshots(created.id);
         }
-      } else {
-        await attachScreenshots(created.id);
+      } catch (e) {
+        console.error("Attaching screenshots failed unexpectedly:", e);
       }
       onUploaded();
     } catch (e) {
@@ -957,6 +1016,11 @@ export default function Recorder({
           stream={streamRef.current}
           canRecord={canRecord}
           busy={busy}
+          busyLabel={
+            attachProgress
+              ? t("recAttachingScreenshots", { done: attachProgress.done, total: attachProgress.total })
+              : undefined
+          }
           startDisabled={selection.kind === "none" && !systemAudio}
           onStart={() => start()}
           onPause={pause}
@@ -1004,6 +1068,14 @@ export default function Recorder({
           className="hidden"
           data-testid="upload-input"
         />
+
+        {/* Screenshot capture: camera icon button (desktop shell + recording only). The in-app equivalent
+            of the global hotkey and tray menu item - all three funnel into the same shell capture. */}
+        {recording && canCaptureScreenshots() && (
+          <HubIconButton label={t("screenshotCaptureButton")} onClick={requestCapture}>
+            <IconCamera />
+          </HubIconButton>
+        )}
 
         {/* Notes: pencil icon button (recording-only) -> Notes popover. */}
         {recording && (
