@@ -214,6 +214,8 @@
   "liveNotesClose": "Cerrar notas",
   "notesAttachFailed": "Tus notas se guardaron pero no se pudieron adjuntar a la grabación.",
   "notesAttachRetry": "Adjuntar notas",
+  "screenshotsAttachFailed": "Tus capturas de pantalla se guardaron pero no se pudieron adjuntar a la grabación.",
+  "screenshotsAttachRetry": "Adjuntar capturas",
   "eventNotesTitle": "Tus notas",
   "eventNotesHint": "Notas de preparación para esta reunión. Se adjuntan a la grabación automáticamente cuando se vincula.",
   "overviewEmpty": "Aún no hay resumen: usa el botón de actualizar para generarlo.",

@@ -214,6 +214,8 @@
   "liveNotesClose": "Close notes",
   "notesAttachFailed": "Your notes were saved but could not be attached to the recording.",
   "notesAttachRetry": "Attach notes",
+  "screenshotsAttachFailed": "Your screenshots were saved but could not be attached to the recording.",
+  "screenshotsAttachRetry": "Attach screenshots",
   "eventNotesTitle": "Your notes",
   "eventNotesHint": "Prep notes for this meeting. They attach to the recording automatically once it is linked.",
   "overviewEmpty": "No summary yet - use the refresh button to generate one.",

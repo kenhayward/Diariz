@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vite
 const TOKEN = `h.${btoa(JSON.stringify({ sub: "u1" }))}.s`;
 
 vi.mock("../lib/api", () => ({
-  api: { upload: vi.fn(), createNotes: vi.fn() },
+  api: { upload: vi.fn(), createNotes: vi.fn(), createScreenshot: vi.fn() },
   apiErrorMessage: (_e: unknown, fb: string) => fb,
   getToken: () => TOKEN,
 }));
@@ -13,6 +13,11 @@ vi.mock("../lib/pendingNotes", () => ({
   savePendingNotes: vi.fn().mockResolvedValue(undefined),
   loadPendingNotes: vi.fn().mockResolvedValue(null),
   clearPendingNotes: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../lib/pendingScreenshots", () => ({
+  savePendingScreenshots: vi.fn().mockResolvedValue(undefined),
+  loadPendingScreenshots: vi.fn().mockResolvedValue(null),
+  clearPendingScreenshots: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../lib/uploadContext", () => ({ useUpload: () => ({ uploadFiles: vi.fn() }) }));
 const setStatus = vi.fn();
@@ -56,6 +61,7 @@ import {
 } from "../lib/audioSource";
 import { loadPendingRecording, clearPendingRecording } from "../lib/pendingRecording";
 import { savePendingNotes, clearPendingNotes } from "../lib/pendingNotes";
+import { savePendingScreenshots, clearPendingScreenshots } from "../lib/pendingScreenshots";
 import Recorder from "./Recorder";
 
 // jsdom has no MediaRecorder; a minimal stub lets start() run without capturing real audio.
@@ -730,5 +736,176 @@ describe("live notes", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^notes$/i }));
     expect(await screen.findByText(/notes while recording/i)).toBeTruthy();
+  });
+});
+
+describe("live screenshots", () => {
+  // A fake Electron shell exposing the screenshot bridge (see lib/trayScreenshots.ts). The real bridge
+  // module is used unmocked - only its `window.diariz` dependency is faked, exactly like a real desktop
+  // build would supply it. `emit` lets a test simulate the shell delivering a capture.
+  let emit: ((payload: unknown) => void) | null = null;
+  function installShell() {
+    emit = null;
+    (window as unknown as { diariz?: unknown }).diariz = {
+      canCaptureScreenshot: true,
+      onScreenshotCaptured: (cb: (payload: unknown) => void) => {
+        emit = cb;
+        return () => {
+          emit = null;
+        };
+      },
+    };
+  }
+  const capture = (overrides: Partial<{ width: number; height: number }> = {}) =>
+    emit!({
+      full: new Uint8Array([1, 2, 3]),
+      thumb: new Uint8Array([4]),
+      width: 800,
+      height: 600,
+      ...overrides,
+    });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    (listInputDevices as Mock).mockResolvedValue({ devices: [], hasLabels: true });
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.upload as Mock).mockResolvedValue({ id: "rec-new" });
+    (api.createScreenshot as Mock).mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    delete (window as unknown as { diariz?: unknown }).diariz;
+  });
+
+  it("does nothing in a plain browser (no window.diariz)", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+
+    // No shell was installed, so there is nothing to emit and nothing should have been stashed.
+    expect(savePendingScreenshots).not.toHaveBeenCalled();
+  });
+
+  it("ignores a capture that arrives while not recording", async () => {
+    installShell();
+    render(<Recorder onUploaded={() => {}} />);
+    await screen.findByRole("button", { name: /^record$/i }); // mounted, not recording
+
+    capture();
+
+    expect(savePendingScreenshots).not.toHaveBeenCalled();
+  });
+
+  it("stamps a capture with the recorded clock and mirrors it to the stash while recording", async () => {
+    installShell();
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+
+    capture({ width: 640, height: 480 });
+
+    await waitFor(() =>
+      expect(savePendingScreenshots).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recordingId: null,
+          shots: [expect.objectContaining({ width: 640, height: 480, capturedAtMs: expect.any(Number) })],
+        }),
+      ),
+    );
+  });
+
+  it("attaches stashed captures to the uploaded recording and clears the stash", async () => {
+    installShell();
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    capture();
+    await waitFor(() => expect(savePendingScreenshots).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() =>
+      expect(api.createScreenshot).toHaveBeenCalledWith(
+        "rec-new",
+        expect.objectContaining({ width: 800, height: 600 }),
+      ),
+    );
+    await waitFor(() => expect(clearPendingScreenshots).toHaveBeenCalledWith("u1"));
+  });
+
+  it("re-stashes only the un-uploaded remainder when a later capture in the batch fails", async () => {
+    installShell();
+    (api.createScreenshot as Mock).mockResolvedValueOnce({}).mockRejectedValueOnce(new Error("boom"));
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    capture({ width: 111, height: 111 });
+    await waitFor(() => expect(savePendingScreenshots).toHaveBeenCalledTimes(1));
+    capture({ width: 222, height: 222 });
+    await waitFor(() =>
+      expect(savePendingScreenshots).toHaveBeenLastCalledWith(
+        expect.objectContaining({ shots: [expect.anything(), expect.anything()] }),
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.createScreenshot).toHaveBeenCalledTimes(2));
+    // Only the second (un-uploaded) capture is kept for retry - the first already reached the server.
+    await waitFor(() =>
+      expect(savePendingScreenshots).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          recordingId: "rec-new",
+          shots: [expect.objectContaining({ width: 222, height: 222 })],
+        }),
+      ),
+    );
+  });
+
+  it("keeps captures durable and offers a retry when the attach fails, without failing the upload", async () => {
+    installShell();
+    (api.createScreenshot as Mock).mockRejectedValueOnce(new Error("boom"));
+    const onUploaded = vi.fn();
+    render(<Recorder onUploaded={onUploaded} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    capture();
+    await waitFor(() => expect(savePendingScreenshots).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    // The audio upload still succeeds even though the screenshot attach threw.
+    await waitFor(() => expect(onUploaded).toHaveBeenCalled());
+    expect(await screen.findByText(/screenshots were saved but could not be attached/i)).toBeTruthy();
+    await waitFor(() =>
+      expect(savePendingScreenshots).toHaveBeenCalledWith(expect.objectContaining({ recordingId: "rec-new" })),
+    );
+
+    // Retry succeeds and the banner clears.
+    fireEvent.click(screen.getByRole("button", { name: /attach screenshots/i }));
+    await waitFor(() => expect(api.createScreenshot).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText(/screenshots were saved but could not be attached/i)).toBeNull());
+  });
+
+  it("clears a stale, never-attached stash when a new recording starts", async () => {
+    installShell();
+    (api.upload as Mock).mockRejectedValueOnce(new Error("network down"));
+    render(<Recorder onUploaded={() => {}} />);
+
+    // First recording: capture one shot, then the audio upload itself fails (never reaches attach).
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    capture();
+    await waitFor(() => expect(savePendingScreenshots).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+    await waitFor(() => expect(api.upload).toHaveBeenCalledTimes(1));
+
+    (clearPendingScreenshots as Mock).mockClear();
+
+    // Starting a fresh recording must not carry the orphaned capture over into the new take.
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+
+    await waitFor(() => expect(clearPendingScreenshots).toHaveBeenCalledWith("u1"));
   });
 });

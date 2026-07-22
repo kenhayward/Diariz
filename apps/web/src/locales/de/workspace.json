@@ -214,6 +214,8 @@
   "liveNotesClose": "Notizen schließen",
   "notesAttachFailed": "Ihre Notizen wurden gespeichert, konnten aber nicht der Aufnahme zugeordnet werden.",
   "notesAttachRetry": "Notizen zuordnen",
+  "screenshotsAttachFailed": "Ihre Screenshots wurden gespeichert, konnten aber nicht der Aufnahme zugeordnet werden.",
+  "screenshotsAttachRetry": "Screenshots zuordnen",
   "eventNotesTitle": "Ihre Notizen",
   "eventNotesHint": "Vorbereitungsnotizen für dieses Meeting. Sie werden der Aufnahme automatisch zugeordnet, sobald sie verknüpft ist.",
   "overviewEmpty": "Noch keine Zusammenfassung - mit der Aktualisieren-Schaltfläche erstellen.",
