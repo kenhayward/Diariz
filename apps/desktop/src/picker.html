@@ -46,7 +46,12 @@
     sel.style.display = "block";
     // Keep receiving pointermove/pointerup on this window even if the cursor
     // crosses onto another display's overlay before the button is released.
-    e.target.setPointerCapture(e.pointerId);
+    try {
+      e.target.setPointerCapture(e.pointerId);
+    } catch (err) {
+      // If setPointerCapture throws (e.g., InvalidPointerId), degrade to
+      // same-window-only tracking instead of propagating.
+    }
   });
 
   addEventListener("pointermove", (e) => {
@@ -68,6 +73,16 @@
     done = true;
     if (r.width < CLICK_THRESHOLD || r.height < CLICK_THRESHOLD) window.picker.choose({ kind: "screen" });
     else window.picker.choose({ kind: "region", rect: r });
+  });
+
+  addEventListener("pointercancel", (e) => {
+    if (done) return;
+    if (e.target.hasPointerCapture && e.target.hasPointerCapture(e.pointerId)) {
+      e.target.releasePointerCapture(e.pointerId);
+    }
+    resetDrag();
+    done = true;
+    window.picker.cancel();
   });
 
   addEventListener("keydown", (e) => {
