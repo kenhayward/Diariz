@@ -9,9 +9,14 @@ const save = document.getElementById("save");
 // replaced by every keydown once main formats it (see below).
 let pending = null;
 
+// Inert until the persisted hotkey has actually loaded: a click before then would send
+// `save(null)` and show the generic "needs a modifier" error instead of the real state.
+save.disabled = true;
+
 window.hotkeyConfig.load().then((current) => {
   pending = current;
   input.value = current;
+  save.disabled = false;
 });
 
 // This window is sandboxed (see main.js's showHotkeyWindow), so it can't require
@@ -24,6 +29,17 @@ window.hotkeyConfig.load().then((current) => {
 // it, and an unusable combination (or a physical key Electron has no name for at all) is
 // flagged immediately rather than only as a save error.
 input.addEventListener("keydown", async (e) => {
+  // Tab must keep moving focus - the field is readonly-by-design (it captures raw keys rather than
+  // accepting typed text), but that must not turn it into a keyboard trap.
+  if (e.key === "Tab") return;
+  // A bare Enter (no modifiers) submits the form, matching every other input in the app, rather than
+  // being built into a one-key "accelerator" that isValidAccelerator then rejects as needing a modifier.
+  // Enter held WITH a modifier (e.g. Shift+Enter) is a legitimate accelerator and falls through below.
+  if (e.key === "Enter" && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+    e.preventDefault();
+    void submit();
+    return;
+  }
   e.preventDefault();
   const descriptor = {
     ctrlKey: e.ctrlKey,
