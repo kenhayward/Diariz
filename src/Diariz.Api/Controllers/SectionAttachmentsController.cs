@@ -241,13 +241,22 @@ public class SectionAttachmentsController : ControllerBase
 
         var quota = await _db.Users.Where(u => u.Id == UserId).Select(u => u.QuotaBytes).FirstOrDefaultAsync();
         var used = await _usage.UsedBytesAsync(UserId);
-        if (used - a.SizeBytes + bytes.Length > quota)
+        // `used` only counts rows already attributed to the caller, so only subtract the row's current size when
+        // the caller already owns it - otherwise this edit is about to re-attribute a stranger's bytes onto the
+        // caller's ledger for the first time, and none of the old size was ever part of `used` to subtract.
+        var currentContribution = a.UploadedByUserId == UserId ? a.SizeBytes : 0;
+        if (used - currentContribution + bytes.Length > quota)
             return StatusCode(StatusCodes.Status413PayloadTooLarge,
                 "Storage quota exceeded. Delete some recordings/attachments or ask an administrator to raise your quota.");
 
         await using (var ms = new MemoryStream(bytes))
             await _storage.UploadAsync(a.BlobKey, ms, "text/markdown");
         a.SizeBytes = bytes.Length;
+        // Re-attribute: whoever edits the content now owns the stored bytes, matching the "uploader pays" rule
+        // the other write paths already enforce (a shared-room member with ManageContents need not be the
+        // original uploader). The blob key keeps the ORIGINAL uploader's prefix (`{uploader}/section-attachments/
+        // {id}.md`) - that's harmless, keys are opaque identifiers, not an access-control or billing signal.
+        a.UploadedByUserId = UserId;
         await _db.SaveChangesAsync();
         return NoContent();
     }

@@ -334,6 +334,61 @@ public class SectionAttachmentsControllerTests
     }
 
     [Fact]
+    public async Task AddMarkdown_InSharedRoom_ChargesTheUploader_NotTheFolderCreator()
+    {
+        // Same regression as AddFile's sibling test, but for the /markdown route (the chat /attach path) - the
+        // stamp there is just as easy to lose silently as on the file route.
+        using var db = TestDb.Create();
+        var creator = Guid.NewGuid();
+        var section = await SharedRoomSection(db, creator); // Section.UserId == creator
+        var uploader = Guid.NewGuid();
+        Users.Ensure(db, uploader);
+        await new Diariz.Api.Services.RoomScope(db).SetMemberAsync(
+            section.RoomId, RoomPrincipalType.User, uploader, RoomPermission.ManageContents);
+
+        var result = await Build(db, uploader).AddMarkdown(section.Id, new AddMarkdownAttachmentRequest("Notes", "# hello"));
+
+        var dto = Assert.IsType<AttachmentDto>(result.Value);
+        var usage = new StorageUsage(db);
+        Assert.Equal(dto.SizeBytes, await usage.UsedBytesAsync(uploader)); // charged to whoever created it
+        Assert.Equal(0, await usage.UsedBytesAsync(creator));              // not to the folder's creator
+    }
+
+    [Fact]
+    public async Task UpdateContent_InSharedRoom_ChargesTheEditor_NotTheOriginalUploader()
+    {
+        // Same defect as AddFile's regression test, surviving on the one write path that edits an EXISTING row
+        // rather than creating one: the in-place Markdown edit is gated on ManageContents only, so in a shared
+        // room the editor need not be the attachment's original uploader. Before the fix, the pre-flight quota
+        // check was measured against the CALLER (correct) but the charge stayed on the ORIGINAL uploader
+        // (a.UploadedByUserId was left untouched) - so the editor's headroom was checked (loosely - the
+        // `used - a.SizeBytes` subtraction removed bytes that were never in the editor's own `used`, granting a
+        // small free allowance) while the bytes actually landed on someone else's ledger.
+        using var db = TestDb.Create();
+        var creator = Guid.NewGuid();
+        var section = await SharedRoomSection(db, creator); // Section.UserId == creator
+        var created = (await Build(db, creator).AddMarkdown(
+            section.Id, new AddMarkdownAttachmentRequest("Notes", "hello"))).Value!;
+
+        var editor = Guid.NewGuid();
+        Users.Ensure(db, editor);
+        await new Diariz.Api.Services.RoomScope(db).SetMemberAsync(
+            section.RoomId, RoomPrincipalType.User, editor, RoomPermission.ManageContents);
+
+        var newContent = new string('x', 1000);
+        var updateResult = await Build(db, editor).UpdateContent(
+            section.Id, created.Id, new UpdateAttachmentContentRequest(newContent));
+
+        Assert.IsType<NoContentResult>(updateResult);
+        var usage = new StorageUsage(db);
+        Assert.Equal(newContent.Length, await usage.UsedBytesAsync(editor)); // charged to whoever edited it
+        Assert.Equal(0, await usage.UsedBytesAsync(creator));                // not to the original uploader
+
+        var a = await db.SectionAttachments.SingleAsync(x => x.Id == created.Id);
+        Assert.Equal(editor, a.UploadedByUserId); // re-attributed: the editor now owns the stored bytes
+    }
+
+    [Fact]
     public async Task Personal_room_owner_keeps_full_access_unchanged()
     {
         // Verifies the personal-room path (the owner holds every permission via RoomScope.PermissionsAsync)

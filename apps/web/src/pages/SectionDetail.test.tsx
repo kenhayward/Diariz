@@ -16,6 +16,15 @@ vi.mock("../lib/rooms", () => ({
 // FormulaRunModal reads useAuth for the caller id (groups Personal vs Shared formulas).
 vi.mock("../auth", () => ({ useAuth: () => ({ id: "u1", fullName: "Test User", email: "t@x.test" }) }));
 
+// Copy-link wiring: keep folderUrl real (it's the thing under test - does the page pass the right roomBasePath
+// into it) but stub copyRichLink so no real clipboard API is touched and we can inspect the URL it was given.
+// vi.mock's factory is hoisted above top-level const declarations, so the mock fn is created via vi.hoisted.
+const { copyRichLink } = vi.hoisted(() => ({ copyRichLink: vi.fn().mockResolvedValue(true) }));
+vi.mock("../lib/clipboard", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/clipboard")>();
+  return { ...actual, copyRichLink };
+});
+
 vi.mock("../lib/api", () => ({
   api: {
     getSection: vi.fn(),
@@ -246,6 +255,46 @@ describe("SectionDetail formula-result mutation gating", () => {
 
     fireEvent.click(await screen.findByText("Risk Register"));
     expect((screen.getByRole("button", { name: /^delete$/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
+describe("SectionDetail copy-link room prefix", () => {
+  // section.roomId resolves the folder's OWN room from `rooms` (see the sectionRoom/roomBasePath comment in
+  // SectionDetail.tsx) - the copied link must carry that room's prefix, not the URL's, and must carry none at
+  // all for a personal folder even though the folder-attachments describe block above already covers the
+  // room-less legacy URL for a DIFFERENT concern (write-control gating).
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    roomsState.rooms = [];
+  });
+
+  it("copies a shared folder's link with its room prefix", async () => {
+    roomsState.rooms = [
+      { id: "shared-1", name: "Eng", kind: 1, icon: null, color: null, isPersonal: false, permissions: RoomPermission.ManageContents, sectionCount: 0, recordingCount: 0 },
+    ];
+    renderPage({ ...base, roomId: "shared-1" });
+    await loaded();
+
+    fireEvent.click(screen.getByLabelText("Copy link"));
+
+    await waitFor(() => expect(copyRichLink).toHaveBeenCalled());
+    const [url] = copyRichLink.mock.calls[0];
+    expect(url).toBe(`${window.location.origin}/rooms/shared-1/sections/sec-1`);
+  });
+
+  it("copies a personal folder's link with no room prefix", async () => {
+    roomsState.rooms = [
+      { id: "personal-1", name: "You", kind: 0, icon: null, color: null, isPersonal: true, permissions: 63, sectionCount: 0, recordingCount: 0 },
+    ];
+    renderPage({ ...base, roomId: "personal-1" });
+    await loaded();
+
+    fireEvent.click(screen.getByLabelText("Copy link"));
+
+    await waitFor(() => expect(copyRichLink).toHaveBeenCalled());
+    const [url] = copyRichLink.mock.calls[0];
+    expect(url).toBe(`${window.location.origin}/sections/sec-1`);
   });
 });
 
