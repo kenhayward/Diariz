@@ -790,10 +790,11 @@ describe("RecordingDetail", () => {
     await loaded();
     openTab("Transcript");
 
-    // Both captures are woven in after the recording's one segment, in capture-time order. (The inline
-    // transcript thumbnail's alt text comes from this page's own zero-padded `fmt`, unlike the modal's.)
-    const thumb1 = await screen.findByRole("button", { name: /screenshot at 01:05/i });
-    const thumb2 = screen.getByRole("button", { name: /screenshot at 02:05/i });
+    // Both captures are woven in after the recording's one segment, in capture-time order. The inline
+    // transcript thumbnail's alt text now shares the same unpadded m:ss format as the Notes-tab strip and
+    // the modal (this page used to have its own zero-padded fmt just for screenshots).
+    const thumb1 = await screen.findByRole("button", { name: /screenshot at 1:05/i });
+    const thumb2 = screen.getByRole("button", { name: /screenshot at 2:05/i });
 
     // Click the second thumbnail first - the modal must open on shot-2, not always the first capture.
     fireEvent.click(thumb2);
@@ -803,6 +804,20 @@ describe("RecordingDetail", () => {
 
     fireEvent.click(thumb1);
     expect((await screen.findByRole("dialog")).textContent).toMatch(/1:05/);
+  });
+
+  it("shows a visible timestamp on the screenshot's transcript row, like NoteRow's", async () => {
+    (api.listScreenshots as ReturnType<typeof vi.fn>).mockResolvedValue(shots);
+    renderPage(base);
+    await loaded();
+    openTab("Transcript");
+
+    const thumb1 = await screen.findByRole("button", { name: /screenshot at 1:05/i });
+    const thumb2 = screen.getByRole("button", { name: /screenshot at 2:05/i });
+
+    // A plain leading timestamp (matching NoteRow's own), not just present in the thumbnail's aria-label/alt.
+    expect(within(thumb1.closest("li")!).getByText("1:05")).toBeTruthy();
+    expect(within(thumb2.closest("li")!).getByText("2:05")).toBeTruthy();
   });
 
   it("shows the Screenshots section collapsed in the Notes tab, with the capture count", async () => {

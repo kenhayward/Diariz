@@ -1418,15 +1418,22 @@ export default function RecordingDetail() {
                 <NoteRow key={`note-${row.note.id}`} note={row.note} speaker={fullName ?? email ?? t("workspace:noteSpeakerYou")} />
               ) : row.kind === "screenshot" ? (
                 <li key={`shot-${row.shot.id}`} className="flex items-start gap-2">
+                  {/* Same leading-timestamp treatment as NoteRow's - a plain (non-interactive) stamp, since
+                      NoteRow's own timestamp isn't a click-to-jump control either. Uses the same time format
+                      as the Notes-tab strip and the modal (formatDuration), not this page's own `fmt`, so the
+                      same capture reads identically everywhere it appears. */}
+                  <span className="w-12 shrink-0 font-mono text-xs text-gray-400 dark:text-gray-500">
+                    {formatDuration(row.shot.capturedAtMs)}
+                  </span>
                   <button
                     type="button"
                     onClick={() => setOpenShot(shots.findIndex((s) => s.id === row.shot.id))}
                     className="overflow-hidden rounded border hover:ring-2 hover:ring-blue-400 dark:border-gray-700"
-                    aria-label={t("workspace:screenshotAlt", { time: fmt(row.shot.capturedAtMs) })}
+                    aria-label={t("workspace:screenshotAlt", { time: formatDuration(row.shot.capturedAtMs) })}
                   >
                     <img
                       src={api.screenshotThumbUrl(id, row.shot.id)}
-                      alt={t("workspace:screenshotAlt", { time: fmt(row.shot.capturedAtMs) })}
+                      alt={t("workspace:screenshotAlt", { time: formatDuration(row.shot.capturedAtMs) })}
                       loading="lazy"
                       className="h-24 w-auto"
                     />

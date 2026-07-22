@@ -1,11 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
+import { formatDuration } from "../lib/format";
 import type { Screenshot } from "../lib/types";
-
-const fmt = (ms: number) => {
-  const s = Math.floor(ms / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-};
 
 /// A row of capture thumbnails. Used both in the live recorder popover (immediate feedback that the
 /// capture area is right) and in the Notes tab's collapsed section - kept free of assumptions about
@@ -32,12 +28,12 @@ export default function ScreenshotStrip({
           <button
             type="button"
             onClick={() => onOpen(i)}
-            aria-label={t("screenshotAlt", { time: fmt(shot.capturedAtMs) })}
+            aria-label={t("screenshotAlt", { time: formatDuration(shot.capturedAtMs) })}
             className="block overflow-hidden rounded border hover:border-blue-400 dark:border-gray-700 dark:hover:border-blue-500"
           >
             <img
               src={api.screenshotThumbUrl(recordingId, shot.id)}
-              alt={t("screenshotAlt", { time: fmt(shot.capturedAtMs) })}
+              alt={t("screenshotAlt", { time: formatDuration(shot.capturedAtMs) })}
               loading="lazy"
               className="h-20 w-auto"
             />

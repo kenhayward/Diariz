@@ -1,12 +1,8 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
+import { formatDuration } from "../lib/format";
 import type { Screenshot } from "../lib/types";
-
-const fmt = (ms: number) => {
-  const s = Math.floor(ms / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-};
 
 /// Full-size viewer for one capture, with prev/next through the recording's captures, a jump to the
 /// moment it was taken, download and delete. Index is owned by the caller so the transcript row, the
@@ -55,7 +51,7 @@ export default function ScreenshotModal({
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         role="dialog"
-        aria-label={t("screenshotAlt", { time: fmt(shot.capturedAtMs) })}
+        aria-label={t("screenshotAlt", { time: formatDuration(shot.capturedAtMs) })}
         className="flex max-h-full w-full max-w-5xl flex-col gap-2 rounded-lg border bg-white p-3 shadow-xl dark:border-gray-700 dark:bg-gray-900"
         onClick={(e) => e.stopPropagation()}
       >
@@ -80,10 +76,10 @@ export default function ScreenshotModal({
             <button
               type="button"
               className={btn}
-              aria-label={t("screenshotJump", { time: fmt(shot.capturedAtMs) })}
+              aria-label={t("screenshotJump", { time: formatDuration(shot.capturedAtMs) })}
               onClick={() => onJump(shot.capturedAtMs)}
             >
-              {fmt(shot.capturedAtMs)}
+              {formatDuration(shot.capturedAtMs)}
             </button>
           )}
           <span className="flex-1" />
@@ -111,7 +107,7 @@ export default function ScreenshotModal({
         </div>
         <img
           src={api.screenshotContentUrl(recordingId, shot.id)}
-          alt={t("screenshotAlt", { time: fmt(shot.capturedAtMs) })}
+          alt={t("screenshotAlt", { time: formatDuration(shot.capturedAtMs) })}
           className="max-h-[75vh] w-auto self-center object-contain"
         />
       </div>
