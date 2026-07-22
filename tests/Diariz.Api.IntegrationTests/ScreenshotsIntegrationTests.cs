@@ -106,6 +106,13 @@ public class ScreenshotsIntegrationTests(ContainersFixture fx)
         await using (var db = fx.CreateDbContext())
             created = Assert.IsType<ScreenshotDto>((await Build(db, ownerId, storage).Create(recId, Png(), Jpg(), 0, 10, 10)).Value);
 
+        // Share the recording into a room the stranger is NOT a member of, so CanReadRecordingAsync's placement
+        // loop actually runs against real Postgres (and rejects on the membership check) rather than exiting on
+        // an empty placement list - the recording would otherwise carry no placement at all in this test.
+        var coViewerId = Guid.NewGuid();
+        await using (var db = fx.CreateDbContext())
+            await ShareWithCoViewerAsync(db, ownerId, recId, coViewerId);
+
         await using (var db = fx.CreateDbContext())
         {
             db.Users.Add(new ApplicationUser { Id = strangerId, UserName = $"{strangerId}@x.test", Email = $"{strangerId}@x.test" });

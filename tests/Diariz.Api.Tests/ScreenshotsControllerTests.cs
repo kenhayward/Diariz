@@ -221,6 +221,11 @@ public class ScreenshotsControllerTests
         var (owner, db, _, ownerId, recordingId) = Setup();
         var created = Assert.IsType<ScreenshotDto>(
             (await owner.Create(recordingId, Png(), Jpg(), 0, 10, 10)).Value);
+        // Share the recording into a room the stranger is NOT a member of, so CanReadRecordingAsync's placement
+        // loop actually runs (and rejects on the membership check) rather than exiting on an empty placement
+        // list - the recording would otherwise have no placement at all in this test.
+        var coViewerId = Guid.NewGuid();
+        await ShareWithCoViewerAsync(db, ownerId, recordingId, coViewerId);
         var stranger = Guid.NewGuid();
         Users.Ensure(db, stranger);
         var strangerController = Build(db, stranger);

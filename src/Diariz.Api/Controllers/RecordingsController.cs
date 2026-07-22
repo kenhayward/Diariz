@@ -157,14 +157,13 @@ public class RecordingsController : ControllerBase
 
         // Visible to the recorder, or to a member of any room it is placed in - the same "can read" rule
         // IRoomScope.CanReadRecordingAsync codifies for per-recording sub-resources (screenshots, meeting
-        // notes, ...). The rooms line lists only the rooms the caller can actually see (a member should not
-        // learn about rooms they are not in), so it is still built by hand here.
-        var placements = await _rooms.RoomsForRecordingAsync(id);
-        var visibleRooms = new List<RecordingRoomDto>();
-        foreach (var p in placements)
-            if (await _rooms.IsMemberAsync(UserId, p.RoomId))
-                visibleRooms.Add(new RecordingRoomDto(p.RoomId, p.Name, p.Icon, p.Color, p.IsMainRoom));
-        if (!await _rooms.CanReadRecordingAsync(UserId, id)) return NotFound();
+        // notes, ...). ReadAccessForRecordingAsync is the single walk that answers both this gate and the
+        // room list below (a member should not learn about rooms they are not in) - one call, one walk.
+        var access = await _rooms.ReadAccessForRecordingAsync(UserId, id);
+        if (!access.CanRead) return NotFound();
+        var visibleRooms = access.VisibleRooms
+            .Select(p => new RecordingRoomDto(p.RoomId, p.Name, p.Icon, p.Color, p.IsMainRoom))
+            .ToList();
 
         var recordedByName = await _db.Users
             .Where(u => u.Id == rec.UserId)
