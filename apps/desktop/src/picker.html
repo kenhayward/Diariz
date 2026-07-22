@@ -18,6 +18,9 @@
 <script>
   const sel = document.getElementById("sel");
   let start = null;
+  // One-shot guard: the overlay contract is exactly one choose()/cancel() message.
+  // Once true, every handler below is a no-op.
+  let done = false;
 
   // Below this many pixels a drag is treated as a click (whole screen) rather than a
   // tiny unusable rectangle.
@@ -32,13 +35,22 @@
     };
   }
 
-  addEventListener("mousedown", (e) => {
+  function resetDrag() {
+    start = null;
+    sel.style.display = "none";
+  }
+
+  addEventListener("pointerdown", (e) => {
+    if (done) return;
     start = { x: e.clientX, y: e.clientY };
     sel.style.display = "block";
+    // Keep receiving pointermove/pointerup on this window even if the cursor
+    // crosses onto another display's overlay before the button is released.
+    e.target.setPointerCapture(e.pointerId);
   });
 
-  addEventListener("mousemove", (e) => {
-    if (!start) return;
+  addEventListener("pointermove", (e) => {
+    if (done || !start) return;
     const r = rectFrom(start, { x: e.clientX, y: e.clientY });
     sel.style.left = r.x + "px";
     sel.style.top = r.y + "px";
@@ -46,16 +58,22 @@
     sel.style.height = r.height + "px";
   });
 
-  addEventListener("mouseup", (e) => {
-    if (!start) return;
+  addEventListener("pointerup", (e) => {
+    if (done || !start) return;
     const r = rectFrom(start, { x: e.clientX, y: e.clientY });
-    start = null;
-    sel.style.display = "none";
+    if (e.target.hasPointerCapture && e.target.hasPointerCapture(e.pointerId)) {
+      e.target.releasePointerCapture(e.pointerId);
+    }
+    resetDrag();
+    done = true;
     if (r.width < CLICK_THRESHOLD || r.height < CLICK_THRESHOLD) window.picker.choose({ kind: "screen" });
     else window.picker.choose({ kind: "region", rect: r });
   });
 
   addEventListener("keydown", (e) => {
-    if (e.key === "Escape") window.picker.cancel();
+    if (e.key !== "Escape" || done) return;
+    resetDrag();
+    done = true;
+    window.picker.cancel();
   });
 </script>
