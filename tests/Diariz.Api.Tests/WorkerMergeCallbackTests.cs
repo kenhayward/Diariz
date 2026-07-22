@@ -85,6 +85,54 @@ public class WorkerMergeCallbackTests
     }
 
     [Fact]
+    public async Task Result_FreesSourceScreenshotBlobs_ButLeavesSurvivorsScreenshotsAlone()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var storage = new FakeAudioStorage();
+        var survivor = Rec(userId, $"{userId}/old.webm", size: 50);
+        var other = Rec(userId, $"{userId}/other.webm", size: 70);
+        db.Recordings.AddRange(survivor, other);
+
+        // A screenshot still hanging off the merged-away source must have both its blobs freed.
+        var otherFullKey = $"{userId}/screenshots/{Guid.NewGuid()}.png";
+        var otherThumbKey = $"{userId}/screenshots/{Guid.NewGuid()}-thumb.jpg";
+        db.MeetingScreenshots.Add(new MeetingScreenshot
+        {
+            Id = Guid.NewGuid(), UserId = userId, RecordingId = other.Id,
+            BlobKey = otherFullKey, ThumbBlobKey = otherThumbKey, CapturedAtMs = 1000,
+        });
+
+        // The survivor's own screenshot blobs must NOT be touched by the merge.
+        var survivorFullKey = $"{userId}/screenshots/{Guid.NewGuid()}.png";
+        var survivorThumbKey = $"{userId}/screenshots/{Guid.NewGuid()}-thumb.jpg";
+        db.MeetingScreenshots.Add(new MeetingScreenshot
+        {
+            Id = Guid.NewGuid(), UserId = userId, RecordingId = survivor.Id,
+            BlobKey = survivorFullKey, ThumbBlobKey = survivorThumbKey, CapturedAtMs = 500,
+        });
+        await db.SaveChangesAsync();
+
+        storage.Objects[survivor.BlobKey] = Encoding.UTF8.GetBytes("old");
+        storage.Objects[other.BlobKey] = Encoding.UTF8.GetBytes("oth");
+        storage.Objects[otherFullKey] = Encoding.UTF8.GetBytes("png");
+        storage.Objects[otherThumbKey] = Encoding.UTF8.GetBytes("jpg");
+        storage.Objects[survivorFullKey] = Encoding.UTF8.GetBytes("png2");
+        storage.Objects[survivorThumbKey] = Encoding.UTF8.GetBytes("jpg2");
+        var mergedKey = $"{userId}/merged.webm";
+        storage.Objects[mergedKey] = Encoding.UTF8.GetBytes("combined");
+
+        var result = await Build(db, storage).Result(
+            new AudioMergeResult(survivor.Id, mergedKey, "audio/webm", SizeBytes: 999, DurationMs: 3000, [other.Id]));
+
+        Assert.IsType<OkResult>(result);
+        Assert.False(storage.Objects.ContainsKey(otherFullKey));   // source screenshot's full image freed
+        Assert.False(storage.Objects.ContainsKey(otherThumbKey));  // source screenshot's thumbnail freed
+        Assert.True(storage.Objects.ContainsKey(survivorFullKey)); // survivor's screenshot untouched
+        Assert.True(storage.Objects.ContainsKey(survivorThumbKey));// survivor's thumbnail untouched
+    }
+
+    [Fact]
     public async Task Result_WithWrongSecret_ReturnsUnauthorized()
     {
         using var db = TestDb.Create();

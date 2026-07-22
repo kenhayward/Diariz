@@ -62,13 +62,24 @@ public class WorkerMergeCallbackController : ControllerBase
             await _storage.DeleteAsync(other.BlobKey);
             // The controller reassigns source attachments to the survivor before enqueuing, so normally
             // there are none here; delete any that slipped in (e.g. attached during the merge window) so
-            // their blobs aren't orphaned when the row is removed.
+            // their blobs aren't orphaned when the row is removed. Screenshots are never reassigned, so
+            // every merged-away source's screenshot blobs (full image + thumbnail) must be freed here too -
+            // the DB cascade only clears the MeetingScreenshot rows, not their object-storage blobs.
             var attachmentKeys = await _db.Attachments
                 .Where(a => a.RecordingId == other.Id && a.BlobKey != null)
                 .Select(a => a.BlobKey!)
                 .ToListAsync();
             foreach (var key in attachmentKeys)
                 await _storage.DeleteAsync(key);
+            var screenshots = await _db.MeetingScreenshots
+                .Where(s => s.RecordingId == other.Id)
+                .Select(s => new { s.BlobKey, s.ThumbBlobKey })
+                .ToListAsync();
+            foreach (var s in screenshots)
+            {
+                await _storage.DeleteAsync(s.BlobKey);
+                await _storage.DeleteAsync(s.ThumbBlobKey);
+            }
             _db.Recordings.Remove(other);
         }
         // Drop the survivor's original blob — its audio now lives inside the combined file.
