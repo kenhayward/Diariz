@@ -2,11 +2,15 @@ import { render, screen, fireEvent, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { SectionDetail as SectionDetailT, SectionFormulaResult } from "../lib/types";
+import { RoomPermission } from "../lib/types";
+import type { RoomListItem, SectionDetail as SectionDetailT, SectionFormulaResult } from "../lib/types";
 
-// FolderRecordingList (rendered on the Overview tab) reads the current room + base path.
+// FolderRecordingList (rendered on the Overview tab) reads the current room + base path. `rooms` is mutable so
+// individual tests can seed the caller's room memberships (with permissions) to exercise the folder-attachment
+// ManageContents gate, which resolves against section.roomId - not `currentRoom` (the URL-resolved room).
+const roomsState: { rooms: RoomListItem[] } = { rooms: [] };
 vi.mock("../lib/rooms", () => ({
-  useRoom: () => ({ currentRoom: undefined, rooms: [] }),
+  useRoom: () => ({ currentRoom: undefined, rooms: roomsState.rooms }),
   useRoomBasePath: () => "",
 }));
 // FormulaRunModal reads useAuth for the caller id (groups Personal vs Shared formulas).
@@ -53,6 +57,7 @@ const base: SectionDetailT = {
   id: "sec-1",
   name: "My Folder",
   parentId: null,
+  roomId: "personal-1",
   stats: { transcriptCount: 2, totalDurationMs: 60_000, firstRecordingAt: null, lastRecordingAt: null },
   summary: null,
   minutes: null,
@@ -171,5 +176,55 @@ describe("SectionDetail formulas tab", () => {
     fireEvent.click(await screen.findByText("Risk Register"));
     fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
     await waitFor(() => expect(api.deleteSectionFormulaResult).toHaveBeenCalledWith("sec-1", "sfr-1"));
+  });
+});
+
+describe("SectionDetail folder-attachment room gating", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    roomsState.rooms = [];
+  });
+
+  it("hides folder-attachment write controls for a shared-room member without ManageContents, even at the room-less legacy URL", async () => {
+    // The caller's personal room grants every permission - if the gate ever fell back to it (the historical
+    // bug: useRoom() resolves the URL's room, which falls back to personal when the URL carries none), these
+    // write controls would wrongly render. Gating on section.roomId instead must resolve the SHARED room here.
+    roomsState.rooms = [
+      { id: "personal-1", name: "You", kind: 0, icon: null, color: null, isPersonal: true, permissions: 63, sectionCount: 0, recordingCount: 0 },
+      { id: "shared-1", name: "Eng", kind: 1, icon: null, color: null, isPersonal: false, permissions: RoomPermission.CreateRecording, sectionCount: 0, recordingCount: 0 },
+    ];
+    (api.listFolderAttachments as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "att-1", kind: "File", name: "spec.pdf", contentType: "application/pdf", sizeBytes: 100, url: null, ordinal: 0 },
+    ]);
+
+    renderPage({ ...base, roomId: "shared-1" }); // note: rendered at the room-less "/sections/sec-1" route
+    await loaded();
+    openTab(/attachments/i);
+
+    expect(await screen.findByText("spec.pdf")).toBeTruthy();
+    expect(screen.queryByText("Add file")).toBeNull();
+    expect(screen.queryByText("Add URL")).toBeNull();
+    expect(screen.queryByText("Remove")).toBeNull();
+  });
+
+  it("shows folder-attachment write controls for a shared-room member with ManageContents, even at the room-less legacy URL", async () => {
+    roomsState.rooms = [
+      { id: "personal-1", name: "You", kind: 0, icon: null, color: null, isPersonal: true, permissions: 63, sectionCount: 0, recordingCount: 0 },
+      { id: "shared-1", name: "Eng", kind: 1, icon: null, color: null, isPersonal: false, permissions: RoomPermission.ManageContents, sectionCount: 0, recordingCount: 0 },
+    ];
+    (api.listFolderAttachments as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "att-1", kind: "File", name: "spec.pdf", contentType: "application/pdf", sizeBytes: 100, url: null, ordinal: 0 },
+    ]);
+
+    renderPage({ ...base, roomId: "shared-1" });
+    await loaded();
+    openTab(/attachments/i);
+
+    // A manager gets a rename input (value, not text content) instead of a plain text name.
+    expect(await screen.findByDisplayValue("spec.pdf")).toBeTruthy();
+    expect(screen.getByText("Add file")).toBeTruthy();
+    expect(screen.getByText("Add URL")).toBeTruthy();
+    expect(screen.getByText("Remove")).toBeTruthy();
   });
 });

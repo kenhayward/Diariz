@@ -90,8 +90,12 @@ public record FolderMinutesDto(
     string Model, string Text, DateTimeOffset CreatedAt, bool IsUserEdited,
     Guid? MeetingTypeId, SectionGenerationStatus Status, string? Error);
 
+/// <summary><c>RoomId</c> is the section's ACTUAL room - the web uses it to resolve permissions (e.g.
+/// ManageContents for folder-direct attachments) against the folder it is really looking at, rather than
+/// whatever room the URL happens to name (the room-less legacy <c>/sections/{id}</c> deep-link carries none,
+/// and falls back to the caller's personal room, which is not necessarily where this folder lives).</summary>
 public record SectionDetailDto(
-    Guid Id, string Name, Guid? ParentId,
+    Guid Id, string Name, Guid? ParentId, Guid RoomId,
     SectionStatsDto Stats, FolderSummaryDto? Summary, FolderMinutesDto? Minutes, Guid? MeetingTypeId);
 
 /// <summary>One note aggregated for the folder Notes tab, carrying its source recording's display name and

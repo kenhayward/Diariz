@@ -96,10 +96,43 @@ public class SectionAttachmentsIntegrationTests(ContainersFixture fx)
         rec.Attachments.Add(new Attachment { Id = Guid.NewGuid(), Kind = AttachmentKind.File, Name = "r.pdf", SizeBytes = 20 });
         db.Recordings.Add(rec);
         var section = new Section { Id = Guid.NewGuid(), UserId = userId, RoomId = await RoomOf(db, userId), Name = "F" };
-        section.Attachments.Add(new SectionAttachment { Id = Guid.NewGuid(), Kind = AttachmentKind.File, Name = "s.md", SizeBytes = 7 });
+        section.Attachments.Add(new SectionAttachment
+        {
+            Id = Guid.NewGuid(), Kind = AttachmentKind.File, Name = "s.md", SizeBytes = 7, UploadedByUserId = userId,
+        });
         db.Sections.Add(section);
         await db.SaveChangesAsync();
 
         Assert.Equal(127, await new StorageUsage(db).UsedBytesAsync(userId));
+    }
+
+    [Fact]
+    public async Task AddFile_InSharedRoom_ChargesTheUploader_NotTheFolderCreator_UnderPostgres()
+    {
+        var creator = await SeedUser();
+        var uploader = await SeedUser();
+        Guid sectionId;
+        Guid roomId;
+        await using (var db = fx.CreateDbContext())
+        {
+            var scope = new RoomScope(db);
+            roomId = await scope.CreateSharedRoomAsync("Eng", null, null, null);
+            await scope.SetMemberAsync(roomId, RoomPrincipalType.User, creator, RoomPermission.ManageContents);
+            await scope.SetMemberAsync(roomId, RoomPrincipalType.User, uploader, RoomPermission.ManageContents);
+            sectionId = Guid.NewGuid();
+            db.Sections.Add(new Section { Id = sectionId, UserId = creator, RoomId = roomId, Name = "Shared F" });
+            await db.SaveChangesAsync();
+        }
+
+        var storage = new FakeAudioStorage();
+        await using var db2 = fx.CreateDbContext();
+        var controller = Build(db2, uploader, storage);
+        var bytes = Encoding.UTF8.GetBytes(new string('x', 1000));
+        var result = await controller.AddFile(sectionId, FileOf("a.bin", "application/octet-stream", bytes));
+        Assert.IsType<AttachmentDto>(result.Value);
+
+        var usage = new StorageUsage(db2);
+        Assert.Equal(bytes.Length, await usage.UsedBytesAsync(uploader));
+        Assert.Equal(0, await usage.UsedBytesAsync(creator));
     }
 }

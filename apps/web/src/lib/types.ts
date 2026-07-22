@@ -137,6 +137,10 @@ export interface SectionDetail {
   id: string;
   name: string;
   parentId: string | null;
+  /// The folder's actual room - resolve permissions (e.g. ManageContents for folder-direct attachments)
+  /// against THIS, not the current room the URL happens to name (the room-less legacy /sections/:id
+  /// deep-link falls back to the caller's personal room, which is not necessarily where this folder lives).
+  roomId: string;
   stats: SectionStats;
   summary: FolderSummary | null;
   minutes: FolderMinutes | null;

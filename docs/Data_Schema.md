@@ -87,6 +87,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddFormulaContent` | `Formulas.ContentJson` (**jsonb**, default `{"sections":[]}`) replaces `Formulas.Prompt`: the column is added, **backfilled from `Prompt`** (each prompt wrapped as one headless level-0 section holding one prompt block, via `jsonb_build_object` so any quotes/newlines stay escaped), and only then is `Prompt` dropped. A formula becomes a structured template, the same shape a meeting type uses. `Down` recovers the first prompt block (lossy for a genuinely structured formula - break-glass, not an inverse). Destructive column drop, but the data is preserved by the backfill and older backups restore fine onto it, so **no `MaintenanceController.CurrentFormat` bump** |
 | `AddSectionFormulaResults` | `SectionFormulaResults` table (a formula run over a folder + its sub-sections; `SectionId` FK `ON DELETE CASCADE`, `FormulaId`/`CreatedByUserId` FK `ON DELETE SET NULL`, `Status`/`Error` like `FormulaResults`, index `(SectionId, Ordinal)`) — additive new table, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddMeetingScreenshots` | `MeetingScreenshots` (screen captures taken during a recording from the desktop app; cascade FKs from both `AspNetUsers` and `Recordings`, index `(RecordingId, CapturedAtMs)`) — additive new table, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddSectionAttachmentUploader` | `SectionAttachments.UploadedByUserId` (uuid, not-null, plain column - no FK, mirrors `Sections.RoomId`'s "not yet" pattern; indexed). Storage quota (`StorageUsage`) now sums a folder's file attachments by whoever **uploaded** them instead of `Section.UserId` (the folder's creator) - the two can differ once a shared-room member with `ManageContents` can add to a folder they didn't create. **Backfills** every existing row from its `Section.UserId` (that's who it was charged to before this column existed, so the backfill is a no-op in effect) — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
 
@@ -440,6 +441,7 @@ Supporting documents filed **directly** on a folder (`Section`) rather than a re
 |---|---|---|
 | `Id` | uuid PK | |
 | `SectionId` | uuid FK → Sections | cascade (deleting the folder, or a parent folder, removes these) |
+| `UploadedByUserId` | uuid | plain column, no FK (mirrors `Sections.RoomId`'s "not yet" pattern); who to charge for `SizeBytes` — the caller who created this row, which can differ from the folder's creator (`Section.UserId`) in a shared room. Indexed |
 | `Kind` | int | `File`=0, `Url`=1 (reuses `AttachmentKind`) |
 | `Name` | varchar(512) | display name / link text |
 | `BlobKey` | text null | object-storage key (File kind) |
@@ -449,9 +451,11 @@ Supporting documents filed **directly** on a folder (`Section`) rather than a re
 | `Ordinal` | int | 0-based order within the folder |
 | `CreatedAt` | timestamptz | |
 
-Index: `(SectionId, Ordinal)`. Blobs live under MinIO key `{userId}/section-attachments/{attachmentId}{ext}`.
-Counts toward the owner's storage quota (`StorageUsage` sums recording + section attachment bytes). CRUD +
-in-place Markdown edit live in `SectionAttachmentsController` at route `api/sections/{id}/folder-attachments`.
+Indexes: `(SectionId, Ordinal)`, `UploadedByUserId`. Blobs live under MinIO key
+`{uploaderUserId}/section-attachments/{attachmentId}{ext}`. Counts toward the **uploader's** storage quota
+(`StorageUsage` sums recording + section-attachment bytes by `UploadedByUserId`, not by the folder's creator).
+CRUD + in-place Markdown edit live in `SectionAttachmentsController` at route
+`api/sections/{id}/folder-attachments`.
 
 #### `RecordingCalendarLinks`
 The Google Calendar event a recording belongs to (1:1 with `Recording`, shared primary key). A lightweight

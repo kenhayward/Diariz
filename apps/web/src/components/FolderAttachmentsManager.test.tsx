@@ -1,16 +1,8 @@
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { I18nextProvider } from "react-i18next";
 import i18n from "../lib/i18n";
-import { RoomPermission } from "../lib/types";
 import type { Attachment } from "../lib/types";
-
-// The room the folder page is viewing; write controls are gated on ManageContents (mirrors the pattern
-// RecordingsPanel already uses for folder create/rename/delete in a shared room).
-const roomState = { permissions: 0 };
-vi.mock("../lib/rooms", () => ({
-  useRoom: () => ({ can: (perm: number) => (roomState.permissions & perm) !== 0 }),
-}));
 
 import FolderAttachmentsManager from "./FolderAttachmentsManager";
 
@@ -21,22 +13,19 @@ const markdownAttachment: Attachment = {
   id: "a2", kind: "File", name: "notes.md", contentType: "text/markdown", sizeBytes: 20, url: null, ordinal: 0,
 };
 
-function renderManager(attachments: Attachment[] = [fileAttachment]) {
+// `canManage` is a plain prop resolved by the caller (SectionDetail, against the folder's real room) - no
+// router/room mocking needed to exercise the gate here.
+function renderManager(canManage: boolean, attachments: Attachment[] = [fileAttachment]) {
   return render(
     <I18nextProvider i18n={i18n}>
-      <FolderAttachmentsManager sectionId="s1" attachments={attachments} onChange={() => {}} />
+      <FolderAttachmentsManager sectionId="s1" attachments={attachments} canManage={canManage} onChange={() => {}} />
     </I18nextProvider>,
   );
 }
 
 describe("FolderAttachmentsManager permission gating", () => {
-  beforeEach(() => {
-    roomState.permissions = 0;
-  });
-
-  it("shows add controls and Remove for a member with ManageContents", () => {
-    roomState.permissions = RoomPermission.ManageContents;
-    renderManager();
+  it("shows add controls and Remove when canManage is true", () => {
+    renderManager(true);
 
     expect(screen.getByText("Add file")).toBeTruthy();
     expect(screen.getByText("Add URL")).toBeTruthy();
@@ -45,9 +34,8 @@ describe("FolderAttachmentsManager permission gating", () => {
     expect(screen.getByDisplayValue("spec.pdf")).toBeTruthy();
   });
 
-  it("hides add controls and Remove for a member without ManageContents, but still allows Open", () => {
-    roomState.permissions = 0; // e.g. only CreateRecording, or nothing at all
-    renderManager();
+  it("hides add controls and Remove when canManage is false, but still allows Open", () => {
+    renderManager(false);
 
     expect(screen.queryByText("Add file")).toBeNull();
     expect(screen.queryByText("Add URL")).toBeNull();
@@ -58,14 +46,12 @@ describe("FolderAttachmentsManager permission gating", () => {
     expect(screen.getByText("Open")).toBeTruthy();
   });
 
-  it("offers the in-app Markdown editor to a manager but only a plain Open to a non-manager", () => {
-    roomState.permissions = RoomPermission.ManageContents;
-    const { unmount } = renderManager([markdownAttachment]);
+  it("offers the in-app Markdown editor when canManage is true but only a plain Open when it is false", () => {
+    const { unmount } = renderManager(true, [markdownAttachment]);
     expect(screen.getByText("Edit")).toBeTruthy();
     unmount();
 
-    roomState.permissions = 0;
-    renderManager([markdownAttachment]);
+    renderManager(false, [markdownAttachment]);
     expect(screen.queryByText("Edit")).toBeNull();
     expect(screen.getByText("Open")).toBeTruthy();
   });

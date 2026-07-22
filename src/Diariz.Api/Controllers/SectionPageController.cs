@@ -106,8 +106,8 @@ public class SectionPageController : ControllerBase
             ? new FolderMinutesDto(m.Model, m.Text, m.CreatedAt, m.IsUserEdited, m.MeetingTypeId, m.Status, m.Error)
             : null;
 
-        return new SectionDetailDto(section.Id, section.Name, section.ParentId, stats, summary, minutes,
-            section.Minutes?.MeetingTypeId);
+        return new SectionDetailDto(section.Id, section.Name, section.ParentId, section.RoomId, stats, summary,
+            minutes, section.Minutes?.MeetingTypeId);
     }
 
     // ---- Aggregations (read-only; edit/delete reuse the per-item controllers) ----

@@ -230,17 +230,19 @@ public class SectionAttachmentsControllerTests
         using var db = TestDb.Create();
         var owner = Guid.NewGuid();
         var section = await SharedRoomSection(db, owner); // owner can manage, so can seed the attachment
-        var created = (await Build(db, owner).AddUrl(section.Id, new AddUrlAttachmentRequest("https://a.test", "a"))).Value!;
+        var storage = new FakeAudioStorage();
+        var created = (await Build(db, owner, storage).AddFile(
+            section.Id, FileOf("spec.pdf", "application/pdf", Encoding.UTF8.GetBytes("body")))).Value!;
 
         var viewer = Guid.NewGuid();
         Users.Ensure(db, viewer);
         await new Diariz.Api.Services.RoomScope(db).SetMemberAsync(
             section.RoomId, RoomPrincipalType.User, viewer, RoomPermission.CreateRecording); // no ManageContents
 
-        // The attachment is a URL (no blob), so Content 404s on the attachment lookup, not the section gate -
-        // this still proves List/gate gets past NotFound for a non-manage viewer. A file-backed Content 200 is
-        // exercised by the personal-room tests above (Delete_File_.../UpdateContent_...).
-        Assert.IsType<NotFoundResult>(await Build(db, viewer).Content(section.Id, created.Id));
+        // A real file-backed attachment, so a wrong section gate (e.g. the old caller's-personal-room-only
+        // check) would 404 here for real, rather than the attachment lookup 404ing regardless of the gate.
+        var result = await Build(db, viewer, storage).Content(section.Id, created.Id);
+        Assert.IsType<FileStreamResult>(result);
     }
 
     [Fact]
@@ -261,19 +263,24 @@ public class SectionAttachmentsControllerTests
         using var db = TestDb.Create();
         var owner = Guid.NewGuid();
         var section = await SharedRoomSection(db, owner);
-        var created = (await Build(db, owner).AddUrl(section.Id, new AddUrlAttachmentRequest("https://a.test", "a"))).Value!;
+        var storage = new FakeAudioStorage();
+        var created = (await Build(db, owner, storage).AddUrl(section.Id, new AddUrlAttachmentRequest("https://a.test", "a"))).Value!;
 
         var member = Guid.NewGuid();
         Users.Ensure(db, member);
         await new Diariz.Api.Services.RoomScope(db).SetMemberAsync(
             section.RoomId, RoomPrincipalType.User, member, RoomPermission.CreateRecording); // no ManageContents
-        var controller = Build(db, member);
+        var controller = Build(db, member, storage);
 
         Assert.IsType<ForbidResult>(
             (await controller.AddUrl(section.Id, new AddUrlAttachmentRequest("https://b.test", "b"))).Result);
         Assert.IsType<ForbidResult>(
             (await controller.AddMarkdown(section.Id, new AddMarkdownAttachmentRequest("n", "c"))).Result);
+        Assert.IsType<ForbidResult>(
+            (await controller.AddFile(section.Id, FileOf("x.txt", "text/plain", new byte[4]))).Result);
         Assert.IsType<ForbidResult>(await controller.Rename(section.Id, created.Id, new RenameAttachmentRequest("x")));
+        Assert.IsType<ForbidResult>(
+            await controller.UpdateContent(section.Id, created.Id, new UpdateAttachmentContentRequest("x")));
         Assert.IsType<ForbidResult>(await controller.Delete(section.Id, created.Id));
     }
 
@@ -283,18 +290,47 @@ public class SectionAttachmentsControllerTests
         using var db = TestDb.Create();
         var owner = Guid.NewGuid();
         var section = await SharedRoomSection(db, owner);
-        var created = (await Build(db, owner).AddUrl(section.Id, new AddUrlAttachmentRequest("https://a.test", "a"))).Value!;
+        var storage = new FakeAudioStorage();
+        var created = (await Build(db, owner, storage).AddUrl(section.Id, new AddUrlAttachmentRequest("https://a.test", "a"))).Value!;
 
         var stranger = Guid.NewGuid();
         Users.Ensure(db, stranger); // no membership at all in this room
-        var controller = Build(db, stranger);
+        var controller = Build(db, stranger, storage);
 
         Assert.IsType<NotFoundResult>((await controller.List(section.Id)).Result);
         Assert.IsType<NotFoundResult>(await controller.Content(section.Id, created.Id));
         Assert.IsType<NotFoundResult>(
             (await controller.AddUrl(section.Id, new AddUrlAttachmentRequest("https://b.test", "b"))).Result);
+        Assert.IsType<NotFoundResult>(
+            (await controller.AddFile(section.Id, FileOf("x.txt", "text/plain", new byte[4]))).Result);
         Assert.IsType<NotFoundResult>(await controller.Rename(section.Id, created.Id, new RenameAttachmentRequest("x")));
+        Assert.IsType<NotFoundResult>(
+            await controller.UpdateContent(section.Id, created.Id, new UpdateAttachmentContentRequest("x")));
         Assert.IsType<NotFoundResult>(await controller.Delete(section.Id, created.Id));
+    }
+
+    [Fact]
+    public async Task AddFile_InSharedRoom_ChargesTheUploader_NotTheFolderCreator()
+    {
+        // Regression: StorageUsage used to sum SectionAttachments via Section.UserId (the folder's creator),
+        // while the pre-flight quota check summed the CALLER's own usage. In a shared room those can now be two
+        // different people (ManageContents lets any member add to a folder they didn't create) - so a member
+        // could dodge their own quota, and their upload would land on the creator's ledger instead.
+        using var db = TestDb.Create();
+        var creator = Guid.NewGuid();
+        var section = await SharedRoomSection(db, creator); // Section.UserId == creator
+        var uploader = Guid.NewGuid();
+        Users.Ensure(db, uploader);
+        await new Diariz.Api.Services.RoomScope(db).SetMemberAsync(
+            section.RoomId, RoomPrincipalType.User, uploader, RoomPermission.ManageContents);
+
+        var bytes = new byte[1000];
+        var result = await Build(db, uploader).AddFile(section.Id, FileOf("a.bin", "application/octet-stream", bytes));
+
+        Assert.IsType<AttachmentDto>(result.Value);
+        var usage = new StorageUsage(db);
+        Assert.Equal(bytes.Length, await usage.UsedBytesAsync(uploader)); // charged to whoever uploaded it
+        Assert.Equal(0, await usage.UsedBytesAsync(creator));             // not to the folder's creator
     }
 
     [Fact]

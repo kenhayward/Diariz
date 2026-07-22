@@ -19,9 +19,10 @@ public class StorageUsage(DiarizDbContext db) : IStorageUsage
             .Where(r => r.UserId == userId)
             .SelectMany(r => r.Attachments)
             .SumAsync(a => a.SizeBytes, ct); // URL attachments are 0 bytes
-        // Folder-direct attachments count too (owned via the section).
+        // Folder-direct attachments count toward whoever uploaded them, not the folder's creator - a shared-room
+        // member with ManageContents can add to a folder someone else created (see SectionAttachment.UploadedByUserId).
         var sectionAttachments = await db.SectionAttachments
-            .Where(a => a.Section!.UserId == userId)
+            .Where(a => a.UploadedByUserId == userId)
             .SumAsync(a => a.SizeBytes, ct);
         var screenshots = await db.MeetingScreenshots
             .Where(s => s.UserId == userId)

@@ -90,6 +90,20 @@ public class SectionPageControllerTests
     }
 
     [Fact]
+    public async Task Get_returns_the_sections_actual_room_id()
+    {
+        // The web resolves ManageContents for folder-direct attachments against THIS field, not the URL's room
+        // (a room-less legacy /sections/{id} deep-link carries none) - see FolderAttachmentsManager/SectionDetail.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var section = await Section(db, userId);
+
+        var dto = (await Build(db, userId).Get(section.Id)).Value!;
+
+        Assert.Equal(section.RoomId, dto.RoomId);
+    }
+
+    [Fact]
     public async Task Get_other_users_section_is_not_found()
     {
         using var db = TestDb.Create();

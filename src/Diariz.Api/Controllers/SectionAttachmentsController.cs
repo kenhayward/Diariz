@@ -28,7 +28,9 @@ namespace Diariz.Api.Controllers;
 /// <c>SectionPageController.ManageableSectionAsync</c> and the gate <see cref="SectionsController"/> uses for
 /// folder create/rename/delete. The personal room's owner holds every permission (see
 /// <see cref="IRoomScope.PermissionsAsync"/>), so personal-room behaviour is unchanged. Files count toward the
-/// uploader's own quota (not the folder's owner).</summary>
+/// uploader's own quota, not the folder creator's (<see cref="SectionAttachment.UploadedByUserId"/>, checked
+/// against the caller's own <c>QuotaBytes</c> here and summed by <c>StorageUsage</c>) - in a shared room, whoever
+/// holds <see cref="RoomPermission.ManageContents"/> can add to a folder someone else created.</summary>
 [ApiController]
 [Authorize]
 [Route("api/sections/{sectionId:guid}/folder-attachments")]
@@ -125,6 +127,7 @@ public class SectionAttachmentsController : ControllerBase
         {
             Id = id,
             SectionId = sectionId,
+            UploadedByUserId = UserId,
             Kind = AttachmentKind.File,
             Name = SafeName(StripPath(file.FileName)),
             BlobKey = blobKey,
@@ -166,6 +169,7 @@ public class SectionAttachmentsController : ControllerBase
         {
             Id = id,
             SectionId = sectionId,
+            UploadedByUserId = UserId,
             Kind = AttachmentKind.File,
             Name = MarkdownName(req.Name),
             BlobKey = blobKey,
@@ -193,6 +197,7 @@ public class SectionAttachmentsController : ControllerBase
         {
             Id = Guid.NewGuid(),
             SectionId = sectionId,
+            UploadedByUserId = UserId,
             Kind = AttachmentKind.Url,
             Name = SafeName(name),
             Url = uri.ToString(),

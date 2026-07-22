@@ -23,6 +23,10 @@ describe("folderUrl", () => {
   it("builds an absolute /sections/:id link on the current origin", () => {
     expect(folderUrl("f-1")).toBe(`${window.location.origin}/sections/f-1`);
   });
+
+  it("prefixes a shared room's base path when given one", () => {
+    expect(folderUrl("f-1", "/rooms/r-9")).toBe(`${window.location.origin}/rooms/r-9/sections/f-1`);
+  });
 });
 
 describe("copyRichLink", () => {

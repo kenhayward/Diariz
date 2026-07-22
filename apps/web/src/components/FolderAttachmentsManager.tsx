@@ -3,8 +3,6 @@ import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import { isMarkdownAttachment } from "../lib/attachments";
 import { formatBytes } from "../lib/format";
-import { useRoom } from "../lib/rooms";
-import { RoomPermission } from "../lib/types";
 import type { Attachment } from "../lib/types";
 import MarkdownAttachmentEditModal from "./MarkdownAttachmentEditModal";
 
@@ -17,22 +15,26 @@ export function openFolderAttachment(sectionId: string, a: Attachment) {
 /// Manage a folder's own attachments (filed directly against the folder, not aggregated from its transcripts):
 /// add files or a URL, then rename, open/edit, and remove. Mirrors `AttachmentsManager` but points at the
 /// folder-attachment endpoints. The parent owns the list (react-query); every change calls `onChange`.
+///
+/// `canManage` (write access = ManageContents in the folder's room; the personal room's owner holds every
+/// permission, so it's always true there) is resolved by the CALLER against the folder's actual room
+/// (`SectionDetailDto.RoomId`), not this component's own guess - a naive `useRoom()` read here would resolve
+/// against whatever room the URL names, which falls back to the caller's personal room for the room-less
+/// legacy `/sections/:id` deep-link even when the folder itself lives in a shared room (see SectionDetail.tsx).
+/// Read (Open/Edit-view) stays available to any viewer who can see the page at all - the same read/write split
+/// the server enforces (see SectionAttachmentsController.ViewableSectionAsync / ManageableSectionAsync).
 export default function FolderAttachmentsManager({
   sectionId,
   attachments,
+  canManage,
   onChange,
 }: {
   sectionId: string;
   attachments: Attachment[];
+  canManage: boolean;
   onChange: () => void;
 }) {
   const { t } = useTranslation("workspace");
-  // Write (add/rename/edit/remove) needs ManageContents in the folder's room; the personal room's owner
-  // holds every permission, so this is a no-op there. Read (Open/Edit-view) stays available to any viewer
-  // who can see the page at all - the same read/write split the server enforces (see
-  // SectionAttachmentsController.ViewableSectionAsync / ManageableSectionAsync).
-  const { can } = useRoom();
-  const canManage = can(RoomPermission.ManageContents);
   const fileInput = useRef<HTMLInputElement>(null);
   const [url, setUrl] = useState("");
   const [urlName, setUrlName] = useState("");

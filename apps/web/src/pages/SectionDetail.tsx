@@ -6,6 +6,8 @@ import { useAuth } from "../auth";
 import { api, apiErrorMessage } from "../lib/api";
 import { formatDurationHm, formatDate } from "../lib/format";
 import { folderUrl, copyRichLink } from "../lib/clipboard";
+import { useRoom } from "../lib/rooms";
+import { RoomPermission } from "../lib/types";
 import { renderMarkdown } from "../lib/markdown";
 import DetailTabs, { type DetailTab } from "../components/DetailTabs";
 import ToolbarButton, { iconProps } from "../components/ToolbarButton";
@@ -40,6 +42,10 @@ export default function SectionDetail() {
   // Rows aggregated on this page span many recordings, possibly owned by other room members - each row's
   // edit/delete controls are gated per-row against this (mirrors RecordingDetail's isOwner check).
   const { id: myId } = useAuth();
+  // Every room the caller belongs to, with their permissions in each - used below to resolve ManageContents
+  // against the FOLDER'S OWN room (section.roomId), not whatever room the URL happens to name. Must be called
+  // unconditionally, above every early return.
+  const { rooms } = useRoom();
 
   const [tab, setTab] = useState<string>(() => localStorage.getItem(TAB_KEY) ?? "overview");
   const selectTab = (k: string) => { setTab(k); try { localStorage.setItem(TAB_KEY, k); } catch { /* non-fatal */ } };
@@ -92,6 +98,14 @@ export default function SectionDetail() {
     return <p className="p-4 text-sm text-red-600 dark:text-red-400">{apiErrorMessage(sectionError, t("workspace:errLoadFolder"))}</p>;
   if (!section) return <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>;
 
+  // Resolve the folder's OWN room from its RoomId (not the current/URL room, which falls back to the caller's
+  // personal room on the room-less legacy /sections/:id link even when the folder actually lives in a shared
+  // room). Everything gated on ManageContents below - and the room-aware copy link - uses this, not useRoom()'s
+  // `can`/`currentRoom`.
+  const sectionRoom = rooms.find((r) => r.id === section.roomId);
+  const canManageFolder = !!sectionRoom && (sectionRoom.permissions & RoomPermission.ManageContents) !== 0;
+  const roomBasePath = sectionRoom && !sectionRoom.isPersonal ? `/rooms/${sectionRoom.id}` : "";
+
   const refetchSection = () => qc.invalidateQueries({ queryKey: ["section", id] });
   const run = async (fn: () => Promise<unknown>, fallback: string, invalidate: unknown[]) => {
     setError(null);
@@ -106,7 +120,7 @@ export default function SectionDetail() {
     setRenaming(false);
   }
   async function copyLink() {
-    const ok = await copyRichLink(folderUrl(id!), section!.name);
+    const ok = await copyRichLink(folderUrl(id!, roomBasePath), section!.name);
     setInfo(ok ? t("workspace:linkCopied") : null);
     setError(ok ? null : t("workspace:errCopyLink"));
   }
@@ -283,6 +297,7 @@ export default function SectionDetail() {
         <FolderAttachmentsManager
           sectionId={id}
           attachments={folderAttachments ?? []}
+          canManage={canManageFolder}
           onChange={refreshFolderAttachments}
         />
 
