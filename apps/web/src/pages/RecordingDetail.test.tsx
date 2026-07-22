@@ -68,6 +68,10 @@ vi.mock("../lib/api", () => ({
     createNotes: vi.fn(),
     updateNote: vi.fn(),
     deleteNote: vi.fn(),
+    listScreenshots: vi.fn().mockResolvedValue([]),
+    deleteScreenshot: vi.fn(),
+    screenshotThumbUrl: (rec: string, sid: string) => `/api/recordings/${rec}/screenshots/${sid}/thumb`,
+    screenshotContentUrl: (rec: string, sid: string) => `/api/recordings/${rec}/screenshots/${sid}/content`,
     listFormulaResults: vi.fn().mockResolvedValue([]),
     listFormulas: vi.fn().mockResolvedValue([]),
     runFormula: vi.fn(),
@@ -162,6 +166,7 @@ describe("RecordingDetail", () => {
     (api.audioUrl as ReturnType<typeof vi.fn>).mockResolvedValue("blob:audio");
     (api.listSpeakerProfiles as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (api.listAttachments as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (api.listScreenshots as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (api.generateMeetingMinutes as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.emailMeetingMinutes as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   });
@@ -772,6 +777,82 @@ describe("RecordingDetail", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: /jump to 1:01/i }));
     await waitFor(() => expect(screen.getByRole("navigation", { name: "Transcript" })).toBeTruthy());
+  });
+
+  const shots = [
+    { id: "shot-1", capturedAtMs: 65_000, width: 10, height: 10, sizeBytes: 1, ordinal: 0, createdAt: base.createdAt },
+    { id: "shot-2", capturedAtMs: 125_000, width: 10, height: 10, sizeBytes: 1, ordinal: 1, createdAt: base.createdAt },
+  ];
+
+  it("weaves screenshots into the transcript, opening the modal at the clicked capture's own index", async () => {
+    (api.listScreenshots as ReturnType<typeof vi.fn>).mockResolvedValue(shots);
+    renderPage(base);
+    await loaded();
+    openTab("Transcript");
+
+    // Both captures are woven in after the recording's one segment, in capture-time order. (The inline
+    // transcript thumbnail's alt text comes from this page's own zero-padded `fmt`, unlike the modal's.)
+    const thumb1 = await screen.findByRole("button", { name: /screenshot at 01:05/i });
+    const thumb2 = screen.getByRole("button", { name: /screenshot at 02:05/i });
+
+    // Click the second thumbnail first - the modal must open on shot-2, not always the first capture.
+    fireEvent.click(thumb2);
+    expect((await screen.findByRole("dialog")).textContent).toMatch(/2:05/);
+    fireEvent.click(screen.getByRole("button", { name: /close screenshot/i }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    fireEvent.click(thumb1);
+    expect((await screen.findByRole("dialog")).textContent).toMatch(/1:05/);
+  });
+
+  it("shows the Screenshots section collapsed in the Notes tab, with the capture count", async () => {
+    (api.listScreenshots as ReturnType<typeof vi.fn>).mockResolvedValue(shots);
+    renderPage(base);
+    await loaded();
+    openTab("Notes");
+
+    const group = await screen.findByRole("group");
+    expect(group.getAttribute("open")).toBeNull();
+    expect(within(group).getByText(/Screenshots \(2\)/)).toBeTruthy();
+  });
+
+  it("hides the Screenshots section entirely on the Notes tab when there are no captures", async () => {
+    renderPage(base); // beforeEach leaves listScreenshots resolving []
+    await loaded();
+    openTab("Notes");
+
+    await screen.findByPlaceholderText(/add a note/i); // wait for the tab's content to settle before asserting absence
+    expect(screen.queryByText(/Screenshots \(/)).toBeNull();
+  });
+
+  it("opens a capture from the Notes tab strip and jumps playback to its moment", async () => {
+    (api.listScreenshots as ReturnType<typeof vi.fn>).mockResolvedValue(shots);
+    renderPage(base);
+    await loaded();
+    openTab("Notes");
+
+    fireEvent.click(await screen.findByRole("button", { name: /screenshot at 2:05/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /jump to 2:05/i }));
+
+    // jumpToMs is the page's existing note-jump helper - it switches to the Transcript section.
+    await waitFor(() => expect(screen.getByRole("navigation", { name: "Transcript" })).toBeTruthy());
+  });
+
+  it("deletes the open capture, closing the modal and refreshing the list", async () => {
+    (api.listScreenshots as ReturnType<typeof vi.fn>).mockResolvedValue(shots);
+    (api.deleteScreenshot as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    renderPage(base);
+    await loaded();
+    openTab("Notes");
+
+    fireEvent.click(await screen.findByRole("button", { name: /screenshot at 1:05/i }));
+    await screen.findByRole("dialog");
+    fireEvent.click(screen.getByRole("button", { name: /delete screenshot/i }));
+
+    await waitFor(() => expect(api.deleteScreenshot).toHaveBeenCalledWith("rec-123", "shot-1"));
+    // Deleting always closes rather than re-clamping the index, so no stale index can point past the
+    // end of the (post-delete) array while the refetch is still in flight.
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   // Bug: the minutes picker spinner only cleared on a SignalR "completed" push. If that event is missed

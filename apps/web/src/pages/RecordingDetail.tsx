@@ -31,6 +31,8 @@ import MeetingMinutesEditModal from "../components/MeetingMinutesEditModal";
 import EmailMinutesModal from "../components/EmailMinutesModal";
 import MeetingTypeMenu from "../components/MeetingTypeMenu";
 import NotesSection from "../components/NotesSection";
+import ScreenshotModal from "../components/ScreenshotModal";
+import ScreenshotsSection from "../components/ScreenshotsSection";
 import ManageMeetingTypesModal from "../components/ManageMeetingTypesModal";
 import { renderMarkdown } from "../lib/markdown";
 import { weaveTranscript } from "../lib/transcriptNotes";
@@ -139,6 +141,21 @@ export default function RecordingDetail() {
     queryFn: () => api.listNotes(id),
     enabled: Boolean(id),
   });
+  // Captures taken during the recording; woven into the transcript and listed in the Notes tab.
+  const { data: shots = [], refetch: refetchShots } = useQuery({
+    queryKey: ["screenshots", id],
+    queryFn: () => api.listScreenshots(id),
+    enabled: Boolean(id),
+  });
+  const [openShot, setOpenShot] = useState<number | null>(null);
+
+  async function removeShot(shotId: string) {
+    await api.deleteScreenshot(id, shotId);
+    // Close rather than re-clamp: the modal's own index (post-delete) would otherwise dangle past the
+    // end of the array for the instant between the delete and the refetch resolving.
+    setOpenShot(null);
+    await refetchShots();
+  }
   // The user's native language drives the "Translate to …" action; resolve its display name.
   const { data: profile } = useQuery({ queryKey: ["user-profile"], queryFn: api.getProfile });
   const { data: languages = [] } = useQuery({ queryKey: ["languages"], queryFn: fetchLanguages });
@@ -1212,8 +1229,9 @@ export default function RecordingDetail() {
         />
       ),
       content: (
-        <div className="px-4 pb-4">
+        <div className="px-4 pb-4 space-y-3">
           <NotesSection notes={notes} onAdd={addNote} onEdit={editNote} onDelete={removeNote} onJump={jumpToMs} />
+          <ScreenshotsSection recordingId={id} shots={shots} onOpen={setOpenShot} />
         </div>
       ),
     },
@@ -1395,9 +1413,25 @@ export default function RecordingDetail() {
             </div>
           )}
           <ul className="space-y-2">
-            {weaveTranscript(rec.current.segments, notes).map((row) =>
+            {weaveTranscript(rec.current.segments, notes, shots).map((row) =>
               row.kind === "note" ? (
                 <NoteRow key={`note-${row.note.id}`} note={row.note} speaker={fullName ?? email ?? t("workspace:noteSpeakerYou")} />
+              ) : row.kind === "screenshot" ? (
+                <li key={`shot-${row.shot.id}`} className="flex items-start gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOpenShot(shots.findIndex((s) => s.id === row.shot.id))}
+                    className="overflow-hidden rounded border hover:ring-2 hover:ring-blue-400 dark:border-gray-700"
+                    aria-label={t("workspace:screenshotAlt", { time: fmt(row.shot.capturedAtMs) })}
+                  >
+                    <img
+                      src={api.screenshotThumbUrl(id, row.shot.id)}
+                      alt={t("workspace:screenshotAlt", { time: fmt(row.shot.capturedAtMs) })}
+                      loading="lazy"
+                      className="h-24 w-auto"
+                    />
+                  </button>
+                </li>
               ) : (
                 <SegmentRow
                   key={row.seg.id}
@@ -1583,6 +1617,18 @@ export default function RecordingDetail() {
       {peopleOpen && <PreferencesModal initialTab="voiceprints" onClose={() => setPeopleOpen(false)} />}
       {linkModalOpen && (
         <CalendarLinkModal recordingId={id} aroundDate={rec.createdAt} onClose={() => setLinkModalOpen(false)} />
+      )}
+
+      {openShot !== null && (
+        <ScreenshotModal
+          recordingId={id}
+          shots={shots}
+          index={openShot}
+          onIndexChange={setOpenShot}
+          onClose={() => setOpenShot(null)}
+          onJump={jumpToMs}
+          onDelete={removeShot}
+        />
       )}
 
       {formulaRunOpen && (
