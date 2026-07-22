@@ -52,7 +52,7 @@ export default function ScreenshotModal({
     "rounded border px-2 py-1 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800";
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/70 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
         role="dialog"
         aria-label={t("screenshotAlt", { time: fmt(shot.capturedAtMs) })}
