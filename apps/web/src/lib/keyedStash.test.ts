@@ -57,6 +57,31 @@ describe("keyedStash", () => {
     expect(await stashB.load("shared")).toBeNull();
   });
 
+  it("degrades to a no-op rather than rejecting when merely accessing indexedDB throws synchronously", async () => {
+    // Some environments throw synchronously just from touching the global (e.g. a locked-down iframe
+    // whose `indexedDB` accessor raises a SecurityError). openDb()'s *call* happens outside withStore's
+    // own try, so a throw at this point - before openDb ever reaches `new Promise(...)` - must still
+    // degrade to a no-op, exactly like the "IndexedDB is unavailable" case below, rather than rejecting
+    // save()/load()/clear() and surfacing as a real failure to whatever feature sits on top of the stash.
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, "indexedDB");
+    Object.defineProperty(globalThis, "indexedDB", {
+      configurable: true,
+      get(): never {
+        throw new DOMException("simulated synchronous throw on access", "SecurityError");
+      },
+    });
+
+    try {
+      const stash = createKeyedStash<Widget>("test-db-7", "widgets", "userId");
+
+      await expect(stash.save({ userId: "u6", count: 1, blob: new Blob([]) })).resolves.toBeUndefined();
+      await expect(stash.load("u6")).resolves.toBeNull();
+      await expect(stash.clear("u6")).resolves.toBeUndefined();
+    } finally {
+      Object.defineProperty(globalThis, "indexedDB", descriptor!);
+    }
+  });
+
   it("degrades to no-ops when IndexedDB is unavailable", async () => {
     const original = globalThis.indexedDB;
     // @ts-expect-error simulating an environment without IndexedDB

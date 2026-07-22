@@ -43,9 +43,14 @@ export function createKeyedStash<T>(
     mode: IDBTransactionMode,
     fn: (store: IDBObjectStore) => IDBRequest,
   ): Promise<R | null> {
-    const dbp = openDb(dbName, storeName, keyPath);
-    if (!dbp) return null;
     try {
+      // openDb() itself is called inside this try (not just its result awaited): merely touching the
+      // `indexedDB` global can throw synchronously in some locked-down contexts (e.g. a sandboxed iframe
+      // whose accessor raises a SecurityError), before openDb ever reaches its own Promise wrapping. That
+      // throw must degrade to a no-op exactly like every other storage hiccup here - callers depend on
+      // this stash never surfacing a rejection.
+      const dbp = openDb(dbName, storeName, keyPath);
+      if (!dbp) return null;
       const db = await dbp;
       return await new Promise<R | null>((resolve, reject) => {
         const tx = db.transaction(storeName, mode);
