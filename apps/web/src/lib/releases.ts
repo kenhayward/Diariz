@@ -58,7 +58,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.146.0",
     date: "2026-07-22",
-    pr: 0, // replace with the real PR number
+    pr: 320,
     headline: "Capture screenshots during a meeting",
     summary:
       "The Windows desktop app can now capture the screen while you record. The first capture in a meeting asks which screen or which rectangle to use, and every later capture in that meeting reuses it (change it any time from the tray or the recorder). Screenshots appear inline in the transcript at the moment they were taken, as thumbnails you can click to view full size with previous/next, a jump back to that moment, download, and delete. The Notes tab lists them in a collapsed Screenshots section, and a live strip in the recorder's notes popover lets you catch a mis-aimed capture area during the meeting instead of after it.",
