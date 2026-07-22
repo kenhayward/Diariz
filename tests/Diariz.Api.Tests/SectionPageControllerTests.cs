@@ -286,6 +286,56 @@ public class SectionPageControllerTests
         Assert.Empty((await Build(db, me).Attachments(section.Id)).Value!);
     }
 
+    // Review finding: the pre-existing multi-owner coverage (Actions_aggregate_across_children_..., Notes_and_
+    // attachments_aggregate_with_meeting_name) puts every INCLUDED row under the SAME owner - a second owner's
+    // recording sits in an unrelated section and is excluded entirely, so it never appears as a "theirs" row in
+    // the same response. This pins the actual claim the fix rests on: a folder aggregation containing recordings
+    // from two DIFFERENT owners, in the SAME section, attributes each row to its own owner in one response. It's
+    // a flat per-row join (no aggregation/grouping/Include+Take), so the in-memory provider is a faithful stand-in
+    // here; see Aggregations_attribute_each_row_to_its_own_owner_under_postgres for the same claim pinned against
+    // real Postgres too.
+    [Fact]
+    public async Task Aggregations_attribute_each_row_to_its_own_recording_owner_in_a_shared_room()
+    {
+        using var db = TestDb.Create();
+        var ownerA = Guid.NewGuid();
+        var section = await SharedRoomSection(db, ownerA);
+        var ownerB = Guid.NewGuid();
+        Users.Ensure(db, ownerB);
+        var scope = new RoomScope(db);
+        await scope.SetMemberAsync(section.RoomId, RoomPrincipalType.User, ownerB, RoomPermission.CreateRecording);
+
+        var recA = new Recording { Id = Guid.NewGuid(), UserId = ownerA, BlobKey = "k", Title = "Rec A" };
+        var recB = new Recording { Id = Guid.NewGuid(), UserId = ownerB, BlobKey = "k", Title = "Rec B" };
+        db.Recordings.AddRange(recA, recB);
+        db.RecordingActions.Add(new RecordingAction { Id = Guid.NewGuid(), RecordingId = recA.Id, Text = "A action", Ordinal = 0 });
+        db.RecordingActions.Add(new RecordingAction { Id = Guid.NewGuid(), RecordingId = recB.Id, Text = "B action", Ordinal = 0 });
+        db.MeetingNotes.Add(new MeetingNote { Id = Guid.NewGuid(), UserId = ownerA, RecordingId = recA.Id, Text = "A note", Ordinal = 0 });
+        db.MeetingNotes.Add(new MeetingNote { Id = Guid.NewGuid(), UserId = ownerB, RecordingId = recB.Id, Text = "B note", Ordinal = 0 });
+        db.Attachments.Add(new Attachment { Id = Guid.NewGuid(), RecordingId = recA.Id, Kind = AttachmentKind.File, Name = "a.pdf", SizeBytes = 1, Ordinal = 0 });
+        db.Attachments.Add(new Attachment { Id = Guid.NewGuid(), RecordingId = recB.Id, Kind = AttachmentKind.File, Name = "b.pdf", SizeBytes = 1, Ordinal = 0 });
+        await db.SaveChangesAsync();
+        // Both recordings land in the SAME shared section, shared in by their own respective owner.
+        await scope.ShareIntoRoomAsync(recA.Id, section.RoomId, ownerA, section.Id);
+        await scope.ShareIntoRoomAsync(recB.Id, section.RoomId, ownerB, section.Id);
+
+        var actions = (await Build(db, ownerA).Actions(section.Id)).Value!;
+        var notes = (await Build(db, ownerA).Notes(section.Id)).Value!;
+        var attachments = (await Build(db, ownerA).Attachments(section.Id)).Value!;
+
+        Assert.Equal(2, actions.Count);
+        Assert.Equal(ownerA, Assert.Single(actions, i => i.Text == "A action").RecordedByUserId);
+        Assert.Equal(ownerB, Assert.Single(actions, i => i.Text == "B action").RecordedByUserId);
+
+        Assert.Equal(2, notes.Count);
+        Assert.Equal(ownerA, Assert.Single(notes, i => i.Text == "A note").RecordedByUserId);
+        Assert.Equal(ownerB, Assert.Single(notes, i => i.Text == "B note").RecordedByUserId);
+
+        Assert.Equal(2, attachments.Count);
+        Assert.Equal(ownerA, Assert.Single(attachments, i => i.Name == "a.pdf").RecordedByUserId);
+        Assert.Equal(ownerB, Assert.Single(attachments, i => i.Name == "b.pdf").RecordedByUserId);
+    }
+
     [Fact]
     public async Task GenerateSummary_in_a_shared_room_needs_ManageContents()
     {

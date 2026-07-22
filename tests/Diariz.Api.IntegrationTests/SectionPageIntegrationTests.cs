@@ -159,4 +159,59 @@ public class SectionPageIntegrationTests(ContainersFixture fx)
         Assert.Equal("note", Assert.Single(notes).Text);
         Assert.Equal(ownerId, notes[0].RecordedByUserId); // the recording's owner, not noteAuthorId
     }
+
+    /// <summary>Review finding: the unit-test coverage for a genuinely multi-owner folder (two recordings from
+    /// TWO DIFFERENT owners, both filed in the SAME section) is a faithful stand-in for this flat, un-grouped
+    /// join - but pins it against real Postgres too, matching the paranoia that already produced
+    /// <see cref="Notes_aggregation_returns_the_recordings_owner_under_postgres"/> for the single-owner case.
+    /// Two recordings owned by two different users are shared into the same section of a Shared room; each of
+    /// the three aggregations must attribute its two rows to their own distinct recording owner in one response.</summary>
+    [Fact]
+    public async Task Aggregations_attribute_each_row_to_its_own_owner_under_postgres()
+    {
+        var ownerA = await SeedUser();
+        var ownerB = await SeedUser();
+        var sectionId = Guid.NewGuid();
+        var recAId = Guid.NewGuid();
+        var recBId = Guid.NewGuid();
+        await using (var db = fx.CreateDbContext())
+        {
+            var rooms = new RoomScope(db);
+            // Unique room name: the integration suite runs sequentially against one set of containers, and a
+            // fixed name like "Engineering" has collided with other tests' seed data before.
+            var roomId = await rooms.CreateSharedRoomAsync($"Two-Owner Folder {Guid.NewGuid():N}", null, null, null);
+            await rooms.SetMemberAsync(roomId, RoomPrincipalType.User, ownerA, RoomPermission.CreateRecording);
+            await rooms.SetMemberAsync(roomId, RoomPrincipalType.User, ownerB, RoomPermission.CreateRecording);
+            db.Sections.Add(new Section { Id = sectionId, UserId = ownerA, RoomId = roomId, Name = "F" });
+            db.Recordings.Add(new Recording { Id = recAId, UserId = ownerA, Title = "Rec A", BlobKey = "k" });
+            db.Recordings.Add(new Recording { Id = recBId, UserId = ownerB, Title = "Rec B", BlobKey = "k" });
+            db.RecordingActions.Add(new RecordingAction { Id = Guid.NewGuid(), RecordingId = recAId, Text = "A action", Ordinal = 0 });
+            db.RecordingActions.Add(new RecordingAction { Id = Guid.NewGuid(), RecordingId = recBId, Text = "B action", Ordinal = 0 });
+            db.MeetingNotes.Add(new MeetingNote { Id = Guid.NewGuid(), UserId = ownerA, RecordingId = recAId, Text = "A note", Ordinal = 0 });
+            db.MeetingNotes.Add(new MeetingNote { Id = Guid.NewGuid(), UserId = ownerB, RecordingId = recBId, Text = "B note", Ordinal = 0 });
+            db.Attachments.Add(new Attachment { Id = Guid.NewGuid(), RecordingId = recAId, Kind = AttachmentKind.File, Name = "a.pdf", SizeBytes = 1, Ordinal = 0 });
+            db.Attachments.Add(new Attachment { Id = Guid.NewGuid(), RecordingId = recBId, Kind = AttachmentKind.File, Name = "b.pdf", SizeBytes = 1, Ordinal = 0 });
+            await db.SaveChangesAsync();
+            // Both recordings land in the SAME shared section, shared in by their own respective owner.
+            await rooms.ShareIntoRoomAsync(recAId, roomId, ownerA, sectionId);
+            await rooms.ShareIntoRoomAsync(recBId, roomId, ownerB, sectionId);
+        }
+
+        await using var db2 = fx.CreateDbContext();
+        var actions = (await Build(db2, ownerA).Actions(sectionId)).Value!;
+        var notes = (await Build(db2, ownerA).Notes(sectionId)).Value!;
+        var attachments = (await Build(db2, ownerA).Attachments(sectionId)).Value!;
+
+        Assert.Equal(2, actions.Count);
+        Assert.Equal(ownerA, Assert.Single(actions, i => i.Text == "A action").RecordedByUserId);
+        Assert.Equal(ownerB, Assert.Single(actions, i => i.Text == "B action").RecordedByUserId);
+
+        Assert.Equal(2, notes.Count);
+        Assert.Equal(ownerA, Assert.Single(notes, i => i.Text == "A note").RecordedByUserId);
+        Assert.Equal(ownerB, Assert.Single(notes, i => i.Text == "B note").RecordedByUserId);
+
+        Assert.Equal(2, attachments.Count);
+        Assert.Equal(ownerA, Assert.Single(attachments, i => i.Name == "a.pdf").RecordedByUserId);
+        Assert.Equal(ownerB, Assert.Single(attachments, i => i.Name == "b.pdf").RecordedByUserId);
+    }
 }
