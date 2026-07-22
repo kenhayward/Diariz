@@ -865,7 +865,7 @@ function refreshTray() {
         click: toggleOpenAtLogin,
       },
       { label: "Check for Updates…", click: () => checkForUpdates(true) },
-      { label: "Screenshot Hotkey...", click: () => showHotkeyWindow() },
+      { label: "Screenshot Hotkey…", click: () => showHotkeyWindow() },
       { label: "Settings…", click: () => showSetupWindow() },
       { label: "Quit", click: () => { isQuitting = true; app.quit(); } },
     ]),

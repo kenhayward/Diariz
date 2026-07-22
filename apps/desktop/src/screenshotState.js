@@ -32,7 +32,7 @@ function trayScreenshotItems(state) {
   if (!canCapture(state)) return [];
   return [
     { id: "capture", label: "Capture Screenshot", enabled: true },
-    { id: "change-area", label: "Change Capture Area...", enabled: true },
+    { id: "change-area", label: "Change Capture Area…", enabled: true },
   ];
 }
 
@@ -130,8 +130,10 @@ function normalizeAccelerator(input) {
 //   - Volume keys: DOM's "AudioVolumeUp"/"AudioVolumeDown"/"AudioVolumeMute" vs.
 //     Electron's "VolumeUp"/"VolumeDown"/"VolumeMute".
 //   - Media track keys: DOM's "MediaTrackNext"/"MediaTrackPrevious" vs. Electron's
-//     "MediaNextTrack"/"MediaPreviousTrack" (word order swapped; MediaStop and
-//     MediaPlayPause already agree, so they aren't listed).
+//     "MediaNextTrack"/"MediaPreviousTrack" (word order swapped). MediaStop and
+//     MediaPlayPause already agree between DOM and Electron, but are still listed
+//     explicitly below (rather than left to an implicit fallback) for the same reason
+//     as the always-fixed keys further down.
 //   - Space/Tab/Backspace/Delete/Insert/Home/End/PageUp/PageDown/Escape/Enter and the
 //     always-fixed media keys: `code` already equals Electron's token, listed explicitly
 //     (rather than left to an implicit fallback) so "not in this map and not digit/letter/

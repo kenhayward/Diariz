@@ -35,7 +35,7 @@ test("capture and change-area items appear while recording and ready", () => {
   assert.deepEqual(items.map((i) => i.id), ["capture", "change-area"]);
   assert.ok(items.every((i) => i.enabled));
   assert.equal(items[0].label, "Capture Screenshot");
-  assert.equal(items[1].label, "Change Capture Area...");
+  assert.equal(items[1].label, "Change Capture Area…"); // matches the file's ellipsis-character idiom (FIX 8)
 });
 
 test("no screenshot items exist while recording but not ready (e.g. a mid-recording renderer reload)", () => {
