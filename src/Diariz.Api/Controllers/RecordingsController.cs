@@ -463,14 +463,19 @@ public class RecordingsController : ControllerBase
             return string.IsNullOrEmpty(sp.DisplayName) ? $"l:{label}" : $"n:{sp.DisplayName}";
         }
 
-        // A note-taker's note sits between two segments; don't let a same-speaker merge swallow that boundary
-        // (or the note would jump to after the whole merged block). Flag the segment after each note's anchor.
+        // A note or a screenshot sits between two segments; don't let a same-speaker merge swallow that
+        // boundary (the note or image would jump to after the whole merged block). Flag the segment after
+        // each anchor. Both kinds of capture use the same rule, so they share one break set.
         var noteTimes = await _db.MeetingNotes
             .Where(n => n.RecordingId == id && n.CapturedAtMs != null)
             .Select(n => n.CapturedAtMs!.Value)
             .ToListAsync();
+        var shotTimes = await _db.MeetingScreenshots
+            .Where(s => s.RecordingId == id)
+            .Select(s => s.CapturedAtMs)
+            .ToListAsync();
         var breakBefore = TranscriptNoteAnchor.BreakBeforeIndices(
-            segments.Select(s => s.StartMs).ToList(), noteTimes);
+            segments.Select(s => s.StartMs).ToList(), noteTimes.Concat(shotTimes));
 
         var merged = SegmentMerger.Merge(segments
             .Select((s, i) => new SegmentMerger.Part(
