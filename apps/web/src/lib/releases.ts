@@ -59,7 +59,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.154.0",
     date: "2026-07-24",
-    pr: 0, // set on open
+    pr: 336,
     headline: "Workflow Signals: route formula outputs to team automations",
     summary:
       "Platform admins can define named Workflow Signals and wire each to a platform automation once, for " +
