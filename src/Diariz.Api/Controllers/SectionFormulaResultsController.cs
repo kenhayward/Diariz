@@ -212,7 +212,7 @@ public class SectionFormulaResultsController : ControllerBase
 
     /// <summary>Edit/delete gate: the result's creator OR a member of the section's room with ManageContents
     /// (the personal-room owner holds every permission). Only meaningful once the caller has passed
-    /// <see cref="ViewableSectionAsync"/> for the same section.</summary>
+    /// <see cref="IRoomScope.ViewableSectionAsync"/> for the same section.</summary>
     private async Task<bool> CanEditAsync(SectionFormulaResult result, Section section) =>
         result.CreatedByUserId == UserId ||
         (await _rooms.PermissionsAsync(UserId, section.RoomId)).HasFlag(RoomPermission.ManageContents);
