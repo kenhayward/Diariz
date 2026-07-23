@@ -35,6 +35,7 @@ describe("DeveloperAccessSection", () => {
     renderIt();
     const link = await screen.findByRole("link", { name: /view api reference/i });
     expect(link.getAttribute("href")).toBe("/developers/api");
+    expect(link.getAttribute("target")).toBe("_blank");
   });
 
   it("generates a token and shows it once", async () => {

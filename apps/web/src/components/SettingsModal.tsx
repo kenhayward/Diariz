@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 import type { MinutesGenerationMode } from "../lib/types";
 import { useAuth } from "../auth";
@@ -298,13 +297,14 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 <span className="font-medium text-gray-700 dark:text-gray-200">{t("webhooksEnabledLabel")}</span>
               </label>
               <p className="text-xs text-gray-400 dark:text-gray-500">{t("webhooksEnabledHelp")}</p>
-              <Link
-                to="/developers/api"
-                onClick={onClose}
+              <a
+                href="/developers/api"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-block text-xs text-indigo-600 hover:underline dark:text-indigo-400"
               >
                 {t("apiViewReference")} →
-              </Link>
+              </a>
             </div>
           )}
         </div>

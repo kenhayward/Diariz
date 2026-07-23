@@ -140,7 +140,9 @@ describe("SettingsModal", () => {
     renderModal();
 
     fireEvent.click(await screen.findByRole("tab", { name: /integration/i }));
-    expect(screen.getByRole("link", { name: /view api reference/i }).getAttribute("href")).toBe("/developers/api");
+    const link = screen.getByRole("link", { name: /view api reference/i });
+    expect(link.getAttribute("href")).toBe("/developers/api");
+    expect(link.getAttribute("target")).toBe("_blank");
     const toggle = await screen.findByLabelText(/enable user api access/i);
     await waitFor(() => expect((toggle as HTMLInputElement).checked).toBe(false));
     fireEvent.click(toggle);

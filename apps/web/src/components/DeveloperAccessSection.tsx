@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 import type { ApiTokenCreated } from "../lib/types";
 
@@ -69,9 +68,9 @@ export default function DeveloperAccessSection() {
         <button type="button" onClick={() => copy(baseUrl)} className={btn}>
           {t("apiCopyUrl")}
         </button>
-        <Link to="/developers/api" className={btn}>
+        <a href="/developers/api" target="_blank" rel="noopener noreferrer" className={btn}>
           {t("apiViewReference")}
-        </Link>
+        </a>
       </div>
 
       <div className="mt-2 flex gap-2">
