@@ -61,7 +61,9 @@ public class ApiTokensController : ControllerBase
             TokenHash = g.Hash,
             Prefix = g.Prefix,
             Scope = req.ReadOnly ? ApiTokenScope.ReadOnly : ApiTokenScope.ReadWrite,
-            ExpiresAt = req.ExpiresAt,
+            // Npgsql rejects a non-zero-offset DateTimeOffset for a `timestamptz` column, so normalise to UTC
+            // before storing (same pattern as RecordingsController's calendar-link Start/End).
+            ExpiresAt = req.ExpiresAt?.ToUniversalTime(),
         };
         _db.ApiAccessTokens.Add(row);
         await _db.SaveChangesAsync();
