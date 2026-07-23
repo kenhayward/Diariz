@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import KebabMenu, { type KebabAction } from "../KebabMenu";
-import { DownloadIcon, LinkIcon, PlayIcon } from "./SectionIcons";
+import { DownloadIcon, LinkIcon, PencilIcon, PlayIcon } from "./SectionIcons";
 
 /// The recording-detail header: the title, and a consolidated action cluster.
 ///
@@ -16,6 +16,7 @@ export default function DetailHeader({
   hasAudio,
   hasTranscript,
   onPlay,
+  onRename,
   onCopyLink,
   onDownload,
 }: {
@@ -24,6 +25,7 @@ export default function DetailHeader({
   hasAudio: boolean;
   hasTranscript: boolean;
   onPlay: () => void;
+  onRename: () => void;
   onCopyLink: () => void;
   onDownload: () => void;
 }) {
@@ -45,6 +47,10 @@ export default function DetailHeader({
           <PlayIcon />
           {t("workspace:playRecording")}
         </button>
+
+        <IconButton label={t("recordings:rename")} onClick={onRename}>
+          <PencilIcon />
+        </IconButton>
 
         <IconButton label={t("recordings:copyLink")} onClick={onCopyLink}>
           <LinkIcon />

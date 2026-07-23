@@ -21,7 +21,17 @@ describe("hubCounts", () => {
       notes: 1,
       files: 2,
       formulaRuns: 1,
+      screenshots: 0,
     });
+  });
+
+  it("counts screenshots from the shots side query", () => {
+    const counts = hubCounts(rec(), [], [], [], [{ id: "sh1" }, { id: "sh2" }, { id: "sh3" }]);
+    expect(counts.screenshots).toBe(3);
+  });
+
+  it("reports zero screenshots when no shots query is supplied", () => {
+    expect(hubCounts(rec(), [], [], []).screenshots).toBe(0);
   });
 
   it("splits actions into open and done on `completed`", () => {
@@ -50,6 +60,7 @@ describe("hubCounts", () => {
       notes: 0,
       files: 0,
       formulaRuns: 0,
+      screenshots: 0,
     });
   });
 });

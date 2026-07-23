@@ -18,6 +18,7 @@ export interface HubCounts {
   notes: number;
   files: number;
   formulaRuns: number;
+  screenshots: number;
 }
 
 export function hubCounts(
@@ -25,6 +26,7 @@ export function hubCounts(
   notes: unknown[],
   attachments: unknown[],
   formulaResults: unknown[],
+  shots: unknown[] = [],
 ): HubCounts {
   return {
     segments: rec.current?.segments.length ?? 0,
@@ -35,5 +37,6 @@ export function hubCounts(
     notes: notes.length,
     files: attachments.length,
     formulaRuns: formulaResults.length,
+    screenshots: shots.length,
   };
 }

@@ -102,13 +102,18 @@ function wrap(ui: ReactElement) {
   return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
 }
 
-function renderHub(h: ReturnType<typeof handlers>, over: Partial<RecordingDetail> = {}) {
+function renderHub(
+  h: ReturnType<typeof handlers>,
+  over: Partial<RecordingDetail> = {},
+  shots: unknown[] = [],
+) {
   return wrap(
     <RecordingHub
       rec={rec(over)}
       notes={notes}
       attachments={attachments}
       formulaResults={formulaResults}
+      shots={shots}
       meetingTypeTitle="Meeting minutes template"
       speakerNameOf={(l) => (l === "SPEAKER_00" ? "Ken Hayward" : "Marie Dubois")}
       minutesRunning={false}
@@ -202,5 +207,15 @@ describe("RecordingHub", () => {
   it("says so plainly when the recording has no summary yet", () => {
     renderHub(h, { summary: null });
     expect(screen.getByText("No summary yet.")).toBeTruthy();
+  });
+
+  it("keeps the Notes subtitle to just the note count when there are no screenshots", () => {
+    renderHub(h, {}, []);
+    expect(screen.getByText("1 note")).toBeTruthy();
+  });
+
+  it("appends the screenshot count to the Notes subtitle once there are any", () => {
+    renderHub(h, {}, [{ id: "sh1" }, { id: "sh2" }, { id: "sh3" }]);
+    expect(screen.getByText("1 note · 3 screenshots")).toBeTruthy();
   });
 });

@@ -159,6 +159,8 @@
   "hubSpeakersSubtitle_other": "{{count}} identifiziert",
   "hubNotesSubtitle_one": "{{count}} Notiz",
   "hubNotesSubtitle_other": "{{count}} Notizen",
+  "hubScreenshotsCount_one": "{{count}} Screenshot",
+  "hubScreenshotsCount_other": "{{count}} Screenshots",
   "hubFilesSubtitle_one": "{{count}} angehängt",
   "hubFilesSubtitle_other": "{{count}} angehängt",
   "hubFormulasSubtitle_one": "{{count}} Lauf",

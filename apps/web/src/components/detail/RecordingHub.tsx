@@ -37,6 +37,7 @@ export default function RecordingHub({
   notes,
   attachments,
   formulaResults,
+  shots = [],
   meetingTypeTitle,
   speakerNameOf,
   minutesRunning,
@@ -55,6 +56,7 @@ export default function RecordingHub({
   notes: MeetingNote[];
   attachments: Attachment[];
   formulaResults: FormulaResult[];
+  shots?: unknown[];
   /// The applied template's name, for the Formulas tile's "From <template>" line.
   meetingTypeTitle: string | null;
   speakerNameOf: (label: string) => string;
@@ -71,9 +73,14 @@ export default function RecordingHub({
   onRunFormula: () => void;
 }) {
   const { t } = useTranslation(["workspace", "common"]);
-  const counts = hubCounts(rec, notes, attachments, formulaResults);
+  const counts = hubCounts(rec, notes, attachments, formulaResults, shots);
   const labels = rec.speakers.map((s) => s.label);
   const latestNote = notes[notes.length - 1];
+  const notesSubtitle = t("workspace:hubNotesSubtitle", { count: counts.notes });
+  const notesAndScreenshotsSubtitle =
+    counts.screenshots > 0
+      ? `${notesSubtitle} · ${t("workspace:hubScreenshotsCount", { count: counts.screenshots })}`
+      : notesSubtitle;
 
   return (
     <div className="flex flex-col gap-3.5">
@@ -161,7 +168,7 @@ export default function RecordingHub({
           color="purple"
           icon={<NotesGlyph />}
           title={t("workspace:detailTabNotes")}
-          subtitle={t("workspace:hubNotesSubtitle", { count: counts.notes })}
+          subtitle={notesAndScreenshotsSubtitle}
           action={<TileAction label={t("workspace:hubNewNote")} icon={<PlusIcon />} onClick={onNewNote} />}
           onOpen={() => onOpenSection("notes")}
         >
