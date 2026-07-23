@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import { normalizeBreaks, contentError, emptyContent } from "../lib/meetingTypeDraft";
@@ -42,8 +43,15 @@ export default function FormulaEditModal({
     formula ? normalizeBreaks(formula.content) : emptyContent());
   const [context, setContext] = useState(formula?.context ?? 0);
   const [shared, setShared] = useState(formula?.shared ?? false);
+  const [signals, setSignals] = useState<string[]>(formula?.signals ?? []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Same profile query the Automations tab gates on (see PreferencesModal) - webhooks may be platform-disabled.
+  const { data: profile } = useQuery({ queryKey: ["user-profile"], queryFn: api.getProfile });
+  const { data: workflowSignals } = useQuery({ queryKey: ["workflow-signals"], queryFn: api.listWorkflowSignals });
+  const activeSignals = (workflowSignals ?? []).filter((s) => s.isActive);
+  const showSignals = !!profile?.webhooksEnabled && activeSignals.length > 0;
 
   const isPersonal = formula ? formula.scope === "Personal" : scope === "Personal";
 
@@ -55,6 +63,10 @@ export default function FormulaEditModal({
 
   function toggle(bit: number) {
     setContext((c) => c ^ bit);
+  }
+
+  function toggleSignal(id: string) {
+    setSignals((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   }
 
   // A formula with no sections would generate nothing, so it is not saveable - the same bar the meeting-type
@@ -74,6 +86,7 @@ export default function FormulaEditModal({
           content,
           context,
           shared,
+          signals,
         });
       } else {
         await api.createFormula({
@@ -83,6 +96,7 @@ export default function FormulaEditModal({
           content,
           context,
           shared,
+          signals,
         });
       }
       onSaved();
@@ -138,6 +152,31 @@ export default function FormulaEditModal({
             ))}
           </div>
         </div>
+
+        {showSignals && (
+          <div>
+            <span className={`text-sm ${labelSpan}`}>{t("formulaSignalsHeading")}</span>
+            <p className="mb-2 text-xs text-gray-400 dark:text-gray-500">{t("formulaSignalsHint")}</p>
+            <div className="space-y-1.5">
+              {activeSignals.map((sig) => (
+                <label key={sig.id} className="flex items-start gap-2 text-sm dark:text-gray-200">
+                  <input
+                    type="checkbox"
+                    checked={signals.includes(sig.id)}
+                    onChange={() => toggleSignal(sig.id)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="font-medium">{sig.label}</span>
+                    {sig.description && (
+                      <span className="block text-xs text-gray-400 dark:text-gray-500">{sig.description}</span>
+                    )}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
 
         {isPersonal && (
           <label className="flex items-start gap-2 text-sm dark:text-gray-200">

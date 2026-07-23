@@ -73,6 +73,10 @@ import type {
   WebhookDelivery,
   CreateWebhookBody,
   UpdateWebhookBody,
+  CreatePlatformWebhookBody,
+  WorkflowSignal,
+  CreateWorkflowSignalBody,
+  UpdateWorkflowSignalBody,
 } from "./types";
 
 const TOKEN_KEY = "diariz.token";
@@ -1022,6 +1026,58 @@ export const api = {
     return data;
   },
 
+  // ---- Platform webhooks (admin-managed) ----
+
+  async listPlatformWebhooks(): Promise<WebhookSubscription[]> {
+    const { data } = await http.get<WebhookSubscription[]>("/api/admin/webhooks");
+    return data;
+  },
+
+  /// Create a platform webhook. The response's plaintext `secret` is returned once - show it to the user immediately.
+  async createPlatformWebhook(body: CreatePlatformWebhookBody): Promise<WebhookCreated> {
+    const { data } = await http.post<WebhookCreated>("/api/admin/webhooks", body);
+    return data;
+  },
+
+  async updatePlatformWebhook(
+    id: string,
+    body: CreatePlatformWebhookBody & { isActive: boolean },
+  ): Promise<WebhookSubscription> {
+    const { data } = await http.put<WebhookSubscription>(`/api/admin/webhooks/${id}`, body);
+    return data;
+  },
+
+  async deletePlatformWebhook(id: string): Promise<void> {
+    await http.delete(`/api/admin/webhooks/${id}`);
+  },
+
+  // ---- Workflow signals ----
+
+  async listWorkflowSignals(): Promise<WorkflowSignal[]> {
+    const { data } = await http.get<WorkflowSignal[]>("/api/workflow-signals");
+    return data;
+  },
+
+  /// Every workflow signal, including inactive ones, for the admin manage popup.
+  async listAllWorkflowSignals(): Promise<WorkflowSignal[]> {
+    const { data } = await http.get<WorkflowSignal[]>("/api/workflow-signals/manage");
+    return data;
+  },
+
+  async createWorkflowSignal(body: CreateWorkflowSignalBody): Promise<WorkflowSignal> {
+    const { data } = await http.post<WorkflowSignal>("/api/workflow-signals", body);
+    return data;
+  },
+
+  async updateWorkflowSignal(id: string, body: UpdateWorkflowSignalBody): Promise<WorkflowSignal> {
+    const { data } = await http.put<WorkflowSignal>(`/api/workflow-signals/${id}`, body);
+    return data;
+  },
+
+  async deleteWorkflowSignal(id: string): Promise<void> {
+    await http.delete(`/api/workflow-signals/${id}`);
+  },
+
   // ---- Storage quotas ----
 
   async getUserStorage(): Promise<UserStorage> {
@@ -1255,6 +1311,7 @@ export const api = {
     content: TemplateContent;
     context: number;
     shared?: boolean;
+    signals?: string[];
   }): Promise<Formula> {
     const { data } = await http.post<Formula>("/api/formulas", body);
     return data;
@@ -1263,7 +1320,14 @@ export const api = {
   /// Partial update: omitted fields are left unchanged.
   async updateFormula(
     id: string,
-    body: { name?: string; description?: string | null; content?: TemplateContent; context?: number; shared?: boolean },
+    body: {
+      name?: string;
+      description?: string | null;
+      content?: TemplateContent;
+      context?: number;
+      shared?: boolean;
+      signals?: string[];
+    },
   ): Promise<Formula> {
     const { data } = await http.put<Formula>(`/api/formulas/${id}`, body);
     return data;

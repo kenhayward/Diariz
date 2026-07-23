@@ -371,6 +371,21 @@ namespace Diariz.Domain.Migrations
                     b.ToTable("FormulaSubscriptions");
                 });
 
+            modelBuilder.Entity("Diariz.Domain.Entities.FormulaWorkflowSignal", b =>
+                {
+                    b.Property<Guid>("FormulaId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("WorkflowSignalId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("FormulaId", "WorkflowSignalId");
+
+                    b.HasIndex("WorkflowSignalId");
+
+                    b.ToTable("FormulaWorkflowSignals");
+                });
+
             modelBuilder.Entity("Diariz.Domain.Entities.IcsCalendarSource", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1742,6 +1757,10 @@ namespace Diariz.Domain.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("SignalFilter")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
                     b.Property<string>("Url")
                         .IsRequired()
                         .HasMaxLength(2048)
@@ -1752,6 +1771,39 @@ namespace Diariz.Domain.Migrations
                     b.HasIndex("OwnerUserId");
 
                     b.ToTable("Webhooks");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.WorkflowSignal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.ToTable("WorkflowSignals");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>
@@ -2177,6 +2229,25 @@ namespace Diariz.Domain.Migrations
                     b.Navigation("Formula");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.FormulaWorkflowSignal", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.Formula", "Formula")
+                        .WithMany()
+                        .HasForeignKey("FormulaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Diariz.Domain.Entities.WorkflowSignal", "WorkflowSignal")
+                        .WithMany()
+                        .HasForeignKey("WorkflowSignalId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Formula");
+
+                    b.Navigation("WorkflowSignal");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.IcsCalendarSource", b =>

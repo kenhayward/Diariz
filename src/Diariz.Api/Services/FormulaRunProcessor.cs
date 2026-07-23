@@ -26,14 +26,14 @@ public static class FormulaRunProcessor
         var cfg = await settings.ResolveAsync(job.UserId, ct);
         if (!cfg.Enabled)
         {
-            await FailAsync(db, hub, job, "No LLM endpoint is configured for this user or server.", webhooks, publicUrl, ct);
+            await FailAsync(db, hub, job, "No LLM endpoint is configured for this user or server.", webhooks, publicUrl, logger, ct);
             return;
         }
 
         var formula = await db.Formulas.FirstOrDefaultAsync(f => f.Id == job.FormulaId, ct);
         if (formula is null)
         {
-            await FailAsync(db, hub, job, "The formula was removed before the run completed.", webhooks, publicUrl, ct);
+            await FailAsync(db, hub, job, "The formula was removed before the run completed.", webhooks, publicUrl, logger, ct);
             return;
         }
 
@@ -70,29 +70,50 @@ public static class FormulaRunProcessor
             }
             await hub.NotifyFormulaStatusAsync(job.UserId, job.RecordingId, job.SectionId, job.ResultId,
                 nameof(FormulaRunStatus.Ready));
-            await webhooks.PublishAsync(WebhookEventTypes.FormulaResultCompleted, job.UserId, new
+            // Webhook emission (signal/name lookups + publish) is best-effort and must never undo the Ready
+            // result just persisted above - a transient failure here is swallowed, not surfaced to the outer
+            // catch (which would otherwise flip the just-succeeded run back to Failed).
+            try
             {
-                recordingId = job.RecordingId, sectionId = job.SectionId, formulaId = job.FormulaId,
-                formulaResultId = job.ResultId, status = nameof(FormulaRunStatus.Ready),
-                links = new { result = FormulaResultLink(publicUrl, job.RecordingId, job.ResultId) },
-            });
+                var signalKeys = await LoadSignalKeysAsync(db, job.FormulaId, ct);
+                string? recordingName = job.RecordingId is { } rid
+                    ? await db.Recordings.Where(r => r.Id == rid).Select(r => r.Name ?? r.Title).FirstOrDefaultAsync(ct)
+                    : null;
+                var formulaName = formula.Name;
+                await webhooks.PublishAsync(WebhookEventTypes.FormulaResultCompleted, job.UserId, new
+                {
+                    recordingId = job.RecordingId, sectionId = job.SectionId, formulaId = job.FormulaId,
+                    formulaResultId = job.ResultId, signals = signalKeys, status = nameof(FormulaRunStatus.Ready),
+                    links = new { result = FormulaResultLink(publicUrl, job.RecordingId, job.ResultId) },
+                }, signals: signalKeys, platformData: new
+                {
+                    recordingId = job.RecordingId, sectionId = job.SectionId, formulaId = job.FormulaId,
+                    formulaResultId = job.ResultId, signals = signalKeys, status = nameof(FormulaRunStatus.Ready),
+                    links = new { result = FormulaResultLink(publicUrl, job.RecordingId, job.ResultId) },
+                    output = text, recordingName, formulaName,
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to emit formula_result webhook for {ResultId}", job.ResultId);
+            }
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             // The linked CTS fired (LLM timeout), not the caller's ct - record it as a failure, don't propagate.
             logger.LogWarning("Formula run {ResultId} timed out", job.ResultId);
-            await FailAsync(db, hub, job, "The LLM request timed out.", webhooks, publicUrl, ct);
+            await FailAsync(db, hub, job, "The LLM request timed out.", webhooks, publicUrl, logger, ct);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Formula run {ResultId} failed", job.ResultId);
-            await FailAsync(db, hub, job, ex.Message, webhooks, publicUrl, ct);
+            await FailAsync(db, hub, job, ex.Message, webhooks, publicUrl, logger, ct);
         }
     }
 
     private static async Task FailAsync(
         DiarizDbContext db, IHubContext<TranscriptionHub> hub, FormulaRunJob job, string error,
-        IWebhookPublisher webhooks, string publicUrl, CancellationToken ct)
+        IWebhookPublisher webhooks, string publicUrl, ILogger logger, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         // A section-scoped job flips the SectionFormulaResult row; a recording job the FormulaResult row.
@@ -120,13 +141,41 @@ public static class FormulaRunProcessor
         }
         await hub.NotifyFormulaStatusAsync(job.UserId, job.RecordingId, job.SectionId, job.ResultId,
             nameof(FormulaRunStatus.Failed));
-        await webhooks.PublishAsync(WebhookEventTypes.FormulaResultFailed, job.UserId, new
+        // Best-effort, same as the completed site: a failure loading signals/names or publishing must not
+        // propagate out of FailAsync - the Failed status above is already persisted and must stand either way.
+        try
         {
-            recordingId = job.RecordingId, sectionId = job.SectionId, formulaId = job.FormulaId,
-            formulaResultId = job.ResultId, status = nameof(FormulaRunStatus.Failed),
-            links = new { result = FormulaResultLink(publicUrl, job.RecordingId, job.ResultId) },
-        });
+            var signalKeys = await LoadSignalKeysAsync(db, job.FormulaId, ct);
+            string? recordingName = job.RecordingId is { } rid
+                ? await db.Recordings.Where(r => r.Id == rid).Select(r => r.Name ?? r.Title).FirstOrDefaultAsync(ct)
+                : null;
+            var formulaName = await db.Formulas.Where(f => f.Id == job.FormulaId).Select(f => f.Name).FirstOrDefaultAsync(ct);
+            await webhooks.PublishAsync(WebhookEventTypes.FormulaResultFailed, job.UserId, new
+            {
+                recordingId = job.RecordingId, sectionId = job.SectionId, formulaId = job.FormulaId,
+                formulaResultId = job.ResultId, signals = signalKeys, error, status = nameof(FormulaRunStatus.Failed),
+                links = new { result = FormulaResultLink(publicUrl, job.RecordingId, job.ResultId) },
+            }, signals: signalKeys, platformData: new
+            {
+                recordingId = job.RecordingId, sectionId = job.SectionId, formulaId = job.FormulaId,
+                formulaResultId = job.ResultId, signals = signalKeys, error, status = nameof(FormulaRunStatus.Failed),
+                links = new { result = FormulaResultLink(publicUrl, job.RecordingId, job.ResultId) },
+                recordingName, formulaName,
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to emit formula_result webhook for {ResultId}", job.ResultId);
+        }
     }
+
+    /// <summary>The formula's attached signal keys, ACTIVE only - an inactive signal stays linked (so re-enabling
+    /// it restores routing) but doesn't route events while off.</summary>
+    private static Task<List<string>> LoadSignalKeysAsync(DiarizDbContext db, Guid formulaId, CancellationToken ct) =>
+        db.FormulaWorkflowSignals
+            .Where(x => x.FormulaId == formulaId && x.WorkflowSignal!.IsActive)
+            .Select(x => x.WorkflowSignal!.Key)
+            .ToListAsync(ct);
 
     /// <summary>The result-fetch endpoint link, or null when there's no public URL configured or the run is
     /// section-scoped (no owning recording to address the endpoint by).</summary>

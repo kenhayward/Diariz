@@ -46,6 +46,8 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<FormulaSubscription> FormulaSubscriptions => Set<FormulaSubscription>();
     public DbSet<WebhookSubscription> Webhooks => Set<WebhookSubscription>();
     public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
+    public DbSet<WorkflowSignal> WorkflowSignals => Set<WorkflowSignal>();
+    public DbSet<FormulaWorkflowSignal> FormulaWorkflowSignals => Set<FormulaWorkflowSignal>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -635,6 +637,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         {
             e.Property(s => s.Name).HasMaxLength(200);
             e.Property(s => s.Url).HasMaxLength(2048);
+            e.Property(s => s.SignalFilter).HasMaxLength(1024);
             e.HasIndex(s => s.OwnerUserId);
             e.HasOne(s => s.Owner).WithMany().HasForeignKey(s => s.OwnerUserId).OnDelete(DeleteBehavior.Cascade);
         });
@@ -644,6 +647,26 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.Property(d => d.EventType).HasMaxLength(64);
             e.HasIndex(d => new { d.Status, d.NextAttemptAt }); // the worker's due-poll index
             e.HasOne(d => d.Subscription).WithMany().HasForeignKey(d => d.SubscriptionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Admin-defined named routing keys a formula author can attach to a formula ("Send to Slack"). Provider-
+        // agnostic (plain columns), so it stays outside the Npgsql guard and loads under the in-memory test
+        // provider too.
+        builder.Entity<WorkflowSignal>(e =>
+        {
+            e.Property(s => s.Key).HasMaxLength(64);
+            e.Property(s => s.Label).HasMaxLength(200);
+            e.HasIndex(s => s.Key).IsUnique();
+        });
+
+        // Join: a formula carries zero or more Workflow Signals. Cascade on both sides: deleting a signal removes
+        // the link but not the formula; deleting a formula removes the link.
+        builder.Entity<FormulaWorkflowSignal>(e =>
+        {
+            e.HasKey(x => new { x.FormulaId, x.WorkflowSignalId });
+            e.HasOne(x => x.Formula).WithMany().HasForeignKey(x => x.FormulaId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.WorkflowSignal).WithMany().HasForeignKey(x => x.WorkflowSignalId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

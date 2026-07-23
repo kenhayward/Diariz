@@ -72,7 +72,7 @@ public class RecordingWebhookEmitTests
 
         // Assert the external `data` contract, not just the event type/owner - a caller-facing shape regression
         // (a renamed or dropped field) would otherwise slip past every test in this file.
-        var (_, _, data) = publisher.Published.Single(p => p.EventType == WebhookEventTypes.RecordingTranscribed);
+        var (_, _, data, _, _) = publisher.Published.Single(p => p.EventType == WebhookEventTypes.RecordingTranscribed);
         var json = System.Text.Json.JsonSerializer.Serialize(data);
         using var doc = System.Text.Json.JsonDocument.Parse(json);
         Assert.Equal(recordingId.ToString(), doc.RootElement.GetProperty("recordingId").GetString());
@@ -154,7 +154,7 @@ public class RecordingWebhookEmitTests
         Assert.Contains(publisher.Published, p =>
             p.EventType == WebhookEventTypes.RecordingCreated && p.Owner == userId);
 
-        var (_, _, data) = publisher.Published.Single(p => p.EventType == WebhookEventTypes.RecordingCreated);
+        var (_, _, data, _, _) = publisher.Published.Single(p => p.EventType == WebhookEventTypes.RecordingCreated);
         var json = System.Text.Json.JsonSerializer.Serialize(data);
         using var doc = System.Text.Json.JsonDocument.Parse(json);
         var recordingId = doc.RootElement.GetProperty("recordingId").GetString();

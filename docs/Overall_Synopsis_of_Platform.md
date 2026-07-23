@@ -735,11 +735,13 @@ toggle is off.
   the recording-create site and the worker-callback success/failure sites (`RecordingsController`,
   `WorkerCallbackController`) and at the formula-run completion/failure sites (`FormulaRunProcessor`, invoked from
   `FormulaRunWorker`), each via `IWebhookPublisher.PublishAsync(eventType, ownerUserId, data)`.
-- **Personal-scope matching only in Phase 2.** `WebhookSubscription.Scope` defaults to `WebhookScope.Personal`
-  (a `Platform` scope value exists on the enum for Phase 3 but has no behavior yet). `WebhookPublisher` looks up
-  the event owner's own **active** subscriptions whose comma-separated `EventTypes` contains the firing event
-  type, builds the envelope **once** per event, and inserts one `WebhookDelivery` row per matching subscription —
-  it never throws (a publish failure is logged, not surfaced to the triggering request/worker).
+- **Personal-scope matching in Phase 2; platform-scope matching joins it in Phase 3** (see the Workflow
+  Signals section below). `WebhookSubscription.Scope` defaults to `WebhookScope.Personal`. `WebhookPublisher`
+  looks up the event owner's own **active** personal subscriptions plus every active platform subscription,
+  filters each by its comma-separated `EventTypes` against the firing event type (and, for platform subs, a
+  mandatory signal match), builds the envelope **once** per event, and inserts one `WebhookDelivery` row per
+  matching subscription — it never throws (a publish failure is logged, not surfaced to the triggering
+  request/worker).
 - **Envelope + Standard Webhooks-style signing.** `WebhookPayload.Build` serializes a thin
   `{ id, type, created, data }` JSON envelope once; that exact string is stored as `WebhookDelivery.PayloadJson`
   (a `text` column, deliberately **not** `jsonb`) and is **never re-serialized** between store and send, because
@@ -775,10 +777,65 @@ toggle is off.
   fallback.
 - **`Webhooks` options section:** `AutoDisableThreshold` (default 15) and `BatchSize` (default 20) — see
   `WebhookOptions` in `Configuration/AppOptions.cs`.
-- **Deferred to Phase 3** (see the roadmap): platform-scoped subscriptions (`WebhookScope.Platform`), a
-  `SignalFilter`/`WorkflowSignal` model, inline formula-output delivery, and a per-subscription delivery
-  rate cap (Phase 2 has no cap because deliveries only originate from real user activity and retries are
-  already backoff-scheduled).
+- **Phase 3 (Workflow Signals) builds directly on this core** — see the next section. Still deferred: a
+  per-platform-subscription delivery rate cap (the delivery worker's batch-and-backoff throughput bound
+  already covers this; a per-subscription token bucket is a hardening follow-up now that platform subs fan
+  out across users), and detaching a platform subscription from the single admin who owns it (see below).
+
+## Workflow Signals and platform automations
+
+Phase 3 of the Integrations roadmap - **completes the integrations feature**. Where Phase 2 automations are
+personal (a subscription only ever sees its own owner's events), Workflow Signals let a **Platform
+Administrator** wire one automation to fire **for every user**, and let a **formula author** opt a formula
+into it with no URL or per-user setup at all.
+
+- **`WorkflowSignal` — the admin-defined vocabulary.** A named routing key (`Key`/`Label`/`Description`/
+  `IsActive`) a Platform Administrator manages at Settings → Integration → Workflow Signals, e.g. `Key:
+  post-to-slack`, `Label: "Send to Slack"`. `WorkflowSignalsController` (`api/workflow-signals`): `GET` (any
+  authenticated user — feeds the formula editor's picker, active signals only) is open; `GET manage`/`POST`/
+  `PUT`/`DELETE` require the `ManagePlatform` policy. **`Key` is immutable after creation** — it is the value
+  formulas and subscriptions reference, so the edit endpoint updates only `Label`/`Description`/`IsActive`.
+  Deleting a signal cascades its `FormulaWorkflowSignals` links but leaves any `Webhooks.SignalFilter` text
+  referencing the dead key alone (harmless — it just never matches again).
+- **`FormulaWorkflowSignals` — a formula's attached signals.** A formula author, in the formula editor, picks
+  zero or more active signals under "When this finishes, trigger: ...". `FormulaWorkflowSignal` is a plain
+  join (`FormulaId`, `WorkflowSignalId`, both cascade).
+- **`Webhooks.SignalFilter` and the `Platform` scope.** `WebhookScope.Platform` (already reserved on the
+  `Scope` column in Phase 2) is now live: a Platform subscription is managed by `PlatformWebhooksController`
+  (`api/admin/webhooks`, `ManagePlatform`-gated, CRUD only — no test-ping or delivery log like the personal
+  controller) and is **not owner-scoped for reads/writes** (any admin can manage any platform subscription),
+  though it still carries an `OwnerUserId` (the creating admin) for the cascade. Its new `SignalFilter`
+  column (comma-separated `WorkflowSignal.Key`s) is the routing filter. **A platform subscription's filter
+  cannot be empty** — enforced both at create/update (`PlatformWebhooksController.Validate` rejects an empty
+  list) and at publish/match time (see below) — a deliberate footgun guard, since an empty filter reading as
+  "match everything" would make a half-configured automation fire on every signal.
+- **Platform-scope matching rule (`WebhookPublisher`).** `IWebhookPublisher.PublishAsync` gained `signals`
+  (the firing formula's active signal keys) and `platformData` (the inline-output body) parameters. It loads
+  every active subscription (personal, owned by the event's user, **or** platform, any owner), then splits
+  matching in two: a **personal** subscription matches on its subscribed event type and (if it has a filter)
+  a signal intersection; a **platform** subscription matches only when its (mandatory) `SignalFilter`
+  intersects the firing signals — `WebhookSignals.Intersects` on an empty filter always returns `false`, which
+  is what enforces the footgun guard above. Matching subscriptions of either scope get one `WebhookDelivery`
+  row each, same delivery/retry/auto-disable machinery as Phase 2.
+- **Inline output only on platform signal-routed deliveries.** `FormulaRunProcessor` builds two payload
+  bodies for a completion/failure event — a thin `data` body (ids, status, links; what every Phase 2 personal
+  subscriber has always received) and a richer `platformData` body that additionally carries the rendered
+  formula `output` text, the recording name, and the formula name. It passes **both** to `PublishAsync`
+  alongside the formula's active `signals`; the publisher — not the processor — decides who gets which body:
+  every matching **personal** subscription gets the thin body regardless of signals, every matching
+  **platform** subscription gets `platformData` (falling back to the thin body only if `platformData` is
+  null). This split is deliberate: a personal automation must never leak a formula's generated content to a
+  webhook receiver the recording's owner didn't intend to see it, while a platform automation exists
+  specifically to route that output somewhere (e.g. post the generated minutes to a team Slack channel).
+- **New admin endpoints:** `api/workflow-signals` (signal CRUD + the open list for the picker, above) and
+  `api/admin/webhooks` (platform subscription CRUD, above) — both surfaced in Settings → Integration
+  alongside the existing personal Automations tab.
+- **Deferred follow-ups (documented, not built in Phase 3):** a per-platform-subscription delivery rate cap
+  (see the Phase 2 section above); detaching a platform subscription from the single admin who created it
+  (today, deleting that admin cascades and deletes their platform subscriptions too — a future improvement
+  is to let a platform subscription survive its creator's departure); and the Phase 2 carryover minors
+  (`Z` vs `+00:00` timestamp formatting, an N+1 query in the delivery worker, delivery-time IP re-pinning)
+  remain open.
 
 ## Auth, multi-tenancy, and roles
 

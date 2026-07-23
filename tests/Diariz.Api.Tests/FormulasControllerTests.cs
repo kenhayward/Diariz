@@ -659,6 +659,134 @@ public class FormulasControllerTests
         Assert.IsType<NotFoundResult>(await controller.Subscribe(Guid.NewGuid()));
     }
 
+    // ---- Workflow Signal attachment ----
+
+    private static WorkflowSignal Signal(string key = "post-to-slack") => new()
+    {
+        Id = Guid.NewGuid(), Key = key, Label = key, IsActive = true,
+    };
+
+    [Fact]
+    public async Task Create_with_signals_persists_join_rows_and_dto_reflects_them()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var sig = Signal();
+        db.WorkflowSignals.Add(sig);
+        await db.SaveChangesAsync();
+        var controller = Build(db, userId);
+
+        var result = await controller.Create(new CreateFormulaRequest(
+            "Personal", "My Formula", "desc", TemplateContent.FromPrompt("Summarize."),
+            (int)FormulaContext.Transcript, Signals: new[] { sig.Id }));
+
+        var dto = Assert.IsType<FormulaDto>(Assert.IsType<CreatedResult>(result.Result).Value);
+        Assert.Equal(new[] { sig.Id }, dto.Signals);
+        var link = Assert.Single(db.FormulaWorkflowSignals);
+        Assert.Equal(dto.Id, link.FormulaId);
+        Assert.Equal(sig.Id, link.WorkflowSignalId);
+    }
+
+    [Fact]
+    public async Task Create_ignores_unknown_signal_ids()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var controller = Build(db, userId);
+
+        var result = await controller.Create(new CreateFormulaRequest(
+            "Personal", "My Formula", null, TemplateContent.FromPrompt("Summarize."),
+            (int)FormulaContext.Transcript, Signals: new[] { Guid.NewGuid() }));
+
+        var dto = Assert.IsType<FormulaDto>(Assert.IsType<CreatedResult>(result.Result).Value);
+        Assert.Empty(dto.Signals);
+        Assert.Empty(db.FormulaWorkflowSignals);
+    }
+
+    [Fact]
+    public async Task Update_with_empty_signals_clears_existing_links()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var sig = Signal();
+        db.WorkflowSignals.Add(sig);
+        var formula = Personal(owner);
+        db.Formulas.Add(formula);
+        db.FormulaWorkflowSignals.Add(new FormulaWorkflowSignal { FormulaId = formula.Id, WorkflowSignalId = sig.Id });
+        await db.SaveChangesAsync();
+
+        var controller = Build(db, owner);
+        var result = await controller.Update(formula.Id, new UpdateFormulaRequest(
+            null, null, null, null, Signals: Array.Empty<Guid>()));
+
+        var dto = Assert.IsType<FormulaDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Empty(dto.Signals);
+        Assert.Empty(db.FormulaWorkflowSignals);
+    }
+
+    [Fact]
+    public async Task Update_with_null_signals_leaves_existing_links_unchanged()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var sig = Signal();
+        db.WorkflowSignals.Add(sig);
+        var formula = Personal(owner);
+        db.Formulas.Add(formula);
+        db.FormulaWorkflowSignals.Add(new FormulaWorkflowSignal { FormulaId = formula.Id, WorkflowSignalId = sig.Id });
+        await db.SaveChangesAsync();
+
+        var controller = Build(db, owner);
+        var result = await controller.Update(formula.Id, new UpdateFormulaRequest(
+            "New Name", null, null, null, Signals: null));
+
+        var dto = Assert.IsType<FormulaDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(new[] { sig.Id }, dto.Signals);
+        Assert.Single(db.FormulaWorkflowSignals);
+    }
+
+    [Fact]
+    public async Task Update_with_signals_reconciles_to_exactly_that_set()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var sigOld = Signal("old");
+        var sigNew = Signal("new");
+        db.WorkflowSignals.AddRange(sigOld, sigNew);
+        var formula = Personal(owner);
+        db.Formulas.Add(formula);
+        db.FormulaWorkflowSignals.Add(new FormulaWorkflowSignal { FormulaId = formula.Id, WorkflowSignalId = sigOld.Id });
+        await db.SaveChangesAsync();
+
+        var controller = Build(db, owner);
+        var result = await controller.Update(formula.Id, new UpdateFormulaRequest(
+            null, null, null, null, Signals: new[] { sigNew.Id }));
+
+        var dto = Assert.IsType<FormulaDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(new[] { sigNew.Id }, dto.Signals);
+        var link = Assert.Single(db.FormulaWorkflowSignals);
+        Assert.Equal(sigNew.Id, link.WorkflowSignalId);
+    }
+
+    [Fact]
+    public async Task List_reflects_attached_signals_without_per_formula_queries()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var sig = Signal();
+        db.WorkflowSignals.Add(sig);
+        var mine = Personal(me, "Mine");
+        db.Formulas.Add(mine);
+        db.FormulaWorkflowSignals.Add(new FormulaWorkflowSignal { FormulaId = mine.Id, WorkflowSignalId = sig.Id });
+        await db.SaveChangesAsync();
+
+        var controller = Build(db, me);
+        var list = await controller.List();
+
+        var dto = Assert.Single(list, f => f.Name == "Mine");
+        Assert.Equal(new[] { sig.Id }, dto.Signals);
+    }
+
     [Fact]
     public async Task Unsubscribe_removes_link_and_is_idempotent()
     {

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
-import type { MinutesGenerationMode } from "../lib/types";
+import type { MinutesGenerationMode, WebhookCreated, WorkflowSignal } from "../lib/types";
 import { useAuth } from "../auth";
 import { bytesToGb, gbToBytes } from "../lib/format";
 import MaintenancePanel from "./MaintenancePanel";
@@ -305,6 +305,9 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
               >
                 {t("apiViewReference")} →
               </a>
+
+              {webhooksEnabled && <WorkflowSignalsSection />}
+              {webhooksEnabled && <PlatformAutomationsSection />}
             </div>
           )}
         </div>
@@ -327,6 +330,339 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
             {busy ? t("common:saving") : t("common:ok")}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/// Admin management of workflow signals: named conditions a formula can attach, driving webhook
+/// `signalFilter` matching. Lists every signal (active + inactive), lets the admin add one (key + label +
+/// optional description), toggle it active, or delete it. Only rendered when webhooks are enabled - signals
+/// are meaningless without the webhook system that consumes them.
+function WorkflowSignalsSection() {
+  const { t } = useTranslation("account");
+  const qc = useQueryClient();
+  const { data: signals = [] } = useQuery({ queryKey: ["workflow-signals-all"], queryFn: api.listAllWorkflowSignals });
+
+  const [key, setKey] = useState("");
+  const [label, setLabel] = useState("");
+  const [description, setDescription] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["workflow-signals-all"] });
+
+  const create = useMutation({
+    mutationFn: () => api.createWorkflowSignal({ key: key.trim(), label: label.trim(), description: description.trim() || null }),
+    onSuccess: () => {
+      setKey("");
+      setLabel("");
+      setDescription("");
+      setError(null);
+      void invalidate();
+    },
+    onError: (e) => setError(apiErrorMessage(e)),
+  });
+
+  const toggleActive = useMutation({
+    mutationFn: (signal: WorkflowSignal) =>
+      api.updateWorkflowSignal(signal.id, { label: signal.label, description: signal.description, isActive: !signal.isActive }),
+    onSuccess: invalidate,
+    onError: (e) => setError(apiErrorMessage(e)),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.deleteWorkflowSignal(id),
+    onSuccess: invalidate,
+    onError: (e) => setError(apiErrorMessage(e)),
+  });
+
+  function onDelete(signal: WorkflowSignal) {
+    setError(null);
+    if (window.confirm(t("signalDelete") + `: ${signal.label}?`)) remove.mutate(signal.id);
+  }
+
+  return (
+    <div className="border-t pt-3 dark:border-gray-700">
+      <h3 className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-200">{t("signalsHeading")}</h3>
+      {error && <p className="mb-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
+
+      {signals.length > 0 && (
+        <table className="mb-2 w-full text-sm">
+          <tbody>
+            {signals.map((s) => (
+              <tr key={s.id} className="border-t align-middle dark:border-gray-700 dark:text-gray-200">
+                <td className="py-1 pr-2 font-mono text-xs">{s.key}</td>
+                <td className="py-1 pr-2">{s.label}</td>
+                <td className="px-2 text-center">
+                  <label className="inline-flex items-center gap-1 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={s.isActive}
+                      aria-label={`${s.label}: ${t("signalActive")}`}
+                      onChange={() => toggleActive.mutate(s)}
+                    />
+                    {t("signalActive")}
+                  </label>
+                </td>
+                <td className="py-1 text-right">
+                  <button
+                    type="button"
+                    onClick={() => onDelete(s)}
+                    className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
+                  >
+                    {t("signalDelete")}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <form
+        className="flex flex-wrap items-end gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setError(null);
+          if (key.trim() && label.trim()) create.mutate();
+        }}
+      >
+        <label className="text-xs">
+          <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("signalKey")}</span>
+          <input
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            aria-label={t("signalKey")}
+            className="w-40 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          />
+          <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("signalKeyHint")}</span>
+        </label>
+        <label className="text-xs">
+          <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("signalLabel")}</span>
+          <input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            aria-label={t("signalLabel")}
+            className="w-40 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          />
+        </label>
+        <label className="text-xs">
+          <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("signalDescription")}</span>
+          <input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            aria-label={t("signalDescription")}
+            className="w-48 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={!key.trim() || !label.trim()}
+          className="shrink-0 rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+        >
+          {t("signalAdd")}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+/// Admin management of Platform (admin-owned, signal-routed) webhook subscriptions - unlike a user's own
+/// Automations, these route by Workflow Signal across every user rather than belonging to one person. Reuses
+/// the personal Automations create-form shape (name + destination URL + event checkboxes) plus a Workflow
+/// Signal multi-select sourced from the signals section's own query; the server rejects an empty signal
+/// filter (a platform automation with no signal never fires), so the create is blocked client-side to match.
+/// The signing secret is shown exactly once, right after creation, using the same amber show-once pattern as
+/// the personal Automations section. Only rendered when webhooks are enabled.
+function PlatformAutomationsSection() {
+  const { t } = useTranslation("account");
+  const qc = useQueryClient();
+  const { data: subs = [] } = useQuery({ queryKey: ["platform-webhooks"], queryFn: api.listPlatformWebhooks });
+  const { data: signals = [] } = useQuery({ queryKey: ["workflow-signals-all"], queryFn: api.listAllWorkflowSignals });
+
+  const EVENTS: { key: string; label: string }[] = [
+    { key: "recording.created", label: t("evtRecordingCreated") },
+    { key: "recording.transcribed", label: t("evtRecordingTranscribed") },
+    { key: "recording.transcription_failed", label: t("evtRecordingFailed") },
+    { key: "formula_result.completed", label: t("evtFormulaCompleted") },
+    { key: "formula_result.failed", label: t("evtFormulaFailed") },
+  ];
+
+  const [name, setName] = useState("");
+  const [url, setUrl] = useState("");
+  const [selectedEvents, setSelectedEvents] = useState<Record<string, boolean>>({});
+  const [selectedSignals, setSelectedSignals] = useState<Record<string, boolean>>({});
+  const [created, setCreated] = useState<WebhookCreated | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const eventTypes = EVENTS.map((e) => e.key).filter((key) => selectedEvents[key]);
+  const signalFilter = signals.filter((s) => selectedSignals[s.id]).map((s) => s.key);
+  const signalLabel = (key: string) => signals.find((s) => s.key === key)?.label ?? key;
+  const eventLabel = (key: string) => EVENTS.find((e) => e.key === key)?.label ?? key;
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["platform-webhooks"] });
+
+  const copy = (text: string) => void navigator.clipboard?.writeText(text);
+
+  const create = useMutation({
+    mutationFn: () =>
+      api.createPlatformWebhook({ name: name.trim() || t("automationDefaultName"), url, eventTypes, signalFilter }),
+    onSuccess: (result) => {
+      setCreated(result);
+      setName("");
+      setUrl("");
+      setSelectedEvents({});
+      setSelectedSignals({});
+      setError(null);
+      void invalidate();
+    },
+    onError: (e) => setError(apiErrorMessage(e, t("automationCreateError"))),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.deletePlatformWebhook(id),
+    onSuccess: invalidate,
+    onError: (e) => setError(apiErrorMessage(e, t("automationCreateError"))),
+  });
+
+  function onCreate() {
+    setError(null);
+    if (!url.trim() || eventTypes.length === 0) return;
+    if (signalFilter.length === 0) {
+      setError(t("platformAutomationNeedsSignal"));
+      return;
+    }
+    create.mutate();
+  }
+
+  function onDelete(id: string) {
+    setError(null);
+    if (window.confirm(t("automationDelete") + "?")) remove.mutate(id);
+  }
+
+  const btn =
+    "rounded border px-2 py-1 text-xs hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800";
+
+  return (
+    <div className="border-t pt-3 dark:border-gray-700">
+      <h3 className="mb-1 text-sm font-medium text-gray-700 dark:text-gray-200">{t("platformAutomationsHeading")}</h3>
+      <p className="mb-2 text-xs text-gray-400 dark:text-gray-500">{t("platformAutomationsHint")}</p>
+      {error && <p className="mb-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
+
+      {subs.length > 0 && (
+        <div className="mb-3 space-y-2">
+          {subs.map((s) => (
+            <div key={s.id} className="rounded border p-2 dark:border-gray-700">
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate text-sm font-medium text-gray-800 dark:text-gray-100">{s.name}</span>
+                <button
+                  type="button"
+                  onClick={() => onDelete(s.id)}
+                  className="shrink-0 rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
+                >
+                  {t("automationDelete")}
+                </button>
+              </div>
+              <p className="mt-0.5 truncate text-xs text-gray-400 dark:text-gray-500">{s.url}</p>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {s.eventTypes.map((key) => (
+                  <span
+                    key={key}
+                    className="rounded-full border px-2 py-0.5 text-[11px] text-gray-600 dark:border-gray-700 dark:text-gray-300"
+                  >
+                    {eventLabel(key)}
+                  </span>
+                ))}
+                {s.signalFilter.map((key) => (
+                  <span
+                    key={key}
+                    className="rounded-full border border-indigo-200 px-2 py-0.5 text-[11px] text-indigo-600 dark:border-indigo-800 dark:text-indigo-300"
+                  >
+                    {signalLabel(key)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {created && (
+        <div className="mb-3 rounded border border-amber-300 bg-amber-50 p-2 dark:border-amber-700/60 dark:bg-amber-900/20">
+          <p className="text-xs font-medium text-amber-800 dark:text-amber-300">{t("automationSecretOnce")}</p>
+          <div className="mt-1 flex items-center gap-2">
+            <code className="flex-1 break-all rounded bg-white px-2 py-1 text-xs dark:bg-gray-900 dark:text-gray-100">
+              {created.secret}
+            </code>
+            <button type="button" onClick={() => copy(created.secret)} className={btn}>
+              {t("apiCopyToken")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={t("automationDefaultName")}
+          aria-label={t("automationDefaultName")}
+          className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+        />
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          aria-label={t("automationDestinationUrl")}
+          placeholder="https://hooks.zapier.com/..."
+          className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+        />
+
+        <div>
+          <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">
+            {t("automationEventsHeading")}
+          </span>
+          <div className="space-y-1">
+            {EVENTS.map((evt) => (
+              <label key={evt.key} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  aria-label={evt.label}
+                  checked={selectedEvents[evt.key] ?? false}
+                  onChange={(e) => setSelectedEvents((s) => ({ ...s, [evt.key]: e.target.checked }))}
+                />
+                {evt.label}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">
+            {t("platformAutomationSignals")}
+          </span>
+          <div className="space-y-1">
+            {signals.map((s) => (
+              <label key={s.id} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  aria-label={s.label}
+                  checked={selectedSignals[s.id] ?? false}
+                  onChange={(e) => setSelectedSignals((sel) => ({ ...sel, [s.id]: e.target.checked }))}
+                />
+                {`${s.label} (${s.key})`}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onCreate}
+          disabled={create.isPending || !url.trim() || eventTypes.length === 0}
+          className="rounded bg-gray-900 px-3 py-1.5 text-sm text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
+        >
+          {t("platformAutomationCreate")}
+        </button>
       </div>
     </div>
   );
