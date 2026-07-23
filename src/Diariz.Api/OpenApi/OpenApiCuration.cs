@@ -15,6 +15,21 @@ public static class OpenApiCuration
     /// exporter can't map - excluding it keeps the document generatable as well as on-topic.)</summary>
     private static readonly string[] ExcludedPrefixes = ["api/oauth", "api/platform", "api/admin", "api/maintenance"];
 
+    /// <summary>Landing copy for the reference. Scalar renders <c>Info.Description</c> as the intro panel above the
+    /// endpoint list, so this is where users learn what the API is and how to authenticate. Markdown; keep it free of
+    /// em/en dashes per the user-facing-text convention.</summary>
+    private const string Description =
+        """
+        The Diariz REST API lets you work with your own recordings, transcriptions, summaries, speaker
+        profiles, and more - the same data you see in the app, scoped to your account.
+
+        **Authentication.** Send a bearer token in the `Authorization` header. Generate a personal API
+        token (`dz_api_...`) from **Settings -> Developers** (when your platform admin has enabled
+        API access), or use your current session token. Use **Authorize** above to try requests here.
+
+        Every endpoint is scoped to the signed-in user - you can only read and change your own data.
+        """;
+
     public static bool ShouldInclude(string? relativePath) =>
         relativePath is not null
         && relativePath.StartsWith("api/", StringComparison.OrdinalIgnoreCase)
@@ -42,6 +57,7 @@ public static class OpenApiCuration
                 [new OpenApiSecuritySchemeReference("Bearer", document)] = []
             });
             document.Info.Title = "Diariz API";
+            document.Info.Description = Description;
             return Task.CompletedTask;
         }
     }

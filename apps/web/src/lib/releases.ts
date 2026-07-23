@@ -56,6 +56,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.152.0",
+    date: "2026-07-24",
+    pr: 0,
+    headline: "API reference gets an intro and how-to-authenticate blurb",
+    summary:
+      "The in-app API reference (Settings -> Developers -> API reference) now opens with a short " +
+      "description of what the Diariz REST API is and how to authenticate - generate a personal API token " +
+      "or use your session token, then use Authorize to try requests. Nothing changes about the endpoints " +
+      "themselves; the published OpenAPI document just carries a populated Info.description.",
+    added: [
+      "An intro/authentication description at the top of the in-app API reference",
+    ],
+  },
+  {
     version: "0.151.0",
     date: "2026-07-24",
     pr: 333,
