@@ -45,6 +45,8 @@
   "contextActions": "Actions",
   "formulaShared": "Partager cette formule",
   "formulaSharedHint": "D'autres personnes peuvent trouver et ajouter cette formule. Elles peuvent l'exécuter mais pas la modifier, et vos modifications ultérieures s'appliquent aussi à elles.",
+  "formulaSignalsHeading": "Une fois terminé, déclencher",
+  "formulaSignalsHint": "Choisissez quels signaux d’automatisation se déclenchent quand cette formule termine de s’exécuter.",
   "jobTitle": "Intitulé du poste",
   "companyName": "Nom de l'entreprise",
   "jobDescription": "Description du poste",

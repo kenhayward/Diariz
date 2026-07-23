@@ -1,9 +1,15 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fromPrompt } from "../lib/formulaTemplate";
 
 vi.mock("../lib/api", () => ({
-  api: { createFormula: vi.fn(), updateFormula: vi.fn() },
+  api: {
+    createFormula: vi.fn(),
+    updateFormula: vi.fn(),
+    listWorkflowSignals: vi.fn(),
+    getProfile: vi.fn(),
+  },
   apiErrorMessage: (e: unknown) => String(e),
 }));
 
@@ -14,7 +20,12 @@ import type { Formula } from "../lib/types";
 function renderModal(overrides: Partial<React.ComponentProps<typeof FormulaEditModal>> = {}) {
   const onClose = vi.fn();
   const onSaved = vi.fn();
-  const result = render(<FormulaEditModal onClose={onClose} onSaved={onSaved} {...overrides} />);
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const result = render(
+    <QueryClientProvider client={qc}>
+      <FormulaEditModal onClose={onClose} onSaved={onSaved} {...overrides} />
+    </QueryClientProvider>,
+  );
   return { onClose, onSaved, ...result };
 }
 
@@ -29,6 +40,7 @@ const existingFormula: Formula = {
   enabled: true,
   isBuiltIn: false,
   shared: false,
+  signals: [],
 };
 
 
@@ -54,7 +66,12 @@ const authored = (sectionTitle: string, promptText: string) => ({
 });
 
 describe("FormulaEditModal", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Hidden by default: no active signals and webhooks off. Individual tests override as needed.
+    (api.listWorkflowSignals as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ webhooksEnabled: false });
+  });
 
   it("renders the required fields for a new formula", () => {
     renderModal();
@@ -103,6 +120,7 @@ describe("FormulaEditModal", () => {
         content: authored("Summary", "Summarize this"),
         context: 33,
         shared: false,
+        signals: [],
       }),
     );
     expect(onSaved).toHaveBeenCalled();
@@ -127,6 +145,7 @@ describe("FormulaEditModal", () => {
         content: authored("Body", "Do the thing"),
         context: 0,
         shared: false,
+        signals: [],
       }),
     );
     expect(onSaved).toHaveBeenCalled();
@@ -178,6 +197,7 @@ describe("FormulaEditModal", () => {
         },
         context: 11,
         shared: false,
+        signals: [],
       }),
     );
     expect(onSaved).toHaveBeenCalled();
@@ -228,5 +248,66 @@ describe("FormulaEditModal", () => {
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText("Error: boom")).toBeTruthy();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  describe("workflow signal picker", () => {
+    const signal = {
+      id: "sig1",
+      key: "digest",
+      label: "Send weekly digest",
+      description: "Notify the team",
+      isActive: true,
+    };
+
+    it("shows the active signal and attaches it to the create payload when ticked", async () => {
+      (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ webhooksEnabled: true });
+      (api.listWorkflowSignals as ReturnType<typeof vi.fn>).mockResolvedValue([signal]);
+      (api.createFormula as ReturnType<typeof vi.fn>).mockResolvedValue({});
+      renderModal();
+
+      expect(await screen.findByText(/when this finishes, trigger/i)).toBeTruthy();
+      fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "With Signal" } });
+      authorTemplate("Body", "Do it");
+      fireEvent.click(screen.getByLabelText(/send weekly digest/i));
+      fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+      await waitFor(() =>
+        expect(api.createFormula).toHaveBeenCalledWith(expect.objectContaining({ signals: ["sig1"] })),
+      );
+    });
+
+    it("hides the section when webhooks are disabled even if active signals exist", async () => {
+      (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ webhooksEnabled: false });
+      (api.listWorkflowSignals as ReturnType<typeof vi.fn>).mockResolvedValue([signal]);
+      renderModal();
+
+      await waitFor(() => expect(api.listWorkflowSignals).toHaveBeenCalled());
+      expect(screen.queryByText(/when this finishes, trigger/i)).toBeNull();
+      expect(screen.queryByText(/send weekly digest/i)).toBeNull();
+    });
+
+    it("hides the section when there are no active signals", async () => {
+      (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ webhooksEnabled: true });
+      (api.listWorkflowSignals as ReturnType<typeof vi.fn>).mockResolvedValue([{ ...signal, isActive: false }]);
+      renderModal();
+
+      await waitFor(() => expect(api.listWorkflowSignals).toHaveBeenCalled());
+      expect(screen.queryByText(/when this finishes, trigger/i)).toBeNull();
+    });
+
+    it("pre-populates ticked signals when editing an existing formula and sends them back on save", async () => {
+      (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ webhooksEnabled: true });
+      (api.listWorkflowSignals as ReturnType<typeof vi.fn>).mockResolvedValue([signal]);
+      (api.updateFormula as ReturnType<typeof vi.fn>).mockResolvedValue({});
+      renderModal({ formula: { ...existingFormula, signals: ["sig1"] } });
+
+      const checkbox = (await screen.findByLabelText(/send weekly digest/i)) as HTMLInputElement;
+      expect(checkbox.checked).toBe(true);
+
+      fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+      await waitFor(() =>
+        expect(api.updateFormula).toHaveBeenCalledWith("f1", expect.objectContaining({ signals: ["sig1"] })),
+      );
+    });
   });
 });

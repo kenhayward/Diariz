@@ -45,6 +45,8 @@
   "contextActions": "Aktionen",
   "formulaShared": "Diese Formel teilen",
   "formulaSharedHint": "Andere können diese Formel finden und hinzufügen. Sie können sie ausführen, aber nicht bearbeiten, und deine späteren Änderungen gelten auch für sie.",
+  "formulaSignalsHeading": "Nach Abschluss auslösen",
+  "formulaSignalsHint": "Wähle aus, welche Automatisierungssignale ausgelöst werden, wenn diese Formel fertig ist.",
   "jobTitle": "Berufsbezeichnung",
   "companyName": "Firmenname",
   "jobDescription": "Tätigkeitsbeschreibung",
