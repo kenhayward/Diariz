@@ -85,8 +85,21 @@ finished or failed, formula run finished or failed), paste your tool's webhook U
 delivery is a **Standard Webhooks-style signed** POST (HMAC-SHA256 over the exact payload bytes, timestamp and
 delivery-id headers) so the receiver can verify authenticity; failed deliveries are **retried automatically with
 backoff**, and a subscription is **auto-paused** after repeated failures so a broken endpoint doesn't loop forever. A
-per-automation view shows recent deliveries and their status. Personal-scope only in this release (a subscription
-only sees its own owner's recordings/formulas); platform-wide automations are a later milestone.
+per-automation view shows recent deliveries and their status. This personal scope (a subscription only sees its own
+owner's recordings/formulas) sits alongside the platform scope described next.
+- **Workflow Signals and platform automations.** A Platform Administrator (Settings → Integration → Workflow Signals)
+defines named signals - a label, a description, and an immutable routing key - then wires a **platform automation**
+(Settings → Integration → Platform Automations) to one or more signals: a webhook URL that fires for every user,
+not just its creator. A formula author opens the formula editor and, under "When this finishes, trigger:", picks
+one of the admin-defined signals - no URL, no per-user setup. When that formula runs, the publisher matches the
+signal against every platform subscription whose signal filter includes it and delivers the event, **including the
+formula's rendered output inline in the payload** (personal-scope deliveries never carry the output, only platform
+signal-routed ones do). An empty signal filter on a platform subscription deliberately matches nothing, both at
+create time and at delivery time, so a half-configured subscription can't silently fan out to every signal. A
+signal's routing key can't be changed after creation; only its label, description, and active flag can be edited.
+Deferred follow-ups: a per-platform-subscription delivery rate cap (the delivery worker's existing batch-and-backoff
+throughput bound covers this for now), and detaching a platform subscription from the single admin who created it
+(today it cascades with that admin's account).
 - **Integration toggles.** A Platform Administrator can independently switch **API access**, **Claude/MCP**, and
 **Automations** (webhooks) on or off from Settings → Integration - each surface is gated behind its own toggle, so
 turning off webhooks, say, does not disable a user's API tokens or the MCP connector. API access and Automations

@@ -36,7 +36,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
 | **API access** | Generate a personal API token (when enabled), read-only or read-write, with an optional expiry date, to call the REST API as yourself, with a built-in API reference. |
-| **Automations (webhooks)** | When enabled, register outbound webhooks from Preferences that fire when a recording is created, finishes or fails transcription, or a formula finishes or fails - signed deliveries with automatic retries, a test-event button, and auto-pause after repeated failures. |
+| **Automations (webhooks)** | When enabled, register outbound webhooks from Preferences that fire when a recording is created, finishes or fails transcription, or a formula finishes or fails - signed deliveries with automatic retries, a test-event button, and auto-pause after repeated failures. Admins can also define named Workflow Signals and wire a platform automation to one, so a formula author just picks "When this finishes, trigger: ..." in the formula editor - no URL or per-user setup - and the formula's output is delivered inline to everyone routed through that signal. |
 | **Multi-user & groups** | User groups grant platform permissions (manage rooms / users / platform), with an approval lifecycle, per-user isolation, and Light/Dark/Auto themes. |
 | **Admin controls** | Storage quotas, optional audio auto-deletion, a global AI request timeout, separate platform toggles for API access, Claude/MCP, and Automations (webhooks), and whole-platform backup & restore. |
 
@@ -56,6 +56,20 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.154.0",
+    date: "2026-07-24",
+    pr: 0, // set on open
+    headline: "Workflow Signals: route formula outputs to team automations",
+    summary:
+      "Platform admins can define named Workflow Signals and wire each to a platform automation once, for " +
+      "everyone. A formula author just picks 'When this finishes, trigger: Send to Slack' - no URLs or setup - " +
+      "and when that formula runs, its output is delivered to the wired destination. Completes the integrations feature.",
+    added: [
+      "Admin-defined Workflow Signals and a signal picker in the formula editor",
+      "Platform (signal-routed) automations that fire across users and can include the formula output inline",
+    ],
+  },
   {
     version: "0.153.0",
     date: "2026-07-24",

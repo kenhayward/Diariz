@@ -91,6 +91,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddApiTokenScopeExpiry` | `ApiAccessTokens.Scope` (int, not-null, **default 1** = ReadWrite, so every pre-existing token keeps full access) + `ApiAccessTokens.ExpiresAt` (timestamptz null, default never-expires) — least-privilege, time-boxed personal API tokens; additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddPlatformIntegrationToggles` | `PlatformSettings.McpAccessEnabled` (bool, not-null, **default true**, existing row updated to true so an already-connected MCP client is not broken) + `PlatformSettings.WebhooksEnabled` (bool, not-null, default false) — split the single implicit "integrations" surface into three independent admin toggles (API access already existed; MCP and Webhooks join it) — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddWebhooks` | `Webhooks` (a user's outbound webhook subscription, backing the `WebhookSubscription` entity - table name predates a later rename; `Scope` int 0=Personal/1=Platform, default Personal, Phase 2 only supports Personal; `OwnerUserId` FK `ON DELETE CASCADE`; `SecretEncrypted` **text**, Data-Protection-encrypted HMAC secret; `EventTypes` **text**, comma-separated event keys; index `OwnerUserId`) + `WebhookDeliveries` (one queued/sent event per matching subscription; `SubscriptionId` FK `ON DELETE CASCADE`; `PayloadJson` **text, not jsonb** - preserved byte-for-byte so the HMAC signature computed over it stays valid across retries; `Status` int enum `Pending/Delivered/Failed`; composite index `(Status, NextAttemptAt)` - the delivery worker's due-poll query; index `SubscriptionId`) — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddWorkflowSignals` | `Webhooks.SignalFilter` (varchar(1024) null, comma-separated Workflow Signal keys this subscription routes on; empty/null deliberately matches nothing, so a Platform subscription must pick at least one signal to ever fire) + `WorkflowSignals` (the admin-defined named routing vocabulary; `Key` varchar(64) **unique**, immutable after creation; `Label` varchar(200); `Description` text null; `IsActive` bool) + `FormulaWorkflowSignals` (join table, composite PK `(FormulaId, WorkflowSignalId)`, both FKs `ON DELETE CASCADE`, index `WorkflowSignalId`) - Phase 3 of the Integrations roadmap: lets a formula author attach one or more admin-defined signals to a formula and a Platform Administrator route a `Webhooks` row of `Scope = Platform` to those same signals, so the formula's completion/failure event fans out across every user through that one wired automation. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
 
@@ -716,20 +717,22 @@ storage discipline as `McpAccessTokens` (hash-only, shown once), but a **separat
 Indexes: unique `(TokenHash)`, `(UserId)`.
 
 #### `Webhooks`
-A user's outbound webhook subscription ("Automation" in the UI), backing the `WebhookSubscription` entity - the
-physical table is named `Webhooks` (the `DbSet` name), not `WebhookSubscriptions`. Gated end-to-end by
-`PlatformSettings.WebhooksEnabled`. Personal-scope only in Phase 2 (`Scope` exists for a Phase 3 platform-wide
-subscription model).
+A webhook subscription ("Automation" in the UI), backing the `WebhookSubscription` entity - the physical table is
+named `Webhooks` (the `DbSet` name), not `WebhookSubscriptions`. Gated end-to-end by
+`PlatformSettings.WebhooksEnabled`. Two scopes: **Personal** (Phase 2 - owned by and fires only for its creator)
+and **Platform** (Phase 3 - owned by the admin who created it, but routes by Workflow Signal across every user;
+see `WorkflowSignals` below).
 
 | Column | Type | Notes |
 |---|---|---|
 | `Id` | uuid PK | |
-| `OwnerUserId` | uuid FK → AspNetUsers | owner; **cascade** on user delete |
-| `Scope` | int | `WebhookScope`: `0` = Personal (only value used in Phase 2), `1` = Platform (Phase 3, no behavior yet) |
+| `OwnerUserId` | uuid FK → AspNetUsers | owner; **cascade** on user delete (a Platform subscription cascades with the admin who created it - a documented follow-up is to detach it from a single owner) |
+| `Scope` | int | `WebhookScope`: `0` = Personal, `1` = Platform |
 | `Name` | varchar(200) | user-chosen label |
 | `Url` | varchar(2048) | delivery target; SSRF-validated (`IWebhookUrlValidator`) on every create/update |
 | `SecretEncrypted` | text | the HMAC signing secret (`dz_whsec_…`), encrypted at rest via Data Protection; shown to the user once, at creation |
 | `EventTypes` | text | comma-separated `WebhookEventTypes` keys this subscription wants |
+| `SignalFilter` | varchar(1024) null | comma-separated `WorkflowSignals.Key` values this subscription routes on. Personal subscriptions may use it to narrow (empty = no narrowing, matches any signal on a subscribed event); a **Platform** subscription requires a non-empty filter - empty deliberately matches nothing, both at create/update time (`PlatformWebhooksController.Validate`) and at publish time (`WebhookPublisher`/`WebhookSignals.Intersects`), so a half-configured platform automation can't silently fire on everything |
 | `IsActive` | bool | default true; flipped false by auto-disable or by the user |
 | `ConsecutiveFailures` | int | consecutive failed deliveries; reset to 0 on any success |
 | `DisabledReason` | text null | set when auto-disabled, so the UI can explain why |
@@ -758,6 +761,34 @@ polls it) and the durable delivery-history log shown in the UI.
 | `CreatedAt` | timestamptz | |
 
 Indexes: composite `(Status, NextAttemptAt)` (the delivery worker's due-poll query), `(SubscriptionId)`.
+
+#### `WorkflowSignals`
+The admin-defined named vocabulary a formula author picks from ("Send to Slack") and a Platform Administrator
+wires a `Webhooks` (Platform-scope) subscription's `SignalFilter` to. Managed via `api/workflow-signals` (list is
+open to any authenticated user, for the formula-editor picker; create/update/delete require `ManagePlatform`).
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `Key` | varchar(64) | stable machine-facing routing slug (e.g. `post-to-slack`); **unique index**; immutable after creation - the admin edit endpoint updates `Label`/`Description`/`IsActive` only |
+| `Label` | varchar(200) | friendly, author-facing name shown in the formula editor's signal picker |
+| `Description` | text null | |
+| `IsActive` | bool | default true; an inactive signal is hidden from the picker but existing `FormulaWorkflowSignals` links and `Webhooks.SignalFilter` entries referencing its `Key` are kept as-is |
+| `CreatedAt` | timestamptz | |
+
+Indexes: unique `(Key)`. Deleting a signal cascades to its `FormulaWorkflowSignals` rows (it does not touch any
+`Webhooks.SignalFilter` text, which is why an inactive/deleted signal's key can linger harmlessly in a filter).
+
+#### `FormulaWorkflowSignals`
+Join table: which admin-defined Workflow Signals a formula carries. When that formula's run completes or fails,
+`FormulaRunProcessor` loads the formula's **active** signal keys and passes them to `IWebhookPublisher.PublishAsync`,
+which matches them against every Platform subscription's `SignalFilter` and delivers the formula's output inline
+to each match (a Personal subscriber on the same event never receives the output, only the thin event body).
+
+| Column | Type | Notes |
+|---|---|---|
+| `FormulaId` | uuid | PK part 1. FK → `Formulas`, **cascade** |
+| `WorkflowSignalId` | uuid | PK part 2. FK → `WorkflowSignals`, **cascade**; index `IX_FormulaWorkflowSignals_WorkflowSignalId` |
 
 #### `UserGroups`
 
