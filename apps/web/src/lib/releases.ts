@@ -56,6 +56,18 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.149.0",
+    date: "2026-07-23",
+    pr: 329,
+    headline: "Screenshot viewer: a position counter and a full-screen toggle",
+    summary:
+      "Two improvements to the screenshot viewer that opens when you click a capture. It now shows where you are in the set - a \"3 of 12\" counter sits between the previous and next arrows - so paging through a recording's captures no longer loses your place. And a full-screen toggle expands the viewer to fill the browser window, so a whole-screen capture is large enough to read without downloading it and opening it in another app. Viewing a very high-resolution capture at its native size and scrolling around it (zoom and pan) is a separate improvement coming next.",
+    added: [
+      "A \"N of M\" position counter in the screenshot viewer, between the previous and next controls",
+      "A full-screen toggle in the screenshot viewer that expands it to fill the window for reading large captures",
+    ],
+  },
+  {
     version: "0.148.0",
     date: "2026-07-23",
     pr: 328,

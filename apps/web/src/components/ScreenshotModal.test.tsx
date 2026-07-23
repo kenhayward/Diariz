@@ -166,6 +166,33 @@ describe("ScreenshotModal", () => {
     expect(onIndexChange).toHaveBeenCalledWith(0);
   });
 
+  it("shows the current position within the list", () => {
+    render(<ScreenshotModal recordingId="r1" shots={shots} index={0} onIndexChange={() => {}} onClose={() => {}} />);
+
+    expect(screen.getByText("1 of 2")).toBeTruthy();
+  });
+
+  it("advances the position label with the index", () => {
+    render(<ScreenshotModal recordingId="r1" shots={shots} index={1} onIndexChange={() => {}} onClose={() => {}} />);
+
+    expect(screen.getByText("2 of 2")).toBeTruthy();
+  });
+
+  it("starts windowed and toggles full screen on demand", () => {
+    render(<ScreenshotModal recordingId="r1" shots={shots} index={0} onIndexChange={() => {}} onClose={() => {}} />);
+
+    const toggle = screen.getByRole("button", { name: /enter full screen/i });
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+
+    fireEvent.click(toggle);
+
+    const pressed = screen.getByRole("button", { name: /exit full screen/i });
+    expect(pressed.getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(pressed);
+    expect(screen.getByRole("button", { name: /enter full screen/i }).getAttribute("aria-pressed")).toBe("false");
+  });
+
   it("renders nothing for an empty list instead of crashing", () => {
     const { container } = render(
       <ScreenshotModal recordingId="r1" shots={[]} index={0} onIndexChange={() => {}} onClose={() => {}} />,
