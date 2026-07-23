@@ -25,11 +25,13 @@ namespace Diariz.Api.IntegrationTests.Infrastructure;
 /// <c>ContainersFixture</c>/"integration" collection and therefore runs sequentially - see
 /// <see cref="IntegrationCollection"/>; do not use this pattern from a class outside that collection.</para>
 ///
-/// <para>Deliberately minimal: the MCP endpoint and its OpenIddict OAuth authorization server are switched off
-/// (<c>Mcp__Enabled</c> / <c>McpOAuth__Enabled</c> = <c>false</c>). Neither is part of the surface this harness
-/// targets (the query-string bearer-token allowlist), and leaving them on pulls in OpenIddict signing-key setup
-/// on every test's app-host boot for no benefit here - do not switch them on to test something else without
-/// reconsidering that cost. Everything else uses the real startup path, unaltered.</para>
+/// <para>Deliberately minimal by default: the MCP endpoint and its OpenIddict OAuth authorization server are
+/// switched off (<c>Mcp__Enabled</c> / <c>McpOAuth__Enabled</c> = <c>false</c>). Neither is part of the surface
+/// this harness targets (the query-string bearer-token allowlist), and leaving them on pulls in OpenIddict
+/// signing-key setup on every test's app-host boot for no benefit here. A test class that specifically targets
+/// <c>/mcp</c> can opt <c>Mcp__Enabled</c> back on via the <see cref="DiarizWebAppFactory(ContainersFixture, bool)"/>
+/// constructor's <c>enableMcp</c> flag (see <c>McpToggleTests</c>); <c>McpOAuth__Enabled</c> has no such flag since
+/// nothing here exercises the OAuth path yet. Everything else uses the real startup path, unaltered.</para>
 /// </summary>
 public sealed class DiarizWebAppFactory : WebApplicationFactory<Program>
 {
@@ -43,7 +45,11 @@ public sealed class DiarizWebAppFactory : WebApplicationFactory<Program>
     /// factory's) blobs.</summary>
     public string Bucket { get; } = $"it-http-{Guid.NewGuid():N}";
 
-    public DiarizWebAppFactory(ContainersFixture fx)
+    /// <param name="fx">The shared containers fixture.</param>
+    /// <param name="enableMcp">Sets <c>Mcp__Enabled</c> for this instance. Defaults to <c>false</c> to preserve
+    /// this harness's usual scope (see the class remarks) - pass <c>true</c> only from a test class that
+    /// specifically targets the <c>/mcp</c> endpoint, such as <c>McpToggleTests</c>.</param>
+    public DiarizWebAppFactory(ContainersFixture fx, bool enableMcp = false)
     {
         // Set *before* anything triggers the host to boot (WebApplicationFactory builds the host lazily, on
         // first access of Server/Services/CreateClient). Safe only under the "integration" collection's
@@ -59,8 +65,8 @@ public sealed class DiarizWebAppFactory : WebApplicationFactory<Program>
         Environment.SetEnvironmentVariable("Storage__Bucket", Bucket);
         Environment.SetEnvironmentVariable("Storage__ForcePathStyle", "true");
         Environment.SetEnvironmentVariable("JobQueue__RedisConnection", fx.RedisConnectionString);
-        // See class remarks: out of scope for this harness.
-        Environment.SetEnvironmentVariable("Mcp__Enabled", "false");
+        // See class remarks: out of scope for this harness by default; opt in via the constructor flag.
+        Environment.SetEnvironmentVariable("Mcp__Enabled", enableMcp ? "true" : "false");
         Environment.SetEnvironmentVariable("McpOAuth__Enabled", "false");
         // A random seed email per factory instance - several factories boot against the same shared Postgres
         // database (per the "integration" collection), and the seeded user has a unique-email constraint.
