@@ -52,7 +52,7 @@ public class ActionsController : ControllerBase
             orderby r.CreatedAt descending, a.Ordinal
             select new ActionListItemDto(
                 a.Id, a.RecordingId, r.Name ?? r.Title, a.Text, a.Actor, a.Deadline,
-                a.Ordinal, a.Completed, a.CompletedAt, a.CreatedAt)).ToListAsync();
+                a.Ordinal, a.Completed, a.CompletedAt, a.CreatedAt, r.UserId)).ToListAsync();
         return actions;
     }
 

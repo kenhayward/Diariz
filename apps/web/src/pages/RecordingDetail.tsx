@@ -1025,6 +1025,15 @@ export default function RecordingDetail() {
   // same woven-in transcript but the mutating routes are owner-only (404 for anyone else).
   const isOwner = myId != null && rec.recordedByUserId === myId;
 
+  // Formula-result mutation gate: mirrors FormulaResultsController.CanEdit - the result's creator OR the
+  // recording's owner. Unlike the section (folder) side, there is no room ManageContents check here at all;
+  // gate against this side's own rule rather than reusing the folder's. Open/Download/Email are reads (the
+  // server only gates List/Get/Download/Email on being able to view the recording at all, not per-result), so
+  // only Delete (and the "Open" modal's Save, via `editable` below) needs this.
+  const selectedFormulaResult = formulaResults.find((r) => r.id === selectedFormulaResultId) ?? null;
+  const canManageFormulaResult = (r: { createdByUserId: string | null }) => isOwner || (myId != null && r.createdByUserId === myId);
+  const canManageSelectedFormulaResult = !!selectedFormulaResult && canManageFormulaResult(selectedFormulaResult);
+
   const hasTranscript = (rec.current?.segments.length ?? 0) > 0;
   const isSummarizing = rec.status === "Summarizing" || summarizing;
 
@@ -1484,6 +1493,7 @@ export default function RecordingDetail() {
       toolbar: (
         <FormulasToolbar
           selectedId={selectedFormulaResultId}
+          canManageSelected={canManageSelectedFormulaResult}
           onRun={() => setFormulaRunOpen(true)}
           onOpen={openFormulaResult}
           onDownload={downloadFormulaResult}
@@ -1677,6 +1687,7 @@ export default function RecordingDetail() {
           save={(md) => api.updateFormulaResult(id, editingFormulaResult.id, md).then(() => undefined)}
           onSaved={refreshFormulas}
           onClose={() => setEditingFormulaResult(null)}
+          editable={canManageFormulaResult(editingFormulaResult)}
         />
       )}
       {managingFormulas && (

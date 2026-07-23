@@ -137,12 +137,19 @@ export interface SectionDetail {
   id: string;
   name: string;
   parentId: string | null;
+  /// The folder's actual room - resolve permissions (e.g. ManageContents for folder-direct attachments)
+  /// against THIS, not the current room the URL happens to name (the room-less legacy /sections/:id
+  /// deep-link falls back to the caller's personal room, which is not necessarily where this folder lives).
+  roomId: string;
   stats: SectionStats;
   summary: FolderSummary | null;
   minutes: FolderMinutes | null;
   meetingTypeId: string | null;
 }
 /// One note aggregated for the folder Notes tab (carries its source recording's display name).
+/// `recordedByUserId` is the recording's owner - the mutating routes are owner-only, so the folder page
+/// compares this against `useAuth().id` (the same pattern RecordingDetail uses) to hide edit/delete for a
+/// room co-viewer's rows, which come from someone else's recording.
 export interface SectionNoteItem {
   id: string;
   recordingId: string;
@@ -151,8 +158,10 @@ export interface SectionNoteItem {
   capturedAtMs: number | null;
   ordinal: number;
   createdAt: string;
+  recordedByUserId: string;
 }
 /// One attachment aggregated for the folder Attachments tab (carries its source recording's display name).
+/// `recordedByUserId` - see `SectionNoteItem` for the rationale.
 export interface SectionAttachmentItem {
   id: string;
   recordingId: string;
@@ -163,6 +172,7 @@ export interface SectionAttachmentItem {
   sizeBytes: number;
   url: string | null;
   ordinal: number;
+  recordedByUserId: string;
 }
 
 /// A supporting document attached to a recording — an uploaded file or a URL.
@@ -294,7 +304,8 @@ export interface Screenshot {
 }
 
 /// An action across the whole library (the "Actions" tab), carrying its source recording so the row can
-/// link back to that transcript.
+/// link back to that transcript. `recordedByUserId` - see `SectionNoteItem` for the rationale (the folder
+/// page's aggregated Actions tab hides edit/delete/complete for someone else's recording).
 export interface ActionListItem {
   id: string;
   recordingId: string;
@@ -306,6 +317,7 @@ export interface ActionListItem {
   completed: boolean;
   completedAt: string | null;
   createdAt: string;
+  recordedByUserId: string;
 }
 
 export interface RecordingDetail {

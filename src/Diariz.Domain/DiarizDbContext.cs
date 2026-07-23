@@ -287,6 +287,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         builder.Entity<SectionAttachment>(e =>
         {
             e.HasIndex(a => new { a.SectionId, a.Ordinal });
+            e.HasIndex(a => a.UploadedByUserId);
             e.Property(a => a.Name).HasMaxLength(512);
         });
 

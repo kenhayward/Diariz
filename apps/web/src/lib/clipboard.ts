@@ -6,10 +6,13 @@ export function transcriptUrl(id: string): string {
   return `${window.location.origin}/recordings/${id}`;
 }
 
-/// The persistent, owner-only deep-link to a folder (section) page. Like transcriptUrl, it's a personal
-/// bookmark - the opener must be signed in as the owner.
-export function folderUrl(id: string): string {
-  return `${window.location.origin}/sections/${id}`;
+/// The persistent deep-link to a folder (section) page. `roomBasePath` (from useRoomBasePath, resolved
+/// against the folder's OWN room - not necessarily the room currently showing in the URL) prefixes the link
+/// with `/rooms/:id` for a shared-room folder, so a freshly copied link stays room-aware. Older links (and any
+/// call site that omits it) still resolve via the room-less legacy `/sections/:id` route, which now gates on
+/// the section's real room server-side rather than the caller's personal room.
+export function folderUrl(id: string, roomBasePath = ""): string {
+  return `${window.location.origin}${roomBasePath}/sections/${id}`;
 }
 
 function escapeHtml(s: string): string {

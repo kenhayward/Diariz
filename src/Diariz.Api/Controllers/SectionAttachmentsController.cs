@@ -18,7 +18,19 @@ namespace Diariz.Api.Controllers;
 /// <see cref="AttachmentsController"/> (recording attachments) but is owned by the folder itself, so these
 /// survive independently of any one transcript. The route is <c>folder-attachments</c> to avoid colliding with
 /// <see cref="SectionPageController"/>'s aggregated <c>/attachments</c> read of the folder's transcripts.
-/// Ownership is a direct <c>Section.UserId</c> check; files count toward the owner's quota.</summary>
+///
+/// Access is gated by room membership/permission, not by a direct <c>Section.UserId</c> check (that check used
+/// to hardcode the caller's OWN personal room, so every route 404'd for a folder in a shared room - including
+/// for whoever created it). Read (<see cref="List"/>, <see cref="Content"/>) only requires the caller to be a
+/// member of the section's room - <see cref="ViewableSectionAsync"/>, mirroring
+/// <c>SectionPageController.ViewableSectionAsync</c>. Write (add/rename/edit-content/delete) additionally
+/// requires <see cref="RoomPermission.ManageContents"/> - <see cref="ManageableSectionAsync"/>, mirroring
+/// <c>SectionPageController.ManageableSectionAsync</c> and the gate <see cref="SectionsController"/> uses for
+/// folder create/rename/delete. The personal room's owner holds every permission (see
+/// <see cref="IRoomScope.PermissionsAsync"/>), so personal-room behaviour is unchanged. Files count toward the
+/// uploader's own quota, not the folder creator's (<see cref="SectionAttachment.UploadedByUserId"/>, checked
+/// against the caller's own <c>QuotaBytes</c> here and summed by <c>StorageUsage</c>) - in a shared room, whoever
+/// holds <see cref="RoomPermission.ManageContents"/> can add to a folder someone else created.</summary>
 [ApiController]
 [Authorize]
 [Route("api/sections/{sectionId:guid}/folder-attachments")]
@@ -43,10 +55,28 @@ public class SectionAttachmentsController : ControllerBase
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    private async Task<bool> OwnsAsync(Guid sectionId)
+    /// <summary>Load a section by id and check the caller may VIEW it - i.e. is a member of the section's own
+    /// room (their personal room for a personal folder, or a shared room they belong to). Returns null when the
+    /// section doesn't exist OR the caller isn't a member, so callers 404 either way and a room's contents stay
+    /// private. Mirrors <c>SectionPageController.ViewableSectionAsync</c>.</summary>
+    private async Task<Section?> ViewableSectionAsync(Guid id)
     {
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        return await _db.Sections.AnyAsync(s => s.Id == sectionId && s.RoomId == roomId);
+        var section = await _db.Sections.FirstOrDefaultAsync(s => s.Id == id);
+        if (section is null || !await _rooms.IsMemberAsync(UserId, section.RoomId)) return null;
+        return section;
+    }
+
+    /// <summary>As <see cref="ViewableSectionAsync"/> but additionally requires ManageContents in the section's
+    /// room (the personal-room owner holds every permission). Returns the section, or an error result: 404 for a
+    /// non-member/missing section, 403 for a member lacking the permission. Mirrors
+    /// <c>SectionPageController.ManageableSectionAsync</c>.</summary>
+    private async Task<(Section? Section, ActionResult? Error)> ManageableSectionAsync(Guid id)
+    {
+        var section = await ViewableSectionAsync(id);
+        if (section is null) return (null, NotFound());
+        if (!(await _rooms.PermissionsAsync(UserId, section.RoomId)).HasFlag(RoomPermission.ManageContents))
+            return (null, Forbid());
+        return (section, null);
     }
 
     private static AttachmentDto ToDto(SectionAttachment a) =>
@@ -59,7 +89,7 @@ public class SectionAttachmentsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<AttachmentDto>>> List(Guid sectionId)
     {
-        if (!await OwnsAsync(sectionId)) return NotFound();
+        if (await ViewableSectionAsync(sectionId) is null) return NotFound();
         var items = await _db.SectionAttachments
             .Where(a => a.SectionId == sectionId)
             .OrderBy(a => a.Ordinal)
@@ -73,7 +103,8 @@ public class SectionAttachmentsController : ControllerBase
     [RequestSizeLimit(100L * 1024 * 1024)]
     public async Task<ActionResult<AttachmentDto>> AddFile(Guid sectionId, [FromForm] IFormFile? file)
     {
-        if (!await OwnsAsync(sectionId)) return NotFound();
+        var (_, error) = await ManageableSectionAsync(sectionId);
+        if (error is not null) return error;
         if (file is null || file.Length == 0) return BadRequest("A file is required.");
         if (file.Length > _options.MaxBytes)
             return StatusCode(StatusCodes.Status413PayloadTooLarge,
@@ -96,6 +127,7 @@ public class SectionAttachmentsController : ControllerBase
         {
             Id = id,
             SectionId = sectionId,
+            UploadedByUserId = UserId,
             Kind = AttachmentKind.File,
             Name = SafeName(StripPath(file.FileName)),
             BlobKey = blobKey,
@@ -113,7 +145,8 @@ public class SectionAttachmentsController : ControllerBase
     [HttpPost("markdown")]
     public async Task<ActionResult<AttachmentDto>> AddMarkdown(Guid sectionId, AddMarkdownAttachmentRequest req)
     {
-        if (!await OwnsAsync(sectionId)) return NotFound();
+        var (_, error) = await ManageableSectionAsync(sectionId);
+        if (error is not null) return error;
         if (string.IsNullOrWhiteSpace(req.Content)) return BadRequest("Content is required.");
 
         var bytes = Encoding.UTF8.GetBytes(req.Content);
@@ -136,6 +169,7 @@ public class SectionAttachmentsController : ControllerBase
         {
             Id = id,
             SectionId = sectionId,
+            UploadedByUserId = UserId,
             Kind = AttachmentKind.File,
             Name = MarkdownName(req.Name),
             BlobKey = blobKey,
@@ -152,7 +186,8 @@ public class SectionAttachmentsController : ControllerBase
     [HttpPost("url")]
     public async Task<ActionResult<AttachmentDto>> AddUrl(Guid sectionId, AddUrlAttachmentRequest req)
     {
-        if (!await OwnsAsync(sectionId)) return NotFound();
+        var (_, error) = await ManageableSectionAsync(sectionId);
+        if (error is not null) return error;
         if (!Uri.TryCreate(req.Url, UriKind.Absolute, out var uri) ||
             (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
             return BadRequest("A valid http(s) URL is required.");
@@ -162,6 +197,7 @@ public class SectionAttachmentsController : ControllerBase
         {
             Id = Guid.NewGuid(),
             SectionId = sectionId,
+            UploadedByUserId = UserId,
             Kind = AttachmentKind.Url,
             Name = SafeName(name),
             Url = uri.ToString(),
@@ -175,7 +211,8 @@ public class SectionAttachmentsController : ControllerBase
     [HttpPut("{attachmentId:guid}")]
     public async Task<IActionResult> Rename(Guid sectionId, Guid attachmentId, RenameAttachmentRequest req)
     {
-        if (!await OwnsAsync(sectionId)) return NotFound();
+        var (_, error) = await ManageableSectionAsync(sectionId);
+        if (error is not null) return error;
         var a = await _db.SectionAttachments.FirstOrDefaultAsync(x => x.Id == attachmentId && x.SectionId == sectionId);
         if (a is null) return NotFound();
         if (string.IsNullOrWhiteSpace(req.Name)) return BadRequest("A name is required.");
@@ -189,7 +226,8 @@ public class SectionAttachmentsController : ControllerBase
     public async Task<IActionResult> UpdateContent(
         Guid sectionId, Guid attachmentId, UpdateAttachmentContentRequest req)
     {
-        if (!await OwnsAsync(sectionId)) return NotFound();
+        var (_, error) = await ManageableSectionAsync(sectionId);
+        if (error is not null) return error;
         var a = await _db.SectionAttachments.FirstOrDefaultAsync(
             x => x.Id == attachmentId && x.SectionId == sectionId && x.Kind == AttachmentKind.File);
         if (a?.BlobKey is null) return NotFound();
@@ -203,13 +241,22 @@ public class SectionAttachmentsController : ControllerBase
 
         var quota = await _db.Users.Where(u => u.Id == UserId).Select(u => u.QuotaBytes).FirstOrDefaultAsync();
         var used = await _usage.UsedBytesAsync(UserId);
-        if (used - a.SizeBytes + bytes.Length > quota)
+        // `used` only counts rows already attributed to the caller, so only subtract the row's current size when
+        // the caller already owns it - otherwise this edit is about to re-attribute a stranger's bytes onto the
+        // caller's ledger for the first time, and none of the old size was ever part of `used` to subtract.
+        var currentContribution = a.UploadedByUserId == UserId ? a.SizeBytes : 0;
+        if (used - currentContribution + bytes.Length > quota)
             return StatusCode(StatusCodes.Status413PayloadTooLarge,
                 "Storage quota exceeded. Delete some recordings/attachments or ask an administrator to raise your quota.");
 
         await using (var ms = new MemoryStream(bytes))
             await _storage.UploadAsync(a.BlobKey, ms, "text/markdown");
         a.SizeBytes = bytes.Length;
+        // Re-attribute: whoever edits the content now owns the stored bytes, matching the "uploader pays" rule
+        // the other write paths already enforce (a shared-room member with ManageContents need not be the
+        // original uploader). The blob key keeps the ORIGINAL uploader's prefix (`{uploader}/section-attachments/
+        // {id}.md`) - that's harmless, keys are opaque identifiers, not an access-control or billing signal.
+        a.UploadedByUserId = UserId;
         await _db.SaveChangesAsync();
         return NoContent();
     }
@@ -217,7 +264,8 @@ public class SectionAttachmentsController : ControllerBase
     [HttpDelete("{attachmentId:guid}")]
     public async Task<IActionResult> Delete(Guid sectionId, Guid attachmentId)
     {
-        if (!await OwnsAsync(sectionId)) return NotFound();
+        var (_, error) = await ManageableSectionAsync(sectionId);
+        if (error is not null) return error;
         var a = await _db.SectionAttachments.FirstOrDefaultAsync(x => x.Id == attachmentId && x.SectionId == sectionId);
         if (a is null) return NotFound();
 
@@ -233,7 +281,7 @@ public class SectionAttachmentsController : ControllerBase
     [HttpGet("{attachmentId:guid}/content")]
     public async Task<IActionResult> Content(Guid sectionId, Guid attachmentId, CancellationToken ct = default)
     {
-        if (!await OwnsAsync(sectionId)) return NotFound();
+        if (await ViewableSectionAsync(sectionId) is null) return NotFound();
         var a = await _db.SectionAttachments.FirstOrDefaultAsync(
             x => x.Id == attachmentId && x.SectionId == sectionId && x.Kind == AttachmentKind.File, ct);
         if (a?.BlobKey is null) return NotFound();

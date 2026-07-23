@@ -90,6 +90,20 @@ public class SectionPageControllerTests
     }
 
     [Fact]
+    public async Task Get_returns_the_sections_actual_room_id()
+    {
+        // The web resolves ManageContents for folder-direct attachments against THIS field, not the URL's room
+        // (a room-less legacy /sections/{id} deep-link carries none) - see FolderAttachmentsManager/SectionDetail.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var section = await Section(db, userId);
+
+        var dto = (await Build(db, userId).Get(section.Id)).Value!;
+
+        Assert.Equal(section.RoomId, dto.RoomId);
+    }
+
+    [Fact]
     public async Task Get_other_users_section_is_not_found()
     {
         using var db = TestDb.Create();
@@ -121,6 +135,9 @@ public class SectionPageControllerTests
         Assert.Contains(items, i => i is { Text: "Do A", RecordingName: "Kickoff" });
         Assert.Contains(items, i => i is { Text: "Do B", RecordingName: "Untitled Review" }); // Name ?? Title
         Assert.DoesNotContain(items, i => i.Text == "Secret");
+        // RecordedByUserId mirrors RecordingActionsController.OwnsAsync's gate (r.UserId), so the web can hide
+        // edit/delete for rows it isn't allowed to mutate.
+        Assert.All(items, i => Assert.Equal(userId, i.RecordedByUserId));
     }
 
     [Fact]
@@ -130,7 +147,12 @@ public class SectionPageControllerTests
         var userId = Guid.NewGuid();
         var section = await Section(db, userId);
         var rec = await Recording(db, userId, section.Id, name: "Sync");
-        db.MeetingNotes.Add(new MeetingNote { Id = Guid.NewGuid(), UserId = userId, RecordingId = rec.Id, Text = "note", Ordinal = 0 });
+        // The note's own denormalized UserId is deliberately a DIFFERENT guid than the recording's owner, to
+        // prove the projection surfaces the recording's owner (r.UserId, what MeetingNotesController.OwnsAsync
+        // actually gates on) rather than the note's own UserId - they happen to coincide in real usage (notes
+        // are only ever adopted onto their own owner's recording), but this test pins the correct source.
+        var noteAuthor = Guid.NewGuid();
+        db.MeetingNotes.Add(new MeetingNote { Id = Guid.NewGuid(), UserId = noteAuthor, RecordingId = rec.Id, Text = "note", Ordinal = 0 });
         db.Attachments.Add(new Attachment { Id = Guid.NewGuid(), RecordingId = rec.Id, Kind = AttachmentKind.File, Name = "spec.pdf", SizeBytes = 10, Ordinal = 0 });
         await db.SaveChangesAsync();
 
@@ -139,8 +161,10 @@ public class SectionPageControllerTests
 
         Assert.Equal("note", Assert.Single(notes).Text);
         Assert.Equal("Sync", notes[0].RecordingName);
+        Assert.Equal(userId, notes[0].RecordedByUserId); // the recording's owner, not noteAuthor
         Assert.Equal("spec.pdf", Assert.Single(atts).Name);
         Assert.Equal("Sync", atts[0].RecordingName);
+        Assert.Equal(userId, atts[0].RecordedByUserId);
     }
 
     [Fact]
@@ -274,6 +298,56 @@ public class SectionPageControllerTests
         Assert.Empty((await Build(db, me).Actions(section.Id)).Value!);
         Assert.Empty((await Build(db, me).Notes(section.Id)).Value!);
         Assert.Empty((await Build(db, me).Attachments(section.Id)).Value!);
+    }
+
+    // Review finding: the pre-existing multi-owner coverage (Actions_aggregate_across_children_..., Notes_and_
+    // attachments_aggregate_with_meeting_name) puts every INCLUDED row under the SAME owner - a second owner's
+    // recording sits in an unrelated section and is excluded entirely, so it never appears as a "theirs" row in
+    // the same response. This pins the actual claim the fix rests on: a folder aggregation containing recordings
+    // from two DIFFERENT owners, in the SAME section, attributes each row to its own owner in one response. It's
+    // a flat per-row join (no aggregation/grouping/Include+Take), so the in-memory provider is a faithful stand-in
+    // here; see Aggregations_attribute_each_row_to_its_own_owner_under_postgres for the same claim pinned against
+    // real Postgres too.
+    [Fact]
+    public async Task Aggregations_attribute_each_row_to_its_own_recording_owner_in_a_shared_room()
+    {
+        using var db = TestDb.Create();
+        var ownerA = Guid.NewGuid();
+        var section = await SharedRoomSection(db, ownerA);
+        var ownerB = Guid.NewGuid();
+        Users.Ensure(db, ownerB);
+        var scope = new RoomScope(db);
+        await scope.SetMemberAsync(section.RoomId, RoomPrincipalType.User, ownerB, RoomPermission.CreateRecording);
+
+        var recA = new Recording { Id = Guid.NewGuid(), UserId = ownerA, BlobKey = "k", Title = "Rec A" };
+        var recB = new Recording { Id = Guid.NewGuid(), UserId = ownerB, BlobKey = "k", Title = "Rec B" };
+        db.Recordings.AddRange(recA, recB);
+        db.RecordingActions.Add(new RecordingAction { Id = Guid.NewGuid(), RecordingId = recA.Id, Text = "A action", Ordinal = 0 });
+        db.RecordingActions.Add(new RecordingAction { Id = Guid.NewGuid(), RecordingId = recB.Id, Text = "B action", Ordinal = 0 });
+        db.MeetingNotes.Add(new MeetingNote { Id = Guid.NewGuid(), UserId = ownerA, RecordingId = recA.Id, Text = "A note", Ordinal = 0 });
+        db.MeetingNotes.Add(new MeetingNote { Id = Guid.NewGuid(), UserId = ownerB, RecordingId = recB.Id, Text = "B note", Ordinal = 0 });
+        db.Attachments.Add(new Attachment { Id = Guid.NewGuid(), RecordingId = recA.Id, Kind = AttachmentKind.File, Name = "a.pdf", SizeBytes = 1, Ordinal = 0 });
+        db.Attachments.Add(new Attachment { Id = Guid.NewGuid(), RecordingId = recB.Id, Kind = AttachmentKind.File, Name = "b.pdf", SizeBytes = 1, Ordinal = 0 });
+        await db.SaveChangesAsync();
+        // Both recordings land in the SAME shared section, shared in by their own respective owner.
+        await scope.ShareIntoRoomAsync(recA.Id, section.RoomId, ownerA, section.Id);
+        await scope.ShareIntoRoomAsync(recB.Id, section.RoomId, ownerB, section.Id);
+
+        var actions = (await Build(db, ownerA).Actions(section.Id)).Value!;
+        var notes = (await Build(db, ownerA).Notes(section.Id)).Value!;
+        var attachments = (await Build(db, ownerA).Attachments(section.Id)).Value!;
+
+        Assert.Equal(2, actions.Count);
+        Assert.Equal(ownerA, Assert.Single(actions, i => i.Text == "A action").RecordedByUserId);
+        Assert.Equal(ownerB, Assert.Single(actions, i => i.Text == "B action").RecordedByUserId);
+
+        Assert.Equal(2, notes.Count);
+        Assert.Equal(ownerA, Assert.Single(notes, i => i.Text == "A note").RecordedByUserId);
+        Assert.Equal(ownerB, Assert.Single(notes, i => i.Text == "B note").RecordedByUserId);
+
+        Assert.Equal(2, attachments.Count);
+        Assert.Equal(ownerA, Assert.Single(attachments, i => i.Name == "a.pdf").RecordedByUserId);
+        Assert.Equal(ownerB, Assert.Single(attachments, i => i.Name == "b.pdf").RecordedByUserId);
     }
 
     [Fact]

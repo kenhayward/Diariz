@@ -259,9 +259,19 @@ default timeout for its header phase and relies on client-disconnect for cancell
 - **Folder-direct attachments.** Besides the read-only aggregation of its transcripts' attachments, a folder
   can hold **its own** attachments (files or URLs) filed directly against the `Section` (`SectionAttachments`
   table + `SectionAttachmentsController` at `api/sections/{id}/folder-attachments`, blobs under
-  `{userId}/section-attachments/…`, counted toward the quota by `StorageUsage`). The folder page's Attachments
-  tab shows these as a second, **addable** list above the transcript-aggregated one. Files open in a new tab
-  via `/content` (the `access_token` query-auth allowance in `Program.cs` was extended to `/api/sections/…/content`).
+  `{uploaderUserId}/section-attachments/…`). Files open in a new tab via `/content` (the `access_token`
+  query-auth allowance in `Program.cs` was extended to `/api/sections/…/content`). Access is gated by room
+  permission, not by the folder owner: **read** (list, content) only requires the caller to be a **member** of
+  the section's room; **write** (add/rename/edit-content/delete) additionally requires **`ManageContents`** -
+  the same gate `SectionsController` uses for folder create/rename/delete, and the personal room's owner holds
+  every permission so that path is unaffected. Each row is stamped with `UploadedByUserId` (the caller who
+  created it) and `StorageUsage` counts a folder's file attachments toward **that** person's quota, not the
+  folder's creator (`Section.UserId`) - in a shared room a `ManageContents` member can add to a folder someone
+  else made, so the two can differ. The folder page's Attachments tab shows these as a second, **addable** list
+  above the transcript-aggregated one, gated on `canManage` resolved from the folder's **actual** room
+  (`SectionDetailDto.RoomId` looked up against the caller's room list) rather than the URL's room - the
+  room-less legacy `/sections/{id}` deep-link would otherwise resolve permissions against the caller's personal
+  room instead of the folder's real one. Open stays available to any member regardless.
 - **Semantic search index (RAG, M3 - backend).** A **fifth Redis stream `embedding-jobs`** (group `embedders`)
   with its own `EmbeddingWorker` (singleton `BackgroundService`) builds the semantic-search index. Per job,
   `EmbeddingProcessor` windows the transcription's segments into overlapping passages (`TranscriptChunker`,

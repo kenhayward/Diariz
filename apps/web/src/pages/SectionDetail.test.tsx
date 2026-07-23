@@ -2,15 +2,28 @@ import { render, screen, fireEvent, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { SectionDetail as SectionDetailT, SectionFormulaResult } from "../lib/types";
+import { RoomPermission } from "../lib/types";
+import type { RoomListItem, SectionDetail as SectionDetailT, SectionFormulaResult } from "../lib/types";
 
-// FolderRecordingList (rendered on the Overview tab) reads the current room + base path.
+// FolderRecordingList (rendered on the Overview tab) reads the current room + base path. `rooms` is mutable so
+// individual tests can seed the caller's room memberships (with permissions) to exercise the folder-attachment
+// ManageContents gate, which resolves against section.roomId - not `currentRoom` (the URL-resolved room).
+const roomsState: { rooms: RoomListItem[] } = { rooms: [] };
 vi.mock("../lib/rooms", () => ({
-  useRoom: () => ({ currentRoom: undefined, rooms: [] }),
+  useRoom: () => ({ currentRoom: undefined, rooms: roomsState.rooms }),
   useRoomBasePath: () => "",
 }));
 // FormulaRunModal reads useAuth for the caller id (groups Personal vs Shared formulas).
 vi.mock("../auth", () => ({ useAuth: () => ({ id: "u1", fullName: "Test User", email: "t@x.test" }) }));
+
+// Copy-link wiring: keep folderUrl real (it's the thing under test - does the page pass the right roomBasePath
+// into it) but stub copyRichLink so no real clipboard API is touched and we can inspect the URL it was given.
+// vi.mock's factory is hoisted above top-level const declarations, so the mock fn is created via vi.hoisted.
+const { copyRichLink } = vi.hoisted(() => ({ copyRichLink: vi.fn().mockResolvedValue(true) }));
+vi.mock("../lib/clipboard", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/clipboard")>();
+  return { ...actual, copyRichLink };
+});
 
 vi.mock("../lib/api", () => ({
   api: {
@@ -53,6 +66,7 @@ const base: SectionDetailT = {
   id: "sec-1",
   name: "My Folder",
   parentId: null,
+  roomId: "personal-1",
   stats: { transcriptCount: 2, totalDurationMs: 60_000, firstRecordingAt: null, lastRecordingAt: null },
   summary: null,
   minutes: null,
@@ -171,5 +185,165 @@ describe("SectionDetail formulas tab", () => {
     fireEvent.click(await screen.findByText("Risk Register"));
     fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
     await waitFor(() => expect(api.deleteSectionFormulaResult).toHaveBeenCalledWith("sec-1", "sfr-1"));
+  });
+});
+
+describe("SectionDetail formula-result mutation gating", () => {
+  // Mirrors SectionFormulaResultsController.CanEditAsync: the result's creator OR a member with ManageContents
+  // in the FOLDER'S OWN room (section.roomId) - resolved against the folder's real room, never useRoom()'s
+  // URL-derived one (which falls back to the caller's personal room, holding every permission, on the
+  // room-less legacy /sections/:id link - see the folder-attachment gating tests above for that trap).
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    (api.listSectionFormulaResults as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (api.getSectionFormulaResultText as ReturnType<typeof vi.fn>).mockResolvedValue("body");
+    (api.listFormulas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  });
+
+  it("enables Delete for the result's creator, even without ManageContents in the folder's room", async () => {
+    roomsState.rooms = [
+      { id: "personal-1", name: "You", kind: 0, icon: null, color: null, isPersonal: true, permissions: 63, sectionCount: 0, recordingCount: 0 },
+      { id: "shared-1", name: "Eng", kind: 1, icon: null, color: null, isPersonal: false, permissions: RoomPermission.CreateRecording, sectionCount: 0, recordingCount: 0 },
+    ];
+    (api.listSectionFormulaResults as ReturnType<typeof vi.fn>).mockResolvedValue([
+      result({ createdByUserId: "u1" }), // "u1" is the caller (useAuth mock)
+    ]);
+    renderPage({ ...base, roomId: "shared-1" });
+    await loaded();
+    openTab(/formulas/i);
+
+    fireEvent.click(await screen.findByText("Risk Register"));
+    expect((screen.getByRole("button", { name: /^open$/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /^download$/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /^email$/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /^delete$/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("disables Delete for a non-creator without ManageContents in the folder's room", async () => {
+    roomsState.rooms = [
+      { id: "personal-1", name: "You", kind: 0, icon: null, color: null, isPersonal: true, permissions: 63, sectionCount: 0, recordingCount: 0 },
+      { id: "shared-1", name: "Eng", kind: 1, icon: null, color: null, isPersonal: false, permissions: RoomPermission.CreateRecording, sectionCount: 0, recordingCount: 0 },
+    ];
+    (api.listSectionFormulaResults as ReturnType<typeof vi.fn>).mockResolvedValue([
+      result({ createdByUserId: "u-someone-else" }),
+    ]);
+    renderPage({ ...base, roomId: "shared-1" }); // note: room-less legacy URL, real room resolved from section.roomId
+    await loaded();
+    openTab(/formulas/i);
+
+    fireEvent.click(await screen.findByText("Risk Register"));
+    // Reads stay available.
+    expect((screen.getByRole("button", { name: /^open$/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /^download$/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /^email$/i }) as HTMLButtonElement).disabled).toBe(false);
+    // The mutation is not.
+    expect((screen.getByRole("button", { name: /^delete$/i }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("enables Delete for a non-creator who holds ManageContents in the folder's room", async () => {
+    roomsState.rooms = [
+      { id: "personal-1", name: "You", kind: 0, icon: null, color: null, isPersonal: true, permissions: 63, sectionCount: 0, recordingCount: 0 },
+      { id: "shared-1", name: "Eng", kind: 1, icon: null, color: null, isPersonal: false, permissions: RoomPermission.ManageContents, sectionCount: 0, recordingCount: 0 },
+    ];
+    (api.listSectionFormulaResults as ReturnType<typeof vi.fn>).mockResolvedValue([
+      result({ createdByUserId: "u-someone-else" }),
+    ]);
+    renderPage({ ...base, roomId: "shared-1" });
+    await loaded();
+    openTab(/formulas/i);
+
+    fireEvent.click(await screen.findByText("Risk Register"));
+    expect((screen.getByRole("button", { name: /^delete$/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
+describe("SectionDetail copy-link room prefix", () => {
+  // section.roomId resolves the folder's OWN room from `rooms` (see the sectionRoom/roomBasePath comment in
+  // SectionDetail.tsx) - the copied link must carry that room's prefix, not the URL's, and must carry none at
+  // all for a personal folder even though the folder-attachments describe block above already covers the
+  // room-less legacy URL for a DIFFERENT concern (write-control gating).
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    roomsState.rooms = [];
+  });
+
+  it("copies a shared folder's link with its room prefix", async () => {
+    roomsState.rooms = [
+      { id: "shared-1", name: "Eng", kind: 1, icon: null, color: null, isPersonal: false, permissions: RoomPermission.ManageContents, sectionCount: 0, recordingCount: 0 },
+    ];
+    renderPage({ ...base, roomId: "shared-1" });
+    await loaded();
+
+    fireEvent.click(screen.getByLabelText("Copy link"));
+
+    await waitFor(() => expect(copyRichLink).toHaveBeenCalled());
+    const [url] = copyRichLink.mock.calls[0];
+    expect(url).toBe(`${window.location.origin}/rooms/shared-1/sections/sec-1`);
+  });
+
+  it("copies a personal folder's link with no room prefix", async () => {
+    roomsState.rooms = [
+      { id: "personal-1", name: "You", kind: 0, icon: null, color: null, isPersonal: true, permissions: 63, sectionCount: 0, recordingCount: 0 },
+    ];
+    renderPage({ ...base, roomId: "personal-1" });
+    await loaded();
+
+    fireEvent.click(screen.getByLabelText("Copy link"));
+
+    await waitFor(() => expect(copyRichLink).toHaveBeenCalled());
+    const [url] = copyRichLink.mock.calls[0];
+    expect(url).toBe(`${window.location.origin}/sections/sec-1`);
+  });
+});
+
+describe("SectionDetail folder-attachment room gating", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    roomsState.rooms = [];
+  });
+
+  it("hides folder-attachment write controls for a shared-room member without ManageContents, even at the room-less legacy URL", async () => {
+    // The caller's personal room grants every permission - if the gate ever fell back to it (the historical
+    // bug: useRoom() resolves the URL's room, which falls back to personal when the URL carries none), these
+    // write controls would wrongly render. Gating on section.roomId instead must resolve the SHARED room here.
+    roomsState.rooms = [
+      { id: "personal-1", name: "You", kind: 0, icon: null, color: null, isPersonal: true, permissions: 63, sectionCount: 0, recordingCount: 0 },
+      { id: "shared-1", name: "Eng", kind: 1, icon: null, color: null, isPersonal: false, permissions: RoomPermission.CreateRecording, sectionCount: 0, recordingCount: 0 },
+    ];
+    (api.listFolderAttachments as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "att-1", kind: "File", name: "spec.pdf", contentType: "application/pdf", sizeBytes: 100, url: null, ordinal: 0 },
+    ]);
+
+    renderPage({ ...base, roomId: "shared-1" }); // note: rendered at the room-less "/sections/sec-1" route
+    await loaded();
+    openTab(/attachments/i);
+
+    expect(await screen.findByText("spec.pdf")).toBeTruthy();
+    expect(screen.queryByText("Add file")).toBeNull();
+    expect(screen.queryByText("Add URL")).toBeNull();
+    expect(screen.queryByText("Remove")).toBeNull();
+  });
+
+  it("shows folder-attachment write controls for a shared-room member with ManageContents, even at the room-less legacy URL", async () => {
+    roomsState.rooms = [
+      { id: "personal-1", name: "You", kind: 0, icon: null, color: null, isPersonal: true, permissions: 63, sectionCount: 0, recordingCount: 0 },
+      { id: "shared-1", name: "Eng", kind: 1, icon: null, color: null, isPersonal: false, permissions: RoomPermission.ManageContents, sectionCount: 0, recordingCount: 0 },
+    ];
+    (api.listFolderAttachments as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "att-1", kind: "File", name: "spec.pdf", contentType: "application/pdf", sizeBytes: 100, url: null, ordinal: 0 },
+    ]);
+
+    renderPage({ ...base, roomId: "shared-1" });
+    await loaded();
+    openTab(/attachments/i);
+
+    // A manager gets a rename input (value, not text content) instead of a plain text name.
+    expect(await screen.findByDisplayValue("spec.pdf")).toBeTruthy();
+    expect(screen.getByText("Add file")).toBeTruthy();
+    expect(screen.getByText("Add URL")).toBeTruthy();
+    expect(screen.getByText("Remove")).toBeTruthy();
   });
 });

@@ -1116,10 +1116,15 @@ namespace Diariz.Domain.Migrations
                     b.Property<long>("SizeBytes")
                         .HasColumnType("bigint");
 
+                    b.Property<Guid>("UploadedByUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Url")
                         .HasColumnType("text");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("UploadedByUserId");
 
                     b.HasIndex("SectionId", "Ordinal");
 

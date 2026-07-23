@@ -5,13 +5,19 @@ import { useRoomBasePath } from "../lib/rooms";
 import type { SectionNoteItem } from "../lib/types";
 
 /// The folder Notes tab: every note across the folder's recordings (and sub-folders), with a read-only
-/// **Meeting** column. Edit + delete reuse the per-note endpoints; adding is not offered.
+/// **Meeting** column. Edit + delete reuse the per-note endpoints (owner-only - see `MeetingNotesController`),
+/// so they're only offered on a row whose source recording belongs to `myUserId`; a room co-viewer's rows
+/// (from someone else's recording) show as plain read-only text instead. Adding is not offered.
 export default function FolderNotesList({
   items,
+  myUserId,
   onEdit,
   onDelete,
 }: {
   items: SectionNoteItem[];
+  /// The signed-in user's id (`useAuth().id`), compared against each row's `recordedByUserId` - mirrors
+  /// RecordingDetail's `isOwner` check, just applied per row since rows here span many recordings.
+  myUserId: string | null;
   onEdit: (recordingId: string, id: string, text: string) => void;
   onDelete: (recordingId: string, id: string) => void;
 }) {
@@ -33,7 +39,15 @@ export default function FolderNotesList({
         </thead>
         <tbody>
           {items.map((n, i) => (
-            <Row key={n.id} note={n} row={i + 1} basePath={basePath} onEdit={onEdit} onDelete={onDelete} />
+            <Row
+              key={n.id}
+              note={n}
+              row={i + 1}
+              basePath={basePath}
+              isOwner={myUserId != null && n.recordedByUserId === myUserId}
+              onEdit={onEdit}
+              onDelete={onDelete}
+            />
           ))}
         </tbody>
       </table>
@@ -42,11 +56,12 @@ export default function FolderNotesList({
 }
 
 function Row({
-  note, row, basePath, onEdit, onDelete,
+  note, row, basePath, isOwner, onEdit, onDelete,
 }: {
   note: SectionNoteItem;
   row: number;
   basePath: string;
+  isOwner: boolean;
   onEdit: (recordingId: string, id: string, text: string) => void;
   onDelete: (recordingId: string, id: string) => void;
 }) {
@@ -61,24 +76,30 @@ function Row({
         </NavLink>
       </td>
       <td className="py-1 pr-2">
-        <input
-          value={draft}
-          aria-label={t("noteCellAria", { row })}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => { const v = draft.trim(); if (v && v !== note.text) onEdit(note.recordingId, note.id, v); }}
-          className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-        />
+        {isOwner ? (
+          <input
+            value={draft}
+            aria-label={t("noteCellAria", { row })}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => { const v = draft.trim(); if (v && v !== note.text) onEdit(note.recordingId, note.id, v); }}
+            className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          />
+        ) : (
+          <span className="block w-full px-2 py-1 text-sm dark:text-gray-200">{note.text}</span>
+        )}
       </td>
       <td className="py-1 text-right">
-        <button
-          type="button"
-          aria-label={t("removeNoteAria", { row })}
-          title={t("common:remove")}
-          onClick={() => onDelete(note.recordingId, note.id)}
-          className="rounded px-1 text-gray-400 hover:bg-gray-100 hover:text-red-600 dark:hover:bg-gray-800 dark:hover:text-red-400"
-        >
-          ✕
-        </button>
+        {isOwner && (
+          <button
+            type="button"
+            aria-label={t("removeNoteAria", { row })}
+            title={t("common:remove")}
+            onClick={() => onDelete(note.recordingId, note.id)}
+            className="rounded px-1 text-gray-400 hover:bg-gray-100 hover:text-red-600 dark:hover:bg-gray-800 dark:hover:text-red-400"
+          >
+            ✕
+          </button>
+        )}
       </td>
     </tr>
   );

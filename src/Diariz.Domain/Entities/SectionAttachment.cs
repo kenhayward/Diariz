@@ -10,6 +10,12 @@ public class SectionAttachment
     public Guid SectionId { get; set; }
     public Section? Section { get; set; }
 
+    /// <summary>The user who created this attachment - who its bytes are charged to (see
+    /// <c>IStorageUsage.UsedBytesAsync</c>). In a shared room, any member with <c>RoomPermission.ManageContents</c>
+    /// can add to a folder they don't own, so this can differ from the folder's creator (<see cref="Section.UserId"/>).
+    /// Backfilled from <c>Section.UserId</c> for rows created before this column existed.</summary>
+    public Guid UploadedByUserId { get; set; }
+
     public AttachmentKind Kind { get; set; }
 
     /// <summary>Display name - the file's name, or the link text for a URL. User-editable.</summary>
