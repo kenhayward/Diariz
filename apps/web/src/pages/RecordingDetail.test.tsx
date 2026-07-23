@@ -1010,6 +1010,120 @@ describe("RecordingDetail", () => {
     await waitFor(() => expect(api.audioUrl).toHaveBeenCalledWith("rec-123"));
   });
 
+  // The global header transport: it must flip to Stop for every play path, and its Stop must halt playback,
+  // reset the position/highlight, and revert every other control's own Play/Pause toggle.
+  describe("header Play/Stop transport", () => {
+    /// The one shared <audio> element (hidden). play()/pause() are mocked below (jsdom has no real media
+    /// pipeline), so the native "play"/"pause" events that drive audioPaused must be dispatched by hand -
+    /// exactly what a real browser does synchronously when play()/pause() succeed.
+    const audioEl = () => document.querySelector("audio") as HTMLAudioElement;
+
+    function mockMediaElement() {
+      const play = vi.spyOn(window.HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+      const pause = vi.spyOn(window.HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+      return { play, pause };
+    }
+
+    it("reads Play initially and flips to Stop once the header's own Play starts audio", async () => {
+      mockMediaElement();
+      renderPage(base);
+      await loaded();
+
+      expect(screen.getByRole("button", { name: "Play" })).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Play" }));
+      await waitFor(() => expect(api.audioUrl).toHaveBeenCalledWith("rec-123"));
+      fireEvent.play(audioEl());
+
+      expect(await screen.findByRole("button", { name: "Stop" })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Play" })).toBeNull();
+    });
+
+    it("flips to Stop when Play selected starts, and the header Stop halts + reverts the selection button", async () => {
+      const { pause } = mockMediaElement();
+      renderPage(base);
+      await loaded();
+      openTab("Transcript");
+
+      fireEvent.click(await screen.findByText("Hi"));
+      fireEvent.click(screen.getByRole("button", { name: /play selected/i }));
+      await screen.findByRole("button", { name: /pause selected/i });
+      fireEvent.play(audioEl());
+
+      expect(await screen.findByRole("button", { name: "Stop" })).toBeTruthy();
+
+      fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+      expect(pause).toHaveBeenCalled();
+      expect(audioEl().currentTime).toBe(0);
+      fireEvent.pause(audioEl()); // the browser's synchronous effect of pause(), simulated
+
+      expect(await screen.findByRole("button", { name: "Play" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: /play selected/i })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: /pause selected/i })).toBeNull();
+    });
+
+    it("flips to Stop when a speaker plays, and the header Stop reverts that speaker's own button", async () => {
+      const { pause } = mockMediaElement();
+      renderPage(base);
+      await loaded();
+      openTab("Speakers");
+
+      fireEvent.click(screen.getByRole("button", { name: /play speaker_00's segments/i }));
+      await waitFor(() => expect(api.audioUrl).toHaveBeenCalledWith("rec-123"));
+      fireEvent.play(audioEl());
+
+      expect(await screen.findByRole("button", { name: "Stop" })).toBeTruthy();
+
+      fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+      expect(pause).toHaveBeenCalled();
+      fireEvent.pause(audioEl());
+
+      expect(await screen.findByRole("button", { name: "Play" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: /play speaker_00's segments/i })).toBeTruthy();
+    });
+
+    it("flips to Stop for a segment played from the Speakers tab's expanded segment list", async () => {
+      mockMediaElement();
+      renderPage(base);
+      await loaded();
+      openTab("Speakers");
+      fireEvent.click(screen.getByRole("button", { name: /show speaker_00's segments/i }));
+
+      fireEvent.click(await screen.findByText("Hi"));
+      await waitFor(() => expect(api.audioUrl).toHaveBeenCalledWith("rec-123"));
+      fireEvent.play(audioEl());
+
+      expect(await screen.findByRole("button", { name: "Stop" })).toBeTruthy();
+    });
+
+    // Natural end-of-playback: the whole recording plays through with no explicit Stop click. Only "ended"
+    // is fired here (deliberately no preceding "pause"), so this only passes if an onEnded handler reverts
+    // the header itself rather than relying on the browser's implicit pause-before-ended ordering.
+    it("reverts the header to Play and clears the highlight when playback ends naturally", async () => {
+      mockMediaElement();
+      renderPage(base);
+      await loaded();
+      openTab("Transcript");
+
+      fireEvent.click(screen.getByRole("button", { name: "Play" }));
+      await waitFor(() => expect(api.audioUrl).toHaveBeenCalledWith("rec-123"));
+      fireEvent.play(audioEl());
+
+      expect(await screen.findByRole("button", { name: "Stop" })).toBeTruthy();
+
+      // Land inside seg-1's range (0-1000ms) so the transcript highlight turns on, like real playback would.
+      audioEl().currentTime = 0.5;
+      fireEvent.timeUpdate(audioEl());
+      expect(await screen.findByText("▶")).toBeTruthy();
+
+      fireEvent.ended(audioEl());
+
+      expect(await screen.findByRole("button", { name: "Play" })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+      expect(screen.queryByText("▶")).toBeNull();
+      expect(audioEl().currentTime).toBe(0);
+    });
+  });
+
   // Bug 2: a recording that no longer exists (deleted here, on another device, or a stale list link) must
   // redirect to the home page instead of showing "Loading..." forever / a stale transcript.
   it("redirects to the home page when the recording is not found (404)", async () => {

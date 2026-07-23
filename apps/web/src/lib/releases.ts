@@ -56,6 +56,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.148.0",
+    date: "2026-07-23",
+    pr: 328,
+    headline: "The header Play button is now a real Stop, and reflects any playing audio",
+    summary:
+      "The always-visible header Play Recording button used to be static - it never showed that audio was playing, and offered no way to stop it. It is now a global Play/Stop transport for the recording-detail page: the instant any audio starts (the header's own Play, Play selected, a per-speaker audition, or a segment played from the Speakers tab), the header flips to a Stop button. Pressing Stop is a true stop, not a pause: it halts the shared audio, resets its position back to the start, and clears the transcript highlight, so pressing Play again always restarts the recording from 0:00. Every other play control (Play selected, the per-speaker Play/Pause toggle, the conversation-flow player) keeps its own existing Play/Pause behavior unchanged - Stop simply reverts all of them to their Play state, since they all share the one audio element the header now watches.",
+    changed: [
+      "The recording header's Play button now shows Stop (with a stop icon) whenever any audio on the page is playing, and stopping resets playback to the start instead of pausing in place",
+    ],
+  },
+  {
     version: "0.147.1",
     date: "2026-07-23",
     pr: 327,

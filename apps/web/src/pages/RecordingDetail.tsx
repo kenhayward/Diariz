@@ -256,6 +256,11 @@ export default function RecordingDetail() {
   // Mini player (the small header progress bar): current time + play/pause state of the shared <audio>.
   const [audioCur, setAudioCur] = useState(0);
   const [audioPaused, setAudioPaused] = useState(true);
+  // The header's global Play/Stop transport signal. audioPaused starts true and only ever flips false via the
+  // shared <audio>'s native onPlay - which fires only once a play() call actually succeeds (every play path
+  // sets a valid src first and catches a failed play(), see playFrom/playSpeaker/playSelected/togglePlayPause
+  // above) - so this can't read true while nothing is actually playing.
+  const isPlaying = !audioPaused;
   // True while "Play selected" owns the audio, so its toolbar button can offer Pause. Cleared by anything
   // that takes the audio away from the selection (the flow player, a seek, the end of the last range).
   const [selectionPlaying, setSelectionPlaying] = useState(false);
@@ -858,6 +863,23 @@ export default function RecordingDetail() {
     speakerRangesRef.current = [];
     setPlayingSpeaker(null);
     setSelectionPlaying(false);
+  }
+
+  // Global Stop (the header transport): a true stop, not a pause - it halts the shared audio AND resets its
+  // position, so the header's next Play always restarts the recording from 0. Clears every mode the audio
+  // could be in (per-speaker audition / a playing selection) and the transcript highlight, so every other
+  // control (per-selection, per-speaker, the flow player) reverts to its own Play state too. The native
+  // onPause handler (below, on the <audio>) picks up audioPaused/selectionPlaying from here.
+  function stopPlayback() {
+    const el = audioRef.current;
+    if (el) {
+      el.pause();
+      el.currentTime = 0;
+    }
+    setAudioPaused(true); // set directly rather than waiting on the native onPause round-trip, so a natural
+    // "ended" (which fires with no guaranteed prior "pause" in every environment) still flips the header
+    exitSpeakerMode();
+    setActiveIdx(null);
   }
 
   // Audition a single speaker: play only their (merged) segments, skipping everyone else's audio.
@@ -1544,7 +1566,9 @@ export default function RecordingDetail() {
           menu={menuActions}
           hasAudio={rec.hasAudio}
           hasTranscript={hasTranscript}
+          isPlaying={isPlaying}
           onPlay={() => playFrom(0)}
+          onStop={stopPlayback}
           onRename={() => setRenaming(true)}
           onCopyLink={copyLink}
           onDownload={() => setDownloading(true)}
@@ -1584,6 +1608,7 @@ export default function RecordingDetail() {
             setAudioPaused(true);
             setSelectionPlaying(false); // whatever paused it, the toolbar's Pause has nothing left to stop
           }}
+          onEnded={stopPlayback} // natural end of the whole recording: behave exactly like an explicit Stop
           className="hidden"
         />
       )}
