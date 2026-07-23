@@ -1,20 +1,23 @@
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
-import type { WebhookCreated } from "../lib/types";
+import type { ApiTokenCreated, WebhookCreated, WebhookSubscription } from "../lib/types";
 
 type Provider = "zapier" | "n8n" | null;
 
 /// The Preferences "Automations" section: the guided CREATE flow for outbound webhooks (send meeting events to
-/// Zapier / n8n / Make / anything that can accept a webhook). Shown only when the platform has webhooks enabled
-/// (the parent gates on profile.webhooksEnabled). Plain-language checkboxes pick which events fire it; provider
-/// hint tabs help the user find the right URL to paste from their tool. The signing secret is shown exactly
-/// once, right after creation - it is never retrievable again. Listing/status/test/delete existing automations
-/// is a later task; this section only creates new ones.
+/// Zapier / n8n / Make / anything that can accept a webhook), plus the management UI for existing automations -
+/// a card per webhook (trigger chips, destination host, Active/Paused status), "Send test event", delete, and
+/// Re-enable for ones the server auto-disabled after repeated failures. Shown only when the platform has
+/// webhooks enabled (the parent gates on profile.webhooksEnabled). Plain-language checkboxes pick which events
+/// fire it; provider hint tabs help the user find the right URL to paste from their tool. The signing secret is
+/// shown exactly once, right after creation - it is never retrievable again. When a formula event is selected,
+/// an inline offer to mint a read-only API token appears (formula callers often need to read results back).
 export default function AutomationsSection() {
   const { t } = useTranslation("account");
   const qc = useQueryClient();
+  const { data: webhooks } = useQuery({ queryKey: ["webhooks"], queryFn: api.listWebhooks });
 
   const EVENTS: { key: string; label: string }[] = [
     { key: "recording.created", label: t("evtRecordingCreated") },
@@ -31,10 +34,66 @@ export default function AutomationsSection() {
   const [created, setCreated] = useState<WebhookCreated | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [tokenCreated, setTokenCreated] = useState<ApiTokenCreated | null>(null);
+  const [tokenError, setTokenError] = useState<string | null>(null);
 
   const eventTypes = EVENTS.map((e) => e.key).filter((key) => selected[key]);
+  const wantsFormulaToken = eventTypes.some((key) => key.startsWith("formula_result"));
 
   const copy = (text: string) => void navigator.clipboard?.writeText(text);
+
+  async function createToken() {
+    setTokenError(null);
+    try {
+      const tok = await api.createApiToken(t("automationTokenName"), { readOnly: true, expiresAt: null });
+      setTokenCreated(tok);
+    } catch (e) {
+      setTokenError(apiErrorMessage(e, t("automationCreateError")));
+    }
+  }
+
+  async function sendTest(id: string) {
+    setError(null);
+    try {
+      await api.testWebhook(id);
+    } catch (e) {
+      setError(apiErrorMessage(e, t("automationCreateError")));
+    }
+  }
+
+  async function remove(id: string) {
+    setError(null);
+    try {
+      await api.deleteWebhook(id);
+      qc.invalidateQueries({ queryKey: ["webhooks"] });
+    } catch (e) {
+      setError(apiErrorMessage(e, t("automationCreateError")));
+    }
+  }
+
+  async function reenable(hook: WebhookSubscription) {
+    setError(null);
+    try {
+      await api.updateWebhook(hook.id, {
+        name: hook.name,
+        url: hook.url,
+        eventTypes: hook.eventTypes,
+        isActive: true,
+      });
+      qc.invalidateQueries({ queryKey: ["webhooks"] });
+    } catch (e) {
+      setError(apiErrorMessage(e, t("automationCreateError")));
+    }
+  }
+
+  const eventLabel = (key: string) => EVENTS.find((e) => e.key === key)?.label ?? key;
+  const host = (url: string) => {
+    try {
+      return new URL(url).host;
+    } catch {
+      return url;
+    }
+  };
 
   async function create() {
     setError(null);
@@ -85,6 +144,28 @@ export default function AutomationsSection() {
             </label>
           ))}
         </div>
+        {wantsFormulaToken && !tokenCreated && (
+          <div className="mt-2 rounded border border-blue-200 bg-blue-50 p-2 dark:border-blue-800/60 dark:bg-blue-900/20">
+            <p className="text-xs text-blue-800 dark:text-blue-300">{t("automationTokenOffer")}</p>
+            <button type="button" onClick={createToken} className={`mt-1 ${btn}`}>
+              {t("automationTokenCreate")}
+            </button>
+            {tokenError && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{tokenError}</p>}
+          </div>
+        )}
+        {tokenCreated && (
+          <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 dark:border-amber-700/60 dark:bg-amber-900/20">
+            <p className="text-xs font-medium text-amber-800 dark:text-amber-300">{t("apiTokenOnce")}</p>
+            <div className="mt-1 flex items-center gap-2">
+              <code className="flex-1 break-all rounded bg-white px-2 py-1 text-xs dark:bg-gray-900 dark:text-gray-100">
+                {tokenCreated.token}
+              </code>
+              <button type="button" onClick={() => copy(tokenCreated.token)} className={btn}>
+                {t("apiCopyToken")}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div>
@@ -152,6 +233,67 @@ export default function AutomationsSection() {
           </div>
         </div>
       )}
+
+      <div className="space-y-2 border-t pt-3 dark:border-gray-700">
+        {webhooks?.length === 0 && (
+          <p className="text-xs text-gray-400 dark:text-gray-500">{t("automationEmpty")}</p>
+        )}
+        {webhooks?.map((hook) => {
+          const paused = !hook.isActive;
+          return (
+            <div
+              key={hook.id}
+              className="rounded border p-2 dark:border-gray-700"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate text-sm font-medium text-gray-800 dark:text-gray-100">{hook.name}</span>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${
+                    paused
+                      ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                      : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                  }`}
+                >
+                  {paused ? t("automationPaused") : t("automationActive")}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{host(hook.url)}</p>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {hook.eventTypes.map((key) => (
+                  <span
+                    key={key}
+                    className="rounded-full border px-2 py-0.5 text-[11px] text-gray-600 dark:border-gray-700 dark:text-gray-300"
+                  >
+                    {eventLabel(key)}
+                  </span>
+                ))}
+              </div>
+              {hook.lastDeliveryAt && (
+                <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">
+                  {t("automationLastDelivered", { when: new Date(hook.lastDeliveryAt).toLocaleString() })}
+                </p>
+              )}
+              <div className="mt-2 flex gap-2">
+                <button type="button" onClick={() => sendTest(hook.id)} className={btn}>
+                  {t("automationSendTest")}
+                </button>
+                {paused && (
+                  <button type="button" onClick={() => reenable(hook)} className={btn}>
+                    {t("automationReenable")}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => remove(hook.id)}
+                  className="rounded border px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-gray-700 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                  {t("automationDelete")}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

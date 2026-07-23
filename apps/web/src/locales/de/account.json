@@ -242,5 +242,15 @@
   "automationCreateError": "Die Automatisierung konnte nicht erstellt werden.",
   "automationHintZapier": "In Zapier: Füge einen Trigger 'Webhooks by Zapier - Catch Hook' hinzu und füge hier dessen Custom Webhook URL ein.",
   "automationHintN8n": "In n8n: Füge einen Webhook-Node hinzu und füge hier dessen Production URL ein.",
-  "automationHintOther": "Füge hier die Webhook-URL ein, die dir dein Tool gibt."
+  "automationHintOther": "Füge hier die Webhook-URL ein, die dir dein Tool gibt.",
+  "automationSendTest": "Testereignis senden",
+  "automationDelete": "Löschen",
+  "automationReenable": "Wieder aktivieren",
+  "automationActive": "Aktiv",
+  "automationPaused": "Pausiert - URL prüfen",
+  "automationLastDelivered": "zugestellt {{when}}",
+  "automationTokenOffer": "Diese Automatisierung muss möglicherweise Ergebnisse in deinen Arbeitsablauf zurücklesen. Einen schreibgeschützten Zugriffstoken erstellen?",
+  "automationTokenCreate": "Token erstellen",
+  "automationTokenName": "Automatisierungstoken",
+  "automationEmpty": "Noch keine Automatisierungen."
 }

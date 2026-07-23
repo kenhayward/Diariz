@@ -242,5 +242,15 @@
   "automationCreateError": "Could not create the automation.",
   "automationHintZapier": "In Zapier: add a 'Webhooks by Zapier - Catch Hook' trigger and paste its Custom Webhook URL here.",
   "automationHintN8n": "In n8n: add a Webhook node and paste its Production URL here.",
-  "automationHintOther": "Paste the webhook URL your tool gives you."
+  "automationHintOther": "Paste the webhook URL your tool gives you.",
+  "automationSendTest": "Send test event",
+  "automationDelete": "Delete",
+  "automationReenable": "Re-enable",
+  "automationActive": "Active",
+  "automationPaused": "Paused - check the URL",
+  "automationLastDelivered": "delivered {{when}}",
+  "automationTokenOffer": "This automation may need to read results back into your workflow. Create a read-only access token?",
+  "automationTokenCreate": "Create token",
+  "automationTokenName": "Automation token",
+  "automationEmpty": "No automations yet."
 }

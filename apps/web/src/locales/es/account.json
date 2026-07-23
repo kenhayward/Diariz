@@ -242,5 +242,15 @@
   "automationCreateError": "No se pudo crear la automatización.",
   "automationHintZapier": "En Zapier: añade un disparador 'Webhooks by Zapier - Catch Hook' y pega aquí su Custom Webhook URL.",
   "automationHintN8n": "En n8n: añade un nodo Webhook y pega aquí su Production URL.",
-  "automationHintOther": "Pega aquí la URL de webhook que te da tu herramienta."
+  "automationHintOther": "Pega aquí la URL de webhook que te da tu herramienta.",
+  "automationSendTest": "Enviar evento de prueba",
+  "automationDelete": "Eliminar",
+  "automationReenable": "Reactivar",
+  "automationActive": "Activa",
+  "automationPaused": "Pausada - revisa la URL",
+  "automationLastDelivered": "entregado {{when}}",
+  "automationTokenOffer": "Esta automatización puede necesitar leer los resultados en tu flujo de trabajo. ¿Crear un token de acceso de solo lectura?",
+  "automationTokenCreate": "Crear token",
+  "automationTokenName": "Token de automatización",
+  "automationEmpty": "Aún no hay automatizaciones."
 }
