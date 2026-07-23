@@ -50,38 +50,23 @@ public class SectionPageController : ControllerBase
         return ids;
     }
 
-    /// <summary>Load a section by id and check the caller may VIEW it - i.e. is a member of the section's own
-    /// room (their personal room for a personal folder, or a shared room they belong to). Returns null when the
-    /// section doesn't exist OR the caller isn't a member, so callers 404 either way and a room's contents stay
-    /// private. Fixes issue #289: folders in a shared room were hardcoded to the caller's personal room and so
-    /// 404'd, leaving the page stuck on "Loading ...".</summary>
-    private async Task<Section?> ViewableSectionAsync(Guid id, bool withArtifacts = false)
+    /// <summary>Maps the shared <see cref="RoomAccessError"/> from <see cref="IRoomScope.ManageableSectionAsync"/>
+    /// to this controller's status codes: 404 for a non-member/missing section (room existence stays private),
+    /// 403 for a member lacking the permission. Fixes issue #289: folders in a shared room used to be hardcoded
+    /// to the caller's personal room and so 404'd, leaving the page stuck on "Loading ...".</summary>
+    private ActionResult? ToActionResult(RoomAccessError? error) => error switch
     {
-        IQueryable<Section> q = _db.Sections;
-        if (withArtifacts) q = q.Include(s => s.Summary).Include(s => s.Minutes);
-        var section = await q.FirstOrDefaultAsync(s => s.Id == id);
-        if (section is null || !await _rooms.IsMemberAsync(UserId, section.RoomId)) return null;
-        return section;
-    }
-
-    /// <summary>As <see cref="ViewableSectionAsync"/> but additionally requires ManageContents in the section's
-    /// room (the personal-room owner holds every permission). Returns the section (with artifacts included), or
-    /// an error result: 404 for a non-member/missing section, 403 for a member lacking the permission.</summary>
-    private async Task<(Section? Section, ActionResult? Error)> ManageableSectionAsync(Guid id)
-    {
-        var section = await ViewableSectionAsync(id, withArtifacts: true);
-        if (section is null) return (null, NotFound());
-        if (!(await _rooms.PermissionsAsync(UserId, section.RoomId)).HasFlag(RoomPermission.ManageContents))
-            return (null, Forbid());
-        return (section, null);
-    }
+        RoomAccessError.NotFound => NotFound(),
+        RoomAccessError.Forbidden => Forbid(),
+        _ => null,
+    };
 
     // ---- Detail (stats + folder summary + folder minutes) ----
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<SectionDetailDto>> Get(Guid id)
     {
-        var section = await ViewableSectionAsync(id, withArtifacts: true);
+        var section = await _rooms.ViewableSectionAsync(UserId, id, withArtifacts: true);
         if (section is null) return NotFound();
         var roomId = section.RoomId;
 
@@ -115,7 +100,7 @@ public class SectionPageController : ControllerBase
     [HttpGet("{id:guid}/actions")]
     public async Task<ActionResult<IReadOnlyList<ActionListItemDto>>> Actions(Guid id)
     {
-        var section = await ViewableSectionAsync(id);
+        var section = await _rooms.ViewableSectionAsync(UserId, id);
         if (section is null) return NotFound();
         var roomId = section.RoomId;
         var allIds = await IncludedSectionIdsAsync(id, roomId);
@@ -133,7 +118,7 @@ public class SectionPageController : ControllerBase
     [HttpGet("{id:guid}/notes")]
     public async Task<ActionResult<IReadOnlyList<SectionNoteListItemDto>>> Notes(Guid id)
     {
-        var section = await ViewableSectionAsync(id);
+        var section = await _rooms.ViewableSectionAsync(UserId, id);
         if (section is null) return NotFound();
         var roomId = section.RoomId;
         var allIds = await IncludedSectionIdsAsync(id, roomId);
@@ -151,7 +136,7 @@ public class SectionPageController : ControllerBase
     [HttpGet("{id:guid}/attachments")]
     public async Task<ActionResult<IReadOnlyList<SectionAttachmentListItemDto>>> Attachments(Guid id)
     {
-        var section = await ViewableSectionAsync(id);
+        var section = await _rooms.ViewableSectionAsync(UserId, id);
         if (section is null) return NotFound();
         var roomId = section.RoomId;
         var allIds = await IncludedSectionIdsAsync(id, roomId);
@@ -172,8 +157,8 @@ public class SectionPageController : ControllerBase
     [HttpPost("{id:guid}/summary/generate")]
     public async Task<IActionResult> GenerateSummary(Guid id)
     {
-        var (section, error) = await ManageableSectionAsync(id);
-        if (error is not null) return error;
+        var (section, error) = await _rooms.ManageableSectionAsync(UserId, id, withArtifacts: true);
+        if (ToActionResult(error) is { } errorResult) return errorResult;
         var sec = section!;
 
         var cfg = await _summarization.ResolveAsync(UserId);
@@ -195,8 +180,8 @@ public class SectionPageController : ControllerBase
     [HttpPut("{id:guid}/summary")]
     public async Task<IActionResult> UpdateSummary(Guid id, UpdateSummaryRequest req)
     {
-        var (section, error) = await ManageableSectionAsync(id);
-        if (error is not null) return error;
+        var (section, error) = await _rooms.ManageableSectionAsync(UserId, id, withArtifacts: true);
+        if (ToActionResult(error) is { } errorResult) return errorResult;
 
         var summary = await UpsertSummaryAsync(section!);
         summary.Text = req.Text ?? string.Empty;
@@ -214,8 +199,8 @@ public class SectionPageController : ControllerBase
     [HttpPost("{id:guid}/minutes/generate")]
     public async Task<IActionResult> GenerateMinutes(Guid id, ApplyMeetingTypeRequest req)
     {
-        var (section, error) = await ManageableSectionAsync(id);
-        if (error is not null) return error;
+        var (section, error) = await _rooms.ManageableSectionAsync(UserId, id, withArtifacts: true);
+        if (ToActionResult(error) is { } errorResult) return errorResult;
         var sec = section!;
 
         // A chosen type must be a General type (null room) or a type in this section's room.
@@ -243,8 +228,8 @@ public class SectionPageController : ControllerBase
     [HttpPut("{id:guid}/minutes")]
     public async Task<IActionResult> UpdateMinutes(Guid id, UpdateMeetingMinutesRequest req)
     {
-        var (section, error) = await ManageableSectionAsync(id);
-        if (error is not null) return error;
+        var (section, error) = await _rooms.ManageableSectionAsync(UserId, id, withArtifacts: true);
+        if (ToActionResult(error) is { } errorResult) return errorResult;
 
         var minutes = await UpsertMinutesAsync(section!);
         minutes.Text = req.Text ?? string.Empty;
