@@ -58,7 +58,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.146.2",
     date: "2026-07-23",
-    pr: 0,
+    pr: 324,
     headline: "Consolidate the folder authorization checks",
     summary:
       "Internal refactor, no user-visible change. The folder (section) view and manage authorization checks - is the caller a member of the folder's room, and for write routes does that member hold ManageContents - were copy-pasted with small differences across SectionPageController, SectionFormulaResultsController, and SectionAttachmentsController, plus a related room-id-based version in SectionsController. All four now share one implementation on IRoomScope (ViewableSectionAsync, ManageableSectionAsync, AuthorizeManageContentsAsync), so the rule can no longer drift between routes. Every route's status code and included data are unchanged; the security property that a non-member gets NotFound before any permission is even checked (so a room's existence stays private) is preserved and covered by new tests.",
