@@ -839,6 +839,8 @@ export interface Formula {
   enabled: boolean;
   isBuiltIn: boolean;
   shared: boolean;
+  /// Workflow signal ids attached to this formula (drives webhook signalFilter matching downstream).
+  signals: string[];
 }
 
 /// A formula shared by another user, for the discovery browser (mirrors SharedFormulaDto).
@@ -964,6 +966,10 @@ export interface WebhookSubscription {
   lastDeliveryAt: string | null;
   lastStatus: string | null;
   createdAt: string;
+  /// Workflow signal ids this webhook filters deliveries to (empty = no signal filtering).
+  signalFilter: string[];
+  /// Personal (owned by a user) or Platform (admin-managed, `/api/admin/webhooks`).
+  scope: "Personal" | "Platform";
 }
 /// The response to creating a webhook: the plaintext signing secret, shown to the user exactly once.
 export interface WebhookCreated {
@@ -989,5 +995,33 @@ export interface CreateWebhookBody {
   eventTypes: string[];
 }
 export interface UpdateWebhookBody extends CreateWebhookBody {
+  isActive: boolean;
+}
+
+/// Create/update payload for a Platform (admin-managed) webhook - `/api/admin/webhooks`.
+export interface CreatePlatformWebhookBody {
+  name: string;
+  url: string;
+  eventTypes: string[];
+  signalFilter: string[];
+}
+
+// ---- Workflow signals ----
+/// A workflow signal: a named condition a formula can attach, driving webhook `signalFilter` matching.
+export interface WorkflowSignal {
+  id: string;
+  key: string;
+  label: string;
+  description: string | null;
+  isActive: boolean;
+}
+export interface CreateWorkflowSignalBody {
+  key: string;
+  label: string;
+  description: string | null;
+}
+export interface UpdateWorkflowSignalBody {
+  label: string;
+  description: string | null;
   isActive: boolean;
 }
