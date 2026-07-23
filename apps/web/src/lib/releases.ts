@@ -58,7 +58,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.150.0",
     date: "2026-07-24",
-    pr: 0,
+    pr: 332,
     headline: "Zoom and pan in the screenshot viewer",
     summary:
       "The screenshot viewer now supports zoom and pan, so a dense capture (a full 4K screen grab of a spreadsheet, say) can be read at native size and scrolled around inside the modal instead of downloading it and opening it elsewhere. A zoom cluster in the toolbar (minus / current percentage / plus) sits alongside the existing prev/next, counter, jump, download, delete, and full-screen controls - the percentage also acts as a one-click reset to fit. You can also zoom with the mouse wheel (zooms toward the pointer), double-click to toggle between fit and 100%, and use the +/-/0 keyboard shortcuts. Once zoomed past fit, drag the image to pan, with the view clamped so it can never be dragged fully off-screen. Zoom and pan reset to fit whenever you move to a different capture or reopen the viewer, and work in both the windowed and full-screen states.",
