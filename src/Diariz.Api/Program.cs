@@ -490,6 +490,7 @@ app.MapOpenApi("/api/openapi/{documentName}.json").RequireAuthorization();
 
 app.UseCors();
 app.UseAuthentication();
+app.UseMiddleware<Diariz.Api.Auth.ApiTokenScopeMiddleware>();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<TranscriptionHub>("/hubs/transcription");
