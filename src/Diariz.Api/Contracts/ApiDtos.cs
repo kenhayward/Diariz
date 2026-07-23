@@ -369,6 +369,8 @@ public record UserProfileDto(
     string Theme = "auto",
     /// <summary>Whether the platform has user API access enabled (drives the Preferences "Developers" tab).</summary>
     bool ApiAccessEnabled = false,
+    /// <summary>Whether the platform has outbound webhooks enabled (drives the Preferences "Automations" tab).</summary>
+    bool WebhooksEnabled = false,
     /// <summary>The caller's platform permissions, from their group membership. Resolved server-side on every
     /// request: the web must not infer authority from the JWT, which goes stale when membership changes.</summary>
     PermissionsDto? Permissions = null);

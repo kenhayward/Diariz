@@ -49,7 +49,9 @@ public class UserProfileController : ControllerBase
         var user = await _users.FindByIdAsync(UserId.ToString());
         if (user is null) return NotFound();
         var s = await _db.UserSettings.FindAsync(UserId);
-        var apiAccessEnabled = (await _platform.GetAsync()).ApiAccessEnabled;
+        var settings = await _platform.GetAsync();
+        var apiAccessEnabled = settings.ApiAccessEnabled;
+        var webhooksEnabled = settings.WebhooksEnabled;
         return new UserProfileDto(user.Email ?? "", user.FullName, s?.NativeLanguage, s?.UiLanguage,
             GoogleConnected: user.GoogleSubject is not null,
             GoogleCalendar: s?.GoogleCalendarGranted ?? false,
@@ -57,6 +59,7 @@ public class UserProfileController : ControllerBase
             CompanyDescription: s?.CompanyDescription, LinkedIn: s?.LinkedIn,
             Theme: ThemeToString(s?.Theme ?? ThemePreference.Auto),
             ApiAccessEnabled: apiAccessEnabled,
+            WebhooksEnabled: webhooksEnabled,
             Permissions: ToDto(await _permissions.ForAsync(UserId)));
     }
 
