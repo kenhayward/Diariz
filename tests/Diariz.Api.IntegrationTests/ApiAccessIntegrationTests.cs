@@ -55,7 +55,7 @@ public class ApiAccessIntegrationTests(ContainersFixture fx)
             }
 
             await using (var db = fx.CreateDbContext())
-                Assert.Equal(userId, await new ApiTokenAuthenticator(db, new PlatformSettingsService(db)).AuthenticateAsync(token, default));
+                Assert.Equal(userId, (await new ApiTokenAuthenticator(db, new PlatformSettingsService(db)).AuthenticateAsync(token, default))?.UserId);
 
             await using (var verify = fx.CreateDbContext())
                 Assert.NotNull((await verify.ApiAccessTokens.SingleAsync(t => t.UserId == userId)).LastUsedAt);
@@ -92,7 +92,7 @@ public class ApiAccessIntegrationTests(ContainersFixture fx)
                 await Controller(db, bob).Create(new CreateApiTokenRequest("b"));
 
             await using (var db = fx.CreateDbContext())
-                Assert.Equal(alice, await new ApiTokenAuthenticator(db, new PlatformSettingsService(db)).AuthenticateAsync(aliceToken, default));
+                Assert.Equal(alice, (await new ApiTokenAuthenticator(db, new PlatformSettingsService(db)).AuthenticateAsync(aliceToken, default))?.UserId);
         }
         finally { await SetApiAccess(false); }
     }

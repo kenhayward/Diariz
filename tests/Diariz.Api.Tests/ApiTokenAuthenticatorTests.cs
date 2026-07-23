@@ -1,49 +1,53 @@
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
+using Diariz.Domain;
 using Diariz.Domain.Entities;
 
 namespace Diariz.Api.Tests;
 
 public class ApiTokenAuthenticatorTests
 {
-    private static async Task<(ApiTokenAuthenticator auth, Diariz.Domain.DiarizDbContext db)> BuildAsync(bool enabled)
+    private static (DiarizDbContext db, Guid userId, string token) Seed(
+        ApiTokenScope scope, DateTimeOffset? expiresAt, bool apiEnabled = true)
     {
         var db = TestDb.Create();
-        db.PlatformSettings.Add(new PlatformSettings { Id = PlatformSettings.SingletonId, ApiAccessEnabled = enabled });
-        await db.SaveChangesAsync();
-        return (new ApiTokenAuthenticator(db, new PlatformSettingsService(db)), db);
-    }
-
-    private static async Task<string> SeedTokenAsync(Diariz.Domain.DiarizDbContext db, Guid userId)
-    {
-        var g = new ApiTokenService().Generate();
-        db.ApiAccessTokens.Add(new ApiAccessToken { Id = Guid.NewGuid(), UserId = userId, Name = "t", TokenHash = g.Hash, Prefix = g.Prefix });
-        await db.SaveChangesAsync();
-        return g.Token;
-    }
-
-    [Fact]
-    public async Task Authenticate_ReturnsOwner_WhenEnabledAndTokenValid()
-    {
-        var (auth, db) = await BuildAsync(enabled: true);
-        var user = Guid.NewGuid();
-        var token = await SeedTokenAsync(db, user);
-        Assert.Equal(user, await auth.AuthenticateAsync(token, default));
+        var userId = Guid.NewGuid();
+        db.Users.Add(new ApplicationUser { Id = userId, Email = "u@e.com", UserName = "u@e.com" });
+        db.PlatformSettings.Add(new PlatformSettings { Id = PlatformSettings.SingletonId, ApiAccessEnabled = apiEnabled });
+        var token = "dz_api_" + Guid.NewGuid().ToString("N");
+        db.ApiAccessTokens.Add(new ApiAccessToken
+        {
+            Id = Guid.NewGuid(), UserId = userId, Name = "t", TokenHash = ApiTokenService.Hash(token),
+            Prefix = ApiTokenService.DisplayPrefix(token), Scope = scope, ExpiresAt = expiresAt,
+        });
+        db.SaveChanges();
+        return (db, userId, token);
     }
 
     [Fact]
-    public async Task Authenticate_ReturnsNull_WhenFeatureDisabled()
+    public async Task Valid_token_returns_user_and_scope()
     {
-        var (auth, db) = await BuildAsync(enabled: false);
-        var token = await SeedTokenAsync(db, Guid.NewGuid());
+        var (db, userId, token) = Seed(ApiTokenScope.ReadOnly, expiresAt: null);
+        var auth = new ApiTokenAuthenticator(db, new FixedPlatformSettings(db));
+        var result = await auth.AuthenticateAsync(token, default);
+        Assert.NotNull(result);
+        Assert.Equal(userId, result!.UserId);
+        Assert.Equal(ApiTokenScope.ReadOnly, result.Scope);
+    }
+
+    [Fact]
+    public async Task Expired_token_is_rejected()
+    {
+        var (db, _, token) = Seed(ApiTokenScope.ReadWrite, expiresAt: DateTimeOffset.UtcNow.AddMinutes(-1));
+        var auth = new ApiTokenAuthenticator(db, new FixedPlatformSettings(db));
         Assert.Null(await auth.AuthenticateAsync(token, default));
     }
 
     [Fact]
-    public async Task Authenticate_ReturnsNull_ForUnknownOrBlankToken()
+    public async Task Feature_disabled_rejects_even_valid_token()
     {
-        var (auth, _) = await BuildAsync(enabled: true);
-        Assert.Null(await auth.AuthenticateAsync("dz_api_nope", default));
-        Assert.Null(await auth.AuthenticateAsync("", default));
+        var (db, _, token) = Seed(ApiTokenScope.ReadWrite, expiresAt: null, apiEnabled: false);
+        var auth = new ApiTokenAuthenticator(db, new FixedPlatformSettings(db));
+        Assert.Null(await auth.AuthenticateAsync(token, default));
     }
 }
