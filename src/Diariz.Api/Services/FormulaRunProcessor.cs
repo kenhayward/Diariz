@@ -70,11 +70,22 @@ public static class FormulaRunProcessor
             }
             await hub.NotifyFormulaStatusAsync(job.UserId, job.RecordingId, job.SectionId, job.ResultId,
                 nameof(FormulaRunStatus.Ready));
+            var signalKeys = await LoadSignalKeysAsync(db, job.FormulaId, ct);
+            string? recordingName = job.RecordingId is { } rid
+                ? await db.Recordings.Where(r => r.Id == rid).Select(r => r.Name ?? r.Title).FirstOrDefaultAsync(ct)
+                : null;
+            var formulaName = formula.Name;
             await webhooks.PublishAsync(WebhookEventTypes.FormulaResultCompleted, job.UserId, new
             {
                 recordingId = job.RecordingId, sectionId = job.SectionId, formulaId = job.FormulaId,
-                formulaResultId = job.ResultId, status = nameof(FormulaRunStatus.Ready),
+                formulaResultId = job.ResultId, signals = signalKeys, status = nameof(FormulaRunStatus.Ready),
                 links = new { result = FormulaResultLink(publicUrl, job.RecordingId, job.ResultId) },
+            }, signals: signalKeys, platformData: new
+            {
+                recordingId = job.RecordingId, sectionId = job.SectionId, formulaId = job.FormulaId,
+                formulaResultId = job.ResultId, signals = signalKeys, status = nameof(FormulaRunStatus.Ready),
+                links = new { result = FormulaResultLink(publicUrl, job.RecordingId, job.ResultId) },
+                output = text, recordingName, formulaName,
             });
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -120,13 +131,32 @@ public static class FormulaRunProcessor
         }
         await hub.NotifyFormulaStatusAsync(job.UserId, job.RecordingId, job.SectionId, job.ResultId,
             nameof(FormulaRunStatus.Failed));
+        var signalKeys = await LoadSignalKeysAsync(db, job.FormulaId, ct);
+        string? recordingName = job.RecordingId is { } rid
+            ? await db.Recordings.Where(r => r.Id == rid).Select(r => r.Name ?? r.Title).FirstOrDefaultAsync(ct)
+            : null;
+        var formulaName = await db.Formulas.Where(f => f.Id == job.FormulaId).Select(f => f.Name).FirstOrDefaultAsync(ct);
         await webhooks.PublishAsync(WebhookEventTypes.FormulaResultFailed, job.UserId, new
         {
             recordingId = job.RecordingId, sectionId = job.SectionId, formulaId = job.FormulaId,
-            formulaResultId = job.ResultId, status = nameof(FormulaRunStatus.Failed),
+            formulaResultId = job.ResultId, signals = signalKeys, error, status = nameof(FormulaRunStatus.Failed),
             links = new { result = FormulaResultLink(publicUrl, job.RecordingId, job.ResultId) },
+        }, signals: signalKeys, platformData: new
+        {
+            recordingId = job.RecordingId, sectionId = job.SectionId, formulaId = job.FormulaId,
+            formulaResultId = job.ResultId, signals = signalKeys, error, status = nameof(FormulaRunStatus.Failed),
+            links = new { result = FormulaResultLink(publicUrl, job.RecordingId, job.ResultId) },
+            recordingName, formulaName,
         });
     }
+
+    /// <summary>The formula's attached signal keys, ACTIVE only - an inactive signal stays linked (so re-enabling
+    /// it restores routing) but doesn't route events while off.</summary>
+    private static Task<List<string>> LoadSignalKeysAsync(DiarizDbContext db, Guid formulaId, CancellationToken ct) =>
+        db.FormulaWorkflowSignals
+            .Where(x => x.FormulaId == formulaId && x.WorkflowSignal!.IsActive)
+            .Select(x => x.WorkflowSignal!.Key)
+            .ToListAsync(ct);
 
     /// <summary>The result-fetch endpoint link, or null when there's no public URL configured or the run is
     /// section-scoped (no owning recording to address the endpoint by).</summary>

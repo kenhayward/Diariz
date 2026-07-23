@@ -165,4 +165,59 @@ public class FormulaWebhookEmitTests
         Assert.Equal(sectionId.ToString(), doc.RootElement.GetProperty("sectionId").GetString());
         Assert.Equal(System.Text.Json.JsonValueKind.Null, doc.RootElement.GetProperty("links").GetProperty("result").ValueKind);
     }
+
+    [Fact]
+    public async Task Successful_run_withAttachedActiveSignal_carriesSignalsAndPlatformData()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecordingWithTranscript(db, userId);
+        var (formula, result) = await SeedFormulaAndResult(db, userId, rec.Id);
+        var signal = new WorkflowSignal { Id = Guid.NewGuid(), Key = "post-to-slack", Label = "Post to Slack", IsActive = true };
+        db.WorkflowSignals.Add(signal);
+        db.FormulaWorkflowSignals.Add(new FormulaWorkflowSignal { FormulaId = formula.Id, WorkflowSignalId = signal.Id });
+        await db.SaveChangesAsync();
+        var chat = new FakeChatStreamClient { Tokens = ["OUT", "PUT"] };
+        var hub = new FakeHubContext();
+        var publisher = new CapturingWebhookPublisher();
+
+        await Run(db, chat, new FakeSummarizationSettingsResolver(), hub,
+            new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId), publisher,
+            publicUrl: "https://app.test");
+
+        Assert.Contains(publisher.Published, p =>
+            p.EventType == WebhookEventTypes.FormulaResultCompleted
+            && p.Signals.Contains("post-to-slack")
+            && p.PlatformData is not null);
+
+        var (_, _, _, _, platformData) = publisher.Published.Single(p => p.EventType == WebhookEventTypes.FormulaResultCompleted);
+        var json = System.Text.Json.JsonSerializer.Serialize(platformData);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        Assert.Equal("OUTPUT", doc.RootElement.GetProperty("output").GetString());
+        Assert.Equal(rec.Name ?? rec.Title, doc.RootElement.GetProperty("recordingName").GetString());
+        Assert.Equal(formula.Name, doc.RootElement.GetProperty("formulaName").GetString());
+    }
+
+    [Fact]
+    public async Task Failed_run_withAttachedActiveSignal_carriesSignals()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecordingWithTranscript(db, userId);
+        var (formula, result) = await SeedFormulaAndResult(db, userId, rec.Id);
+        var signal = new WorkflowSignal { Id = Guid.NewGuid(), Key = "post-to-slack", Label = "Post to Slack", IsActive = true };
+        db.WorkflowSignals.Add(signal);
+        db.FormulaWorkflowSignals.Add(new FormulaWorkflowSignal { FormulaId = formula.Id, WorkflowSignalId = signal.Id });
+        await db.SaveChangesAsync();
+        var chat = new FakeChatStreamClient { ThrowOnCall = new InvalidOperationException("LLM down") };
+        var hub = new FakeHubContext();
+        var publisher = new CapturingWebhookPublisher();
+
+        await Run(db, chat, new FakeSummarizationSettingsResolver(), hub,
+            new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId), publisher);
+
+        Assert.Contains(publisher.Published, p =>
+            p.EventType == WebhookEventTypes.FormulaResultFailed
+            && p.Signals.Contains("post-to-slack"));
+    }
 }
