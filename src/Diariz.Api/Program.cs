@@ -43,6 +43,7 @@ builder.Services.Configure<AttachmentOptions>(builder.Configuration.GetSection(A
 builder.Services.Configure<ScreenshotOptions>(builder.Configuration.GetSection(ScreenshotOptions.Section));
 builder.Services.Configure<McpOptions>(builder.Configuration.GetSection(McpOptions.Section));
 builder.Services.Configure<McpOAuthOptions>(builder.Configuration.GetSection(McpOAuthOptions.Section));
+builder.Services.Configure<WebhookOptions>(builder.Configuration.GetSection(WebhookOptions.Section));
 
 // Honour X-Forwarded-* from the reverse proxy (nginx/TLS terminator) so Request.Scheme/IsHttps reflect the
 // browser's HTTPS — needed for the OAuth state cookie's Secure flag and any request-derived URLs. The proxy
@@ -315,6 +316,12 @@ builder.Services.AddScoped<IUrlFetcher, UrlFetcher>();
 builder.Services.AddSingleton<IWebhookUrlValidator, WebhookUrlValidator>();
 builder.Services.AddSingleton<IWebhookSecretProtector, WebhookSecretProtector>();
 builder.Services.AddScoped<IWebhookPublisher, WebhookPublisher>();
+builder.Services.AddScoped<WebhookDeliveryProcessor>();
+// Auto-redirect OFF so a delivery target can't 3xx its way to a different (possibly internal) host after
+// the SSRF guard already approved the subscription's URL.
+builder.Services.AddHttpClient("webhooks", c => c.Timeout = TimeSpan.FromSeconds(10))
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddHostedService<WebhookDeliveryWorker>();
 
 // ---- Chat tool calling (built-in transcript tools) ----
 builder.Services.AddScoped<ITranscriptSearch, TranscriptSearch>();
