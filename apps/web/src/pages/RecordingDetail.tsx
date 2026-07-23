@@ -876,6 +876,8 @@ export default function RecordingDetail() {
       el.pause();
       el.currentTime = 0;
     }
+    setAudioPaused(true); // set directly rather than waiting on the native onPause round-trip, so a natural
+    // "ended" (which fires with no guaranteed prior "pause" in every environment) still flips the header
     exitSpeakerMode();
     setActiveIdx(null);
   }
@@ -1606,6 +1608,7 @@ export default function RecordingDetail() {
             setAudioPaused(true);
             setSelectionPlaying(false); // whatever paused it, the toolbar's Pause has nothing left to stop
           }}
+          onEnded={stopPlayback} // natural end of the whole recording: behave exactly like an explicit Stop
           className="hidden"
         />
       )}

@@ -1094,6 +1094,34 @@ describe("RecordingDetail", () => {
 
       expect(await screen.findByRole("button", { name: "Stop" })).toBeTruthy();
     });
+
+    // Natural end-of-playback: the whole recording plays through with no explicit Stop click. Only "ended"
+    // is fired here (deliberately no preceding "pause"), so this only passes if an onEnded handler reverts
+    // the header itself rather than relying on the browser's implicit pause-before-ended ordering.
+    it("reverts the header to Play and clears the highlight when playback ends naturally", async () => {
+      mockMediaElement();
+      renderPage(base);
+      await loaded();
+      openTab("Transcript");
+
+      fireEvent.click(screen.getByRole("button", { name: "Play" }));
+      await waitFor(() => expect(api.audioUrl).toHaveBeenCalledWith("rec-123"));
+      fireEvent.play(audioEl());
+
+      expect(await screen.findByRole("button", { name: "Stop" })).toBeTruthy();
+
+      // Land inside seg-1's range (0-1000ms) so the transcript highlight turns on, like real playback would.
+      audioEl().currentTime = 0.5;
+      fireEvent.timeUpdate(audioEl());
+      expect(await screen.findByText("▶")).toBeTruthy();
+
+      fireEvent.ended(audioEl());
+
+      expect(await screen.findByRole("button", { name: "Play" })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+      expect(screen.queryByText("▶")).toBeNull();
+      expect(audioEl().currentTime).toBe(0);
+    });
   });
 
   // Bug 2: a recording that no longer exists (deleted here, on another device, or a stale list link) must
