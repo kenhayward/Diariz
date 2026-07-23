@@ -17,6 +17,7 @@ vi.mock("./CalendarFeedsSection", () => ({ default: () => <div>FEEDS_SECTION</di
 vi.mock("./McpAccessSection", () => ({ default: () => <div>CLAUDE_SECTION</div> }));
 vi.mock("./DeveloperAccessSection", () => ({ default: () => <div>DEVELOPERS_SECTION</div> }));
 vi.mock("./VoicePrintsSection", () => ({ default: () => <div>VOICEPRINTS_SECTION</div> }));
+vi.mock("./AutomationsSection", () => ({ default: () => <div>AUTOMATIONS_SECTION</div> }));
 
 import { api } from "../lib/api";
 import PreferencesModal, { type PreferencesTab } from "./PreferencesModal";
@@ -33,7 +34,7 @@ function renderModal(props: { onClose?: () => void; initialTab?: PreferencesTab 
 describe("PreferencesModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ apiAccessEnabled: false });
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ apiAccessEnabled: false, webhooksEnabled: false });
   });
 
   it("renders the standard tabs headed by the user's name, showing Profile first", () => {
@@ -69,9 +70,22 @@ describe("PreferencesModal", () => {
     // Disabled by default (getProfile → apiAccessEnabled:false): no Developers tab.
     expect(screen.queryByRole("tab", { name: /developers/i })).toBeNull();
 
-    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ apiAccessEnabled: true });
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ apiAccessEnabled: true, webhooksEnabled: false });
     renderModal();
     expect(await screen.findByRole("tab", { name: /developers/i })).toBeTruthy();
+  });
+
+  it("hides the Automations tab when webhooks are disabled, shows it when enabled", async () => {
+    renderModal();
+    // Disabled by default (getProfile → webhooksEnabled:false): no Automations tab.
+    expect(screen.queryByRole("tab", { name: /automations/i })).toBeNull();
+
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ apiAccessEnabled: false, webhooksEnabled: true });
+    renderModal();
+    expect(await screen.findByRole("tab", { name: /automations/i })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: /automations/i }));
+    expect(screen.getByText("AUTOMATIONS_SECTION")).toBeTruthy();
   });
 
   it("switches the content panel when another tab is selected", () => {

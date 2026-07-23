@@ -225,5 +225,22 @@
   "minutesModeHint": "Plattformweit: wie das Protokoll aus einer Vorlage erzeugt wird. Gilt ab dem nächsten Lauf.",
   "llmTimeoutLabel": "KI-Timeout (Sekunden)",
   "llmTimeoutHint": "Plattformweites Anfrage-Timeout für jeden KI-Aufruf (Zusammenfassungen, Protokolle, Aktionen, Tags, Embeddings). Für langsame lokale Modelle erhöhen. Standard 120.",
-  "llmTimeoutInvalid": "Das KI-Timeout muss eine ganze Zahl in Sekunden sein (mindestens 5)."
+  "llmTimeoutInvalid": "Das KI-Timeout muss eine ganze Zahl in Sekunden sein (mindestens 5).",
+  "tabAutomations": "Automatisierungen",
+  "automationsTitle": "Automatisierungen",
+  "automationsIntro": "Sende deine Besprechungsereignisse an Tools wie Zapier, n8n oder Make. Wähle aus, was sie auslösen soll, füge die URL aus deinem Tool ein und teste sie.",
+  "automationDefaultName": "Automatisierung",
+  "automationDestinationUrl": "Ziel-URL",
+  "automationEventsHeading": "Was soll sie auslösen?",
+  "evtRecordingCreated": "Eine Aufnahme wird erstellt",
+  "evtRecordingTranscribed": "Eine Aufnahme ist fertig transkribiert",
+  "evtRecordingFailed": "Eine Aufnahme kann nicht transkribiert werden",
+  "evtFormulaCompleted": "Eine Formel ist fertig",
+  "evtFormulaFailed": "Eine Formel schlägt fehl",
+  "automationCreate": "Automatisierung erstellen",
+  "automationSecretOnce": "Signierschlüssel (wird nur einmal angezeigt) - optional, damit kannst du prüfen, ob Anfragen wirklich von Diariz stammen.",
+  "automationCreateError": "Die Automatisierung konnte nicht erstellt werden.",
+  "automationHintZapier": "In Zapier: Füge einen Trigger 'Webhooks by Zapier - Catch Hook' hinzu und füge hier dessen Custom Webhook URL ein.",
+  "automationHintN8n": "In n8n: Füge einen Webhook-Node hinzu und füge hier dessen Production URL ein.",
+  "automationHintOther": "Füge hier die Webhook-URL ein, die dir dein Tool gibt."
 }

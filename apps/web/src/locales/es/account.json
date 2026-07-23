@@ -225,5 +225,22 @@
   "minutesModeHint": "Para toda la plataforma: cómo se generan las actas a partir de una plantilla. Se aplica desde la próxima ejecución.",
   "llmTimeoutLabel": "Tiempo de espera de IA (segundos)",
   "llmTimeoutHint": "Tiempo de espera por solicitud para toda la plataforma en cada llamada de IA (resúmenes, actas, acciones, etiquetas, incrustaciones). Auméntalo para modelos locales lentos. Predeterminado 120.",
-  "llmTimeoutInvalid": "El tiempo de espera de IA debe ser un número entero de segundos (al menos 5)."
+  "llmTimeoutInvalid": "El tiempo de espera de IA debe ser un número entero de segundos (al menos 5).",
+  "tabAutomations": "Automatizaciones",
+  "automationsTitle": "Automatizaciones",
+  "automationsIntro": "Envía los eventos de tus reuniones a herramientas como Zapier, n8n o Make. Elige qué debe activarla, pega la URL de tu herramienta y pruébala.",
+  "automationDefaultName": "Automatización",
+  "automationDestinationUrl": "URL de destino",
+  "automationEventsHeading": "¿Qué debe activarla?",
+  "evtRecordingCreated": "Se crea una grabación",
+  "evtRecordingTranscribed": "Una grabación termina de transcribirse",
+  "evtRecordingFailed": "Una grabación falla al transcribirse",
+  "evtFormulaCompleted": "Una fórmula termina",
+  "evtFormulaFailed": "Una fórmula falla",
+  "automationCreate": "Crear automatización",
+  "automationSecretOnce": "Clave de firma (se muestra una sola vez) - opcional, úsala para verificar que las solicitudes vinieron realmente de Diariz.",
+  "automationCreateError": "No se pudo crear la automatización.",
+  "automationHintZapier": "En Zapier: añade un disparador 'Webhooks by Zapier - Catch Hook' y pega aquí su Custom Webhook URL.",
+  "automationHintN8n": "En n8n: añade un nodo Webhook y pega aquí su Production URL.",
+  "automationHintOther": "Pega aquí la URL de webhook que te da tu herramienta."
 }
