@@ -60,7 +60,8 @@ public class FormulasController : ControllerBase
                      || (f.Scope == FormulaScope.Personal && f.Shared
                          && _db.FormulaSubscriptions.Any(s => s.FormulaId == f.Id && s.UserId == userId)))
             .ToListAsync();
-        return formulas.Select(ToDto).ToList();
+        var signals = await LoadSignalsAsync(formulas.Select(f => f.Id));
+        return formulas.Select(f => ToDto(f, signals)).ToList();
     }
 
     /// <summary>Every Platform/Diariz formula, enabled or not (never Personal) - for the Formulas admin
@@ -79,7 +80,8 @@ public class FormulasController : ControllerBase
             .OrderBy(f => f.Scope)
             .ThenBy(f => f.Name)
             .ToListAsync();
-        return Ok(formulas.Select(ToDto).ToList());
+        var signals = await LoadSignalsAsync(formulas.Select(f => f.Id));
+        return Ok(formulas.Select(f => ToDto(f, signals)).ToList());
     }
 
     /// <summary>Creates a formula. A Personal formula is always allowed and owned by the caller; a
@@ -111,7 +113,8 @@ public class FormulasController : ControllerBase
         };
         _db.Formulas.Add(formula);
         await _db.SaveChangesAsync();
-        return Created($"api/formulas/{formula.Id}", ToDto(formula));
+        await ReconcileSignalsAsync(formula.Id, req.Signals);
+        return Created($"api/formulas/{formula.Id}", await ToDtoAsync(formula));
     }
 
     /// <summary>Partial update (null fields left unchanged). A Personal formula needs ownership (a
@@ -142,7 +145,8 @@ public class FormulasController : ControllerBase
         if (req.Shared is not null && formula.Scope == FormulaScope.Personal) formula.Shared = req.Shared.Value;
         formula.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync();
-        return Ok(ToDto(formula));
+        await ReconcileSignalsAsync(formula.Id, req.Signals);
+        return Ok(await ToDtoAsync(formula));
     }
 
     /// <summary>Deletes a formula. Personal needs ownership (404 otherwise, same leak-avoidance as
@@ -242,6 +246,7 @@ public class FormulasController : ControllerBase
                 .Select(s => s.FormulaId).ToListAsync())
             .ToHashSet();
 
+        var signals = await LoadSignalsAsync(sharedIds);
         return shared.Select(f =>
         {
             string? name = null, pic = null;
@@ -250,7 +255,7 @@ public class FormulasController : ControllerBase
                 name = string.IsNullOrWhiteSpace(o.FullName) ? o.Email : o.FullName;
                 pic = o.PictureUrl;
             }
-            return new SharedFormulaDto(ToDto(f), name, pic, mine.Contains(f.Id));
+            return new SharedFormulaDto(ToDto(f, signals), name, pic, mine.Contains(f.Id));
         }).ToList();
     }
 
@@ -339,9 +344,50 @@ public class FormulasController : ControllerBase
 
     private ObjectResult Forbidden(string message) => StatusCode(StatusCodes.Status403Forbidden, message);
 
-    private static FormulaDto ToDto(Formula f) => new(
+    /// <summary>Reconciles a formula's <see cref="FormulaWorkflowSignal"/> rows to exactly <paramref name="signalIds"/>.
+    /// Null means "leave unchanged" (partial update semantics); unknown ids are silently ignored (validated
+    /// against the existing <see cref="Diariz.Domain.Entities.WorkflowSignal"/> rows).</summary>
+    private async Task ReconcileSignalsAsync(Guid formulaId, Guid[]? signalIds)
+    {
+        if (signalIds is null) return; // unchanged
+        var wanted = signalIds.Distinct().ToHashSet();
+        var existing = await _db.FormulaWorkflowSignals.Where(x => x.FormulaId == formulaId).ToListAsync();
+        _db.FormulaWorkflowSignals.RemoveRange(existing.Where(x => !wanted.Contains(x.WorkflowSignalId)));
+        var have = existing.Select(x => x.WorkflowSignalId).ToHashSet();
+        var validIds = await _db.WorkflowSignals.Where(s => wanted.Contains(s.Id)).Select(s => s.Id).ToListAsync();
+        foreach (var id in validIds.Where(id => !have.Contains(id)))
+            _db.FormulaWorkflowSignals.Add(new FormulaWorkflowSignal { FormulaId = formulaId, WorkflowSignalId = id });
+        await _db.SaveChangesAsync();
+    }
+
+    /// <summary>Batch-loads attached Workflow Signal ids for a set of formulas in one query, keyed by
+    /// FormulaId - used by list endpoints (<see cref="List"/>/<see cref="Managed"/>/<see cref="Shared"/>) to
+    /// avoid an N+1 query per formula.</summary>
+    private async Task<Dictionary<Guid, Guid[]>> LoadSignalsAsync(IEnumerable<Guid> formulaIds)
+    {
+        var ids = formulaIds.ToList();
+        var links = await _db.FormulaWorkflowSignals
+            .Where(x => ids.Contains(x.FormulaId))
+            .Select(x => new { x.FormulaId, x.WorkflowSignalId })
+            .ToListAsync();
+        return links.GroupBy(x => x.FormulaId).ToDictionary(g => g.Key, g => g.Select(x => x.WorkflowSignalId).ToArray());
+    }
+
+    /// <summary>Single-formula DTO projection for Create/Update, where a fresh query for just this formula's
+    /// signals is cheap (no list involved).</summary>
+    private async Task<FormulaDto> ToDtoAsync(Formula f)
+    {
+        var ids = await _db.FormulaWorkflowSignals.Where(x => x.FormulaId == f.Id)
+            .Select(x => x.WorkflowSignalId).ToArrayAsync();
+        return ToDto(f, ids);
+    }
+
+    private static FormulaDto ToDto(Formula f, Dictionary<Guid, Guid[]> signalsByFormula) =>
+        ToDto(f, signalsByFormula.TryGetValue(f.Id, out var ids) ? ids : Array.Empty<Guid>());
+
+    private static FormulaDto ToDto(Formula f, Guid[] signals) => new(
         f.Id, f.Scope.ToString(), f.OwnerUserId, f.Name, f.Description, TemplateContent.Parse(f.ContentJson),
-        (int)f.Context, f.Enabled, f.IsBuiltIn, f.Shared);
+        (int)f.Context, f.Enabled, f.IsBuiltIn, f.Shared, signals);
 
     private static FormulaResultDto ToResultDto(FormulaResult r, FormulaResultOriginDto origin) => new(
         r.Id, r.RecordingId, r.Name, r.CreatedByUserId, r.CreatedAt, r.UpdatedAt, origin,

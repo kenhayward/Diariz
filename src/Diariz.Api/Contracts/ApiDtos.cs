@@ -537,7 +537,7 @@ public record SaveChatConversationResult(Guid Id, string Title);
 public record FormulaDto(
     Guid Id, string Scope, Guid? OwnerUserId, string Name, string? Description,
     Diariz.Api.Services.TemplateContent Content,
-    int Context, bool Enabled, bool IsBuiltIn, bool Shared);
+    int Context, bool Enabled, bool IsBuiltIn, bool Shared, Guid[] Signals);
 
 /// <summary>A formula shared by another user, for the discovery browser: the formula, the owner's display +
 /// avatar (name falls back to email), and whether the caller has already added it.</summary>
@@ -547,14 +547,16 @@ public record SharedFormulaDto(FormulaDto Formula, string? OwnerName, string? Ow
 /// <paramref name="Context"/> is the [Flags] bit value as an int.</summary>
 public record CreateFormulaRequest(
     string Scope, string Name, string? Description, Diariz.Api.Services.TemplateContent Content,
-    int Context, bool Shared = false);
+    int Context, bool Shared = false, Guid[]? Signals = null);
 
 /// <summary>Partial update: null leaves a field unchanged, mirroring the tri-state pattern used by
 /// <see cref="UpdateUserSettingsRequest"/> (a value replaces it - none of these fields need a separate
-/// "clear" state, unlike the optional overrides in user settings).</summary>
+/// "clear" state, unlike the optional overrides in user settings). <paramref name="Signals"/> follows the
+/// same null-means-unchanged rule; a non-null array (including empty) reconciles the attached Workflow
+/// Signals to exactly that set.</summary>
 public record UpdateFormulaRequest(
     string? Name, string? Description, Diariz.Api.Services.TemplateContent? Content, int? Context,
-    bool? Shared = null);
+    bool? Shared = null, Guid[]? Signals = null);
 
 public record SetFormulaEnabledRequest(bool Enabled);
 
