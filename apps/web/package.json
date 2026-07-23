@@ -1,7 +1,7 @@
 {
   "name": "diariz-web",
   "private": true,
-  "version": "0.147.0",
+  "version": "0.147.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -22,7 +22,7 @@
     "@tiptap/react": "^3.27.1",
     "@tiptap/starter-kit": "^3.27.1",
     "axios": "^1.7.9",
-    "dompurify": "^3.4.11",
+    "dompurify": "^3.4.12",
     "i18next": "^23.16.8",
     "marked": "^18.0.5",
     "react": "^19.0.0",
