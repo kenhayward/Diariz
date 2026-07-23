@@ -16,7 +16,8 @@ namespace Diariz.Api.Controllers;
 /// map-reduce over its meetings) plus - in a later unit - listing/reading/editing/deleting the results. The
 /// section-scoped twin of the recording formula surface in <see cref="FormulasController"/>. Every action is
 /// gated by folder membership (a caller who is not a member of the section's room 404s, so a room's contents
-/// stay private) - mirroring <c>SectionPageController.ViewableSectionAsync</c>.</summary>
+/// stay private) - <see cref="IRoomScope.ViewableSectionAsync"/>, the shared gate also used by
+/// <c>SectionPageController</c> and <c>SectionAttachmentsController</c>.</summary>
 [ApiController]
 [Authorize]
 [Route("api/sections")]
@@ -42,16 +43,6 @@ public class SectionFormulaResultsController : ControllerBase
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    /// <summary>Load a section and check the caller may view it - i.e. is a member of the section's room. Returns
-    /// null when the section is missing OR the caller isn't a member, so callers 404 either way and a room's
-    /// contents stay private (same gate as <c>SectionPageController.ViewableSectionAsync</c>).</summary>
-    private async Task<Section?> ViewableSectionAsync(Guid id)
-    {
-        var section = await _db.Sections.FirstOrDefaultAsync(s => s.Id == id);
-        if (section is null || !await _rooms.IsMemberAsync(UserId, section.RoomId)) return null;
-        return section;
-    }
-
     /// <summary>The section id plus its child section ids (within the same room) - the placements that count as
     /// "included" in this folder (mirrors <c>SectionPageController.IncludedSectionIdsAsync</c>).</summary>
     private async Task<List<Guid>> IncludedSectionIdsAsync(Guid sectionId, Guid roomId, CancellationToken ct)
@@ -71,7 +62,7 @@ public class SectionFormulaResultsController : ControllerBase
     [HttpPost("~/api/sections/{sectionId:guid}/formulas/{formulaId:guid}/run")]
     public async Task<ActionResult<SectionFormulaResultDto>> Run(Guid sectionId, Guid formulaId, CancellationToken ct)
     {
-        var section = await ViewableSectionAsync(sectionId);
+        var section = await _rooms.ViewableSectionAsync(UserId, sectionId);
         if (section is null) return NotFound();
 
         Formula formula;
@@ -119,7 +110,7 @@ public class SectionFormulaResultsController : ControllerBase
     [HttpGet("{sectionId:guid}/formula-results")]
     public async Task<ActionResult<IReadOnlyList<SectionFormulaResultDto>>> List(Guid sectionId)
     {
-        var section = await ViewableSectionAsync(sectionId);
+        var section = await _rooms.ViewableSectionAsync(UserId, sectionId);
         if (section is null) return NotFound();
 
         var results = await _db.SectionFormulaResults
@@ -134,7 +125,7 @@ public class SectionFormulaResultsController : ControllerBase
     [HttpGet("{sectionId:guid}/formula-results/{id:guid}")]
     public async Task<ActionResult<FormulaResultTextDto>> Get(Guid sectionId, Guid id)
     {
-        var section = await ViewableSectionAsync(sectionId);
+        var section = await _rooms.ViewableSectionAsync(UserId, sectionId);
         if (section is null) return NotFound();
 
         var result = await ResultAsync(sectionId, id);
@@ -145,7 +136,7 @@ public class SectionFormulaResultsController : ControllerBase
     [HttpPut("{sectionId:guid}/formula-results/{id:guid}")]
     public async Task<ActionResult<SectionFormulaResultDto>> Update(Guid sectionId, Guid id, UpdateFormulaResultRequest req)
     {
-        var section = await ViewableSectionAsync(sectionId);
+        var section = await _rooms.ViewableSectionAsync(UserId, sectionId);
         if (section is null) return NotFound();
 
         var result = await ResultAsync(sectionId, id);
@@ -167,7 +158,7 @@ public class SectionFormulaResultsController : ControllerBase
     [HttpDelete("{sectionId:guid}/formula-results/{id:guid}")]
     public async Task<IActionResult> Delete(Guid sectionId, Guid id)
     {
-        var section = await ViewableSectionAsync(sectionId);
+        var section = await _rooms.ViewableSectionAsync(UserId, sectionId);
         if (section is null) return NotFound();
 
         var result = await ResultAsync(sectionId, id);
@@ -185,7 +176,7 @@ public class SectionFormulaResultsController : ControllerBase
     [HttpPost("{sectionId:guid}/formula-results/{id:guid}/email")]
     public async Task<IActionResult> Email(Guid sectionId, Guid id)
     {
-        var section = await ViewableSectionAsync(sectionId);
+        var section = await _rooms.ViewableSectionAsync(UserId, sectionId);
         if (section is null) return NotFound();
 
         var result = await ResultAsync(sectionId, id);
@@ -206,7 +197,7 @@ public class SectionFormulaResultsController : ControllerBase
     [HttpGet("{sectionId:guid}/formula-results/{id:guid}/download")]
     public async Task<IActionResult> Download(Guid sectionId, Guid id)
     {
-        var section = await ViewableSectionAsync(sectionId);
+        var section = await _rooms.ViewableSectionAsync(UserId, sectionId);
         if (section is null) return NotFound();
 
         var result = await ResultAsync(sectionId, id);
@@ -221,7 +212,7 @@ public class SectionFormulaResultsController : ControllerBase
 
     /// <summary>Edit/delete gate: the result's creator OR a member of the section's room with ManageContents
     /// (the personal-room owner holds every permission). Only meaningful once the caller has passed
-    /// <see cref="ViewableSectionAsync"/> for the same section.</summary>
+    /// <see cref="IRoomScope.ViewableSectionAsync"/> for the same section.</summary>
     private async Task<bool> CanEditAsync(SectionFormulaResult result, Section section) =>
         result.CreatedByUserId == UserId ||
         (await _rooms.PermissionsAsync(UserId, section.RoomId)).HasFlag(RoomPermission.ManageContents);

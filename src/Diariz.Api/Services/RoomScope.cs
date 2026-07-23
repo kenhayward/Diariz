@@ -26,6 +26,14 @@ public record RecordingRoomPlacement(
 /// get them from one walk instead of two.</summary>
 public record RecordingReadAccess(bool CanRead, IReadOnlyList<RecordingRoomPlacement> VisibleRooms);
 
+/// <summary>The two ways a section/room "manage" gate can fail. <see cref="NotFound"/> covers both a missing
+/// section/room AND a non-member - checked first, so a stranger cannot tell "no such folder" from "not
+/// permitted" by getting <see cref="Forbidden"/> instead (see <see cref="IRoomScope.ManageableSectionAsync"/>).
+/// <see cref="Forbidden"/> is only reachable once membership is established, for a member who lacks the
+/// required permission. Framework-free by design (no <c>Microsoft.AspNetCore.Mvc</c> dependency in this
+/// service) - the controller maps this to <c>NotFound()</c>/<c>Forbid()</c> itself.</summary>
+public enum RoomAccessError { NotFound, Forbidden }
+
 /// <summary>Resolves rooms and the caller's authority inside them.
 ///
 /// Effective permissions are the union of the caller's own <see cref="RoomMember"/> row and the rows of every
@@ -107,6 +115,36 @@ public interface IRoomScope
     /// <summary>Move the recording to a folder within this room (null = ungroup). False when it is not placed
     /// in that room.</summary>
     Task<bool> SetSectionAsync(Guid roomId, Guid recordingId, Guid? sectionId, CancellationToken ct = default);
+
+    /// <summary>Load a folder (section) by id and check the caller may VIEW it - i.e. is a member of the
+    /// section's own room (their personal room for a personal folder, or a shared room they belong to). Returns
+    /// null when the section doesn't exist OR the caller isn't a member, so callers 404 either way and a room's
+    /// contents stay private. <paramref name="withArtifacts"/> additionally includes the folder's LLM
+    /// <c>Summary</c>/<c>Minutes</c> navigations - only the routes that actually read them ask for it, so the
+    /// others don't pay for the extra join. The shared gate behind
+    /// <see cref="Diariz.Api.Controllers.SectionPageController"/>,
+    /// <see cref="Diariz.Api.Controllers.SectionFormulaResultsController"/> and
+    /// <see cref="Diariz.Api.Controllers.SectionAttachmentsController"/>'s read routes.</summary>
+    Task<Section?> ViewableSectionAsync(
+        Guid userId, Guid sectionId, bool withArtifacts = false, CancellationToken ct = default);
+
+    /// <summary>As <see cref="ViewableSectionAsync"/> but additionally requires
+    /// <see cref="RoomPermission.ManageContents"/> in the section's room (the personal room's owner holds every
+    /// permission). Returns the section (with artifacts included when requested) and a null error on success; on
+    /// failure the section is null and the error is <see cref="RoomAccessError.NotFound"/> for a missing
+    /// section/non-member (checked first - see <see cref="RoomAccessError"/>) or
+    /// <see cref="RoomAccessError.Forbidden"/> for a member lacking the permission. The shared gate behind the
+    /// write routes of the same three controllers listed on <see cref="ViewableSectionAsync"/>.</summary>
+    Task<(Section? Section, RoomAccessError? Error)> ManageableSectionAsync(
+        Guid userId, Guid sectionId, bool withArtifacts = false, CancellationToken ct = default);
+
+    /// <summary>The room-id-based twin of <see cref="ManageableSectionAsync"/>, for operations that resolve
+    /// their room directly (folder create/rename/reorder/delete in
+    /// <see cref="Diariz.Api.Controllers.SectionsController"/>) rather than loading a section entity first. Same
+    /// NotFound-before-Forbidden ordering: a non-member gets <see cref="RoomAccessError.NotFound"/> (the room's
+    /// existence stays private), a member lacking <see cref="RoomPermission.ManageContents"/> gets
+    /// <see cref="RoomAccessError.Forbidden"/>, null on success.</summary>
+    Task<RoomAccessError?> AuthorizeManageContentsAsync(Guid userId, Guid roomId, CancellationToken ct = default);
 }
 
 public class RoomScope(DiarizDbContext db) : IRoomScope
@@ -474,6 +512,35 @@ public class RoomScope(DiarizDbContext db) : IRoomScope
             .Where(r => r.OwnerUserId == userId && r.Kind == RoomKind.Personal)
             .Select(r => (Guid?)r.Id)
             .FirstOrDefaultAsync(ct);
+
+    public async Task<Section?> ViewableSectionAsync(
+        Guid userId, Guid sectionId, bool withArtifacts = false, CancellationToken ct = default)
+    {
+        IQueryable<Section> q = db.Sections;
+        if (withArtifacts) q = q.Include(s => s.Summary).Include(s => s.Minutes);
+        var section = await q.FirstOrDefaultAsync(s => s.Id == sectionId, ct);
+        if (section is null || !await IsMemberAsync(userId, section.RoomId, ct)) return null;
+        return section;
+    }
+
+    public async Task<(Section? Section, RoomAccessError? Error)> ManageableSectionAsync(
+        Guid userId, Guid sectionId, bool withArtifacts = false, CancellationToken ct = default)
+    {
+        var section = await ViewableSectionAsync(userId, sectionId, withArtifacts, ct);
+        if (section is null) return (null, RoomAccessError.NotFound);
+        if (!(await PermissionsAsync(userId, section.RoomId, ct)).HasFlag(RoomPermission.ManageContents))
+            return (null, RoomAccessError.Forbidden);
+        return (section, null);
+    }
+
+    public async Task<RoomAccessError?> AuthorizeManageContentsAsync(
+        Guid userId, Guid roomId, CancellationToken ct = default)
+    {
+        if (!await IsMemberAsync(userId, roomId, ct)) return RoomAccessError.NotFound;
+        if (!(await PermissionsAsync(userId, roomId, ct)).HasFlag(RoomPermission.ManageContents))
+            return RoomAccessError.Forbidden;
+        return null;
+    }
 
     /// <summary>A personal room's display name. Never empty: the Name column is required.</summary>
     private static string Display(ApplicationUser user)

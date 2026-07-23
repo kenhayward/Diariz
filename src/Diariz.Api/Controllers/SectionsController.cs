@@ -26,16 +26,21 @@ public class SectionsController : ControllerBase
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     /// <summary>Resolve the room a section op targets (its own room by default) and check the caller may manage
-    /// its contents. Returns the room id, or an error result: 404 for a non-member (room existence stays
-    /// private), 403 for a member lacking <see cref="RoomPermission.ManageContents"/>. The personal room's
-    /// owner holds every permission, so the personal-room behaviour is unchanged.</summary>
+    /// its contents - the room-id-based twin of <see cref="IRoomScope.ManageableSectionAsync"/>
+    /// (<see cref="IRoomScope.AuthorizeManageContentsAsync"/>). Returns the room id, or an error result: 404 for
+    /// a non-member (room existence stays private), 403 for a member lacking
+    /// <see cref="RoomPermission.ManageContents"/>. The personal room's owner holds every permission, so the
+    /// personal-room behaviour is unchanged.</summary>
     private async Task<(Guid RoomId, ActionResult? Error)> AuthorizeManage(Guid? roomIdArg, CancellationToken ct)
     {
         var roomId = roomIdArg ?? await _rooms.PersonalRoomIdAsync(UserId, ct);
-        if (!await _rooms.IsMemberAsync(UserId, roomId, ct)) return (roomId, NotFound());
-        if (!(await _rooms.PermissionsAsync(UserId, roomId, ct)).HasFlag(RoomPermission.ManageContents))
-            return (roomId, Forbid());
-        return (roomId, null);
+        var error = await _rooms.AuthorizeManageContentsAsync(UserId, roomId, ct);
+        return (roomId, error switch
+        {
+            RoomAccessError.NotFound => NotFound(),
+            RoomAccessError.Forbidden => Forbid(),
+            _ => null,
+        });
     }
 
     [HttpGet]
