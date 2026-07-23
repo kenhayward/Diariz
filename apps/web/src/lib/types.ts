@@ -966,7 +966,7 @@ export interface WebhookSubscription {
   lastDeliveryAt: string | null;
   lastStatus: string | null;
   createdAt: string;
-  /// Workflow signal ids this webhook filters deliveries to (empty = no signal filtering).
+  /// Workflow signal keys this webhook filters deliveries to (empty = no signal filtering).
   signalFilter: string[];
   /// Personal (owned by a user) or Platform (admin-managed, `/api/admin/webhooks`).
   scope: "Personal" | "Platform";
