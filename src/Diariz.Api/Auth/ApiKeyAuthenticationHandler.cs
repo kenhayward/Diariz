@@ -18,6 +18,11 @@ public sealed class ApiKeyAuthSchemeOptions : AuthenticationSchemeOptions;
 public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthSchemeOptions>
 {
     public const string SchemeName = "ApiKey";
+
+    /// <summary>Claim carrying the token's <see cref="ApiTokenScope"/> (value = enum name). Only ApiKey-authed
+    /// principals carry it; the write-block middleware reads it.</summary>
+    public const string ScopeClaimType = "diariz:api_scope";
+
     private const string Prefix = "Bearer ";
 
     private readonly IApiTokenAuthenticator _authenticator;
@@ -42,17 +47,18 @@ public sealed class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAu
         if (!token.StartsWith(ApiTokenService.TokenPrefix, StringComparison.Ordinal))
             return AuthenticateResult.NoResult(); // not our credential; let the challenge produce a 401
 
-        var userId = await _authenticator.AuthenticateAsync(token, Context.RequestAborted);
-        if (userId is null) return AuthenticateResult.Fail("Invalid API token or API access is disabled.");
+        var auth = await _authenticator.AuthenticateAsync(token, Context.RequestAborted);
+        if (auth is null) return AuthenticateResult.Fail("Invalid API token or API access is disabled.");
 
-        var user = await _users.FindByIdAsync(userId.Value.ToString());
+        var user = await _users.FindByIdAsync(auth.UserId.ToString());
         if (user is null) return AuthenticateResult.Fail("Token owner no longer exists.");
 
         var claims = new List<Claim>
         {
-            new(ClaimTypes.NameIdentifier, userId.Value.ToString()),
+            new(ClaimTypes.NameIdentifier, auth.UserId.ToString()),
             new(ClaimTypes.Name, user.FullName ?? user.Email ?? ""),
             new(ClaimTypes.Email, user.Email ?? ""),
+            new(ScopeClaimType, auth.Scope.ToString()),
         };
         var identity = new ClaimsIdentity(claims, SchemeName);
         return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName));

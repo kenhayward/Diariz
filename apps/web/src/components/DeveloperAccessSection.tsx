@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 import type { ApiTokenCreated } from "../lib/types";
 
@@ -15,6 +14,8 @@ export default function DeveloperAccessSection() {
   const { data: tokens } = useQuery({ queryKey: ["api-tokens"], queryFn: api.listApiTokens });
 
   const [name, setName] = useState("");
+  const [readOnly, setReadOnly] = useState(false);
+  const [expiresAt, setExpiresAt] = useState(""); // yyyy-mm-dd or empty
   const [created, setCreated] = useState<ApiTokenCreated | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -28,7 +29,10 @@ export default function DeveloperAccessSection() {
     setError(null);
     setBusy(true);
     try {
-      const tok = await api.createApiToken(name.trim() || t("apiDefaultName"));
+      const tok = await api.createApiToken(name.trim() || t("apiDefaultName"), {
+        readOnly,
+        expiresAt: expiresAt ? new Date(expiresAt + "T23:59:59Z").toISOString() : null,
+      });
       setCreated(tok);
       setName("");
       qc.invalidateQueries({ queryKey: ["api-tokens"] });
@@ -64,9 +68,9 @@ export default function DeveloperAccessSection() {
         <button type="button" onClick={() => copy(baseUrl)} className={btn}>
           {t("apiCopyUrl")}
         </button>
-        <Link to="/developers/api" className={btn}>
+        <a href="/developers/api" target="_blank" rel="noopener noreferrer" className={btn}>
           {t("apiViewReference")}
-        </Link>
+        </a>
       </div>
 
       <div className="mt-2 flex gap-2">
@@ -81,6 +85,20 @@ export default function DeveloperAccessSection() {
           {t("apiGenerate")}
         </button>
       </div>
+
+      <label className="mt-2 flex items-center gap-2 text-xs">
+        <input type="checkbox" checked={readOnly} onChange={(e) => setReadOnly(e.target.checked)} />
+        {t("apiReadOnly")}
+      </label>
+      <label className="mt-1 flex items-center gap-2 text-xs">
+        {t("apiExpiresOn")}
+        <input
+          type="date"
+          value={expiresAt}
+          onChange={(e) => setExpiresAt(e.target.value)}
+          className="rounded border px-2 py-1 dark:border-gray-700 dark:bg-gray-800"
+        />
+      </label>
 
       {created && (
         <div className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 dark:border-amber-700/60 dark:bg-amber-900/20">

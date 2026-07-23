@@ -55,7 +55,7 @@ public class ApiAccessIntegrationTests(ContainersFixture fx)
             }
 
             await using (var db = fx.CreateDbContext())
-                Assert.Equal(userId, await new ApiTokenAuthenticator(db, new PlatformSettingsService(db)).AuthenticateAsync(token, default));
+                Assert.Equal(userId, (await new ApiTokenAuthenticator(db, new PlatformSettingsService(db)).AuthenticateAsync(token, default))?.UserId);
 
             await using (var verify = fx.CreateDbContext())
                 Assert.NotNull((await verify.ApiAccessTokens.SingleAsync(t => t.UserId == userId)).LastUsedAt);
@@ -92,9 +92,29 @@ public class ApiAccessIntegrationTests(ContainersFixture fx)
                 await Controller(db, bob).Create(new CreateApiTokenRequest("b"));
 
             await using (var db = fx.CreateDbContext())
-                Assert.Equal(alice, await new ApiTokenAuthenticator(db, new PlatformSettingsService(db)).AuthenticateAsync(aliceToken, default));
+                Assert.Equal(alice, (await new ApiTokenAuthenticator(db, new PlatformSettingsService(db)).AuthenticateAsync(aliceToken, default))?.UserId);
         }
         finally { await SetApiAccess(false); }
+    }
+
+    [Fact]
+    public async Task Create_NormalizesNonUtcExpiresAt_ToUtcInstant()
+    {
+        // Npgsql rejects a non-zero-offset DateTimeOffset written to a `timestamptz` column - the in-memory
+        // provider used by the unit tests doesn't enforce this, so only a real-Postgres test catches it.
+        var userId = await SeedUser();
+        var expires = new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.FromHours(5));
+
+        ApiTokenCreatedDto created;
+        await using (var db = fx.CreateDbContext())
+            created = (await Controller(db, userId).Create(
+                new CreateApiTokenRequest("tz", ReadOnly: false, ExpiresAt: expires))).Value!;
+
+        Assert.NotNull(created);
+
+        await using var verify = fx.CreateDbContext();
+        var row = await verify.ApiAccessTokens.SingleAsync(t => t.UserId == userId && t.Name == "tz");
+        Assert.Equal(expires.ToUniversalTime(), row.ExpiresAt);
     }
 
     [Fact]

@@ -49,6 +49,15 @@ public sealed class QueuedHttpMessageHandler : HttpMessageHandler
     }
 }
 
+/// <summary>Test double for <see cref="IPlatformSettingsService"/> that returns the seeded singleton
+/// <see cref="PlatformSettings"/> row from the given <see cref="DiarizDbContext"/>, rather than lazily
+/// creating one - lets a test control <c>ApiAccessEnabled</c> (and other flags) up front.</summary>
+public sealed class FixedPlatformSettings(Diariz.Domain.DiarizDbContext db) : IPlatformSettingsService
+{
+    public Task<PlatformSettings> GetAsync(CancellationToken ct = default) =>
+        Task.FromResult(db.PlatformSettings.First());
+}
+
 /// <summary>Returns a fixed summarisation config and records the resolved user id.</summary>
 public sealed class FakeSummarizationSettingsResolver : ISummarizationSettingsResolver
 {

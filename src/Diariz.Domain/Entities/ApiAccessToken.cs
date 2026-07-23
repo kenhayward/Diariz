@@ -24,4 +24,11 @@ public class ApiAccessToken
 
     /// <summary>When the token was last presented on an API request. Null until first use.</summary>
     public DateTimeOffset? LastUsedAt { get; set; }
+
+    /// <summary>Coarse capability. Defaults to <see cref="ApiTokenScope.ReadWrite"/> so pre-existing tokens
+    /// keep full access; the migration sets the column default to 1 for the same reason.</summary>
+    public ApiTokenScope Scope { get; set; } = ApiTokenScope.ReadWrite;
+
+    /// <summary>Optional hard expiry. Null = never expires (all pre-existing tokens).</summary>
+    public DateTimeOffset? ExpiresAt { get; set; }
 }

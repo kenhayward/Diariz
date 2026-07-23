@@ -33,6 +33,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset?>("LastUsedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -45,6 +48,9 @@ namespace Diariz.Domain.Migrations
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
+
+                    b.Property<int>("Scope")
+                        .HasColumnType("integer");
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
@@ -696,6 +702,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<long>("MaxQuotaBytes")
                         .HasColumnType("bigint");
 
+                    b.Property<bool>("McpAccessEnabled")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("MinutesGenerationMode")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
@@ -703,6 +712,9 @@ namespace Diariz.Domain.Migrations
 
                     b.Property<long>("StarterQuotaBytes")
                         .HasColumnType("bigint");
+
+                    b.Property<bool>("WebhooksEnabled")
+                        .HasColumnType("boolean");
 
                     b.HasKey("Id");
 
@@ -718,8 +730,10 @@ namespace Diariz.Domain.Migrations
                             AutoDeleteAudioEnabled = false,
                             LlmTimeoutSeconds = 120,
                             MaxQuotaBytes = 53687091200L,
+                            McpAccessEnabled = true,
                             MinutesGenerationMode = 0,
-                            StarterQuotaBytes = 5368709120L
+                            StarterQuotaBytes = 5368709120L,
+                            WebhooksEnabled = false
                         });
                 });
 

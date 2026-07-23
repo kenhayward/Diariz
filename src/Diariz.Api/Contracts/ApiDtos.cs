@@ -37,7 +37,8 @@ public record GrantResultDto(bool Emailed, string? SetupUrl);
 public record PlatformSettingsDto(
     long StarterQuotaBytes, long MaxQuotaBytes, MinutesGenerationMode MinutesGenerationMode,
     bool AutoDeleteAudioEnabled, int AudioRetentionDays, TimeOnly AudioDeletionTimeOfDay,
-    bool ApiAccessEnabled, int LlmTimeoutSeconds);
+    bool ApiAccessEnabled, int LlmTimeoutSeconds,
+    bool McpAccessEnabled, bool WebhooksEnabled);
 public record UpdatePlatformSettingsRequest(
     long StarterQuotaBytes, long MaxQuotaBytes,
     MinutesGenerationMode MinutesGenerationMode = MinutesGenerationMode.SingleCall,
@@ -45,7 +46,9 @@ public record UpdatePlatformSettingsRequest(
     int AudioRetentionDays = PlatformSettings.DefaultAudioRetentionDays,
     TimeOnly AudioDeletionTimeOfDay = default,
     bool ApiAccessEnabled = false,
-    int LlmTimeoutSeconds = PlatformSettings.DefaultLlmTimeoutSeconds);
+    int LlmTimeoutSeconds = PlatformSettings.DefaultLlmTimeoutSeconds,
+    bool McpAccessEnabled = true,
+    bool WebhooksEnabled = false);
 /// <summary>Result of a manual "run the audio-retention pass now" trigger: how many recordings had audio deleted.</summary>
 public record AudioRetentionRunResult(int Deleted);
 /// <summary>Result of a manual "backfill tags now" trigger: how many extraction jobs were ENQUEUED (the
@@ -468,14 +471,18 @@ public record CreateMcpTokenRequest(string? Name);
 
 /// <summary>A stored personal REST-API token, listed in Preferences. The secret is never returned - only a
 /// short display <paramref name="Prefix"/> and usage timestamps.</summary>
-public record ApiTokenDto(Guid Id, string Name, string Prefix, DateTimeOffset CreatedAt, DateTimeOffset? LastUsedAt);
+public record ApiTokenDto(
+    Guid Id, string Name, string Prefix, DateTimeOffset CreatedAt, DateTimeOffset? LastUsedAt,
+    string Scope, DateTimeOffset? ExpiresAt);
 
 /// <summary>The response to generating an API token: the plaintext <paramref name="Token"/> is returned
 /// exactly once (never retrievable again).</summary>
 public record ApiTokenCreatedDto(Guid Id, string Name, string Prefix, string Token);
 
-/// <summary>Request to mint a new personal REST-API token with a user-supplied label.</summary>
-public record CreateApiTokenRequest(string? Name);
+/// <summary>Request to mint a new personal REST-API token with a user-supplied label. <paramref name="ReadOnly"/>
+/// requests the <see cref="Diariz.Domain.Entities.ApiTokenScope.ReadOnly"/> scope (default is ReadWrite).
+/// <paramref name="ExpiresAt"/> is optional and must be in the future.</summary>
+public record CreateApiTokenRequest(string? Name, bool ReadOnly = false, DateTimeOffset? ExpiresAt = null);
 
 // ---- Chat ----
 public record ChatTurnDto(string Role, string Content);

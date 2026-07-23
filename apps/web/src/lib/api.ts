@@ -34,6 +34,7 @@ import type {
   McpTokenCreated,
   ApiToken,
   ApiTokenCreated,
+  CreateApiTokenOptions,
   MeetingType,
   MeetingTypeInput,
   OAuthConnection,
@@ -955,8 +956,12 @@ export const api = {
   },
 
   /// Generate a new API token. The plaintext token is returned once - show it to the user immediately.
-  async createApiToken(name: string): Promise<ApiTokenCreated> {
-    const { data } = await http.post<ApiTokenCreated>("/api/user/api-tokens", { name });
+  async createApiToken(name: string, options?: CreateApiTokenOptions): Promise<ApiTokenCreated> {
+    const { data } = await http.post<ApiTokenCreated>("/api/user/api-tokens", {
+      name,
+      readOnly: options?.readOnly ?? false,
+      expiresAt: options?.expiresAt ?? null,
+    });
     return data;
   },
 

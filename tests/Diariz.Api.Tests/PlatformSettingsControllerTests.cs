@@ -154,6 +154,23 @@ public class PlatformSettingsControllerTests
     }
 
     [Fact]
+    public async Task Update_persists_mcp_and_webhooks_toggles()
+    {
+        using var db = TestDb.Create();
+        var gb = 5L * 1024 * 1024 * 1024;
+
+        var result = await Build(db).Update(new UpdatePlatformSettingsRequest(
+            gb, gb, McpAccessEnabled: false, WebhooksEnabled: true));
+
+        Assert.NotNull(result.Value);
+        Assert.False(result.Value!.McpAccessEnabled);
+        Assert.True(result.Value.WebhooksEnabled);
+        var row = await db.PlatformSettings.SingleAsync();
+        Assert.False(row.McpAccessEnabled);
+        Assert.True(row.WebhooksEnabled);
+    }
+
+    [Fact]
     public async Task Update_AudioRetentionDaysBelowOne_ReturnsBadRequest()
     {
         using var db = TestDb.Create();

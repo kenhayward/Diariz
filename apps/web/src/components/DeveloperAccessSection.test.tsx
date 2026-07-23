@@ -1,6 +1,5 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../lib/api", () => ({
@@ -14,9 +13,7 @@ function renderIt() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
-        <DeveloperAccessSection />
-      </MemoryRouter>
+      <DeveloperAccessSection />
     </QueryClientProvider>,
   );
 }
@@ -31,10 +28,11 @@ describe("DeveloperAccessSection", () => {
     (api.revokeApiToken as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   });
 
-  it("links to the in-app API reference", async () => {
+  it("links to the API reference in a new tab", async () => {
     renderIt();
     const link = await screen.findByRole("link", { name: /view api reference/i });
     expect(link.getAttribute("href")).toBe("/developers/api");
+    expect(link.getAttribute("target")).toBe("_blank");
   });
 
   it("generates a token and shows it once", async () => {
@@ -52,5 +50,16 @@ describe("DeveloperAccessSection", () => {
     expect(await screen.findByText(/CI/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /revoke/i }));
     await waitFor(() => expect(api.revokeApiToken).toHaveBeenCalledWith("t9"));
+  });
+
+  it("passes read-only when the box is ticked", async () => {
+    const createApiToken = vi.mocked(api.createApiToken).mockResolvedValue({
+      id: "1", name: "t", prefix: "dz_api_x", token: "dz_api_secret",
+    });
+    renderIt();
+    fireEvent.click(await screen.findByLabelText(/read-only/i));
+    fireEvent.click(screen.getByRole("button", { name: /generate/i }));
+    await waitFor(() =>
+      expect(createApiToken).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ readOnly: true })));
   });
 });

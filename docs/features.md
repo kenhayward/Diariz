@@ -75,7 +75,14 @@ Screenshots section. A note or screenshot sitting between two turns by the same 
 turns from being merged past it.
 - **User API access.** When a Platform Administrator enables it (Settings → Integration), generate a **personal
 API token** (Preferences → Developers) to call the Diariz **REST API** directly as yourself — acting with your own
-permissions, over your own data — and browse a **built-in API reference** (Developers → View API reference).
+permissions, over your own data — and browse a **built-in API reference** (Developers → View API reference). Each
+token can be minted **read-only or read-write** and given an optional **expiry date**, so a token pasted into an
+external tool can be least-privilege and time-boxed; a pre-existing token keeps its original read-write, no-expiry
+behavior.
+- **Integration toggles.** A Platform Administrator can independently switch **API access**, **Claude/MCP**, and
+**Automations** (webhooks) on or off from Settings → Integration - each surface is gated behind its own toggle, so
+turning off webhooks, say, does not disable a user's API tokens or the MCP connector. API access and Automations
+default off; Claude/MCP defaults on so an already-connected MCP client is not broken by the upgrade.
 - **Status bar** locked to the bottom of the app: left-aligned live progress (transcribing, summarising,
 merging, extracting actions, uploading, errors — in their tone colours) and right-aligned storage usage ·
 transcription usage · total transcripts.
@@ -161,7 +168,9 @@ token into Claude Desktop or Code. Either way Claude uses the same built-in tool
 action items / summaries / attendees / talk time / …, plus email-to-self) to answer grounded in your
 transcripts. Per-user and secure: tokens are shown once and stored only as a **SHA-256 hash**, work only for
 your own recordings, and both **tokens and web connections are revocable** any time in the same Preferences
-section.
+section. A Platform Administrator can turn the whole surface off from Settings → Integration (the **Claude/MCP**
+toggle, on by default so it never breaks an already-connected client); when it is off, the `/mcp` endpoint and
+any `dz_mcp_` token stop authenticating.
 - **Formulas: build a document, run it over a recording.** A **Formula** is a **template** plus a chosen
 **context**. The template is built from blocks - **headings**, **literal text**, **substituted meeting details**
 (date, time, title, attendees, duration, action items, your notes), **instructions to the model**, and horizontal

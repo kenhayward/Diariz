@@ -1,13 +1,17 @@
 using Diariz.Domain;
+using Diariz.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Diariz.Api.Services;
 
+/// <summary>A verified API token: the owning user and the token's capability.</summary>
+public sealed record ApiTokenAuth(Guid UserId, ApiTokenScope Scope);
+
 public interface IApiTokenAuthenticator
 {
-    /// <summary>Verifies a presented API token. Returns the owning user's id when the feature is enabled and
-    /// the token matches (recording <c>LastUsedAt</c>), else null (blank/unknown token, or feature disabled).</summary>
-    Task<Guid?> AuthenticateAsync(string? token, CancellationToken ct);
+    /// <summary>Verifies a presented API token. Returns the owner + scope when the feature is enabled, the
+    /// token matches, and it has not expired; else null.</summary>
+    Task<ApiTokenAuth?> AuthenticateAsync(string? token, CancellationToken ct);
 }
 
 /// <summary>Verifies incoming API tokens by hashing and looking them up, gated on the platform
@@ -25,11 +29,10 @@ public sealed class ApiTokenAuthenticator : IApiTokenAuthenticator
         _platform = platform;
     }
 
-    public async Task<Guid?> AuthenticateAsync(string? token, CancellationToken ct)
+    public async Task<ApiTokenAuth?> AuthenticateAsync(string? token, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(token)) return null;
 
-        // Platform kill-switch: no key authenticates while the feature is off.
         var settings = await _platform.GetAsync(ct);
         if (!settings.ApiAccessEnabled) return null;
 
@@ -37,13 +40,14 @@ public sealed class ApiTokenAuthenticator : IApiTokenAuthenticator
         var row = await _db.ApiAccessTokens.FirstOrDefaultAsync(t => t.TokenHash == hash, ct);
         if (row is null) return null;
 
-        // Record usage. Only write when it has meaningfully changed to avoid a DB write on every request.
+        if (row.ExpiresAt is { } exp && exp <= DateTimeOffset.UtcNow) return null;
+
         var now = DateTimeOffset.UtcNow;
         if (row.LastUsedAt is null || now - row.LastUsedAt.Value > TimeSpan.FromMinutes(1))
         {
             row.LastUsedAt = now;
             await _db.SaveChangesAsync(ct);
         }
-        return row.UserId;
+        return new ApiTokenAuth(row.UserId, row.Scope);
     }
 }

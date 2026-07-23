@@ -414,6 +414,10 @@ export interface PlatformSettings {
   audioDeletionTimeOfDay: string;
   /// Master switch for user API access (personal tokens). Off by default.
   apiAccessEnabled: boolean;
+  /// Master switch for Claude / MCP access (personal MCP tokens). On by default.
+  mcpAccessEnabled: boolean;
+  /// Master switch for outbound webhooks (meeting-event automations). Off by default.
+  webhooksEnabled: boolean;
   /// Per-request timeout (seconds) applied to every LLM call platform-wide. Default 120.
   llmTimeoutSeconds: number;
 }
@@ -630,6 +634,10 @@ export interface ApiToken {
   prefix: string;
   createdAt: string;
   lastUsedAt: string | null;
+  /// Whether the token can only read (ReadOnly) or also write (ReadWrite).
+  scope: "ReadOnly" | "ReadWrite";
+  /// When the token stops working, or null if it never expires.
+  expiresAt: string | null;
 }
 
 /// The response to generating an API token: the plaintext token, shown to the user exactly once.
@@ -638,6 +646,12 @@ export interface ApiTokenCreated {
   name: string;
   prefix: string;
   token: string;
+}
+
+/// Options when minting a new API token: restrict it to read-only, and/or give it an expiry.
+export interface CreateApiTokenOptions {
+  readOnly: boolean;
+  expiresAt: string | null;
 }
 
 /// One of the user's Google calendars, for the Preferences picker. `selected` is the user's effective

@@ -63,6 +63,8 @@ public class PlatformSettingsController : ControllerBase
         s.AudioDeletionTimeOfDay = req.AudioDeletionTimeOfDay;
         s.ApiAccessEnabled = req.ApiAccessEnabled;
         s.LlmTimeoutSeconds = req.LlmTimeoutSeconds;
+        s.McpAccessEnabled = req.McpAccessEnabled;
+        s.WebhooksEnabled = req.WebhooksEnabled;
         await _db.SaveChangesAsync();
         return ToDto(s);
     }
@@ -94,5 +96,5 @@ public class PlatformSettingsController : ControllerBase
     private static PlatformSettingsDto ToDto(PlatformSettings s) => new(
         s.StarterQuotaBytes, s.MaxQuotaBytes, s.MinutesGenerationMode,
         s.AutoDeleteAudioEnabled, s.AudioRetentionDays, s.AudioDeletionTimeOfDay, s.ApiAccessEnabled,
-        s.LlmTimeoutSeconds);
+        s.LlmTimeoutSeconds, s.McpAccessEnabled, s.WebhooksEnabled);
 }

@@ -30,6 +30,8 @@ const platformDefaults = {
   audioRetentionDays: 30,
   audioDeletionTimeOfDay: "03:00:00",
   apiAccessEnabled: false,
+  mcpAccessEnabled: true,
+  webhooksEnabled: false,
   llmTimeoutSeconds: 120,
 };
 
@@ -138,7 +140,9 @@ describe("SettingsModal", () => {
     renderModal();
 
     fireEvent.click(await screen.findByRole("tab", { name: /integration/i }));
-    expect(screen.getByRole("link", { name: /view api reference/i }).getAttribute("href")).toBe("/developers/api");
+    const link = screen.getByRole("link", { name: /view api reference/i });
+    expect(link.getAttribute("href")).toBe("/developers/api");
+    expect(link.getAttribute("target")).toBe("_blank");
     const toggle = await screen.findByLabelText(/enable user api access/i);
     await waitFor(() => expect((toggle as HTMLInputElement).checked).toBe(false));
     fireEvent.click(toggle);
@@ -146,6 +150,22 @@ describe("SettingsModal", () => {
 
     await waitFor(() =>
       expect(api.updatePlatformSettings).toHaveBeenCalledWith(expect.objectContaining({ apiAccessEnabled: true })),
+    );
+  });
+
+  it("saves the MCP and Webhooks toggles", async () => {
+    const update = vi.mocked(api.updatePlatformSettings).mockResolvedValue(undefined);
+    renderModal();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /integration/i }));
+    await screen.findByLabelText(/enable user api access/i);
+    expect((screen.getByLabelText(/mcp/i) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText(/webhooks/i) as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(screen.getByLabelText(/webhooks/i));
+    fireEvent.click(screen.getByRole("button", { name: /^ok$/i }));
+
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(expect.objectContaining({ webhooksEnabled: true })),
     );
   });
 
