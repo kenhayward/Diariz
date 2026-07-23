@@ -610,3 +610,11 @@ public record UpdateWebhookRequest(string? Name, string Url, string[] EventTypes
 public record WebhookDeliveryDto(
     Guid Id, string EventType, string Status, int AttemptCount, int? ResponseStatus, string? LastError,
     DateTimeOffset CreatedAt, DateTimeOffset? NextAttemptAt);
+
+// ---- Workflow Signals (admin-defined vocabulary for the formula author's picker) ----
+
+public record WorkflowSignalDto(Guid Id, string Key, string Label, string? Description, bool IsActive);
+
+public record CreateWorkflowSignalRequest(string Key, string Label, string? Description);
+
+public record UpdateWorkflowSignalRequest(string Label, string? Description, bool IsActive);
