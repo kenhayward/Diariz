@@ -15,6 +15,10 @@ vi.mock("../lib/api", () => ({
     runTagBackfill: vi.fn().mockResolvedValue({ enqueued: 3 }),
     backupUrl: () => "/api/maintenance/backup?access_token=t",
     restoreBackup: vi.fn().mockResolvedValue(undefined),
+    listAllWorkflowSignals: vi.fn().mockResolvedValue([]),
+    createWorkflowSignal: vi.fn(),
+    updateWorkflowSignal: vi.fn(),
+    deleteWorkflowSignal: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -53,6 +57,12 @@ describe("SettingsModal", () => {
     (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({ ...platformDefaults });
     (api.updatePlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.runAudioRetention as ReturnType<typeof vi.fn>).mockResolvedValue({ deleted: 0 });
+    (api.listAllWorkflowSignals as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (api.createWorkflowSignal as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "s-new", key: "new_key", label: "New label", description: null, isActive: true,
+    });
+    (api.updateWorkflowSignal as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (api.deleteWorkflowSignal as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   });
 
   it("only carries platform-admin tabs (no personal Model Settings / Chat Tools / Recordings)", async () => {
@@ -167,6 +177,95 @@ describe("SettingsModal", () => {
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith(expect.objectContaining({ webhooksEnabled: true })),
     );
+  });
+
+  it("lists workflow signals when webhooks are enabled", async () => {
+    (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({ ...platformDefaults, webhooksEnabled: true });
+    (api.listAllWorkflowSignals as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "s1", key: "action_item_created", label: "Action item created", description: null, isActive: true },
+    ]);
+    renderModal();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /integration/i }));
+
+    expect(await screen.findByText("action_item_created")).toBeTruthy();
+    expect(screen.getByText("Action item created")).toBeTruthy();
+  });
+
+  it("does not show the workflow signals section when webhooks are disabled", async () => {
+    renderModal();
+    fireEvent.click(await screen.findByRole("tab", { name: /integration/i }));
+    await screen.findByLabelText(/enable user api access/i);
+    expect(screen.queryByText(/workflow signals/i)).toBeNull();
+  });
+
+  it("adds a workflow signal from the Integration tab", async () => {
+    (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({ ...platformDefaults, webhooksEnabled: true });
+    renderModal();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /integration/i }));
+    await screen.findByText(/workflow signals/i);
+
+    fireEvent.change(screen.getByLabelText(/^signal key$/i), { target: { value: "new_key" } });
+    fireEvent.change(screen.getByLabelText(/^signal label$/i), { target: { value: "New label" } });
+    fireEvent.click(screen.getByRole("button", { name: /add signal/i }));
+
+    await waitFor(() =>
+      expect(api.createWorkflowSignal).toHaveBeenCalledWith(
+        expect.objectContaining({ key: "new_key", label: "New label" }),
+      ),
+    );
+  });
+
+  it("surfaces an error when adding a workflow signal fails", async () => {
+    (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({ ...platformDefaults, webhooksEnabled: true });
+    (api.createWorkflowSignal as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("Key already exists."));
+    renderModal();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /integration/i }));
+    await screen.findByText(/workflow signals/i);
+
+    fireEvent.change(screen.getByLabelText(/^signal key$/i), { target: { value: "dup_key" } });
+    fireEvent.change(screen.getByLabelText(/^signal label$/i), { target: { value: "Dup" } });
+    fireEvent.click(screen.getByRole("button", { name: /add signal/i }));
+
+    expect(await screen.findByText(/key already exists/i)).toBeTruthy();
+  });
+
+  it("toggles a workflow signal's active state", async () => {
+    (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({ ...platformDefaults, webhooksEnabled: true });
+    (api.listAllWorkflowSignals as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "s1", key: "action_item_created", label: "Action item created", description: null, isActive: true },
+    ]);
+    renderModal();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /integration/i }));
+    const toggle = await screen.findByLabelText(/action item created: active/i);
+    expect((toggle as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(toggle);
+
+    await waitFor(() =>
+      expect(api.updateWorkflowSignal).toHaveBeenCalledWith(
+        "s1",
+        expect.objectContaining({ label: "Action item created", isActive: false }),
+      ),
+    );
+  });
+
+  it("deletes a workflow signal", async () => {
+    (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({ ...platformDefaults, webhooksEnabled: true });
+    (api.listAllWorkflowSignals as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "s1", key: "action_item_created", label: "Action item created", description: null, isActive: true },
+    ]);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderModal();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /integration/i }));
+    await screen.findByText("action_item_created");
+    fireEvent.click(screen.getByRole("button", { name: /delete signal/i }));
+
+    await waitFor(() => expect(api.deleteWorkflowSignal).toHaveBeenCalledWith("s1"));
+    confirm.mockRestore();
   });
 
   it("enables audio auto-delete and saves the retention policy", async () => {

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
-import type { MinutesGenerationMode } from "../lib/types";
+import type { MinutesGenerationMode, WorkflowSignal } from "../lib/types";
 import { useAuth } from "../auth";
 import { bytesToGb, gbToBytes } from "../lib/format";
 import MaintenancePanel from "./MaintenancePanel";
@@ -305,6 +305,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
               >
                 {t("apiViewReference")} →
               </a>
+
+              {webhooksEnabled && <WorkflowSignalsSection />}
             </div>
           )}
         </div>
@@ -328,6 +330,138 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/// Admin management of workflow signals: named conditions a formula can attach, driving webhook
+/// `signalFilter` matching. Lists every signal (active + inactive), lets the admin add one (key + label +
+/// optional description), toggle it active, or delete it. Only rendered when webhooks are enabled - signals
+/// are meaningless without the webhook system that consumes them.
+function WorkflowSignalsSection() {
+  const { t } = useTranslation("account");
+  const qc = useQueryClient();
+  const { data: signals = [] } = useQuery({ queryKey: ["workflow-signals-all"], queryFn: api.listAllWorkflowSignals });
+
+  const [key, setKey] = useState("");
+  const [label, setLabel] = useState("");
+  const [description, setDescription] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["workflow-signals-all"] });
+
+  const create = useMutation({
+    mutationFn: () => api.createWorkflowSignal({ key: key.trim(), label: label.trim(), description: description.trim() || null }),
+    onSuccess: () => {
+      setKey("");
+      setLabel("");
+      setDescription("");
+      setError(null);
+      void invalidate();
+    },
+    onError: (e) => setError(apiErrorMessage(e)),
+  });
+
+  const toggleActive = useMutation({
+    mutationFn: (signal: WorkflowSignal) =>
+      api.updateWorkflowSignal(signal.id, { label: signal.label, description: signal.description, isActive: !signal.isActive }),
+    onSuccess: invalidate,
+    onError: (e) => setError(apiErrorMessage(e)),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.deleteWorkflowSignal(id),
+    onSuccess: invalidate,
+    onError: (e) => setError(apiErrorMessage(e)),
+  });
+
+  function onDelete(signal: WorkflowSignal) {
+    setError(null);
+    if (window.confirm(t("signalDelete") + `: ${signal.label}?`)) remove.mutate(signal.id);
+  }
+
+  return (
+    <div className="border-t pt-3 dark:border-gray-700">
+      <h3 className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-200">{t("signalsHeading")}</h3>
+      {error && <p className="mb-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
+
+      {signals.length > 0 && (
+        <table className="mb-2 w-full text-sm">
+          <tbody>
+            {signals.map((s) => (
+              <tr key={s.id} className="border-t align-middle dark:border-gray-700 dark:text-gray-200">
+                <td className="py-1 pr-2 font-mono text-xs">{s.key}</td>
+                <td className="py-1 pr-2">{s.label}</td>
+                <td className="px-2 text-center">
+                  <label className="inline-flex items-center gap-1 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={s.isActive}
+                      aria-label={`${s.label}: ${t("signalActive")}`}
+                      onChange={() => toggleActive.mutate(s)}
+                    />
+                    {t("signalActive")}
+                  </label>
+                </td>
+                <td className="py-1 text-right">
+                  <button
+                    type="button"
+                    onClick={() => onDelete(s)}
+                    className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
+                  >
+                    {t("signalDelete")}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <form
+        className="flex flex-wrap items-end gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setError(null);
+          if (key.trim() && label.trim()) create.mutate();
+        }}
+      >
+        <label className="text-xs">
+          <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("signalKey")}</span>
+          <input
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            aria-label={t("signalKey")}
+            className="w-40 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          />
+          <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("signalKeyHint")}</span>
+        </label>
+        <label className="text-xs">
+          <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("signalLabel")}</span>
+          <input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            aria-label={t("signalLabel")}
+            className="w-40 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          />
+        </label>
+        <label className="text-xs">
+          <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("signalDescription")}</span>
+          <input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            aria-label={t("signalDescription")}
+            className="w-48 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={!key.trim() || !label.trim()}
+          className="shrink-0 rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+        >
+          {t("signalAdd")}
+        </button>
+      </form>
     </div>
   );
 }
