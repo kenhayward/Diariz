@@ -198,6 +198,43 @@ public class FormulaWebhookEmitTests
         Assert.Equal(formula.Name, doc.RootElement.GetProperty("formulaName").GetString());
     }
 
+    /// <summary>A publisher that always throws, standing in for a transient failure in the webhook-emission
+    /// path (signal/name loading or the publish call itself) - used to prove that path can never undo an
+    /// already-persisted result.</summary>
+    private sealed class ThrowingWebhookPublisher : IWebhookPublisher
+    {
+        public Task PublishAsync(string eventType, Guid ownerUserId, object data,
+            IReadOnlyList<string>? signals = null, object? platformData = null, CancellationToken ct = default) =>
+            throw new InvalidOperationException("webhook publish exploded");
+    }
+
+    [Fact]
+    public async Task Successful_run_withThrowingWebhookPublisher_stillLeavesResultReady()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecordingWithTranscript(db, userId);
+        var (formula, result) = await SeedFormulaAndResult(db, userId, rec.Id);
+        var signal = new WorkflowSignal { Id = Guid.NewGuid(), Key = "post-to-slack", Label = "Post to Slack", IsActive = true };
+        db.WorkflowSignals.Add(signal);
+        db.FormulaWorkflowSignals.Add(new FormulaWorkflowSignal { FormulaId = formula.Id, WorkflowSignalId = signal.Id });
+        await db.SaveChangesAsync();
+        var chat = new FakeChatStreamClient { Tokens = ["OUT", "PUT"] };
+        var hub = new FakeHubContext();
+
+        // The webhook publisher itself throws - this must not flip the just-persisted Ready result to Failed.
+        await FormulaRunProcessor.ProcessAsync(
+            db, chat, new FakeSummarizationSettingsResolver(), hub,
+            new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId), 48_000, NullLogger.Instance,
+            new ThrowingWebhookPublisher(), "https://app.test");
+
+        var reloaded = await db.FormulaResults.FindAsync(result.Id);
+        Assert.NotNull(reloaded);
+        Assert.Equal(FormulaRunStatus.Ready, reloaded!.Status);
+        Assert.Equal("OUTPUT", reloaded.Text);
+        Assert.Null(reloaded.Error);
+    }
+
     [Fact]
     public async Task Failed_run_withAttachedActiveSignal_carriesSignals()
     {
