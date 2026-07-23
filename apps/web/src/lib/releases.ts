@@ -56,6 +56,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.149.1",
+    date: "2026-07-23",
+    pr: 0,
+    headline: "Stop the recorder's timers when you navigate away mid-recording",
+    summary:
+      "Fixes a resource leak: the recorder's elapsed-time ticker and its auto-stop watcher are interval timers that kept running if you left the recording screen while a recording was in progress, firing on a component that was no longer on screen. They are now cleared as soon as the recorder unmounts. No visible change in normal use - it removes stray background timers (and, in the test suite, an intermittent teardown error those leaked timers caused).",
+    fixed: [
+      "The recorder now clears its elapsed and auto-stop interval timers on unmount instead of leaving them running after you navigate away mid-recording",
+    ],
+  },
+  {
     version: "0.149.0",
     date: "2026-07-23",
     pr: 329,

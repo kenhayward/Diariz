@@ -259,6 +259,24 @@ describe("Recorder transport controls", () => {
     expect(iconOnly(await screen.findByRole("button", { name: /^resume$/i }))).toBe(true);
   });
 
+  it("clears its running interval timers on unmount so none fire after teardown", async () => {
+    // The elapsed ticker and the auto-stop schedule watcher are window.setInterval timers started when
+    // recording begins. If they are not cleared on unmount they keep firing; once the test environment is
+    // torn down, the next tick calls stop() -> window.clearInterval and throws "window is not defined",
+    // which vitest reports as an unhandled error and fails the whole run.
+    const clearSpy = vi.spyOn(window, "clearInterval");
+    const { unmount } = render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /^record$/i }));
+    await screen.findByRole("button", { name: /^stop$/i }); // recording -> both intervals are now running
+
+    clearSpy.mockClear();
+    unmount();
+
+    // Unmount must clear the running intervals (nothing else clears an interval on unmount).
+    expect(clearSpy).toHaveBeenCalled();
+    clearSpy.mockRestore();
+  });
+
   it("disables Record and Upload without CreateRecording, explaining why", async () => {
     roomState.can = () => false;
     render(<Recorder onUploaded={() => {}} />);
