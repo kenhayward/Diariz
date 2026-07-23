@@ -20,7 +20,8 @@ public class RecordingsReorderTests
         var resolver = new SummarizationSettingsResolver(
             db, Options.Create(new SummarizationOptions()), new FakeApiKeyProtector());
         return new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
-            resolver, new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()), new RoomScope(db))
+            resolver, new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()), new RoomScope(db),
+            new CapturingWebhookPublisher(), Options.Create(new AppPublicOptions()))
         {
             ControllerContext = Http.Context(userId),
         };

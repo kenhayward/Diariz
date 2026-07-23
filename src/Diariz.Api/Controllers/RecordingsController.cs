@@ -4,6 +4,7 @@ using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
 using Diariz.Api.Services;
+using Diariz.Api.Webhooks;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -28,6 +29,8 @@ public class RecordingsController : ControllerBase
     private readonly ISpeakerIdentifier _identifier;
     private readonly UploadOptions _uploads;
     private readonly IRoomScope _rooms;
+    private readonly IWebhookPublisher _webhooks;
+    private readonly IOptions<AppPublicOptions> _appOpts;
     private readonly IExportLocalizer? _exportLocalizer;
     private readonly IGoogleCalendarClient? _calendar;
     private readonly string _defaultModel;
@@ -36,7 +39,8 @@ public class RecordingsController : ControllerBase
         DiarizDbContext db, IAudioStorage storage, IJobQueue queue,
         IHubContext<TranscriptionHub> hub, IConfiguration config,
         ISummarizationSettingsResolver summarization, IEmailSender email, ISpeakerIdentifier identifier,
-        IOptions<UploadOptions> uploads, IRoomScope rooms, IExportLocalizer? exportLocalizer = null,
+        IOptions<UploadOptions> uploads, IRoomScope rooms, IWebhookPublisher webhooks,
+        IOptions<AppPublicOptions> appOpts, IExportLocalizer? exportLocalizer = null,
         IGoogleCalendarClient? calendar = null)
     {
         _db = db;
@@ -48,6 +52,8 @@ public class RecordingsController : ControllerBase
         _identifier = identifier;
         _uploads = uploads.Value;
         _rooms = rooms;
+        _webhooks = webhooks;
+        _appOpts = appOpts;
         _exportLocalizer = exportLocalizer;
         _calendar = calendar;
         _defaultModel = config["Transcription:DefaultModel"] ?? "whisperx-large-v3";
@@ -276,6 +282,14 @@ public class RecordingsController : ControllerBase
         _db.Recordings.Add(rec);
         await EnqueueTranscriptionAsync(rec);
         await _db.SaveChangesAsync();
+
+        var publicUrl = string.IsNullOrWhiteSpace(_appOpts.Value.PublicUrl)
+            ? $"{Request.Scheme}://{Request.Host}" : _appOpts.Value.PublicUrl;
+        await _webhooks.PublishAsync(WebhookEventTypes.RecordingCreated, UserId, new
+        {
+            recordingId = rec.Id, name = rec.Name ?? rec.Title, source = rec.Source.ToString(),
+            status = rec.Status.ToString(), links = WebhookPayload.For(publicUrl, rec.Id),
+        });
 
         // The folder is a property of the placement, not the recording: create the main placement in the
         // uploader's personal room. When recording into a shared room the main placement is Ungrouped (the

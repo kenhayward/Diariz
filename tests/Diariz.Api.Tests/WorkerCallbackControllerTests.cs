@@ -35,7 +35,8 @@ public class WorkerCallbackControllerTests
             db, Options.Create(new EmbeddingOptions()), Options.Create(summaryOpts), new FakeApiKeyProtector());
         var controller = new WorkerCallbackController(
             db, hub, queue, resolver, embedding, identifier ?? new FakeSpeakerIdentifier(),
-            Options.Create(new WorkerOptions { CallbackSecret = Secret }))
+            Options.Create(new WorkerOptions { CallbackSecret = Secret }),
+            new CapturingWebhookPublisher(), Options.Create(new AppPublicOptions()))
         {
             ControllerContext = Http.Context(headers: ("X-Worker-Secret", presentedSecret))
         };

@@ -2,6 +2,7 @@ using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
 using Diariz.Api.Services;
+using Diariz.Api.Webhooks;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
@@ -27,11 +28,14 @@ public class WorkerCallbackController : ControllerBase
     private readonly IEmbeddingSettingsResolver _embedding;
     private readonly ISpeakerIdentifier _identifier;
     private readonly WorkerOptions _opts;
+    private readonly IWebhookPublisher _webhooks;
+    private readonly IOptions<AppPublicOptions> _appOpts;
 
     public WorkerCallbackController(
         DiarizDbContext db, IHubContext<TranscriptionHub> hub, IJobQueue queue,
         ISummarizationSettingsResolver summarization, IEmbeddingSettingsResolver embedding,
-        ISpeakerIdentifier identifier, IOptions<WorkerOptions> opts)
+        ISpeakerIdentifier identifier, IOptions<WorkerOptions> opts,
+        IWebhookPublisher webhooks, IOptions<AppPublicOptions> appOpts)
     {
         _db = db;
         _hub = hub;
@@ -40,6 +44,8 @@ public class WorkerCallbackController : ControllerBase
         _embedding = embedding;
         _identifier = identifier;
         _opts = opts.Value;
+        _webhooks = webhooks;
+        _appOpts = appOpts;
     }
 
     private bool SecretOk =>
@@ -134,6 +140,17 @@ public class WorkerCallbackController : ControllerBase
 
         await _hub.NotifyStatusAsync(transcription.Recording.UserId, transcription.RecordingId,
             transcription.Recording.Status.ToString());
+
+        var publicUrl = string.IsNullOrWhiteSpace(_appOpts.Value.PublicUrl)
+            ? $"{Request.Scheme}://{Request.Host}" : _appOpts.Value.PublicUrl;
+        var rec = transcription.Recording;
+        if (rec.Status == RecordingStatus.Transcribed || rec.Status == RecordingStatus.Summarizing)
+            await _webhooks.PublishAsync(WebhookEventTypes.RecordingTranscribed, rec.UserId, new
+            {
+                recordingId = rec.Id, name = rec.Name ?? rec.Title, status = rec.Status.ToString(),
+                durationMs = body.DurationMs, links = WebhookPayload.For(publicUrl, rec.Id),
+            });
+
         return Ok();
     }
 
@@ -152,6 +169,16 @@ public class WorkerCallbackController : ControllerBase
         await _db.SaveChangesAsync();
         await _hub.NotifyStatusAsync(transcription.Recording.UserId, transcription.RecordingId,
             RecordingStatus.Failed.ToString());
+
+        var publicUrl = string.IsNullOrWhiteSpace(_appOpts.Value.PublicUrl)
+            ? $"{Request.Scheme}://{Request.Host}" : _appOpts.Value.PublicUrl;
+        var rec = transcription.Recording;
+        await _webhooks.PublishAsync(WebhookEventTypes.RecordingTranscriptionFailed, rec.UserId, new
+        {
+            recordingId = rec.Id, name = rec.Name ?? rec.Title, status = RecordingStatus.Failed.ToString(),
+            error = body.Error, links = WebhookPayload.For(publicUrl, rec.Id),
+        });
+
         return Ok();
     }
 }

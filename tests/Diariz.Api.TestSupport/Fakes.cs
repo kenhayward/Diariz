@@ -741,3 +741,11 @@ public sealed class FakeHubContext : IHubContext<TranscriptionHub>
         public Task RemoveFromGroupAsync(string connectionId, string groupName, CancellationToken ct = default) => Task.CompletedTask;
     }
 }
+
+/// <summary>Records every publish a controller makes, without touching the database.</summary>
+public sealed class CapturingWebhookPublisher : IWebhookPublisher
+{
+    public readonly List<(string EventType, Guid Owner, object Data)> Published = new();
+    public Task PublishAsync(string eventType, Guid ownerUserId, object data, CancellationToken ct = default)
+    { Published.Add((eventType, ownerUserId, data)); return Task.CompletedTask; }
+}
