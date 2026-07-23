@@ -64,7 +64,8 @@ public class WebhookDeliveryIntegrationTests(ContainersFixture fx)
         var expected = "v1," + Convert.ToBase64String(new HMACSHA256(Encoding.UTF8.GetBytes("topsecret"))
             .ComputeHash(Encoding.UTF8.GetBytes($"evt_int.{receivedTs}.{{\"id\":\"evt_int\"}}")));
         Assert.Equal(expected, receivedSig);
-        Assert.Equal(WebhookDeliveryStatus.Delivered, (await db.WebhookDeliveries.SingleAsync()).Status);
+        Assert.Equal(WebhookDeliveryStatus.Delivered,
+            (await db.WebhookDeliveries.SingleAsync(d => d.EventId == "evt_int")).Status);
     }
 
     private static int GetFreePort()

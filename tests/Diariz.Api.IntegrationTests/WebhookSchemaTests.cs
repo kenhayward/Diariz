@@ -20,9 +20,10 @@ public class WebhookSchemaTests(ContainersFixture fx)
             SecretEncrypted = "cipher", EventTypes = "recording.transcribed,formula_result.completed",
         };
         db.Webhooks.Add(sub);
+        var deliveryId = Guid.NewGuid();
         db.WebhookDeliveries.Add(new WebhookDelivery
         {
-            Id = Guid.NewGuid(), SubscriptionId = sub.Id, EventId = "evt_1", EventType = "recording.transcribed",
+            Id = deliveryId, SubscriptionId = sub.Id, EventId = "evt_1", EventType = "recording.transcribed",
             PayloadJson = "{\"id\":\"evt_1\"}", NextAttemptAt = DateTimeOffset.UtcNow,
         });
         await db.SaveChangesAsync();
@@ -30,13 +31,14 @@ public class WebhookSchemaTests(ContainersFixture fx)
         var reloaded = await db.Webhooks.SingleAsync(s => s.Id == sub.Id);
         Assert.Equal(WebhookScope.Personal, reloaded.Scope);
         Assert.True(reloaded.IsActive);
-        Assert.Equal(WebhookDeliveryStatus.Pending, (await db.WebhookDeliveries.SingleAsync()).Status);
+        Assert.Equal(WebhookDeliveryStatus.Pending,
+            (await db.WebhookDeliveries.SingleAsync(d => d.SubscriptionId == sub.Id)).Status);
 
         // Deleting the owning user cascades the subscription and its deliveries.
         db.Users.Remove(await db.Users.SingleAsync(u => u.Id == userId));
         await db.SaveChangesAsync();
-        Assert.Empty(await db.Webhooks.ToListAsync());
-        Assert.Empty(await db.WebhookDeliveries.ToListAsync());
+        Assert.False(await db.Webhooks.AnyAsync(s => s.Id == sub.Id));
+        Assert.False(await db.WebhookDeliveries.AnyAsync(d => d.Id == deliveryId));
     }
 
     private static async Task<Guid> SeedUser(DiarizDbContext db)
