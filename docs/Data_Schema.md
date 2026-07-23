@@ -88,6 +88,8 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddSectionFormulaResults` | `SectionFormulaResults` table (a formula run over a folder + its sub-sections; `SectionId` FK `ON DELETE CASCADE`, `FormulaId`/`CreatedByUserId` FK `ON DELETE SET NULL`, `Status`/`Error` like `FormulaResults`, index `(SectionId, Ordinal)`) — additive new table, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddMeetingScreenshots` | `MeetingScreenshots` (screen captures taken during a recording from the desktop app; cascade FKs from both `AspNetUsers` and `Recordings`, index `(RecordingId, CapturedAtMs)`) — additive new table, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddSectionAttachmentUploader` | `SectionAttachments.UploadedByUserId` (uuid, not-null, plain column - no FK, mirrors `Sections.RoomId`'s "not yet" pattern; indexed). Storage quota (`StorageUsage`) now sums a folder's file attachments by whoever **uploaded** them instead of `Section.UserId` (the folder's creator) - the two can differ once a shared-room member with `ManageContents` can add to a folder they didn't create. **Backfills** every existing row from its `Section.UserId` (that's who it was charged to before this column existed, so the backfill is a no-op in effect) — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddApiTokenScopeExpiry` | `ApiAccessTokens.Scope` (int, not-null, **default 1** = ReadWrite, so every pre-existing token keeps full access) + `ApiAccessTokens.ExpiresAt` (timestamptz null, default never-expires) — least-privilege, time-boxed personal API tokens; additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddPlatformIntegrationToggles` | `PlatformSettings.McpAccessEnabled` (bool, not-null, **default true**, existing row updated to true so an already-connected MCP client is not broken) + `PlatformSettings.WebhooksEnabled` (bool, not-null, default false) — split the single implicit "integrations" surface into three independent admin toggles (API access already existed; MCP and Webhooks join it) — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
 
@@ -658,6 +660,8 @@ Single seeded row (`Id = 1`), edited by the Platform Administrator.
 | `AudioDeletionTimeOfDay` | time | server-local time of day the nightly retention job runs (default 03:00) |
 | `ApiAccessEnabled` | bool | master switch for user API access (personal `dz_api_` tokens); default false = off |
 | `LlmTimeoutSeconds` | int | platform-wide per-request timeout (seconds) for every LLM call - the single authority (the HTTP clients have no cap); default 120 |
+| `McpAccessEnabled` | bool | master switch for the `/mcp` server and personal `dz_mcp_` tokens; default **true** (seeded true in its migration so shipping this toggle never disables an already-connected MCP client) |
+| `WebhooksEnabled` | bool | master switch for outbound webhooks / user Automations; default false = off (enforced starting with the Phase 2 webhooks core) |
 
 #### Identity tables (`AspNet*`)
 Standard ASP.NET Identity schema with **Guid** keys: `AspNetUsers`, `AspNetRoles`, `AspNetUserRoles`,
@@ -705,6 +709,8 @@ storage discipline as `McpAccessTokens` (hash-only, shown once), but a **separat
 | `Prefix` | varchar(32) | short non-secret display prefix (e.g. `dz_api_ab12cd`) |
 | `CreatedAt` | timestamptz | |
 | `LastUsedAt` | timestamptz null | last time the token was presented on an API request |
+| `Scope` | int | `ApiTokenScope`: `0` = ReadOnly, `1` = ReadWrite (default, so pre-existing tokens keep full access). Set only at creation; a ReadOnly token gets 403 on any unsafe verb (POST/PUT/PATCH/DELETE). Append-only enum |
+| `ExpiresAt` | timestamptz null | optional hard expiry, set only at creation; null = never expires (all pre-existing tokens) |
 
 Indexes: unique `(TokenHash)`, `(UserId)`.
 

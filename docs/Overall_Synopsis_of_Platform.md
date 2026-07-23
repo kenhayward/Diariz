@@ -647,8 +647,11 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
 > nginx forwards the outer proxy's incoming `X-Forwarded-Proto` (falling back to its own `$scheme`) rather than
 > clobbering it, so **the outer proxy must set `X-Forwarded-Proto: https`** (most do by default).
 
-- **Per-user token auth.** The endpoint is guarded by a dedicated auth scheme (`McpBearerAuthenticationHandler`,
-  scheme `"Mcp"`), separate from the browser JWT. A user generates a personal access token in **Preferences →
+- **Per-user token auth, gated by a platform toggle.** The endpoint is guarded by a dedicated auth scheme
+  (`McpBearerAuthenticationHandler`, scheme `"Mcp"`), separate from the browser JWT, and fails closed while
+  `PlatformSettings.McpAccessEnabled` is off (a Platform Admin toggle on **Settings → Integration**, **on by
+  default** so shipping the toggle never disables an already-connected client). A user generates a personal
+  access token in **Preferences →
   Claude / MCP access** (`McpTokensController`, `/api/user/mcp-tokens` GET/POST/DELETE, JWT-authed). Tokens are
   `dz_mcp_` + base64url(32 random bytes); **only their SHA-256 hash is stored** (`McpAccessToken`), shown to the
   user **once** at generation. On each `/mcp` request the presented bearer is hashed and looked up
@@ -745,6 +748,30 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   see `OpenApiCuration`), and a signed-in user can browse it via an in-app **Scalar** reference at
   **`/developers/api`** (lazy-loaded route, `@scalar/api-reference-react`), linked from both the Developers and
   Integration tabs.
+  - **Scope and expiry.** Each token carries an `ApiTokenScope` (`ReadOnly` = 0, `ReadWrite` = 1, column default
+    1 so pre-existing tokens keep full access) and an optional `ExpiresAt` (null = never expires), both settable
+    only at creation. `ApiTokenAuthenticator` fails a presented token once `ExpiresAt` has passed; a read-only
+    token's scope travels onto the principal as a claim and `ApiTokenScopeMiddleware` (a pure `ApiTokenScopePolicy`
+    plus a thin ASP.NET middleware, runs after authentication) rejects any unsafe verb (POST/PUT/PATCH/DELETE)
+    from it with 403 — JWT/browser sessions carry no scope claim and are unaffected. The create-token UI
+    (Preferences → Developers) offers a scope radio and an optional expiry date picker.
+- **Three independent platform integration toggles.** `PlatformSettings` carries three master switches, each a
+  Platform Admin setting on **Settings → Integration** and independent of the others: `ApiAccessEnabled` (personal
+  API tokens / the REST API, default **off**), `McpAccessEnabled` (the `/mcp` server and `dz_mcp_` tokens, default
+  **on** — seeded `true` in its migration so shipping the toggle never disables an already-connected MCP client),
+  and `WebhooksEnabled` (outbound webhooks / user Automations, default **off**, enforced from the Phase 2 webhooks
+  core). Turning one off does not affect the others — e.g. disabling Automations leaves existing API tokens and
+  the MCP connector working.
+- **Inbound automation surface (fire a formula / fetch its output).** External tools that want to trigger Diariz
+  work and read the result — the shape Phase 2/3 webhooks and Workflow Signals build on — already have a surface
+  via the existing Formulas endpoints, authenticated the same way as any other REST call (a `dz_api_` token, scope
+  and expiry enforced as above): **`POST /api/recordings/{recordingId}/formulas/{formulaId}/run`** validates,
+  creates a `Generating` `FormulaResult`, enqueues the run, and returns **202** with the new result's id (a
+  read-only token is rejected here, since it is a state-changing POST); **`GET
+  /api/recordings/{recordingId}/formula-results/{id}`** then polls/fetches that result, including its `Status`
+  (`Generating`/`Ready`/`Failed`) and, once ready, the generated Markdown text. Both routes are `api/*` and not
+  under an excluded prefix, so they are also published in the curated OpenAPI document (`OpenApiCuration`) and
+  browsable in the in-app reference — no new endpoints were added for this.
 - **RBAC (user groups + platform permissions).** Authority comes from **group membership**, not from a role.
   A `UserGroup` carries a `[Flags] PlatformPermission` (`ManageRooms = 1`, `ManageUsers = 2`,
   `ManagePlatform = 4`; append-only), users join via `UserGroupMember`, and a caller's effective permissions
