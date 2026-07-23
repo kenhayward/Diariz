@@ -59,7 +59,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.153.0",
     date: "2026-07-24",
-    pr: 0, // set on open
+    pr: 335,
     headline: "Automations: send your meeting events to Zapier, n8n, and more",
     summary:
       "You can now create Automations that send a signed webhook to your tools when a recording is created, " +
