@@ -56,6 +56,9 @@ export default function ScreenshotModal({
   // (initialZoomState) each time the modal is reopened, and via the effect below whenever `index` changes.
   const [zoom, setZoom] = useState(() => initialZoomState());
   const [dragging, setDragging] = useState(false);
+  // Bumped when the image finishes loading, so the zoom-percentage badge recomputes from the real
+  // naturalWidth/Height instead of the pre-load fallback (which reads as 100%).
+  const [, remeasure] = useState(0);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const dragRef = useRef<{ startX: number; startY: number; startOffset: Point } | null>(null);
@@ -251,6 +254,7 @@ export default function ScreenshotModal({
             type="button"
             className={btn}
             aria-label={t("screenshotZoomLevel", { pct: zoomPct })}
+            title={t("screenshotZoomReset")}
             onClick={resetZoom}
           >
             {zoomPct}%
@@ -304,6 +308,7 @@ export default function ScreenshotModal({
             src={api.screenshotContentUrl(recordingId, shot.id)}
             alt={t("screenshotAlt", { time: formatDuration(shot.capturedAtMs) })}
             draggable={false}
+            onLoad={() => remeasure((n) => n + 1)}
             className={`w-auto max-w-full self-center object-contain ${expanded ? "max-h-[92vh]" : "max-h-[75vh]"} ${
               isZoomed ? (dragging ? "cursor-grabbing" : "cursor-grab") : ""
             }`}
