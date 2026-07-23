@@ -68,6 +68,11 @@ import type {
   UserSettings,
   UserStorage,
   SearchResponse,
+  WebhookSubscription,
+  WebhookCreated,
+  WebhookDelivery,
+  CreateWebhookBody,
+  UpdateWebhookBody,
 } from "./types";
 
 const TOKEN_KEY = "diariz.token";
@@ -984,6 +989,37 @@ export const api = {
   /// Revoke an OAuth connection - deletes the authorization + its tokens so the client can no longer connect.
   async revokeOAuthConnection(id: string): Promise<void> {
     await http.delete(`/api/oauth/connections/${encodeURIComponent(id)}`);
+  },
+
+  // ---- Outbound webhooks (Automations) ----
+
+  async listWebhooks(): Promise<WebhookSubscription[]> {
+    const { data } = await http.get<WebhookSubscription[]>("/api/user/webhooks");
+    return data;
+  },
+
+  /// Create a webhook. The response's plaintext `secret` is returned once - show it to the user immediately.
+  async createWebhook(body: CreateWebhookBody): Promise<WebhookCreated> {
+    const { data } = await http.post<WebhookCreated>("/api/user/webhooks", body);
+    return data;
+  },
+
+  async updateWebhook(id: string, body: UpdateWebhookBody): Promise<WebhookSubscription> {
+    const { data } = await http.put<WebhookSubscription>(`/api/user/webhooks/${id}`, body);
+    return data;
+  },
+
+  async deleteWebhook(id: string): Promise<void> {
+    await http.delete(`/api/user/webhooks/${id}`);
+  },
+
+  async testWebhook(id: string): Promise<void> {
+    await http.post(`/api/user/webhooks/${id}/test`);
+  },
+
+  async listWebhookDeliveries(id: string): Promise<WebhookDelivery[]> {
+    const { data } = await http.get<WebhookDelivery[]>(`/api/user/webhooks/${id}/deliveries`);
+    return data;
   },
 
   // ---- Storage quotas ----
