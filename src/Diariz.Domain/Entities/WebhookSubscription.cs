@@ -22,6 +22,10 @@ public class WebhookSubscription
     /// <summary>Comma-separated event-type keys this subscription wants (see WebhookEventTypes).</summary>
     public string EventTypes { get; set; } = string.Empty;
 
+    /// <summary>Comma-separated Workflow Signal keys this subscription routes on. Platform subscriptions require
+    /// a non-empty filter (they fire only when a signal matches); personal subscriptions may use it to narrow.</summary>
+    public string? SignalFilter { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     /// <summary>Consecutive failed deliveries; reset to 0 on any success. Auto-disable at the threshold.</summary>
