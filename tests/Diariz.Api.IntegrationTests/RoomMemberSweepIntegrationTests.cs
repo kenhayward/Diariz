@@ -8,6 +8,7 @@ using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.IntegrationTests;
@@ -42,7 +43,8 @@ public class RoomMemberSweepIntegrationTests(ContainersFixture fx)
 
     private static AdminUsersController AdminUsers(UserManager<ApplicationUser> users, DiarizDbContext db, Guid callerId) =>
         new(users, new FakeEmailSender(), db, new PlatformSettingsService(db),
-            Options.Create(new AppPublicOptions { PublicUrl = "http://localhost:8081" }), new UserPermissions(db))
+            Options.Create(new AppPublicOptions { PublicUrl = "http://localhost:8081" }), new UserPermissions(db),
+            new FakeAudioStorage(), NullLogger<AdminUsersController>.Instance)
         {
             ControllerContext = Http.Context(callerId),
         };
