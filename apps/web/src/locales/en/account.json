@@ -127,6 +127,8 @@
   "apiLastUsed": "used",
   "apiNeverUsed": "never used",
   "apiNoTokens": "No API tokens yet.",
+  "apiReadOnly": "Read-only (cannot change anything)",
+  "apiExpiresOn": "Expires on (optional)",
   "apiViewReference": "View API reference",
   "apiBackToApp": "Back to app",
   "apiReferenceTitle": "Diariz API reference",

@@ -53,4 +53,15 @@ describe("DeveloperAccessSection", () => {
     fireEvent.click(screen.getByRole("button", { name: /revoke/i }));
     await waitFor(() => expect(api.revokeApiToken).toHaveBeenCalledWith("t9"));
   });
+
+  it("passes read-only when the box is ticked", async () => {
+    const createApiToken = vi.mocked(api.createApiToken).mockResolvedValue({
+      id: "1", name: "t", prefix: "dz_api_x", token: "dz_api_secret",
+    });
+    renderIt();
+    fireEvent.click(await screen.findByLabelText(/read-only/i));
+    fireEvent.click(screen.getByRole("button", { name: /generate/i }));
+    await waitFor(() =>
+      expect(createApiToken).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ readOnly: true })));
+  });
 });

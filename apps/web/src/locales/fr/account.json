@@ -127,6 +127,8 @@
   "apiLastUsed": "utilisé",
   "apiNeverUsed": "jamais utilisé",
   "apiNoTokens": "Aucun jeton d'API pour l'instant.",
+  "apiReadOnly": "Lecture seule (ne peut rien modifier)",
+  "apiExpiresOn": "Expire le (facultatif)",
   "apiViewReference": "Voir la référence de l'API",
   "apiBackToApp": "Retour à l'application",
   "apiReferenceTitle": "Référence de l'API Diariz",
