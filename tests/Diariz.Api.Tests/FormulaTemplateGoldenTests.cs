@@ -47,7 +47,7 @@ public class FormulaTemplateGoldenTests
         await FormulaRunProcessor.ProcessAsync(
             db, chat, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
             new FormulaRunJob(recordingId, null, result.Id, formula.Id, Guid.NewGuid()),
-            48_000, NullLogger.Instance);
+            48_000, NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         var reloaded = await db.FormulaResults.FindAsync(result.Id);
         Assert.Equal(FormulaRunStatus.Ready, reloaded!.Status);

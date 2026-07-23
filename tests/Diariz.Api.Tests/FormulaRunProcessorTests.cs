@@ -51,7 +51,8 @@ public class FormulaRunProcessorTests
     private static Task Run(
         DiarizDbContext db, FakeChatStreamClient chat, FakeSummarizationSettingsResolver resolver,
         FakeHubContext hub, FormulaRunJob job) =>
-        FormulaRunProcessor.ProcessAsync(db, chat, resolver, hub, job, 48_000, NullLogger.Instance);
+        FormulaRunProcessor.ProcessAsync(
+            db, chat, resolver, hub, job, 48_000, NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
     // ---- Section (folder) map-reduce path ----
 

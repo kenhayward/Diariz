@@ -2,6 +2,7 @@ using System.Text.Json;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
+using Diariz.Api.Webhooks;
 using Diariz.Domain;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
@@ -18,16 +19,18 @@ public class FormulaRunWorker : BackgroundService
     private readonly IConnectionMultiplexer _redis;
     private readonly IHubContext<TranscriptionHub> _hub;
     private readonly FormulaRunOptions _opts;
+    private readonly string _publicUrl;
     private readonly ILogger<FormulaRunWorker> _log;
 
     public FormulaRunWorker(
         IServiceScopeFactory scopes, IConnectionMultiplexer redis, IHubContext<TranscriptionHub> hub,
-        IOptions<FormulaRunOptions> opts, ILogger<FormulaRunWorker> log)
+        IOptions<FormulaRunOptions> opts, IOptions<AppPublicOptions> appOpts, ILogger<FormulaRunWorker> log)
     {
         _scopes = scopes;
         _redis = redis;
         _hub = hub;
         _opts = opts.Value;
+        _publicUrl = appOpts.Value.PublicUrl;
         _log = log;
     }
 
@@ -75,8 +78,9 @@ public class FormulaRunWorker : BackgroundService
                 var ctx = scope.ServiceProvider.GetRequiredService<DiarizDbContext>();
                 var chat = scope.ServiceProvider.GetRequiredService<IChatStreamClient>();
                 var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
+                var webhooks = scope.ServiceProvider.GetRequiredService<IWebhookPublisher>();
                 await FormulaRunProcessor.ProcessAsync(
-                    ctx, chat, resolver, _hub, job, _opts.CombineCharBudget, _log, ct);
+                    ctx, chat, resolver, _hub, job, _opts.CombineCharBudget, _log, webhooks, _publicUrl, ct);
             }
         }
         catch (Exception ex)
