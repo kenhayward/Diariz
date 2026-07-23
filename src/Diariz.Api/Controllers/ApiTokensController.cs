@@ -36,7 +36,8 @@ public class ApiTokensController : ControllerBase
         await _db.ApiAccessTokens
             .Where(t => t.UserId == UserId)
             .OrderByDescending(t => t.CreatedAt)
-            .Select(t => new ApiTokenDto(t.Id, t.Name, t.Prefix, t.CreatedAt, t.LastUsedAt))
+            .Select(t => new ApiTokenDto(
+                t.Id, t.Name, t.Prefix, t.CreatedAt, t.LastUsedAt, t.Scope.ToString(), t.ExpiresAt))
             .ToListAsync();
 
     [HttpPost]
@@ -48,6 +49,9 @@ public class ApiTokensController : ControllerBase
         if (await _db.ApiAccessTokens.CountAsync(t => t.UserId == UserId) >= MaxTokensPerUser)
             return BadRequest("Token limit reached. Revoke an existing token before creating another.");
 
+        if (req.ExpiresAt is { } exp && exp <= DateTimeOffset.UtcNow)
+            return BadRequest("Expiry must be in the future.");
+
         var g = _tokens.Generate();
         var row = new ApiAccessToken
         {
@@ -56,6 +60,8 @@ public class ApiTokensController : ControllerBase
             Name = name,
             TokenHash = g.Hash,
             Prefix = g.Prefix,
+            Scope = req.ReadOnly ? ApiTokenScope.ReadOnly : ApiTokenScope.ReadWrite,
+            ExpiresAt = req.ExpiresAt,
         };
         _db.ApiAccessTokens.Add(row);
         await _db.SaveChangesAsync();
