@@ -70,7 +70,8 @@ public class WebhooksController : ControllerBase
     public async Task<ActionResult<WebhookSubscriptionDto>> Update(Guid id, UpdateWebhookRequest req)
     {
         if (!await EnabledAsync()) return Forbid();
-        var row = await _db.Webhooks.FirstOrDefaultAsync(s => s.Id == id && s.OwnerUserId == UserId);
+        var row = await _db.Webhooks.FirstOrDefaultAsync(
+            s => s.Id == id && s.OwnerUserId == UserId && s.Scope == WebhookScope.Personal);
         if (row is null) return NotFound();
         var invalid = Validate(req.Url, req.EventTypes, out var events, out var reason);
         if (invalid is null && !(await _urls.ValidateAsync(req.Url)).Ok) reason = "That address is not allowed.";
@@ -89,7 +90,8 @@ public class WebhooksController : ControllerBase
     public async Task<IActionResult> Delete(Guid id)
     {
         if (!await EnabledAsync()) return Forbid();
-        var row = await _db.Webhooks.FirstOrDefaultAsync(s => s.Id == id && s.OwnerUserId == UserId);
+        var row = await _db.Webhooks.FirstOrDefaultAsync(
+            s => s.Id == id && s.OwnerUserId == UserId && s.Scope == WebhookScope.Personal);
         if (row is null) return NotFound();
         _db.Webhooks.Remove(row);
         await _db.SaveChangesAsync();
@@ -100,7 +102,8 @@ public class WebhooksController : ControllerBase
     public async Task<IActionResult> SendTest(Guid id)
     {
         if (!await EnabledAsync()) return Forbid();
-        var row = await _db.Webhooks.FirstOrDefaultAsync(s => s.Id == id && s.OwnerUserId == UserId);
+        var row = await _db.Webhooks.FirstOrDefaultAsync(
+            s => s.Id == id && s.OwnerUserId == UserId && s.Scope == WebhookScope.Personal);
         if (row is null) return NotFound();
         var eventId = "evt_" + Guid.NewGuid().ToString("N");
         _db.WebhookDeliveries.Add(new WebhookDelivery
@@ -118,7 +121,8 @@ public class WebhooksController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<WebhookDeliveryDto>>> Deliveries(Guid id)
     {
         if (!await EnabledAsync()) return Forbid();
-        if (!await _db.Webhooks.AnyAsync(s => s.Id == id && s.OwnerUserId == UserId)) return NotFound();
+        if (!await _db.Webhooks.AnyAsync(s => s.Id == id && s.OwnerUserId == UserId && s.Scope == WebhookScope.Personal))
+            return NotFound();
         var rows = await _db.WebhookDeliveries.Where(d => d.SubscriptionId == id)
             .OrderByDescending(d => d.CreatedAt).Take(50).ToListAsync();
         return Ok(rows.Select(d => new WebhookDeliveryDto(

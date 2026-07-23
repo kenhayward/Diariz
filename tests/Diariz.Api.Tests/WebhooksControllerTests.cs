@@ -248,4 +248,164 @@ public class WebhooksControllerTests
         var res = await Controller(db, other, urlOk: true).Deliveries(sub.Id);
         Assert.IsType<NotFoundResult>(res.Result);
     }
+
+    [Fact]
+    public async Task Delete_others_subscription_returns_not_found()
+    {
+        var db = Enabled(); var owner = Guid.NewGuid(); var other = Guid.NewGuid();
+        var sub = new WebhookSubscription
+        {
+            Id = Guid.NewGuid(), OwnerUserId = owner, Name = "z", Url = "https://x/y",
+            SecretEncrypted = "enc:s", EventTypes = "recording.transcribed",
+        };
+        db.Webhooks.Add(sub);
+        await db.SaveChangesAsync();
+
+        var res = await Controller(db, other, urlOk: true).Delete(sub.Id);
+        Assert.IsType<NotFoundResult>(res);
+        Assert.NotEmpty(await db.Webhooks.ToListAsync());
+    }
+
+    [Fact]
+    public async Task SendTest_others_subscription_returns_not_found()
+    {
+        var db = Enabled(); var owner = Guid.NewGuid(); var other = Guid.NewGuid();
+        var sub = new WebhookSubscription
+        {
+            Id = Guid.NewGuid(), OwnerUserId = owner, Name = "z", Url = "https://x/y",
+            SecretEncrypted = "enc:s", EventTypes = "recording.transcribed",
+        };
+        db.Webhooks.Add(sub);
+        await db.SaveChangesAsync();
+
+        var res = await Controller(db, other, urlOk: true).SendTest(sub.Id);
+        Assert.IsType<NotFoundResult>(res);
+        Assert.Empty(await db.WebhookDeliveries.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Update_rejects_ssrf_url()
+    {
+        var db = Enabled(); var userId = Guid.NewGuid();
+        var sub = new WebhookSubscription
+        {
+            Id = Guid.NewGuid(), OwnerUserId = userId, Name = "z", Url = "https://x/y",
+            SecretEncrypted = "enc:s", EventTypes = "recording.transcribed",
+        };
+        db.Webhooks.Add(sub);
+        await db.SaveChangesAsync();
+
+        var c = Controller(db, userId, urlOk: false);
+        var res = await c.Update(sub.Id, new UpdateWebhookRequest("z", "http://169.254.169.254/", new[] { "recording.transcribed" }, true));
+        Assert.IsType<BadRequestObjectResult>(res.Result);
+        Assert.Equal("https://x/y", (await db.Webhooks.SingleAsync()).Url); // unchanged
+    }
+
+    [Fact]
+    public async Task Update_rejects_unknown_event_type()
+    {
+        var db = Enabled(); var userId = Guid.NewGuid();
+        var sub = new WebhookSubscription
+        {
+            Id = Guid.NewGuid(), OwnerUserId = userId, Name = "z", Url = "https://x/y",
+            SecretEncrypted = "enc:s", EventTypes = "recording.transcribed",
+        };
+        db.Webhooks.Add(sub);
+        await db.SaveChangesAsync();
+
+        var c = Controller(db, userId, urlOk: true);
+        var res = await c.Update(sub.Id, new UpdateWebhookRequest("z", "https://x/y", new[] { "not.a.real.event" }, true));
+        Assert.IsType<BadRequestObjectResult>(res.Result);
+        Assert.Equal("recording.transcribed", (await db.Webhooks.SingleAsync()).EventTypes); // unchanged
+    }
+
+    [Fact]
+    public async Task List_when_disabled_is_forbidden()
+    {
+        var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.PlatformSettings.Add(new PlatformSettings { Id = PlatformSettings.SingletonId, WebhooksEnabled = false });
+        db.Webhooks.Add(new WebhookSubscription
+        {
+            Id = Guid.NewGuid(), OwnerUserId = userId, Name = "z", Url = "https://x/y",
+            SecretEncrypted = "enc:s", EventTypes = "recording.transcribed",
+        });
+        await db.SaveChangesAsync();
+
+        var res = await Controller(db, userId, urlOk: true).List();
+        Assert.IsType<ForbidResult>(res.Result);
+    }
+
+    [Fact]
+    public async Task Update_when_disabled_is_forbidden()
+    {
+        var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.PlatformSettings.Add(new PlatformSettings { Id = PlatformSettings.SingletonId, WebhooksEnabled = false });
+        var sub = new WebhookSubscription
+        {
+            Id = Guid.NewGuid(), OwnerUserId = userId, Name = "z", Url = "https://x/y",
+            SecretEncrypted = "enc:s", EventTypes = "recording.transcribed",
+        };
+        db.Webhooks.Add(sub);
+        await db.SaveChangesAsync();
+
+        var res = await Controller(db, userId, urlOk: true)
+            .Update(sub.Id, new UpdateWebhookRequest("z", "https://x/y", new[] { "recording.transcribed" }, true));
+        Assert.IsType<ForbidResult>(res.Result);
+    }
+
+    [Fact]
+    public async Task Delete_when_disabled_is_forbidden()
+    {
+        var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.PlatformSettings.Add(new PlatformSettings { Id = PlatformSettings.SingletonId, WebhooksEnabled = false });
+        var sub = new WebhookSubscription
+        {
+            Id = Guid.NewGuid(), OwnerUserId = userId, Name = "z", Url = "https://x/y",
+            SecretEncrypted = "enc:s", EventTypes = "recording.transcribed",
+        };
+        db.Webhooks.Add(sub);
+        await db.SaveChangesAsync();
+
+        var res = await Controller(db, userId, urlOk: true).Delete(sub.Id);
+        Assert.IsType<ForbidResult>(res);
+    }
+
+    [Fact]
+    public async Task SendTest_when_disabled_is_forbidden()
+    {
+        var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.PlatformSettings.Add(new PlatformSettings { Id = PlatformSettings.SingletonId, WebhooksEnabled = false });
+        var sub = new WebhookSubscription
+        {
+            Id = Guid.NewGuid(), OwnerUserId = userId, Name = "z", Url = "https://x/y",
+            SecretEncrypted = "enc:s", EventTypes = "recording.transcribed",
+        };
+        db.Webhooks.Add(sub);
+        await db.SaveChangesAsync();
+
+        var res = await Controller(db, userId, urlOk: true).SendTest(sub.Id);
+        Assert.IsType<ForbidResult>(res);
+    }
+
+    [Fact]
+    public async Task Deliveries_when_disabled_is_forbidden()
+    {
+        var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.PlatformSettings.Add(new PlatformSettings { Id = PlatformSettings.SingletonId, WebhooksEnabled = false });
+        var sub = new WebhookSubscription
+        {
+            Id = Guid.NewGuid(), OwnerUserId = userId, Name = "z", Url = "https://x/y",
+            SecretEncrypted = "enc:s", EventTypes = "recording.transcribed",
+        };
+        db.Webhooks.Add(sub);
+        await db.SaveChangesAsync();
+
+        var res = await Controller(db, userId, urlOk: true).Deliveries(sub.Id);
+        Assert.IsType<ForbidResult>(res.Result);
+    }
 }
