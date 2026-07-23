@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import type { ApiTokenCreated, WebhookCreated, WebhookSubscription } from "../lib/types";
+import type { TFunction } from "i18next";
 
 type Provider = "zapier" | "n8n" | null;
 
@@ -238,62 +239,136 @@ export default function AutomationsSection() {
         {webhooks?.length === 0 && (
           <p className="text-xs text-gray-400 dark:text-gray-500">{t("automationEmpty")}</p>
         )}
-        {webhooks?.map((hook) => {
-          const paused = !hook.isActive;
-          return (
-            <div
-              key={hook.id}
-              className="rounded border p-2 dark:border-gray-700"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="truncate text-sm font-medium text-gray-800 dark:text-gray-100">{hook.name}</span>
-                <span
-                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${
-                    paused
-                      ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
-                      : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                  }`}
-                >
-                  {paused ? t("automationPaused") : t("automationActive")}
-                </span>
-              </div>
-              <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{host(hook.url)}</p>
-              <div className="mt-1 flex flex-wrap gap-1">
-                {hook.eventTypes.map((key) => (
-                  <span
-                    key={key}
-                    className="rounded-full border px-2 py-0.5 text-[11px] text-gray-600 dark:border-gray-700 dark:text-gray-300"
-                  >
-                    {eventLabel(key)}
-                  </span>
-                ))}
-              </div>
-              {hook.lastDeliveryAt && (
-                <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">
-                  {t("automationLastDelivered", { when: new Date(hook.lastDeliveryAt).toLocaleString() })}
-                </p>
-              )}
-              <div className="mt-2 flex gap-2">
-                <button type="button" onClick={() => sendTest(hook.id)} className={btn}>
-                  {t("automationSendTest")}
-                </button>
-                {paused && (
-                  <button type="button" onClick={() => reenable(hook)} className={btn}>
-                    {t("automationReenable")}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => remove(hook.id)}
-                  className="rounded border px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-gray-700 dark:text-red-400 dark:hover:bg-red-900/20"
-                >
-                  {t("automationDelete")}
-                </button>
-              </div>
-            </div>
-          );
-        })}
+        {webhooks?.map((hook) => (
+          <AutomationCard
+            key={hook.id}
+            hook={hook}
+            t={t}
+            btn={btn}
+            eventLabel={eventLabel}
+            host={host}
+            onSendTest={sendTest}
+            onReenable={reenable}
+            onRemove={remove}
+          />
+        ))}
       </div>
+    </div>
+  );
+}
+
+/// One automation card: status/trigger chips plus a "Recent deliveries" disclosure that lazily fetches this
+/// automation's delivery history only once expanded (a per-card hook keeps the fetch/expand state isolated
+/// from the parent's variable-length map, rather than calling useQuery directly inside .map).
+function AutomationCard({
+  hook,
+  t,
+  btn,
+  eventLabel,
+  host,
+  onSendTest,
+  onReenable,
+  onRemove,
+}: {
+  hook: WebhookSubscription;
+  t: TFunction;
+  btn: string;
+  eventLabel: (key: string) => string;
+  host: (url: string) => string;
+  onSendTest: (id: string) => void;
+  onReenable: (hook: WebhookSubscription) => void;
+  onRemove: (id: string) => void;
+}) {
+  const paused = !hook.isActive;
+  const [expanded, setExpanded] = useState(false);
+  const { data: deliveries, isLoading } = useQuery({
+    queryKey: ["webhook-deliveries", hook.id],
+    queryFn: () => api.listWebhookDeliveries(hook.id),
+    enabled: expanded,
+  });
+
+  return (
+    <div className="rounded border p-2 dark:border-gray-700">
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-sm font-medium text-gray-800 dark:text-gray-100">{hook.name}</span>
+        <span
+          className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${
+            paused
+              ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+              : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+          }`}
+        >
+          {paused ? t("automationPaused") : t("automationActive")}
+        </span>
+      </div>
+      <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{host(hook.url)}</p>
+      {paused && (hook.disabledReason || hook.lastStatus) && (
+        <p className="mt-0.5 text-[11px] text-red-600 dark:text-red-400">
+          {hook.disabledReason ?? hook.lastStatus}
+        </p>
+      )}
+      <div className="mt-1 flex flex-wrap gap-1">
+        {hook.eventTypes.map((key) => (
+          <span
+            key={key}
+            className="rounded-full border px-2 py-0.5 text-[11px] text-gray-600 dark:border-gray-700 dark:text-gray-300"
+          >
+            {eventLabel(key)}
+          </span>
+        ))}
+      </div>
+      {hook.lastDeliveryAt && (
+        <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">
+          {t("automationLastDelivered", { when: new Date(hook.lastDeliveryAt).toLocaleString() })}
+        </p>
+      )}
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button type="button" onClick={() => onSendTest(hook.id)} className={btn}>
+          {t("automationSendTest")}
+        </button>
+        {paused && (
+          <button type="button" onClick={() => onReenable(hook)} className={btn}>
+            {t("automationReenable")}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          aria-expanded={expanded}
+          className={btn}
+        >
+          {t("automationDeliveries")}
+        </button>
+        <button
+          type="button"
+          onClick={() => onRemove(hook.id)}
+          className="rounded border px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-gray-700 dark:text-red-400 dark:hover:bg-red-900/20"
+        >
+          {t("automationDelete")}
+        </button>
+      </div>
+      {expanded && (
+        <div className="mt-2 space-y-1 rounded border border-gray-100 bg-gray-50 p-2 dark:border-gray-800 dark:bg-gray-900/40">
+          {!isLoading && !deliveries?.length && (
+            <p className="text-[11px] text-gray-400 dark:text-gray-500">{t("automationNoDeliveries")}</p>
+          )}
+          {deliveries?.map((d) => (
+            <div
+              key={d.id}
+              className="flex items-center justify-between gap-2 text-[11px] text-gray-600 dark:text-gray-300"
+            >
+              <span className="truncate">{eventLabel(d.eventType)}</span>
+              <span className="shrink-0">
+                {d.status}
+                {d.responseStatus != null && ` (${d.responseStatus})`}
+              </span>
+              <span className="shrink-0 text-gray-400 dark:text-gray-500">
+                {new Date(d.createdAt).toLocaleString()}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

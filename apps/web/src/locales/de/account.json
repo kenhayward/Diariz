@@ -252,5 +252,7 @@
   "automationTokenOffer": "Diese Automatisierung muss möglicherweise Ergebnisse in deinen Arbeitsablauf zurücklesen. Einen schreibgeschützten Zugriffstoken erstellen?",
   "automationTokenCreate": "Token erstellen",
   "automationTokenName": "Automatisierungstoken",
-  "automationEmpty": "Noch keine Automatisierungen."
+  "automationEmpty": "Noch keine Automatisierungen.",
+  "automationDeliveries": "Letzte Zustellungen",
+  "automationNoDeliveries": "Noch keine Zustellungen."
 }

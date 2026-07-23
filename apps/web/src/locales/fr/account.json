@@ -252,5 +252,7 @@
   "automationTokenOffer": "Cette automatisation peut avoir besoin de relire les résultats dans votre flux de travail. Créer un jeton d’accès en lecture seule ?",
   "automationTokenCreate": "Créer le jeton",
   "automationTokenName": "Jeton d’automatisation",
-  "automationEmpty": "Aucune automatisation pour le moment."
+  "automationEmpty": "Aucune automatisation pour le moment.",
+  "automationDeliveries": "Livraisons récentes",
+  "automationNoDeliveries": "Aucune livraison pour le moment."
 }

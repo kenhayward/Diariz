@@ -252,5 +252,7 @@
   "automationTokenOffer": "Esta automatización puede necesitar leer los resultados en tu flujo de trabajo. ¿Crear un token de acceso de solo lectura?",
   "automationTokenCreate": "Crear token",
   "automationTokenName": "Token de automatización",
-  "automationEmpty": "Aún no hay automatizaciones."
+  "automationEmpty": "Aún no hay automatizaciones.",
+  "automationDeliveries": "Entregas recientes",
+  "automationNoDeliveries": "Aún no hay entregas."
 }

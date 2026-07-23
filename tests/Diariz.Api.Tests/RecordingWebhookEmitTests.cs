@@ -65,10 +65,22 @@ public class RecordingWebhookEmitTests
         var (recordingId, transcriptionId) = await SeedQueuedRecording(db, ownerId);
 
         await controller.Result(new TranscriptionResult(transcriptionId, "en",
-            [new SegmentResult("SPEAKER_00", 0, 1000, "Hello")]));
+            [new SegmentResult("SPEAKER_00", 0, 1000, "Hello")], DurationMs: 42_000));
 
         Assert.Contains(publisher.Published, p =>
             p.EventType == WebhookEventTypes.RecordingTranscribed && p.Owner == ownerId);
+
+        // Assert the external `data` contract, not just the event type/owner - a caller-facing shape regression
+        // (a renamed or dropped field) would otherwise slip past every test in this file.
+        var (_, _, data) = publisher.Published.Single(p => p.EventType == WebhookEventTypes.RecordingTranscribed);
+        var json = System.Text.Json.JsonSerializer.Serialize(data);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        Assert.Equal(recordingId.ToString(), doc.RootElement.GetProperty("recordingId").GetString());
+        Assert.Equal("Standup", doc.RootElement.GetProperty("name").GetString());
+        Assert.Equal(nameof(RecordingStatus.Transcribed), doc.RootElement.GetProperty("status").GetString());
+        Assert.Equal(42_000, doc.RootElement.GetProperty("durationMs").GetInt64());
+        Assert.Equal(System.Text.Json.JsonValueKind.Object, doc.RootElement.GetProperty("links").ValueKind);
+        Assert.Contains(recordingId.ToString(), doc.RootElement.GetProperty("links").GetRawText());
     }
 
     [Fact]
@@ -141,5 +153,15 @@ public class RecordingWebhookEmitTests
         Assert.IsType<CreatedAtActionResult>(result.Result);
         Assert.Contains(publisher.Published, p =>
             p.EventType == WebhookEventTypes.RecordingCreated && p.Owner == userId);
+
+        var (_, _, data) = publisher.Published.Single(p => p.EventType == WebhookEventTypes.RecordingCreated);
+        var json = System.Text.Json.JsonSerializer.Serialize(data);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var recordingId = doc.RootElement.GetProperty("recordingId").GetString();
+        Assert.False(string.IsNullOrEmpty(recordingId));
+        Assert.Equal("Standup", doc.RootElement.GetProperty("name").GetString());
+        Assert.Equal(nameof(RecordingStatus.Queued), doc.RootElement.GetProperty("status").GetString());
+        Assert.Equal(System.Text.Json.JsonValueKind.Object, doc.RootElement.GetProperty("links").ValueKind);
+        Assert.Contains(recordingId!, doc.RootElement.GetProperty("links").GetRawText());
     }
 }

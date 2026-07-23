@@ -10,6 +10,7 @@ vi.mock("../lib/api", () => ({
     deleteWebhook: vi.fn(),
     updateWebhook: vi.fn(),
     createApiToken: vi.fn(),
+    listWebhookDeliveries: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
 }));
@@ -29,6 +30,7 @@ describe("AutomationsSection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(api.listWebhooks).mockResolvedValue([]);
+    vi.mocked(api.listWebhookDeliveries).mockResolvedValue([]);
   });
 
   it("creates an automation with the chosen event and url", async () => {
@@ -196,5 +198,57 @@ describe("AutomationsSection", () => {
       expect(createApiToken).toHaveBeenCalledWith(expect.any(String), { readOnly: true, expiresAt: null }),
     );
     expect(await screen.findByText("dz_plaintext_x")).toBeTruthy();
+  });
+
+  it("expands recent deliveries and renders a returned delivery row", async () => {
+    vi.mocked(api.listWebhooks).mockResolvedValue([
+      {
+        id: "1",
+        name: "n",
+        url: "https://x/y",
+        eventTypes: ["recording.transcribed"],
+        isActive: true,
+        consecutiveFailures: 0,
+        disabledReason: null,
+        lastDeliveryAt: null,
+        lastStatus: null,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+    const listWebhookDeliveries = vi.mocked(api.listWebhookDeliveries).mockResolvedValue([
+      {
+        id: "d1",
+        eventType: "recording.transcribed",
+        status: "success",
+        attemptCount: 1,
+        responseStatus: 200,
+        lastError: null,
+        createdAt: new Date().toISOString(),
+        nextAttemptAt: null,
+      },
+    ]);
+    render(<Wrapped />);
+    fireEvent.click(await screen.findByRole("button", { name: /recent deliveries/i }));
+    await waitFor(() => expect(listWebhookDeliveries).toHaveBeenCalledWith("1"));
+    expect(await screen.findByText(/success/)).toBeTruthy();
+  });
+
+  it("shows the disabled reason on a paused automation", async () => {
+    vi.mocked(api.listWebhooks).mockResolvedValue([
+      {
+        id: "2",
+        name: "Broken hook",
+        url: "https://example.com/hook",
+        eventTypes: ["recording.created"],
+        isActive: false,
+        consecutiveFailures: 5,
+        disabledReason: "too many failures",
+        lastDeliveryAt: null,
+        lastStatus: "failed",
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+    render(<Wrapped />);
+    expect(await screen.findByText("too many failures")).toBeTruthy();
   });
 });

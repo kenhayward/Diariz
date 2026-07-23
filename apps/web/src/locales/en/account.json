@@ -252,5 +252,7 @@
   "automationTokenOffer": "This automation may need to read results back into your workflow. Create a read-only access token?",
   "automationTokenCreate": "Create token",
   "automationTokenName": "Automation token",
-  "automationEmpty": "No automations yet."
+  "automationEmpty": "No automations yet.",
+  "automationDeliveries": "Recent deliveries",
+  "automationNoDeliveries": "No deliveries yet."
 }
