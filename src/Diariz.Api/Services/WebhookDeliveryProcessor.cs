@@ -31,6 +31,8 @@ public sealed class WebhookDeliveryProcessor
 
         foreach (var d in due)
         {
+            if (ct.IsCancellationRequested) break; // shutting down; stop starting new deliveries
+
             var sub = await db.Webhooks.FirstOrDefaultAsync(s => s.Id == d.SubscriptionId, ct);
             if (sub is null) { d.Status = WebhookDeliveryStatus.Failed; continue; } // orphan; cascade should prevent
 
@@ -51,6 +53,14 @@ public sealed class WebhookDeliveryProcessor
                 using var resp = await http.SendAsync(req, ct);
                 responseStatus = (int)resp.StatusCode;
                 if (!resp.IsSuccessStatusCode) error = $"HTTP {responseStatus}";
+            }
+            // Shutdown cancelled the in-flight request (not a genuine failure/timeout - HttpClient timeouts throw
+            // TaskCanceledException that is NOT linked to `ct`, so those still fall through to the catch below and
+            // correctly count). Revert the attempt and leave the row untouched for the next run.
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                d.AttemptCount--;
+                break;
             }
             catch (Exception ex) { error = ex.Message; }
 
@@ -79,6 +89,8 @@ public sealed class WebhookDeliveryProcessor
                 d.NextAttemptAt = now.Add(WebhookBackoff.NextDelay(d.AttemptCount));
             }
         }
-        await db.SaveChangesAsync(ct);
+        // Persist with a non-cancelled token: deliveries completed earlier in this batch must not be lost just
+        // because a later one was interrupted by shutdown.
+        await db.SaveChangesAsync(CancellationToken.None);
     }
 }

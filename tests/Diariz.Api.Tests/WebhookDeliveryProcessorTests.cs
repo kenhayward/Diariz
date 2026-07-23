@@ -71,6 +71,7 @@ public class WebhookDeliveryProcessorTests
         var ts = long.Parse(h.Last.Headers.GetValues("webhook-timestamp").Single());
         Assert.Equal(WebhookSigner.Sign("shh", "evt_1", ts, "{\"a\":1}"), sig);
         Assert.Equal(0, (await db.Webhooks.SingleAsync()).ConsecutiveFailures);
+        Assert.Equal("{\"a\":1}", h.LastBody);
     }
 
     [Fact]
@@ -113,5 +114,32 @@ public class WebhookDeliveryProcessorTests
         var s = await db.Webhooks.SingleAsync();
         Assert.False(s.IsActive);
         Assert.NotNull(s.DisabledReason);
+    }
+
+    private sealed class ShutdownCancelHandler : HttpMessageHandler
+    {
+        private readonly CancellationTokenSource _cts;
+        public ShutdownCancelHandler(CancellationTokenSource cts) => _cts = cts;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, CancellationToken ct)
+        {
+            _cts.Cancel();
+            throw new OperationCanceledException(_cts.Token);
+        }
+    }
+
+    [Fact]
+    public async Task Shutdown_cancellation_is_not_counted_as_a_failure()
+    {
+        var (db, sub, del) = Seed();
+        using var cts = new CancellationTokenSource(); // not pre-cancelled: the initial due-deliveries query must run
+        using var http = new HttpClient(new ShutdownCancelHandler(cts));
+
+        await Processor().ProcessDueAsync(db, http, DateTimeOffset.UtcNow, cts.Token);
+
+        var d = await db.WebhookDeliveries.SingleAsync();
+        Assert.Equal(WebhookDeliveryStatus.Pending, d.Status);
+        Assert.Equal(0, d.AttemptCount);
+        Assert.NotEqual(WebhookDeliveryStatus.Failed, d.Status);
+        Assert.Equal(0, (await db.Webhooks.SingleAsync()).ConsecutiveFailures);
     }
 }
