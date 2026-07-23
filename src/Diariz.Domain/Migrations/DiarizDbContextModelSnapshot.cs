@@ -33,6 +33,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset?>("LastUsedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -45,6 +48,9 @@ namespace Diariz.Domain.Migrations
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
+
+                    b.Property<int>("Scope")
+                        .HasColumnType("integer");
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
