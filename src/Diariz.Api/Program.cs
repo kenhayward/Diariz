@@ -313,6 +313,8 @@ builder.Services.AddHttpClient("url-attachments")
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 builder.Services.AddScoped<IUrlFetcher, UrlFetcher>();
 builder.Services.AddSingleton<IWebhookUrlValidator, WebhookUrlValidator>();
+builder.Services.AddSingleton<IWebhookSecretProtector, WebhookSecretProtector>();
+builder.Services.AddScoped<IWebhookPublisher, WebhookPublisher>();
 
 // ---- Chat tool calling (built-in transcript tools) ----
 builder.Services.AddScoped<ITranscriptSearch, TranscriptSearch>();
