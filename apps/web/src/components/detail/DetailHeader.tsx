@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import KebabMenu, { type KebabAction } from "../KebabMenu";
-import { DownloadIcon, LinkIcon, PencilIcon, PlayIcon } from "./SectionIcons";
+import { DownloadIcon, LinkIcon, PencilIcon, PlayIcon, StopIcon } from "./SectionIcons";
 
 /// The recording-detail header: the title, and a consolidated action cluster.
 ///
@@ -15,7 +15,9 @@ export default function DetailHeader({
   menu,
   hasAudio,
   hasTranscript,
+  isPlaying,
   onPlay,
+  onStop,
   onRename,
   onCopyLink,
   onDownload,
@@ -24,7 +26,9 @@ export default function DetailHeader({
   menu: KebabAction[];
   hasAudio: boolean;
   hasTranscript: boolean;
+  isPlaying: boolean;
   onPlay: () => void;
+  onStop: () => void;
   onRename: () => void;
   onCopyLink: () => void;
   onDownload: () => void;
@@ -40,12 +44,12 @@ export default function DetailHeader({
       <div className="flex shrink-0 items-center gap-1.5">
         <button
           type="button"
-          onClick={onPlay}
+          onClick={isPlaying ? onStop : onPlay}
           disabled={!hasAudio}
           className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700 disabled:pointer-events-none disabled:opacity-40"
         >
-          <PlayIcon />
-          {t("workspace:playRecording")}
+          {isPlaying ? <StopIcon /> : <PlayIcon />}
+          {isPlaying ? t("workspace:stopPlayback") : t("workspace:playRecording")}
         </button>
 
         <IconButton label={t("recordings:rename")} onClick={onRename}>

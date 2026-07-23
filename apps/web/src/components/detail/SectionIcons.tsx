@@ -173,6 +173,15 @@ export function PauseIcon({ size = 15 }: IconProps) {
   );
 }
 
+/// A filled square, matching PlayIcon/PauseIcon's solid-glyph style - the global transport's Stop state.
+export function StopIcon({ size = 15 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <rect x="5" y="5" width="14" height="14" rx="1.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function ChevronRightIcon({ size = 15 }: IconProps) {
   return (
     <svg {...base(size)}>
