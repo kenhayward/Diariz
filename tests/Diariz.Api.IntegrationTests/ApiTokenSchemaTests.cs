@@ -36,11 +36,35 @@ public class ApiTokenSchemaTests(ContainersFixture fx)
         });
         await db.SaveChangesAsync();
 
-        var scoped = await db.ApiAccessTokens.SingleAsync(t => t.Name == "scoped");
-        var def = await db.ApiAccessTokens.SingleAsync(t => t.Name == "default");
+        var scoped = await db.ApiAccessTokens.SingleAsync(t => t.Name == "scoped" && t.UserId == userId);
+        var def = await db.ApiAccessTokens.SingleAsync(t => t.Name == "default" && t.UserId == userId);
         Assert.Equal(ApiTokenScope.ReadOnly, scoped.Scope);
         Assert.NotNull(scoped.ExpiresAt);
         Assert.Equal(ApiTokenScope.ReadWrite, def.Scope);
         Assert.Null(def.ExpiresAt);
+    }
+
+    [Fact]
+    public async Task Column_default_for_Scope_is_ReadWrite_at_the_SQL_level()
+    {
+        // The C# property initializer (`= ApiTokenScope.ReadWrite`) only guards EF-issued inserts - it does
+        // nothing for the actual Postgres column default. Insert via raw SQL that omits the Scope column
+        // entirely, so Postgres itself must supply the value, then read it back through EF to prove the
+        // migration's `defaultValue: 1` (not the C# initializer) is what keeps pre-existing/externally
+        // inserted rows ReadWrite.
+        var userId = await SeedUser();
+
+        await using var db = fx.CreateDbContext();
+        var rowId = Guid.NewGuid();
+        var tokenHash = Guid.NewGuid().ToString("N");
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            INSERT INTO "ApiAccessTokens" ("Id", "UserId", "Name", "TokenHash", "Prefix", "CreatedAt")
+            VALUES ({0}, {1}, {2}, {3}, {4}, {5})
+            """,
+            rowId, userId, "sql-inserted", tokenHash, "dz_api_ccc", DateTimeOffset.UtcNow);
+
+        var row = await db.ApiAccessTokens.SingleAsync(t => t.Id == rowId);
+        Assert.Equal(ApiTokenScope.ReadWrite, row.Scope);
     }
 }
