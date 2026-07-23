@@ -593,11 +593,14 @@ public record UpdateFormulaResultRequest(string Text);
 
 // ---- Webhooks (outbound "Automations") ----
 
-/// <summary>A user's webhook subscription as listed/returned after creation - never carries the secret
-/// (see <see cref="WebhookCreatedDto"/> for the one-time reveal).</summary>
+/// <summary>A webhook subscription as listed/returned after creation - never carries the secret (see
+/// <see cref="WebhookCreatedDto"/> for the one-time reveal). <c>Scope</c> is a <c>WebhookScope</c> name
+/// ("Personal"/"Platform"); <c>SignalFilter</c> is the Workflow Signal keys the subscription routes on
+/// (empty for a Personal subscription that hasn't narrowed to any).</summary>
 public record WebhookSubscriptionDto(
     Guid Id, string Name, string Url, string[] EventTypes, bool IsActive, int ConsecutiveFailures,
-    string? DisabledReason, DateTimeOffset? LastDeliveryAt, string? LastStatus, DateTimeOffset CreatedAt);
+    string? DisabledReason, DateTimeOffset? LastDeliveryAt, string? LastStatus, DateTimeOffset CreatedAt,
+    string Scope, string[] SignalFilter);
 
 /// <summary>Returned only from <c>Create</c> - the plaintext signing <see cref="Secret"/> is shown once and
 /// never persisted or returned again.</summary>
@@ -606,6 +609,13 @@ public record WebhookCreatedDto(Guid Id, string Name, string Url, string[] Event
 public record CreateWebhookRequest(string? Name, string Url, string[] EventTypes);
 
 public record UpdateWebhookRequest(string? Name, string Url, string[] EventTypes, bool IsActive);
+
+/// <summary>Creates an admin-owned, signal-routed Platform webhook subscription (Phase 3). Requires a
+/// non-empty <see cref="SignalFilter"/> - a Platform subscription with no signal fires on nothing.</summary>
+public record CreatePlatformWebhookRequest(string? Name, string Url, string[] EventTypes, string[] SignalFilter);
+
+public record UpdatePlatformWebhookRequest(
+    string? Name, string Url, string[] EventTypes, string[] SignalFilter, bool IsActive);
 
 /// <summary>One delivery attempt (or pending/queued item) for a subscription, for the deliveries log.
 /// <c>Status</c> is a <c>WebhookDeliveryStatus</c> name (Pending/Succeeded/Failed/...).</summary>
