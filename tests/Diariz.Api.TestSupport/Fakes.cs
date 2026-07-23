@@ -745,7 +745,8 @@ public sealed class FakeHubContext : IHubContext<TranscriptionHub>
 /// <summary>Records every publish a controller makes, without touching the database.</summary>
 public sealed class CapturingWebhookPublisher : IWebhookPublisher
 {
-    public readonly List<(string EventType, Guid Owner, object Data)> Published = new();
-    public Task PublishAsync(string eventType, Guid ownerUserId, object data, CancellationToken ct = default)
-    { Published.Add((eventType, ownerUserId, data)); return Task.CompletedTask; }
+    public readonly List<(string EventType, Guid Owner, object Data, IReadOnlyList<string> Signals, object? PlatformData)> Published = new();
+    public Task PublishAsync(string eventType, Guid ownerUserId, object data,
+        IReadOnlyList<string>? signals = null, object? platformData = null, CancellationToken ct = default)
+    { Published.Add((eventType, ownerUserId, data, signals ?? Array.Empty<string>(), platformData)); return Task.CompletedTask; }
 }

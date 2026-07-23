@@ -73,7 +73,7 @@ public class FormulaWebhookEmitTests
         Assert.Contains(publisher.Published, p =>
             p.EventType == WebhookEventTypes.FormulaResultCompleted);
 
-        var (_, owner, data) = publisher.Published.Single(p => p.EventType == WebhookEventTypes.FormulaResultCompleted);
+        var (_, owner, data, _, _) = publisher.Published.Single(p => p.EventType == WebhookEventTypes.FormulaResultCompleted);
         Assert.Equal(userId, owner);
         var json = System.Text.Json.JsonSerializer.Serialize(data);
         using var doc = System.Text.Json.JsonDocument.Parse(json);
@@ -100,7 +100,7 @@ public class FormulaWebhookEmitTests
         await Run(db, chat, new FakeSummarizationSettingsResolver(), hub,
             new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId), publisher, publicUrl: "");
 
-        var (_, _, data) = publisher.Published.Single(p => p.EventType == WebhookEventTypes.FormulaResultCompleted);
+        var (_, _, data, _, _) = publisher.Published.Single(p => p.EventType == WebhookEventTypes.FormulaResultCompleted);
         var json = System.Text.Json.JsonSerializer.Serialize(data);
         using var doc = System.Text.Json.JsonDocument.Parse(json);
         Assert.Equal(System.Text.Json.JsonValueKind.Null, doc.RootElement.GetProperty("links").GetProperty("result").ValueKind);
@@ -158,7 +158,7 @@ public class FormulaWebhookEmitTests
         await Run(db, chat, new FakeSummarizationSettingsResolver(), hub,
             new FormulaRunJob(null, sectionId, result.Id, formula.Id, userId), publisher, publicUrl: "https://app.test");
 
-        var (_, _, data) = publisher.Published.Single(p => p.EventType == WebhookEventTypes.FormulaResultFailed);
+        var (_, _, data, _, _) = publisher.Published.Single(p => p.EventType == WebhookEventTypes.FormulaResultFailed);
         var json = System.Text.Json.JsonSerializer.Serialize(data);
         using var doc = System.Text.Json.JsonDocument.Parse(json);
         Assert.Equal(System.Text.Json.JsonValueKind.Null, doc.RootElement.GetProperty("recordingId").ValueKind);
