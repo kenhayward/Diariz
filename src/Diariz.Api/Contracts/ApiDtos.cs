@@ -369,6 +369,8 @@ public record UserProfileDto(
     string Theme = "auto",
     /// <summary>Whether the platform has user API access enabled (drives the Preferences "Developers" tab).</summary>
     bool ApiAccessEnabled = false,
+    /// <summary>Whether the platform has outbound webhooks enabled (drives the Preferences "Automations" tab).</summary>
+    bool WebhooksEnabled = false,
     /// <summary>The caller's platform permissions, from their group membership. Resolved server-side on every
     /// request: the web must not infer authority from the JWT, which goes stale when membership changes.</summary>
     PermissionsDto? Permissions = null);
@@ -586,3 +588,25 @@ public record FormulaResultTextDto(string Text);
 
 /// <summary>Edits a formula result's Markdown body.</summary>
 public record UpdateFormulaResultRequest(string Text);
+
+// ---- Webhooks (outbound "Automations") ----
+
+/// <summary>A user's webhook subscription as listed/returned after creation - never carries the secret
+/// (see <see cref="WebhookCreatedDto"/> for the one-time reveal).</summary>
+public record WebhookSubscriptionDto(
+    Guid Id, string Name, string Url, string[] EventTypes, bool IsActive, int ConsecutiveFailures,
+    string? DisabledReason, DateTimeOffset? LastDeliveryAt, string? LastStatus, DateTimeOffset CreatedAt);
+
+/// <summary>Returned only from <c>Create</c> - the plaintext signing <see cref="Secret"/> is shown once and
+/// never persisted or returned again.</summary>
+public record WebhookCreatedDto(Guid Id, string Name, string Url, string[] EventTypes, string Secret);
+
+public record CreateWebhookRequest(string? Name, string Url, string[] EventTypes);
+
+public record UpdateWebhookRequest(string? Name, string Url, string[] EventTypes, bool IsActive);
+
+/// <summary>One delivery attempt (or pending/queued item) for a subscription, for the deliveries log.
+/// <c>Status</c> is a <c>WebhookDeliveryStatus</c> name (Pending/Succeeded/Failed/...).</summary>
+public record WebhookDeliveryDto(
+    Guid Id, string EventType, string Status, int AttemptCount, int? ResponseStatus, string? LastError,
+    DateTimeOffset CreatedAt, DateTimeOffset? NextAttemptAt);

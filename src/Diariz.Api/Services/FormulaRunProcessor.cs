@@ -1,6 +1,7 @@
 using System.Text;
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
+using Diariz.Api.Webhooks;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.SignalR;
@@ -20,19 +21,19 @@ public static class FormulaRunProcessor
     public static async Task ProcessAsync(
         DiarizDbContext db, IChatStreamClient chat, ISummarizationSettingsResolver settings,
         IHubContext<TranscriptionHub> hub, FormulaRunJob job, int reduceCharBudget, ILogger logger,
-        CancellationToken ct = default)
+        IWebhookPublisher webhooks, string publicUrl, CancellationToken ct = default)
     {
         var cfg = await settings.ResolveAsync(job.UserId, ct);
         if (!cfg.Enabled)
         {
-            await FailAsync(db, hub, job, "No LLM endpoint is configured for this user or server.", ct);
+            await FailAsync(db, hub, job, "No LLM endpoint is configured for this user or server.", webhooks, publicUrl, ct);
             return;
         }
 
         var formula = await db.Formulas.FirstOrDefaultAsync(f => f.Id == job.FormulaId, ct);
         if (formula is null)
         {
-            await FailAsync(db, hub, job, "The formula was removed before the run completed.", ct);
+            await FailAsync(db, hub, job, "The formula was removed before the run completed.", webhooks, publicUrl, ct);
             return;
         }
 
@@ -69,22 +70,29 @@ public static class FormulaRunProcessor
             }
             await hub.NotifyFormulaStatusAsync(job.UserId, job.RecordingId, job.SectionId, job.ResultId,
                 nameof(FormulaRunStatus.Ready));
+            await webhooks.PublishAsync(WebhookEventTypes.FormulaResultCompleted, job.UserId, new
+            {
+                recordingId = job.RecordingId, sectionId = job.SectionId, formulaId = job.FormulaId,
+                formulaResultId = job.ResultId, status = nameof(FormulaRunStatus.Ready),
+                links = new { result = FormulaResultLink(publicUrl, job.RecordingId, job.ResultId) },
+            });
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             // The linked CTS fired (LLM timeout), not the caller's ct - record it as a failure, don't propagate.
             logger.LogWarning("Formula run {ResultId} timed out", job.ResultId);
-            await FailAsync(db, hub, job, "The LLM request timed out.", ct);
+            await FailAsync(db, hub, job, "The LLM request timed out.", webhooks, publicUrl, ct);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Formula run {ResultId} failed", job.ResultId);
-            await FailAsync(db, hub, job, ex.Message, ct);
+            await FailAsync(db, hub, job, ex.Message, webhooks, publicUrl, ct);
         }
     }
 
     private static async Task FailAsync(
-        DiarizDbContext db, IHubContext<TranscriptionHub> hub, FormulaRunJob job, string error, CancellationToken ct)
+        DiarizDbContext db, IHubContext<TranscriptionHub> hub, FormulaRunJob job, string error,
+        IWebhookPublisher webhooks, string publicUrl, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         // A section-scoped job flips the SectionFormulaResult row; a recording job the FormulaResult row.
@@ -112,7 +120,20 @@ public static class FormulaRunProcessor
         }
         await hub.NotifyFormulaStatusAsync(job.UserId, job.RecordingId, job.SectionId, job.ResultId,
             nameof(FormulaRunStatus.Failed));
+        await webhooks.PublishAsync(WebhookEventTypes.FormulaResultFailed, job.UserId, new
+        {
+            recordingId = job.RecordingId, sectionId = job.SectionId, formulaId = job.FormulaId,
+            formulaResultId = job.ResultId, status = nameof(FormulaRunStatus.Failed),
+            links = new { result = FormulaResultLink(publicUrl, job.RecordingId, job.ResultId) },
+        });
     }
+
+    /// <summary>The result-fetch endpoint link, or null when there's no public URL configured or the run is
+    /// section-scoped (no owning recording to address the endpoint by).</summary>
+    private static string? FormulaResultLink(string publicUrl, Guid? recordingId, Guid resultId) =>
+        recordingId is { } rid && !string.IsNullOrWhiteSpace(publicUrl)
+            ? $"{publicUrl.TrimEnd('/')}/api/recordings/{rid}/formula-results/{resultId}"
+            : null;
 
     // -- Shared context/LLM primitives (also used by the synchronous FormulaRunner) --
 

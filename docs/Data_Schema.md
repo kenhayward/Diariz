@@ -90,6 +90,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddSectionAttachmentUploader` | `SectionAttachments.UploadedByUserId` (uuid, not-null, plain column - no FK, mirrors `Sections.RoomId`'s "not yet" pattern; indexed). Storage quota (`StorageUsage`) now sums a folder's file attachments by whoever **uploaded** them instead of `Section.UserId` (the folder's creator) - the two can differ once a shared-room member with `ManageContents` can add to a folder they didn't create. **Backfills** every existing row from its `Section.UserId` (that's who it was charged to before this column existed, so the backfill is a no-op in effect) — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddApiTokenScopeExpiry` | `ApiAccessTokens.Scope` (int, not-null, **default 1** = ReadWrite, so every pre-existing token keeps full access) + `ApiAccessTokens.ExpiresAt` (timestamptz null, default never-expires) — least-privilege, time-boxed personal API tokens; additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddPlatformIntegrationToggles` | `PlatformSettings.McpAccessEnabled` (bool, not-null, **default true**, existing row updated to true so an already-connected MCP client is not broken) + `PlatformSettings.WebhooksEnabled` (bool, not-null, default false) — split the single implicit "integrations" surface into three independent admin toggles (API access already existed; MCP and Webhooks join it) — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddWebhooks` | `Webhooks` (a user's outbound webhook subscription, backing the `WebhookSubscription` entity - table name predates a later rename; `Scope` int 0=Personal/1=Platform, default Personal, Phase 2 only supports Personal; `OwnerUserId` FK `ON DELETE CASCADE`; `SecretEncrypted` **text**, Data-Protection-encrypted HMAC secret; `EventTypes` **text**, comma-separated event keys; index `OwnerUserId`) + `WebhookDeliveries` (one queued/sent event per matching subscription; `SubscriptionId` FK `ON DELETE CASCADE`; `PayloadJson` **text, not jsonb** - preserved byte-for-byte so the HMAC signature computed over it stays valid across retries; `Status` int enum `Pending/Delivered/Failed`; composite index `(Status, NextAttemptAt)` - the delivery worker's due-poll query; index `SubscriptionId`) — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
 
@@ -713,6 +714,50 @@ storage discipline as `McpAccessTokens` (hash-only, shown once), but a **separat
 | `ExpiresAt` | timestamptz null | optional hard expiry, set only at creation; null = never expires (all pre-existing tokens) |
 
 Indexes: unique `(TokenHash)`, `(UserId)`.
+
+#### `Webhooks`
+A user's outbound webhook subscription ("Automation" in the UI), backing the `WebhookSubscription` entity - the
+physical table is named `Webhooks` (the `DbSet` name), not `WebhookSubscriptions`. Gated end-to-end by
+`PlatformSettings.WebhooksEnabled`. Personal-scope only in Phase 2 (`Scope` exists for a Phase 3 platform-wide
+subscription model).
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `OwnerUserId` | uuid FK → AspNetUsers | owner; **cascade** on user delete |
+| `Scope` | int | `WebhookScope`: `0` = Personal (only value used in Phase 2), `1` = Platform (Phase 3, no behavior yet) |
+| `Name` | varchar(200) | user-chosen label |
+| `Url` | varchar(2048) | delivery target; SSRF-validated (`IWebhookUrlValidator`) on every create/update |
+| `SecretEncrypted` | text | the HMAC signing secret (`dz_whsec_…`), encrypted at rest via Data Protection; shown to the user once, at creation |
+| `EventTypes` | text | comma-separated `WebhookEventTypes` keys this subscription wants |
+| `IsActive` | bool | default true; flipped false by auto-disable or by the user |
+| `ConsecutiveFailures` | int | consecutive failed deliveries; reset to 0 on any success |
+| `DisabledReason` | text null | set when auto-disabled, so the UI can explain why |
+| `LastDeliveryAt` | timestamptz null | |
+| `LastStatus` | text null | `"Delivered"` or the last error string |
+| `CreatedAt` | timestamptz | |
+
+Indexes: `(OwnerUserId)`.
+
+#### `WebhookDeliveries`
+One queued or sent event for one `Webhooks` subscription - doubles as the retry queue (`WebhookDeliveryWorker`
+polls it) and the durable delivery-history log shown in the UI.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `SubscriptionId` | uuid FK → Webhooks | **cascade** on subscription delete |
+| `EventId` | varchar(64) | the stable `evt_…` idempotency key (the `webhook-id` header); constant across retries of this delivery |
+| `EventType` | varchar(64) | a `WebhookEventTypes` key, or `webhook.ping` for a manual test |
+| `PayloadJson` | **text, not jsonb** | the exact signed request body; never re-serialized after creation, since the HMAC signature is computed over these literal bytes |
+| `Status` | int | `WebhookDeliveryStatus`: `Pending` / `Delivered` / `Failed` |
+| `AttemptCount` | int | incremented on every delivery attempt; capped by `WebhookBackoff.MaxAttempts` (8) |
+| `NextAttemptAt` | timestamptz | earliest time the worker may attempt this delivery; the poll key |
+| `ResponseStatus` | int null | HTTP status of the last attempt, if any response was received |
+| `LastError` | text null | last error message (non-2xx status or exception), if any |
+| `CreatedAt` | timestamptz | |
+
+Indexes: composite `(Status, NextAttemptAt)` (the delivery worker's due-poll query), `(SubscriptionId)`.
 
 #### `UserGroups`
 

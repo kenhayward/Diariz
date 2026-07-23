@@ -324,6 +324,16 @@ public class IdentificationOptions
     public double Threshold { get; set; } = 0.4;
 }
 
+/// <summary>Outbound webhook delivery (the worker that signs + POSTs due <c>WebhookDelivery</c> rows).</summary>
+public class WebhookOptions
+{
+    public const string Section = "Webhooks";
+    /// <summary>Consecutive failed deliveries before a subscription is auto-disabled.</summary>
+    public int AutoDisableThreshold { get; set; } = 15;
+    /// <summary>Max due deliveries processed per worker tick.</summary>
+    public int BatchSize { get; set; } = 20;
+}
+
 /// <summary>OpenAI-compatible speech-to-text endpoint used for chat voice dictation - the server-fallback
 /// path for environments where the browser SpeechRecognition API is unavailable (the Electron desktop
 /// shell, Safari, Firefox). Empty <see cref="ApiBase"/> disables the server path; the browser API is still

@@ -624,6 +624,7 @@ export interface UserProfile {
   apiAccessEnabled: boolean;
   /// The caller's platform permissions. Optional only because the server marks it nullable; always sent.
   permissions?: Permissions;
+  webhooksEnabled: boolean;   // drives the "Automations" tab
 }
 
 /// A stored personal REST-API token, listed in Preferences -> Developers. The secret is never returned -
@@ -950,3 +951,43 @@ export interface SearchResponse {
 
 /// The scope a search runs in. `folder` is the drill position, `everywhere` spans every room.
 export type SearchScope = "folder" | "everywhere";
+
+// ---- Webhooks (outbound automations) ----
+export interface WebhookSubscription {
+  id: string;
+  name: string;
+  url: string;
+  eventTypes: string[];
+  isActive: boolean;
+  consecutiveFailures: number;
+  disabledReason: string | null;
+  lastDeliveryAt: string | null;
+  lastStatus: string | null;
+  createdAt: string;
+}
+/// The response to creating a webhook: the plaintext signing secret, shown to the user exactly once.
+export interface WebhookCreated {
+  id: string;
+  name: string;
+  url: string;
+  eventTypes: string[];
+  secret: string;
+}
+export interface WebhookDelivery {
+  id: string;
+  eventType: string;
+  status: string;
+  attemptCount: number;
+  responseStatus: number | null;
+  lastError: string | null;
+  createdAt: string;
+  nextAttemptAt: string | null;
+}
+export interface CreateWebhookBody {
+  name: string;
+  url: string;
+  eventTypes: string[];
+}
+export interface UpdateWebhookBody extends CreateWebhookBody {
+  isActive: boolean;
+}

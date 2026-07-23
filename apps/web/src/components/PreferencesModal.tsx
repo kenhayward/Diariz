@@ -14,6 +14,7 @@ import McpAccessSection from "./McpAccessSection";
 import DeveloperAccessSection from "./DeveloperAccessSection";
 import VoicePrintsSection from "./VoicePrintsSection";
 import FormulasSection from "./FormulasSection";
+import AutomationsSection from "./AutomationsSection";
 
 export type PreferencesTab =
   | "profile"
@@ -25,6 +26,7 @@ export type PreferencesTab =
   | "feeds"
   | "claude"
   | "developers"
+  | "automations"
   | "voiceprints";
 
 /// Personal preferences, organised as a vertical-tabbed modal (a left nav headed by the user's avatar/name,
@@ -60,6 +62,7 @@ export default function PreferencesModal({
     { id: "feeds", label: t("tabCalendarFeeds") },
     { id: "claude", label: t("tabClaudeAccess") },
     ...(profile?.apiAccessEnabled ? [{ id: "developers" as const, label: t("tabDevelopers") }] : []),
+    ...(profile?.webhooksEnabled ? [{ id: "automations" as const, label: t("tabAutomations") }] : []),
     { id: "voiceprints", label: t("tabVoicePrints") },
   ];
 
@@ -115,6 +118,7 @@ export default function PreferencesModal({
             {tab === "feeds" && <CalendarFeedsSection />}
             {tab === "claude" && <McpAccessSection />}
             {tab === "developers" && <DeveloperAccessSection />}
+            {tab === "automations" && <AutomationsSection />}
             {tab === "voiceprints" && <VoicePrintsSection />}
           </div>
           <div className="flex items-center justify-end border-t px-5 py-3 dark:border-gray-700">

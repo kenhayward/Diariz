@@ -44,6 +44,8 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<FormulaResult> FormulaResults => Set<FormulaResult>();
     public DbSet<SectionFormulaResult> SectionFormulaResults => Set<SectionFormulaResult>();
     public DbSet<FormulaSubscription> FormulaSubscriptions => Set<FormulaSubscription>();
+    public DbSet<WebhookSubscription> Webhooks => Set<WebhookSubscription>();
+    public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -623,6 +625,25 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.HasOne(t => t.User)
                 .WithMany()
                 .HasForeignKey(t => t.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // A user-registered outbound webhook ("Automation") and its delivery/retry queue. Provider-agnostic
+        // (plain columns, no vector/jsonb - PayloadJson stays plain text so a later task can HMAC-sign the
+        // exact bytes), so both stay outside the Npgsql guard and load under the in-memory test provider too.
+        builder.Entity<WebhookSubscription>(e =>
+        {
+            e.Property(s => s.Name).HasMaxLength(200);
+            e.Property(s => s.Url).HasMaxLength(2048);
+            e.HasIndex(s => s.OwnerUserId);
+            e.HasOne(s => s.Owner).WithMany().HasForeignKey(s => s.OwnerUserId).OnDelete(DeleteBehavior.Cascade);
+        });
+        builder.Entity<WebhookDelivery>(e =>
+        {
+            e.Property(d => d.EventId).HasMaxLength(64);
+            e.Property(d => d.EventType).HasMaxLength(64);
+            e.HasIndex(d => new { d.Status, d.NextAttemptAt }); // the worker's due-poll index
+            e.HasOne(d => d.Subscription).WithMany().HasForeignKey(d => d.SubscriptionId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

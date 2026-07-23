@@ -108,7 +108,8 @@ public class SectionFormulaRunIntegrationTests(ContainersFixture fx)
         {
             await FormulaRunProcessor.ProcessAsync(
                 db, chat, new FakeSummarizationSettingsResolver(), hub,
-                new FormulaRunJob(null, parentId, resultId, formulaId, userId), 48_000, NullLogger.Instance);
+                new FormulaRunJob(null, parentId, resultId, formulaId, userId), 48_000, NullLogger.Instance,
+                new CapturingWebhookPublisher(), "");
         }
 
         // 2 map calls (parent + its sub-section, room-scoped - the decoy in another room excluded) + 1 reduce.

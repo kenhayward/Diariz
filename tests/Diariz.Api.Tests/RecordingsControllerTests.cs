@@ -30,7 +30,8 @@ public class RecordingsControllerTests
             new FakeApiKeyProtector());
         return new RecordingsController(db, storage ?? new FakeAudioStorage(), queue, new FakeHubContext(), config,
             resolver, email ?? new FakeEmailSender(), identifier ?? new FakeSpeakerIdentifier(),
-            Options.Create(uploads ?? new UploadOptions()), new RoomScope(db), exportLocalizer, calendar)
+            Options.Create(uploads ?? new UploadOptions()), new RoomScope(db), new CapturingWebhookPublisher(),
+            Options.Create(new AppPublicOptions()), exportLocalizer, calendar)
         {
             ControllerContext = Http.Context(userId)
         };

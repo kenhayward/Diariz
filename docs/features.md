@@ -79,6 +79,14 @@ permissions, over your own data — and browse a **built-in API reference** (Dev
 token can be minted **read-only or read-write** and given an optional **expiry date**, so a token pasted into an
 external tool can be least-privilege and time-boxed; a pre-existing token keeps its original read-write, no-expiry
 behavior.
+- **Automations (outbound webhooks).** When a Platform Administrator enables it (Settings → Integration), register
+outbound webhooks from **Preferences → Automations**: pick which events fire it (recording created, transcription
+finished or failed, formula run finished or failed), paste your tool's webhook URL, and send a test event. Each
+delivery is a **Standard Webhooks-style signed** POST (HMAC-SHA256 over the exact payload bytes, timestamp and
+delivery-id headers) so the receiver can verify authenticity; failed deliveries are **retried automatically with
+backoff**, and a subscription is **auto-paused** after repeated failures so a broken endpoint doesn't loop forever. A
+per-automation view shows recent deliveries and their status. Personal-scope only in this release (a subscription
+only sees its own owner's recordings/formulas); platform-wide automations are a later milestone.
 - **Integration toggles.** A Platform Administrator can independently switch **API access**, **Claude/MCP**, and
 **Automations** (webhooks) on or off from Settings → Integration - each surface is gated behind its own toggle, so
 turning off webhooks, say, does not disable a user's API tokens or the MCP connector. API access and Automations

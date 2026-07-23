@@ -721,6 +721,65 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   token lapses at its short lifetime). Config lives under the `McpOAuth` options block; the whole server is gated
   by `McpOAuth:Enabled` (on by default). **The OAuth-for-MCP arc is complete.**
 
+## Outbound webhooks (Automations)
+
+Phase 2 of the Integrations roadmap: a user can register outbound webhooks ("Automations", Preferences →
+Automations) that fire signed HTTP events when their own recordings/formulas change state. Gated end-to-end
+behind the `PlatformSettings.WebhooksEnabled` platform toggle (off by default; independent of the API-access and
+Claude/MCP toggles) — `WebhooksController` (`/api/user/webhooks`, JWT-authed) `Forbid`s every action when the
+toggle is off.
+
+- **Event catalog (`WebhookEventTypes`), five subscribable types:** `recording.created`, `recording.transcribed`,
+  `recording.transcription_failed`, `formula_result.completed`, `formula_result.failed` — plus an internal
+  `webhook.ping` used only by the manual "Send test event" button (never subscribable). Events are emitted at
+  the recording-create site and the worker-callback success/failure sites (`RecordingsController`,
+  `WorkerCallbackController`) and at the formula-run completion/failure sites (`FormulaRunProcessor`, invoked from
+  `FormulaRunWorker`), each via `IWebhookPublisher.PublishAsync(eventType, ownerUserId, data)`.
+- **Personal-scope matching only in Phase 2.** `WebhookSubscription.Scope` defaults to `WebhookScope.Personal`
+  (a `Platform` scope value exists on the enum for Phase 3 but has no behavior yet). `WebhookPublisher` looks up
+  the event owner's own **active** subscriptions whose comma-separated `EventTypes` contains the firing event
+  type, builds the envelope **once** per event, and inserts one `WebhookDelivery` row per matching subscription —
+  it never throws (a publish failure is logged, not surfaced to the triggering request/worker).
+- **Envelope + Standard Webhooks-style signing.** `WebhookPayload.Build` serializes a thin
+  `{ id, type, created, data }` JSON envelope once; that exact string is stored as `WebhookDelivery.PayloadJson`
+  (a `text` column, deliberately **not** `jsonb`) and is **never re-serialized** between store and send, because
+  the HMAC signature is computed over the literal stored bytes. `WebhookDeliveryProcessor` signs and POSTs it with
+  three headers: `webhook-id` (the stable `evt_…` idempotency key, constant across retries), `webhook-timestamp`
+  (Unix seconds), and `webhook-signature` (`WebhookSigner`: `v1,base64(HMAC-SHA256(secret, "id.timestamp.body"))`)
+  — the same header names/format used by the Standard Webhooks spec, so existing verification libraries work
+  unmodified. The per-subscription signing secret (`dz_whsec_…`, shown once at creation) is encrypted at rest via
+  `IWebhookSecretProtector` (ASP.NET Data Protection, same keyring as the summarisation API-key protector).
+- **Postgres-backed delivery queue, not Redis.** `WebhookDelivery` rows *are* the queue: `Status`
+  (`Pending`/`Delivered`/`Failed`) + `NextAttemptAt` double as both the retry schedule and a durable audit log
+  (surfaced to the user via `GET /api/user/webhooks/{id}/deliveries`). `WebhookDeliveryWorker` (a `BackgroundService`,
+  the API's only webhook consumer) polls every 2 seconds, and `WebhookDeliveryProcessor.ProcessDueAsync` takes up
+  to `Webhooks:BatchSize` (default 20) due rows per tick (`Status == Pending && NextAttemptAt <= now`, oldest
+  first). On failure it schedules a backoff retry (`WebhookBackoff`: ~8 attempts spread from 5 seconds out to
+  ~10 hours, ≈24h total); on exhausting all attempts it marks the delivery `Failed` and increments
+  `WebhookSubscription.ConsecutiveFailures`, **auto-disabling** the subscription (`IsActive = false`, with a
+  human-readable `DisabledReason`) once that counter reaches `Webhooks:AutoDisableThreshold` (default 15) — any
+  single success resets the counter to 0. This Postgres-backed design (rather than a Redis stream, unlike the
+  summarisation/minutes/actions/embedding/tag-cloud queues) is deliberate: scheduled retries and a queryable
+  delivery history come for free from the relational row instead of needing a second store.
+- **SSRF validation on every write.** `IWebhookUrlValidator` (`WebhookUrlValidator`) rejects a subscription's
+  `Url` unless it parses as an absolute `http(s)://` URL and **every** DNS-resolved IP passes the shared
+  `UrlFetchGuard.IsBlocked` check (rejects loopback/private/link-local/CGNAT/cloud-metadata ranges — the same
+  guard used elsewhere for user-supplied fetch targets). Both `Create` and `Update` on `WebhooksController`
+  re-validate, so a subscription can't be repointed at an internal address after creation either.
+- **`App:PublicUrl` requirement.** The delivery worker and the formula-event site run with no `HttpContext`, so
+  the absolute recording links included in a payload's `data.links` (`WebhookPayload.For`) depend entirely on
+  `App:PublicUrl` (`AppPublicOptions`) being configured — **any deployment that enables webhooks must set
+  `App:PublicUrl`** to its externally-reachable origin. The two controller-triggered sites
+  (`RecordingsController`, `WorkerCallbackController`) run inside a request and fall back to
+  `{Request.Scheme}://{Request.Host}` when `App:PublicUrl` is empty, but the formula-event site has no such
+  fallback.
+- **`Webhooks` options section:** `AutoDisableThreshold` (default 15) and `BatchSize` (default 20) — see
+  `WebhookOptions` in `Configuration/AppOptions.cs`.
+- **Deferred to Phase 3** (see the roadmap): platform-scoped subscriptions (`WebhookScope.Platform`), a
+  `SignalFilter`/`WorkflowSignal` model, inline formula-output delivery, and a per-subscription delivery
+  rate cap (Phase 2 has no cap because deliveries only originate from real user activity and retries are
+  already backoff-scheduled).
+
 ## Auth, multi-tenancy, and roles
 
 - **ASP.NET Core Identity** (Guid keys) issues **JWT** bearer tokens (`TokenService`). Browsers pass the

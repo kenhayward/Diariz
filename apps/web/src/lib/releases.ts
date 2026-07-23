@@ -36,6 +36,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
 | **API access** | Generate a personal API token (when enabled), read-only or read-write, with an optional expiry date, to call the REST API as yourself, with a built-in API reference. |
+| **Automations (webhooks)** | When enabled, register outbound webhooks from Preferences that fire when a recording is created, finishes or fails transcription, or a formula finishes or fails - signed deliveries with automatic retries, a test-event button, and auto-pause after repeated failures. |
 | **Multi-user & groups** | User groups grant platform permissions (manage rooms / users / platform), with an approval lifecycle, per-user isolation, and Light/Dark/Auto themes. |
 | **Admin controls** | Storage quotas, optional audio auto-deletion, a global AI request timeout, separate platform toggles for API access, Claude/MCP, and Automations (webhooks), and whole-platform backup & restore. |
 
@@ -55,6 +56,22 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.153.0",
+    date: "2026-07-24",
+    pr: 335,
+    headline: "Automations: send your meeting events to Zapier, n8n, and more",
+    summary:
+      "You can now create Automations that send a signed webhook to your tools when a recording is created, " +
+      "finishes (or fails) transcription, or a formula finishes (or fails). Pick the triggers, paste your tool's " +
+      "webhook URL, and send a test event. Deliveries are retried automatically and a failing endpoint is paused. " +
+      "Requires a platform admin to enable Automations.",
+    added: [
+      "An Automations tab in Preferences to register outbound webhooks (personal, gated on the platform toggle)",
+      "Standards-compliant signed delivery (HMAC-SHA256), automatic retries with backoff, and auto-pause on repeated failure",
+      "A 'Send test event' button and a recent-deliveries view per automation",
+    ],
+  },
   {
     version: "0.152.0",
     date: "2026-07-24",
