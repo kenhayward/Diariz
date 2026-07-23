@@ -19,7 +19,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Recording hub** | Every meeting opens on a hub: a summary card (meeting type, key facts, the summary inline) over tiles for transcript, actions, speakers, notes, files, and formulas - each showing its count and a preview, with new-note / add-file / run-formula available in place. The transcript embeds a conversation-flow player showing who spoke when, which doubles as the scrubber. |
 | **Speaker identification** | Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). Assign a speaker from the Speakers tab or straight from the label on any transcript row, as you read or listen. |
 | **Notes** | Take your own note lines live during a meeting (timestamped, crash-safe); they appear inline in the transcript at the moment you wrote them, steer the minutes, and can be woven into an enhanced-notes section linking to the exact transcript moments. |
-| **Meeting screenshots** | Capture the screen during a recording from the desktop app - a hotkey, the tray menu, or the app itself - choosing a screen or a rectangle on the first capture and reusing it after; captures appear in the transcript at the moment they were taken, as a full-size viewer, and in a Notes-tab section. |
+| **Meeting screenshots** | Capture the screen during a recording from the desktop app - a hotkey, the tray menu, or the app itself - choosing a screen or a rectangle on the first capture and reusing it after; captures appear in the transcript at the moment they were taken, as a full-size viewer with zoom and pan to read a capture at native resolution, and in a Notes-tab section. |
 | **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable. A meeting type carries no prompts of its own: it names the **formula** that generates its minutes, plus any others to run alongside (their documents appear in the Formulas tab). Minutes and formulas are the same machinery - any formula you can use can produce your minutes. Templates are built from blocks (H1-H3 headings, literal text, substituted details, model prompts, rules, drag-to-reorder) with JSON import/export. |
 | **Action items** | Auto-extracted with owner and deadline, tracked across every meeting with completion and a person filter, linking back to the transcript. |
 | **Tag cloud** | Every meeting is auto-tagged with weighted topics; a Tags tab shows a weighted cloud and the meetings behind each tag. |
@@ -55,6 +55,19 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.150.0",
+    date: "2026-07-24",
+    pr: 0,
+    headline: "Zoom and pan in the screenshot viewer",
+    summary:
+      "The screenshot viewer now supports zoom and pan, so a dense capture (a full 4K screen grab of a spreadsheet, say) can be read at native size and scrolled around inside the modal instead of downloading it and opening it elsewhere. A zoom cluster in the toolbar (minus / current percentage / plus) sits alongside the existing prev/next, counter, jump, download, delete, and full-screen controls - the percentage also acts as a one-click reset to fit. You can also zoom with the mouse wheel (zooms toward the pointer), double-click to toggle between fit and 100%, and use the +/-/0 keyboard shortcuts. Once zoomed past fit, drag the image to pan, with the view clamped so it can never be dragged fully off-screen. Zoom and pan reset to fit whenever you move to a different capture or reopen the viewer, and work in both the windowed and full-screen states.",
+    added: [
+      "A zoom cluster (minus, percentage-as-reset, plus) in the screenshot viewer's toolbar",
+      "Mouse wheel zoom toward the pointer, double-click to toggle fit/100%, and +/-/0 keyboard shortcuts in the screenshot viewer",
+      "Drag-to-pan once zoomed past fit in the screenshot viewer, clamped so the capture can't be dragged fully off-screen",
+    ],
+  },
   {
     version: "0.149.1",
     date: "2026-07-23",

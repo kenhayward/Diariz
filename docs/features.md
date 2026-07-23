@@ -67,9 +67,12 @@ in that meeting reuses the same area, and a "Change capture area" action lets yo
 notes popover, so a mis-aimed capture area is caught during the meeting instead of after it. Each capture
 stores a full PNG (long edge capped at 2560 pixels) plus a JPEG thumbnail, and both count toward your
 storage quota. Screenshots then appear **inline in the transcript** at the moment they were taken, as
-thumbnails that open a full-size viewer with previous/next, jump-to-moment, download, and delete; the Notes
-tab also lists a recording's captures in a collapsed Screenshots section. A note or screenshot sitting
-between two turns by the same speaker now stops those turns from being merged past it.
+thumbnails that open a full-size viewer with previous/next, a position counter, a full-screen toggle,
+jump-to-moment, download, and delete; **zoom and pan** (mouse wheel toward the pointer, a zoom cluster,
+double-click, keyboard shortcuts, drag once zoomed in) let a dense capture be read at native resolution and
+scrolled around instead of downloading it. The Notes tab also lists a recording's captures in a collapsed
+Screenshots section. A note or screenshot sitting between two turns by the same speaker now stops those
+turns from being merged past it.
 - **User API access.** When a Platform Administrator enables it (Settings → Integration), generate a **personal
 API token** (Preferences → Developers) to call the Diariz **REST API** directly as yourself — acting with your own
 permissions, over your own data — and browse a **built-in API reference** (Developers → View API reference).
