@@ -43,6 +43,10 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
   const [retentionRunMsg, setRetentionRunMsg] = useState<string | null>(null);
   // Integration: master switch for user API access (personal tokens).
   const [apiAccessEnabled, setApiAccessEnabled] = useState(false);
+  // Integration: master switch for Claude / MCP access (personal MCP tokens). On by default.
+  const [mcpAccessEnabled, setMcpAccessEnabled] = useState(true);
+  // Integration: master switch for outbound webhooks (meeting-event automations). Off by default.
+  const [webhooksEnabled, setWebhooksEnabled] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -58,6 +62,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
       // "HH:mm:ss" on the wire -> "HH:mm" for the <input type="time">.
       setDeletionTime((platform.audioDeletionTimeOfDay ?? "03:00:00").slice(0, 5));
       setApiAccessEnabled(platform.apiAccessEnabled);
+      setMcpAccessEnabled(platform.mcpAccessEnabled);
+      setWebhooksEnabled(platform.webhooksEnabled);
     }
   }, [platform]);
 
@@ -88,6 +94,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
         // "HH:mm" from the input -> "HH:mm:ss" for the TimeOnly wire type.
         audioDeletionTimeOfDay: `${deletionTime || "03:00"}:00`,
         apiAccessEnabled,
+        mcpAccessEnabled,
+        webhooksEnabled,
         llmTimeoutSeconds: timeout,
       });
       qc.invalidateQueries({ queryKey: ["platform-settings"] });
@@ -270,6 +278,26 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
                 <span className="font-medium text-gray-700 dark:text-gray-200">{t("apiAccessEnabledLabel")}</span>
               </label>
               <p className="text-xs text-gray-400 dark:text-gray-500">{t("apiAccessEnabledHelp")}</p>
+
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={mcpAccessEnabled}
+                  onChange={(e) => setMcpAccessEnabled(e.target.checked)}
+                />
+                <span className="font-medium text-gray-700 dark:text-gray-200">{t("mcpAccessEnabledLabel")}</span>
+              </label>
+              <p className="text-xs text-gray-400 dark:text-gray-500">{t("mcpAccessEnabledHelp")}</p>
+
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={webhooksEnabled}
+                  onChange={(e) => setWebhooksEnabled(e.target.checked)}
+                />
+                <span className="font-medium text-gray-700 dark:text-gray-200">{t("webhooksEnabledLabel")}</span>
+              </label>
+              <p className="text-xs text-gray-400 dark:text-gray-500">{t("webhooksEnabledHelp")}</p>
               <Link
                 to="/developers/api"
                 onClick={onClose}

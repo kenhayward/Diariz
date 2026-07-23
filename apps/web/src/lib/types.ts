@@ -414,6 +414,10 @@ export interface PlatformSettings {
   audioDeletionTimeOfDay: string;
   /// Master switch for user API access (personal tokens). Off by default.
   apiAccessEnabled: boolean;
+  /// Master switch for Claude / MCP access (personal MCP tokens). On by default.
+  mcpAccessEnabled: boolean;
+  /// Master switch for outbound webhooks (meeting-event automations). Off by default.
+  webhooksEnabled: boolean;
   /// Per-request timeout (seconds) applied to every LLM call platform-wide. Default 120.
   llmTimeoutSeconds: number;
 }
