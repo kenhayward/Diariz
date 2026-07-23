@@ -56,6 +56,18 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.147.1",
+    date: "2026-07-23",
+    pr: 0,
+    headline: "Security patch: update two vulnerable dependencies",
+    summary:
+      "Applies two dependency security fixes flagged by automated scanning. In the desktop app, fast-uri (a URI parser pulled in by the settings-storage library) moves from 3.1.3 to 3.1.4, closing a high-severity host-confusion issue where a backslash in a URI could be mis-parsed as the host; the affected code only ever validates the app's own local config file, not untrusted input, so real-world exposure here was low, but the patch is free and worth taking. In the web app, DOMPurify (the HTML sanitizer) moves from 3.4.11 to 3.4.12, closing a low-severity bypass that only applies when a custom-element sanitizer option the app does not use is enabled. No behavior changes and no code changes - dependency versions only. Because the fast-uri fix ships inside the desktop app, installed desktop clients pick it up only from a new installer; the web fix ships with the normal server redeploy.",
+    fixed: [
+      "Desktop: updated fast-uri to 3.1.4 (high-severity URI host-confusion advisory)",
+      "Web: updated DOMPurify to 3.4.12 (low-severity custom-element sanitization advisory)",
+    ],
+  },
+  {
     version: "0.147.0",
     date: "2026-07-23",
     pr: 326,
