@@ -4,9 +4,9 @@ using Microsoft.AspNetCore.Http;
 
 namespace Diariz.Api.Tests;
 
-/// <summary>Pipeline-level coverage for <see cref="ApiTokenScopeMiddleware"/>: this repo's integration project
-/// has no WebApplicationFactory/HTTP harness (see ApiAccessIntegrationTests), so real block/pass-through
-/// behaviour is exercised here directly against a <see cref="DefaultHttpContext"/> instead.</summary>
+/// <summary>Pipeline-level coverage for <see cref="ApiTokenScopeMiddleware"/>: block/pass-through
+/// behaviour is exercised here directly against a <see cref="DefaultHttpContext"/>, invoking the
+/// middleware in isolation rather than through a full HTTP request pipeline.</summary>
 public class ApiTokenScopeMiddlewareTests
 {
     private static DefaultHttpContext ContextWithScopeClaim(string? scope, string method)

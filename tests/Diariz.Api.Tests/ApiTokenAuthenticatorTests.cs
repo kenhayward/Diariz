@@ -50,4 +50,23 @@ public class ApiTokenAuthenticatorTests
         var auth = new ApiTokenAuthenticator(db, new FixedPlatformSettings(db));
         Assert.Null(await auth.AuthenticateAsync(token, default));
     }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Blank_token_is_rejected(string? blankToken)
+    {
+        var (db, _, _) = Seed(ApiTokenScope.ReadWrite, expiresAt: null, apiEnabled: true);
+        var auth = new ApiTokenAuthenticator(db, new FixedPlatformSettings(db));
+        Assert.Null(await auth.AuthenticateAsync(blankToken, default));
+    }
+
+    [Fact]
+    public async Task Unknown_token_is_rejected()
+    {
+        var (db, _, _) = Seed(ApiTokenScope.ReadWrite, expiresAt: null, apiEnabled: true);
+        var auth = new ApiTokenAuthenticator(db, new FixedPlatformSettings(db));
+        Assert.Null(await auth.AuthenticateAsync("dz_api_" + Guid.NewGuid().ToString("N"), default));
+    }
 }
