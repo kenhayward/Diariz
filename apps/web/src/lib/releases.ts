@@ -58,7 +58,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.151.0",
     date: "2026-07-24",
-    pr: 0, // set to the PR number when opened
+    pr: 333,
     headline: "Granular integration controls and safer API tokens",
     summary:
       "Platform admins can now enable API access, Claude/MCP, and Automations (webhooks) independently. " +
