@@ -79,6 +79,21 @@ describe("NotesPopover screenshots", () => {
     expect(screen.queryByRole("img")).toBeNull();
   });
 
+  it("offers capturing a screenshot without leaving the popover", () => {
+    const onCapture = vi.fn();
+    renderPopover({ shots: [], onChangeCaptureArea: () => {}, onCapture });
+
+    fireEvent.click(screen.getByRole("button", { name: /capture screenshot/i }));
+
+    expect(onCapture).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides the capture button when onCapture is not provided", () => {
+    renderPopover({ shots: [], onChangeCaptureArea: () => {}, onCapture: undefined });
+
+    expect(screen.queryByRole("button", { name: /capture screenshot/i })).toBeNull();
+  });
+
   it("renders the strip with no captures yet, without a stray thumbnail", () => {
     renderPopover({ shots: [], onChangeCaptureArea: () => {} });
 

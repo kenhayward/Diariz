@@ -56,6 +56,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.147.0",
+    date: "2026-07-23",
+    pr: 326,
+    headline: "Capture without leaving Notes, a screenshot count, and a header rename shortcut",
+    summary:
+      "Three small usability refinements to existing features, aimed at multi-screen users and quicker renaming. The Notes popover (open while recording) now has its own Capture button next to Change capture area, so a multi-screen user can take a screenshot without hunting for the main toolbar button behind the popover - the toolbar's own Capture button steps aside while the popover is open, since showing both at once would just be two buttons doing the same thing. The Notes tile on a recording's hub now appends the screenshot count to its subtitle once there are any (\"5 notes - 3 screenshots\"), so screenshots are visible at a glance instead of only after opening the tile. And the recording header gained a pencil Rename button right after Play (before Copy link), reusing the same inline rename form the kebab menu's Rename action already opens - a faster path to the same, unchanged rename flow.",
+    added: [
+      "A Capture button inside the live-notes popover, next to Change capture area, so a screenshot can be taken without closing the popover",
+      "A pencil Rename button in the recording header, right after Play, opening the existing inline rename form",
+    ],
+    changed: [
+      "The Notes tile's subtitle on the recording hub now shows the screenshot count alongside the note count once the recording has any screenshots",
+    ],
+  },
+  {
     version: "0.146.3",
     date: "2026-07-23",
     pr: 325,

@@ -208,6 +208,14 @@ export function LinkIcon({ size = 18 }: IconProps) {
   );
 }
 
+export function PencilIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      <path d="M17 3a2.83 2.83 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+    </svg>
+  );
+}
+
 export function DownloadIcon({ size = 18 }: IconProps) {
   return (
     <svg {...base(size)}>

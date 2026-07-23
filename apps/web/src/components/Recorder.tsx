@@ -1083,8 +1083,10 @@ export default function Recorder({
         />
 
         {/* Screenshot capture: camera icon button (desktop shell + recording only). The in-app equivalent
-            of the global hotkey and tray menu item - all three funnel into the same shell capture. */}
-        {recording && canCaptureScreenshots() && (
+            of the global hotkey and tray menu item - all three funnel into the same shell capture. Hidden
+            while the notes popover is open - it offers its own capture button in that state, and showing
+            both at once would just be two identically-labelled controls doing the same thing. */}
+        {recording && canCaptureScreenshots() && !hub.isOpen("notes") && (
           <HubIconButton label={t("screenshotCaptureButton")} onClick={requestCapture}>
             <IconCamera />
           </HubIconButton>
@@ -1110,6 +1112,7 @@ export default function Recorder({
               shots={liveShots}
               onDeleteShot={deleteLiveShot}
               onChangeCaptureArea={canCaptureScreenshots() ? requestChangeArea : undefined}
+              onCapture={canCaptureScreenshots() ? requestCapture : undefined}
             />
           </div>
         )}

@@ -24,6 +24,8 @@ export type NotesPopoverProps = {
   onDeleteShot: (index: number) => void;
   /// Absent in a plain browser, which is what hides the whole screenshot area.
   onChangeCaptureArea?: () => void;
+  /// Takes a screenshot without closing the popover. Absent in a plain browser, same as onChangeCaptureArea.
+  onCapture?: () => void;
 };
 
 /**
@@ -42,6 +44,7 @@ export default function NotesPopover({
   shots,
   onDeleteShot,
   onChangeCaptureArea,
+  onCapture,
 }: NotesPopoverProps) {
   const { t } = useTranslation("workspace");
 
@@ -105,25 +108,48 @@ export default function NotesPopover({
               <span style={{ fontFamily: "system-ui", fontWeight: 600, fontSize: 12, color: "var(--hub-text-2)" }}>
                 {t("screenshots")} ({shots.length})
               </span>
-              <button
-                type="button"
-                onClick={onChangeCaptureArea}
-                style={{
-                  fontFamily: "system-ui",
-                  fontWeight: 500,
-                  fontSize: 12,
-                  padding: "2px 6px",
-                  borderRadius: 6,
-                  border: "1px solid var(--hub-border)",
-                  background: "transparent",
-                  color: "var(--hub-text-2)",
-                  cursor: "pointer",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hub-surface-hover)")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-              >
-                {t("screenshotCaptureArea")}
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {onCapture && (
+                  <button
+                    type="button"
+                    onClick={onCapture}
+                    style={{
+                      fontFamily: "system-ui",
+                      fontWeight: 500,
+                      fontSize: 12,
+                      padding: "2px 6px",
+                      borderRadius: 6,
+                      border: "1px solid var(--hub-border)",
+                      background: "transparent",
+                      color: "var(--hub-text-2)",
+                      cursor: "pointer",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hub-surface-hover)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    {t("screenshotCaptureButton")}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={onChangeCaptureArea}
+                  style={{
+                    fontFamily: "system-ui",
+                    fontWeight: 500,
+                    fontSize: 12,
+                    padding: "2px 6px",
+                    borderRadius: 6,
+                    border: "1px solid var(--hub-border)",
+                    background: "transparent",
+                    color: "var(--hub-text-2)",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hub-surface-hover)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  {t("screenshotCaptureArea")}
+                </button>
+              </div>
             </div>
             <ul style={{ display: "flex", flexWrap: "wrap", gap: 4, margin: 0, padding: 0, listStyle: "none" }}>
               {previews.map((url, i) => (

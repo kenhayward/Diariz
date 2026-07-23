@@ -1131,6 +1131,7 @@ export default function RecordingDetail() {
         notes={notes}
         attachments={attachments}
         formulaResults={formulaResults}
+        shots={shots}
         meetingTypeTitle={appliedMeetingType?.title ?? null}
         speakerNameOf={speakerNameOf}
         minutesRunning={minutesRunning}
@@ -1544,6 +1545,7 @@ export default function RecordingDetail() {
           hasAudio={rec.hasAudio}
           hasTranscript={hasTranscript}
           onPlay={() => playFrom(0)}
+          onRename={() => setRenaming(true)}
           onCopyLink={copyLink}
           onDownload={() => setDownloading(true)}
         />
