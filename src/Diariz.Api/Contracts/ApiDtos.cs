@@ -37,7 +37,8 @@ public record GrantResultDto(bool Emailed, string? SetupUrl);
 public record PlatformSettingsDto(
     long StarterQuotaBytes, long MaxQuotaBytes, MinutesGenerationMode MinutesGenerationMode,
     bool AutoDeleteAudioEnabled, int AudioRetentionDays, TimeOnly AudioDeletionTimeOfDay,
-    bool ApiAccessEnabled, int LlmTimeoutSeconds);
+    bool ApiAccessEnabled, int LlmTimeoutSeconds,
+    bool McpAccessEnabled, bool WebhooksEnabled);
 public record UpdatePlatformSettingsRequest(
     long StarterQuotaBytes, long MaxQuotaBytes,
     MinutesGenerationMode MinutesGenerationMode = MinutesGenerationMode.SingleCall,
@@ -45,7 +46,9 @@ public record UpdatePlatformSettingsRequest(
     int AudioRetentionDays = PlatformSettings.DefaultAudioRetentionDays,
     TimeOnly AudioDeletionTimeOfDay = default,
     bool ApiAccessEnabled = false,
-    int LlmTimeoutSeconds = PlatformSettings.DefaultLlmTimeoutSeconds);
+    int LlmTimeoutSeconds = PlatformSettings.DefaultLlmTimeoutSeconds,
+    bool McpAccessEnabled = true,
+    bool WebhooksEnabled = false);
 /// <summary>Result of a manual "run the audio-retention pass now" trigger: how many recordings had audio deleted.</summary>
 public record AudioRetentionRunResult(int Deleted);
 /// <summary>Result of a manual "backfill tags now" trigger: how many extraction jobs were ENQUEUED (the

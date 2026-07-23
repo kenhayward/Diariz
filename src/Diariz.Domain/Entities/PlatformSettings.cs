@@ -48,4 +48,11 @@ public class PlatformSettings
     /// for the request-level timeout - the HTTP clients themselves have no cap - so slow local models can be
     /// given room. Admin-editable on the Model Settings tab.</summary>
     public int LlmTimeoutSeconds { get; set; } = DefaultLlmTimeoutSeconds;
+
+    /// <summary>Master switch for the MCP server + dz_mcp_ tokens. On by default (bounded by env Mcp:Enabled).
+    /// Seeded true in the migration so shipping this never disables an existing connector.</summary>
+    public bool McpAccessEnabled { get; set; } = true;
+
+    /// <summary>Master switch for outbound webhooks / user Automations. Off by default; used from Phase 2.</summary>
+    public bool WebhooksEnabled { get; set; }
 }
