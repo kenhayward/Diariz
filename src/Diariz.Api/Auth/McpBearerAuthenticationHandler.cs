@@ -30,14 +30,16 @@ public sealed class McpBearerAuthenticationHandler : AuthenticationHandler<McpAu
 
     private readonly IMcpTokenAuthenticator _authenticator;
     private readonly IAuthenticationSchemeProvider _schemes;
+    private readonly IPlatformSettingsService _platform;
 
     public McpBearerAuthenticationHandler(
         IOptionsMonitor<McpAuthSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder,
-        IMcpTokenAuthenticator authenticator, IAuthenticationSchemeProvider schemes)
+        IMcpTokenAuthenticator authenticator, IAuthenticationSchemeProvider schemes, IPlatformSettingsService platform)
         : base(options, logger, encoder)
     {
         _authenticator = authenticator;
         _schemes = schemes;
+        _platform = platform;
     }
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -47,6 +49,11 @@ public sealed class McpBearerAuthenticationHandler : AuthenticationHandler<McpAu
             return AuthenticateResult.NoResult(); // let the challenge produce a 401
 
         var token = header[Prefix.Length..].Trim();
+
+        // Runtime platform kill-switch: no MCP credential authenticates while the feature is off. Checked
+        // before both the static-token and OAuth branches below so it covers both credential paths.
+        var settings = await _platform.GetAsync(Context.RequestAborted);
+        if (!settings.McpAccessEnabled) return AuthenticateResult.Fail("MCP access is disabled.");
 
         // A static personal access token is self-identifying by its prefix.
         if (token.StartsWith(McpTokenService.TokenPrefix, StringComparison.Ordinal))
