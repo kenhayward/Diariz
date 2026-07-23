@@ -57,6 +57,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.155.0",
+    date: "2026-07-24",
+    pr: 337,
+    headline: "Every API reference section now has a description",
+    summary:
+      "The in-app API reference (Settings -> Developers -> API reference) now shows a short description under " +
+      "each section heading - Recordings, Actions, Chat, Rooms, and every other group - so it's clear what each " +
+      "set of endpoints is for at a glance. A test enforces that every published controller has a section " +
+      "description, so new endpoint groups can't ship undocumented.",
+    added: [
+      "A one-line description on every section of the in-app API reference",
+    ],
+  },
+  {
     version: "0.154.0",
     date: "2026-07-24",
     pr: 336,

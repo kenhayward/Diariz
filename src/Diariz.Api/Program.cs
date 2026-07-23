@@ -465,6 +465,7 @@ builder.Services.AddOpenApi("v1", options =>
 {
     options.ShouldInclude = desc => Diariz.Api.OpenApi.OpenApiCuration.ShouldInclude(desc.RelativePath);
     options.AddDocumentTransformer<Diariz.Api.OpenApi.OpenApiCuration.SecuritySchemeTransformer>();
+    options.AddDocumentTransformer<Diariz.Api.OpenApi.OpenApiCuration.TagDescriptionsTransformer>();
 });
 
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
