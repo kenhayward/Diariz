@@ -1,0 +1,181 @@
+name: Coverage (report-only)
+
+# Reports test coverage for every stack on each PR and on main. This is DELIBERATELY
+# non-gating: every job is continue-on-error, and this workflow is intentionally kept out
+# of the branch-protection required-checks list, so coverage never blocks a merge. The
+# numbers show up in each run's Step Summary (and as downloadable artifacts) for periodic
+# review, not as a pass/fail gate. See CLAUDE.md - this is a CI/tooling workflow.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dotnet-coverage:
+    name: .NET coverage (API + Domain)
+    runs-on: ubuntu-latest
+    continue-on-error: true # report-only: never fail the check
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      # Unit + integration together give the real figure: much of the API is covered by the
+      # integration suite (real Postgres/pgvector/MinIO), which the in-memory unit provider can't
+      # exercise. The runsettings excludes generated EF migrations and the test assemblies.
+      - name: Unit coverage
+        run: dotnet test tests/Diariz.Api.Tests/Diariz.Api.Tests.csproj -c Release --collect:"XPlat Code Coverage" --settings coverage.runsettings --results-directory ./cov-unit || true
+      - name: Integration coverage (Testcontainers)
+        run: dotnet test tests/Diariz.Api.IntegrationTests/Diariz.Api.IntegrationTests.csproj -c Release --collect:"XPlat Code Coverage" --settings coverage.runsettings --results-directory ./cov-int || true
+      - name: Merge and summarise
+        run: |
+          dotnet tool install -g dotnet-reportgenerator-globaltool || true
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          reportgenerator \
+            "-reports:cov-unit/**/coverage.cobertura.xml;cov-int/**/coverage.cobertura.xml" \
+            -targetdir:cov-report \
+            "-reporttypes:MarkdownSummaryGithub;Html;TextSummary" \
+            -assemblyfilters:"+Diariz.Api;+Diariz.Domain" || true
+          {
+            echo "## .NET coverage - API + Domain (unit + integration)";
+            echo "_Generated EF migrations and test assemblies excluded._";
+            echo "";
+            if [ -f cov-report/SummaryGithub.md ]; then cat cov-report/SummaryGithub.md; else echo "Coverage report not produced - see the job logs."; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload .NET coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotnet-coverage
+          path: cov-report
+          if-no-files-found: ignore
+
+  web-coverage:
+    name: Web coverage (vitest v8)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install
+        working-directory: apps/web
+        run: npm ci
+      # include=src/** counts uncovered files too (the honest all-files number); tests and the
+      # i18n test-setup are excluded from the denominator.
+      - name: Run coverage
+        working-directory: apps/web
+        run: |
+          npx vitest run --coverage \
+            --coverage.provider=v8 \
+            --coverage.reportsDirectory=coverage \
+            --coverage.reporter=json-summary \
+            --coverage.reporter=text-summary \
+            --coverage.reporter=html \
+            --coverage.include='src/**' \
+            --coverage.exclude='src/**/*.test.*' \
+            --coverage.exclude='src/test-setup.ts' || true
+      - name: Summarise
+        working-directory: apps/web
+        run: |
+          node -e '
+            const fs = require("fs");
+            const p = "coverage/coverage-summary.json";
+            let out = "## Web coverage (vitest v8) - all of apps/web/src\n\n";
+            if (!fs.existsSync(p)) { out += "Coverage summary not produced - see the job logs.\n"; }
+            else {
+              const t = JSON.parse(fs.readFileSync(p, "utf8")).total;
+              const row = (k) => `| ${k[0].toUpperCase()+k.slice(1)} | ${t[k].pct}% | ${t[k].covered}/${t[k].total} |`;
+              out += "| Metric | % | Covered / Total |\n|---|---:|---:|\n";
+              out += ["lines","statements","functions","branches"].map(row).join("\n") + "\n";
+            }
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, out);
+          '
+      - name: Upload web coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-coverage
+          path: apps/web/coverage
+          if-no-files-found: ignore
+
+  worker-coverage:
+    name: Worker coverage (pytest-cov)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Install test deps
+        working-directory: src/Diariz.Worker
+        run: python -m pip install -r requirements-test.txt
+      # The GPU model paths in pipeline.py can't run without hardware (whisperx/torch are stubbed),
+      # so those lines show as uncovered by design.
+      - name: Run coverage
+        working-directory: src/Diariz.Worker
+        run: python -m pytest --cov=. --cov-report=term-missing --cov-report=html:cov-html | tee cov.txt || true
+      - name: Summarise
+        working-directory: src/Diariz.Worker
+        run: |
+          {
+            echo "## Worker coverage (pytest-cov)";
+            echo "_Model/GPU paths are stubbed and show as uncovered by design._";
+            echo "";
+            echo '```';
+            if [ -f cov.txt ]; then cat cov.txt; else echo "Coverage not produced - see the job logs."; fi
+            echo '```';
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload worker coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-coverage
+          path: src/Diariz.Worker/cov-html
+          if-no-files-found: ignore
+
+  desktop-coverage:
+    name: Desktop coverage (node --test)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Install
+        working-directory: apps/desktop
+        run: npm ci
+      # Native V8 coverage. This reports only the modules the tests load - the pure logic that was
+      # deliberately extracted out of the Electron shell. main.js / preload.js / the HTML windows
+      # are not headless-testable and are not counted here.
+      - name: Run coverage
+        working-directory: apps/desktop
+        run: node --test --experimental-test-coverage "src/**/*.test.js" 2>&1 | tee cov.txt || true
+      - name: Summarise
+        working-directory: apps/desktop
+        run: |
+          {
+            echo "## Desktop coverage (node --test)";
+            echo "_Coverage of the pure, tested modules only - the Electron shell (main.js/preload.js/HTML) is not headless-testable and is excluded._";
+            echo "";
+            echo '```';
+            # Extract just the coverage table (between the report markers), fall back to the tail.
+            awk '/coverage report/{f=1} f{print} /end of coverage report/{f=0}' cov.txt | grep -E "file|%|all files" || tail -20 cov.txt;
+            echo '```';
+          } >> "$GITHUB_STEP_SUMMARY"

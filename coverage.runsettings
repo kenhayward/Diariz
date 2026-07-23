@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Coverage settings for the report-only CI job (see .github/workflows/coverage.yml).
+     Excludes EF Core's generated migration snapshots/designers, which no test executes and
+     which would otherwise drag the Domain assembly's coverage to near-zero. -->
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <ExcludeByFile>**/Migrations/*.cs</ExcludeByFile>
+          <Exclude>[Diariz.Api.Tests]*,[Diariz.Api.IntegrationTests]*,[Diariz.Api.TestSupport]*</Exclude>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>
