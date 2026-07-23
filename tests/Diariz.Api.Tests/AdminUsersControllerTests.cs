@@ -6,16 +6,18 @@ using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Tests;
 
 public class AdminUsersControllerTests
 {
-    private static AdminUsersController Build(IdentityTestHost host, Guid adminId, FakeEmailSender? email = null) =>
+    private static AdminUsersController Build(
+        IdentityTestHost host, Guid adminId, FakeEmailSender? email = null, FakeAudioStorage? storage = null) =>
         new(host.Users, email ?? new FakeEmailSender(), host.Db, new PlatformSettingsService(host.Db),
             Options.Create(new AppPublicOptions { PublicUrl = "http://localhost:8081" }),
-            new UserPermissions(host.Db))
+            new UserPermissions(host.Db), storage ?? new FakeAudioStorage(), NullLogger<AdminUsersController>.Instance)
         {
             ControllerContext = Http.Context(adminId),
         };
@@ -386,5 +388,77 @@ public class AdminUsersControllerTests
 
         Assert.False(await host.Db.RoomMembers.AnyAsync(m => m.PrincipalId == target.Id));
         Assert.True(await host.Db.RoomMembers.AnyAsync(m => m.PrincipalId == other.Id)); // untouched
+    }
+
+    /// <summary>Pins the collection/re-point logic cheaply with a FakeAudioStorage: every blob the deleted
+    /// user owned (audio, recording attachment, both screenshot keys, own-folder section attachment) is
+    /// passed to DeleteAsync, while the survivor's blob (uploaded into someone else's folder) is not - it is
+    /// re-pointed instead. This does NOT stand in for the cascade/survival proof, which needs real Postgres +
+    /// MinIO (see UserDeletionBlobCleanupIntegrationTests) - the in-memory provider enforces no FK cascade.</summary>
+    [Fact]
+    public async Task Delete_CollectsOwnedBlobKeys_ButNotTheRepointedSurvivors()
+    {
+        using var host = new IdentityTestHost();
+        await host.SeedRolesAsync();
+        var admin = await Seed(host, "admin@x.test", Roles.Administrator);
+        var target = await Seed(host, "t@x.test", Roles.Standard);
+        var folderOwner = await Seed(host, "owner@x.test", Roles.Standard);
+
+        var storage = new FakeAudioStorage();
+        var audioKey = $"{target.Id}/audio.webm";
+        var attachmentKey = $"{target.Id}/attachments/doc.pdf";
+        var screenshotKey = $"{target.Id}/screenshots/full.png";
+        var thumbKey = $"{target.Id}/screenshots/thumb.jpg";
+        var ownFolderKey = $"{target.Id}/section-attachments/own.md";
+        var foreignFolderKey = $"{target.Id}/section-attachments/foreign.md";
+        foreach (var key in new[] { audioKey, attachmentKey, screenshotKey, thumbKey, ownFolderKey, foreignFolderKey })
+            storage.Objects[key] = [1, 2, 3];
+
+        var recordingId = Guid.NewGuid();
+        host.Db.Recordings.Add(new Recording
+        {
+            Id = recordingId, UserId = target.Id, Title = "R", BlobKey = audioKey, SizeBytes = 3,
+        });
+        host.Db.Attachments.Add(new Attachment
+        {
+            Id = Guid.NewGuid(), RecordingId = recordingId, Kind = AttachmentKind.File, Name = "doc.pdf",
+            BlobKey = attachmentKey, SizeBytes = 3,
+        });
+        host.Db.MeetingScreenshots.Add(new MeetingScreenshot
+        {
+            Id = Guid.NewGuid(), UserId = target.Id, RecordingId = recordingId, CapturedAtMs = 0,
+            BlobKey = screenshotKey, ThumbBlobKey = thumbKey,
+        });
+        var ownSectionId = Guid.NewGuid();
+        host.Db.Sections.Add(new Section { Id = ownSectionId, UserId = target.Id, RoomId = Guid.NewGuid(), Name = "Own" });
+        host.Db.SectionAttachments.Add(new SectionAttachment
+        {
+            Id = Guid.NewGuid(), SectionId = ownSectionId, Kind = AttachmentKind.File, Name = "own.md",
+            BlobKey = ownFolderKey, SizeBytes = 3, UploadedByUserId = target.Id,
+        });
+        var foreignSectionId = Guid.NewGuid();
+        var foreignAttachmentId = Guid.NewGuid();
+        host.Db.Sections.Add(new Section { Id = foreignSectionId, UserId = folderOwner.Id, RoomId = Guid.NewGuid(), Name = "Foreign" });
+        host.Db.SectionAttachments.Add(new SectionAttachment
+        {
+            Id = foreignAttachmentId, SectionId = foreignSectionId, Kind = AttachmentKind.File, Name = "foreign.md",
+            BlobKey = foreignFolderKey, SizeBytes = 3, UploadedByUserId = target.Id,
+        });
+        await host.Db.SaveChangesAsync();
+
+        Assert.IsType<NoContentResult>(await Build(host, admin.Id, storage: storage).Delete(target.Id));
+
+        // Every blob the user owned outright was deleted...
+        Assert.DoesNotContain(audioKey, storage.Objects.Keys);
+        Assert.DoesNotContain(attachmentKey, storage.Objects.Keys);
+        Assert.DoesNotContain(screenshotKey, storage.Objects.Keys);
+        Assert.DoesNotContain(thumbKey, storage.Objects.Keys);
+        Assert.DoesNotContain(ownFolderKey, storage.Objects.Keys);
+        // ...but the survivor's blob was NOT - it was re-pointed, not deleted.
+        Assert.Contains(foreignFolderKey, storage.Objects.Keys);
+
+        var survivor = await host.Db.SectionAttachments.SingleAsync(a => a.Id == foreignAttachmentId);
+        Assert.Equal(folderOwner.Id, survivor.UploadedByUserId);
+        Assert.Equal(foreignFolderKey, survivor.BlobKey); // never reconstructed
     }
 }

@@ -56,6 +56,18 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.146.3",
+    date: "2026-07-23",
+    pr: 0,
+    headline: "Clean up a deleted user's files instead of leaking them",
+    summary:
+      "Deleting a user removed their database rows but never touched the underlying files in object storage, so every audio recording, screenshot, and attachment they owned was silently orphaned - taking up storage forever with no way to reclaim it. Deleting a user's account now removes all of their files as part of the same operation: recordings' audio, recording attachments, meeting screenshots (both the full image and its thumbnail), and any files they attached directly to a folder of their own. Separately, if the departing user had uploaded a file into a folder someone else owns (a shared room), that attachment now stays right where it is and is re-pointed to the folder's owner instead of being left attributed to an account that no longer exists - the folder owner keeps the document and its storage now counts correctly toward their own usage.",
+    fixed: [
+      "Deleting a user now removes their audio, attachment, and screenshot files from storage instead of leaking them",
+      "A file a departing user uploaded into someone else's folder now stays with the folder and is re-attributed to the folder's owner, instead of surviving with a reference to a deleted account and dropping off every storage count",
+    ],
+  },
+  {
     version: "0.146.2",
     date: "2026-07-23",
     pr: 324,

@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Controllers;
@@ -29,10 +30,13 @@ public class AdminUsersController : ControllerBase
     private readonly IPlatformSettingsService _platform;
     private readonly AppPublicOptions _appOpts;
     private readonly IUserPermissions _permissions;
+    private readonly IAudioStorage _storage;
+    private readonly ILogger<AdminUsersController> _logger;
 
     public AdminUsersController(
         UserManager<ApplicationUser> users, IEmailSender email, DiarizDbContext db,
-        IPlatformSettingsService platform, IOptions<AppPublicOptions> appOpts, IUserPermissions permissions)
+        IPlatformSettingsService platform, IOptions<AppPublicOptions> appOpts, IUserPermissions permissions,
+        IAudioStorage storage, ILogger<AdminUsersController> logger)
     {
         _users = users;
         _email = email;
@@ -40,6 +44,8 @@ public class AdminUsersController : ControllerBase
         _platform = platform;
         _appOpts = appOpts.Value;
         _permissions = permissions;
+        _storage = storage;
+        _logger = logger;
     }
 
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -202,6 +208,34 @@ public class AdminUsersController : ControllerBase
         // user's own Personal room orphans automatically via the OwnerUserId SetNull FK.
         await SweepRoomMembershipsAsync(user.Id);
 
+        // Re-point section attachments this user uploaded into someone else's folder to that folder's owner.
+        // Those rows are NOT cascaded away (the folder isn't theirs), so UploadedByUserId would otherwise
+        // dangle at a deleted id - StorageUsage keys section-attachment bytes off that column, so the bytes
+        // would silently drop off every ledger. The folder owner keeps the document (and its blob) and is
+        // charged for it from here on. This runs before the blob collection below precisely so the two stay
+        // disjoint: this predicate is Section.UserId != id, the own-folder collection below is
+        // Section.UserId == id - a row can never match both.
+        await RepointForeignSectionAttachmentsAsync(user.Id);
+
+        // Collect every MinIO blob this user owns before their rows vanish under cascade - the row is gone
+        // afterwards, so this MUST happen first. Deletes are best-effort (catch-log-continue): an admin
+        // deleting one user's many blobs shouldn't have the whole request fail on a single transient
+        // object-storage error, and a leaked blob here is merely the pre-existing status quo, unlike an
+        // interactive single-item delete where letting the throw abort the request keeps the DB row and
+        // blob in sync. Blobs are removed before rows, per the codebase-wide convention: a dangling DB row
+        // is safer (and retriable) than an orphaned blob.
+        foreach (var key in await CollectOwnedBlobKeysAsync(user.Id))
+        {
+            try
+            {
+                await _storage.DeleteAsync(key);
+            }
+            catch (Exception e)
+            {
+                _logger.LogWarning(e, "User deletion: could not delete blob {Key} for user {UserId}", key, user.Id);
+            }
+        }
+
         await _users.DeleteAsync(user);
         return NoContent();
     }
@@ -216,6 +250,58 @@ public class AdminUsersController : ControllerBase
         if (rows.Count == 0) return;
         _db.RoomMembers.RemoveRange(rows);
         await _db.SaveChangesAsync();
+    }
+
+    /// <summary>Re-points SectionAttachments this user uploaded into someone else's folder to that folder's
+    /// owner. SectionAttachment.UploadedByUserId carries no FK - it is the one entity where a row genuinely
+    /// survives with what would otherwise be a dangling id - so this must be driven by the explicit predicate
+    /// below, not by any DB-enforced cascade/SetNull. The blob key is left exactly as-is: it encodes the
+    /// ORIGINAL uploader's prefix and is deliberately stale on re-attribution (mirrors
+    /// SectionAttachmentsController.UpdateContent, which re-attributes content the same way).</summary>
+    private async Task RepointForeignSectionAttachmentsAsync(Guid userId)
+    {
+        var foreign = await _db.SectionAttachments
+            .Include(a => a.Section)
+            .Where(a => a.UploadedByUserId == userId && a.Section!.UserId != userId)
+            .ToListAsync();
+        if (foreign.Count == 0) return;
+        foreach (var a in foreign)
+            a.UploadedByUserId = a.Section!.UserId;
+        await _db.SaveChangesAsync();
+    }
+
+    /// <summary>Every object-storage key this user owns, read off the DB rows - never reconstructed (a
+    /// SectionAttachment's key encodes its ORIGINAL uploader, which can differ from UploadedByUserId once a
+    /// row has been re-attributed, so prefix-matching a key from the user id is unsound). The own-folder
+    /// section-attachment predicate here (Section.UserId == id) is the exact complement of
+    /// RepointForeignSectionAttachmentsAsync's (Section.UserId != id), so the two sets are disjoint by
+    /// construction - a survivor's blob is never collected for deletion here.</summary>
+    private async Task<List<string>> CollectOwnedBlobKeysAsync(Guid userId)
+    {
+        var keys = new List<string>();
+
+        keys.AddRange(await _db.Recordings
+            .Where(r => r.UserId == userId && r.BlobKey != null)
+            .Select(r => r.BlobKey)
+            .ToListAsync());
+
+        keys.AddRange(await _db.Attachments
+            .Where(a => a.BlobKey != null && _db.Recordings.Any(r => r.Id == a.RecordingId && r.UserId == userId))
+            .Select(a => a.BlobKey!)
+            .ToListAsync());
+
+        var shots = await _db.MeetingScreenshots
+            .Where(s => s.UserId == userId)
+            .Select(s => new { s.BlobKey, s.ThumbBlobKey })
+            .ToListAsync();
+        keys.AddRange(shots.SelectMany(s => new[] { s.BlobKey, s.ThumbBlobKey }));
+
+        keys.AddRange(await _db.SectionAttachments
+            .Where(a => a.Section!.UserId == userId && a.Kind == AttachmentKind.File && a.BlobKey != null)
+            .Select(a => a.BlobKey!)
+            .ToListAsync());
+
+        return keys;
     }
 
     private Task<bool> IsPlatformAdmin(ApplicationUser u) =>

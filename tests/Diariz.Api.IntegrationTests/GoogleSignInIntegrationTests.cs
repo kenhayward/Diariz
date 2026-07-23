@@ -9,6 +9,7 @@ using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.IntegrationTests;
@@ -115,7 +116,7 @@ public class GoogleSignInIntegrationTests(ContainersFixture fx)
         Perms.Grant(db, admin.Id, Perms.Administrator); // authority is group membership, not a role claim
         var adminCtrl = new AdminUsersController(users, new FakeEmailSender { Sent = false }, db, platform,
             Options.Create(new AppPublicOptions { PublicUrl = "http://localhost:8081" }),
-            new UserPermissions(db))
+            new UserPermissions(db), new FakeAudioStorage(), NullLogger<AdminUsersController>.Instance)
         {
             ControllerContext = Http.Context(admin.Id),
         };

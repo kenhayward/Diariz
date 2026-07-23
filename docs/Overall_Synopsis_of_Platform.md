@@ -840,7 +840,14 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
     recorder's Personal room (Ungrouped) plus a non-main `RoomRecording` in the shared room
     (`RoomScope.ShareIntoRoomAsync`, `SharedBy`/`SharedAt`); the upload 403s if the caller can't `CreateRecording`
     there. **Deleting a user** sweeps their `RoomMember` rows (no FK to cascade them) and orphans their Personal
-    room via the `OwnerUserId` SetNull FK - their shared recordings survive. The **folder / voiceprint / chat /
+    room via the `OwnerUserId` SetNull FK - their shared recordings survive. It also cleans up object storage:
+    before the cascade runs, `AdminUsersController.Delete` re-points any `SectionAttachment` the departing user
+    uploaded into a folder they don't own (`UploadedByUserId` -> the folder owner - the row and its blob survive,
+    and the bytes move onto the folder owner's storage usage) and then collects and deletes every MinIO blob the
+    user does own outright - their recordings' audio, recording attachments, meeting screenshots (full image +
+    thumbnail), and own-folder section attachments - so nothing is left orphaned in object storage. Blob deletes
+    are best-effort (logged and skipped on failure) so one bad object-storage call can't abort the whole account
+    deletion. The **folder / voiceprint / chat /
     meeting-type queries are all scoped by `RoomId`** now (owner-identity for LLM config + SignalR still resolves
     to the room's owner). The now-dead `UserId` columns on `Section` / `SpeakerProfile` / `ChatSession` /
     `MeetingType` are **retained pending a follow-up drop** (harmless; nothing reads them).
