@@ -458,6 +458,18 @@ export default function Recorder({
     scheduleTimerRef.current = null;
   }
 
+  // Clear any running interval on unmount (e.g. the user navigates away mid-recording). Otherwise the
+  // elapsed ticker and the auto-stop watcher keep firing on a dead component - and in the test environment
+  // they fire after jsdom is torn down, where stop() -> window.clearInterval throws "window is not defined"
+  // and vitest fails the run on the unhandled error.
+  useEffect(
+    () => () => {
+      if (timerRef.current) window.clearInterval(timerRef.current);
+      if (scheduleTimerRef.current) window.clearInterval(scheduleTimerRef.current);
+    },
+    [],
+  );
+
   // Mute/unmute the live capture tracks. While paused we disable them so nothing is captured *and* the
   // level meter visibly flatlines — a clear "you're not being recorded" signal for sensitive moments.
   function setCaptureEnabled(on: boolean) {
