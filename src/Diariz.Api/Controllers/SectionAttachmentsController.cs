@@ -73,6 +73,14 @@ public class SectionAttachmentsController : ControllerBase
             .Select(a => (int?)a.Ordinal).MaxAsync() ?? -1) + 1;
 
     [HttpGet]
+    [EndpointSummary("List a folder's own attachments")]
+    [EndpointDescription(
+        "The supporting documents filed against the **folder itself** - a terms of reference, a standing " +
+        "agenda - rather than against any one meeting. These outlive the recordings in the folder, and are " +
+        "distinct from the folder page's `/attachments` roll-up, which gathers the attachments of the " +
+        "recordings inside it. Both `File` and `Url` kinds come back in one list; check `kind` before " +
+        "assuming there is content to fetch.\n\n" +
+        "Readable by **any member of the folder's room**, not just whoever created the folder.")]
     public async Task<ActionResult<IReadOnlyList<AttachmentDto>>> List(Guid sectionId)
     {
         if (await _rooms.ViewableSectionAsync(UserId, sectionId) is null) return NotFound();
@@ -86,6 +94,13 @@ public class SectionAttachmentsController : ControllerBase
 
     /// <summary>Upload a file attachment (any supporting document). Size-capped and quota-enforced.</summary>
     [HttpPost("file")]
+    [EndpointSummary("Attach a file to a folder")]
+    [EndpointDescription(
+        "Uploads a document against the folder as multipart form data. Any type is accepted - it is stored and " +
+        "served, never transcribed.\n\n" +
+        "The bytes count against **your own** storage quota, not the folder creator's, so in a shared room " +
+        "each contributor pays for what they add. 413 when your quota or the platform's attachment size limit " +
+        "would be exceeded. Needs `ManageContents` in the folder's room (403 for a member without it).")]
     [RequestSizeLimit(100L * 1024 * 1024)]
     public async Task<ActionResult<AttachmentDto>> AddFile(Guid sectionId, [FromForm] IFormFile? file)
     {
@@ -129,6 +144,12 @@ public class SectionAttachmentsController : ControllerBase
     /// <summary>Create a Markdown attachment from text content (the chat <c>/attach</c> command posts here for a
     /// folder). Stored as a <c>.md</c> file blob with <c>text/markdown</c> content type; quota-enforced.</summary>
     [HttpPost("markdown")]
+    [EndpointSummary("Attach a Markdown document to a folder")]
+    [EndpointDescription(
+        "Creates a folder attachment from text sent as JSON rather than an uploaded file - this is what saving " +
+        "a chat conversation to a folder does. Stored as a real `.md` blob, so it counts against your quota " +
+        "like any file and lists as a `File`. The name defaults to \"note\" and always gets a `.md` extension. " +
+        "Markdown attachments are the only ones editable afterwards. Needs `ManageContents`.")]
     public async Task<ActionResult<AttachmentDto>> AddMarkdown(Guid sectionId, AddMarkdownAttachmentRequest req)
     {
         var (_, error) = await _rooms.ManageableSectionAsync(UserId, sectionId);
@@ -170,6 +191,11 @@ public class SectionAttachmentsController : ControllerBase
 
     /// <summary>Attach a URL (address + optional display name).</summary>
     [HttpPost("url")]
+    [EndpointSummary("Attach a URL to a folder")]
+    [EndpointDescription(
+        "Records a link against the folder. Nothing is fetched or stored, so it uses no quota and has no " +
+        "content to download. Only `http` and `https` addresses are accepted (400 otherwise); omit the name " +
+        "and the host is used as the label. Needs `ManageContents`.")]
     public async Task<ActionResult<AttachmentDto>> AddUrl(Guid sectionId, AddUrlAttachmentRequest req)
     {
         var (_, error) = await _rooms.ManageableSectionAsync(UserId, sectionId);
@@ -195,6 +221,11 @@ public class SectionAttachmentsController : ControllerBase
     }
 
     [HttpPut("{attachmentId:guid}")]
+    [EndpointSummary("Rename a folder attachment")]
+    [EndpointDescription(
+        "Changes the display name only - the stored file, its content type, and a URL attachment's address are " +
+        "untouched. Names are trimmed and capped at 256 characters; an empty name is rejected with 400. Needs " +
+        "`ManageContents`.")]
     public async Task<IActionResult> Rename(Guid sectionId, Guid attachmentId, RenameAttachmentRequest req)
     {
         var (_, error) = await _rooms.ManageableSectionAsync(UserId, sectionId);
@@ -209,6 +240,14 @@ public class SectionAttachmentsController : ControllerBase
 
     /// <summary>Overwrite a Markdown attachment's content in place (the in-app TipTap editor's Save).</summary>
     [HttpPut("{attachmentId:guid}/content")]
+    [EndpointSummary("Replace a folder Markdown attachment's content")]
+    [EndpointDescription(
+        "Overwrites the document in place, keeping its id and name. **Only Markdown attachments can be " +
+        "edited** (400 for any other file, 404 for a URL attachment), and there is no version history - the " +
+        "previous content is gone.\n\n" +
+        "Editing also **transfers ownership of the stored bytes to you**, following the \"uploader pays\" rule: " +
+        "in a shared room, editing someone else's folder document moves its size onto your quota. Your quota " +
+        "is checked against the resulting change, so this can return 413 even when the document barely grew.")]
     public async Task<IActionResult> UpdateContent(
         Guid sectionId, Guid attachmentId, UpdateAttachmentContentRequest req)
     {
@@ -248,6 +287,11 @@ public class SectionAttachmentsController : ControllerBase
     }
 
     [HttpDelete("{attachmentId:guid}")]
+    [EndpointSummary("Delete a folder attachment")]
+    [EndpointDescription(
+        "Removes the attachment permanently. For a file the stored bytes go too, released against **whoever " +
+        "currently owns them** rather than the caller. For a URL only the row goes. Needs `ManageContents` in " +
+        "the folder's room, so in a shared room you can delete a document another member added.")]
     public async Task<IActionResult> Delete(Guid sectionId, Guid attachmentId)
     {
         var (_, error) = await _rooms.ManageableSectionAsync(UserId, sectionId);
@@ -265,6 +309,12 @@ public class SectionAttachmentsController : ControllerBase
     /// <summary>Streams a file attachment's bytes for the browser to open (inline) or download. Accepts the
     /// bearer via <c>access_token</c> (see Program.cs) so it can be opened in a new tab.</summary>
     [HttpGet("{attachmentId:guid}/content")]
+    [EndpointSummary("Download a folder attachment")]
+    [EndpointDescription(
+        "Streams a file attachment's bytes with its stored content type, marked `inline` so a browser opens " +
+        "viewable types such as PDFs and images in the tab and downloads the rest. The bearer may be supplied " +
+        "as an `access_token` query parameter so a new tab can open it; **treat such a URL as a credential**.\n\n" +
+        "Readable by any member of the folder's room. URL attachments have no content and return 404.")]
     public async Task<IActionResult> Content(Guid sectionId, Guid attachmentId, CancellationToken ct = default)
     {
         if (await _rooms.ViewableSectionAsync(UserId, sectionId) is null) return NotFound();

@@ -57,6 +57,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.157.3",
+    date: "2026-07-24",
+    pr: 345,
+    headline: "API reference: folders and search documented",
+    summary:
+      "The third pass through the in-app API reference covers folders and finding things: the folder tree, " +
+      "folder pages with their roll-up summaries and minutes, documents filed on a folder, formulas run " +
+      "across a folder, and search. As before the descriptions go past what each call does to what a caller " +
+      "needs to know first - that folders only nest one level deep, that deleting a folder takes its " +
+      "sub-folders with it but leaves the recordings ungrouped rather than deleted, that creating a folder " +
+      "that already exists returns the existing one, and how the search scope options interact.",
+    added: [
+      "A title and description on all 29 endpoints under Folders, Folder pages, Folder attachments, Folder formulas and Search.",
+    ],
+  },
+  {
     version: "0.157.2",
     date: "2026-07-24",
     pr: 344,

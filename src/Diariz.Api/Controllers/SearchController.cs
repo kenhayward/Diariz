@@ -44,6 +44,21 @@ public class SearchController : ControllerBase
     /// <param name="everywhere">Search every room the caller can see. Wins over the other two scopes.</param>
     /// <param name="speaker">Only passages spoken by this person. Forces the lexical-only path.</param>
     [HttpGet]
+    [EndpointSummary("Search transcripts and folders")]
+    [EndpointDescription(
+        "Searches across what you can see and returns two things: **transcript hits** (a snippet, the moment " +
+        "it occurs, and the recording and folder it lives in, so you can open the transcript at that point) " +
+        "and **folder hits** whose names match.\n\n" +
+        "Keyword search by default, fused with semantic (meaning-based) matching when an embeddings endpoint " +
+        "is configured - your own, or the platform default. The same query works either way, so a caller " +
+        "never chooses between them.\n\n" +
+        "**Scope.** By default the search covers every room you belong to. `sectionId` narrows it to one folder " +
+        "and everything beneath it; `roomId` narrows it to one room; `everywhere` overrides **both** rather " +
+        "than combining with them. A folder you cannot see yields no transcript hits rather than silently " +
+        "widening the search.\n\n" +
+        "`from`/`to` filter by recording date and `speaker` restricts to passages spoken by one person - note " +
+        "that filtering by speaker forces the keyword path, so it will not do semantic matching. `limit` " +
+        "defaults to 20 and is clamped to 50. An empty query is rejected with 400.")]
     public async Task<ActionResult<SearchResponse>> Search(
         [FromQuery] string q,
         [FromQuery] Guid? roomId = null,

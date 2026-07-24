@@ -64,6 +64,14 @@ public class SectionPageController : ControllerBase
     // ---- Detail (stats + folder summary + folder minutes) ----
 
     [HttpGet("{id:guid}")]
+    [EndpointSummary("Get a folder page")]
+    [EndpointDescription(
+        "A folder's roll-up: how many recordings it holds, their total duration and date range, plus its LLM " +
+        "folder summary and folder minutes if they exist. Everything counts the folder **and its " +
+        "sub-folders**, so a top-level folder reports the whole branch.\n\n" +
+        "The summary and minutes each carry a `status` (`Generating`, `Ready` or `Failed`) and an `error`, " +
+        "because they are produced in the background - poll here after asking for one. Readable by any member " +
+        "of the folder's room.")]
     public async Task<ActionResult<SectionDetailDto>> Get(Guid id)
     {
         var section = await _rooms.ViewableSectionAsync(UserId, id, withArtifacts: true);
@@ -98,6 +106,11 @@ public class SectionPageController : ControllerBase
     // ---- Aggregations (read-only; edit/delete reuse the per-item controllers) ----
 
     [HttpGet("{id:guid}/actions")]
+    [EndpointSummary("List the action items across a folder")]
+    [EndpointDescription(
+        "Every action item from every recording in the folder **and its sub-folders**, newest meeting first, " +
+        "each carrying the recording it came from so you can link back. Read-only aggregation - create, edit, " +
+        "and complete them through the per-recording and Actions endpoints.")]
     public async Task<ActionResult<IReadOnlyList<ActionListItemDto>>> Actions(Guid id)
     {
         var section = await _rooms.ViewableSectionAsync(UserId, id);
@@ -116,6 +129,11 @@ public class SectionPageController : ControllerBase
     }
 
     [HttpGet("{id:guid}/notes")]
+    [EndpointSummary("List the notes across a folder")]
+    [EndpointDescription(
+        "Every note line from every recording in the folder and its sub-folders, newest meeting first, each " +
+        "carrying its recording and the moment it was captured. Read-only aggregation - write through the " +
+        "per-recording notes endpoints.")]
     public async Task<ActionResult<IReadOnlyList<SectionNoteListItemDto>>> Notes(Guid id)
     {
         var section = await _rooms.ViewableSectionAsync(UserId, id);
@@ -134,6 +152,12 @@ public class SectionPageController : ControllerBase
     }
 
     [HttpGet("{id:guid}/attachments")]
+    [EndpointSummary("List the recording attachments across a folder")]
+    [EndpointDescription(
+        "Every attachment belonging to a **recording** in the folder and its sub-folders, each carrying the " +
+        "recording it hangs off. This is not the same as the folder's own attachments, which are filed " +
+        "directly against the folder and live under the separate folder-attachments endpoints. Read-only " +
+        "aggregation.")]
     public async Task<ActionResult<IReadOnlyList<SectionAttachmentListItemDto>>> Attachments(Guid id)
     {
         var section = await _rooms.ViewableSectionAsync(UserId, id);
@@ -155,6 +179,13 @@ public class SectionPageController : ControllerBase
     // ---- Folder summary: generate (async) + edit ----
 
     [HttpPost("{id:guid}/summary/generate")]
+    [EndpointSummary("Generate a folder summary")]
+    [EndpointDescription(
+        "Queues an LLM summary across every recording in the folder and its sub-folders, returning 202 " +
+        "immediately. Watch the folder page's summary `status` for `Ready` or `Failed`; asking again while one " +
+        "is already generating is a no-op rather than a second job.\n\n" +
+        "An explicit generate **overwrites a summary you had written by hand**. Needs `ManageContents` in the " +
+        "folder's room (403 for a member without it), and 400 when no LLM endpoint is configured.")]
     public async Task<IActionResult> GenerateSummary(Guid id)
     {
         var (section, error) = await _rooms.ManageableSectionAsync(UserId, id, withArtifacts: true);
@@ -178,6 +209,12 @@ public class SectionPageController : ControllerBase
     }
 
     [HttpPut("{id:guid}/summary")]
+    [EndpointSummary("Write a folder summary by hand")]
+    [EndpointDescription(
+        "Sets the folder's summary to your own text, creating it if the folder has none. Works with no LLM " +
+        "configured, and marks the summary user-edited so it survives - though an explicit generate still " +
+        "replaces it. The status becomes `Ready` and any previous generation error is cleared, so this is also " +
+        "the way to get a folder out of a `Failed` state. Needs `ManageContents`.")]
     public async Task<IActionResult> UpdateSummary(Guid id, UpdateSummaryRequest req)
     {
         var (section, error) = await _rooms.ManageableSectionAsync(UserId, id, withArtifacts: true);
@@ -197,6 +234,15 @@ public class SectionPageController : ControllerBase
     // ---- Folder minutes: generate (async, with template) + edit ----
 
     [HttpPost("{id:guid}/minutes/generate")]
+    [EndpointSummary("Generate folder minutes")]
+    [EndpointDescription(
+        "Queues consolidated minutes across the folder and its sub-folders, returning 202. Pass a " +
+        "`meetingTypeId` to choose the template, or null for the General default; the type must be a General " +
+        "one or belong to this folder's room, otherwise 404. The chosen type is remembered on the folder even " +
+        "when a generation is already running.\n\n" +
+        "As with the summary, an explicit generate **overwrites hand-edited minutes**, a second call while one " +
+        "is generating is a no-op, and 400 comes back when no LLM endpoint is configured. Needs " +
+        "`ManageContents`.")]
     public async Task<IActionResult> GenerateMinutes(Guid id, ApplyMeetingTypeRequest req)
     {
         var (section, error) = await _rooms.ManageableSectionAsync(UserId, id, withArtifacts: true);
@@ -226,6 +272,11 @@ public class SectionPageController : ControllerBase
     }
 
     [HttpPut("{id:guid}/minutes")]
+    [EndpointSummary("Write folder minutes by hand")]
+    [EndpointDescription(
+        "Sets the folder's minutes to your own Markdown, creating them if there are none. Works with no LLM " +
+        "configured, marks them user-edited, and clears any generation error - so it also rescues a folder " +
+        "stuck in `Failed`. The remembered meeting type is left as it is. Needs `ManageContents`.")]
     public async Task<IActionResult> UpdateMinutes(Guid id, UpdateMeetingMinutesRequest req)
     {
         var (section, error) = await _rooms.ManageableSectionAsync(UserId, id, withArtifacts: true);

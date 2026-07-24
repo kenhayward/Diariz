@@ -44,6 +44,12 @@ public class SectionsController : ControllerBase
     }
 
     [HttpGet]
+    [EndpointSummary("List folders")]
+    [EndpointDescription(
+        "The folder tree of one room, flat and in display order. Defaults to your personal room; pass `roomId` " +
+        "for a shared room you belong to. Build the tree from `parentId` - null means top level, and nesting " +
+        "only ever goes **one level deep**, so a folder with a parent can never have children of its own.\n\n" +
+        "Each room has its own independent folders. A non-member gets 404 rather than learning the room exists.")]
     public async Task<ActionResult<IReadOnlyList<SectionDto>>> List([FromQuery] Guid? roomId = null)
     {
         // The folders of the room being viewed (its personal room by default). Members only.
@@ -59,6 +65,14 @@ public class SectionsController : ControllerBase
     }
 
     [HttpPost]
+    [EndpointSummary("Create a folder")]
+    [EndpointDescription(
+        "Adds a folder to a room, or a sub-folder when you pass `parentId`. **Idempotent by name**: if a " +
+        "folder with the same name already exists under the same parent, that one is returned instead of a " +
+        "duplicate being created - so re-running an import does not litter the tree. Compare the returned id " +
+        "with what you expected if that matters to you.\n\n" +
+        "Nesting is capped at one level, so a parent that is itself a sub-folder is rejected with 400. Needs " +
+        "`ManageContents` in the room; you always hold it in your own personal room.")]
     public async Task<ActionResult<SectionDto>> Create(CreateSectionRequest req, CancellationToken ct = default)
     {
         var name = req.Name?.Trim();
@@ -91,6 +105,15 @@ public class SectionsController : ControllerBase
     /// one call (reorder among siblings and/or reparent). Rejects moves that would nest more than one level
     /// deep — either targeting a parent that itself has a parent, or moving a section that has children.</summary>
     [HttpPut("reorder")]
+    [EndpointSummary("Reorder or reparent folders")]
+    [EndpointDescription(
+        "Sets the parent and 0-based position of each listed folder in one call, covering both resequencing " +
+        "among siblings and moving folders under a new parent. Pass a null `parentId` to move them to the top " +
+        "level.\n\n" +
+        "The one-level nesting cap is enforced here too, and in two ways: the target parent may not itself be " +
+        "a sub-folder, and a folder that **has** sub-folders may not become one (both 400). A folder cannot be " +
+        "its own parent. Every listed id must exist in the room, otherwise the whole call 404s and nothing " +
+        "moves. Needs `ManageContents`.")]
     public async Task<IActionResult> Reorder(ReorderSectionsRequest req, CancellationToken ct = default)
     {
         var ids = (req.OrderedIds ?? []).ToList();
@@ -130,6 +153,11 @@ public class SectionsController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [EndpointSummary("Rename a folder")]
+    [EndpointDescription(
+        "Changes the folder's name. Its position, parent, and contents are untouched. An empty name is " +
+        "rejected with 400. Names are not required to be unique, so renaming one folder to match a sibling is " +
+        "allowed even though creating a duplicate by name is not. Needs `ManageContents` in the folder's room.")]
     public async Task<IActionResult> Rename(Guid id, RenameSectionRequest req, CancellationToken ct = default)
     {
         var name = req.Name?.Trim();
@@ -146,6 +174,12 @@ public class SectionsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [EndpointSummary("Delete a folder")]
+    [EndpointDescription(
+        "Removes the folder. **Recordings are not deleted** - they drop back to Ungrouped in that room, and " +
+        "their placements in other rooms are unaffected. Its **sub-folders are deleted too**, and their " +
+        "recordings likewise become ungrouped.\n\n" +
+        "The folder's own attachments and formula documents go with it. Needs `ManageContents` in the room.")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct = default)
     {
         var section = await _db.Sections.FirstOrDefaultAsync(s => s.Id == id, ct);
