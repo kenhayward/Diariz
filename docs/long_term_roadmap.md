@@ -33,7 +33,7 @@ driven by architectural risk and by how much each one leans on infrastructure th
 | # | Theme | Why now | Primary risk |
 |---|---|---|---|
 | 1 | **Note enhancement** (write rough notes, get polished minutes) | Highest value per unit of effort; extends the existing minutes pipeline | Low |
-| 2 | **Workflows / automations** (trigger → action rules) | Reuses the queue + email/Gmail/MCP infrastructure; multiplies existing features | Low-medium |
+| 2 | **Workflows / automations** (trigger → action rules) — *integration primitive shipped* (outbound webhooks + Workflow Signals + inbound API/MCP); remaining = the internal rules engine (conditions + non-webhook actions) | Reuses the queue + email/Gmail/MCP infrastructure; multiplies existing features | Low-medium |
 | 3 | **Shared spaces** (collaborative containers) | Unlocks team use; requires the deepest change to the ownership model | High |
 | 4 | **Ambient capture** (optional auto-record + calendar auto-link) | High convenience; streaming transcription is genuinely hard, so it goes last | Medium-high |
 
@@ -85,6 +85,24 @@ time-anchoring behaves after a re-transcribe changes segment boundaries.
 Actions** that runs automatically as a recording moves through the pipeline. It turns the features Diariz
 already has into a hands-off assembly line.
 
+**Shipped so far (the Integrations feature, v0.151.0-0.156.1).** The **integration primitive** and the
+**inbound** direction of this theme are built and live:
+
+- **Outbound webhooks ("Automations").** Signed (Standard-Webhooks HMAC), SSRF-validated, rate-limited,
+  auto-retrying, `429`-aware outbound deliveries that fire on recording and formula-result events
+  (`Preferences → Automations`), gated behind a platform toggle, with a per-subscription delivery log and
+  auto-pause on repeated failure. A Postgres-backed delivery queue + `WebhookDeliveryWorker` runs it.
+- **Workflow Signals.** An admin-defined named routing vocabulary an author attaches to a formula, so a
+  single admin-owned **platform automation** delivers that formula's output (inline) across every user who
+  routes through that signal - the "author tags intent, admin wires it once" model.
+- **Inbound access.** A hardened REST API (personal tokens with read-only/read-write scope + optional
+  expiry) and the MCP server, so the same tools can also *call* Diariz.
+
+What remains of this theme is the **internal rules engine** described below: **conditions** gating and
+**non-webhook actions** (auto-apply a Meeting Type, generate minutes/summary/actions, translate, email /
+Gmail draft, save an attachment) over an extensible action registry, reusing the same pipeline trigger
+points the webhook emission already hooks.
+
 **Shape of the model.**
 
 - **Triggers** hook the existing pipeline stages: transcription complete, minutes generated, actions
@@ -116,7 +134,7 @@ email/Gmail path, and MCP surface are all reused.
 
 1. Workflow entity + a small set of triggers and built-in actions (auto-apply Meeting Type, auto-generate
    minutes, auto-email/draft) + platform gating + run log.
-2. Conditions engine + webhook action (signed, templated) + more actions.
+2. Conditions engine + more (non-webhook) actions. *(The signed, templated webhook action is already shipped - see "Shipped so far" above.)*
 3. Space scoping (Theme 3) and a broader action catalogue.
 
 ---
