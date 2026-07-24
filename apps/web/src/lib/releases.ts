@@ -59,6 +59,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.157.5",
     date: "2026-07-24",
+    pr: 347,
     headline: "API reference: sign-in, tokens and settings documented",
     summary:
       "The fifth pass through the in-app API reference covers who you are and how you connect: signing in, " +
