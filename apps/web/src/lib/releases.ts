@@ -57,6 +57,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.157.4",
+    date: "2026-07-24",
+    pr: 346,
+    headline: "API reference: formulas, chat and tags documented",
+    summary:
+      "The fourth pass through the in-app API reference covers generating documents from meetings and " +
+      "talking to them: formulas and the documents they produce, meeting types, chat, and the tag cloud. " +
+      "The descriptions explain the parts that are easy to get wrong - that chat remembers nothing between " +
+      "turns so each request carries its own history, that adding someone's shared formula is a live link " +
+      "rather than a copy, that deleting a formula leaves the documents it produced intact, and that saved " +
+      "conversations get their titles written for them.",
+    added: [
+      "A title and description on all 29 endpoints under Formulas, Formula documents, Meeting types, Chat and Tags.",
+    ],
+  },
+  {
     version: "0.157.3",
     date: "2026-07-24",
     pr: 345,
