@@ -876,9 +876,9 @@ into it with no URL or per-user setup at all.
     `[EndpointSummary]` + `[EndpointDescription]` on the action - these work on MVC controller actions, not just
     minimal-API handlers. Descriptions are Markdown (Scalar renders it) and follow the user-facing-text
     convention (plain hyphens, no em/en dashes). Two tests enforce the copy against the **really generated**
-    document: every tag group must have a description, and every operation in a decorated section must have both
-    a summary and a description. Sections are being decorated a controller at a time; `PerOperationDocumented`
-    in `OpenApiDocumentTests` lists the ones done so far and is deleted once it covers the whole surface.
+    document: every tag group must have a description, and **every published operation** must have both a summary
+    and a description. The whole surface is decorated, so both assertions are unconditional - a new endpoint fails
+    `OpenApiDocumentTests` until it is documented, which is the mechanism that keeps the reference complete.
   - **Scope and expiry.** Each token carries an `ApiTokenScope` (`ReadOnly` = 0, `ReadWrite` = 1, column default
     1 so pre-existing tokens keep full access) and an optional `ExpiresAt` (null = never expires), both settable
     only at creation. `ApiTokenAuthenticator` fails a presented token once `ExpiresAt` has passed; a read-only

@@ -103,42 +103,25 @@ public class OpenApiDocumentTests
         Assert.True(undescribed.Count == 0, $"Tag sections without a description: {string.Join(", ", undescribed)}");
     }
 
-    /// <summary>Sections whose operations have been given per-endpoint <c>[EndpointSummary]</c> and
-    /// <c>[EndpointDescription]</c> copy. The reference is being decorated a section at a time; add each batch
-    /// here as it lands. Once this covers the whole published surface, drop the list and assert over every tag
-    /// in the document instead.</summary>
-    private static readonly string[] PerOperationDocumented =
-    [
-        "Recordings",
-        // Everything that hangs off a recording.
-        "Attachments", "MeetingNotes", "RecordingActions", "RecordingTranslation", "Screenshots",
-        // Folders (sections) and finding things.
-        "Search", "SectionAttachments", "SectionFormulaResults", "SectionPage", "Sections",
-        // Generating documents from meetings, and talking to them.
-        "Chat", "FormulaResults", "Formulas", "MeetingTypes", "Tags",
-        // Who you are, and how you connect.
-        "ApiTokens", "Auth", "McpTokens", "UserProfile", "UserSettings",
-        // Sharing with people, and the people in your meetings.
-        "Actions", "Groups", "Rooms", "SpeakerProfiles", "Storage",
-    ];
-
     /// <summary>Section descriptions tell a developer what a group of endpoints is for; only a per-operation
-    /// summary tells them what one call does. This generates the real document and asserts that every operation
-    /// in a decorated section carries both a summary and a description - which also proves the attributes
-    /// actually reach the document from an MVC controller action, not just a minimal-API handler.</summary>
+    /// summary tells them what one call does. This generates the real document and asserts that <b>every</b>
+    /// published operation carries both a summary and a description - so a new endpoint fails here until it is
+    /// documented. It also proves the attributes actually reach the document from an MVC controller action, not
+    /// just a minimal-API handler.</summary>
     [Fact]
-    public async Task PublishedDocument_DecoratedSectionsHaveASummaryAndDescriptionOnEveryOperation()
+    public async Task PublishedDocument_EveryOperationHasASummaryAndDescription()
     {
         var root = await GenerateDocumentAsync();
 
         var undocumented = new List<string>();
+        var seen = 0;
         foreach (var path in root.GetProperty("paths").EnumerateObject())
         {
             foreach (var op in path.Value.EnumerateObject())
             {
                 if (op.Value.ValueKind != JsonValueKind.Object) continue; // skip "parameters" etc.
-                if (!op.Value.TryGetProperty("tags", out var opTags)) continue;
-                if (!opTags.EnumerateArray().Any(t => PerOperationDocumented.Contains(t.GetString()))) continue;
+                if (!op.Value.TryGetProperty("tags", out _)) continue;
+                seen++;
 
                 var missing = new List<string>();
                 if (!HasText(op.Value, "summary")) missing.Add("summary");
@@ -148,9 +131,11 @@ public class OpenApiDocumentTests
             }
         }
 
+        Assert.True(seen > 0, "No operations found - the document did not generate as expected.");
         Assert.True(
             undocumented.Count == 0,
-            $"Operations in a decorated section without per-endpoint copy:{Environment.NewLine}" +
+            $"Published operations without per-endpoint copy - add [EndpointSummary] and " +
+            $"[EndpointDescription] to the action:{Environment.NewLine}" +
             string.Join(Environment.NewLine, undocumented));
     }
 

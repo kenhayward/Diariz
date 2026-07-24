@@ -33,6 +33,15 @@ public class CalendarController : ControllerBase
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [HttpGet("events")]
+    [EndpointSummary("List calendar events in a date range")]
+    [EndpointDescription(
+        "Your events between `timeMin` and `timeMax`, **merging connected Google calendars with subscribed " +
+        "`.ics` feeds** into one list sorted by start time. The two sources are independent, so someone with " +
+        "only feeds and no Google still gets a populated calendar.\n\n" +
+        "Read-only: this never creates or changes anything in your calendar. An empty list is the normal " +
+        "answer when nothing is connected - the calendar degrades rather than erroring.\n\n" +
+        "The window must be positive and no wider than 62 days (400 otherwise), which is enough for the " +
+        "six-week month grid the app draws.")]
     public async Task<ActionResult<IReadOnlyList<CalendarEvent>>> Events(
         [FromQuery] DateTimeOffset timeMin, [FromQuery] DateTimeOffset timeMax, CancellationToken ct)
     {
@@ -51,6 +60,12 @@ public class CalendarController : ControllerBase
     /// organizer). Powers the recording Overview's meeting details and the recording-less event preview.
     /// 404 when the event is missing or Calendar isn't connected.</summary>
     [HttpGet("events/{eventId}")]
+    [EndpointSummary("Get one calendar event")]
+    [EndpointDescription(
+        "A single event with its **full invite details** - attendees, description, location, organiser - " +
+        "which the range listing leaves out. Fetched live from Google rather than from a stored snapshot, so " +
+        "it reflects the invite as it stands now.\n\n" +
+        "Google events only; 404 when the event is gone or Calendar is not connected.")]
     public async Task<ActionResult<CalendarEvent>> Event(string eventId, CancellationToken ct)
     {
         var ev = await _calendar.GetEventAsync(UserId, eventId, ct);
@@ -62,6 +77,13 @@ public class CalendarController : ControllerBase
     /// selection (an unchosen selection defaults to the Google-visible calendars + primary). Empty when the
     /// user hasn't connected Calendar.</summary>
     [HttpGet("calendars")]
+    [EndpointSummary("List your Google calendars")]
+    [EndpointDescription(
+        "Every Google calendar on your account, each flagged with whether it is **selected** for use here. " +
+        "Until you choose explicitly, the selection defaults to the calendars visible in Google plus your " +
+        "primary one, so the flag is always meaningful rather than empty.\n\n" +
+        "Returns an empty list, not an error, when Calendar is not connected. Subscribed `.ics` feeds are " +
+        "managed separately and do not appear here.")]
     public async Task<ActionResult<IReadOnlyList<CalendarListItemDto>>> Calendars(CancellationToken ct)
     {
         var all = await _calendar.ListAllCalendarsAsync(UserId, ct);
@@ -76,6 +98,13 @@ public class CalendarController : ControllerBase
 
     /// <summary>Save which Google calendars to consider for attribution + the overlay.</summary>
     [HttpPut("calendars")]
+    [EndpointSummary("Choose which Google calendars to use")]
+    [EndpointDescription(
+        "Sets which calendars feed the overlay and the automatic matching of recordings to meetings - useful " +
+        "for keeping a shared team calendar out of your meeting suggestions.\n\n" +
+        "The list you send **replaces** the selection wholesale; sending an empty list selects none, which is " +
+        "different from never having chosen (that defaults to your visible calendars). Nothing in Google is " +
+        "changed.")]
     public async Task<IActionResult> SaveCalendars(SaveCalendarSelectionRequest req, CancellationToken ct)
     {
         await _selection.SetSelectedIdsAsync(UserId, req.Ids ?? [], ct);

@@ -75,7 +75,10 @@ Screenshots section. A note or screenshot sitting between two turns by the same 
 turns from being merged past it.
 - **User API access.** When a Platform Administrator enables it (Settings → Integration), generate a **personal
 API token** (Preferences → Developers) to call the Diariz **REST API** directly as yourself — acting with your own
-permissions, over your own data — and browse a **built-in API reference** (Developers → View API reference). Each
+permissions, over your own data — and browse a **built-in API reference** (Developers → View API reference). The
+reference documents **every endpoint individually**: what the call does, who may make it, what it changes, and the
+things worth knowing before calling it (which actions overwrite hand-edited text, which are permanent, which run in
+the background and need polling, and which errors mean what). Each
 token can be minted **read-only or read-write** and given an optional **expiry date**, so a token pasted into an
 external tool can be least-privilege and time-boxed; a pre-existing token keeps its original read-write, no-expiry
 behavior.

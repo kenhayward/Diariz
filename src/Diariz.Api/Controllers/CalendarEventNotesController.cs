@@ -27,6 +27,12 @@ public class CalendarEventNotesController : ControllerBase
     private static string Clamp(string value) => value.Length > 256 ? value[..256] : value;
 
     [HttpGet]
+    [EndpointSummary("List notes on a calendar event")]
+    [EndpointDescription(
+        "Your notes against an upcoming meeting - the \"before\" surface, for jotting an agenda or a question " +
+        "to raise while there is still no recording to attach them to.\n\n" +
+        "These carry **no capture time**, unlike a recording's notes, because there is no recording clock to " +
+        "measure against. They are private to you and scoped to this calendar and event.")]
     public async Task<ActionResult<IReadOnlyList<MeetingNoteDto>>> List(string calendarId, string eventId) =>
         await _db.MeetingNotes
             .Where(n => n.UserId == UserId && n.RecordingId == null
@@ -36,6 +42,13 @@ public class CalendarEventNotesController : ControllerBase
             .ToListAsync();
 
     [HttpPost]
+    [EndpointSummary("Add notes to a calendar event")]
+    [EndpointDescription(
+        "Appends one or more note lines to an upcoming meeting. Takes a list so a whole agenda can be saved " +
+        "in one call; a single line is a list of one.\n\n" +
+        "**When a recording is later linked to this event, these notes are adopted onto it** and appear " +
+        "alongside the notes typed during the meeting - so preparation and record end up in one place. Blank " +
+        "lines are skipped and long text truncated, so read the response for what was actually created.")]
     public async Task<ActionResult<IReadOnlyList<MeetingNoteDto>>> Create(
         string calendarId, string eventId, CreateMeetingNotesRequest req)
     {
@@ -68,6 +81,11 @@ public class CalendarEventNotesController : ControllerBase
     }
 
     [HttpPut("{noteId:guid}")]
+    [EndpointSummary("Edit a calendar event note")]
+    [EndpointDescription(
+        "Rewrites one note line's text. Empty text is rejected with 400 - delete the note instead; text over " +
+        "2048 characters is truncated. Once a recording has adopted these notes, edit them through the " +
+        "recording's own notes endpoints rather than here.")]
     public async Task<IActionResult> Update(string calendarId, string eventId, Guid noteId, UpdateMeetingNoteRequest req)
     {
         var note = await _db.MeetingNotes.FirstOrDefaultAsync(n =>
@@ -84,6 +102,10 @@ public class CalendarEventNotesController : ControllerBase
     }
 
     [HttpDelete("{noteId:guid}")]
+    [EndpointSummary("Delete a calendar event note")]
+    [EndpointDescription(
+        "Removes one note line from an upcoming meeting permanently. The calendar event itself is untouched - " +
+        "nothing here ever writes to your calendar.")]
     public async Task<IActionResult> Delete(string calendarId, string eventId, Guid noteId)
     {
         var note = await _db.MeetingNotes.FirstOrDefaultAsync(n =>

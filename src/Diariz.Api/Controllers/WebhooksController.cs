@@ -35,6 +35,13 @@ public class WebhooksController : ControllerBase
     private async Task<bool> EnabledAsync() => (await _platform.GetAsync()).WebhooksEnabled;
 
     [HttpGet]
+    [EndpointSummary("List your automations")]
+    [EndpointDescription(
+        "Your outbound webhook subscriptions, newest first, with the events each is subscribed to, whether it " +
+        "is active, and its recent delivery health.\n\n" +
+        "Only your **personal** automations - platform-wide ones wired to Workflow Signals by an " +
+        "administrator are not listed here. The whole section returns 403 when the platform's Automations " +
+        "toggle is off; check `webhooksEnabled` on your profile before showing any of it.")]
     public async Task<ActionResult<IReadOnlyList<WebhookSubscriptionDto>>> List()
     {
         if (!await EnabledAsync()) return Forbid();
@@ -45,6 +52,17 @@ public class WebhooksController : ControllerBase
     }
 
     [HttpPost]
+    [EndpointSummary("Create an automation")]
+    [EndpointDescription(
+        "Registers a URL to be called when the events you choose happen - a recording created, transcribed or " +
+        "failed, a formula finished or failed. Point it at a Zapier or n8n webhook trigger, or your own " +
+        "endpoint.\n\n" +
+        "**The signing secret (`dz_whsec_...`) is returned exactly once, in this response.** Store it now: it " +
+        "is encrypted at rest and never returned again. Deliveries are signed over it, so verify the " +
+        "signature rather than trusting the payload.\n\n" +
+        "The URL must be reachable and public - internal, loopback and cloud-metadata addresses are refused, " +
+        "so an automation cannot be aimed at the server's own network. 400 for a bad or disallowed URL, no " +
+        "events, an unknown event type, or reaching the per-user limit.")]
     public async Task<ActionResult<WebhookCreatedDto>> Create(CreateWebhookRequest req)
     {
         if (!await EnabledAsync()) return Forbid();
@@ -67,6 +85,14 @@ public class WebhooksController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [EndpointSummary("Edit an automation")]
+    [EndpointDescription(
+        "Changes the name, destination URL, subscribed events, or active flag. The event list **replaces** " +
+        "the old one rather than adding to it. A changed URL is re-validated against the same rules as " +
+        "creation.\n\n" +
+        "**Re-activating clears the failure count**, which is how you recover an automation that was " +
+        "auto-paused after repeated failures - fix the endpoint, then set it active again. The signing secret " +
+        "is never changed or returned here.")]
     public async Task<ActionResult<WebhookSubscriptionDto>> Update(Guid id, UpdateWebhookRequest req)
     {
         if (!await EnabledAsync()) return Forbid();
@@ -87,6 +113,11 @@ public class WebhooksController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [EndpointSummary("Delete an automation")]
+    [EndpointDescription(
+        "Removes the subscription and its delivery log; nothing further is sent. Its signing secret is gone " +
+        "too, so re-creating the same URL later issues a **new** secret that your receiver must be updated " +
+        "with. To stop deliveries reversibly, set it inactive instead.")]
     public async Task<IActionResult> Delete(Guid id)
     {
         if (!await EnabledAsync()) return Forbid();
@@ -99,6 +130,13 @@ public class WebhooksController : ControllerBase
     }
 
     [HttpPost("{id:guid}/test")]
+    [EndpointSummary("Send a test event")]
+    [EndpointDescription(
+        "Queues a `ping` event to the automation's URL so you can confirm the endpoint is reachable and your " +
+        "signature check works, without waiting for a real meeting.\n\n" +
+        "Returns 202 - it is **queued, not sent inline**, and travels the same signed, retried delivery path " +
+        "as a real event. Watch the delivery log for the outcome. It counts as a delivery, including toward " +
+        "the failure count that auto-pauses a broken automation.")]
     public async Task<IActionResult> SendTest(Guid id)
     {
         if (!await EnabledAsync()) return Forbid();
@@ -118,6 +156,13 @@ public class WebhooksController : ControllerBase
     }
 
     [HttpGet("{id:guid}/deliveries")]
+    [EndpointSummary("Read an automation's delivery log")]
+    [EndpointDescription(
+        "The **50 most recent** deliveries for one automation, newest first, with each event's type, status, " +
+        "attempt count, the HTTP status your endpoint returned, the last error, and when the next retry is " +
+        "due. This is the place to diagnose an automation that is not firing as expected.\n\n" +
+        "Failed deliveries are retried with a growing backoff, so a `Pending` row with a future retry time is " +
+        "normal rather than stuck. The payload bodies are not included.")]
     public async Task<ActionResult<IReadOnlyList<WebhookDeliveryDto>>> Deliveries(Guid id)
     {
         if (!await EnabledAsync()) return Forbid();
