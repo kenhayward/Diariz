@@ -57,6 +57,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.157.5",
+    date: "2026-07-24",
+    headline: "API reference: sign-in, tokens and settings documented",
+    summary:
+      "The fifth pass through the in-app API reference covers who you are and how you connect: signing in, " +
+      "account setup, Google sign-in and Calendar, API and MCP tokens, your profile, and your AI settings. " +
+      "This is the part a developer reads first, so it explains the whole picture - which calls need no " +
+      "sign-in at all, that a token is shown once and never again, that a read-only token refuses every " +
+      "write, and the difference between updating your profile (which replaces everything) and your " +
+      "settings (which changes only what you send).",
+    added: [
+      "A title and description on all 22 endpoints under Sign-in, API tokens, MCP tokens, Profile and AI settings.",
+    ],
+  },
+  {
     version: "0.157.4",
     date: "2026-07-24",
     pr: 346,

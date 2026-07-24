@@ -32,6 +32,13 @@ public class McpTokensController : ControllerBase
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [HttpGet]
+    [EndpointSummary("List your MCP tokens")]
+    [EndpointDescription(
+        "Your MCP personal access tokens, newest first - the ones that let Claude Desktop or Claude Code " +
+        "reach your meetings. Shows the name, a short prefix, and when each was last used. **The token itself " +
+        "is never returned**; only a hash is stored.\n\n" +
+        "These are separate from REST API tokens: a `dz_mcp_` token is rejected on `/api/*` and a `dz_api_` " +
+        "token on `/mcp`. The claude.ai web connector uses OAuth instead and needs no token here.")]
     public async Task<IReadOnlyList<McpTokenDto>> List() =>
         await _db.McpAccessTokens
             .Where(t => t.UserId == UserId)
@@ -40,6 +47,12 @@ public class McpTokensController : ControllerBase
             .ToListAsync();
 
     [HttpPost]
+    [EndpointSummary("Create an MCP token")]
+    [EndpointDescription(
+        "Mints a `dz_mcp_...` token to paste into Claude Desktop or Claude Code. **The token value is " +
+        "returned exactly once, in this response** - store it now, because only a hash is kept.\n\n" +
+        "Unlike REST API tokens these carry no scope or expiry: an MCP token grants the full tool surface " +
+        "over your own meetings until you revoke it. 400 when you have reached the per-user limit.")]
     public async Task<ActionResult<McpTokenCreatedDto>> Create(CreateMcpTokenRequest req)
     {
         var name = string.IsNullOrWhiteSpace(req.Name) ? "MCP token" : req.Name.Trim();
@@ -65,6 +78,11 @@ public class McpTokensController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [EndpointSummary("Revoke an MCP token")]
+    [EndpointDescription(
+        "Deletes the token immediately - the Claude client using it loses access on its next call and will " +
+        "need a new one pasted in. No undo. Your other tokens, and any claude.ai OAuth connection, are " +
+        "unaffected.")]
     public async Task<IActionResult> Revoke(Guid id)
     {
         var row = await _db.McpAccessTokens.FirstOrDefaultAsync(t => t.Id == id && t.UserId == UserId);

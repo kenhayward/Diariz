@@ -38,6 +38,15 @@ public class UserSettingsController : ControllerBase
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [HttpGet]
+    [EndpointSummary("Get your AI settings")]
+    [EndpointDescription(
+        "Your AI configuration: the OpenAI-compatible endpoint and model used for summaries, minutes, " +
+        "formulas and chat, the chat context window, reasoning options, which chat tools are on, and where " +
+        "new recordings are filed.\n\n" +
+        "Each setting comes back **alongside the server default** it falls back to, so a client can show " +
+        "\"using the platform default\" instead of an empty box - your value is an override, not a " +
+        "requirement.\n\n" +
+        "**Your API key is never returned.** Only `hasApiKey` says whether one is stored.")]
     public async Task<UserSettingsDto> Get()
     {
         var s = await _db.UserSettings.FindAsync(UserId);
@@ -67,6 +76,17 @@ public class UserSettingsController : ControllerBase
     private static string? NullIfBlank(string? v) => string.IsNullOrWhiteSpace(v) ? null : v;
 
     [HttpPut]
+    [EndpointSummary("Update your AI settings")]
+    [EndpointDescription(
+        "A **partial update** - the opposite of the profile endpoint, which replaces everything. Each field " +
+        "is three-way: **omit it** (or send null) to leave it alone, send **empty** to clear your override " +
+        "and fall back to the platform default, or send a value to set one. That is what lets separate " +
+        "settings tabs save independently without wiping each other's fields.\n\n" +
+        "The API key follows the same rule and is **write-only**: send it to replace, send empty to remove, " +
+        "omit to keep. It is encrypted at rest and never returned.\n\n" +
+        "For the context window a value of zero or less clears the override rather than setting it. Choosing " +
+        "a placement mode other than a specific folder clears the stored folder, so a stale one cannot " +
+        "resurface if you switch back.")]
     public async Task<IActionResult> Update(UpdateUserSettingsRequest req)
     {
         var s = await _db.UserSettings.FindAsync(UserId);

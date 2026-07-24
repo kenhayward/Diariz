@@ -116,6 +116,8 @@ public class OpenApiDocumentTests
         "Search", "SectionAttachments", "SectionFormulaResults", "SectionPage", "Sections",
         // Generating documents from meetings, and talking to them.
         "Chat", "FormulaResults", "Formulas", "MeetingTypes", "Tags",
+        // Who you are, and how you connect.
+        "ApiTokens", "Auth", "McpTokens", "UserProfile", "UserSettings",
     ];
 
     /// <summary>Section descriptions tell a developer what a group of endpoints is for; only a per-operation

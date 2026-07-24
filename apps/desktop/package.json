@@ -1,7 +1,7 @@
 {
   "name": "diariz-desktop",
   "private": true,
-  "version": "0.157.4",
+  "version": "0.157.5",
   "description": "Diariz desktop app ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â a tray / menu-bar shell that loads your Diariz server, with mic + system-audio capture (Windows; macOS beta).",
   "main": "src/main.js",
   "author": "Ken Hayward",
