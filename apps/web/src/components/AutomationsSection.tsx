@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import type { ApiTokenCreated, WebhookCreated, WebhookSubscription } from "../lib/types";
+import { webhookEvents } from "../lib/webhookEvents";
 import type { TFunction } from "i18next";
 
 type Provider = "zapier" | "n8n" | null;
@@ -20,13 +21,7 @@ export default function AutomationsSection() {
   const qc = useQueryClient();
   const { data: webhooks } = useQuery({ queryKey: ["webhooks"], queryFn: api.listWebhooks });
 
-  const EVENTS: { key: string; label: string }[] = [
-    { key: "recording.created", label: t("evtRecordingCreated") },
-    { key: "recording.transcribed", label: t("evtRecordingTranscribed") },
-    { key: "recording.transcription_failed", label: t("evtRecordingFailed") },
-    { key: "formula_result.completed", label: t("evtFormulaCompleted") },
-    { key: "formula_result.failed", label: t("evtFormulaFailed") },
-  ];
+  const EVENTS = webhookEvents(t);
 
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
