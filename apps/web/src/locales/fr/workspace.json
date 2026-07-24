@@ -410,6 +410,7 @@
   "confirmDeleteSection": "Supprimer la section « {{name}} » ? Ses enregistrements passeront dans Sans section.",
   "sectionActions": "Actions de la section",
   "sectionNameAria": "Nom de la section",
+  "newSectionNestCapped": "Les sections ne peuvent être imbriquées que sur un niveau",
   "newSubSection": "Nouvelle sous-section",
   "newSubSectionPlaceholder": "Nouvelle sous-section dans {{parent}}",
   "selectRecordingAria": "Sélectionner {{name}}",

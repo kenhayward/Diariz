@@ -297,6 +297,30 @@ describe("RecordingsPanel", () => {
       expect(await screen.findByText(/this folder is empty/i)).toBeTruthy();
     });
 
+    // The folder button follows the drill rather than always creating at the top level: creating a folder
+    // while you are looking inside one should put it where you are looking.
+    it("creates a sub-section of the folder being browsed", async () => {
+      (api.createSection as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "new", name: "Acme" });
+      renderList("/?in=customers");
+      fireEvent.click(await screen.findByRole("button", { name: /new sub-section/i }));
+
+      fireEvent.change(screen.getByPlaceholderText(/new sub-section in customers/i), {
+        target: { value: "Acme" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
+
+      await waitFor(() => expect(api.createSection).toHaveBeenCalledWith("Acme", "customers", undefined));
+    });
+
+    // Nesting is capped at one level, so from inside a sub-section there is no legal parent - say so
+    // rather than silently creating the folder somewhere else.
+    it("disables the folder button inside a sub-section, explaining the nesting cap", async () => {
+      renderList("/?in=ambu");
+      const btn = (await screen.findByRole("button", { name: /nested one level deep/i })) as HTMLButtonElement;
+      expect(btn.disabled).toBe(true);
+      expect(screen.queryByRole("button", { name: /^new sub-section$/i })).toBeNull();
+    });
+
     it("keeps the New recordings prompt for an empty library", async () => {
       (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([]);
       (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([]);

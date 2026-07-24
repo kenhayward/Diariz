@@ -58,6 +58,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.160.0",
+    date: "2026-07-25",
+    pr: 352,
+    headline: "New folders are created where you are browsing",
+    summary:
+      "The folder button above the meetings list used to always create a folder at the top level, wherever " +
+      "you happened to be. Now it follows you: at the top level it still makes a top-level folder, but once " +
+      "you have drilled into one it makes a sub-folder of the folder you are looking at, and says so - the " +
+      "button reads \"New sub-section\" and the box it opens prompts for a name with the parent folder " +
+      "spelled out. Folders still only nest one level deep, so from inside a sub-folder the button is " +
+      "greyed out with a note explaining why, rather than quietly filing the new folder somewhere else. " +
+      "The New sub-section item on a folder's own menu is unchanged.",
+    changed: [
+      "The meetings list's New section button now creates a sub-section of the folder you are browsing, and is labelled for the folder it will create in.",
+      "Inside a sub-section the button is disabled with a tooltip explaining that sections only nest one level deep.",
+    ],
+  },
+  {
     version: "0.159.1",
     date: "2026-07-24",
     pr: 351,
