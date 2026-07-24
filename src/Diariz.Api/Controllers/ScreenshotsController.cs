@@ -56,6 +56,12 @@ public class ScreenshotsController : ControllerBase
         new(s.Id, s.CapturedAtMs, s.Width, s.Height, s.SizeBytes, s.Ordinal, s.CreatedAt);
 
     [HttpGet]
+    [EndpointSummary("List a recording's screenshots")]
+    [EndpointDescription(
+        "The screen captures taken during the meeting, ordered by when they were taken. Metadata only - " +
+        "dimensions, byte size, and the moment of capture (milliseconds into the recording), which is what " +
+        "places each one in the transcript. Fetch the images themselves from the content or thumb endpoints.\n\n" +
+        "Readable by **anyone who can read the recording**, owner or room member.")]
     public async Task<ActionResult<IReadOnlyList<ScreenshotDto>>> List(Guid recordingId)
     {
         if (!await CanReadAsync(recordingId)) return NotFound();
@@ -69,6 +75,14 @@ public class ScreenshotsController : ControllerBase
     /// <summary>Store one capture. The recorder uploads these after the recording row exists, so a capture
     /// taken mid-meeting arrives here only once its audio has landed.</summary>
     [HttpPost]
+    [EndpointSummary("Add a screenshot")]
+    [EndpointDescription(
+        "Stores one capture as a multipart upload. **Both images are required**: the full-size PNG and a JPEG " +
+        "thumbnail, which the client generates - the server does not resize. `capturedAtMs` positions it in " +
+        "the transcript, so send the point in the recording rather than a wall-clock time.\n\n" +
+        "Both blobs count against your storage quota, and the pair is capped by the platform's screenshot " +
+        "limit; either being exceeded returns 413. Captures can only be attached once the recording exists, " +
+        "which is why the desktop client holds mid-meeting captures until the audio has uploaded. Owner only.")]
     [RequestSizeLimit(50L * 1024 * 1024)]
     public async Task<ActionResult<ScreenshotDto>> Create(
         Guid recordingId,
@@ -127,10 +141,20 @@ public class ScreenshotsController : ControllerBase
     }
 
     [HttpGet("{screenshotId:guid}/content")]
+    [EndpointSummary("Get a screenshot image")]
+    [EndpointDescription(
+        "Streams the full-size PNG at its captured resolution - what the viewer shows when you zoom in to read " +
+        "a slide. Like the audio endpoints, the bearer may be supplied as an `access_token` query parameter so " +
+        "an `<img>` tag can load it directly; **treat such a URL as a credential**. Readable by anyone who can " +
+        "read the recording.")]
     public Task<IActionResult> Content(Guid recordingId, Guid screenshotId) =>
         StreamAsync(recordingId, screenshotId, thumbnail: false);
 
     [HttpGet("{screenshotId:guid}/thumb")]
+    [EndpointSummary("Get a screenshot thumbnail")]
+    [EndpointDescription(
+        "Streams the small JPEG preview - use it for strips and transcript rows, where fetching full-size PNGs " +
+        "would be wasteful. Same access rules and the same `access_token` support as the full image.")]
     public Task<IActionResult> Thumb(Guid recordingId, Guid screenshotId) =>
         StreamAsync(recordingId, screenshotId, thumbnail: true);
 
@@ -147,6 +171,11 @@ public class ScreenshotsController : ControllerBase
 
     /// <summary>Remove a capture. Blobs go first: a dangling row is safer (and retriable) than an orphaned blob.</summary>
     [HttpDelete("{screenshotId:guid}")]
+    [EndpointSummary("Delete a screenshot")]
+    [EndpointDescription(
+        "Removes the capture and both its images permanently, releasing their bytes against your storage " +
+        "quota. It also disappears from the transcript. Owner only - a room member who can view the capture " +
+        "cannot delete it.")]
     public async Task<IActionResult> Delete(Guid recordingId, Guid screenshotId)
     {
         if (!await OwnsAsync(recordingId)) return NotFound();

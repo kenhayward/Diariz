@@ -41,6 +41,13 @@ public class RecordingActionsController : ControllerBase
         new(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal, a.Completed, a.CompletedAt);
 
     [HttpGet]
+    [EndpointSummary("List a recording's action items")]
+    [EndpointDescription(
+        "The action items for one recording, in display order. Each carries its text, who it is for, a " +
+        "free-text deadline, and whether it has been completed. An empty list can mean either that extraction " +
+        "found nothing or that it has never been run - `actionsExtracted` on the recording tells them apart. " +
+        "Only the owner can see these; anyone else gets 404. For actions across all your recordings, use the " +
+        "Actions section instead.")]
     public async Task<ActionResult<IReadOnlyList<RecordingActionDto>>> List(Guid recordingId)
     {
         if (!await OwnsAsync(recordingId)) return NotFound();
@@ -55,6 +62,14 @@ public class RecordingActionsController : ControllerBase
     /// <summary>Run the LLM over the current transcript and replace the recording's action list with the
     /// result (which may be empty). Synchronous: the caller waits for the extracted list.</summary>
     [HttpPost("extract")]
+    [EndpointSummary("Extract action items from the transcript")]
+    [EndpointDescription(
+        "Runs the LLM over the current transcript and returns the action items it found. Unlike most of the " +
+        "LLM-backed endpoints this one is **synchronous** - the call blocks until extraction finishes, which " +
+        "can take a while on a long meeting, so allow a generous timeout.\n\n" +
+        "It **replaces the whole list**, so anything you added or edited by hand is discarded, including " +
+        "completion state; a run that finds nothing leaves you with an empty list. Returns 404 when the " +
+        "recording has no transcript yet, and 400 when no LLM endpoint is configured for you or the platform.")]
     public async Task<ActionResult<IReadOnlyList<RecordingActionDto>>> Extract(Guid recordingId)
     {
         var rec = await _db.Recordings
@@ -104,6 +119,13 @@ public class RecordingActionsController : ControllerBase
     }
 
     [HttpPost]
+    [EndpointSummary("Add an action item")]
+    [EndpointDescription(
+        "Adds one action item by hand, appended to the end of the list. No LLM is involved, so this works on a " +
+        "platform with no model configured. All three fields are free text - the deadline included, so " +
+        "\"end of week\" is as valid as a date.\n\n" +
+        "Adding by hand also marks the recording as having surfaced actions, so the panel stays visible. Note " +
+        "that a later extraction replaces the whole list, including anything added this way.")]
     public async Task<ActionResult<RecordingActionDto>> Create(Guid recordingId, CreateRecordingActionRequest req)
     {
         if (!await OwnsAsync(recordingId)) return NotFound();
@@ -133,6 +155,11 @@ public class RecordingActionsController : ControllerBase
     }
 
     [HttpPut("{actionId:guid}")]
+    [EndpointSummary("Edit an action item")]
+    [EndpointDescription(
+        "Updates the text, owner, or deadline. Only the fields you send are changed - omit one (or send null) " +
+        "to leave it as it is, and send an empty string to clear it. Completion is **not** set here: mark " +
+        "actions done through the Actions section, which handles that across recordings.")]
     public async Task<IActionResult> Update(Guid recordingId, Guid actionId, UpdateRecordingActionRequest req)
     {
         if (!await OwnsAsync(recordingId)) return NotFound();
@@ -149,6 +176,10 @@ public class RecordingActionsController : ControllerBase
     }
 
     [HttpDelete("{actionId:guid}")]
+    [EndpointSummary("Delete an action item")]
+    [EndpointDescription(
+        "Removes one action item permanently. The others keep their order. Deleting every action does not " +
+        "reset the recording to \"never extracted\" - the panel stays visible with an empty list.")]
     public async Task<IActionResult> Delete(Guid recordingId, Guid actionId)
     {
         if (!await OwnsAsync(recordingId)) return NotFound();

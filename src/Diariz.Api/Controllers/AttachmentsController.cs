@@ -48,6 +48,13 @@ public class AttachmentsController : ControllerBase
             .Select(a => (int?)a.Ordinal).MaxAsync() ?? -1) + 1;
 
     [HttpGet]
+    [EndpointSummary("List a recording's attachments")]
+    [EndpointDescription(
+        "The supporting documents attached to a recording, in display order. Two kinds come back in one list: " +
+        "`File` (stored bytes, with a content type and size) and `Url` (just an address and a label, taking no " +
+        "storage). Check `kind` before assuming an attachment has content to fetch.\n\n" +
+        "**Owner only** - unlike notes and screenshots, a room member who can read the recording does not see " +
+        "its attachments.")]
     public async Task<ActionResult<IReadOnlyList<AttachmentDto>>> List(Guid recordingId)
     {
         if (!await OwnsAsync(recordingId)) return NotFound();
@@ -61,6 +68,14 @@ public class AttachmentsController : ControllerBase
 
     /// <summary>Upload a file attachment (any supporting document). Size-capped and quota-enforced.</summary>
     [HttpPost("file")]
+    [EndpointSummary("Attach a file")]
+    [EndpointDescription(
+        "Uploads a supporting document as multipart form data - an agenda, a deck, a PDF, whatever is relevant " +
+        "to the meeting. Any type is accepted; unlike a recording upload there is no format gate, because the " +
+        "file is stored and served rather than transcribed.\n\n" +
+        "The bytes count against your storage quota, and the file is capped by the platform's attachment " +
+        "limit; either being exceeded returns 413. The display name is taken from the upload with any " +
+        "directory path stripped and long names truncated, so read it back from the response.")]
     [RequestSizeLimit(100L * 1024 * 1024)]
     public async Task<ActionResult<AttachmentDto>> AddFile(Guid recordingId, [FromForm] IFormFile? file)
     {
@@ -103,6 +118,13 @@ public class AttachmentsController : ControllerBase
     /// <summary>Create a Markdown attachment from text content (the chat "add as attachment" tool posts here).
     /// Stored as a <c>.md</c> file blob with <c>text/markdown</c> content type; quota-enforced like any file.</summary>
     [HttpPost("markdown")]
+    [EndpointSummary("Attach a Markdown document")]
+    [EndpointDescription(
+        "Creates an attachment from text you send as JSON, rather than uploading a file - this is how a chat " +
+        "conversation gets saved onto a recording. It is stored as a real `.md` file blob, so it counts " +
+        "against your quota exactly like an uploaded file and appears in the list as a `File`.\n\n" +
+        "The name defaults to \"note\" and always gets a `.md` extension. Markdown attachments are the only " +
+        "ones that can be edited afterwards, through the content endpoint.")]
     public async Task<ActionResult<AttachmentDto>> AddMarkdown(Guid recordingId, AddMarkdownAttachmentRequest req)
     {
         if (!await OwnsAsync(recordingId)) return NotFound();
@@ -151,6 +173,13 @@ public class AttachmentsController : ControllerBase
 
     /// <summary>Attach a URL (address + optional display name).</summary>
     [HttpPost("url")]
+    [EndpointSummary("Attach a URL")]
+    [EndpointDescription(
+        "Records a link alongside the recording - a ticket, a document, a wiki page. Nothing is fetched or " +
+        "stored, so it uses no quota and there is no content to download; the page is only retrieved later if " +
+        "the attachment is fed to chat.\n\n" +
+        "Only `http` and `https` addresses are accepted (400 otherwise). Omit the name and the host is used " +
+        "as the label.")]
     public async Task<ActionResult<AttachmentDto>> AddUrl(Guid recordingId, AddUrlAttachmentRequest req)
     {
         if (!await OwnsAsync(recordingId)) return NotFound();
@@ -174,6 +203,11 @@ public class AttachmentsController : ControllerBase
     }
 
     [HttpPut("{attachmentId:guid}")]
+    [EndpointSummary("Rename an attachment")]
+    [EndpointDescription(
+        "Changes the display name only - the stored file, its content type, and a URL attachment's address are " +
+        "untouched, so renaming cannot change what an attachment points at. Names are trimmed and capped at " +
+        "256 characters; an empty name is rejected with 400.")]
     public async Task<IActionResult> Rename(Guid recordingId, Guid attachmentId, RenameAttachmentRequest req)
     {
         if (!await OwnsAsync(recordingId)) return NotFound();
@@ -186,6 +220,10 @@ public class AttachmentsController : ControllerBase
     }
 
     [HttpDelete("{attachmentId:guid}")]
+    [EndpointSummary("Delete an attachment")]
+    [EndpointDescription(
+        "Removes the attachment permanently. For a file this also deletes the stored bytes and releases them " +
+        "against your quota; for a URL only the row goes, and the linked page is of course unaffected.")]
     public async Task<IActionResult> Delete(Guid recordingId, Guid attachmentId)
     {
         if (!await OwnsAsync(recordingId)) return NotFound();
@@ -202,6 +240,13 @@ public class AttachmentsController : ControllerBase
     /// <summary>Streams a file attachment's bytes for the browser to open (inline) or download. Accepts the
     /// bearer via <c>access_token</c> (see Program.cs) so it can be opened in a new tab.</summary>
     [HttpGet("{attachmentId:guid}/content")]
+    [EndpointSummary("Download an attachment")]
+    [EndpointDescription(
+        "Streams a file attachment's bytes with its stored content type, marked `inline` so a browser opens " +
+        "viewable types such as PDFs and images in the tab and downloads the rest. Like the audio and " +
+        "screenshot endpoints, the bearer may be supplied as an `access_token` query parameter so a new tab " +
+        "can open it; **treat such a URL as a credential**.\n\n" +
+        "URL attachments have no content and return 404 - follow their `url` instead.")]
     public async Task<IActionResult> Content(Guid recordingId, Guid attachmentId, CancellationToken ct = default)
     {
         if (!await OwnsAsync(recordingId)) return NotFound();
@@ -221,6 +266,14 @@ public class AttachmentsController : ControllerBase
     /// key is reused so MinIO replaces the object wholesale; the size is recomputed and quota re-checked on the
     /// delta. Only Markdown file attachments are editable this way.</summary>
     [HttpPut("{attachmentId:guid}/content")]
+    [EndpointSummary("Replace a Markdown attachment's content")]
+    [EndpointDescription(
+        "Overwrites the document in place, keeping its id and name - this is what the in-app editor saves. " +
+        "**Only Markdown attachments can be edited** (400 for any other file, and 404 for a URL attachment); " +
+        "everything else is immutable once uploaded, so replace it by deleting and re-adding.\n\n" +
+        "There is no version history: the previous content is gone. The stored size is recalculated and your " +
+        "quota is re-checked against the difference, so growing a document can return 413 while shrinking one " +
+        "gives bytes back.")]
     public async Task<IActionResult> UpdateContent(
         Guid recordingId, Guid attachmentId, UpdateAttachmentContentRequest req)
     {

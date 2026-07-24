@@ -107,7 +107,12 @@ public class OpenApiDocumentTests
     /// <c>[EndpointDescription]</c> copy. The reference is being decorated a section at a time; add each batch
     /// here as it lands. Once this covers the whole published surface, drop the list and assert over every tag
     /// in the document instead.</summary>
-    private static readonly string[] PerOperationDocumented = ["Recordings"];
+    private static readonly string[] PerOperationDocumented =
+    [
+        "Recordings",
+        // Everything that hangs off a recording.
+        "Attachments", "MeetingNotes", "RecordingActions", "RecordingTranslation", "Screenshots",
+    ];
 
     /// <summary>Section descriptions tell a developer what a group of endpoints is for; only a per-operation
     /// summary tells them what one call does. This generates the real document and asserts that every operation
