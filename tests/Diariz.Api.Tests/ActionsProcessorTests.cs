@@ -48,7 +48,8 @@ public class ActionsProcessorTests
         var hub = new FakeHubContext();
         var queue = new FakeJobQueue();
 
-        await ActionsProcessor.ProcessAsync(db, client, resolver, hub, queue, Job(rec, tr), Template, NullLogger.Instance);
+        await ActionsProcessor.ProcessAsync(db, client, resolver, hub, queue, Job(rec, tr), Template, NullLogger.Instance,
+            new CapturingWebhookPublisher(), "");
 
         var action = await db.RecordingActions.SingleAsync(a => a.RecordingId == rec.Id);
         Assert.Equal("Send the report", action.Text);
@@ -87,7 +88,7 @@ public class ActionsProcessorTests
 
         await ActionsProcessor.ProcessAsync(
             db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), queue, Job(rec, tr), Template,
-            NullLogger.Instance);
+            NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         var action = await db.RecordingActions.SingleAsync(a => a.RecordingId == rec.Id);
         Assert.Equal("My own task", action.Text);  // untouched
@@ -106,7 +107,7 @@ public class ActionsProcessorTests
         var queue = new FakeJobQueue();
 
         await ActionsProcessor.ProcessAsync(db, client, resolver, new FakeHubContext(), queue, Job(rec, tr), Template,
-            NullLogger.Instance);
+            NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         Assert.Equal(0, client.Calls);
         Assert.Empty(await db.RecordingActions.ToListAsync());
@@ -123,7 +124,7 @@ public class ActionsProcessorTests
 
         await ActionsProcessor.ProcessAsync(
             db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), queue, Job(rec, tr), Template,
-            NullLogger.Instance);
+            NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         Assert.Empty(await db.RecordingActions.ToListAsync());
         var reloaded = await db.Recordings.FindAsync(rec.Id);
@@ -142,7 +143,7 @@ public class ActionsProcessorTests
 
         await ActionsProcessor.ProcessAsync(
             db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), queue, Job(rec, tr), Template,
-            NullLogger.Instance);
+            NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         Assert.Equal(0, client.Calls);
         Assert.Empty(await db.RecordingActions.ToListAsync());

@@ -1,5 +1,6 @@
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
+using Diariz.Api.Webhooks;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.SignalR;
@@ -27,6 +28,7 @@ public static class ActionsProcessor
     public static async Task ProcessAsync(
         DiarizDbContext db, IActionsClient client, ISummarizationSettingsResolver resolver,
         IHubContext<TranscriptionHub> hub, IJobQueue queue, ActionsJob job, string template, ILogger logger,
+        IWebhookPublisher webhooks, string publicUrl,
         CancellationToken ct = default)
     {
         var rec = await db.Recordings
@@ -66,7 +68,7 @@ public static class ActionsProcessor
             // Seed the (empty) action list with the extraction; RemoveRange is a no-op defensively.
             db.RecordingActions.RemoveRange(rec.Actions);
             var ordinal = 0;
-            db.RecordingActions.AddRange(extracted.Select(e => new RecordingAction
+            var newActions = extracted.Select(e => new RecordingAction
             {
                 Id = Guid.NewGuid(),
                 RecordingId = rec.Id,
@@ -74,12 +76,14 @@ public static class ActionsProcessor
                 Actor = e.Actor,
                 Deadline = e.Deadline,
                 Ordinal = ordinal++,
-            }));
+            }).ToList();
+            db.RecordingActions.AddRange(newActions);
             rec.ActionsExtractedAt = DateTimeOffset.UtcNow;
 
             await db.SaveChangesAsync(ct);
             // Nudge the browser to refetch (status is unchanged — actions don't own the recording status).
             await hub.NotifyStatusAsync(rec.UserId, rec.Id, rec.Status.ToString());
+            await PublishActionItemsReadyAsync(webhooks, publicUrl, rec, newActions, logger, ct);
         }
         catch (Exception ex)
         {
@@ -100,6 +104,38 @@ public static class ActionsProcessor
             {
                 logger.LogError(ex, "Failed to enqueue minutes after actions for recording {RecordingId}", rec.Id);
             }
+        }
+    }
+
+    /// <summary>Emits <c>recording.action_items_ready</c>, carrying the freshly extracted actions so a subscriber
+    /// can act on them without a second call. Swallows its own failures - the actions are already persisted and
+    /// must not be flipped by a broken publisher (see SummarizationProcessor, which established the pattern).</summary>
+    private static async Task PublishActionItemsReadyAsync(
+        IWebhookPublisher webhooks, string publicUrl, Recording rec, IReadOnlyList<RecordingAction> actions,
+        ILogger logger, CancellationToken ct)
+    {
+        try
+        {
+            await webhooks.PublishAsync(WebhookEventTypes.RecordingActionItemsReady, rec.UserId, new
+            {
+                recordingId = rec.Id,
+                name = rec.Name ?? rec.Title,
+                status = rec.Status.ToString(),
+                actionItems = actions.Select(a => new
+                {
+                    id = a.Id,
+                    text = a.Text,
+                    assignee = a.Actor,
+                    dueDate = a.Deadline,
+                    completed = a.Completed,
+                }),
+                count = actions.Count,
+                links = WebhookPayload.For(publicUrl, rec.Id),
+            }, ct: ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to emit recording.action_items_ready for {RecordingId}", rec.Id);
         }
     }
 }

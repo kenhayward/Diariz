@@ -20,16 +20,18 @@ public class MeetingMinutesWorker : BackgroundService
     private readonly IConnectionMultiplexer _redis;
     private readonly IHubContext<TranscriptionHub> _hub;
     private readonly MeetingMinutesOptions _opts;
+    private readonly string _publicUrl;
     private readonly ILogger<MeetingMinutesWorker> _log;
 
     public MeetingMinutesWorker(
         IServiceScopeFactory scopes, IConnectionMultiplexer redis, IHubContext<TranscriptionHub> hub,
-        IOptions<MeetingMinutesOptions> opts, ILogger<MeetingMinutesWorker> log)
+        IOptions<MeetingMinutesOptions> opts, IOptions<AppPublicOptions> appOpts, ILogger<MeetingMinutesWorker> log)
     {
         _scopes = scopes;
         _redis = redis;
         _hub = hub;
         _opts = opts.Value;
+        _publicUrl = appOpts.Value.PublicUrl;
         _log = log;
     }
 
@@ -81,8 +83,10 @@ public class MeetingMinutesWorker : BackgroundService
                 var generator = scope.ServiceProvider.GetRequiredService<IMeetingTypeMinutesGenerator>();
                 var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
                 var queue = scope.ServiceProvider.GetRequiredService<IJobQueue>();
+                var webhooks = scope.ServiceProvider.GetRequiredService<IWebhookPublisher>();
                 await MeetingMinutesProcessor.ProcessAsync(
-                    ctx, generator, resolver, _hub, queue, job, _opts.TranscriptCharBudget, _log, ct);
+                    ctx, generator, resolver, _hub, queue, job, _opts.TranscriptCharBudget, _log,
+                    webhooks, _publicUrl, ct);
             }
         }
         catch (Exception ex)

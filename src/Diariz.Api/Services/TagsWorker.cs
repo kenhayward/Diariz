@@ -22,17 +22,20 @@ public class TagsWorker : BackgroundService
     private readonly IHubContext<TranscriptionHub> _hub;
     private readonly IPromptTemplateProvider _prompts;
     private readonly TagsOptions _opts;
+    private readonly string _publicUrl;
     private readonly ILogger<TagsWorker> _log;
 
     public TagsWorker(
         IServiceScopeFactory scopes, IConnectionMultiplexer redis, IHubContext<TranscriptionHub> hub,
-        IPromptTemplateProvider prompts, IOptions<TagsOptions> opts, ILogger<TagsWorker> log)
+        IPromptTemplateProvider prompts, IOptions<TagsOptions> opts, IOptions<AppPublicOptions> appOpts,
+        ILogger<TagsWorker> log)
     {
         _scopes = scopes;
         _redis = redis;
         _hub = hub;
         _prompts = prompts;
         _opts = opts.Value;
+        _publicUrl = appOpts.Value.PublicUrl;
         _log = log;
     }
 
@@ -83,10 +86,11 @@ public class TagsWorker : BackgroundService
                 var ctx = scope.ServiceProvider.GetRequiredService<DiarizDbContext>();
                 var client = scope.ServiceProvider.GetRequiredService<ITagsClient>();
                 var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
+                var webhooks = scope.ServiceProvider.GetRequiredService<IWebhookPublisher>();
                 // Read the (editable) template per job so edits apply without an API restart.
                 await TagsProcessor.ProcessAsync(
                     ctx, client, resolver, _hub, job,
-                    _prompts.Get("tagcloud", TagsPrompt.DefaultTemplate), _log, ct);
+                    _prompts.Get("tagcloud", TagsPrompt.DefaultTemplate), _log, webhooks, _publicUrl, ct);
             }
         }
         catch (Exception ex)

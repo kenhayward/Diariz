@@ -110,4 +110,143 @@ public class RecordingAiWebhookEmitTests
 
         Assert.Empty(publisher.Published);
     }
+
+    [Fact]
+    public async Task Successful_minutes_generation_publishes_recording_minutes_ready()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var typeId = Guid.NewGuid();
+        db.MeetingTypes.Add(new MeetingType
+        {
+            Id = typeId, GroupName = "Standard", Title = "Customer Call", Overview = "o", Icon = "i", Color = "#fff",
+        });
+        var (rec, tr) = await Seed(db, userId);
+        rec.MeetingTypeId = typeId;
+        await db.SaveChangesAsync();
+        var publisher = new CapturingWebhookPublisher();
+
+        await MeetingMinutesProcessor.ProcessAsync(
+            db, new FakeMeetingTypeMinutesGenerator { Result = "# Cadence Call\n\nMinutes." },
+            new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
+            new MeetingMinutesJob(rec.Id, tr.Id), charBudget: 16000, NullLogger.Instance, publisher, "https://app.test");
+
+        var published = Assert.Single(publisher.Published);
+        Assert.Equal(WebhookEventTypes.RecordingMinutesReady, published.EventType);
+        Assert.Equal(userId, published.Owner);
+
+        var data = Payload(published.Data);
+        Assert.Equal(rec.Id.ToString(), data.GetProperty("recordingId").GetString());
+        Assert.Equal("Weekly sync", data.GetProperty("name").GetString());
+        Assert.Equal(nameof(RecordingStatus.Summarizing), data.GetProperty("status").GetString());
+        Assert.Equal("# Cadence Call\n\nMinutes.", data.GetProperty("minutes").GetString());
+        Assert.Equal(typeId.ToString(), data.GetProperty("meetingTypeId").GetString());
+        Assert.Equal("Customer Call", data.GetProperty("meetingTypeName").GetString());
+        Assert.Contains($"https://app.test/api/recordings/{rec.Id}", data.GetProperty("links").GetRawText());
+    }
+
+    [Fact]
+    public async Task Failed_minutes_generation_publishes_nothing()
+    {
+        using var db = TestDb.Create();
+        var (rec, tr) = await Seed(db, Guid.NewGuid());
+        var publisher = new CapturingWebhookPublisher();
+
+        await MeetingMinutesProcessor.ProcessAsync(
+            db, new FakeMeetingTypeMinutesGenerator { ThrowOnCall = new InvalidOperationException("LLM down") },
+            new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
+            new MeetingMinutesJob(rec.Id, tr.Id), 16000, NullLogger.Instance, publisher, "https://app.test");
+
+        Assert.Empty(publisher.Published);
+    }
+
+    [Fact]
+    public async Task Successful_action_extraction_publishes_recording_action_items_ready()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, tr) = await Seed(db, userId);
+        var client = new FakeActionsClient { Result = { new ExtractedAction("Send the report", "Bob", "Friday") } };
+        var publisher = new CapturingWebhookPublisher();
+
+        await ActionsProcessor.ProcessAsync(
+            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
+            new ActionsJob(rec.Id, tr.Id), ActionsPrompt.DefaultTemplate, NullLogger.Instance, publisher,
+            "https://app.test");
+
+        var published = Assert.Single(publisher.Published);
+        Assert.Equal(WebhookEventTypes.RecordingActionItemsReady, published.EventType);
+        Assert.Equal(userId, published.Owner);
+
+        var data = Payload(published.Data);
+        Assert.Equal(rec.Id.ToString(), data.GetProperty("recordingId").GetString());
+        Assert.Equal("Weekly sync", data.GetProperty("name").GetString());
+        Assert.Equal(nameof(RecordingStatus.Summarizing), data.GetProperty("status").GetString());
+        Assert.Equal(1, data.GetProperty("count").GetInt32());
+        var item = Assert.Single(data.GetProperty("actionItems").EnumerateArray());
+        Assert.Equal("Send the report", item.GetProperty("text").GetString());
+        Assert.Equal("Bob", item.GetProperty("assignee").GetString());
+        Assert.Equal("Friday", item.GetProperty("dueDate").GetString());
+        Assert.False(item.GetProperty("completed").GetBoolean());
+        Assert.Contains($"https://app.test/api/recordings/{rec.Id}", data.GetProperty("links").GetRawText());
+    }
+
+    [Fact]
+    public async Task Failed_action_extraction_publishes_nothing()
+    {
+        using var db = TestDb.Create();
+        var (rec, tr) = await Seed(db, Guid.NewGuid());
+        var client = new FakeActionsClient { ThrowOnCall = new InvalidOperationException("LLM down") };
+        var publisher = new CapturingWebhookPublisher();
+
+        await ActionsProcessor.ProcessAsync(
+            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
+            new ActionsJob(rec.Id, tr.Id), ActionsPrompt.DefaultTemplate, NullLogger.Instance, publisher,
+            "https://app.test");
+
+        Assert.Empty(publisher.Published);
+    }
+
+    [Fact]
+    public async Task Successful_tag_extraction_publishes_recording_tags_ready()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var (rec, tr) = await Seed(db, userId);
+        var client = new FakeTagsClient { Result = { new ExtractedTag("Budget Planning", 0.9) } };
+        var publisher = new CapturingWebhookPublisher();
+
+        await TagsProcessor.ProcessAsync(
+            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), new TagsJob(rec.Id, tr.Id),
+            TagsPrompt.DefaultTemplate, NullLogger.Instance, publisher, "https://app.test");
+
+        var published = Assert.Single(publisher.Published);
+        Assert.Equal(WebhookEventTypes.RecordingTagsReady, published.EventType);
+        Assert.Equal(userId, published.Owner);
+
+        var data = Payload(published.Data);
+        Assert.Equal(rec.Id.ToString(), data.GetProperty("recordingId").GetString());
+        Assert.Equal("Weekly sync", data.GetProperty("name").GetString());
+        Assert.Equal(nameof(RecordingStatus.Summarizing), data.GetProperty("status").GetString());
+        Assert.Equal(1, data.GetProperty("count").GetInt32());
+        var tag = Assert.Single(data.GetProperty("tags").EnumerateArray());
+        Assert.Equal("Budget Planning", tag.GetProperty("name").GetString());
+        Assert.Equal(0.9, tag.GetProperty("weight").GetDouble(), 3);
+        Assert.Contains($"https://app.test/api/recordings/{rec.Id}", data.GetProperty("links").GetRawText());
+    }
+
+    [Fact]
+    public async Task Failed_tag_extraction_publishes_nothing()
+    {
+        using var db = TestDb.Create();
+        var (rec, tr) = await Seed(db, Guid.NewGuid());
+        var client = new FakeTagsClient { ThrowOnCall = new InvalidOperationException("LLM down") };
+        var publisher = new CapturingWebhookPublisher();
+
+        await TagsProcessor.ProcessAsync(
+            db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), new TagsJob(rec.Id, tr.Id),
+            TagsPrompt.DefaultTemplate, NullLogger.Instance, publisher, "https://app.test");
+
+        Assert.Empty(publisher.Published);
+    }
 }

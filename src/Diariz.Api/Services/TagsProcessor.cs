@@ -1,5 +1,6 @@
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
+using Diariz.Api.Webhooks;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.SignalR;
@@ -22,6 +23,7 @@ public static class TagsProcessor
     public static async Task ProcessAsync(
         DiarizDbContext db, ITagsClient client, ISummarizationSettingsResolver resolver,
         IHubContext<TranscriptionHub> hub, TagsJob job, string template, ILogger logger,
+        IWebhookPublisher webhooks, string publicUrl,
         CancellationToken ct = default)
     {
         var rec = await db.Recordings
@@ -65,26 +67,53 @@ public static class TagsProcessor
             // Replace only AFTER a successful extraction so a failed re-run keeps the previous set.
             db.RecordingTags.RemoveRange(rec.Tags);
             var ordinal = 0;
-            db.RecordingTags.AddRange(extracted.Select(e => new RecordingTag
+            var newTags = extracted.Select(e => new RecordingTag
             {
                 Id = Guid.NewGuid(),
                 RecordingId = rec.Id,
                 Tag = e.Tag.Length > 64 ? e.Tag[..64] : e.Tag,
                 Weight = Math.Clamp(e.Weight, 0.0, 1.0),
                 Ordinal = ordinal++,
-            }));
+            }).ToList();
+            db.RecordingTags.AddRange(newTags);
             // Set even when zero tags came back: a thin transcript is "done", not retry-forever.
             rec.TagsExtractedAt = DateTimeOffset.UtcNow;
 
             await db.SaveChangesAsync(ct);
             // Nudge the browser to refetch (status is unchanged — tags don't own the recording status).
             await hub.NotifyStatusAsync(rec.UserId, rec.Id, rec.Status.ToString());
+            await PublishTagsReadyAsync(webhooks, publicUrl, rec, newTags, logger, ct);
         }
         catch (Exception ex)
         {
             // Don't mark the recording Failed — the transcript (and summary/minutes) are still valid; only
             // tag extraction didn't run. Log and leave status, tags, and TagsExtractedAt untouched.
             logger.LogError(ex, "Tag extraction failed for recording {RecordingId}", rec.Id);
+        }
+    }
+
+    /// <summary>Emits <c>recording.tags_ready</c>, carrying the freshly extracted tags so a subscriber can act on
+    /// them without a second call. Swallows its own failures - the tags are already persisted and must not be
+    /// flipped by a broken publisher (see SummarizationProcessor, which established the pattern).</summary>
+    private static async Task PublishTagsReadyAsync(
+        IWebhookPublisher webhooks, string publicUrl, Recording rec, IReadOnlyList<RecordingTag> tags,
+        ILogger logger, CancellationToken ct)
+    {
+        try
+        {
+            await webhooks.PublishAsync(WebhookEventTypes.RecordingTagsReady, rec.UserId, new
+            {
+                recordingId = rec.Id,
+                name = rec.Name ?? rec.Title,
+                status = rec.Status.ToString(),
+                tags = tags.Select(t => new { name = t.Tag, weight = t.Weight }),
+                count = tags.Count,
+                links = WebhookPayload.For(publicUrl, rec.Id),
+            }, ct: ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to emit recording.tags_ready for {RecordingId}", rec.Id);
         }
     }
 }
