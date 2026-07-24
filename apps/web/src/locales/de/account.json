@@ -154,7 +154,7 @@
   "signalDelete": "Signal löschen",
   "signalKeyHint": "Kleinbuchstaben, Zahlen, Bindestriche oder Unterstriche (z. B. action_item_created).",
   "platformAutomationsHeading": "Plattform-Automatisierungen",
-  "platformAutomationsHint": "Von Administratoren verwaltete Automatisierungen, die nach benannten Signalen für alle Nutzer weiterleiten, statt einer einzelnen Person zu gehören.",
+  "platformAutomationsHint": "Definieren Sie oben ein Workflow-Signal, fügen Sie dann hier eine Automatisierung hinzu und wählen Sie die Signale aus, die sie auslösen. Wenn die Formel eines beliebigen Nutzers mit einem dieser Signale fertig ist, wird ihre Ausgabe an diese URL gesendet. Eine Automatisierung ohne ausgewähltes Signal wird nie ausgelöst.",
   "platformAutomationSignals": "Bei welchen Signalen soll sie ausgelöst werden?",
   "platformAutomationCreate": "Plattform-Automatisierung erstellen",
   "platformAutomationNeedsSignal": "Wähle mindestens ein Signal - eine Plattform-Automatisierung ohne Signal wird nie ausgelöst.",

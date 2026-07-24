@@ -268,35 +268,42 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
           ) : (
             /* Integration: platform-wide toggles for external access. API access is off by default. */
             <div className="space-y-3">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={apiAccessEnabled}
-                  onChange={(e) => setApiAccessEnabled(e.target.checked)}
-                />
-                <span className="font-medium text-gray-700 dark:text-gray-200">{t("apiAccessEnabledLabel")}</span>
-              </label>
-              <p className="text-xs text-gray-400 dark:text-gray-500">{t("apiAccessEnabledHelp")}</p>
+              {/* One row per toggle: checkbox + label, with the hint inline to the right (wraps when narrow). */}
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={apiAccessEnabled}
+                    onChange={(e) => setApiAccessEnabled(e.target.checked)}
+                  />
+                  <span className="font-medium text-gray-700 dark:text-gray-200">{t("apiAccessEnabledLabel")}</span>
+                </label>
+                <span className="text-xs text-gray-400 dark:text-gray-500">{t("apiAccessEnabledHelp")}</span>
+              </div>
 
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={mcpAccessEnabled}
-                  onChange={(e) => setMcpAccessEnabled(e.target.checked)}
-                />
-                <span className="font-medium text-gray-700 dark:text-gray-200">{t("mcpAccessEnabledLabel")}</span>
-              </label>
-              <p className="text-xs text-gray-400 dark:text-gray-500">{t("mcpAccessEnabledHelp")}</p>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={mcpAccessEnabled}
+                    onChange={(e) => setMcpAccessEnabled(e.target.checked)}
+                  />
+                  <span className="font-medium text-gray-700 dark:text-gray-200">{t("mcpAccessEnabledLabel")}</span>
+                </label>
+                <span className="text-xs text-gray-400 dark:text-gray-500">{t("mcpAccessEnabledHelp")}</span>
+              </div>
 
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={webhooksEnabled}
-                  onChange={(e) => setWebhooksEnabled(e.target.checked)}
-                />
-                <span className="font-medium text-gray-700 dark:text-gray-200">{t("webhooksEnabledLabel")}</span>
-              </label>
-              <p className="text-xs text-gray-400 dark:text-gray-500">{t("webhooksEnabledHelp")}</p>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={webhooksEnabled}
+                    onChange={(e) => setWebhooksEnabled(e.target.checked)}
+                  />
+                  <span className="font-medium text-gray-700 dark:text-gray-200">{t("webhooksEnabledLabel")}</span>
+                </label>
+                <span className="text-xs text-gray-400 dark:text-gray-500">{t("webhooksEnabledHelp")}</span>
+              </div>
               <a
                 href="/developers/api"
                 target="_blank"

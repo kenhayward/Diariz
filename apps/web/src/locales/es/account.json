@@ -154,7 +154,7 @@
   "signalDelete": "Eliminar señal",
   "signalKeyHint": "Letras minúsculas, números, guiones o guiones bajos (p. ej. action_item_created).",
   "platformAutomationsHeading": "Automatizaciones de plataforma",
-  "platformAutomationsHint": "Automatizaciones gestionadas por administradores que se activan según señales con nombre en todos los usuarios, en lugar de pertenecer a una sola persona.",
+  "platformAutomationsHint": "Defina arriba una señal de flujo de trabajo, luego añada aquí una automatización y marque las señales que la activan. Cuando la fórmula de cualquier usuario etiquetada con una de esas señales termina, su resultado se envía a esta URL. Una automatización sin ninguna señal seleccionada nunca se activa.",
   "platformAutomationSignals": "¿Qué señales deben activarla?",
   "platformAutomationCreate": "Crear automatización de plataforma",
   "platformAutomationNeedsSignal": "Elige al menos una señal - una automatización de plataforma sin señal nunca se activa.",
