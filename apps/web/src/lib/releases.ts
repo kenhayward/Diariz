@@ -60,7 +60,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.160.1",
     date: "2026-07-25",
-    pr: 354,
+    pr: 355,
     headline: "Security patches for the desktop packaging toolchain",
     summary:
       "Two denial-of-service advisories against `brace-expansion`, plus one against `tar`, reached the " +
