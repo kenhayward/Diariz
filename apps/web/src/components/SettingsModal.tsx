@@ -383,7 +383,8 @@ function WorkflowSignalsSection() {
 
   return (
     <div className="border-t pt-3 dark:border-gray-700">
-      <h3 className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-200">{t("signalsHeading")}</h3>
+      <h3 className="mb-1 text-sm font-medium text-gray-700 dark:text-gray-200">{t("signalsHeading")}</h3>
+      <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">{t("signalsIntro")}</p>
       {error && <p className="mb-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
 
       {signals.length > 0 && (
@@ -420,48 +421,50 @@ function WorkflowSignalsSection() {
       )}
 
       <form
-        className="flex flex-wrap items-end gap-2"
+        className="space-y-1"
         onSubmit={(e) => {
           e.preventDefault();
           setError(null);
           if (key.trim() && label.trim()) create.mutate();
         }}
       >
-        <label className="text-xs">
-          <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("signalKey")}</span>
-          <input
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-            aria-label={t("signalKey")}
-            className="w-40 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          />
-          <span className="mt-1 block text-xs text-gray-400 dark:text-gray-500">{t("signalKeyHint")}</span>
-        </label>
-        <label className="text-xs">
-          <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("signalLabel")}</span>
-          <input
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            aria-label={t("signalLabel")}
-            className="w-40 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          />
-        </label>
-        <label className="text-xs">
-          <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("signalDescription")}</span>
-          <input
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            aria-label={t("signalDescription")}
-            className="w-48 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          />
-        </label>
-        <button
-          type="submit"
-          disabled={!key.trim() || !label.trim()}
-          className="shrink-0 rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
-        >
-          {t("signalAdd")}
-        </button>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-xs">
+            <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("signalKey")}</span>
+            <input
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              aria-label={t("signalKey")}
+              className="w-40 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            />
+          </label>
+          <label className="text-xs">
+            <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("signalLabel")}</span>
+            <input
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              aria-label={t("signalLabel")}
+              className="w-40 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            />
+          </label>
+          <label className="min-w-[10rem] flex-1 text-xs">
+            <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("signalDescription")}</span>
+            <input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              aria-label={t("signalDescription")}
+              className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={!key.trim() || !label.trim()}
+            className="shrink-0 rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+          >
+            {t("signalAdd")}
+          </button>
+        </div>
+        <p className="text-xs text-gray-400 dark:text-gray-500">{t("signalKeyHint")}</p>
       </form>
     </div>
   );
