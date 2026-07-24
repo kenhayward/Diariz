@@ -36,7 +36,7 @@ At a glance - see **[docs/features.md](docs/features.md)** for the full detail o
 | **Voice dictation in chat** | Dictate chat questions by voice - browser speech recognition, or a server STT endpoint on the desktop app. |
 | **Connect Claude (MCP)** | An in-process MCP server lets Claude connect to your own meetings via OAuth (claude.ai) or a personal token (Claude Desktop/Code), when the platform's Claude/MCP toggle is on, including a `run_formula` tool to trigger your saved Formulas. |
 | **User API access** | When a Platform Administrator enables it, generate a personal API token, read-only or read-write, with an optional expiry date, to call the REST API as yourself, with a built-in API reference. |
-| **Automations (webhooks)** | When a Platform Administrator enables it, register outbound webhooks (Preferences → Automations) that fire when a recording is created, finishes or fails transcription, or a formula finishes or fails; signed deliveries with automatic retries, a send-test-event button, and auto-pause after repeated failure. Admins can also define named **Workflow Signals** and wire one platform automation to each, so a formula author picks "When this finishes, trigger: ..." in the formula editor - no URL or per-user setup - and the formula's output is delivered inline to everyone routed through that signal. |
+| **Automations (webhooks)** | When a Platform Administrator enables it, register outbound webhooks (Preferences → Automations) that fire when a recording is created, finishes or fails transcription, or a formula finishes or fails; signed deliveries with automatic retries (paced to a per-automation rate cap and honoring a `429` Retry-After), a send-test-event button, and auto-pause after repeated failure. Admins can also define named **Workflow Signals** and wire one platform automation to each, so a formula author picks "When this finishes, trigger: ..." in the formula editor - no URL or per-user setup - and the formula's output is delivered inline to everyone routed through that signal. |
 | **Translate** | Translate a whole transcript (segments, summary, actions) or a single segment; stored as revisions you can flip back. |
 | **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) to a recording or directly to a folder, edit Markdown attachments in place, save a chat conversation with /attach, and optionally feed them to chat. |
 | **Rooms** | A private Personal Room per account plus shareable Rooms: invite users and groups with per-member permissions. Each Shared Room has its **own folder structure** (sections/sub-sections, drag-and-drop, per-room order) and its own List/Calendar/Actions/Tags scoped to it; record or upload files straight into a room (your Personal Room keeps the original), and search + chat over every room you belong to. A member who can read a shared recording sees its notes and screenshots too - only the owner can add, edit, or delete them. Your Google Calendar and its linking stay personal. The switcher shows each room's folder and meeting counts (shared ones labelled), ticks the one you are in, and remembers where you were. Manage rooms from the switcher. |
@@ -138,9 +138,15 @@ The headings in
   library; speaker identification via enrolled voiceprints (pgvector).
 - **M4 — in progress:** Windows desktop app (done), **macOS desktop app (beta - unsigned)**, mobile,
   packaging, live streaming.
+- **Integrations — done:** a hardened REST API (scoped, expiring personal tokens) and the MCP server for
+  **inbound** access; **outbound webhooks** ("Automations") that fire on recording and formula events with
+  signed, rate-limited, auto-retrying delivery; and **Workflow Signals** that let an author tag a formula and
+  a Platform Administrator route its output to one platform automation for everyone. Diariz now connects to
+  Zapier / n8n / Make and the like in both directions.
 
-For the next major arc - note enhancement, workflows/automations, collaborative shared spaces, and
-optional ambient capture - see the [long-term roadmap](docs/long_term_roadmap.md).
+For the next major arc - note enhancement, an internal **workflow rules engine** (conditions and non-webhook
+actions layered on the automation triggers already shipped), collaborative shared spaces, and optional
+ambient capture - see the [long-term roadmap](docs/long_term_roadmap.md).
 
 > **Keep this README current.** When a PR changes what the app does (a new feature, a stack change, or a
 > shipped roadmap item), update the **Features** table (one concise row) and **[docs/features.md](docs/features.md)**

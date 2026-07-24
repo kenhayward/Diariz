@@ -84,7 +84,9 @@ outbound webhooks from **Preferences → Automations**: pick which events fire i
 finished or failed, formula run finished or failed), paste your tool's webhook URL, and send a test event. Each
 delivery is a **Standard Webhooks-style signed** POST (HMAC-SHA256 over the exact payload bytes, timestamp and
 delivery-id headers) so the receiver can verify authenticity; failed deliveries are **retried automatically with
-backoff**, and a subscription is **auto-paused** after repeated failures so a broken endpoint doesn't loop forever. A
+backoff**, deliveries to a single automation are **rate-limited per minute** and a `429 Too Many Requests` is honored
+(rescheduled after its `Retry-After`, not counted as a failure) so a busy endpoint is neither hammered nor wrongly
+disabled, and a subscription is **auto-paused** after repeated genuine failures so a broken endpoint doesn't loop forever. A
 per-automation view shows recent deliveries and their status. This personal scope (a subscription only sees its own
 owner's recordings/formulas) sits alongside the platform scope described next.
 - **Workflow Signals and platform automations.** A Platform Administrator (Settings → Integration → Workflow Signals)
