@@ -33,6 +33,13 @@ public class ActionsController : ControllerBase
     /// With no <paramref name="roomId"/> this is the caller's own library; with one it is the recordings placed
     /// in that room (membership is the read gate - a non-member 404s).</summary>
     [HttpGet]
+    [EndpointSummary("List action items across meetings")]
+    [EndpointDescription(
+        "Every action item in one flat list rather than per recording - the view behind the Actions tab. " +
+        "Newest meeting first, each item tagged with the recording it came from so you can link back to the " +
+        "moment it was agreed, and carrying its owner, deadline, and completion state for filtering.\n\n" +
+        "With no `roomId` this covers your own library; with one it covers the recordings placed in that room " +
+        "(404 if you are not a member). For the actions on a single recording, use its own endpoint.")]
     public async Task<ActionResult<IReadOnlyList<ActionListItemDto>>> List([FromQuery] Guid? roomId = null)
     {
         IQueryable<Recording> recs;
@@ -59,6 +66,13 @@ public class ActionsController : ControllerBase
     /// <summary>Mark the given actions complete (or not). Sets/clears <c>CompletedAt</c> accordingly. Ids the
     /// caller doesn't own are silently ignored.</summary>
     [HttpPost("complete")]
+    [EndpointSummary("Complete or reopen action items")]
+    [EndpointDescription(
+        "Ticks off several actions at once, or reopens them with `completed: false` - which also clears the " +
+        "completion timestamp. **This is the only place completion is set**: the per-recording edit endpoint " +
+        "changes text, owner and deadline but not this.\n\n" +
+        "Ids that are not yours are silently skipped rather than failing the call, so a mixed selection still " +
+        "works; an empty list succeeds without doing anything.")]
     public async Task<IActionResult> Complete(CompleteActionsRequest req)
     {
         var ids = req.Ids?.ToHashSet() ?? new HashSet<Guid>();
