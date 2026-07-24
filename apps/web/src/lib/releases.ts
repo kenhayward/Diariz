@@ -59,7 +59,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.156.0",
     date: "2026-07-24",
-    pr: 0, // set on open
+    pr: 338,
     headline: "Webhook deliveries respect rate limits and back off politely",
     summary:
       "Outbound webhook delivery is now gentler on your endpoints. A '429 Too Many Requests' response is honored " +
