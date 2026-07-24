@@ -57,6 +57,27 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.157.0",
+    date: "2026-07-24",
+    headline: "Backup and restore now show you they are running",
+    summary:
+      "Backing up or restoring the platform could look like nothing was happening. A backup archive is built " +
+      "in full on the server before the download begins, so on a platform with a lot of recordings the browser " +
+      "sat silent for minutes with no download and no progress. Settings -> Maintenance now reports the build " +
+      "while it runs: which stage it is on (copying the database, then archiving files), how many files have " +
+      "gone in so far, and how long it has been going, followed by a confirmation when the download takes over. " +
+      "Restore had the mirror-image problem - the percentage covered only the upload, then froze at 100% for " +
+      "the whole destructive server-side load. It now switches to a clear \"the server is applying the backup\" " +
+      "message with its own timer once the upload finishes.",
+    added: [
+      "Live progress for a backup in Settings -> Maintenance: the current stage, files archived so far, and elapsed time.",
+      "A confirmation line once the archive is built and the browser download has taken over.",
+    ],
+    changed: [
+      "A restore now distinguishes uploading the archive from the server applying it, instead of sitting at 100%.",
+    ],
+  },
+  {
     version: "0.156.2",
     date: "2026-07-24",
     pr: 341,

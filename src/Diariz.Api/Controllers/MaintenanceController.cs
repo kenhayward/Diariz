@@ -20,6 +20,7 @@ public class MaintenanceController : ControllerBase
     private readonly IAudioStorage _storage;
     private readonly IDatabaseBackup _backup;
     private readonly ISchemaVersion _schema;
+    private readonly IBackupProgress _progress;
 
     private const string ManifestEntry = "manifest.json";
     private const string DumpEntry = "database.dump";
@@ -32,12 +33,20 @@ public class MaintenanceController : ControllerBase
     public const int CurrentFormat = 1;
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
-    public MaintenanceController(IAudioStorage storage, IDatabaseBackup backup, ISchemaVersion schema)
+    public MaintenanceController(
+        IAudioStorage storage, IDatabaseBackup backup, ISchemaVersion schema, IBackupProgress progress)
     {
         _storage = storage;
         _backup = backup;
         _schema = schema;
+        _progress = progress;
     }
+
+    /// <summary>Whether an archive is being assembled right now, and how far in. The Maintenance panel polls
+    /// this while <see cref="Backup"/> is in flight - that request sends no bytes until the whole zip is
+    /// built, so this is the only signal the browser has that anything is happening.</summary>
+    [HttpGet("backup/status")]
+    public ActionResult<BackupProgressSnapshot> BackupStatus() => Ok(_progress.Current);
 
     /// <summary>Stream the full platform backup as a <c>.zip</c>. Token via <c>access_token</c> query (an
     /// anchor-href download can't set an Authorization header), like the audio endpoint.</summary>
@@ -58,6 +67,10 @@ public class MaintenanceController : ControllerBase
         // returning File(...) (async copy) sidesteps that, and means a pg_dump failure surfaces as a clean 500
         // instead of a truncated download. The file is deleted when the response finishes (DeleteOnClose).
         var tempPath = Path.Combine(Path.GetTempPath(), $"diariz-backup-{Guid.NewGuid():N}.zip");
+        // Assembling the archive is the long, invisible part of a download - report it so the admin UI can
+        // show that a backup is running. The scope ends when the zip is built (the transfer that follows is
+        // the browser's own visible download).
+        using var tracked = _progress.Begin();
         try
         {
             await using (var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
@@ -67,19 +80,22 @@ public class MaintenanceController : ControllerBase
                 await using (var ms = manifestEntry.Open())
                     await JsonSerializer.SerializeAsync(ms, manifest, JsonOpts, ct);
 
+                _progress.SetPhase(BackupPhase.Database);
                 var dumpEntry = zip.CreateEntry(DumpEntry, CompressionLevel.Optimal);
                 await using (var ds = dumpEntry.Open())
                     await _backup.DumpToAsync(ds, ct);
 
+                _progress.SetPhase(BackupPhase.Objects);
                 await foreach (var key in _storage.ListKeysAsync(ct))
                 {
                     var blob = await _storage.OpenAsync(key, ct: ct);
                     if (blob is null) continue;
                     // Audio/attachments are already compressed — store, don't deflate again.
                     var entry = zip.CreateEntry(ObjectPrefix + key, CompressionLevel.NoCompression);
-                    await using var src = blob.Content;
-                    await using var dest = entry.Open();
-                    await src.CopyToAsync(dest, ct);
+                    await using (var src = blob.Content)
+                    await using (var dest = entry.Open())
+                        await src.CopyToAsync(dest, ct);
+                    _progress.ObjectArchived();
                 }
             }
         }

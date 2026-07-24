@@ -1,8 +1,16 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
-import type { RestoreResult } from "../lib/types";
+import { formatDuration } from "../lib/format";
+import type { BackupStatus, RestoreResult } from "../lib/types";
 import { useAuth } from "../auth";
+
+/// How often the panel asks the server how the archive build is going.
+const BACKUP_POLL_MS = 1500;
+/// How long to keep asking before giving up when the server never reports a build. Covers a click that never
+/// produced a request (blocked download, dropped connection) and a tiny platform whose archive was built
+/// between two polls - without it the progress line would sit there for ever.
+const BACKUP_GRACE_MS = 9000;
 
 /// Platform-Administrator-only Maintenance tab content: download a full backup (Postgres + all object-store
 /// blobs) and restore from one. Restore is destructive — it replaces ALL data — so it's gated behind an
@@ -20,6 +28,67 @@ export default function MaintenancePanel() {
   // Tag backfill (manual one-shot): queue tag extraction for every never-tagged recording.
   const [tagRunBusy, setTagRunBusy] = useState(false);
   const [tagRunMsg, setTagRunMsg] = useState<string | null>(null);
+  // Backup: the download is a plain anchor, and the server sends nothing until the whole archive is built -
+  // minutes of silence on a large platform. Poll the server's build status so the panel can say it's running.
+  const [backupWatching, setBackupWatching] = useState(false);
+  const [backupStatus, setBackupStatus] = useState<BackupStatus | null>(null);
+  const [backupElapsed, setBackupElapsed] = useState(0);
+  const [backupReady, setBackupReady] = useState(false);
+  const backupStartedAt = useRef(0);
+  const sawBuildRunning = useRef(false);
+  // The upload is only the first half of a restore; the server-side work that follows has no progress to
+  // report, so it gets its own elapsed timer.
+  const [applyElapsed, setApplyElapsed] = useState(0);
+  const applying = busy && progress >= 100;
+
+  function watchBackup() {
+    backupStartedAt.current = Date.now();
+    sawBuildRunning.current = false;
+    setBackupStatus(null);
+    setBackupElapsed(0);
+    setBackupReady(false);
+    setBackupWatching(true);
+  }
+
+  useEffect(() => {
+    if (!backupWatching) return;
+    const ticker = setInterval(() => setBackupElapsed(Date.now() - backupStartedAt.current), 1000);
+    const poll = setInterval(async () => {
+      let status: BackupStatus;
+      try {
+        status = await api.backupStatus();
+      } catch {
+        return; // a blip while the server is busy building - keep watching
+      }
+      setBackupStatus(status);
+      if (status.running) {
+        sawBuildRunning.current = true;
+        return;
+      }
+      // Idle. If we saw the build running, it has finished and the browser download has taken over; if we
+      // never did, stop watching once the grace window is up rather than claiming a backup was made.
+      if (sawBuildRunning.current) {
+        setBackupWatching(false);
+        setBackupReady(true);
+      } else if (Date.now() - backupStartedAt.current > BACKUP_GRACE_MS) {
+        setBackupWatching(false);
+      }
+    }, BACKUP_POLL_MS);
+    return () => {
+      clearInterval(ticker);
+      clearInterval(poll);
+    };
+  }, [backupWatching]);
+
+  useEffect(() => {
+    if (!applying) {
+      setApplyElapsed(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const id = setInterval(() => setApplyElapsed(Date.now() - startedAt), 1000);
+    return () => clearInterval(id);
+  }, [applying]);
 
   async function runTagBackfillNow() {
     if (!window.confirm(t("runTagBackfillConfirm"))) return;
@@ -69,10 +138,25 @@ export default function MaintenancePanel() {
         </p>
         <a
           href={api.backupUrl()}
+          onClick={watchBackup}
           className="inline-block rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
         >
           {t("downloadBackup")}
         </a>
+        {backupWatching && (
+          <div role="status" className="space-y-0.5">
+            <p className="text-xs text-gray-600 dark:text-gray-300">
+              {backupStatus?.phase === "Objects"
+                ? t("backupArchivingFiles", {
+                    files: backupStatus.objectsArchived,
+                    elapsed: formatDuration(backupElapsed),
+                  })
+                : t("backupCopyingDatabase", { elapsed: formatDuration(backupElapsed) })}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{t("backupPreparing")}</p>
+          </div>
+        )}
+        {backupReady && <p className="text-xs text-green-600 dark:text-green-400">{t("backupReady")}</p>}
       </section>
 
       <section className="space-y-2 border-t pt-4 dark:border-gray-700">
@@ -115,7 +199,13 @@ export default function MaintenancePanel() {
           />
           <span>{t("restoreConfirm")}</span>
         </label>
-        {busy && <p className="text-xs text-gray-500 dark:text-gray-400">{t("restoring", { percent: progress })}</p>}
+        {busy && (
+          <p role="status" className="text-xs text-gray-500 dark:text-gray-400">
+            {applying
+              ? t("restoreApplying", { elapsed: formatDuration(applyElapsed) })
+              : t("restoring", { percent: progress })}
+          </p>
+        )}
         {done && !result?.restartRecommended && (
           <p className="text-xs text-green-600 dark:text-green-400">{t("restoreSuccess")}</p>
         )}

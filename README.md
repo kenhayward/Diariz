@@ -49,7 +49,7 @@ At a glance - see **[docs/features.md](docs/features.md)** for the full detail o
 | **Model settings** | Platform-wide LLM controls: minutes-generation mode and a global AI request timeout (default 120s) covering every AI call. |
 | **Integration toggles** | A Platform Administrator independently enables or disables API access, Claude/MCP, and Automations (webhooks) - each is off by default except Claude/MCP, which is on to protect an existing connector. |
 | **Storage quotas & retention** | Per-user audio quotas plus an optional nightly auto-deletion of old audio (transcripts kept) with per-recording protection. |
-| **Backup & restore** | A Platform Administrator can export the whole platform (database + files) as one archive and restore it. |
+| **Backup & restore** | A Platform Administrator can export the whole platform (database + files) as one archive and restore it, with live progress while the archive is built or applied. |
 | **Desktop apps** | Electron thin shell for Windows (tray) and macOS (menu-bar, beta): system audio, tray recording, Google sign-in, auto-update on Windows. |
 | **Status bar** | Live pipeline progress plus storage, transcription, and transcript counts along the bottom. |
 
