@@ -8,6 +8,12 @@ import type {
 } from "n8n-workflow";
 import { NodeOperationError } from "n8n-workflow";
 import { diarizApiRequest } from "./transport/request";
+import { applyLimit } from "./transport/pagination";
+import { pollUntilTerminal } from "./transport/poll";
+import { accumulateSse } from "./transport/sse";
+import { BINARY_DOWNLOADS, BINARY_UPLOADS, key, SSE_OPERATIONS, WAIT_OPERATIONS } from "./enhancements";
+import type { WaitOperation } from "./enhancements";
+import * as loadOptionsMethods from "./methods/loadOptions";
 import {
   asDataObject,
   buildGeneratedProperties,
@@ -52,6 +58,8 @@ export class Diariz implements INodeType {
     ],
   };
 
+  methods = { loadOptions: loadOptionsMethods };
+
   async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
     const items = this.getInputData();
     const out: INodeExecutionData[] = [];
@@ -86,20 +94,81 @@ export class Diariz implements INodeType {
             generated.queryParams.length > 0
               ? (this.getNodeParameter("queryParameters", i, {}) as IDataObject)
               : undefined;
-          const body = generated.hasBody ? asDataObject(this.getNodeParameter("body", i, "{}")) : undefined;
+          const enhancement = key(resource, operation);
 
-          response = await diarizApiRequest.call(
-            this,
-            generated.method as IHttpRequestMethods,
-            path,
-            body,
-            qs && Object.keys(qs).length > 0 ? qs : undefined,
-          );
+          const download = BINARY_DOWNLOADS[enhancement];
+          if (download) {
+            const binaryProperty = this.getNodeParameter("binaryPropertyName", i, "data") as string;
+            const file = (await diarizApiRequest.call(
+              this,
+              generated.method as IHttpRequestMethods,
+              path,
+              undefined,
+              qs,
+              { json: false, encoding: "arraybuffer" },
+            )) as Buffer;
+            out.push({
+              json: { fileName: download.fileName },
+              binary: {
+                [binaryProperty]: await this.helpers.prepareBinaryData(Buffer.from(file), download.fileName),
+              },
+              pairedItem: { item: i },
+            });
+            continue;
+          }
+
+          const upload = BINARY_UPLOADS[enhancement];
+          if (upload) {
+            const binaryProperty = this.getNodeParameter("binaryPropertyName", i, "data") as string;
+            const binary = this.helpers.assertBinaryData(i, binaryProperty);
+            const buffer = await this.helpers.getBinaryDataBuffer(i, binaryProperty);
+
+            const form = new FormData();
+            form.append(
+              upload.field,
+              new Blob([new Uint8Array(buffer)], { type: binary.mimeType || "application/octet-stream" }),
+              binary.fileName ?? "upload",
+            );
+            for (const [name, value] of Object.entries(upload.fixedFields ?? {})) form.append(name, value);
+            const extra = this.getNodeParameter("uploadOptions", i, {}) as IDataObject;
+            for (const [name, value] of Object.entries(extra)) {
+              if (value !== undefined && value !== "") form.append(name, String(value));
+            }
+
+            response = await diarizApiRequest.call(
+              this,
+              generated.method as IHttpRequestMethods,
+              path,
+              undefined,
+              undefined,
+              { body: form, json: false },
+            );
+            response = typeof response === "string" ? safeParse(response) : response;
+          } else if (SSE_OPERATIONS.includes(enhancement)) {
+            response = await askChat.call(this, i);
+          } else {
+            const body = generated.hasBody ? asDataObject(this.getNodeParameter("body", i, "{}")) : undefined;
+            response = await diarizApiRequest.call(
+              this,
+              generated.method as IHttpRequestMethods,
+              path,
+              body,
+              qs && Object.keys(qs).length > 0 ? qs : undefined,
+            );
+
+            const wait = WAIT_OPERATIONS[enhancement];
+            if (wait && (this.getNodeParameter("waitForCompletion", i, true) as boolean)) {
+              response = await waitForResult.call(this, i, wait, response as IDataObject, params);
+            }
+          }
         }
 
         // A list endpoint returns an array; emit one n8n item per element so downstream nodes iterate.
         if (Array.isArray(response)) {
-          out.push(...response.map((entry) => ({ json: entry as IDataObject, pairedItem: { item: i } })));
+          const returnAll = this.getNodeParameter("returnAll", i, true) as boolean;
+          const limit = this.getNodeParameter("limit", i, 50) as number;
+          const limited = applyLimit(response, returnAll, limit);
+          out.push(...limited.map((entry) => ({ json: entry as IDataObject, pairedItem: { item: i } })));
         } else if (response === undefined || response === null || response === "") {
           out.push({ json: { success: true }, pairedItem: { item: i } });
         } else if (typeof response === "object") {
@@ -118,4 +187,77 @@ export class Diariz implements INodeType {
 
     return [out];
   }
+}
+
+function safeParse(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { data: text };
+  }
+}
+
+/// Diariz answers a formula run with 202 and a document still in Generating. A workflow author almost
+/// always wants the finished text in the same node, so poll the nested result until it settles.
+async function waitForResult(
+  this: IExecuteFunctions,
+  itemIndex: number,
+  wait: WaitOperation,
+  started: IDataObject,
+  pathParams: Record<string, string>,
+): Promise<IDataObject> {
+  const resultId = String(started.id ?? "");
+  const recordingId = pathParams.recordingId ?? String(started.recordingId ?? "");
+  if (!resultId || !recordingId) return started;
+
+  const pollPath = wait.pollPath
+    .replace("{recordingId}", encodeURIComponent(recordingId))
+    .replace("{id}", encodeURIComponent(resultId));
+
+  const intervalMs = (this.getNodeParameter("pollIntervalSeconds", itemIndex, 3) as number) * 1000;
+  const timeoutMs = (this.getNodeParameter("timeoutSeconds", itemIndex, 300) as number) * 1000;
+
+  try {
+    return await pollUntilTerminal<IDataObject>(
+      async () => (await diarizApiRequest.call(this, "GET", pollPath)) as IDataObject,
+      (value) => {
+        const status = String(value[wait.statusField] ?? "");
+        if (status === wait.readyValue) return "ready";
+        if (status === wait.failedValue) return "failed";
+        return "pending";
+      },
+      { intervalMs, timeoutMs },
+    );
+  } catch (error) {
+    // Name the document so the workflow can still fetch it later rather than losing the run entirely.
+    throw new NodeOperationError(
+      this.getNode(),
+      `${(error as Error).message} (formula result ID ${resultId} on recording ${recordingId})`,
+      { itemIndex },
+    );
+  }
+}
+
+/// Chat is server-sent events. Consume the stream here so the workflow sees one finished answer.
+async function askChat(this: IExecuteFunctions, itemIndex: number): Promise<IDataObject> {
+  const question = this.getNodeParameter("chatQuestion", itemIndex) as string;
+  const ids = (this.getNodeParameter("chatRecordingIds", itemIndex, "") as string)
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const stream = (await diarizApiRequest.call(
+    this,
+    "POST",
+    "/api/chat/stream",
+    { message: question, recordingIds: ids },
+    undefined,
+    { json: false, returnFullResponse: false, encoding: "text" },
+  )) as string;
+
+  const result = await accumulateSse((async function* () {
+    yield stream;
+  })());
+
+  return { answer: result.answer, references: result.references, model: result.model };
 }

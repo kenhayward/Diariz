@@ -17,7 +17,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/actions/complete",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "listActionItemsAcrossMeetings",
@@ -33,7 +34,8 @@ const GENERATED: GeneratedResource[] = [
             "description": "roomId"
           }
         ],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       }
     ]
   },
@@ -50,7 +52,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/user/api-tokens",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "listYourApiTokens",
@@ -60,7 +63,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/user/api-tokens",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "revokeAnApiToken",
@@ -72,7 +76,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       }
     ]
   },
@@ -91,7 +96,8 @@ const GENERATED: GeneratedResource[] = [
           "recordingId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "attachAMarkdownDocument",
@@ -103,7 +109,8 @@ const GENERATED: GeneratedResource[] = [
           "recordingId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "attachAUrl",
@@ -115,7 +122,8 @@ const GENERATED: GeneratedResource[] = [
           "recordingId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "deleteAnAttachment",
@@ -128,7 +136,8 @@ const GENERATED: GeneratedResource[] = [
           "attachmentId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "downloadAnAttachment",
@@ -141,7 +150,8 @@ const GENERATED: GeneratedResource[] = [
           "attachmentId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "listARecordingSAttachments",
@@ -153,7 +163,8 @@ const GENERATED: GeneratedResource[] = [
           "recordingId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "renameAnAttachment",
@@ -166,7 +177,8 @@ const GENERATED: GeneratedResource[] = [
           "attachmentId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "replaceAMarkdownAttachmentSContent",
@@ -179,7 +191,8 @@ const GENERATED: GeneratedResource[] = [
           "attachmentId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       }
     ]
   },
@@ -196,7 +209,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/calendar/calendars",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "getOneCalendarEvent",
@@ -208,7 +222,8 @@ const GENERATED: GeneratedResource[] = [
           "eventId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "listCalendarEventsInADateRange",
@@ -229,7 +244,8 @@ const GENERATED: GeneratedResource[] = [
             "description": "timeMax"
           }
         ],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "listYourGoogleCalendars",
@@ -239,7 +255,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/calendar/calendars",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       }
     ]
   },
@@ -259,7 +276,8 @@ const GENERATED: GeneratedResource[] = [
           "eventId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": true
       },
       {
         "value": "deleteACalendarEventNote",
@@ -273,7 +291,8 @@ const GENERATED: GeneratedResource[] = [
           "noteId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "editACalendarEventNote",
@@ -287,7 +306,8 @@ const GENERATED: GeneratedResource[] = [
           "noteId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "listNotesOnACalendarEvent",
@@ -300,7 +320,8 @@ const GENERATED: GeneratedResource[] = [
           "eventId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       }
     ]
   },
@@ -319,7 +340,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "listYourCalendarFeedSubscriptions",
@@ -329,7 +351,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/calendar/feeds",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "removeACalendarFeedSubscription",
@@ -341,7 +364,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "subscribeToACalendarFeed",
@@ -351,7 +375,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/calendar/feeds",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       }
     ]
   },
@@ -368,7 +393,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/chat/stream",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "deleteASavedConversation",
@@ -380,7 +406,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "extractTextFromAFileForChat",
@@ -390,7 +417,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/chat/attachment",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "listSavedConversations",
@@ -400,7 +428,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/chat/conversations",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "loadASavedConversation",
@@ -412,7 +441,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "saveAConversation",
@@ -422,7 +452,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/chat/conversations",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "transcribeASpokenChatQuestion",
@@ -432,7 +463,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/chat/transcribe",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "updateASavedConversation",
@@ -444,7 +476,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       }
     ]
   },
@@ -463,7 +496,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "browseFormulasOtherPeopleHaveShared",
@@ -473,7 +507,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/formulas/shared",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "createAFormula",
@@ -483,7 +518,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/formulas",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "deleteAFormula",
@@ -495,7 +531,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "editAFormula",
@@ -507,7 +544,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "enableOrDisableASharedFormula",
@@ -519,7 +557,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "listTheFormulasYouCanRun",
@@ -529,7 +568,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/formulas",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "listTheSharedFormulasForAdministration",
@@ -539,7 +579,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/formulas/managed",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "removeASharedFormulaFromYourCollection",
@@ -551,7 +592,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "runAFormulaOverARecording",
@@ -564,7 +606,8 @@ const GENERATED: GeneratedResource[] = [
           "formulaId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       }
     ]
   },
@@ -584,7 +627,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "downloadAFormulaDocument",
@@ -597,7 +641,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "editAFormulaDocument",
@@ -610,7 +655,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "emailAFormulaDocumentToYourself",
@@ -623,7 +669,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "listARecordingSFormulaDocuments",
@@ -635,7 +682,8 @@ const GENERATED: GeneratedResource[] = [
           "recordingId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "readAFormulaDocument",
@@ -648,7 +696,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       }
     ]
   },
@@ -668,7 +717,8 @@ const GENERATED: GeneratedResource[] = [
           "userId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "createAUserGroup",
@@ -678,7 +728,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/groups",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "deleteAUserGroup",
@@ -690,7 +741,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "editAUserGroup",
@@ -702,7 +754,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "listUserGroups",
@@ -712,7 +765,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/groups",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "removeAUserFromAGroup",
@@ -725,7 +779,8 @@ const GENERATED: GeneratedResource[] = [
           "userId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       }
     ]
   },
@@ -742,7 +797,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/languages",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       }
     ]
   },
@@ -759,7 +815,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/user/mcp-tokens",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "listYourMcpTokens",
@@ -769,7 +826,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/user/mcp-tokens",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "revokeAnMcpToken",
@@ -781,7 +839,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       }
     ]
   },
@@ -800,7 +859,8 @@ const GENERATED: GeneratedResource[] = [
           "recordingId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": true
       },
       {
         "value": "deleteANote",
@@ -813,7 +873,8 @@ const GENERATED: GeneratedResource[] = [
           "noteId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "editANote",
@@ -826,7 +887,8 @@ const GENERATED: GeneratedResource[] = [
           "noteId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "listARecordingSNotes",
@@ -838,7 +900,8 @@ const GENERATED: GeneratedResource[] = [
           "recordingId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       }
     ]
   },
@@ -855,7 +918,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/meeting-types",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "deleteAMeetingType",
@@ -867,7 +931,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "editAMeetingType",
@@ -879,7 +944,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "listMeetingTypes",
@@ -889,7 +955,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/meeting-types",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       }
     ]
   },
@@ -909,7 +976,8 @@ const GENERATED: GeneratedResource[] = [
           "label"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "deleteARecording",
@@ -921,7 +989,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "deleteARecordingSAudio",
@@ -933,7 +1002,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "deleteASegment",
@@ -946,7 +1016,8 @@ const GENERATED: GeneratedResource[] = [
           "segmentId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "deleteSeveralSegments",
@@ -958,7 +1029,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "deleteTheAudioOfSeveralRecordings",
@@ -968,7 +1040,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/recordings/audio/delete",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "downloadTheTranscriptAsMarkdown",
@@ -980,7 +1053,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "downloadTheTranscriptAsPlainText",
@@ -992,7 +1066,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "downloadTheTranscriptAsRtf",
@@ -1004,7 +1079,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "downloadTheTranscriptAsSubtitles",
@@ -1016,7 +1092,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "editASegmentSText",
@@ -1029,7 +1106,8 @@ const GENERATED: GeneratedResource[] = [
           "segmentId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "emailTheMeetingMinutesToYourself",
@@ -1041,7 +1119,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "emailTheTranscriptToYourself",
@@ -1053,7 +1132,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "fileARecordingInAFolder",
@@ -1065,7 +1145,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "generateASummary",
@@ -1077,7 +1158,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "generateTheMeetingMinutes",
@@ -1089,7 +1171,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "getAPlayableUrlForTheAudio",
@@ -1107,7 +1190,8 @@ const GENERATED: GeneratedResource[] = [
             "description": "download"
           }
         ],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "getARecording",
@@ -1119,7 +1203,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "linkARecordingToACalendarEvent",
@@ -1131,7 +1216,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "listRecordings",
@@ -1147,7 +1233,8 @@ const GENERATED: GeneratedResource[] = [
             "description": "roomId"
           }
         ],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "markASpeakerAsMultipleSpeakers",
@@ -1160,7 +1247,8 @@ const GENERATED: GeneratedResource[] = [
           "label"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "mergeConsecutiveSameSpeakerSegments",
@@ -1172,7 +1260,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "mergeRecordingsIntoOne",
@@ -1182,7 +1271,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/recordings/merge",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "protectARecordingSAudioFromDeletion",
@@ -1194,7 +1284,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "reRunSpeakerIdentification",
@@ -1206,7 +1297,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "reTranscribeARecording",
@@ -1218,7 +1310,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "removeARecordingSCalendarLink",
@@ -1230,7 +1323,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "renameARecording",
@@ -1242,7 +1336,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "renameASpeaker",
@@ -1254,7 +1349,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "reorderRecordingsInARoom",
@@ -1264,7 +1360,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/recordings/reorder",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "setTheMeetingTypeAndRegenerateTheMinutes",
@@ -1276,7 +1373,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "shareARecordingIntoAnotherRoom",
@@ -1288,7 +1386,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "streamOrDownloadTheAudio",
@@ -1306,7 +1405,8 @@ const GENERATED: GeneratedResource[] = [
             "description": "download"
           }
         ],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "suggestTheCalendarEventThisRecordingBelongsTo",
@@ -1318,7 +1418,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "uploadARecording",
@@ -1328,7 +1429,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/recordings",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "writeTheMeetingMinutesByHand",
@@ -1340,7 +1442,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "writeTheSummaryByHand",
@@ -1352,7 +1455,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       }
     ]
   },
@@ -1371,7 +1475,8 @@ const GENERATED: GeneratedResource[] = [
           "recordingId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "deleteAnActionItem",
@@ -1384,7 +1489,8 @@ const GENERATED: GeneratedResource[] = [
           "actionId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "editAnActionItem",
@@ -1397,7 +1503,8 @@ const GENERATED: GeneratedResource[] = [
           "actionId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "extractActionItemsFromTheTranscript",
@@ -1409,7 +1516,8 @@ const GENERATED: GeneratedResource[] = [
           "recordingId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "listARecordingSActionItems",
@@ -1421,7 +1529,8 @@ const GENERATED: GeneratedResource[] = [
           "recordingId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       }
     ]
   },
@@ -1441,7 +1550,8 @@ const GENERATED: GeneratedResource[] = [
           "segmentId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "translateSeveralSegments",
@@ -1453,7 +1563,8 @@ const GENERATED: GeneratedResource[] = [
           "recordingId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "translateTheWholeRecording",
@@ -1465,7 +1576,8 @@ const GENERATED: GeneratedResource[] = [
           "recordingId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       }
     ]
   },
@@ -1484,7 +1596,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "createASharedRoom",
@@ -1494,7 +1607,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/rooms",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "deleteASharedRoom",
@@ -1506,7 +1620,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "editASharedRoom",
@@ -1518,7 +1633,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "getARoomAndItsMembers",
@@ -1530,7 +1646,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "listYourRooms",
@@ -1540,7 +1657,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/rooms",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "removeARoomMember",
@@ -1554,7 +1672,8 @@ const GENERATED: GeneratedResource[] = [
           "principalId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "unshareARecordingFromARoom",
@@ -1567,7 +1686,8 @@ const GENERATED: GeneratedResource[] = [
           "recordingId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       }
     ]
   },
@@ -1586,7 +1706,8 @@ const GENERATED: GeneratedResource[] = [
           "recordingId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "deleteAScreenshot",
@@ -1599,7 +1720,8 @@ const GENERATED: GeneratedResource[] = [
           "screenshotId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "getAScreenshotImage",
@@ -1612,7 +1734,8 @@ const GENERATED: GeneratedResource[] = [
           "screenshotId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "getAScreenshotThumbnail",
@@ -1625,7 +1748,8 @@ const GENERATED: GeneratedResource[] = [
           "screenshotId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "listARecordingSScreenshots",
@@ -1637,7 +1761,8 @@ const GENERATED: GeneratedResource[] = [
           "recordingId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       }
     ]
   },
@@ -1695,7 +1820,8 @@ const GENERATED: GeneratedResource[] = [
             "description": "limit"
           }
         ],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       }
     ]
   },
@@ -1712,7 +1838,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/sections",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "deleteAFolder",
@@ -1724,7 +1851,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "listFolders",
@@ -1740,7 +1868,8 @@ const GENERATED: GeneratedResource[] = [
             "description": "roomId"
           }
         ],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "renameAFolder",
@@ -1752,7 +1881,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "reorderOrReparentFolders",
@@ -1762,7 +1892,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/sections/reorder",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       }
     ]
   },
@@ -1781,7 +1912,8 @@ const GENERATED: GeneratedResource[] = [
           "sectionId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "attachAMarkdownDocumentToAFolder",
@@ -1793,7 +1925,8 @@ const GENERATED: GeneratedResource[] = [
           "sectionId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "attachAUrlToAFolder",
@@ -1805,7 +1938,8 @@ const GENERATED: GeneratedResource[] = [
           "sectionId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "deleteAFolderAttachment",
@@ -1818,7 +1952,8 @@ const GENERATED: GeneratedResource[] = [
           "attachmentId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "downloadAFolderAttachment",
@@ -1831,7 +1966,8 @@ const GENERATED: GeneratedResource[] = [
           "attachmentId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "listAFolderSOwnAttachments",
@@ -1843,7 +1979,8 @@ const GENERATED: GeneratedResource[] = [
           "sectionId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "renameAFolderAttachment",
@@ -1856,7 +1993,8 @@ const GENERATED: GeneratedResource[] = [
           "attachmentId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "replaceAFolderMarkdownAttachmentSContent",
@@ -1869,7 +2007,8 @@ const GENERATED: GeneratedResource[] = [
           "attachmentId"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       }
     ]
   },
@@ -1889,7 +2028,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "downloadAFolderFormulaDocument",
@@ -1902,7 +2042,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "editAFolderFormulaDocument",
@@ -1915,7 +2056,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "emailAFolderFormulaDocumentToYourself",
@@ -1928,7 +2070,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "listAFolderSFormulaDocuments",
@@ -1940,7 +2083,8 @@ const GENERATED: GeneratedResource[] = [
           "sectionId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "readAFolderFormulaDocument",
@@ -1953,7 +2097,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "runAFormulaOverAFolder",
@@ -1966,7 +2111,8 @@ const GENERATED: GeneratedResource[] = [
           "formulaId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       }
     ]
   },
@@ -1985,7 +2131,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "generateFolderMinutes",
@@ -1997,7 +2144,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "getAFolderPage",
@@ -2009,7 +2157,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "listTheActionItemsAcrossAFolder",
@@ -2021,7 +2170,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "listTheNotesAcrossAFolder",
@@ -2033,7 +2183,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "listTheRecordingAttachmentsAcrossAFolder",
@@ -2045,7 +2196,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "writeAFolderSummaryByHand",
@@ -2057,7 +2209,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "writeFolderMinutesByHand",
@@ -2069,7 +2222,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       }
     ]
   },
@@ -2086,7 +2240,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/speaker-profiles",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "eraseAllEnrolledSpeakers",
@@ -2096,7 +2251,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/speaker-profiles",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "eraseAnEnrolledSpeaker",
@@ -2108,7 +2264,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "getAnEnrolledSpeaker",
@@ -2120,7 +2277,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "listYourEnrolledSpeakers",
@@ -2130,7 +2288,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/speaker-profiles",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "mergeTwoEnrolledSpeakers",
@@ -2142,7 +2301,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "removeATrainingSample",
@@ -2155,7 +2315,8 @@ const GENERATED: GeneratedResource[] = [
           "contributionId"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "renameAnEnrolledSpeaker",
@@ -2167,7 +2328,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       }
     ]
   },
@@ -2184,7 +2346,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/user/storage",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       }
     ]
   },
@@ -2207,7 +2370,8 @@ const GENERATED: GeneratedResource[] = [
             "description": "roomId"
           }
         ],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       }
     ]
   },
@@ -2224,7 +2388,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/user/profile",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "updateYourProfile",
@@ -2234,7 +2399,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/user/profile",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       }
     ]
   },
@@ -2251,7 +2417,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/user/settings",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "updateYourAiSettings",
@@ -2261,7 +2428,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/user/settings",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       }
     ]
   },
@@ -2278,7 +2446,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/user/webhooks",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "deleteAnAutomation",
@@ -2290,7 +2459,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "editAnAutomation",
@@ -2302,7 +2472,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "listYourAutomations",
@@ -2312,7 +2483,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/user/webhooks",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "readAnAutomationSDeliveryLog",
@@ -2324,7 +2496,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "sendATestEvent",
@@ -2336,7 +2509,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       }
     ]
   },
@@ -2353,7 +2527,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/workflow-signals",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "deleteAWorkflowSignal",
@@ -2365,7 +2540,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": false
       },
       {
         "value": "editAWorkflowSignal",
@@ -2377,7 +2553,8 @@ const GENERATED: GeneratedResource[] = [
           "id"
         ],
         "queryParams": [],
-        "hasBody": true
+        "hasBody": true,
+        "returnsArray": false
       },
       {
         "value": "listActiveWorkflowSignals",
@@ -2387,7 +2564,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/workflow-signals",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       },
       {
         "value": "listAllWorkflowSignalsForAdministration",
@@ -2397,7 +2575,8 @@ const GENERATED: GeneratedResource[] = [
         "path": "/api/workflow-signals/manage",
         "pathParams": [],
         "queryParams": [],
-        "hasBody": false
+        "hasBody": false,
+        "returnsArray": true
       }
     ]
   }

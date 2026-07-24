@@ -74,3 +74,77 @@ test("gives every operation an action, which the n8n linter requires", () => {
 test("uses plain hyphens throughout the node description", () => {
   assert.ok(!/[–—]/.test(JSON.stringify(node.description)));
 });
+
+function fieldFor(name: string, resource: string, operation: string): INodeProperties | undefined {
+  return props.find(
+    (p) =>
+      p.name === name &&
+      (p.displayOptions?.show?.resource as string[] | undefined)?.includes(resource) &&
+      (p.displayOptions?.show?.operation as string[] | undefined)?.includes(operation),
+  );
+}
+
+test("lets the user pick a recording from a dropdown instead of typing a GUID", () => {
+  const field = fieldFor("path_id", "recordings", "getARecording");
+  assert.ok(field);
+  assert.equal(field!.type, "options");
+  assert.equal(field!.typeOptions?.loadOptionsMethod, "getRecordings");
+});
+
+test("leaves an id with no listing endpoint as a plain field", () => {
+  const field = fieldFor("path_segmentId", "recordings", "editASegmentSText");
+  assert.ok(field);
+  assert.equal(field!.type, "string");
+  assert.equal(field!.typeOptions?.loadOptionsMethod, undefined);
+});
+
+test("registers every loadOptions method the properties reference", () => {
+  const referenced = new Set(
+    props.map((p) => p.typeOptions?.loadOptionsMethod).filter((m): m is string => Boolean(m)),
+  );
+  assert.ok(referenced.size > 0);
+  for (const method of referenced) {
+    assert.equal(typeof (node.methods.loadOptions as Record<string, unknown>)[method], "function", method);
+  }
+});
+
+test("offers Return All with a limit on list operations only", () => {
+  assert.ok(fieldFor("returnAll", "recordings", "listRecordings"));
+  const limit = fieldFor("limit", "recordings", "listRecordings");
+  assert.ok(limit);
+  assert.deepEqual(limit!.displayOptions?.show?.returnAll, [false]);
+  // A single-record fetch must not offer it.
+  assert.ok(!fieldFor("returnAll", "recordings", "getARecording"));
+});
+
+test("writes downloads to a binary field", () => {
+  const field = fieldFor("binaryPropertyName", "recordings", "downloadTheTranscriptAsPlainText");
+  assert.ok(field);
+  assert.equal(field!.default, "data");
+});
+
+test("takes an upload from a binary field and offers the optional form fields", () => {
+  assert.ok(fieldFor("binaryPropertyName", "recordings", "uploadARecording"));
+  const options = fieldFor("uploadOptions", "recordings", "uploadARecording");
+  assert.ok(options);
+  const names = (options!.options as INodeProperties[]).map((o) => o.name);
+  assert.deepEqual(names.sort(), ["roomId", "sectionId", "title"]);
+});
+
+test("never offers a JSON body on a multipart upload", () => {
+  assert.ok(!fieldFor("body", "recordings", "uploadARecording"));
+  assert.ok(!fieldFor("body", "attachments", "attachAFile"));
+});
+
+test("offers Wait for Completion on the formula run, with its interval and timeout", () => {
+  const wait = fieldFor("waitForCompletion", "formulas", "runAFormulaOverARecording");
+  assert.ok(wait);
+  assert.equal(wait!.default, true);
+  assert.ok(fieldFor("pollIntervalSeconds", "formulas", "runAFormulaOverARecording"));
+  assert.ok(fieldFor("timeoutSeconds", "formulas", "runAFormulaOverARecording"));
+});
+
+test("asks the chat question through a dedicated field, not a raw JSON body", () => {
+  assert.ok(fieldFor("chatQuestion", "chat", "askAQuestionAndStreamTheAnswer"));
+  assert.ok(!fieldFor("body", "chat", "askAQuestionAndStreamTheAnswer"));
+});

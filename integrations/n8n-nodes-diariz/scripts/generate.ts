@@ -14,6 +14,7 @@ export interface OpenApiOperation {
   description?: string;
   parameters?: { name: string; in: string; required?: boolean; description?: string; schema?: { type?: string } }[];
   requestBody?: unknown;
+  responses?: Record<string, { content?: Record<string, { schema?: { type?: string } }> }>;
 }
 
 export interface OpenApiDocument {
@@ -35,6 +36,7 @@ export interface GeneratedOperation {
   pathParams: string[];
   queryParams: GeneratedQueryParam[];
   hasBody: boolean;
+  returnsArray: boolean;
 }
 
 export interface GeneratedResource {
@@ -85,6 +87,13 @@ function camelTag(tag: string): string {
   return tag[0].toLowerCase() + tag.slice(1);
 }
 
+/// True when the success response is a JSON array, so the node can offer Return All / Limit. Derived from the
+/// document rather than hand-listed, so a new list endpoint gets it automatically.
+export function returnsArray(op: OpenApiOperation): boolean {
+  const ok = op.responses?.["200"] ?? op.responses?.["201"];
+  return ok?.content?.["application/json"]?.schema?.type === "array";
+}
+
 export function buildResources(doc: OpenApiDocument): GeneratedResource[] {
   const byTag = new Map<string, GeneratedOperation[]>();
 
@@ -121,6 +130,7 @@ export function buildResources(doc: OpenApiDocument): GeneratedResource[] {
             description: firstParagraph(p.description ?? p.name),
           })),
         hasBody: op.requestBody !== undefined && method !== "get",
+        returnsArray: returnsArray(op),
       });
       byTag.set(tag, list);
     }

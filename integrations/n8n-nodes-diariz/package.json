@@ -30,7 +30,7 @@
     "lint": "eslint nodes credentials package.json",
     "lintfix": "eslint nodes credentials package.json --fix",
     "test": "tsc -p tsconfig.test.json && node --test \"dist-test/test/**/*.test.js\"",
-    "generate": "tsc -p tsconfig.test.json && node dist-test/scripts/generate.js",
+    "generate": "tsc -p tsconfig.generate.json && node dist-generate/scripts/generate.js",
     "prepublishOnly": "npm run build && npm run lint && npm test"
   },
   "files": [

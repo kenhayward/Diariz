@@ -1,6 +1,7 @@
 import type { IDataObject, INodeProperties, INodePropertyOptions } from "n8n-workflow";
 import GENERATED from "./generated";
 import type { GeneratedOperation, GeneratedResource } from "./generatedTypes";
+import { BINARY_DOWNLOADS, BINARY_UPLOADS, key, loadOptionsFor, SSE_OPERATIONS, WAIT_OPERATIONS } from "./enhancements";
 
 export const CUSTOM_API_CALL = "customApiCall";
 
@@ -109,10 +110,14 @@ export function buildGeneratedProperties(): INodeProperties[] {
       }
     }
     for (const [param, operations] of byParam) {
+      const loadOptionsMethod = loadOptionsFor(resource.value, param);
       properties.push({
         displayName: titleCase(param),
         name: `path_${param}`,
-        type: "string",
+        // A dropdown listing the user's real records where we have a listing endpoint to populate it from,
+        // otherwise a plain field - an empty dropdown reads as broken.
+        type: loadOptionsMethod ? "options" : "string",
+        ...(loadOptionsMethod ? { typeOptions: { loadOptionsMethod } } : {}),
         default: "",
         required: true,
         displayOptions: { show: { resource: [resource.value], operation: operations } },
@@ -135,7 +140,13 @@ export function buildGeneratedProperties(): INodeProperties[] {
       });
     }
 
-    const withBody = resource.operations.filter((o) => o.hasBody);
+    // A multipart upload takes its file from a binary property, so it must not also offer a JSON body.
+    const uploads = resource.operations.filter((o) => BINARY_UPLOADS[key(resource.value, o.value)]);
+    const uploadValues = uploads.map((o) => o.value);
+
+    const withBody = resource.operations.filter(
+      (o) => o.hasBody && !uploadValues.includes(o.value) && !SSE_OPERATIONS.includes(key(resource.value, o.value)),
+    );
     if (withBody.length > 0) {
       properties.push({
         displayName: "Body",
@@ -146,6 +157,148 @@ export function buildGeneratedProperties(): INodeProperties[] {
         description: "Request body as a JSON object. See the API reference for the fields this endpoint takes.",
       });
     }
+
+    properties.push(...enhancementProperties(resource));
+  }
+
+  return properties;
+}
+
+/// The curated extras: Return All / Limit on list operations, binary in and out on file operations,
+/// completion polling on asynchronous runs, and the chat question field.
+function enhancementProperties(resource: GeneratedResource): INodeProperties[] {
+  const properties: INodeProperties[] = [];
+  const show = (operations: string[]) => ({ show: { resource: [resource.value], operation: operations } });
+
+  const lists = resource.operations.filter((o) => o.returnsArray).map((o) => o.value);
+  if (lists.length > 0) {
+    properties.push(
+      {
+        displayName: "Return All",
+        name: "returnAll",
+        type: "boolean",
+        default: false,
+        displayOptions: show(lists),
+        description: "Whether to return all results or only up to a given limit",
+      },
+      {
+        displayName: "Limit",
+        name: "limit",
+        type: "number",
+        default: 50,
+        typeOptions: { minValue: 1 },
+        displayOptions: { show: { ...show(lists).show, returnAll: [false] } },
+        description: "Max number of results to return",
+      },
+    );
+  }
+
+  const downloads = resource.operations
+    .filter((o) => BINARY_DOWNLOADS[key(resource.value, o.value)])
+    .map((o) => o.value);
+  if (downloads.length > 0) {
+    properties.push({
+      displayName: "Put Output File in Field",
+      name: "binaryPropertyName",
+      type: "string",
+      default: "data",
+      required: true,
+      displayOptions: show(downloads),
+      hint: "The name of the output binary field to put the file in",
+    });
+  }
+
+  for (const operation of resource.operations) {
+    const upload = BINARY_UPLOADS[key(resource.value, operation.value)];
+    if (!upload) continue;
+    properties.push({
+      displayName: "Input Binary Field",
+      name: "binaryPropertyName",
+      type: "string",
+      default: "data",
+      required: true,
+      displayOptions: show([operation.value]),
+      hint: "The name of the input binary field containing the file to upload",
+    });
+    if (upload.optionalFields?.length) {
+      properties.push({
+        displayName: "Options",
+        name: "uploadOptions",
+        type: "collection",
+        placeholder: "Add option",
+        default: {},
+        displayOptions: show([operation.value]),
+        options: upload.optionalFields.map((f) => ({
+          displayName: f.displayName,
+          name: f.name,
+          type: "string" as const,
+          default: "",
+          description: f.description,
+        })),
+      });
+    }
+  }
+
+  const waits = resource.operations
+    .filter((o) => WAIT_OPERATIONS[key(resource.value, o.value)])
+    .map((o) => o.value);
+  if (waits.length > 0) {
+    properties.push(
+      {
+        displayName: "Wait for Completion",
+        name: "waitForCompletion",
+        type: "boolean",
+        default: true,
+        displayOptions: show(waits),
+        description:
+          "Whether to poll until the document is finished. Diariz answers immediately with a document that is still generating, so turn this off only if a Diariz Trigger will pick up the completion event instead.",
+      },
+      {
+        displayName: "Poll Interval (Seconds)",
+        name: "pollIntervalSeconds",
+        type: "number",
+        default: 3,
+        typeOptions: { minValue: 1 },
+        displayOptions: { show: { ...show(waits).show, waitForCompletion: [true] } },
+        description: "How long to wait between checks",
+      },
+      {
+        displayName: "Timeout (Seconds)",
+        name: "timeoutSeconds",
+        type: "number",
+        default: 300,
+        typeOptions: { minValue: 1 },
+        displayOptions: { show: { ...show(waits).show, waitForCompletion: [true] } },
+        description: "How long to keep waiting before giving up",
+      },
+    );
+  }
+
+  const streams = resource.operations
+    .filter((o) => SSE_OPERATIONS.includes(key(resource.value, o.value)))
+    .map((o) => o.value);
+  if (streams.length > 0) {
+    properties.push(
+      {
+        displayName: "Question",
+        name: "chatQuestion",
+        type: "string",
+        typeOptions: { rows: 3 },
+        default: "",
+        required: true,
+        displayOptions: show(streams),
+        description: "What to ask about your meetings",
+      },
+      {
+        displayName: "Recording IDs",
+        name: "chatRecordingIds",
+        type: "string",
+        default: "",
+        displayOptions: show(streams),
+        description:
+          "Comma-separated recording IDs to search. Leave empty to let Diariz choose the context.",
+      },
+    );
   }
 
   return properties;

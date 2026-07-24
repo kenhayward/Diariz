@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist-generate",
+    "declaration": false,
+    "noUnusedLocals": false
+  },
+  "include": ["scripts/**/*"],
+  "exclude": ["dist", "dist-test", "dist-generate", "node_modules"]
+}

@@ -16,6 +16,8 @@ export interface GeneratedOperation {
   pathParams: string[];
   queryParams: GeneratedQueryParam[];
   hasBody: boolean;
+  /// The success response is a JSON array, so Return All / Limit applies.
+  returnsArray: boolean;
 }
 
 export interface GeneratedResource {
