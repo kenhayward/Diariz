@@ -60,7 +60,8 @@ public class MeetingMinutesProcessorTests
         var hub = new FakeHubContext();
 
         await MeetingMinutesProcessor.ProcessAsync(
-            db, generator, resolver, hub, new FakeJobQueue(), Job(rec, tr), charBudget: 16000, NullLogger.Instance);
+            db, generator, resolver, hub, new FakeJobQueue(), Job(rec, tr), charBudget: 16000, NullLogger.Instance,
+            new CapturingWebhookPublisher(), "");
 
         var minutes = await db.MeetingMinutes.SingleAsync(m => m.TranscriptionId == tr.Id);
         Assert.Equal("# Cadence Call\n\nMinutes.", minutes.Text);
@@ -95,7 +96,8 @@ public class MeetingMinutesProcessorTests
 
         await MeetingMinutesProcessor.ProcessAsync(
             db, new FakeMeetingTypeMinutesGenerator { Result = "# Fresh" }, new FakeSummarizationSettingsResolver(),
-            new FakeHubContext(), new FakeJobQueue(), Job(rec, tr), 16000, NullLogger.Instance);
+            new FakeHubContext(), new FakeJobQueue(), Job(rec, tr), 16000, NullLogger.Instance,
+            new CapturingWebhookPublisher(), "");
 
         Assert.Equal("# Fresh", (await db.MeetingMinutes.SingleAsync(m => m.TranscriptionId == tr.Id)).Text);
     }
@@ -114,7 +116,7 @@ public class MeetingMinutesProcessorTests
 
         await MeetingMinutesProcessor.ProcessAsync(
             db, generator, new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
-            Job(rec, tr), 16000, NullLogger.Instance);
+            Job(rec, tr), 16000, NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         Assert.Equal("my edit", (await db.MeetingMinutes.SingleAsync(m => m.TranscriptionId == tr.Id)).Text);
         Assert.Equal(0, generator.Calls); // generator never called
@@ -129,7 +131,7 @@ public class MeetingMinutesProcessorTests
 
         await MeetingMinutesProcessor.ProcessAsync(
             db, generator, new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
-            Job(rec, tr), 16000, NullLogger.Instance);
+            Job(rec, tr), 16000, NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         Assert.Empty(await db.MeetingMinutes.ToListAsync());
         Assert.Equal(RecordingStatus.Summarized, (await db.Recordings.FindAsync(rec.Id))!.Status);
@@ -144,7 +146,7 @@ public class MeetingMinutesProcessorTests
 
         await MeetingMinutesProcessor.ProcessAsync(
             db, generator, new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
-            Job(rec, tr), 16000, NullLogger.Instance);
+            Job(rec, tr), 16000, NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         Assert.Equal(0, generator.Calls);
         Assert.Empty(await db.MeetingMinutes.ToListAsync());

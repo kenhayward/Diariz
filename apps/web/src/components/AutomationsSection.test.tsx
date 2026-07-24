@@ -33,6 +33,16 @@ describe("AutomationsSection", () => {
     vi.mocked(api.listWebhookDeliveries).mockResolvedValue([]);
   });
 
+  it("offers the AI output events alongside the transcription ones", async () => {
+    render(<Wrapped />);
+    // The four events added so an automation can fire when an AI output is ready, rather than
+    // triggering on transcription and polling for the summary.
+    expect(await screen.findByLabelText(/summary is ready/i)).toBeTruthy();
+    expect(screen.getByLabelText(/meeting minutes are ready/i)).toBeTruthy();
+    expect(screen.getByLabelText(/action items are ready/i)).toBeTruthy();
+    expect(screen.getByLabelText(/tags are ready/i)).toBeTruthy();
+  });
+
   it("creates an automation with the chosen event and url", async () => {
     const createWebhook = vi.mocked(api.createWebhook).mockResolvedValue({
       id: "1",

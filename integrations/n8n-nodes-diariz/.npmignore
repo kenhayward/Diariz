@@ -1,0 +1,8 @@
+test/
+scripts/
+dist-test/
+tsconfig.json
+tsconfig.test.json
+.eslintrc.js
+gulpfile.js
+*.tgz

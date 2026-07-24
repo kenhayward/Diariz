@@ -84,7 +84,10 @@ external tool can be least-privilege and time-boxed; a pre-existing token keeps 
 behavior.
 - **Automations (outbound webhooks).** When a Platform Administrator enables it (Settings → Integration), register
 outbound webhooks from **Preferences → Automations**: pick which events fire it (recording created, transcription
-finished or failed, formula run finished or failed), paste your tool's webhook URL, and send a test event. Each
+finished or failed, a summary / meeting minutes / action items / tags ready, formula run finished or failed), paste
+your tool's webhook URL, and send a test event. The four **AI-output events each carry what they produced** - the
+summary text, the minutes Markdown, the extracted actions, the tags - so a workflow acts on the result directly
+instead of triggering on transcription and polling to find out whether the model had finished. Each
 delivery is a **Standard Webhooks-style signed** POST (HMAC-SHA256 over the exact payload bytes, timestamp and
 delivery-id headers) so the receiver can verify authenticity; failed deliveries are **retried automatically with
 backoff**, deliveries to a single automation are **rate-limited per minute** and a `429 Too Many Requests` is honored
@@ -105,6 +108,24 @@ signal's routing key can't be changed after creation; only its label, descriptio
 Deferred follow-ups: a per-platform-subscription delivery rate cap (the delivery worker's existing batch-and-backoff
 throughput bound covers this for now), and detaching a platform subscription from the single admin who created it
 (today it cascades with that admin's account).
+- **n8n community node.** A published node package, **`n8n-nodes-diariz`**, installable from n8n's Settings →
+Community Nodes (self-hosted n8n only). It ships two nodes. The **Diariz Trigger** is self-registering: activating a
+workflow creates the matching Automation in Diariz through the REST API and stores the signing secret Diariz
+returns once, deactivating deletes it again, and every delivery is verified against that secret using the
+Standard Webhooks HMAC scheme - an unsigned or tampered request is answered `401` and starts no execution. It
+covers all nine events. The **Diariz** action node exposes every published REST operation (179 across 31
+resources), generated from the platform's own OpenAPI document so its operation names and help text are the same
+copy as the in-app API reference, plus a **Custom API Call** on every resource for anything added later. On top of
+the generated surface, high-value operations are given real n8n ergonomics: **dropdowns** listing your actual
+recordings, folders, rooms, formulas, speaker profiles and meeting types instead of raw IDs; **binary transfer**
+for transcript exports, audio, attachments and formula documents in both directions; **Return All / Limit** on
+every list; **Wait for Completion** on a formula run (Diariz answers `202` with a document still generating, so
+the node polls until it settles rather than handing back a stub); and chat questions accumulated from the
+server-sent event stream into a single finished answer with citations. The package is **MIT-licensed and free of
+runtime dependencies** to meet n8n's verified-node requirements, and it versions independently of the platform.
+It lives in the platform repository (`integrations/n8n-nodes-diariz`) so CI can regenerate its operations on every
+build and fail if the API has moved underneath it. The `Auth` endpoint group is deliberately excluded: it takes an
+account password and the node authenticates with a token.
 - **Integration toggles.** A Platform Administrator can independently switch **API access**, **Claude/MCP**, and
 **Automations** (webhooks) on or off from Settings → Integration - each surface is gated behind its own toggle, so
 turning off webhooks, say, does not disable a user's API tokens or the MCP connector. API access and Automations

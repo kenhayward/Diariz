@@ -1,5 +1,6 @@
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
+using Diariz.Api.Webhooks;
 using Diariz.Domain;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,7 @@ public static class MeetingMinutesProcessor
     public static async Task ProcessAsync(
         DiarizDbContext db, IMeetingTypeMinutesGenerator generator, ISummarizationSettingsResolver resolver,
         IHubContext<TranscriptionHub> hub, IJobQueue queue, MeetingMinutesJob job, int charBudget, ILogger logger,
+        IWebhookPublisher webhooks, string publicUrl,
         CancellationToken ct = default)
     {
         var rec = await db.Recordings.FirstOrDefaultAsync(r => r.Id == job.RecordingId, ct);
@@ -94,6 +96,15 @@ public static class MeetingMinutesProcessor
             await db.SaveChangesAsync(ct);
             // Nudge the browser to refetch (status is unchanged — minutes don't own the recording status).
             await hub.NotifyStatusAsync(rec.UserId, rec.Id, rec.Status.ToString());
+
+            string? meetingTypeName = null;
+            if (rec.MeetingTypeId is { } typeId)
+                meetingTypeName = await db.MeetingTypes
+                    .Where(m => m.Id == typeId)
+                    .Select(m => m.Title)
+                    .FirstOrDefaultAsync(ct);
+            await PublishMinutesReadyAsync(
+                webhooks, publicUrl, rec, markdown, rec.MeetingTypeId, meetingTypeName, logger, ct);
         }
         catch (Exception ex)
         {
@@ -152,6 +163,32 @@ public static class MeetingMinutesProcessor
                 logger.LogError(ex, "Could not queue formula {FormulaId} for recording {RecordingId}",
                     formula.Id, rec.Id);
             }
+        }
+    }
+
+    /// <summary>Emits <c>recording.minutes_ready</c>, carrying the generated Markdown so a subscriber can act on
+    /// it without a second call. Swallows its own failures - the minutes are already persisted and must not be
+    /// flipped by a broken publisher (see SummarizationProcessor, which established the pattern).</summary>
+    private static async Task PublishMinutesReadyAsync(
+        IWebhookPublisher webhooks, string publicUrl, Recording rec, string minutesText,
+        Guid? meetingTypeId, string? meetingTypeName, ILogger logger, CancellationToken ct)
+    {
+        try
+        {
+            await webhooks.PublishAsync(WebhookEventTypes.RecordingMinutesReady, rec.UserId, new
+            {
+                recordingId = rec.Id,
+                name = rec.Name ?? rec.Title,
+                status = rec.Status.ToString(),
+                minutes = minutesText,
+                meetingTypeId,
+                meetingTypeName,
+                links = WebhookPayload.For(publicUrl, rec.Id),
+            }, ct: ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to emit recording.minutes_ready for {RecordingId}", rec.Id);
         }
     }
 }

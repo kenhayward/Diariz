@@ -1,5 +1,6 @@
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
+using Diariz.Api.Webhooks;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.SignalR;
@@ -19,6 +20,7 @@ public static class SummarizationProcessor
     public static async Task ProcessAsync(
         DiarizDbContext db, ISummarizationClient client, ISummarizationSettingsResolver resolver,
         IHubContext<TranscriptionHub> hub, SummarizationJob job, string template, ILogger logger,
+        IWebhookPublisher webhooks, string publicUrl,
         CancellationToken ct = default)
     {
         var rec = await db.Recordings.FirstOrDefaultAsync(r => r.Id == job.RecordingId, ct);
@@ -40,6 +42,7 @@ public static class SummarizationProcessor
                 rec.Error = null;
                 await db.SaveChangesAsync(ct);
                 await hub.NotifyStatusAsync(rec.UserId, rec.Id, RecordingStatus.Summarized.ToString());
+                await PublishSummarizedAsync(webhooks, publicUrl, rec, transcription.Summary.Text, logger, ct);
                 return;
             }
 
@@ -81,6 +84,7 @@ public static class SummarizationProcessor
             rec.Error = null;
             await db.SaveChangesAsync(ct);
             await hub.NotifyStatusAsync(rec.UserId, rec.Id, RecordingStatus.Summarized.ToString());
+            await PublishSummarizedAsync(webhooks, publicUrl, rec, summary.Text, logger, ct);
         }
         catch (Exception ex)
         {
@@ -89,6 +93,32 @@ public static class SummarizationProcessor
             rec.Error = ex.Message;
             await db.SaveChangesAsync(ct);
             await hub.NotifyStatusAsync(rec.UserId, rec.Id, RecordingStatus.Failed.ToString());
+        }
+    }
+
+    /// <summary>Emits <c>recording.summarized</c>, carrying the summary text so a subscriber can act on it
+    /// without a second call. Both success paths emit: a preserved hand-edited summary still means the
+    /// recording reached Summarized, and a subscriber waiting on "summary ready" must not hang.
+    /// Swallows its own failures - the summary is already persisted and must not be flipped to Failed by a
+    /// broken publisher (see FormulaRunProcessor, which learned the same lesson).</summary>
+    private static async Task PublishSummarizedAsync(
+        IWebhookPublisher webhooks, string publicUrl, Recording rec, string summaryText,
+        ILogger logger, CancellationToken ct)
+    {
+        try
+        {
+            await webhooks.PublishAsync(WebhookEventTypes.RecordingSummarized, rec.UserId, new
+            {
+                recordingId = rec.Id,
+                name = rec.Name ?? rec.Title,
+                status = rec.Status.ToString(),
+                summary = summaryText,
+                links = WebhookPayload.For(publicUrl, rec.Id),
+            }, ct: ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to emit recording.summarized for {RecordingId}", rec.Id);
         }
     }
 }

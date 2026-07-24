@@ -1,0 +1,61 @@
+{
+  "name": "n8n-nodes-diariz",
+  "version": "0.1.0",
+  "description": "n8n community node for Diariz meeting transcription: react to transcriptions and drive the full REST API.",
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "diariz",
+    "transcription",
+    "meetings",
+    "speaker-diarization"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "Ken Hayward"
+  },
+  "homepage": "https://github.com/kenhayward/Diariz/tree/main/integrations/n8n-nodes-diariz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kenhayward/Diariz.git",
+    "directory": "integrations/n8n-nodes-diariz"
+  },
+  "main": "index.js",
+  "engines": {
+    "node": ">=20.15"
+  },
+  "scripts": {
+    "build": "tsc && gulp build:icons",
+    "dev": "tsc --watch",
+    "lint": "eslint nodes credentials package.json",
+    "lintfix": "eslint nodes credentials package.json --fix",
+    "test": "tsc -p tsconfig.test.json && node --test \"dist-test/test/**/*.test.js\"",
+    "generate": "tsc -p tsconfig.generate.json && node dist-generate/scripts/generate.js",
+    "prepublishOnly": "npm run build && npm run lint && npm test"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/DiarizApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/Diariz/Diariz.node.js",
+      "dist/nodes/Diariz/DiarizTrigger.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "@typescript-eslint/parser": "^8.32.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-n8n-nodes-base": "^1.16.3",
+    "gulp": "^5.0.0",
+    "n8n-workflow": "*",
+    "typescript": "^5.8.3"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  }
+}

@@ -22,17 +22,20 @@ public class ActionsWorker : BackgroundService
     private readonly IHubContext<TranscriptionHub> _hub;
     private readonly IPromptTemplateProvider _prompts;
     private readonly ActionsOptions _opts;
+    private readonly string _publicUrl;
     private readonly ILogger<ActionsWorker> _log;
 
     public ActionsWorker(
         IServiceScopeFactory scopes, IConnectionMultiplexer redis, IHubContext<TranscriptionHub> hub,
-        IPromptTemplateProvider prompts, IOptions<ActionsOptions> opts, ILogger<ActionsWorker> log)
+        IPromptTemplateProvider prompts, IOptions<ActionsOptions> opts, IOptions<AppPublicOptions> appOpts,
+        ILogger<ActionsWorker> log)
     {
         _scopes = scopes;
         _redis = redis;
         _hub = hub;
         _prompts = prompts;
         _opts = opts.Value;
+        _publicUrl = appOpts.Value.PublicUrl;
         _log = log;
     }
 
@@ -84,11 +87,12 @@ public class ActionsWorker : BackgroundService
                 var client = scope.ServiceProvider.GetRequiredService<IActionsClient>();
                 var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
                 var queue = scope.ServiceProvider.GetRequiredService<IJobQueue>();
+                var webhooks = scope.ServiceProvider.GetRequiredService<IWebhookPublisher>();
                 // Read the (editable) template per job so edits apply without an API restart. The processor
                 // chains the minutes job when it finishes (so minutes render the canonical action set).
                 await ActionsProcessor.ProcessAsync(
                     ctx, client, resolver, _hub, queue, job,
-                    _prompts.Get("extract-actions", ActionsPrompt.DefaultTemplate), _log, ct);
+                    _prompts.Get("extract-actions", ActionsPrompt.DefaultTemplate), _log, webhooks, _publicUrl, ct);
             }
         }
         catch (Exception ex)

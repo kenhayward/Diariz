@@ -5,6 +5,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import type { MinutesGenerationMode, WebhookCreated, WorkflowSignal } from "../lib/types";
 import { useAuth } from "../auth";
 import { bytesToGb, gbToBytes } from "../lib/format";
+import { webhookEvents } from "../lib/webhookEvents";
 import MaintenancePanel from "./MaintenancePanel";
 
 type Tab = "ai" | "quotas" | "maintenance" | "integration";
@@ -490,13 +491,7 @@ function PlatformAutomationsSection() {
   const { data: subs = [] } = useQuery({ queryKey: ["platform-webhooks"], queryFn: api.listPlatformWebhooks });
   const { data: signals = [] } = useQuery({ queryKey: ["workflow-signals-all"], queryFn: api.listAllWorkflowSignals });
 
-  const EVENTS: { key: string; label: string }[] = [
-    { key: "recording.created", label: t("evtRecordingCreated") },
-    { key: "recording.transcribed", label: t("evtRecordingTranscribed") },
-    { key: "recording.transcription_failed", label: t("evtRecordingFailed") },
-    { key: "formula_result.completed", label: t("evtFormulaCompleted") },
-    { key: "formula_result.failed", label: t("evtFormulaFailed") },
-  ];
+  const EVENTS = webhookEvents(t);
 
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");

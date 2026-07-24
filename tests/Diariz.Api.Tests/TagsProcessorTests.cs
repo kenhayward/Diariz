@@ -45,7 +45,8 @@ public class TagsProcessorTests
         var resolver = new FakeSummarizationSettingsResolver();
         var hub = new FakeHubContext();
 
-        await TagsProcessor.ProcessAsync(db, client, resolver, hub, Job(rec, tr), Template, NullLogger.Instance);
+        await TagsProcessor.ProcessAsync(db, client, resolver, hub, Job(rec, tr), Template, NullLogger.Instance,
+            new CapturingWebhookPublisher(), "");
 
         var tags = await db.RecordingTags.Where(t => t.RecordingId == rec.Id).OrderBy(t => t.Ordinal).ToListAsync();
         Assert.Equal(2, tags.Count);
@@ -81,7 +82,7 @@ public class TagsProcessorTests
 
         await TagsProcessor.ProcessAsync(
             db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
-            NullLogger.Instance);
+            NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         var tag = await db.RecordingTags.SingleAsync(t => t.RecordingId == rec.Id);
         Assert.Equal("Fresh Topic", tag.Tag); // machine-only data: a re-run replaces the whole set
@@ -97,7 +98,8 @@ public class TagsProcessorTests
         var resolver = new FakeSummarizationSettingsResolver { Config = new SummarizationRequestConfig("", "", "", 30) };
         var hub = new FakeHubContext();
 
-        await TagsProcessor.ProcessAsync(db, client, resolver, hub, Job(rec, tr), Template, NullLogger.Instance);
+        await TagsProcessor.ProcessAsync(db, client, resolver, hub, Job(rec, tr), Template, NullLogger.Instance,
+            new CapturingWebhookPublisher(), "");
 
         Assert.Equal(0, client.Calls);
         Assert.Empty(await db.RecordingTags.ToListAsync());
@@ -114,7 +116,8 @@ public class TagsProcessorTests
         var hub = new FakeHubContext();
 
         await TagsProcessor.ProcessAsync(
-            db, client, new FakeSummarizationSettingsResolver(), hub, Job(rec, tr), Template, NullLogger.Instance);
+            db, client, new FakeSummarizationSettingsResolver(), hub, Job(rec, tr), Template, NullLogger.Instance,
+            new CapturingWebhookPublisher(), "");
 
         Assert.Empty(await db.RecordingTags.ToListAsync());
         Assert.NotNull((await db.Recordings.FindAsync(rec.Id))!.TagsExtractedAt); // done, not retry-forever
@@ -129,7 +132,8 @@ public class TagsProcessorTests
 
         await TagsProcessor.ProcessAsync(
             db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(),
-            new TagsJob(Guid.NewGuid(), Guid.NewGuid()), Template, NullLogger.Instance);
+            new TagsJob(Guid.NewGuid(), Guid.NewGuid()), Template, NullLogger.Instance,
+            new CapturingWebhookPublisher(), "");
 
         Assert.Equal(0, client.Calls);
     }
@@ -143,7 +147,7 @@ public class TagsProcessorTests
 
         await TagsProcessor.ProcessAsync(
             db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
-            NullLogger.Instance);
+            NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         Assert.Equal(0, client.Calls);
         Assert.Null((await db.Recordings.FindAsync(rec.Id))!.TagsExtractedAt);
@@ -165,7 +169,7 @@ public class TagsProcessorTests
 
         await TagsProcessor.ProcessAsync(
             db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, tr), Template,
-            NullLogger.Instance);
+            NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         // A failed re-extract must not wipe the previous tags (RemoveRange only after a successful call).
         var tag = await db.RecordingTags.SingleAsync(t => t.RecordingId == rec.Id);
@@ -191,7 +195,7 @@ public class TagsProcessorTests
 
         await TagsProcessor.ProcessAsync(
             db, client, new FakeSummarizationSettingsResolver(), new FakeHubContext(), Job(rec, v1), Template,
-            NullLogger.Instance);
+            NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
         Assert.Equal(0, client.Calls); // a slow/backfilled v1 job must not overwrite v2's tags
         var tag = await db.RecordingTags.SingleAsync(t => t.RecordingId == rec.Id);
