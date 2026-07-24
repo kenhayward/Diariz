@@ -59,6 +59,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.157.3",
     date: "2026-07-24",
+    pr: 345,
     headline: "API reference: folders and search documented",
     summary:
       "The third pass through the in-app API reference covers folders and finding things: the folder tree, " +
