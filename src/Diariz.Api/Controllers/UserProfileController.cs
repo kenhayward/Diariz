@@ -44,6 +44,14 @@ public class UserProfileController : ControllerBase
         p.HasFlag(PlatformPermission.ManageFormulas));
 
     [HttpGet]
+    [EndpointSummary("Get your profile")]
+    [EndpointDescription(
+        "Who you are and how the app is set up for you: email, display name, interface and native languages, " +
+        "theme, the professional details that give the model context about your work, and whether Google " +
+        "sign-in and Calendar are connected.\n\n" +
+        "It also reports your **platform permissions** and which optional features the administrator has " +
+        "enabled (API access, Automations) - so a client can hide what you cannot use rather than " +
+        "discovering it through a 403.")]
     public async Task<ActionResult<UserProfileDto>> Get()
     {
         var user = await _users.FindByIdAsync(UserId.ToString());
@@ -64,6 +72,14 @@ public class UserProfileController : ControllerBase
     }
 
     [HttpPut]
+    [EndpointSummary("Update your profile")]
+    [EndpointDescription(
+        "Saves your display name, languages, theme, and professional details. This is a **full replacement, " +
+        "not a patch**: every field you omit or send blank is cleared, so read the profile first and send it " +
+        "back with your changes.\n\n" +
+        "**It returns a new session token**, because your name travels in the token and would otherwise stay " +
+        "stale until the next sign-in - replace your stored token with this one. Your email cannot be changed " +
+        "here. 400 for a language code the platform does not support.")]
     public async Task<ActionResult<AuthResponse>> Update(UpdateUserProfileRequest req)
     {
         var user = await _users.FindByIdAsync(UserId.ToString());

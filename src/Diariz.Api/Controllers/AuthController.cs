@@ -57,6 +57,15 @@ public class AuthController : ControllerBase
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [HttpPost("login")]
+    [EndpointSummary("Sign in with email and password")]
+    [EndpointDescription(
+        "Exchanges credentials for a **session token** and its expiry. Send it as `Authorization: Bearer ...` " +
+        "on every other endpoint. There is no refresh token: call the refresh endpoint before this one " +
+        "expires to extend the session.\n\n" +
+        "For scripts and integrations, prefer a personal API token (`dz_api_...`) from Settings - it is " +
+        "longer-lived, scope-limited, and revocable without changing your password.\n\n" +
+        "401 for a wrong email or password. 403, with an explanation, when the account exists but cannot sign " +
+        "in yet: awaiting approval, not yet set up, or disabled.")]
     public async Task<IActionResult> Login(LoginRequest req)
     {
         var user = await _users.FindByEmailAsync(req.Email);
@@ -81,6 +90,12 @@ public class AuthController : ControllerBase
 
     /// <summary>Public: anyone can request access. Neutral response (no account enumeration).</summary>
     [HttpPost("request-access")]
+    [EndpointSummary("Request an account")]
+    [EndpointDescription(
+        "Registers interest in an account for an administrator to approve. **No authentication required.**\n\n" +
+        "The response is deliberately the same whether or not the address already has an account, so this " +
+        "cannot be used to discover who is registered. Nothing is granted here - approval creates the account " +
+        "and sends a setup link.")]
     public async Task<IActionResult> RequestAccess(RequestAccessRequest req)
     {
         var email = req.Email?.Trim() ?? "";
@@ -106,6 +121,13 @@ public class AuthController : ControllerBase
 
     /// <summary>Public: check a setup link before showing the form (rejects expired/garbage links).</summary>
     [HttpGet("setup/validate")]
+    [EndpointSummary("Check an account setup link")]
+    [EndpointDescription(
+        "Tells you whether a setup link is still good before showing the form, so an expired or mistyped one " +
+        "fails politely instead of after the user has filled everything in. **No authentication required.**\n\n" +
+        "Always 200: a bad link comes back as `valid: false` rather than an error status, and reveals nothing " +
+        "about the address. A valid one returns the email and name to pre-fill. This only checks - it does not " +
+        "consume the link.")]
     public async Task<ActionResult<SetupValidateResponse>> ValidateSetup(
         [FromQuery] string email, [FromQuery] string token)
     {
@@ -119,6 +141,14 @@ public class AuthController : ControllerBase
 
     /// <summary>Public: finish account setup — set full name + password, activate, auto sign-in.</summary>
     [HttpPost("setup")]
+    [EndpointSummary("Finish setting up an account")]
+    [EndpointDescription(
+        "Completes an invited account: sets the full name and first password, activates it, and returns a " +
+        "session token so the user is signed in straight away - no separate login call. **No authentication " +
+        "required**, since the setup link is the credential.\n\n" +
+        "The link is **single-use**: completing setup invalidates it. 400 for a link that is invalid, expired, " +
+        "or already used, for a missing name, and for a password that fails the platform's rules (the response " +
+        "lists what was wrong).")]
     public async Task<IActionResult> Setup(SetupRequest req)
     {
         var user = await _users.FindByEmailAsync(req.Email ?? "");
@@ -146,6 +176,13 @@ public class AuthController : ControllerBase
     /// progress) alive without a separate long-lived refresh token.</summary>
     [Authorize]
     [HttpPost("refresh")]
+    [EndpointSummary("Extend the session")]
+    [EndpointDescription(
+        "Issues a fresh token for the signed-in user - a sliding session, so a long-running client (say, a " +
+        "recording in progress) is never signed out mid-task.\n\n" +
+        "Requires a **still-valid** token: there is no long-lived refresh token, so call this before the " +
+        "current one expires. Once it has expired the user must sign in again. 401 for an expired token or a " +
+        "since-disabled account.")]
     public async Task<IActionResult> Refresh()
     {
         var user = await _users.GetUserAsync(User);
@@ -170,12 +207,24 @@ public class AuthController : ControllerBase
 
     /// <summary>Public: which external sign-in providers are enabled (so the login page shows the button).</summary>
     [HttpGet("providers")]
+    [EndpointSummary("List the external sign-in providers")]
+    [EndpointDescription(
+        "Which external sign-in options this platform has configured, so a login page knows whether to show " +
+        "the button. **No authentication required.** Currently just `google`. The rest of the Google flow " +
+        "returns 404 when it is off.")]
     public IActionResult Providers() => Ok(new { google = _google.Enabled });
 
     /// <summary>Public: begin Google sign-in. Stashes PKCE state in a short-lived signed cookie and
     /// redirects to Google's consent screen. <paramref name="desktopChallenge"/> (from the desktop shell)
     /// marks this as a desktop flow so the callback hands back a diariz:// code instead of the SPA cookie.</summary>
     [HttpGet("google/start")]
+    [EndpointSummary("Begin Google sign-in")]
+    [EndpointDescription(
+        "Starts the Google sign-in flow. **Navigate a browser here** - it does not return JSON, it redirects " +
+        "to Google's consent screen after stashing PKCE state in a short-lived signed cookie. Not usable from " +
+        "a script or a fetch call.\n\n" +
+        "Google then returns to the callback endpoint. `desktopChallenge` marks a desktop sign-in, which hands " +
+        "back a `diariz://` code instead of a browser cookie. 404 when Google sign-in is not configured.")]
     public IActionResult GoogleStart([FromQuery] string? desktopChallenge = null)
     {
         if (!_google.Enabled) return NotFound();
@@ -194,6 +243,15 @@ public class AuthController : ControllerBase
     /// <summary>Public: Google redirects here with the authorization code. Verifies state, exchanges the
     /// code, resolves the account, and bounces to the SPA with a token (or an error) — never returns JSON.</summary>
     [HttpGet("google/callback")]
+    [EndpointSummary("Google sign-in callback")]
+    [EndpointDescription(
+        "Where Google returns after consent. **Not called by your code** - Google redirects the browser here. " +
+        "It verifies the state, exchanges the authorization code, resolves the account, and redirects onward; " +
+        "it never returns JSON.\n\n" +
+        "The token is **never put in a URL**. A browser sign-in leaves it in a short-lived HttpOnly cookie " +
+        "that the app trades in at the exchange endpoint; a desktop sign-in redirects to a `diariz://` link " +
+        "carrying a single-use code. That way the token stays out of access logs, referrers, and browser " +
+        "history.")]
     public async Task<IActionResult> GoogleCallback(
         [FromQuery] string? code, [FromQuery] string? state, [FromQuery] string? error)
     {
@@ -313,6 +371,13 @@ public class AuthController : ControllerBase
     /// Google account. Returns the Google consent URL for the SPA to navigate to.</summary>
     [Authorize]
     [HttpPost("google/connect")]
+    [EndpointSummary("Connect Google Calendar")]
+    [EndpointDescription(
+        "Begins the extra consent needed to read your Google Calendar - separate from signing in, so nobody " +
+        "grants calendar access just by logging in. Returns an `authorizationUrl` for the browser to navigate " +
+        "to; consent happens at Google, then it redirects back.\n\n" +
+        "Requires an already-linked Google account (400 otherwise) and at least one capability requested " +
+        "(400 if none). 404 when Google sign-in is not configured on the platform.")]
     public async Task<IActionResult> GoogleConnect(ConnectGoogleRequest req)
     {
         if (!_google.Enabled) return NotFound();
@@ -340,6 +405,12 @@ public class AuthController : ControllerBase
     /// <summary>Revoke Google data access for the signed-in user (revokes at Google, clears the stored token).</summary>
     [Authorize]
     [HttpPost("google/disconnect")]
+    [EndpointSummary("Disconnect Google Calendar")]
+    [EndpointDescription(
+        "Revokes calendar access: the grant is revoked **at Google** as well as cleared here, so it does not " +
+        "linger in your Google account permissions. Calendar events stop appearing.\n\n" +
+        "This does not unlink Google **sign-in** - you can still log in with Google afterwards. Links already " +
+        "made between recordings and calendar events are kept, since they are stored snapshots.")]
     public async Task<IActionResult> GoogleDisconnect(CancellationToken ct)
     {
         var s = await _db.UserSettings.FindAsync([CurrentUserId], ct);
@@ -399,6 +470,15 @@ public class AuthController : ControllerBase
     /// calls this to swap the one-time handoff cookie for its access token (returned in the JSON body, then
     /// the cookie is expired). 401 when there is no handoff cookie.</summary>
     [HttpPost("google/exchange")]
+    [EndpointSummary("Collect the token after Google sign-in")]
+    [EndpointDescription(
+        "The last step of a browser Google sign-in: swaps the one-time handoff cookie left by the callback " +
+        "for your session token, returned in the **JSON body**. The cookie is expired as it is read, so this " +
+        "works exactly once.\n\n" +
+        "Handing the token over in a body rather than a URL fragment is deliberate: it survives reverse " +
+        "proxies that strip fragments or force cookies to HttpOnly, either of which would break a " +
+        "JavaScript-visible handoff. 401 when there is no handoff cookie. The response carries no expiry - " +
+        "read it from the token itself.")]
     public IActionResult GoogleExchange()
     {
         var token = Request.Cookies[AuthHandoffCookie];
@@ -410,6 +490,13 @@ public class AuthController : ControllerBase
     /// <summary>Public: the desktop app swaps its one-time diariz:// code for an access token, proving it
     /// holds the PKCE verifier whose S256 challenge was bound to the code. Any failure -> generic 401.</summary>
     [HttpPost("desktop/exchange")]
+    [EndpointSummary("Collect the token after desktop sign-in")]
+    [EndpointDescription(
+        "The desktop equivalent of the browser exchange: the app swaps the single-use code it received on its " +
+        "`diariz://` deep link for a session token, proving it holds the PKCE verifier whose challenge was " +
+        "bound to that code - so a code intercepted from the deep link is useless on its own.\n\n" +
+        "The code is single-use and short-lived. **Any** failure - unknown code, already redeemed, expired, " +
+        "wrong verifier - returns the same generic 401, so nothing can be probed.")]
     public async Task<IActionResult> DesktopExchange(DesktopExchangeRequest req)
     {
         // Diagnostic logging: the desktop app calls this from its main-process fetch after a diariz:// deep
