@@ -58,6 +58,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.159.1",
+    date: "2026-07-24",
+    pr: 351,
+    headline: "Dependency bump for the n8n node's build tooling",
+    summary:
+      "A security update to `form-data`, which reaches the n8n community node through its build and lint " +
+      "tooling. Nothing in the app changes, and nothing in the published node package changes either: the " +
+      "package ships only its compiled output and declares no runtime dependencies, so this affects how the " +
+      "node is built rather than anything an installed copy runs. The package now audits clean.",
+    changed: [
+      "Updated form-data to 4.0.6 in the n8n node's development dependencies.",
+    ],
+  },
+  {
     version: "0.159.0",
     date: "2026-07-24",
     pr: 350,
