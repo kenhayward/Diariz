@@ -7,6 +7,10 @@ public static class WebhookEventTypes
     public const string RecordingCreated = "recording.created";
     public const string RecordingTranscribed = "recording.transcribed";
     public const string RecordingTranscriptionFailed = "recording.transcription_failed";
+    public const string RecordingSummarized = "recording.summarized";
+    public const string RecordingMinutesReady = "recording.minutes_ready";
+    public const string RecordingActionItemsReady = "recording.action_items_ready";
+    public const string RecordingTagsReady = "recording.tags_ready";
     public const string FormulaResultCompleted = "formula_result.completed";
     public const string FormulaResultFailed = "formula_result.failed";
     public const string Ping = "webhook.ping"; // test-only, never subscribable
@@ -15,6 +19,7 @@ public static class WebhookEventTypes
     public static readonly IReadOnlyList<string> Subscribable = new[]
     {
         RecordingCreated, RecordingTranscribed, RecordingTranscriptionFailed,
+        RecordingSummarized, RecordingMinutesReady, RecordingActionItemsReady, RecordingTagsReady,
         FormulaResultCompleted, FormulaResultFailed,
     };
 
