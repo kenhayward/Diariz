@@ -59,7 +59,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.156.2",
     date: "2026-07-24",
-    pr: 0, // set on open
+    pr: 341,
     headline: "Tidier integration settings, and clearer platform automation help",
     summary:
       "The Integration tab now puts each toggle on a single line with its explanation beside it instead of " +
