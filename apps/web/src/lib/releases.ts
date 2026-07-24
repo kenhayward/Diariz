@@ -57,6 +57,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.156.1",
+    date: "2026-07-24",
+    pr: 0, // set on open
+    headline: "Workflow Signals settings: clearer layout and key rules",
+    summary:
+      "Small polish to the admin Workflow Signals panel: the key, label, and description fields now line up on " +
+      "one row, a short explanation sits under the heading, and a signal key may use hyphens or underscores (the " +
+      "hint and validation now agree, so 'action_item_created' is accepted).",
+    fixed: [
+      "The Workflow Signals key hint matched the example (underscores) but the validator rejected it; both hyphens and underscores are now allowed",
+    ],
+    changed: [
+      "Aligned the Workflow Signals add-form fields on one row and added a one-line description of what signals are",
+    ],
+  },
+  {
     version: "0.156.0",
     date: "2026-07-24",
     pr: 338,

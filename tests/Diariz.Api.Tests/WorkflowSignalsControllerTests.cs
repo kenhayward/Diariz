@@ -90,4 +90,19 @@ public class WorkflowSignalsControllerTests
         var res = await c.Create(new CreateWorkflowSignalRequest("some-key", " ", null));
         Assert.IsType<BadRequestObjectResult>(res.Result);
     }
+
+    [Fact]
+    public async Task Create_accepts_key_with_underscores_or_hyphens()
+    {
+        var db = TestDb.Create();
+        var c = new WorkflowSignalsController(db) { ControllerContext = Http.Context(Guid.NewGuid()) };
+
+        var underscore = await c.Create(new CreateWorkflowSignalRequest("action_item_created", "Action item created", null));
+        Assert.NotNull(underscore.Value);
+        Assert.Equal("action_item_created", underscore.Value!.Key);
+
+        var hyphen = await c.Create(new CreateWorkflowSignalRequest("post-to-slack", "Send to Slack", null));
+        Assert.NotNull(hyphen.Value);
+        Assert.Equal("post-to-slack", hyphen.Value!.Key);
+    }
 }

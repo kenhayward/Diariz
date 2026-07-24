@@ -16,7 +16,7 @@ namespace Diariz.Api.Controllers;
 [Route("api/workflow-signals")]
 public class WorkflowSignalsController : ControllerBase
 {
-    private static readonly Regex KeyPattern = new("^[a-z0-9][a-z0-9-]{1,62}$", RegexOptions.Compiled);
+    private static readonly Regex KeyPattern = new("^[a-z0-9][a-z0-9_-]{1,62}$", RegexOptions.Compiled);
     private readonly DiarizDbContext _db;
     public WorkflowSignalsController(DiarizDbContext db) => _db = db;
 
@@ -37,7 +37,7 @@ public class WorkflowSignalsController : ControllerBase
     public async Task<ActionResult<WorkflowSignalDto>> Create(CreateWorkflowSignalRequest req)
     {
         var key = (req.Key ?? "").Trim().ToLowerInvariant();
-        if (!KeyPattern.IsMatch(key)) return BadRequest("Key must be 2-63 chars of lowercase letters, digits, or hyphens.");
+        if (!KeyPattern.IsMatch(key)) return BadRequest("Key must be 2-63 chars of lowercase letters, digits, hyphens, or underscores.");
         if (string.IsNullOrWhiteSpace(req.Label)) return BadRequest("A label is required.");
         if (await _db.WorkflowSignals.AnyAsync(s => s.Key == key)) return BadRequest("That key is already in use.");
 
