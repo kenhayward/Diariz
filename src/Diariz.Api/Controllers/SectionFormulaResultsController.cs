@@ -60,6 +60,16 @@ public class SectionFormulaResultsController : ControllerBase
     /// section-scoped <see cref="FormulaRunJob"/>, and return <c>202 Accepted</c>. The <c>FormulaRunProcessor</c>
     /// flips the row to Ready/Failed and notifies the browser over SignalR.</summary>
     [HttpPost("~/api/sections/{sectionId:guid}/formulas/{formulaId:guid}/run")]
+    [EndpointSummary("Run a formula over a folder")]
+    [EndpointDescription(
+        "Runs a formula across **every meeting in the folder and its sub-folders** and produces one " +
+        "consolidated document. Returns 202 with the result in `Generating`; watch its `status` (or the " +
+        "SignalR notification) for `Ready` or `Failed`, then fetch the text.\n\n" +
+        "An explicit run **replaces this folder's existing document for that formula** rather than adding a " +
+        "second one, and overwrites it even if it had been edited by hand.\n\n" +
+        "You must be a member of the folder's room (404 otherwise), the formula must be one you can run " +
+        "(404 unknown, 403 not yours or shared with you), an AI endpoint must be configured (400), and the " +
+        "folder must contain at least one meeting (400).")]
     public async Task<ActionResult<SectionFormulaResultDto>> Run(Guid sectionId, Guid formulaId, CancellationToken ct)
     {
         var section = await _rooms.ViewableSectionAsync(UserId, sectionId);
@@ -108,6 +118,12 @@ public class SectionFormulaResultsController : ControllerBase
     // lookups are scoped to {sectionId} so a result id from another folder 404s.
 
     [HttpGet("{sectionId:guid}/formula-results")]
+    [EndpointSummary("List a folder's formula documents")]
+    [EndpointDescription(
+        "The documents formulas have produced for this folder, in display order, with the formula each came " +
+        "from, who ran it, its status, and whether it has been edited by hand. **Metadata only** - the " +
+        "document text comes from fetching one by id, so a listing stays cheap however long the documents " +
+        "are. Readable by any member of the folder's room.")]
     public async Task<ActionResult<IReadOnlyList<SectionFormulaResultDto>>> List(Guid sectionId)
     {
         var section = await _rooms.ViewableSectionAsync(UserId, sectionId);
@@ -123,6 +139,11 @@ public class SectionFormulaResultsController : ControllerBase
     }
 
     [HttpGet("{sectionId:guid}/formula-results/{id:guid}")]
+    [EndpointSummary("Read a folder formula document")]
+    [EndpointDescription(
+        "The document's Markdown text. A document still generating comes back empty, so check its `status` in " +
+        "the listing first. Ids are scoped to the folder in the path, so a document id from another folder " +
+        "404s even when you can see that folder. Readable by any member of the room.")]
     public async Task<ActionResult<FormulaResultTextDto>> Get(Guid sectionId, Guid id)
     {
         var section = await _rooms.ViewableSectionAsync(UserId, sectionId);
@@ -134,6 +155,13 @@ public class SectionFormulaResultsController : ControllerBase
     }
 
     [HttpPut("{sectionId:guid}/formula-results/{id:guid}")]
+    [EndpointSummary("Edit a folder formula document")]
+    [EndpointDescription(
+        "Replaces the document's Markdown with your own. It is then marked hand-edited, which protects it from " +
+        "**automatic** re-runs (the ones a meeting type fires when minutes regenerate) - but an explicit run of " +
+        "the same formula over this folder still overwrites it.\n\n" +
+        "Editable by the person who ran it, or by a member with `ManageContents` in the room; anyone else who " +
+        "can see it gets 403.")]
     public async Task<ActionResult<SectionFormulaResultDto>> Update(Guid sectionId, Guid id, UpdateFormulaResultRequest req)
     {
         var section = await _rooms.ViewableSectionAsync(UserId, sectionId);
@@ -156,6 +184,10 @@ public class SectionFormulaResultsController : ControllerBase
     }
 
     [HttpDelete("{sectionId:guid}/formula-results/{id:guid}")]
+    [EndpointSummary("Delete a folder formula document")]
+    [EndpointDescription(
+        "Removes the document permanently. The formula itself is untouched, so you can run it over the folder " +
+        "again. Same gate as editing: the person who ran it, or a member with `ManageContents`.")]
     public async Task<IActionResult> Delete(Guid sectionId, Guid id)
     {
         var section = await _rooms.ViewableSectionAsync(UserId, sectionId);
@@ -174,6 +206,12 @@ public class SectionFormulaResultsController : ControllerBase
     /// <summary>Emails the result's Markdown to the signed-in user's OWN registered address - never a
     /// client-supplied address (mirrors <c>FormulaResultsController.Email</c>).</summary>
     [HttpPost("{sectionId:guid}/formula-results/{id:guid}/email")]
+    [EndpointSummary("Email a folder formula document to yourself")]
+    [EndpointDescription(
+        "Sends the document, rendered from Markdown to HTML, to **your own account address**. There is no " +
+        "recipient parameter, by design. Any member of the room who can read the document may mail it to " +
+        "themselves. Returns 400 when your account has no email address or the platform has no email sender " +
+        "configured.")]
     public async Task<IActionResult> Email(Guid sectionId, Guid id)
     {
         var section = await _rooms.ViewableSectionAsync(UserId, sectionId);
@@ -195,6 +233,11 @@ public class SectionFormulaResultsController : ControllerBase
     /// <summary>Downloads the result's Markdown as a <c>.md</c> file (mirrors
     /// <c>FormulaResultsController.Download</c>).</summary>
     [HttpGet("{sectionId:guid}/formula-results/{id:guid}/download")]
+    [EndpointSummary("Download a folder formula document")]
+    [EndpointDescription(
+        "Returns the document as a `.md` file download, named after the formula. The bytes are the same " +
+        "Markdown the read endpoint returns - use this when you want a file rather than a JSON string. " +
+        "Readable by any member of the folder's room.")]
     public async Task<IActionResult> Download(Guid sectionId, Guid id)
     {
         var section = await _rooms.ViewableSectionAsync(UserId, sectionId);

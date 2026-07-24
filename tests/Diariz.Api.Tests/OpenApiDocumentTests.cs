@@ -112,6 +112,8 @@ public class OpenApiDocumentTests
         "Recordings",
         // Everything that hangs off a recording.
         "Attachments", "MeetingNotes", "RecordingActions", "RecordingTranslation", "Screenshots",
+        // Folders (sections) and finding things.
+        "Search", "SectionAttachments", "SectionFormulaResults", "SectionPage", "Sections",
     ];
 
     /// <summary>Section descriptions tell a developer what a group of endpoints is for; only a per-operation
