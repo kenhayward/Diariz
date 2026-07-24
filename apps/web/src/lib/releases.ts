@@ -59,6 +59,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.157.1",
     date: "2026-07-24",
+    pr: 343,
     headline: "The API reference now explains every Recordings endpoint",
     summary:
       "The in-app API reference (Preferences -> Developers -> API reference) described each section but left " +
