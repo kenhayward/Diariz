@@ -60,7 +60,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.160.0",
     date: "2026-07-25",
-    pr: 352,
+    pr: 353,
     headline: "New folders are created where you are browsing",
     summary:
       "The folder button above the meetings list used to always create a folder at the top level, wherever " +
