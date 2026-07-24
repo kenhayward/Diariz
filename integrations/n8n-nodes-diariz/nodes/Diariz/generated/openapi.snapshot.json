@@ -4316,7 +4316,7 @@
     }
   },
   "info": {
-    "description": "The Diariz REST API lets you work with your own recordings, transcriptions, summaries, speaker\r\nprofiles, and more - the same data you see in the app, scoped to your account.\r\n\r\n**Authentication.** Send a bearer token in the `Authorization` header. Generate a personal API\r\ntoken (`dz_api_...`) from **Settings -> Developers** (when your platform admin has enabled\r\nAPI access), or use your current session token. Use **Authorize** above to try requests here.\r\n\r\nEvery endpoint is scoped to the signed-in user - you can only read and change your own data.",
+    "description": "The Diariz REST API lets you work with your own recordings, transcriptions, summaries, speaker\nprofiles, and more - the same data you see in the app, scoped to your account.\n\n**Authentication.** Send a bearer token in the `Authorization` header. Generate a personal API\ntoken (`dz_api_...`) from **Settings -> Developers** (when your platform admin has enabled\nAPI access), or use your current session token. Use **Authorize** above to try requests here.\n\nEvery endpoint is scoped to the signed-in user - you can only read and change your own data.",
     "title": "Diariz API",
     "version": "1.0.0"
   },

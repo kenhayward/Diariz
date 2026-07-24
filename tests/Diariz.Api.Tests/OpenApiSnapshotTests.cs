@@ -103,6 +103,14 @@ public class OpenApiSnapshotTests
                 writer.WriteEndArray();
                 break;
 
+            case JsonValueKind.String:
+                // Descriptions come from C# raw string literals, so their newlines are whatever line endings
+                // the source file was checked out with - CRLF on Windows, LF on Linux. Those land escaped
+                // INSIDE the JSON string, where normalising the file's own line endings never reaches them.
+                // Left alone, the snapshot differs by platform and the drift guard fires on every CI run.
+                writer.WriteStringValue(element.GetString()?.Replace("\r\n", "\n").Replace("\r", "\n"));
+                break;
+
             default:
                 element.WriteTo(writer);
                 break;
