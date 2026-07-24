@@ -57,6 +57,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.157.2",
+    date: "2026-07-24",
+    pr: 344,
+    headline: "API reference: five more sections documented",
+    summary:
+      "Continuing the pass through the in-app API reference, every endpoint that hangs off a recording now " +
+      "explains itself: attachments, notes, action items, translation, and screenshots. As well as what each " +
+      "call does, they spell out the things worth knowing before you call them - that extracting action items " +
+      "and translating a recording both run synchronously and can take a while on a long meeting, that " +
+      "extraction replaces the whole list including anything you typed, that translating overwrites your " +
+      "segment corrections, and that notes and screenshots can be read by anyone you share a room with while " +
+      "attachments stay private to you.",
+    added: [
+      "A title and description on all 25 endpoints under Attachments, Meeting notes, Action items, Translation and Screenshots.",
+    ],
+  },
+  {
     version: "0.157.1",
     date: "2026-07-24",
     pr: 343,

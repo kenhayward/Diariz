@@ -47,6 +47,17 @@ public class RecordingTranslationController : ControllerBase
     }
 
     [HttpPost("translate")]
+    [EndpointSummary("Translate the whole recording")]
+    [EndpointDescription(
+        "Translates every segment, the summary, and the action items into one language. Omit `language` to use " +
+        "your saved native language. **Synchronous** - the call blocks until the whole transcript has been " +
+        "translated, so allow a generous timeout on a long meeting.\n\n" +
+        "Segments are translated into the same revision column that manual edits use, so the model's original " +
+        "text is preserved and you can flip back - but **any correction you had typed on a segment is " +
+        "overwritten**. The summary and the action items are translated **in place**, replacing the original " +
+        "wording (regenerate or re-extract to get it back). Action owners are left alone, being names.\n\n" +
+        "Returns 404 when the recording has no transcript, and 400 for an unknown language, when no language " +
+        "is given and you have no native language set, or when no LLM endpoint is configured.")]
     public async Task<IActionResult> TranslateRecording(Guid recordingId, TranslateRequest req)
     {
         var rec = await _db.Recordings
@@ -94,6 +105,12 @@ public class RecordingTranslationController : ControllerBase
     }
 
     [HttpPost("segments/{segmentId:guid}/translate")]
+    [EndpointSummary("Translate one segment")]
+    [EndpointDescription(
+        "Translates a single line, for checking one exchange without touching the rest of the transcript. The " +
+        "translation lands in the segment's revision column, so the original is kept but any correction you " +
+        "had typed on that line is overwritten. The summary and actions are untouched. Omit `language` to use " +
+        "your saved native language.")]
     public async Task<IActionResult> TranslateSegment(Guid recordingId, Guid segmentId, TranslateRequest req)
     {
         var seg = await _db.Segments.Include(s => s.Transcription)
@@ -116,6 +133,12 @@ public class RecordingTranslationController : ControllerBase
     /// in one batched call — each segment's <c>Original</c> → <c>Revised</c>. Ids not on the caller's recording
     /// are ignored; summary/actions are untouched.</summary>
     [HttpPost("segments/translate")]
+    [EndpointSummary("Translate several segments")]
+    [EndpointDescription(
+        "Translates a chosen set of lines in one batched LLM call, which is markedly cheaper and faster than " +
+        "translating each on its own. Ids that are not on this recording's current transcript are skipped, and " +
+        "an empty or entirely unmatched list succeeds without doing anything. Same behaviour as the " +
+        "single-segment version otherwise: revisions are overwritten, the summary and actions are untouched.")]
     public async Task<IActionResult> TranslateSegments(Guid recordingId, TranslateSegmentsRequest req)
     {
         var current = await _db.Transcriptions.Where(t => t.RecordingId == recordingId)
