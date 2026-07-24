@@ -1257,8 +1257,9 @@ openai-whisper backend is slower than faster-whisper but accuracy is unchanged (
 a `manifest.json` (a `Format` compatibility epoch, app version, the last-applied EF migration id, createdAt), a
 `database.dump` (`pg_dump --format=custom`), and one `objects/<key>` entry per object-store blob (audio +
 attachments). The API image therefore ships the **PostgreSQL client tools** (`pg_dump`/`pg_restore`). `GET
-/api/maintenance/backup` streams the zip straight to the response (token via `access_token`, like the audio
-endpoint); `POST /api/maintenance/restore` takes the raw zip body and gates on compatibility: the backup's
+/api/maintenance/backup` builds the zip to a **temp file first** and then returns it (`ZipArchive` writes its
+headers synchronously, which Kestrel's response body forbids), with the token passed via `access_token` like the
+audio endpoint; `POST /api/maintenance/restore` takes the raw zip body and gates on compatibility: the backup's
 `Format` must equal the running instance's `CurrentFormat`, and its migration id must be the current one **or
 an earlier ancestor** (newer/unknown schemas are refused - there are no down-migrations). It then runs
 `pg_restore --clean`, and if the backup was an **older ancestor**, calls `MigrateToCurrentAsync` to roll the
@@ -1271,6 +1272,17 @@ The Data-Protection **keyring is not included** — after restoring on a differe
 LLM API keys can't be decrypted (users re-enter them); everything else is faithful. The `pg_dump`/`pg_restore`
 shell-out is behind `IDatabaseBackup` so the archive/object orchestration is unit-tested; the real round-trip
 is an integration test that skips when the client tools aren't on the host PATH.
+
+**Progress reporting.** Because the archive is fully assembled before the first response byte, a download can
+sit silent for minutes on a large platform - the browser shows no download entry until the headers arrive. The
+backup action therefore reports into `IBackupProgress` (a **singleton**, in-memory, per-instance: the build is
+one request on one node and the admin polling it is on that same node), which tracks a running flag, the phase
+(`Database` then `Objects`), a count of blobs archived and the start time. `GET /api/maintenance/backup/status`
+returns that snapshot, and the web Maintenance panel polls it while the download is in flight. The scope is
+opened with `Begin()` and disposed when the zip is built - the transfer that follows is the browser's own
+visible download. Concurrent builds are reference-counted, so one admin finishing doesn't clear another's
+progress. Restore needs no server-side counterpart: the browser owns that upload, so the panel switches from
+upload percentage to an "applying" message once the bytes are sent and the server-side work begins.
 
 ## Repository layout
 

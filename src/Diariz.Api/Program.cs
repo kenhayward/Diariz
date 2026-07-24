@@ -185,6 +185,8 @@ builder.Services.AddSingleton<IAudioStorage, AudioStorage>();
 builder.Services.AddSingleton<IDatabaseBackup>(_ =>
     new PgToolsDatabaseBackup(builder.Configuration.GetConnectionString("Postgres")!));
 builder.Services.AddScoped<ISchemaVersion, EfSchemaVersion>();
+// Singleton: the in-flight archive build is shared state the status endpoint reads from another request.
+builder.Services.AddSingleton<IBackupProgress, BackupProgress>();
 // Platform authority, resolved from the caller's group membership on every request (never from a JWT claim).
 builder.Services.AddScoped<IUserPermissions, UserPermissions>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();

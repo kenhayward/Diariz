@@ -63,6 +63,7 @@ import type {
   Group,
   UpdateUserProfile,
   RestoreResult,
+  BackupStatus,
   UpdateUserSettings,
   UserProfile,
   UserSettings,
@@ -523,6 +524,13 @@ export const api = {
   backupUrl(): string {
     const token = encodeURIComponent(getToken() ?? "");
     return `${baseURL}/api/maintenance/backup?access_token=${token}`;
+  },
+
+  /// Whether the server is assembling a backup archive right now, and how far in. Polled while a download
+  /// is in flight so the Maintenance panel can show that the backup is running.
+  async backupStatus(): Promise<BackupStatus> {
+    const { data } = await http.get<BackupStatus>("/api/maintenance/backup/status");
+    return data;
   },
 
   /// Upload a backup archive to restore the whole platform (destructive). Streams the file as the raw

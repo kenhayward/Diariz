@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using Diariz.Api.Controllers;
+using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -16,10 +17,14 @@ public class MaintenanceControllerTests
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
     private static MaintenanceController Build(
-        FakeAudioStorage storage, FakeDatabaseBackup backup, string migration = Migration)
+        FakeAudioStorage storage, FakeDatabaseBackup backup, string migration = Migration,
+        BackupProgress? progress = null)
     {
         var ctx = Http.Context(Guid.NewGuid(), [Roles.PlatformAdministrator]);
-        return new MaintenanceController(storage, backup, new FakeSchemaVersion(migration)) { ControllerContext = ctx };
+        return new MaintenanceController(storage, backup, new FakeSchemaVersion(migration), progress ?? new BackupProgress())
+        {
+            ControllerContext = ctx,
+        };
     }
 
     [Fact]
@@ -60,6 +65,45 @@ public class MaintenanceControllerTests
         Assert.Equal("PGDUMP-XYZ", Encoding.UTF8.GetString(ReadEntry(zip, "database.dump")));
         Assert.Equal("AUDIO-BYTES", Encoding.UTF8.GetString(ReadEntry(zip, "objects/u1/rec.webm")));
         Assert.Equal("PDF-BYTES", Encoding.UTF8.GetString(ReadEntry(zip, "objects/u1/attachments/a.pdf")));
+    }
+
+    [Fact]
+    public async Task Backup_ReportsProgressWhileAssembling_ThenReturnsToIdle()
+    {
+        // The whole archive is built before the first response byte, so the browser shows nothing for what
+        // can be minutes. The progress tracker is what the Maintenance panel polls to say "this is running".
+        var storage = new FakeAudioStorage();
+        storage.Objects["u1/a.webm"] = Encoding.UTF8.GetBytes("A");
+        storage.Objects["u1/b.webm"] = Encoding.UTF8.GetBytes("B");
+        var progress = new BackupProgress();
+        var sampled = new List<BackupProgressSnapshot>();
+        storage.OnKeyListed = _ => sampled.Add(progress.Current);
+
+        var result = await Build(storage, new FakeDatabaseBackup(), progress: progress).Backup();
+        Assert.IsType<FileStreamResult>(result).FileStream.Dispose(); // closes + deletes the temp archive
+
+        Assert.Equal(2, sampled.Count);
+        Assert.All(sampled, s => Assert.True(s.Running));
+        Assert.All(sampled, s => Assert.Equal(BackupPhase.Objects, s.Phase));
+        Assert.Equal(0, sampled[0].ObjectsArchived);  // sampled as the first key is handed over
+        Assert.Equal(1, sampled[1].ObjectsArchived);  // the first object is archived before the second is listed
+        Assert.False(progress.Current.Running);       // idle again once the archive is built
+    }
+
+    [Fact]
+    public void BackupStatus_ReturnsTheCurrentSnapshot()
+    {
+        var progress = new BackupProgress();
+        using var scope = progress.Begin();
+        progress.SetPhase(BackupPhase.Objects);
+        progress.ObjectArchived();
+
+        var result = Build(new FakeAudioStorage(), new FakeDatabaseBackup(), progress: progress).BackupStatus();
+
+        var snapshot = Assert.IsType<BackupProgressSnapshot>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.True(snapshot.Running);
+        Assert.Equal(BackupPhase.Objects, snapshot.Phase);
+        Assert.Equal(1, snapshot.ObjectsArchived);
     }
 
     [Fact]
@@ -217,7 +261,7 @@ public class MaintenanceControllerTests
     {
         var ctx = Http.Context(Guid.NewGuid(), [Roles.PlatformAdministrator]);
         ctx.HttpContext.Request.Body = body;
-        return new MaintenanceController(storage, backup, schema ?? new FakeSchemaVersion(Migration))
+        return new MaintenanceController(storage, backup, schema ?? new FakeSchemaVersion(Migration), new BackupProgress())
         {
             ControllerContext = ctx,
         };

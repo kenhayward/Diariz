@@ -570,11 +570,18 @@ public sealed class FakeAudioStorage : IAudioStorage
         return Task.CompletedTask;
     }
 
+    /// <summary>Called as each key is handed to the consumer. Lets a test observe state mid-enumeration -
+    /// e.g. sampling backup progress while the archive is still being assembled.</summary>
+    public Action<string>? OnKeyListed { get; set; }
+
     public async IAsyncEnumerable<string> ListKeysAsync(
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
         foreach (var key in Objects.Keys.ToList())
+        {
+            OnKeyListed?.Invoke(key);
             yield return key;
+        }
         await Task.CompletedTask;
     }
 }

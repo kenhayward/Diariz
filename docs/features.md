@@ -349,4 +349,7 @@ recording can be marked **Protected from audio deletion** to exempt it (from bot
 deletion). A **Run now** button runs the same pass on demand. Off by default.
 - **Backup & restore** (Platform Administrator, Settings → Maintenance): download the whole platform —
 the Postgres database (`pg_dump`) plus every stored file — as one transferable archive, and restore from
-one. Restore is destructive (replaces all data) and only accepts a backup from the same app version.
+one. Both report progress while they run: the panel shows the archive being built (the stage it is on, how
+many files are in so far, and elapsed time) before the download begins, and during a restore it distinguishes
+uploading the archive from the server applying it. Restore is destructive (replaces all data) and accepts a
+backup from this app version or an older, forward-migratable one.

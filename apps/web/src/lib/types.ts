@@ -474,6 +474,15 @@ export interface RestoreResult {
   restartRecommended: boolean;
 }
 
+/// How far the server has got assembling a backup archive. The download sends no bytes until the whole zip is
+/// built, so this is the only way the browser can tell that a backup is under way.
+export interface BackupStatus {
+  running: boolean;
+  phase: "Database" | "Objects" | null;
+  objectsArchived: number;
+  startedAt: string | null;
+}
+
 /// A stored MCP personal access token (the secret is never returned — only a short display prefix).
 export interface McpToken {
   id: string;
