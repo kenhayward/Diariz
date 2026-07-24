@@ -1,0 +1,25 @@
+{
+  "vectors": [
+    {
+      "secret": "whsec_test",
+      "webhookId": "evt_1",
+      "timestamp": 1750000000,
+      "body": "{\"id\":\"evt_1\"}",
+      "signature": "v1,g9yolrp7eji0RVHF8rkSQUeEuUrQ2My17b2XVTa87sU="
+    },
+    {
+      "secret": "dz_whsec_abc123",
+      "webhookId": "evt_2",
+      "timestamp": 1750000123,
+      "body": "{\"id\":\"evt_2\",\"type\":\"recording.transcribed\",\"created\":\"2026-07-24T10:00:00.0000000Z\",\"data\":{\"recordingId\":\"6f1b6f0e-6d5f-4a1d-9d3f-2b7c1a5e8f42\",\"name\":\"Weekly sync\"}}",
+      "signature": "v1,YMbaEtqcy8eJURNQn5w22+s1pPJ6pnNBS2GraDIsAHM="
+    },
+    {
+      "secret": "dz_whsec_unicode",
+      "webhookId": "evt_3",
+      "timestamp": 1750000456,
+      "body": "{\"id\":\"evt_3\",\"data\":{\"name\":\"Réunion hebdomadaire ✅\"}}",
+      "signature": "v1,EyqFmajSC+mHyxLROdo0+hBsScv3MdtpuqwJi0omdUg="
+    }
+  ]
+}
