@@ -19,7 +19,7 @@ import { formatDuration } from "../lib/format";
 import { computeReorder } from "../lib/reorder";
 import { useDragAutoScroll } from "../lib/dragAutoScroll";
 import { buildRecordingTree, reorderBeforeSection, appendSectionUnder, type SectionNode } from "../lib/recordingTree";
-import { childrenOf, breadcrumbOf, recordingCountOf } from "../lib/drillView";
+import { childrenOf, breadcrumbOf, recordingCountOf, sectionCreateTarget } from "../lib/drillView";
 import { useDrillSectionId, useDrillSearch } from "../lib/drillRoute";
 import { SECTION_MIME } from "../lib/dragTypes";
 import DrillBreadcrumb from "./nav/DrillBreadcrumb";
@@ -36,7 +36,7 @@ import EditActionModal from "./EditActionModal";
 import TagCloud from "./TagCloud";
 import TagCloudModal from "./TagCloudModal";
 import type { UploadItem } from "../lib/uploadQueue";
-import type { ActionListItem, CalendarEvent, RecordingStatus, RecordingSource, RecordingSummary } from "../lib/types";
+import type { ActionListItem, CalendarEvent, RecordingStatus, RecordingSource, RecordingSummary, SectionDto } from "../lib/types";
 import { RoomPermission } from "../lib/types";
 
 const dragHasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types ?? []).includes("Files");
@@ -352,6 +352,8 @@ export default function RecordingsPanel() {
           recordings={recordings}
           listMode={tab === "list"}
           allowFolders={canManageContents}
+          sections={sections}
+          drillSectionId={drill.sectionId}
           roomId={aggRoomId}
           onError={setOpError}
         />
@@ -646,6 +648,8 @@ function ListToolbar({
   recordings,
   listMode,
   allowFolders,
+  sections,
+  drillSectionId,
   roomId,
   onError,
 }: {
@@ -653,6 +657,10 @@ function ListToolbar({
   listMode: boolean;
   // Shown when the caller can manage the current room's contents (folders are per-room).
   allowFolders: boolean;
+  // The room's folders and where the list is drilled to - together they decide where the folder button
+  // creates: at the top level from the root, inside the folder you are browsing from one level in.
+  sections: SectionDto[];
+  drillSectionId: string | null;
   // The room to create sections in (a shared room, or undefined for the personal room).
   roomId?: string | null;
   onError: (msg: string | null) => void;
@@ -664,13 +672,30 @@ function ListToolbar({
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // Creating a folder while browsing inside one should land it where you are looking, so the button's
+  // parent, label and placeholder all follow the drill. `blocked` is the two-level cap (see
+  // `sectionCreateTarget`): the button stays visible but disabled, saying why, rather than quietly
+  // creating the folder at some other level.
+  const target = sectionCreateTarget(sections, drillSectionId);
+  const parentId = target.kind === "child" ? target.parent.id : null;
+  const createLabel =
+    target.kind === "blocked"
+      ? t("newSectionNestCapped")
+      : target.kind === "child"
+        ? t("newSubSection")
+        : t("newSection");
+  const createPlaceholder =
+    target.kind === "child"
+      ? t("newSubSectionPlaceholder", { parent: target.parent.name })
+      : t("newSectionPlaceholder");
+
   async function create(e: React.FormEvent) {
     e.preventDefault();
     const n = name.trim();
     if (!n) return;
     setBusy(true);
     try {
-      await api.createSection(n, null, roomId);
+      await api.createSection(n, parentId, roomId);
       qc.invalidateQueries({ queryKey: ["sections"] });
       qc.invalidateQueries({ queryKey: ["recordings"] });
       setName("");
@@ -723,8 +748,8 @@ function ListToolbar({
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
-            placeholder={t("newSectionPlaceholder")}
-            aria-label={t("newSectionPlaceholder")}
+            placeholder={createPlaceholder}
+            aria-label={createPlaceholder}
             className="min-w-0 flex-1 rounded border px-2 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           />
           <button
@@ -739,7 +764,16 @@ function ListToolbar({
         <div className="flex items-center gap-0.5">
           {/* New Section / Select / bulk actions apply to the List tab only; Refresh works in both. */}
           {allowFolders && (
-            <ToolbarButton label={t("newSection")} onClick={() => setOpen(true)} disabled={!listMode} icon={<FolderPlusIcon />} />
+            // The title lives on the wrapper, not the button: ToolbarButton disables pointer events when
+            // disabled, so a title on the button itself would never surface the reason it is greyed out.
+            <span title={createLabel}>
+              <ToolbarButton
+                label={createLabel}
+                onClick={() => setOpen(true)}
+                disabled={!listMode || target.kind === "blocked"}
+                icon={<FolderPlusIcon />}
+              />
+            </span>
           )}
           <ToolbarButton
             label={selectMode ? t("doneSelecting") : t("selectRecordings")}

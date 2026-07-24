@@ -55,6 +55,27 @@ export function breadcrumbOf(sections: SectionDto[], sectionId: string | null): 
   return chain.reverse();
 }
 
+/// Where a new folder created from the toolbar should go, given where you are browsing. `blocked` covers
+/// both ends of the same problem: the drill is inside a sub-section (the domain caps nesting at one level,
+/// so `SectionsController.Create` would 400) or inside an id that is no longer in the tree (deleted from
+/// another tab - the level renders empty, and creating under a ghost parent would only 404).
+export type SectionCreateTarget =
+  | { kind: "root" }
+  | { kind: "child"; parent: SectionDto }
+  | { kind: "blocked" };
+
+/// Unlike the rest of this module, this one **does** encode the two-level cap - it has to, because it
+/// decides what the API will accept. Lifting the cap turns the `blocked` branch into another `child`.
+export function sectionCreateTarget(
+  sections: SectionDto[],
+  sectionId: string | null,
+): SectionCreateTarget {
+  if (sectionId === null) return { kind: "root" };
+  const parent = sections.find((s) => s.id === sectionId);
+  if (!parent || parent.parentId !== null) return { kind: "blocked" };
+  return { kind: "child", parent };
+}
+
 function countNode(node: SectionNode): number {
   return node.items.length + node.children.reduce((n, child) => n + countNode(child), 0);
 }

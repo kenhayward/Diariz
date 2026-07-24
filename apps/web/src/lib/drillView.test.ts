@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildRecordingTree } from "./recordingTree";
-import { childrenOf, breadcrumbOf, recordingCountOf } from "./drillView";
+import { childrenOf, breadcrumbOf, recordingCountOf, sectionCreateTarget } from "./drillView";
 import type { RecordingSummary, SectionDto } from "./types";
 
 const section = (id: string, name: string, parentId: string | null = null, position = 0): SectionDto =>
@@ -75,6 +75,29 @@ describe("breadcrumbOf", () => {
   it("terminates on a parent cycle", () => {
     const cyclic = [section("x", "X", "y"), section("y", "Y", "x")];
     expect(() => breadcrumbOf(cyclic, "x")).not.toThrow();
+  });
+});
+
+describe("sectionCreateTarget", () => {
+  it("at the root: a new top-level section", () => {
+    expect(sectionCreateTarget(sections, null)).toEqual({ kind: "root" });
+  });
+
+  it("inside a top-level section: a sub-section of it", () => {
+    expect(sectionCreateTarget(sections, "customers")).toEqual({
+      kind: "child",
+      parent: sections[0],
+    });
+  });
+
+  // The domain caps nesting at one level, so there is no legal parent from inside a sub-section.
+  it("inside a sub-section: blocked, there is nowhere legal to put it", () => {
+    expect(sectionCreateTarget(sections, "ambu")).toEqual({ kind: "blocked" });
+  });
+
+  // Drilled into a folder deleted from another tab: creating under a ghost parent would only 404.
+  it("blocked for an unknown id rather than falling back to the root", () => {
+    expect(sectionCreateTarget(sections, "gone")).toEqual({ kind: "blocked" });
   });
 });
 
