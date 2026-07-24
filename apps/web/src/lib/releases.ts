@@ -59,6 +59,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.157.0",
     date: "2026-07-24",
+    pr: 342,
     headline: "Backup and restore now show you they are running",
     summary:
       "Backing up or restoring the platform could look like nothing was happening. A backup archive is built " +
