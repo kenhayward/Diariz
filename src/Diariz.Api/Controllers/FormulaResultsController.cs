@@ -43,6 +43,13 @@ public class FormulaResultsController : ControllerBase
         result.CreatedByUserId == UserId || recording.UserId == UserId;
 
     [HttpGet]
+    [EndpointSummary("List a recording's formula documents")]
+    [EndpointDescription(
+        "The documents formulas have produced for this meeting, in display order, with the formula each came " +
+        "from, its status, and whether it has been edited by hand. **Metadata only** - fetch one by id for its " +
+        "text, so listing stays cheap however long the documents are.\n\n" +
+        "**Owner only.** Unlike a folder's formula documents, which any room member can read, these follow the " +
+        "recording's own visibility.")]
     public async Task<ActionResult<IReadOnlyList<FormulaResultDto>>> List(Guid recordingId)
     {
         var rec = await CanViewRecordingAsync(recordingId);
@@ -57,6 +64,11 @@ public class FormulaResultsController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
+    [EndpointSummary("Read a formula document")]
+    [EndpointDescription(
+        "The document's Markdown text. One still generating comes back empty, so check its `status` in the " +
+        "listing first. Ids are scoped to the recording in the path, so a document id from another meeting " +
+        "404s.")]
     public async Task<ActionResult<FormulaResultTextDto>> Get(Guid recordingId, Guid id)
     {
         var rec = await CanViewRecordingAsync(recordingId);
@@ -68,6 +80,12 @@ public class FormulaResultsController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [EndpointSummary("Edit a formula document")]
+    [EndpointDescription(
+        "Replaces the document's Markdown with your own. It is then marked hand-edited, which protects it " +
+        "from **automatic** re-runs - the additional formulas a meeting type fires whenever the minutes " +
+        "regenerate - but an explicit run of the same formula still overwrites it.\n\n" +
+        "Editable by whoever ran it or by the recording's owner; anyone else gets 403.")]
     public async Task<ActionResult<FormulaResultDto>> Update(Guid recordingId, Guid id, UpdateFormulaResultRequest req)
     {
         var rec = await CanViewRecordingAsync(recordingId);
@@ -88,6 +106,10 @@ public class FormulaResultsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [EndpointSummary("Delete a formula document")]
+    [EndpointDescription(
+        "Removes the document permanently. The formula itself is untouched, so you can run it over this " +
+        "recording again. Same gate as editing: whoever ran it, or the recording's owner.")]
     public async Task<IActionResult> Delete(Guid recordingId, Guid id)
     {
         var rec = await CanViewRecordingAsync(recordingId);
@@ -105,6 +127,11 @@ public class FormulaResultsController : ControllerBase
     /// <summary>Emails the result's Markdown to the signed-in user's OWN registered address - never a
     /// client-supplied address (mirrors <c>RecordingsController.EmailMeetingMinutes</c>).</summary>
     [HttpPost("{id:guid}/email")]
+    [EndpointSummary("Email a formula document to yourself")]
+    [EndpointDescription(
+        "Sends the document, rendered from Markdown to HTML, to **your own account address**. There is no " +
+        "recipient parameter, by design. Returns 400 when your account has no email address or the platform " +
+        "has no email sender configured.")]
     public async Task<IActionResult> Email(Guid recordingId, Guid id)
     {
         var rec = await CanViewRecordingAsync(recordingId);
@@ -126,6 +153,10 @@ public class FormulaResultsController : ControllerBase
     /// <summary>Downloads the result's Markdown as a <c>.md</c> file (mirrors the transcript download's
     /// content-disposition handling in <c>RecordingsController</c>).</summary>
     [HttpGet("{id:guid}/download")]
+    [EndpointSummary("Download a formula document")]
+    [EndpointDescription(
+        "Returns the document as a `.md` file download, named after the formula. The bytes are the same " +
+        "Markdown the read endpoint returns - use this when you want a file rather than a JSON string.")]
     public async Task<IActionResult> Download(Guid recordingId, Guid id)
     {
         var rec = await CanViewRecordingAsync(recordingId);

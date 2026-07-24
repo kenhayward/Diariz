@@ -37,6 +37,12 @@ public class MeetingTypesController : ControllerBase
     /// <summary>The Platform types (shared) plus the caller's own Personal types, grouped-ready (ordered by
     /// group then title).</summary>
     [HttpGet]
+    [EndpointSummary("List meeting types")]
+    [EndpointDescription(
+        "The minutes templates you can use: shared Platform types plus your own Personal ones, ordered by " +
+        "group then title so they can be rendered as a grouped picker.\n\n" +
+        "A meeting type carries no prompts of its own - it **names the formula** that generates its minutes, " +
+        "plus any additional formulas to run alongside, whose documents land in the recording's Formulas list.")]
     public async Task<IReadOnlyList<MeetingTypeDto>> List()
     {
         var roomId = await _rooms.PersonalRoomIdAsync(UserId);
@@ -53,6 +59,18 @@ public class MeetingTypesController : ControllerBase
     /// <summary>Create a meeting type. A normal user always gets a Personal type they own; only a Platform
     /// Administrator may create a shared Platform type (<c>IsPlatform</c>).</summary>
     [HttpPost]
+    [EndpointSummary("Create a meeting type")]
+    [EndpointDescription(
+        "Saves a minutes template: a title, a group name for the picker, an icon and a hex colour, the primary " +
+        "formula that generates the minutes, and any additional formulas to run with it. A title, group name, " +
+        "known icon, and `#RRGGBB` colour are all required (400 otherwise).\n\n" +
+        "You always get a Personal type you own; `isPlatform` creates a shared one and needs a Platform " +
+        "Administrator.\n\n" +
+        "**Every referenced formula is validated against who could actually run it.** Minutes generate as the " +
+        "recording's owner, and a Personal formula can only be run by its owner - so a Platform type pointing " +
+        "at someone's Personal formula would silently produce nothing for everyone else. That is rejected here " +
+        "at save rather than failing later. A Personal type may reference anything you can run: your own " +
+        "formulas, ones you have added, or enabled shared ones.")]
     public async Task<ActionResult<MeetingTypeDto>> Create(MeetingTypeRequest req)
     {
         if (Validate(req) is { } error) return BadRequest(error);
@@ -83,6 +101,14 @@ public class MeetingTypesController : ControllerBase
     /// <summary>Replace a meeting type's fields and template atomically. A Platform type needs a Platform
     /// Administrator; a Personal type needs ownership. The Platform/Personal scope itself is not changed.</summary>
     [HttpPut("{id:guid}")]
+    [EndpointSummary("Edit a meeting type")]
+    [EndpointDescription(
+        "Replaces the type's fields and its formula links in one call - this is a **full replacement, not a " +
+        "patch**, so send every field and the complete list of additional formulas; anything you omit is " +
+        "cleared. The Platform/Personal scope itself cannot be changed.\n\n" +
+        "A Platform type needs a Platform Administrator; a Personal type needs ownership. The same " +
+        "who-can-run-it validation as create applies. Minutes already generated are untouched - the change " +
+        "takes effect the next time minutes are generated.")]
     public async Task<ActionResult<MeetingTypeDto>> Update(Guid id, MeetingTypeRequest req)
     {
         var roomId = await _rooms.PersonalRoomIdAsync(UserId);
@@ -111,6 +137,13 @@ public class MeetingTypesController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [EndpointSummary("Delete a meeting type")]
+    [EndpointDescription(
+        "Removes the template. Recordings that used it are **not** affected retrospectively: their existing " +
+        "minutes stay, and they fall back to the General default the next time minutes are generated. The " +
+        "formulas it referenced are untouched.\n\n" +
+        "A Platform type needs a Platform Administrator; a Personal type needs ownership (someone else's " +
+        "returns 404, not 403).")]
     public async Task<IActionResult> Delete(Guid id)
     {
         var roomId = await _rooms.PersonalRoomIdAsync(UserId);

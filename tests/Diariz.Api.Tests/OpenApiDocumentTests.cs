@@ -114,6 +114,8 @@ public class OpenApiDocumentTests
         "Attachments", "MeetingNotes", "RecordingActions", "RecordingTranslation", "Screenshots",
         // Folders (sections) and finding things.
         "Search", "SectionAttachments", "SectionFormulaResults", "SectionPage", "Sections",
+        // Generating documents from meetings, and talking to them.
+        "Chat", "FormulaResults", "Formulas", "MeetingTypes", "Tags",
     ];
 
     /// <summary>Section descriptions tell a developer what a group of endpoints is for; only a per-operation

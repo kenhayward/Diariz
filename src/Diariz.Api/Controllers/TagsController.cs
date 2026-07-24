@@ -35,6 +35,16 @@ public class TagsController : ControllerBase
     /// library; with one it covers the recordings placed in that room (membership is the read gate - a
     /// non-member 404s).</summary>
     [HttpGet]
+    [EndpointSummary("Get the tag cloud")]
+    [EndpointDescription(
+        "Every topic tag across your meetings, each with how many recordings carry it, its summed weight, and " +
+        "the recording ids behind it - enough to render a weighted cloud and drill into any entry without a " +
+        "second call. Sorted by weight, heaviest first.\n\n" +
+        "Tags are assigned automatically when a recording is summarised; there is no endpoint to set them by " +
+        "hand. Matching is **case-insensitive** and the most common casing is used for display, so LLM casing " +
+        "drift does not split an entry in two.\n\n" +
+        "With no `roomId` this covers your own library; with one it covers the recordings placed in that room " +
+        "(404 if you are not a member).")]
     public async Task<ActionResult<IReadOnlyList<TagCloudEntryDto>>> List([FromQuery] Guid? roomId = null)
     {
         IQueryable<Recording> recs;

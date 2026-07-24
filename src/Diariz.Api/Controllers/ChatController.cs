@@ -95,6 +95,21 @@ public class ChatController : ControllerBase
     // ---- Streaming chat (SSE) ----
 
     [HttpPost("stream")]
+    [EndpointSummary("Ask a question and stream the answer")]
+    [EndpointDescription(
+        "The chat endpoint. The response is **streamed**, not a single JSON body, so read it incrementally " +
+        "rather than waiting for completion; the final chunk carries a context-usage snapshot.\n\n" +
+        "**Stateless per turn.** Nothing is remembered between calls: send the full message history every " +
+        "time, along with the context you want in scope. `recordingIds` pre-loads those transcripts; " +
+        "`sectionId` additionally prepends a folder's roll-up and widens the scope to every recording beneath " +
+        "it; sending neither means library-wide mode, where the model answers by searching rather than from " +
+        "pre-loaded text. `includeAttachments` pulls the in-scope recordings' attachments into the context - " +
+        "files are extracted and URLs fetched, and anything unsupported or unreachable is skipped rather than " +
+        "failing the request.\n\n" +
+        "Context is trimmed to fit a character budget, so a very large selection is truncated rather than " +
+        "rejected. When you have chat tools enabled the model can also look beyond the supplied context. " +
+        "Returns 404 if any selected recording or folder is not visible to you, and 400 when no LLM endpoint " +
+        "is configured for you or the platform.")]
     public async Task<IActionResult> Stream(ChatStreamRequest req, CancellationToken ct)
     {
         var cfg = await _settings.ResolveAsync(UserId, ct);
@@ -205,6 +220,13 @@ public class ChatController : ControllerBase
     // ---- Attachment extraction (PDF / text) ----
 
     [HttpPost("attachment")]
+    [EndpointSummary("Extract text from a file for chat")]
+    [EndpointDescription(
+        "Uploads a file and returns its **extracted text**, plus a character count, for you to pass back as " +
+        "context on a chat turn. Nothing is stored: this is a one-shot conversion, not an attachment on a " +
+        "recording (use the recording or folder attachment endpoints for that).\n\n" +
+        "PDF and text-based formats only (`.pdf`, `.txt`, `.md`, and similar) - anything else, or a file with " +
+        "no extractable text, returns 400.")]
     [RequestSizeLimit(50L * 1024 * 1024)] // 50 MiB
     public async Task<ActionResult<ChatAttachmentDto>> Attachment([FromForm] IFormFile? file, CancellationToken ct)
     {
@@ -237,6 +259,13 @@ public class ChatController : ControllerBase
     /// <summary>Transcribe one short audio utterance for chat voice dictation. Server-level STT config
     /// (<see cref="DictationOptions"/>); returns 400 when no STT endpoint is configured. Persists nothing.</summary>
     [HttpPost("transcribe")]
+    [EndpointSummary("Transcribe a spoken chat question")]
+    [EndpointDescription(
+        "Converts one short audio utterance to text for voice dictation into the chat box. Nothing is stored " +
+        "- no recording is created and the audio is discarded once transcribed.\n\n" +
+        "This is the **server fallback** for browsers without built-in speech recognition, and uses the " +
+        "platform's speech-to-text endpoint rather than your own AI settings; 400 when the platform has none " +
+        "configured. Intended for single utterances, not meetings - upload those as recordings instead.")]
     [RequestSizeLimit(10L * 1024 * 1024)] // 10 MiB - a single dictation utterance is small
     public async Task<ActionResult<ChatTranscriptionDto>> Transcribe(
         [FromForm] IFormFile? file, CancellationToken ct)
@@ -270,6 +299,10 @@ public class ChatController : ControllerBase
     // ---- Saved conversations (per-user CRUD) ----
 
     [HttpGet("conversations")]
+    [EndpointSummary("List saved conversations")]
+    [EndpointDescription(
+        "Your saved chats, most recently updated first, as id, title, and timestamp. **Titles only** - load " +
+        "one by id for its messages. Conversations are private to you and never shared into a room.")]
     public async Task<IReadOnlyList<ChatConversationSummaryDto>> ListConversations()
     {
         var roomId = await _rooms.PersonalRoomIdAsync(UserId);
@@ -281,6 +314,11 @@ public class ChatController : ControllerBase
     }
 
     [HttpGet("conversations/{id:guid}")]
+    [EndpointSummary("Load a saved conversation")]
+    [EndpointDescription(
+        "The full message history plus the context selection it was saved with - the recordings or folder in " +
+        "scope - so you can resume it exactly where it left off. Because chat itself is stateless, resuming " +
+        "means sending these messages back on the next stream call.")]
     public async Task<ActionResult<ChatConversationDto>> GetConversation(Guid id)
     {
         var roomId = await _rooms.PersonalRoomIdAsync(UserId);
@@ -290,6 +328,12 @@ public class ChatController : ControllerBase
     }
 
     [HttpPost("conversations")]
+    [EndpointSummary("Save a conversation")]
+    [EndpointDescription(
+        "Stores a chat's messages and its context selection, returning the new id and title. The **title is " +
+        "generated for you** - a short LLM-written phrase, falling back to the first user message when chat " +
+        "is not configured or generation fails - so there is no title parameter. Saving an empty conversation " +
+        "is rejected with 400.")]
     public async Task<ActionResult<SaveChatConversationResult>> CreateConversation(
         SaveChatConversationRequest req, CancellationToken ct)
     {
@@ -315,6 +359,12 @@ public class ChatController : ControllerBase
     }
 
     [HttpPut("conversations/{id:guid}")]
+    [EndpointSummary("Update a saved conversation")]
+    [EndpointDescription(
+        "Replaces a saved conversation's messages and context - what you call after adding turns to one you " +
+        "loaded. The whole history is replaced, not appended to, so send the complete message list.\n\n" +
+        "The **title is regenerated** from the new messages, so it may change as the conversation moves on. " +
+        "Saving an empty conversation is rejected with 400.")]
     public async Task<ActionResult<SaveChatConversationResult>> UpdateConversation(
         Guid id, SaveChatConversationRequest req, CancellationToken ct)
     {
@@ -334,6 +384,10 @@ public class ChatController : ControllerBase
     }
 
     [HttpDelete("conversations/{id:guid}")]
+    [EndpointSummary("Delete a saved conversation")]
+    [EndpointDescription(
+        "Removes the conversation permanently. Only the chat goes - the recordings it discussed, and any " +
+        "attachment you saved from it, are untouched.")]
     public async Task<IActionResult> DeleteConversation(Guid id)
     {
         var roomId = await _rooms.PersonalRoomIdAsync(UserId);
