@@ -59,7 +59,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.156.1",
     date: "2026-07-24",
-    pr: 0, // set on open
+    pr: 339,
     headline: "Workflow Signals settings: clearer layout and key rules",
     summary:
       "Small polish to the admin Workflow Signals panel: the key, label, and description fields now line up on " +
