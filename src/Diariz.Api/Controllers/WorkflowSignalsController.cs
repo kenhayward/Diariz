@@ -22,17 +22,37 @@ public class WorkflowSignalsController : ControllerBase
 
     /// <summary>Active signals, for the formula-author picker. Any authenticated user.</summary>
     [HttpGet]
+    [EndpointSummary("List active workflow signals")]
+    [EndpointDescription(
+        "The signals a formula author can attach to a formula - the picker behind \"When this finishes, " +
+        "trigger: ...\". A signal is a **named intent**, like \"send to Slack\", that an administrator has " +
+        "already wired to a destination; the author picks one without knowing the URL or that a webhook is " +
+        "involved.\n\n" +
+        "Active signals only, alphabetically. Open to any signed-in user - naming what can be triggered is " +
+        "not privileged.")]
     public async Task<ActionResult<IReadOnlyList<WorkflowSignalDto>>> ListActive() =>
         await _db.WorkflowSignals.Where(s => s.IsActive).OrderBy(s => s.Label)
             .Select(s => new WorkflowSignalDto(s.Id, s.Key, s.Label, s.Description, s.IsActive)).ToListAsync();
 
     [HttpGet("manage")]
+    [EndpointSummary("List all workflow signals for administration")]
+    [EndpointDescription(
+        "Every signal, **including inactive ones** - the admin view, as opposed to the picker, which shows " +
+        "only what can be chosen. Requires a Platform Administrator, as does creating, editing and deleting.")]
     [Authorize(Policy = "ManagePlatform")]
     public async Task<ActionResult<IReadOnlyList<WorkflowSignalDto>>> ListAll() =>
         await _db.WorkflowSignals.OrderBy(s => s.Label)
             .Select(s => new WorkflowSignalDto(s.Id, s.Key, s.Label, s.Description, s.IsActive)).ToListAsync();
 
     [HttpPost]
+    [EndpointSummary("Create a workflow signal")]
+    [EndpointDescription(
+        "Defines a new named intent for formula authors to choose. The `label` is what they see; the `key` is " +
+        "the **routing value** a platform automation subscribes to, and is **immutable once created** - it is " +
+        "lower-cased for you, must be 2 to 63 characters of lowercase letters, digits, hyphens or " +
+        "underscores, and must be unique (400 on any of those).\n\n" +
+        "Creating a signal on its own does nothing: pair it with a platform automation that selects it, or " +
+        "formulas tagged with it will fire into nowhere.")]
     [Authorize(Policy = "ManagePlatform")]
     public async Task<ActionResult<WorkflowSignalDto>> Create(CreateWorkflowSignalRequest req)
     {
@@ -48,6 +68,13 @@ public class WorkflowSignalsController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [EndpointSummary("Edit a workflow signal")]
+    [EndpointDescription(
+        "Changes the label, description, or whether the signal is active. **The key cannot be changed** - " +
+        "automations route on it, so renaming would silently break every wiring; create a new signal instead.\n\n" +
+        "Deactivating both hides it from the formula picker **and stops it firing**, while leaving existing " +
+        "formulas tagged with it - so reactivating resumes delivery with the wiring intact. That makes it the " +
+        "reversible way to switch a signal off, and the one to prefer over deleting.")]
     [Authorize(Policy = "ManagePlatform")]
     public async Task<ActionResult<WorkflowSignalDto>> Update(Guid id, UpdateWorkflowSignalRequest req)
     {
@@ -62,6 +89,12 @@ public class WorkflowSignalsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [EndpointSummary("Delete a workflow signal")]
+    [EndpointDescription(
+        "Removes the signal and **detaches it from every formula** that used it - those formulas keep working " +
+        "but stop triggering anything, and automations that selected it stop matching. There is no undo, and " +
+        "re-creating the same key does **not** restore the formula links: every author would have to re-tag " +
+        "their formula. Deactivate instead when you only want to switch it off.")]
     [Authorize(Policy = "ManagePlatform")]
     public async Task<IActionResult> Delete(Guid id)
     {

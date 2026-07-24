@@ -35,7 +35,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Organise & merge** | Sections and sub-sections with drag-and-drop; the meetings list drills in one folder at a time (coloured folder rows with counts, a breadcrumb back out, browser back pops a level) so it stays readable however many recordings you have, with **Open section page** as a separate target from browsing deeper; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
-| **API access** | Generate a personal API token (when enabled), read-only or read-write, with an optional expiry date, to call the REST API as yourself, with a built-in API reference. |
+| **API access** | Generate a personal API token (when enabled), read-only or read-write, with an optional expiry date, to call the REST API as yourself, with a built-in API reference documenting every endpoint - what it does, who may call it, and what it changes. |
 | **Automations (webhooks)** | When enabled, register outbound webhooks from Preferences that fire when a recording is created, finishes or fails transcription, or a formula finishes or fails - signed deliveries with automatic retries (rate-limited per automation and 429-aware), a test-event button, and auto-pause after repeated failures. Admins can also define named Workflow Signals and wire a platform automation to one, so a formula author just picks "When this finishes, trigger: ..." in the formula editor - no URL or per-user setup - and the formula's output is delivered inline to everyone routed through that signal. |
 | **Multi-user & groups** | User groups grant platform permissions (manage rooms / users / platform), with an approval lifecycle, per-user isolation, and Light/Dark/Auto themes. |
 | **Admin controls** | Storage quotas, optional audio auto-deletion, a global AI request timeout, separate platform toggles for API access, Claude/MCP, and Automations (webhooks), and whole-platform backup & restore. |
@@ -56,6 +56,25 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.158.0",
+    date: "2026-07-24",
+    headline: "Every API endpoint is now documented",
+    summary:
+      "The final pass completes the in-app API reference. Calendar, calendar notes and feeds, languages, " +
+      "automations and workflow signals are documented, and with them every one of the API's 191 endpoints " +
+      "across all 32 sections now explains itself: what the call does, who may make it, what it changes, and " +
+      "the things worth knowing first - which calls need no sign-in, which overwrite text you edited by " +
+      "hand, which are permanent, which run in the background and need polling, and which errors mean what. " +
+      "A test now checks the published document on every build, so an endpoint added later cannot ship " +
+      "undocumented.",
+    added: [
+      "A title and description on the last 24 endpoints, under Calendar, Calendar event notes, Calendar feeds, Languages, Automations and Workflow signals.",
+    ],
+    changed: [
+      "The API reference now documents every endpoint individually, not just each section.",
+    ],
+  },
   {
     version: "0.157.6",
     date: "2026-07-24",
