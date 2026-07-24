@@ -57,6 +57,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.156.0",
+    date: "2026-07-24",
+    pr: 338,
+    headline: "Webhook deliveries respect rate limits and back off politely",
+    summary:
+      "Outbound webhook delivery is now gentler on your endpoints. A '429 Too Many Requests' response is honored " +
+      "(we wait for the Retry-After the endpoint asks for) instead of counting as a failure, so a busy automation " +
+      "can no longer disable itself just for being throttled. Deliveries to any one automation are also paced to a " +
+      "per-minute cap, so a signal wired across many users' formulas trickles out steadily rather than in a burst.",
+    changed: [
+      "A 429 response is retried after the endpoint's Retry-After and no longer counts toward auto-disabling an automation",
+      "Deliveries to a single automation are capped per minute (excess is paced, never dropped)",
+    ],
+  },
+  {
     version: "0.155.0",
     date: "2026-07-24",
     pr: 337,

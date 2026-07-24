@@ -760,7 +760,14 @@ toggle is off.
   ~10 hours, ≈24h total); on exhausting all attempts it marks the delivery `Failed` and increments
   `WebhookSubscription.ConsecutiveFailures`, **auto-disabling** the subscription (`IsActive = false`, with a
   human-readable `DisabledReason`) once that counter reaches `Webhooks:AutoDisableThreshold` (default 15) — any
-  single success resets the counter to 0. This Postgres-backed design (rather than a Redis stream, unlike the
+  single success resets the counter to 0. A **`429 Too Many Requests`** response is handled specially: it is
+  **not** a failure (no `ConsecutiveFailures`, no consumed retry attempt) — the delivery is rescheduled after the
+  endpoint's `Retry-After` (or `Webhooks:RetryAfterFallbackSeconds`, default 60, when the header is absent), so a
+  throttled-but-healthy automation can't disable itself. Delivery to any one subscription is also **rate-capped**:
+  each attempt records `WebhookDelivery.LastAttemptAt`, and the processor keeps a subscription under
+  `Webhooks:MaxPerSubscriptionPerMinute` (default 120) over a rolling minute — excess deliveries are **paced**
+  (deferred, never dropped), which matters most for a Phase 3 platform automation whose signal is attached to many
+  users' formulas and would otherwise burst against one endpoint. This Postgres-backed design (rather than a Redis stream, unlike the
   summarisation/minutes/actions/embedding/tag-cloud queues) is deliberate: scheduled retries and a queryable
   delivery history come for free from the relational row instead of needing a second store.
 - **SSRF validation on every write.** `IWebhookUrlValidator` (`WebhookUrlValidator`) rejects a subscription's

@@ -16,14 +16,20 @@ public class WebhookDeliveryProcessorTests
     private sealed class StubHandler : HttpMessageHandler
     {
         private readonly HttpStatusCode _status;
+        private readonly TimeSpan? _retryAfter;
+        public int Sends { get; private set; }
         public HttpRequestMessage? Last { get; private set; }
         public string? LastBody { get; private set; }
-        public StubHandler(HttpStatusCode status) => _status = status;
+        public StubHandler(HttpStatusCode status, TimeSpan? retryAfter = null) { _status = status; _retryAfter = retryAfter; }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, CancellationToken ct)
         {
+            Sends++;
             Last = req;
             LastBody = req.Content is null ? null : await req.Content.ReadAsStringAsync(ct);
-            return new HttpResponseMessage(_status);
+            var resp = new HttpResponseMessage(_status);
+            if (_retryAfter is { } ra)
+                resp.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(ra);
+            return resp;
         }
     }
 
@@ -50,8 +56,10 @@ public class WebhookDeliveryProcessorTests
         return (db, sub, del);
     }
 
-    private static WebhookDeliveryProcessor Processor() =>
-        new(new PlainProtector(), Options.Create(new WebhookOptions()), NullLogger<WebhookDeliveryProcessor>.Instance);
+    private static WebhookDeliveryProcessor Processor() => Processor(new WebhookOptions());
+
+    private static WebhookDeliveryProcessor Processor(WebhookOptions opts) =>
+        new(new PlainProtector(), Options.Create(opts), NullLogger<WebhookDeliveryProcessor>.Instance);
 
     private static HttpClient Client(StubHandler h) => new(h);
 
@@ -141,5 +149,111 @@ public class WebhookDeliveryProcessorTests
         Assert.Equal(0, d.AttemptCount);
         Assert.NotEqual(WebhookDeliveryStatus.Failed, d.Status);
         Assert.Equal(0, (await db.Webhooks.SingleAsync()).ConsecutiveFailures);
+    }
+
+    [Fact]
+    public async Task Retry_after_429_reschedules_and_is_not_a_failure()
+    {
+        var (db, _, _) = Seed();
+        var now = DateTimeOffset.UtcNow;
+        var h = new StubHandler(HttpStatusCode.TooManyRequests, retryAfter: TimeSpan.FromSeconds(30));
+        await Processor().ProcessDueAsync(db, Client(h), now, default);
+
+        var d = await db.WebhookDeliveries.SingleAsync();
+        Assert.Equal(WebhookDeliveryStatus.Pending, d.Status);   // not Failed
+        Assert.Equal(429, d.ResponseStatus);
+        Assert.Equal(0, d.AttemptCount);                         // a 429 does not consume an attempt
+        Assert.True(d.NextAttemptAt >= now.AddSeconds(29) && d.NextAttemptAt <= now.AddSeconds(31));
+        Assert.Equal(0, (await db.Webhooks.SingleAsync()).ConsecutiveFailures); // not a failure toward auto-disable
+    }
+
+    [Fact]
+    public async Task Retry_after_429_without_header_uses_fallback()
+    {
+        var (db, _, _) = Seed();
+        var now = DateTimeOffset.UtcNow;
+        var h = new StubHandler(HttpStatusCode.TooManyRequests); // no Retry-After header
+        await Processor(new WebhookOptions { RetryAfterFallbackSeconds = 90 }).ProcessDueAsync(db, Client(h), now, default);
+
+        var d = await db.WebhookDeliveries.SingleAsync();
+        Assert.Equal(WebhookDeliveryStatus.Pending, d.Status);
+        Assert.Equal(0, d.AttemptCount);
+        Assert.True(d.NextAttemptAt >= now.AddSeconds(89) && d.NextAttemptAt <= now.AddSeconds(91));
+    }
+
+    private static (DiarizDbContext db, WebhookSubscription sub) SeedSubWithDeliveries(int count, DateTimeOffset now)
+    {
+        var db = TestDb.Create();
+        var sub = new WebhookSubscription
+        {
+            Id = Guid.NewGuid(), OwnerUserId = Guid.NewGuid(), Name = "s", Url = "https://sink.example.com/hook",
+            SecretEncrypted = "shh", EventTypes = "recording.transcribed", IsActive = true,
+        };
+        db.Webhooks.Add(sub);
+        for (var i = 0; i < count; i++)
+            db.WebhookDeliveries.Add(new WebhookDelivery
+            {
+                Id = Guid.NewGuid(), SubscriptionId = sub.Id, EventId = $"evt_{i}", EventType = "recording.transcribed",
+                PayloadJson = "{}", Status = WebhookDeliveryStatus.Pending, NextAttemptAt = now.AddMinutes(-1),
+            });
+        db.SaveChanges();
+        return (db, sub);
+    }
+
+    [Fact]
+    public async Task Pace_cap_defers_excess_deliveries_for_one_subscription()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var (db, _) = SeedSubWithDeliveries(4, now);
+        var h = new StubHandler(HttpStatusCode.OK);
+
+        await Processor(new WebhookOptions { MaxPerSubscriptionPerMinute = 2 }).ProcessDueAsync(db, Client(h), now, default);
+
+        Assert.Equal(2, h.Sends); // only the cap was actually dispatched this pass
+        Assert.Equal(2, await db.WebhookDeliveries.CountAsync(d => d.Status == WebhookDeliveryStatus.Delivered));
+        var deferred = await db.WebhookDeliveries.Where(d => d.Status == WebhookDeliveryStatus.Pending).ToListAsync();
+        Assert.Equal(2, deferred.Count);
+        Assert.All(deferred, d =>
+        {
+            Assert.True(d.NextAttemptAt > now); // deferred, not dropped
+            Assert.Equal(0, d.AttemptCount);    // a paced delivery consumes no attempt
+            Assert.Null(d.LastAttemptAt);       // it was never contacted
+        });
+    }
+
+    [Fact]
+    public async Task Pace_cap_counts_recent_attempts_in_the_rolling_window()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var db = TestDb.Create();
+        var sub = new WebhookSubscription
+        {
+            Id = Guid.NewGuid(), OwnerUserId = Guid.NewGuid(), Name = "s", Url = "https://sink.example.com/hook",
+            SecretEncrypted = "shh", EventTypes = "recording.transcribed", IsActive = true,
+        };
+        db.Webhooks.Add(sub);
+        // Two deliveries already attempted 10s ago - inside the one-minute window, so the cap is already reached.
+        for (var i = 0; i < 2; i++)
+            db.WebhookDeliveries.Add(new WebhookDelivery
+            {
+                Id = Guid.NewGuid(), SubscriptionId = sub.Id, EventId = $"old_{i}", EventType = "recording.transcribed",
+                PayloadJson = "{}", Status = WebhookDeliveryStatus.Delivered, NextAttemptAt = now.AddMinutes(-5),
+                LastAttemptAt = now.AddSeconds(-10),
+            });
+        var fresh = new WebhookDelivery
+        {
+            Id = Guid.NewGuid(), SubscriptionId = sub.Id, EventId = "fresh", EventType = "recording.transcribed",
+            PayloadJson = "{}", Status = WebhookDeliveryStatus.Pending, NextAttemptAt = now.AddMinutes(-1),
+        };
+        db.WebhookDeliveries.Add(fresh);
+        await db.SaveChangesAsync();
+
+        var h = new StubHandler(HttpStatusCode.OK);
+        await Processor(new WebhookOptions { MaxPerSubscriptionPerMinute = 2 }).ProcessDueAsync(db, Client(h), now, default);
+
+        Assert.Equal(0, h.Sends); // window already at the cap, so the fresh delivery is deferred, not sent
+        var d = await db.WebhookDeliveries.SingleAsync(x => x.Id == fresh.Id);
+        Assert.Equal(WebhookDeliveryStatus.Pending, d.Status);
+        Assert.True(d.NextAttemptAt > now);
     }
 }

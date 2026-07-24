@@ -24,5 +24,10 @@ public class WebhookDelivery
 
     public int? ResponseStatus { get; set; }
     public string? LastError { get; set; }
+
+    /// <summary>When the worker last actually contacted the target for this delivery (null until first attempt).
+    /// Used to enforce the per-subscription rolling-minute delivery rate cap.</summary>
+    public DateTimeOffset? LastAttemptAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

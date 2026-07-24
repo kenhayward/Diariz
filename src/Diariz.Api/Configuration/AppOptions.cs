@@ -332,6 +332,12 @@ public class WebhookOptions
     public int AutoDisableThreshold { get; set; } = 15;
     /// <summary>Max due deliveries processed per worker tick.</summary>
     public int BatchSize { get; set; } = 20;
+    /// <summary>Max deliveries sent to a single subscription per rolling minute. Excess deliveries are paced
+    /// (deferred, not dropped) so a fan-out target (a platform automation feeding one endpoint) can't be
+    /// hammered by a burst.</summary>
+    public int MaxPerSubscriptionPerMinute { get; set; } = 120;
+    /// <summary>Fallback delay (seconds) when a 429 response has no parseable Retry-After header.</summary>
+    public int RetryAfterFallbackSeconds { get; set; } = 60;
 }
 
 /// <summary>OpenAI-compatible speech-to-text endpoint used for chat voice dictation - the server-fallback
