@@ -58,6 +58,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.160.1",
+    date: "2026-07-25",
+    pr: 354,
+    headline: "Security patches for the desktop packaging toolchain",
+    summary:
+      "Two denial-of-service advisories against `brace-expansion`, plus one against `tar`, reached the " +
+      "repository through the tooling that builds the desktop installer. Nothing in the app itself was " +
+      "affected: these are build-time packages only, and a production-only audit of the desktop workspace " +
+      "reported no vulnerabilities either before or after. The installer you download is unchanged. This " +
+      "updates the pinned versions so the machine that cuts a release is running patched tooling, and " +
+      "clears the outstanding security alerts against the desktop workspace.",
+    fixed: [
+      "Updated brace-expansion (1.1.16 / 2.1.2 / 5.0.8) in the desktop build toolchain, resolving a denial-of-service advisory.",
+      "Updated tar to 7.5.22 in the desktop build toolchain.",
+    ],
+  },
+  {
     version: "0.160.0",
     date: "2026-07-25",
     pr: 353,
