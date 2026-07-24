@@ -154,7 +154,7 @@
   "signalDelete": "Delete signal",
   "signalKeyHint": "Lowercase letters, numbers, hyphens, or underscores (e.g. action_item_created).",
   "platformAutomationsHeading": "Platform automations",
-  "platformAutomationsHint": "Admin-managed automations that route on named signals across every user, rather than belonging to one person.",
+  "platformAutomationsHint": "Define a Workflow Signal above, then add an automation here and tick the signals that route to it. When any user's formula tagged with one of those signals finishes, its output is delivered to this URL. An automation with no signal selected never fires.",
   "platformAutomationSignals": "Which signals should route to it?",
   "platformAutomationCreate": "Create platform automation",
   "platformAutomationNeedsSignal": "Choose at least one signal - a platform automation with no signal never fires.",

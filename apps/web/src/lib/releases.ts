@@ -57,6 +57,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.156.2",
+    date: "2026-07-24",
+    pr: 341,
+    headline: "Tidier integration settings, and clearer platform automation help",
+    summary:
+      "The Integration tab now puts each toggle on a single line with its explanation beside it instead of " +
+      "stacked underneath, and the Platform automations help text explains how to actually wire things up: " +
+      "define a Workflow Signal, add an automation, and tick the signals that route to it.",
+    changed: [
+      "Each integration toggle sits on one line with its hint alongside",
+      "The Platform automations hint now explains how to wire a Workflow Signal to an automation",
+    ],
+  },
+  {
     version: "0.156.1",
     date: "2026-07-24",
     pr: 339,
