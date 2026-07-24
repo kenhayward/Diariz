@@ -118,6 +118,8 @@ public class OpenApiDocumentTests
         "Chat", "FormulaResults", "Formulas", "MeetingTypes", "Tags",
         // Who you are, and how you connect.
         "ApiTokens", "Auth", "McpTokens", "UserProfile", "UserSettings",
+        // Sharing with people, and the people in your meetings.
+        "Actions", "Groups", "Rooms", "SpeakerProfiles", "Storage",
     ];
 
     /// <summary>Section descriptions tell a developer what a group of endpoints is for; only a per-operation

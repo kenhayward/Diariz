@@ -20,6 +20,13 @@ public class RoomsController(IRoomScope rooms, DiarizDbContext db) : ControllerB
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [HttpGet]
+    [EndpointSummary("List your rooms")]
+    [EndpointDescription(
+        "Every room you belong to, starting with your private Personal room, each with its folder and " +
+        "recording counts and **your** permissions in it as a bitmask: `ManageRoom` 1, `CreateRecording` 2, " +
+        "`RemoveOthersRecordings` 4, `ShareOut` 8, `ManageContents` 16, `EditOthersRecordings` 32.\n\n" +
+        "Test those bits to know what you may do before calling anything else - you always hold all of them " +
+        "in your own Personal room. Rooms you are not a member of never appear.")]
     public async Task<IActionResult> List(CancellationToken ct = default)
     {
         var list = await rooms.RoomsForUserAsync(UserId, ct);
@@ -46,6 +53,12 @@ public class RoomsController(IRoomScope rooms, DiarizDbContext db) : ControllerB
     /// <summary>A shared room with its membership, for the Manage Rooms editor. Members only (a stranger gets a
     /// 404, so room existence stays private).</summary>
     [HttpGet("{id:guid}")]
+    [EndpointSummary("Get a room and its members")]
+    [EndpointDescription(
+        "A room with its full membership list, for the management editor. Each member is a **user or a " +
+        "group** (`principalType` says which) with its own permission bitmask, and display names are resolved " +
+        "for you - so you do not need permission to list platform users just to show who is in a room.\n\n" +
+        "Members only: a non-member gets 404 rather than 403, so a room's existence stays private.")]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct = default)
     {
         if (!await rooms.IsMemberAsync(UserId, id, ct)) return NotFound();
@@ -76,6 +89,14 @@ public class RoomsController(IRoomScope rooms, DiarizDbContext db) : ControllerB
     }
 
     [HttpPost]
+    [EndpointSummary("Create a shared room")]
+    [EndpointDescription(
+        "Creates a shared workspace with its own folder tree, recordings, and membership. **You are added as " +
+        "a full member automatically**, holding every room permission - a shared room has no owner, so " +
+        "without that its creator could not manage it.\n\n" +
+        "Shared room names must be unique across the platform (409 on a clash); an empty name is 400. " +
+        "Requires the Manage Rooms platform permission. Personal rooms cannot be created - everyone gets " +
+        "exactly one automatically.")]
     [Authorize(Policy = "ManageRooms")]
     public async Task<IActionResult> Create(RoomInput input, CancellationToken ct = default)
     {
@@ -95,6 +116,11 @@ public class RoomsController(IRoomScope rooms, DiarizDbContext db) : ControllerB
     }
 
     [HttpPut("{id:guid}")]
+    [EndpointSummary("Edit a shared room")]
+    [EndpointDescription(
+        "Changes a room's name, description, icon and colour. Membership is managed separately. Names stay " +
+        "unique across shared rooms (409 on a clash) and an empty name is 400.\n\n" +
+        "The **Personal room cannot be edited** (400) - it is nobody's to rename. Requires Manage Rooms.")]
     [Authorize(Policy = "ManageRooms")]
     public async Task<IActionResult> Update(Guid id, RoomInput input, CancellationToken ct = default)
     {
@@ -111,6 +137,11 @@ public class RoomsController(IRoomScope rooms, DiarizDbContext db) : ControllerB
     }
 
     [HttpDelete("{id:guid}")]
+    [EndpointSummary("Delete a shared room")]
+    [EndpointDescription(
+        "Removes the room, its folders, and its membership. **Recordings are not deleted** - a room holds " +
+        "placements, and every recording still lives in its owner's Personal room; only the sharing goes.\n\n" +
+        "The **Personal room cannot be deleted** (400). Requires Manage Rooms.")]
     [Authorize(Policy = "ManageRooms")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct = default)
     {
@@ -123,6 +154,13 @@ public class RoomsController(IRoomScope rooms, DiarizDbContext db) : ControllerB
     }
 
     [HttpPut("{id:guid}/members")]
+    [EndpointSummary("Add or update a room member")]
+    [EndpointDescription(
+        "Adds a member or replaces their permissions - an **upsert**, so the same call invites someone and " +
+        "later changes what they may do. The principal is a **user or a group**; adding a group grants its " +
+        "permissions to everyone in it, now and as it changes, which is the tidier way to run a team.\n\n" +
+        "`permissions` is the bitmask from the room list, and is replaced wholesale rather than merged. " +
+        "Personal rooms cannot take members (400). Requires Manage Rooms.")]
     [Authorize(Policy = "ManageRooms")]
     public async Task<IActionResult> SetMember(Guid id, RoomMemberInput input, CancellationToken ct = default)
     {
@@ -131,6 +169,12 @@ public class RoomsController(IRoomScope rooms, DiarizDbContext db) : ControllerB
     }
 
     [HttpDelete("{id:guid}/members/{type}/{principalId:guid}")]
+    [EndpointSummary("Remove a room member")]
+    [EndpointDescription(
+        "Revokes a user's or group's access. They immediately stop seeing the room and everything shared into " +
+        "it - but **recordings they contributed stay**, still owned by them in their own Personal room.\n\n" +
+        "Give the same `principalType` used when adding them: removing a user does not remove access granted " +
+        "through a group they are in, and vice versa. Requires Manage Rooms.")]
     [Authorize(Policy = "ManageRooms")]
     public async Task<IActionResult> RemoveMember(Guid id, RoomPrincipalType type, Guid principalId, CancellationToken ct = default)
     {
@@ -141,6 +185,13 @@ public class RoomsController(IRoomScope rooms, DiarizDbContext db) : ControllerB
     /// <summary>Unshare a recording from this room (delete its non-main placement). The recorder, or a member
     /// holding <c>RemoveOthersRecordings</c>, may do it. Never the main room - that is a delete, from its home.</summary>
     [HttpDelete("{roomId:guid}/recordings/{recordingId:guid}")]
+    [EndpointSummary("Unshare a recording from a room")]
+    [EndpointDescription(
+        "Removes a recording from this room without deleting it - the reverse of sharing one in. It stays in " +
+        "its owner's Personal room and in any other room it was shared into.\n\n" +
+        "You can unshare your own recording from any room you belong to; removing **someone else's** needs " +
+        "the `RemoveOthersRecordings` permission (403 otherwise). A recording's home room cannot be unshared " +
+        "from (400) - deleting it there means deleting the recording itself.")]
     public async Task<IActionResult> RemoveRecording(Guid roomId, Guid recordingId, CancellationToken ct = default)
     {
         if (!await rooms.IsMemberAsync(UserId, roomId, ct)) return NotFound(); // don't reveal the room exists

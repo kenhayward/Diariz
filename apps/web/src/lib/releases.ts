@@ -57,6 +57,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.157.6",
+    date: "2026-07-24",
+    headline: "API reference: rooms, groups and speakers documented",
+    summary:
+      "The sixth pass through the in-app API reference covers sharing and people: rooms and their " +
+      "membership, user groups, enrolled speaker voiceprints, action items across meetings, and storage " +
+      "usage. The descriptions set out the permission model a caller has to understand first - what each " +
+      "room permission bit means, that platform authority comes from group membership rather than " +
+      "per-user flags, and the safeguards that stop a deployment locking itself out. They also spell out " +
+      "what deleting really does: removing a room or a group takes away access without deleting anyone's " +
+      "recordings, and erasing a voiceprint reverts the names it applied automatically while keeping the " +
+      "ones you typed yourself.",
+    added: [
+      "A title and description on all 25 endpoints under Rooms, Groups, Speaker profiles, Action items and Storage.",
+    ],
+  },
+  {
     version: "0.157.5",
     date: "2026-07-24",
     pr: 347,

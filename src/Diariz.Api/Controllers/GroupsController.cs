@@ -22,6 +22,15 @@ public record GroupDto(Guid Id, string Name, string? Description, string? Icon, 
 public class GroupsController(DiarizDbContext db) : ControllerBase
 {
     [HttpGet]
+    [EndpointSummary("List user groups")]
+    [EndpointDescription(
+        "Every group, with its members and its platform permissions as a bitmask: `ManageRooms` 1, " +
+        "`ManageUsers` 2, `ManagePlatform` 4, `ManageFormulas` 8. **Platform authority comes from group " +
+        "membership** - there are no per-user permission flags - so this is where administrative power is " +
+        "granted.\n\n" +
+        "The built-in Platform Administrators group is flagged `isSystem` and comes first; it is protected " +
+        "from deletion, renaming, and losing its last member. The whole section requires the Manage Users " +
+        "permission.")]
     public async Task<List<GroupDto>> List() =>
         await db.UserGroups
             .OrderByDescending(g => g.IsSystem).ThenBy(g => g.Name)
@@ -30,6 +39,12 @@ public class GroupsController(DiarizDbContext db) : ControllerBase
             .ToListAsync();
 
     [HttpPost]
+    [EndpointSummary("Create a user group")]
+    [EndpointDescription(
+        "Creates a named permission holder. It starts empty - add members separately. Whatever permission " +
+        "bits you set are granted to every member, so a group is the unit of administrative authority.\n\n" +
+        "Group names are unique (409 on a clash) and an empty name is 400. A new group is never a system " +
+        "group, whatever you send.")]
     public async Task<IActionResult> Create(GroupInput input)
     {
         if (string.IsNullOrWhiteSpace(input.Name)) return BadRequest("A group needs a name.");
@@ -54,6 +69,14 @@ public class GroupsController(DiarizDbContext db) : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [EndpointSummary("Edit a user group")]
+    [EndpointDescription(
+        "Changes a group's name, permissions, and appearance. Permission changes take effect immediately for " +
+        "every member. Names stay unique (409 on a clash).\n\n" +
+        "For the **system group** the name and permissions are **silently ignored** - only the description, " +
+        "icon and colour change. Clearing `ManagePlatform` from Platform Administrators would lock the " +
+        "deployment out of maintenance, so it is refused rather than obeyed. Check `isSystem` before offering " +
+        "those fields for editing.")]
     public async Task<IActionResult> Update(Guid id, GroupInput input)
     {
         var group = await db.UserGroups.FirstOrDefaultAsync(g => g.Id == id);
@@ -80,6 +103,12 @@ public class GroupsController(DiarizDbContext db) : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [EndpointSummary("Delete a user group")]
+    [EndpointDescription(
+        "Removes the group. **The users themselves are untouched** - they simply lose whatever the group " +
+        "granted them, both platform permissions and access to any shared room the group was a member of. " +
+        "Those room memberships are cleaned up here, so no stale grant survives.\n\n" +
+        "The Platform Administrators group cannot be deleted (403).")]
     public async Task<IActionResult> Delete(Guid id)
     {
         var group = await db.UserGroups.FirstOrDefaultAsync(g => g.Id == id);
@@ -100,6 +129,11 @@ public class GroupsController(DiarizDbContext db) : ControllerBase
     }
 
     [HttpPut("{id:guid}/members/{userId:guid}")]
+    [EndpointSummary("Add a user to a group")]
+    [EndpointDescription(
+        "Grants the user everything the group holds - platform permissions and membership of any shared room " +
+        "the group belongs to - taking effect on their next request, with no sign-out needed. Idempotent. " +
+        "404 for an unknown group or user.")]
     public async Task<IActionResult> AddMember(Guid id, Guid userId)
     {
         if (!await db.UserGroups.AnyAsync(g => g.Id == id)) return NotFound();
@@ -113,6 +147,12 @@ public class GroupsController(DiarizDbContext db) : ControllerBase
     }
 
     [HttpDelete("{id:guid}/members/{userId:guid}")]
+    [EndpointSummary("Remove a user from a group")]
+    [EndpointDescription(
+        "Revokes what the group granted them; the account itself is untouched and they keep anything granted " +
+        "another way. Idempotent - removing a non-member succeeds.\n\n" +
+        "**The Platform Administrators group must keep at least one member** (403 on the last one), so a " +
+        "deployment can never be left with nobody able to administer it.")]
     public async Task<IActionResult> RemoveMember(Guid id, Guid userId)
     {
         var group = await db.UserGroups.FirstOrDefaultAsync(g => g.Id == id);

@@ -26,6 +26,13 @@ public class StorageController : ControllerBase
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [HttpGet]
+    [EndpointSummary("Get your storage usage")]
+    [EndpointDescription(
+        "How many bytes you are using against your quota, plus the total wall-clock time spent transcribing " +
+        "your recordings.\n\n" +
+        "Usage counts **stored bytes only** - audio, attachments and screenshots - so transcripts, summaries " +
+        "and documents are free. Deleting a recording's audio while keeping its transcript therefore reclaims " +
+        "space. Quotas are set by an administrator; this endpoint only reports.")]
     public async Task<StorageUsageDto> Get()
     {
         var quota = await _db.Users.Where(u => u.Id == UserId).Select(u => u.QuotaBytes).FirstOrDefaultAsync();

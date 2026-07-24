@@ -29,6 +29,12 @@ public class SpeakerProfilesController : ControllerBase
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
     [HttpGet]
+    [EndpointSummary("List your enrolled speakers")]
+    [EndpointDescription(
+        "The people you have enrolled a voiceprint for, with how many samples each has learned from. These " +
+        "are what let Diariz recognise the same person across later recordings automatically.\n\n" +
+        "Voiceprints are **biometric data** and strictly per-user: yours are never visible to anyone else, " +
+        "even in a shared room.")]
     public async Task<IReadOnlyList<SpeakerProfileDto>> List()
     {
         var roomId = await _rooms.PersonalRoomIdAsync(UserId);
@@ -42,6 +48,13 @@ public class SpeakerProfilesController : ControllerBase
     /// <summary>A voiceprint's training contributions (which recording-speakers feed it) and how many
     /// recording-speakers it currently labels.</summary>
     [HttpGet("{id:guid}")]
+    [EndpointSummary("Get an enrolled speaker")]
+    [EndpointDescription(
+        "One person's voiceprint in detail: the **training contributions** feeding it - which recording and " +
+        "speaker each sample came from - and how many recording-speakers it currently labels.\n\n" +
+        "Use it to audit what a voiceprint has learned from: a contribution from a misattributed speaker is " +
+        "why recognition drifts, and can be removed individually. The embedding vector itself is never " +
+        "returned.")]
     public async Task<ActionResult<SpeakerProfileDetailDto>> Get(Guid id)
     {
         var roomId = await _rooms.PersonalRoomIdAsync(UserId);
@@ -96,6 +109,10 @@ public class SpeakerProfilesController : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [EndpointSummary("Rename an enrolled speaker")]
+    [EndpointDescription(
+        "Corrects the person's name - for a spelling fix or a change of surname. The voiceprint is unchanged, " +
+        "so recognition is unaffected, and every recording labelled with this person picks up the new name.")]
     public async Task<IActionResult> Rename(Guid id, RenameSpeakerProfileRequest req)
     {
         var name = req.Name?.Trim() ?? "";
@@ -117,6 +134,14 @@ public class SpeakerProfilesController : ControllerBase
 
     /// <summary>Create a voiceprint from a recording's diarized speaker (its embedding becomes the centroid).</summary>
     [HttpPost]
+    [EndpointSummary("Enrol a speaker")]
+    [EndpointDescription(
+        "Creates a voiceprint from one recording's diarized speaker: that speaker's embedding becomes the " +
+        "starting point, and the speaker is named and linked to the new person. From then on the same voice " +
+        "is recognised automatically in later recordings.\n\n" +
+        "The speaker must already **have an embedding** - one is computed during transcription, so a " +
+        "recording made before voiceprints were enabled needs re-transcribing first (400). 404 when the " +
+        "recording is not yours or the label does not exist; 400 for an empty name.")]
     public async Task<ActionResult<SpeakerProfileDto>> Create(CreateSpeakerProfileRequest req)
     {
         var name = req.Name?.Trim() ?? "";
@@ -163,6 +188,12 @@ public class SpeakerProfilesController : ControllerBase
     /// <summary>Remove one training contribution and recompute the centroid from the remaining snapshots.
     /// The last contribution can't be removed — delete the person instead (a voiceprint needs a sample).</summary>
     [HttpDelete("{id:guid}/contributions/{contributionId:guid}")]
+    [EndpointSummary("Remove a training sample")]
+    [EndpointDescription(
+        "Drops one sample from a voiceprint and **recomputes it from what remains** - the fix when a " +
+        "misattributed speaker has been taught to the wrong person and recognition has started drifting.\n\n" +
+        "The **last remaining sample cannot be removed** (400): a voiceprint with nothing to match against " +
+        "is meaningless, so delete the person instead. Recordings already labelled keep their names.")]
     public async Task<IActionResult> RemoveContribution(Guid id, Guid contributionId)
     {
         var roomId = await _rooms.PersonalRoomIdAsync(UserId);
@@ -187,6 +218,13 @@ public class SpeakerProfilesController : ControllerBase
     /// <summary>Merge <c>sourceId</c> into this profile: move its training contributions, reassign its
     /// linked recording-speakers, recompute the centroid, and delete the source.</summary>
     [HttpPost("{id:guid}/merge")]
+    [EndpointSummary("Merge two enrolled speakers")]
+    [EndpointDescription(
+        "Folds `sourceId` into the person in the path when the same human has been enrolled twice - say once " +
+        "as \"Sam\" and once as \"Samantha\". The source's training samples move across, every recording " +
+        "labelled with it is relabelled, the voiceprint is recomputed from the combined samples, and the " +
+        "**source person is deleted**.\n\n" +
+        "There is no un-merge, so check the direction: the profile in the path survives.")]
     public async Task<IActionResult> Merge(Guid id, MergeSpeakerProfilesRequest req)
     {
         if (req.SourceId == id) return BadRequest("Cannot merge a person into itself.");
@@ -215,6 +253,13 @@ public class SpeakerProfilesController : ControllerBase
     /// <summary>GDPR erase: delete the voiceprint + training data, unlink it from recordings, and revert
     /// auto-applied names to the anonymous label (manual names are kept).</summary>
     [HttpDelete("{id:guid}")]
+    [EndpointSummary("Erase an enrolled speaker")]
+    [EndpointDescription(
+        "Deletes the person's voiceprint and all its training data, and unlinks it from every recording - the " +
+        "**GDPR erasure** path for biometric data, so nothing recognisable is retained.\n\n" +
+        "Labels are handled by origin: names this voiceprint applied **automatically** revert to the " +
+        "anonymous speaker label, while names you typed or assigned by hand are kept, since those are your " +
+        "words rather than derived from the biometric. Transcripts are otherwise untouched.")]
     public async Task<IActionResult> Delete(Guid id)
     {
         var roomId = await _rooms.PersonalRoomIdAsync(UserId);
@@ -230,6 +275,12 @@ public class SpeakerProfilesController : ControllerBase
     /// <summary>GDPR erase-all: delete every one of the caller's voiceprints + training data and revert
     /// all auto-applied labels (manual names kept).</summary>
     [HttpDelete]
+    [EndpointSummary("Erase all enrolled speakers")]
+    [EndpointDescription(
+        "Deletes **every** voiceprint you have enrolled, with all their training data, in one call - the " +
+        "wholesale GDPR erasure. Automatic speaker identification stops until you enrol again.\n\n" +
+        "Same labelling rule as erasing one person: automatically applied names revert to the anonymous " +
+        "label, hand-typed names are kept. There is no undo and no confirmation step, so gate it in your UI.")]
     public async Task<IActionResult> DeleteAll()
     {
         var roomId = await _rooms.PersonalRoomIdAsync(UserId);
