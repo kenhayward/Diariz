@@ -74,6 +74,44 @@ jobs:
       - name: Check one non-en locale per translation PR
         run: node apps/web/scripts/check-single-locale.mjs ${{ github.event.pull_request.base.sha }}
 
+  n8n-node:
+    name: n8n community node
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: integrations/n8n-nodes-diariz/package-lock.json
+      # The node's long tail of operations is generated from the published OpenAPI document. This test
+      # rewrites the committed snapshot and fails when the API's public surface has moved, so an endpoint
+      # cannot change under the node unnoticed. It needs no database or containers.
+      - name: OpenAPI snapshot is current
+        run: dotnet test tests/Diariz.Api.Tests/Diariz.Api.Tests.csproj -c Release --filter "FullyQualifiedName~OpenApiSnapshotTests"
+      - name: Install
+        working-directory: integrations/n8n-nodes-diariz
+        run: npm ci
+      - name: Regenerate operations
+        working-directory: integrations/n8n-nodes-diariz
+        run: npm run generate
+      - name: Test
+        working-directory: integrations/n8n-nodes-diariz
+        run: npm test
+      - name: Lint
+        working-directory: integrations/n8n-nodes-diariz
+        run: npm run lint
+      - name: Build
+        working-directory: integrations/n8n-nodes-diariz
+        run: npm run build
+      # Catches the case where the snapshot was current but the generated module was never regenerated
+      # from it, which would leave the node advertising operations the API no longer has.
+      - name: Generated output is committed
+        run: git diff --exit-code -- integrations/n8n-nodes-diariz
+
   worker:
     name: Worker (pytest)
     runs-on: ubuntu-latest

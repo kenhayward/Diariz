@@ -25,6 +25,13 @@ module.exports = {
     },
     {
       files: ["./nodes/**/*.ts"],
+      // The operation lists in generatedProperties.ts are built from the OpenAPI document at generate time
+      // rather than written as static literals, and generated/index.ts is machine-written data. Every
+      // n8n-nodes-base rule that inspects operation options walks the AST expecting object literals and
+      // throws outright on a spread of .map() results, so the plugin cannot analyse these two files at all.
+      // test/node.test.ts asserts the same properties instead, by checking the built objects rather than
+      // their syntax - including the "every option has an action" rule the plugin would have enforced.
+      excludedFiles: ["./nodes/Diariz/generatedProperties.ts", "./nodes/Diariz/generated/*.ts"],
       plugins: ["n8n-nodes-base"],
       extends: ["plugin:n8n-nodes-base/nodes"],
     },
