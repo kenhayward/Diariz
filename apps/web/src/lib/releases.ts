@@ -36,7 +36,8 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
 | **API access** | Generate a personal API token (when enabled), read-only or read-write, with an optional expiry date, to call the REST API as yourself, with a built-in API reference documenting every endpoint - what it does, who may call it, and what it changes. |
-| **Automations (webhooks)** | When enabled, register outbound webhooks from Preferences that fire when a recording is created, finishes or fails transcription, or a formula finishes or fails - signed deliveries with automatic retries (rate-limited per automation and 429-aware), a test-event button, and auto-pause after repeated failures. Admins can also define named Workflow Signals and wire a platform automation to one, so a formula author just picks "When this finishes, trigger: ..." in the formula editor - no URL or per-user setup - and the formula's output is delivered inline to everyone routed through that signal. |
+| **Automations (webhooks)** | When enabled, register outbound webhooks from Preferences that fire when a recording is created, finishes or fails transcription, a summary / meeting minutes / action items / tags become ready (each carrying its output), or a formula finishes or fails - signed deliveries with automatic retries (rate-limited per automation and 429-aware), a test-event button, and auto-pause after repeated failures. Admins can also define named Workflow Signals and wire a platform automation to one, so a formula author just picks "When this finishes, trigger: ..." in the formula editor - no URL or per-user setup - and the formula's output is delivered inline to everyone routed through that signal. |
+| **n8n** | A published community node (\`n8n-nodes-diariz\`): a trigger that registers its own automation and verifies every signed delivery, plus an action node covering the whole REST API - with dropdowns listing your real recordings and formulas, files in and out, and a Run Formula step that waits for the document to finish. |
 | **Multi-user & groups** | User groups grant platform permissions (manage rooms / users / platform), with an approval lifecycle, per-user isolation, and Light/Dark/Auto themes. |
 | **Admin controls** | Storage quotas, optional audio auto-deletion, a global AI request timeout, separate platform toggles for API access, Claude/MCP, and Automations (webhooks), and whole-platform backup & restore. |
 
@@ -56,6 +57,33 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.159.0",
+    date: "2026-07-24",
+    pr: 350,
+    headline: "An n8n community node, and four new automation events",
+    summary:
+      "Diariz now has a published n8n node, so you can wire your meetings into anything n8n reaches without " +
+      "building HTTP requests by hand. A **Diariz Trigger** starts a workflow when something happens - it " +
+      "registers its own automation for you when the workflow is activated, removes it again when you " +
+      "deactivate, and checks the signature on every delivery, so a forged request starts nothing. A " +
+      "**Diariz action node** covers the whole API: every one of the 179 published operations across 31 " +
+      "resources, with dropdowns listing your real recordings, folders and formulas rather than asking for " +
+      "IDs, files moving in and out as attachments, and a Run Formula step that waits for the document to " +
+      "finish instead of handing back one that is still generating.\n\n" +
+      "Automations also gained four events, which is what makes the interesting workflows possible: a " +
+      "summary, meeting minutes, action items, or tags being ready. Each carries its own output, so a " +
+      "workflow can act on the summary text or the extracted actions directly rather than triggering on " +
+      "transcription and then polling to see whether the AI had finished. They are available to any " +
+      "automation, not only to n8n.",
+    added: [
+      "An n8n community node, n8n-nodes-diariz, with a Diariz Trigger and a Diariz action node.",
+      "Four Automation events: a summary is ready, meeting minutes are ready, action items are ready, and tags are ready - each carrying the output it produced.",
+    ],
+    changed: [
+      "The Automations event picker, in both Preferences and the platform admin section, now offers all nine events.",
+    ],
+  },
   {
     version: "0.158.0",
     date: "2026-07-24",

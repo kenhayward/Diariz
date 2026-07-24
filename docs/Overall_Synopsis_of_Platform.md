@@ -33,6 +33,7 @@ infrastructure services.
 | **Worker** | Python: WhisperX (large-v3), pyannote 3.1, SpeechBrain ECAPA, CUDA | `src/Diariz.Worker` | GPU transcription → alignment → diarization → per-speaker voiceprints |
 | **Web** | React 19 + TypeScript + Vite + Tailwind v4 | `apps/web` | SPA UI (served by nginx in Docker) |
 | **Desktop** | Electron thin shell - Windows tray + **macOS (beta) menu-bar** | `apps/desktop` | Mic + system audio (Windows loopback / macOS ScreenCaptureKit), tray recording; auto-update on Windows, manual update check on macOS; loads the web app from the server origin |
+| **n8n node** | TypeScript, zero runtime dependencies, MIT | `integrations/n8n-nodes-diariz` | Published npm package (`n8n-nodes-diariz`) installed into a **user's own n8n**, not deployed with Diariz: a self-registering webhook trigger and a full REST action node. Versions independently of `version.json`. |
 
 Infrastructure (via Docker Compose, project name **`diariz`**):
 
@@ -729,12 +730,25 @@ behind the `PlatformSettings.WebhooksEnabled` platform toggle (off by default; i
 Claude/MCP toggles) — `WebhooksController` (`/api/user/webhooks`, JWT-authed) `Forbid`s every action when the
 toggle is off.
 
-- **Event catalog (`WebhookEventTypes`), five subscribable types:** `recording.created`, `recording.transcribed`,
-  `recording.transcription_failed`, `formula_result.completed`, `formula_result.failed` — plus an internal
-  `webhook.ping` used only by the manual "Send test event" button (never subscribable). Events are emitted at
-  the recording-create site and the worker-callback success/failure sites (`RecordingsController`,
-  `WorkerCallbackController`) and at the formula-run completion/failure sites (`FormulaRunProcessor`, invoked from
-  `FormulaRunWorker`), each via `IWebhookPublisher.PublishAsync(eventType, ownerUserId, data)`.
+- **Event catalog (`WebhookEventTypes`), nine subscribable types:** `recording.created`, `recording.transcribed`,
+  `recording.transcription_failed`, `recording.summarized`, `recording.minutes_ready`,
+  `recording.action_items_ready`, `recording.tags_ready`, `formula_result.completed`, `formula_result.failed` —
+  plus an internal `webhook.ping` used only by the manual "Send test event" button (never subscribable). The keys
+  are **append-only**: they are stored as a comma-separated string in `WebhookSubscription.EventTypes`, so a
+  rename would orphan every existing subscription. Events are emitted at the recording-create site and the
+  worker-callback success/failure sites (`RecordingsController`, `WorkerCallbackController`), at the formula-run
+  completion/failure sites (`FormulaRunProcessor`, invoked from `FormulaRunWorker`), and — for the four AI-output
+  events — at each AI processor's success path immediately after its existing `NotifyStatusAsync` hub call
+  (`SummarizationProcessor`, `MeetingMinutesProcessor`, `ActionsProcessor`, `TagsProcessor`, each invoked from its
+  matching worker), all via `IWebhookPublisher.PublishAsync(eventType, ownerUserId, data)`.
+- **The four AI-output events carry their output inline** (the summary text, the minutes Markdown, the extracted
+  action items, the tags), so a subscriber can act on the result without a second REST call — that is the whole
+  reason they exist, since `recording.transcribed` fires before the model has run. Each processor takes
+  `IWebhookPublisher webhooks, string publicUrl` (resolved from `AppPublicOptions` by its worker) and wraps the
+  publish in its own try/catch: the output is already persisted, and a broken publisher must never flip a
+  succeeded job to `Failed`. `SummarizationProcessor` emits on **both** success paths, including the short-circuit
+  that preserves a hand-edited summary — the recording still reached `Summarized`, and a subscriber waiting on
+  "summary ready" must not hang.
 - **Personal-scope matching in Phase 2; platform-scope matching joins it in Phase 3** (see the Workflow
   Signals section below). `WebhookSubscription.Scope` defaults to `WebhookScope.Personal`. `WebhookPublisher`
   looks up the event owner's own **active** personal subscriptions plus every active platform subscription,
@@ -788,6 +802,52 @@ toggle is off.
   per-platform-subscription delivery rate cap (the delivery worker's batch-and-backoff throughput bound
   already covers this; a per-subscription token bucket is a hardening follow-up now that platform subs fan
   out across users), and detaching a platform subscription from the single admin who owns it (see below).
+
+## n8n community node (`integrations/n8n-nodes-diariz`)
+
+A published npm package installed into a **user's own n8n** (Settings → Community Nodes). It is not deployed
+with Diariz and needs no server-side support beyond the REST API and the webhook endpoints already described.
+
+- **Two nodes plus a credential.** `DiarizTrigger` (webhook trigger), `Diariz` (action), `DiarizApi`
+  (bearer credential: base URL + `dz_api_` token). The credential test calls `GET /api/user/profile` and uses
+  the `apiAccessEnabled` / `webhooksEnabled` flags it returns to warn at save time when a capability is off,
+  rather than surfacing an unexplained 403 at first execution.
+- **The trigger is self-registering** — the n8n-native pattern, and the reason the node needs no manual setup.
+  `webhookMethods.default.create` POSTs `/api/user/webhooks` with n8n's own webhook URL and stores the
+  **once-returned signing secret** in the node's static data; `delete` removes the subscription on
+  deactivation (so the 20-per-user cap does not silt up); `checkExists` treats a subscription whose secret is
+  missing as absent, so it is recreated rather than left unverifiable.
+- **Signature verification is mandatory and byte-exact.** The webhook declares `rawBody: true` and
+  `nodes/Diariz/signature.ts` recomputes `v1,base64(HMAC-SHA256(secret, "<id>.<timestamp>.<body>"))` over the
+  original bytes — a re-serialised body would never match, since the envelope is C#-compact JSON written with
+  `DefaultIgnoreCondition: WhenWritingNull`. Comparison is `timingSafeEqual`, several space-delimited
+  signatures are accepted (secret rotation), and a timestamp more than 5 minutes out is rejected as a replay.
+  A failed check answers `401` and emits nothing, so Diariz retries on its normal backoff.
+- **Cross-language contract test.** `tests/Diariz.Api.Tests/WebhookSignerFixtureTests.cs` writes signing
+  vectors (including a non-ASCII case, where UTF-8 handling usually diverges) to
+  `integrations/n8n-nodes-diariz/test/fixtures/signing-vectors.json`, and the TypeScript suite verifies every
+  one. Without this, .NET signing and TypeScript verification could drift apart and silently reject every live
+  delivery with nothing failing in either suite.
+- **The action node's operations are generated from the published OpenAPI document.**
+  `OpenApiSnapshotTests` writes `nodes/Diariz/generated/openapi.snapshot.json` using the same in-process host
+  as `OpenApiDocumentTests` (no database, no containers); `scripts/generate.ts` turns it into 179 operations
+  across 31 resources, taking each operation's display name from its `[EndpointSummary]` and its help text
+  from the first paragraph of its `[EndpointDescription]`. The `Auth` tag is excluded (it takes an account
+  password; the node is token-authenticated). A **Custom API Call** on every resource keeps anything added
+  later reachable.
+- **A curated layer decorates specific generated operations** (`nodes/Diariz/enhancements.ts`) rather than
+  introducing a parallel set of hand-written resources, which would show two entries for the same thing:
+  `loadOptions` dropdowns for parameters that name a listable entity, binary download/upload for the file
+  endpoints, Return All / Limit wherever the response schema is an array (derived from the document, so a new
+  list endpoint gets it automatically), completion polling for the `202`-returning formula run, and SSE
+  accumulation for `POST /api/chat/stream`.
+- **CI drift guard.** The `n8n-node` job in `.github/workflows/ci.yml` re-runs the snapshot test and
+  `npm run generate`, then `git diff --exit-code`s the package — so an endpoint cannot change under the node
+  unnoticed. This lockstep guarantee is the reason the package lives in this repository rather than its own.
+- **Constraints that are requirements, not preferences.** Zero runtime dependencies and an MIT `LICENSE`
+  inside the package directory (the repository root stays AGPL-3.0) are both n8n verified-node requirements.
+  The package version is deliberately **not** a `version.json` mirror: n8n users pin it, and a node fix must
+  be able to ship without a platform release.
 
 ## Workflow Signals and platform automations
 
@@ -1303,6 +1363,7 @@ src/Diariz.Domain/          # entities, DiarizDbContext, Migrations
 src/Diariz.Worker/          # Python GPU worker (worker.py, pipeline.py, callback.py, storage.py, config.py)
 apps/web/                   # React SPA (lib/, components/, pages/)
 apps/desktop/               # Electron tray shell
+integrations/n8n-nodes-diariz/  # published n8n community node (independent semver, MIT)
 deploy/                     # docker-compose.yml (+ .env.example)
 docs/                       # this folder
 branding/                   # GitHub social card + source
@@ -1313,8 +1374,10 @@ tests/                      # Diariz.Api.Tests (unit), .IntegrationTests (Testco
 
 Three .NET test projects (fast **unit** with the EF in-memory provider + hand-rolled fakes; **integration**
 via Testcontainers spinning up real Postgres/Redis/MinIO; shared **TestSupport** fakes), plus **vitest** for
-the web and **pytest** for the worker (whisperx stubbed). **TDD is required** — write the failing test first.
-CI runs all four suites on a self-hosted Windows runner.
+the web, **pytest** for the worker (whisperx stubbed), and **`node --test`** for the desktop shell and the n8n
+node. **TDD is required** — write the failing test first. CI (`.github/workflows/ci.yml`) runs the suites on
+`ubuntu-latest`; the n8n-node job additionally regenerates the node from the API's OpenAPI document and fails
+the build if the committed output has drifted.
 
 ## Roadmap (milestones)
 
