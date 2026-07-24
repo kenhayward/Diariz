@@ -57,6 +57,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.157.1",
+    date: "2026-07-24",
+    pr: 343,
+    headline: "The API reference now explains every Recordings endpoint",
+    summary:
+      "The in-app API reference (Preferences -> Developers -> API reference) described each section but left " +
+      "the individual calls bare - you could see that an endpoint existed, but not what it did or what it " +
+      "would change. Every endpoint under Recordings now carries a title and a written explanation: what the " +
+      "call does, who may make it, what it affects, and the traps worth knowing about (which actions overwrite " +
+      "hand-edited text, which are permanent, which run in the background and need polling, and which return " +
+      "which errors). The remaining sections follow in later releases.",
+    added: [
+      "A title and description on all 37 Recordings endpoints in the API reference.",
+    ],
+  },
+  {
     version: "0.157.0",
     date: "2026-07-24",
     pr: 342,

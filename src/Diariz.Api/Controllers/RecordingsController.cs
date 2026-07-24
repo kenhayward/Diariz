@@ -70,6 +70,12 @@ public class RecordingsController : ControllerBase
     }
 
     [HttpGet]
+    [EndpointSummary("List recordings")]
+    [EndpointDescription(
+        "Every recording placed in one room, in the order it appears in the app. Defaults to your personal " +
+        "room; pass `roomId` for a shared room you belong to. Each entry carries its folder, duration, " +
+        "transcription status, and whether its audio is still stored. Returns 404 if you are not a member of " +
+        "the room, rather than revealing that it exists.")]
     public async Task<ActionResult<IReadOnlyList<RecordingSummaryDto>>> List([FromQuery] Guid? roomId = null)
     {
         // The recordings of the room being viewed (its personal room by default). A folder is a property of the
@@ -115,6 +121,12 @@ public class RecordingsController : ControllerBase
     /// Needs <c>ManageContents</c> in that room; the personal-room owner holds it, so personal reorder is
     /// unchanged. A non-member 404s; a member without the permission gets 403.</summary>
     [HttpPut("reorder")]
+    [EndpointSummary("Reorder recordings in a room")]
+    [EndpointDescription(
+        "Sets the folder and 0-based position of each listed recording in one call, covering both resequencing " +
+        "within a folder and moving between folders. Order and folder belong to the placement, so only the " +
+        "given room is affected (your personal room by default). Requires the `ManageContents` permission in " +
+        "that room; you always hold it in your own personal room. Ids you do not list keep their position.")]
     public async Task<IActionResult> Reorder(ReorderRecordingsRequest req)
     {
         var ids = (req.OrderedIds ?? []).ToList();
@@ -145,6 +157,12 @@ public class RecordingsController : ControllerBase
     }
 
     [HttpGet("{id:guid}")]
+    [EndpointSummary("Get a recording")]
+    [EndpointDescription(
+        "The full detail view: metadata, speakers, action items, calendar link, the rooms you can see it in, " +
+        "and the **current transcription only** (the highest version) with its segments, summary, and meeting " +
+        "minutes. Earlier versions left behind by a re-transcribe are not returned. Visible to the person who " +
+        "recorded it and to members of any room it is placed in; anyone else gets 404.")]
     public async Task<ActionResult<RecordingDetailDto>> Get(Guid id)
     {
         var rec = await _db.Recordings
@@ -225,6 +243,17 @@ public class RecordingsController : ControllerBase
 
     /// <summary>Upload an audio file and kick off transcription.</summary>
     [HttpPost]
+    [EndpointSummary("Upload a recording")]
+    [EndpointDescription(
+        "Multipart form upload that stores the audio and immediately queues transcription; the response comes " +
+        "back before any transcribing has happened, with status `Uploaded`. Poll the recording or subscribe to " +
+        "the `recording.transcribed` webhook for the result.\n\n" +
+        "`source=Upload` (a file the user picked, rather than a browser recording) is additionally checked: the " +
+        "format is sniffed from the actual bytes rather than trusted from the extension or MIME type " +
+        "(415 if unsupported), and the file is capped by the platform's upload limit (413). Every source counts " +
+        "against your storage quota (413 when it would be exceeded).\n\n" +
+        "The recording is always filed in your personal room. Passing `roomId` for a shared room also shares it " +
+        "there and needs `CreateRecording` in that room; `sectionId` files it in a folder of your personal room.")]
     [RequestSizeLimit(1024L * 1024 * 1024)] // 1 GiB
     public async Task<ActionResult<RecordingSummaryDto>> Upload(
         [FromForm] IFormFile audio, [FromForm] string? title, [FromForm] long durationMs,
@@ -312,6 +341,16 @@ public class RecordingsController : ControllerBase
     }
 
     [HttpPost("{id:guid}/retranscribe")]
+    [EndpointSummary("Re-transcribe a recording")]
+    [EndpointDescription(
+        "Queues a fresh transcription and returns 202 immediately. This creates a **new transcription version** " +
+        "rather than replacing the old one; the recording then reports the new version as its current " +
+        "transcript, and any manual segment edits on the previous version stay with that version. Speaker " +
+        "display names you have set are preserved.\n\n" +
+        "Send `speakers` to set the diarization hints (minimum and maximum speaker count; null means " +
+        "automatic); omit it entirely to reuse whatever the recording already has.\n\n" +
+        "The job reads the original audio, so a recording whose audio has been deleted is still accepted here " +
+        "but the transcription itself then fails - check `hasAudio` before offering this.")]
     public async Task<IActionResult> Retranscribe(Guid id, RetranscribeRequest req)
     {
         var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
@@ -334,6 +373,14 @@ public class RecordingsController : ControllerBase
     }
 
     [HttpPut("{id:guid}/speakers")]
+    [EndpointSummary("Rename a speaker")]
+    [EndpointDescription(
+        "Sets the display name shown against every segment carrying a diarization label (`SPEAKER_00`, ...) in " +
+        "this recording. The label itself never changes, so the name survives a re-transcribe. Creates the " +
+        "speaker record if the label has not been named yet.\n\n" +
+        "A free-text rename is treated as a correction by hand: it detaches the speaker from any enrolled " +
+        "voiceprint, clears the auto-identified flag, and takes it out of \"Multiple Speakers\" mode. To point a " +
+        "speaker at an enrolled profile instead, use the assign endpoint.")]
     public async Task<IActionResult> RenameSpeaker(Guid id, RenameSpeakerRequest req)
     {
         var rec = await _db.Recordings.Include(r => r.Speakers)
@@ -363,6 +410,12 @@ public class RecordingsController : ControllerBase
     /// speaker is detached from any voiceprint and excluded from auto-identification and enrolment, since
     /// its audio mixes people. Clearing happens implicitly when the user renames/assigns the speaker.</summary>
     [HttpPut("{id:guid}/speakers/{label}/multi")]
+    [EndpointSummary("Mark a speaker as multiple speakers")]
+    [EndpointDescription(
+        "Flags a diarization label as overlapping or simultaneous speech rather than one person. Because its " +
+        "audio mixes voices, the speaker is detached from any voiceprint and excluded from both automatic " +
+        "identification and enrolment - so it can never pollute a stored voiceprint. There is no explicit " +
+        "\"unmark\": renaming or assigning the speaker clears the flag.")]
     public async Task<IActionResult> MarkMultiSpeaker(Guid id, string label)
     {
         var rec = await _db.Recordings.Include(r => r.Speakers)
@@ -387,6 +440,13 @@ public class RecordingsController : ControllerBase
     /// <summary>Reassign a recording's speaker to an enrolled voiceprint (or unassign with profileId=null).
     /// Assigning adds the speaker as a training contribution and recomputes the profile centroid.</summary>
     [HttpPut("{id:guid}/speakers/{label}/assign")]
+    [EndpointSummary("Assign a speaker to an enrolled voiceprint")]
+    [EndpointDescription(
+        "Points a diarization label at one of your enrolled speaker profiles, taking its name from the profile. " +
+        "Pass a null `profileId` to unassign.\n\n" +
+        "Assigning also **teaches the profile**: this recording's speaker is added as a training contribution " +
+        "and the profile's voiceprint centroid is recomputed, so later recordings identify that person more " +
+        "reliably. Use the rename endpoint instead when you just want a label, with no effect on enrolment.")]
     public async Task<IActionResult> AssignSpeaker(Guid id, string label, AssignSpeakerRequest req)
     {
         var rec = await _db.Recordings.Include(r => r.Speakers)
@@ -454,6 +514,13 @@ public class RecordingsController : ControllerBase
     /// blocks (run after fixing speaker assignments). Permanent for this version; re-transcribe to
     /// regenerate granular segments.</summary>
     [HttpPost("{id:guid}/merge-segments")]
+    [EndpointSummary("Merge consecutive same-speaker segments")]
+    [EndpointDescription(
+        "Collapses runs of consecutive segments that share a speaker into single blocks, which is what you want " +
+        "after correcting speaker assignments has left the transcript fragmented. Text is joined and the block " +
+        "spans from the first segment's start to the last one's end.\n\n" +
+        "**Permanent for this transcription version** - there is no un-merge. Re-transcribe to get granular " +
+        "segments back (that creates a new version and leaves this one intact).")]
     public async Task<IActionResult> MergeSegments(Guid id)
     {
         var owned = await _db.Recordings.AnyAsync(r => r.Id == id && r.UserId == UserId);
@@ -521,6 +588,13 @@ public class RecordingsController : ControllerBase
     /// already-stored embeddings (no re-transcription). Anonymous/auto speakers are (re)labelled; manual
     /// names are left alone.</summary>
     [HttpPost("{id:guid}/reidentify")]
+    [EndpointSummary("Re-run speaker identification")]
+    [EndpointDescription(
+        "Matches this recording's speakers against your current voiceprints again, using the embeddings already " +
+        "stored on the recording - so it is quick and does **not** re-transcribe or need the audio. Use it after " +
+        "enrolling a new profile or improving an existing one.\n\n" +
+        "Only anonymous and previously auto-identified speakers are relabelled. Names you set by hand, and " +
+        "speakers marked as multiple speakers, are left alone.")]
     public async Task<IActionResult> Reidentify(Guid id)
     {
         var rec = await _db.Recordings.Include(r => r.Speakers)
@@ -534,6 +608,12 @@ public class RecordingsController : ControllerBase
 
     /// <summary>Email the current transcript to the signed-in user's account address.</summary>
     [HttpPost("{id:guid}/email")]
+    [EndpointSummary("Email the transcript to yourself")]
+    [EndpointDescription(
+        "Sends the current transcript - the recording name, its summary, and the speaker-labelled segments - to " +
+        "**your own account address**. There is no recipient parameter, by design: this endpoint can only mail " +
+        "you. Labels are rendered in your interface language. Requires an email sender to be configured on the " +
+        "platform.")]
     public async Task<IActionResult> EmailTranscript(Guid id)
     {
         var rec = await _db.Recordings
@@ -580,6 +660,12 @@ public class RecordingsController : ControllerBase
     /// <summary>Email just the meeting minutes (Markdown → HTML) to the signed-in user's account address,
     /// optionally attaching the recording's uploaded files.</summary>
     [HttpPost("{id:guid}/meeting-minutes/email")]
+    [EndpointSummary("Email the meeting minutes to yourself")]
+    [EndpointDescription(
+        "Sends just the minutes (Markdown rendered to HTML), without the transcript, to **your own account " +
+        "address** - like the transcript email, there is no recipient parameter. Optionally attaches the " +
+        "recording's uploaded files. Returns 400 when the current transcription has no minutes yet, when your " +
+        "account has no email address, or when no email sender is configured on the platform.")]
     public async Task<IActionResult> EmailMeetingMinutes(Guid id, EmailMeetingMinutesRequest req)
     {
         var rec = await _db.Recordings
@@ -625,6 +711,12 @@ public class RecordingsController : ControllerBase
     /// overlap against the recording's wall-clock span). Requires the user to have granted Calendar access.
     /// Returns <c>{ match: null }</c> when nothing overlaps.</summary>
     [HttpGet("{id:guid}/calendar-match")]
+    [EndpointSummary("Suggest the calendar event this recording belongs to")]
+    [EndpointDescription(
+        "Looks for the Google Calendar meeting the recording was most likely captured during, by overlapping " +
+        "its wall-clock span against your events. This only suggests - nothing is stored until you confirm it " +
+        "with the calendar-link endpoint. Returns `{ \"match\": null }` when nothing overlaps, and requires you " +
+        "to have connected Google Calendar.")]
     public async Task<IActionResult> CalendarMatch(Guid id, CancellationToken ct)
     {
         var settings = await _db.UserSettings.FindAsync([UserId], ct);
@@ -659,6 +751,13 @@ public class RecordingsController : ControllerBase
     /// snapshot; the rich invite details are fetched live. <c>Manual</c> links are never overwritten by the
     /// auto-match.</summary>
     [HttpPut("{id:guid}/calendar-link")]
+    [EndpointSummary("Link a recording to a calendar event")]
+    [EndpointDescription(
+        "Stores the link, whether you are accepting the suggested match or picking an event by hand (the times " +
+        "need not line up). Only a lightweight snapshot is kept - title, times, colour - and the richer invite " +
+        "details are fetched live when displayed.\n\n" +
+        "A link made by hand is marked manual and is never overwritten by the automatic matcher, so a " +
+        "deliberate choice survives later re-matching. Replaces any existing link.")]
     public async Task<IActionResult> LinkCalendar(Guid id, LinkCalendarRequest req, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(req.EventId)) return BadRequest("An event id is required.");
@@ -704,6 +803,10 @@ public class RecordingsController : ControllerBase
 
     /// <summary>Remove this recording's calendar link (idempotent).</summary>
     [HttpDelete("{id:guid}/calendar-link")]
+    [EndpointSummary("Remove a recording's calendar link")]
+    [EndpointDescription(
+        "Detaches the recording from its calendar event. Idempotent - unlinking a recording that has no link " +
+        "succeeds. Only the link is removed; the calendar event itself is never touched.")]
     public async Task<IActionResult> UnlinkCalendar(Guid id, CancellationToken ct)
     {
         var rec = await _db.Recordings
@@ -720,6 +823,12 @@ public class RecordingsController : ControllerBase
     }
 
     [HttpPut("{id:guid}/segments/{segmentId:guid}")]
+    [EndpointSummary("Edit a segment's text")]
+    [EndpointDescription(
+        "Corrects one line of the transcript. The edit is stored as a **revision** alongside the model's " +
+        "original, which is never overwritten, so you can always see what was actually said. Send a null `text` " +
+        "to clear the revision and fall back to the original; an empty string is a revision to empty text, not " +
+        "a reset. Timings and the speaker label are not editable here.")]
     public async Task<IActionResult> UpdateSegment(Guid id, Guid segmentId, UpdateSegmentRequest req)
     {
         var seg = await _db.Segments.Include(s => s.Transcription)
@@ -741,6 +850,12 @@ public class RecordingsController : ControllerBase
     /// Permanent for this version — re-transcribe to regenerate the full set. Remaining segments are
     /// renumbered so their ordinals stay contiguous.</summary>
     [HttpDelete("{id:guid}/segments/{segmentId:guid}")]
+    [EndpointSummary("Delete a segment")]
+    [EndpointDescription(
+        "Removes one line from the current transcript - a filler row, a stray noise, and so on. Survivors are " +
+        "renumbered so ordinals stay contiguous. If this was a speaker's last remaining segment, that speaker " +
+        "drops off the recording and its stored voiceprint is cleared (any enrolled profile is untouched).\n\n" +
+        "**Permanent for this transcription version.** Re-transcribe to regenerate the full set.")]
     public async Task<IActionResult> DeleteSegment(Guid id, Guid segmentId)
     {
         var seg = await _db.Segments.Include(s => s.Transcription)
@@ -782,6 +897,12 @@ public class RecordingsController : ControllerBase
     /// <summary>Delete several segments from the current transcription at once (the Select-mode bulk delete),
     /// renumbering the survivors once. Ids that aren't on this caller's recording are ignored.</summary>
     [HttpPost("{id:guid}/segments/delete")]
+    [EndpointSummary("Delete several segments")]
+    [EndpointDescription(
+        "Bulk form of deleting a segment, renumbering the survivors once at the end rather than per row. Ids " +
+        "that do not belong to this recording are skipped rather than failing the request, so a partly stale " +
+        "selection still works. Same permanence: this affects the current transcription version only, and " +
+        "re-transcribing regenerates the full set.")]
     public async Task<IActionResult> DeleteSegments(Guid id, DeleteSegmentsRequest req)
     {
         var current = await _db.Transcriptions.Where(t => t.RecordingId == id)
@@ -810,6 +931,13 @@ public class RecordingsController : ControllerBase
     }
 
     [HttpPost("{id:guid}/summarize")]
+    [EndpointSummary("Generate a summary")]
+    [EndpointDescription(
+        "Queues an LLM summary of the current transcription and returns 202 immediately; poll the recording for " +
+        "the result. While it runs the recording's status is `Summarizing`. Calling again during that window is " +
+        "a no-op rather than queuing a second job.\n\n" +
+        "Asking for this explicitly means \"overwrite\": a summary you had edited by hand loses its protection " +
+        "and will be replaced. Returns 400 when no LLM endpoint is configured for you or the platform.")]
     public async Task<IActionResult> Summarize(Guid id)
     {
         var rec = await _db.Recordings
@@ -842,6 +970,12 @@ public class RecordingsController : ControllerBase
     /// <summary>Manually create or edit the current transcription's summary. Works even when no LLM is
     /// configured, and marks the summary as user-edited so the automatic summariser won't overwrite it.</summary>
     [HttpPut("{id:guid}/summary")]
+    [EndpointSummary("Write the summary by hand")]
+    [EndpointDescription(
+        "Creates or replaces the current transcription's summary with your own text. Works with no LLM " +
+        "configured at all, so it is the way to attach a summary on a platform with no model set up.\n\n" +
+        "The summary is then marked user-edited, which **protects it**: the automatic summariser will not " +
+        "overwrite it. Asking for a summary explicitly clears that protection.")]
     public async Task<IActionResult> UpdateSummary(Guid id, UpdateSummaryRequest req)
     {
         var rec = await _db.Recordings
@@ -874,6 +1008,14 @@ public class RecordingsController : ControllerBase
     /// <summary>Re-create the current transcription's meeting minutes via the LLM. Clears the protected-edit
     /// flag first (the UI warns), so this explicit re-create overwrites hand-edited minutes.</summary>
     [HttpPost("{id:guid}/meeting-minutes/generate")]
+    [EndpointSummary("Generate the meeting minutes")]
+    [EndpointDescription(
+        "Rebuilds the current transcription's minutes with the LLM, following the recording's meeting type " +
+        "(the template naming the formula that produces them). Queued in the background: returns 202 " +
+        "immediately, so poll the recording for the finished minutes. Returns 400 when no LLM endpoint is " +
+        "configured for you or the platform.\n\n" +
+        "This is an explicit re-create, so it **overwrites minutes you had edited by hand** - the protected-edit " +
+        "flag is cleared first. Warn the user before calling it.")]
     public async Task<IActionResult> GenerateMeetingMinutes(Guid id)
     {
         var rec = await _db.Recordings
@@ -900,6 +1042,12 @@ public class RecordingsController : ControllerBase
     /// default. The type must be usable by the owner (a Platform type or one they own). Clears the protected-edit
     /// flag so the run overwrites hand-edited minutes.</summary>
     [HttpPost("{id:guid}/meeting-type")]
+    [EndpointSummary("Set the meeting type and regenerate the minutes")]
+    [EndpointDescription(
+        "Chooses the template driving this recording's minutes and regenerates them in one step. Pass a null id " +
+        "for the General default. The type must be one you can use - a platform-wide type or one you own - " +
+        "otherwise you get 404. Like the explicit regenerate it is queued (202) and **overwrites hand-edited " +
+        "minutes**; 400 when no LLM endpoint is configured.")]
     public async Task<IActionResult> ApplyMeetingType(Guid id, ApplyMeetingTypeRequest req)
     {
         var rec = await _db.Recordings
@@ -932,6 +1080,11 @@ public class RecordingsController : ControllerBase
     /// with no LLM configured, and marks the minutes user-edited so the automatic generator won't overwrite
     /// them.</summary>
     [HttpPut("{id:guid}/meeting-minutes")]
+    [EndpointSummary("Write the meeting minutes by hand")]
+    [EndpointDescription(
+        "Creates or replaces the current transcription's minutes with your own Markdown. Works with no LLM " +
+        "configured. The minutes are then marked user-edited, which **protects them** from the automatic " +
+        "generator - though an explicit regenerate, or applying a meeting type, still overwrites them.")]
     public async Task<IActionResult> UpdateMeetingMinutes(Guid id, UpdateMeetingMinutesRequest req)
     {
         var rec = await _db.Recordings
@@ -959,6 +1112,11 @@ public class RecordingsController : ControllerBase
     }
 
     [HttpPut("{id:guid}/name")]
+    [EndpointSummary("Rename a recording")]
+    [EndpointDescription(
+        "Sets the display name. This is separate from the automatic title assigned at upload, which is kept: " +
+        "send a blank name to clear yours and fall back to that title. The summariser also fills this in " +
+        "automatically for a recording that has no name yet, so setting one stops that.")]
     public async Task<IActionResult> Rename(Guid id, RenameRecordingRequest req)
     {
         var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
@@ -970,6 +1128,13 @@ public class RecordingsController : ControllerBase
     }
 
     [HttpPut("{id:guid}/section")]
+    [EndpointSummary("File a recording in a folder")]
+    [EndpointDescription(
+        "Moves the recording into a folder, or ungroups it with a null `sectionId`. The folder belongs to the " +
+        "placement in one room, not to the recording itself, so this only affects the given room (your personal " +
+        "room by default) - the same recording can sit in a different folder in each room it is shared into.\n\n" +
+        "Requires `ManageContents` in that room; you always hold it in your own personal room. The recording " +
+        "must already be placed in the room, and the target folder must belong to it.")]
     public async Task<IActionResult> MoveToSection(Guid id, MoveRecordingRequest req)
     {
         // The folder lives on the placement in the room being viewed (its personal room by default; null section
@@ -991,6 +1156,13 @@ public class RecordingsController : ControllerBase
     /// <summary>Share a recording from one room into another (a non-main placement). Needs <c>ShareOut</c> in the
     /// source room and <c>CreateRecording</c> in the target; the link lands ungrouped for now.</summary>
     [HttpPost("{id:guid}/share")]
+    [EndpointSummary("Share a recording into another room")]
+    [EndpointDescription(
+        "Adds the recording to a second room. This is a **link, not a copy**: one recording, visible in both " +
+        "rooms, each with its own folder and position. The original placement is unaffected, and members of the " +
+        "target room can read the transcript, notes, and screenshots but only the owner can change them.\n\n" +
+        "Needs `ShareOut` in the source room and `CreateRecording` in the target. The share lands ungrouped. " +
+        "Personal rooms cannot receive shares.")]
     public async Task<IActionResult> Share(Guid id, ShareRecordingRequest req)
     {
         // The recording must actually be placed in the source room (and the caller a member with ShareOut).
@@ -1006,6 +1178,15 @@ public class RecordingsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
+    [EndpointSummary("Delete a recording")]
+    [EndpointDescription(
+        "Permanently deletes the recording and everything belonging to it: every transcription version and its " +
+        "segments, summaries and minutes, speakers, action items, notes, attachments, and screenshots, along " +
+        "with the stored audio, attachment files, and screenshot images. It also disappears from every room it " +
+        "was shared into.\n\n" +
+        "**There is no undo and no recycle bin.** Only the owner can delete; sharing a recording into a room " +
+        "does not let that room's members delete it. Enrolled speaker profiles survive - they are separate " +
+        "records. To free the audio bytes while keeping the transcript, delete just the audio instead.")]
     public async Task<IActionResult> Delete(Guid id)
     {
         var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
@@ -1046,6 +1227,13 @@ public class RecordingsController : ControllerBase
     /// bytes against the owner's quota (SizeBytes -> 0) and flags <see cref="Recording.AudioDeletedAt"/>.
     /// Idempotent: deleting already-deleted audio is a no-op success.</summary>
     [HttpDelete("{id:guid}/audio")]
+    [EndpointSummary("Delete a recording's audio")]
+    [EndpointDescription(
+        "Deletes the audio blob while keeping the transcript, summary, minutes, actions, and everything else. " +
+        "The recording's bytes are released against your storage quota and it is flagged as audio-deleted.\n\n" +
+        "You lose playback and the ability to re-transcribe, both of which need the original audio. Idempotent: " +
+        "deleting already-deleted audio succeeds. Returns 409 while the recording is protected from audio " +
+        "deletion - clear the protection first.")]
     public async Task<IActionResult> DeleteAudio(Guid id)
     {
         var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
@@ -1066,6 +1254,11 @@ public class RecordingsController : ControllerBase
     /// <summary>Bulk variant of <see cref="DeleteAudio"/> for the recordings-list "Delete audio" action.
     /// Skips ids that aren't the caller's or already have no audio.</summary>
     [HttpPost("audio/delete")]
+    [EndpointSummary("Delete the audio of several recordings")]
+    [EndpointDescription(
+        "Bulk form of deleting a recording's audio. Transcripts are kept and the freed bytes are returned to " +
+        "your quota. Ids that are not yours, already have no audio, or are protected from audio deletion are " +
+        "skipped, so a mixed selection still succeeds.")]
     public async Task<IActionResult> DeleteAudioBulk(DeleteAudioRequest req)
     {
         var ids = (req.Ids ?? []).ToList();
@@ -1088,6 +1281,12 @@ public class RecordingsController : ControllerBase
     /// <summary>Protect (or unprotect) a recording's audio from deletion. While protected, both the nightly
     /// auto-retention job and the manual <see cref="DeleteAudio"/> action skip/refuse it.</summary>
     [HttpPut("{id:guid}/audio-protection")]
+    [EndpointSummary("Protect a recording's audio from deletion")]
+    [EndpointDescription(
+        "Marks the audio as protected, or clears that. While protected the recording is skipped by the nightly " +
+        "auto-retention job and refused by both the single and bulk audio-delete endpoints. Use it to keep " +
+        "important recordings playable and re-transcribable on a platform with a retention policy. It does not " +
+        "protect against deleting the whole recording.")]
     public async Task<IActionResult> SetAudioProtection(Guid id, SetAudioProtectionRequest req)
     {
         var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
@@ -1109,6 +1308,17 @@ public class RecordingsController : ControllerBase
     /// available audio and the worker callback swaps in the combined blob and deletes the other recordings;
     /// when none has audio the merge finishes synchronously. The summary is not merged (regenerate it).</summary>
     [HttpPost("merge")]
+    [EndpointSummary("Merge recordings into one")]
+    [EndpointDescription(
+        "Combines two or more recordings into the **earliest-created** one, which survives; the others are " +
+        "deleted. Their transcripts are concatenated with timestamps laid end to end into a new transcription " +
+        "version on the survivor, and their action items are appended. Use it for a meeting captured in several " +
+        "parts.\n\n" +
+        "Recordings whose audio has been deleted can still be merged - they contribute transcript and actions " +
+        "only. If any source still has audio the response is 202 and an audio-concatenation job stitches the " +
+        "available audio in the background, swapping in the combined blob and removing the other recordings " +
+        "when it finishes; if none has audio the merge completes synchronously.\n\n" +
+        "The summary and minutes are **not** merged - regenerate them afterwards.")]
     public async Task<IActionResult> Merge(MergeRecordingsRequest req)
     {
         var ids = (req.Ids ?? []).Distinct().ToList();
@@ -1258,6 +1468,13 @@ public class RecordingsController : ControllerBase
     /// client. The &lt;audio&gt; element / download link can't send an Authorization header, so the caller's
     /// bearer is carried as <c>access_token</c> (the same approach SignalR uses for its WS handshake).</summary>
     [HttpGet("{id:guid}/audio-url")]
+    [EndpointSummary("Get a playable URL for the audio")]
+    [EndpointDescription(
+        "Returns a same-origin URL an `<audio>` element or a download link can use directly. Those cannot send " +
+        "an `Authorization` header, so the URL carries your bearer token as an `access_token` query parameter " +
+        "instead - **treat it as a credential**: anyone with the URL can fetch the audio until the token " +
+        "expires. The audio is served by the API itself, so the object store never has to be reachable from the " +
+        "client. Pass `download=true` for a URL that saves rather than streams.")]
     public async Task<ActionResult<object>> AudioUrl(Guid id, [FromQuery] bool download = false)
     {
         var owned = await _db.Recordings.AnyAsync(r => r.Id == id && r.UserId == UserId && r.AudioDeletedAt == null);
@@ -1273,6 +1490,12 @@ public class RecordingsController : ControllerBase
     /// other endpoint, but also accepts the bearer via <c>access_token</c> (see Program.cs) so the
     /// &lt;audio&gt; element can load it.</summary>
     [HttpGet("{id:guid}/audio")]
+    [EndpointSummary("Stream or download the audio")]
+    [EndpointDescription(
+        "Serves the original audio bytes, honouring HTTP `Range` requests so a player can seek without pulling " +
+        "the whole file (206 for a range, 200 for the lot). Pass `download=true` to get it as an attachment.\n\n" +
+        "Authenticated like any other endpoint, but the bearer may also be supplied as an `access_token` query " +
+        "parameter so an `<audio>` element can load it. Returns 404 once the audio has been deleted.")]
     public async Task<IActionResult> GetAudio(Guid id, [FromQuery] bool download = false, CancellationToken ct = default)
     {
         var rec = await _db.Recordings.FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId, ct);
@@ -1321,15 +1544,31 @@ public class RecordingsController : ControllerBase
     }
 
     [HttpGet("{id:guid}/transcript.txt")]
+    [EndpointSummary("Download the transcript as plain text")]
+    [EndpointDescription(
+        "The current transcript as a `.txt` download: the recording name, its summary, then the " +
+        "speaker-labelled segments. Speaker names and section labels follow your interface language. Reflects " +
+        "your segment edits, using the revised text where you have corrected a line.")]
     public Task<IActionResult> TranscriptTxt(Guid id) => RenderTranscriptAsync(id, "txt");
 
     [HttpGet("{id:guid}/transcript.md")]
+    [EndpointSummary("Download the transcript as Markdown")]
+    [EndpointDescription(
+        "The same content as the plain-text export, formatted as Markdown for pasting into a document or wiki.")]
     public Task<IActionResult> TranscriptMd(Guid id) => RenderTranscriptAsync(id, "md");
 
     [HttpGet("{id:guid}/transcript.rtf")]
+    [EndpointSummary("Download the transcript as RTF")]
+    [EndpointDescription(
+        "The same content as the plain-text export, as Rich Text for opening in Word or a similar editor with " +
+        "its formatting intact.")]
     public Task<IActionResult> TranscriptRtf(Guid id) => RenderTranscriptAsync(id, "rtf");
 
     [HttpGet("{id:guid}/transcript.srt")]
+    [EndpointSummary("Download the transcript as subtitles")]
+    [EndpointDescription(
+        "The transcript as an SRT subtitle file: numbered cues with start and end timecodes, and **nothing " +
+        "else** - no name or summary, unlike the other export formats. Suitable for a video editor or player.")]
     public Task<IActionResult> TranscriptSrt(Guid id) => RenderTranscriptAsync(id, "srt");
 
     /// <summary>Render the current transcript as a download. txt/md/rtf mirror the emailed layout
