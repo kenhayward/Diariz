@@ -48,6 +48,9 @@ public static class IcsCalendar
                 var effEnd = occ.Period.EffectiveEndTime?.AsUtc ?? occ.Period.StartTime.AsUtc;
                 var endAt = new DateTimeOffset(effEnd, TimeSpan.Zero);
 
+                // A date-only DTSTART (`DTSTART;VALUE=DATE:20260212`) is an all-day entry, not a timed meeting.
+                var allDay = !occ.Period.StartTime.HasTime;
+
                 results.Add(new CalendarEvent(
                     Id: MakeId(source, startAt),
                     Summary: NullIfBlank(source.Summary),
@@ -60,7 +63,8 @@ public static class IcsCalendar
                     Attendees: null,
                     CalendarId: calendarId,
                     CalendarName: calendarName,
-                    Color: color));
+                    Color: color,
+                    AllDay: allDay));
             }
         }
         catch

@@ -53,6 +53,7 @@ At a glance - see **[docs/features.md](docs/features.md)** for the full detail o
 | **Backup & restore** | A Platform Administrator can export the whole platform (database + files) as one archive and restore it, with live progress while the archive is built or applied. |
 | **Desktop apps** | Electron thin shell for Windows (tray) and macOS (menu-bar, beta): system audio, tray recording, Google sign-in, auto-update on Windows. |
 | **Status bar** | Live pipeline progress plus storage, transcription, and transcript counts along the bottom. |
+| **Help & documentation** | A browsable help section at `/help` with a grouped article tree and instant search, plus a `?` beside features that opens a short explanation linking to the full article. Includes an Advanced and admin section covering formulas, meeting types, automations, permissions, MCP, n8n, Zapier, and the API. |
 
 See **[docs/features.md](docs/features.md)** for the full prose description of each feature.
 

@@ -56,6 +56,8 @@ import {
 } from "../lib/pendingNotes";
 import {
   canCaptureScreenshots,
+  hasCaptureArea,
+  onCaptureAreaChanged,
   onScreenshotCaptured,
   requestCapture,
   requestChangeArea,
@@ -656,6 +658,24 @@ export default function Recorder({
     });
   }, []);
 
+  // Whether this recording has a capture area yet. Capturing without one opens the shell's area picker and
+  // leaves every capture control inert until it settles, so the capture buttons stay disabled until the area
+  // is set - making "set the area" the visible first step instead of a button that looks broken. Asked once
+  // on mount (a mid-recording reload must not assume "no area") and kept live by the shell's notifications.
+  const [captureAreaSet, setCaptureAreaSet] = useState(false);
+  useEffect(() => {
+    if (!canCaptureScreenshots()) return;
+    let active = true;
+    void hasCaptureArea().then((has) => {
+      if (active) setCaptureAreaSet(has);
+    });
+    const unsubscribe = onCaptureAreaChanged((has) => setCaptureAreaSet(has));
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
+
   // `trayKind` is set only when the Electron tray drives us (it speaks coarse mic/system); the on-screen
   // button passes nothing and records the current `selection`. A tray "mic" maps to the current specific
   // mic (or default), "system" to loopback.
@@ -1099,7 +1119,14 @@ export default function Recorder({
             while the notes popover is open - it offers its own capture button in that state, and showing
             both at once would just be two identically-labelled controls doing the same thing. */}
         {recording && canCaptureScreenshots() && !hub.isOpen("notes") && (
-          <HubIconButton label={t("screenshotCaptureButton")} onClick={requestCapture}>
+          <HubIconButton
+            label={t("screenshotCaptureButton")}
+            title={captureAreaSet ? undefined : t("screenshotCaptureNeedsArea")}
+            onClick={requestCapture}
+            // Same gate as the popover's capture button: with no area chosen this would open the picker and
+            // then sit inert until it settled. The area is set from the notes popover (or the tray).
+            disabled={!captureAreaSet}
+          >
             <IconCamera />
           </HubIconButton>
         )}
@@ -1125,6 +1152,7 @@ export default function Recorder({
               onDeleteShot={deleteLiveShot}
               onChangeCaptureArea={canCaptureScreenshots() ? requestChangeArea : undefined}
               onCapture={canCaptureScreenshots() ? requestCapture : undefined}
+              captureAreaSet={captureAreaSet}
             />
           </div>
         )}

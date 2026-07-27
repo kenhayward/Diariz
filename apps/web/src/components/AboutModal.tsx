@@ -44,6 +44,14 @@ export default function AboutModal({ onClose }: { onClose: () => void }) {
         {/* Links */}
         <div className="mt-4 flex flex-wrap gap-4 text-sm">
           <a
+            href="/help"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:underline dark:text-blue-400"
+          >
+            {t("help:browseHelp")}
+          </a>
+          <a
             href="/release-notes"
             target="_blank"
             rel="noopener noreferrer"

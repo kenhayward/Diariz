@@ -1411,7 +1411,7 @@ const GENERATED: GeneratedResource[] = [
       {
         "value": "suggestTheCalendarEventThisRecordingBelongsTo",
         "displayName": "Suggest the calendar event this recording belongs to",
-        "description": "Looks for the Google Calendar meeting the recording was most likely captured during, by overlapping its wall-clock span against your events. This only suggests - nothing is stored until you confirm it with the calendar-link endpoint. Returns { \"match\": null } when nothing overlaps, and requires you to have connected Google Calendar.",
+        "description": "Looks for the Google Calendar meeting the recording was most likely captured during, by overlapping its wall-clock span against your events. Only timed meetings are considered - an all-day entry (holiday, birthday, out-of-office day) is never suggested or linked automatically, though you can still link one by hand. This only suggests - nothing is stored until you confirm it with the calendar-link endpoint. Returns { \"match\": null } when nothing overlaps, and requires you to have connected Google Calendar.",
         "method": "GET",
         "path": "/api/recordings/{id}/calendar-match",
         "pathParams": [

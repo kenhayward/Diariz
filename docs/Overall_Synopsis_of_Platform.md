@@ -571,7 +571,18 @@ meeting. On the **first** capture of a recording it opens a full-screen overlay 
 target (`{ displayId, selection }`) is cached in memory and reused for every later capture in that
 recording, and is cleared on every transition into "recording" so a stale rectangle from a previous monitor
 layout can never silently capture the wrong thing. A tray/recorder "Change capture area" action
-(`screenshot:change-area`) forgets the cached target and reopens the picker mid-meeting. The grabbed image
+(`screenshot:change-area`) forgets the cached target and reopens the picker mid-meeting.
+**Whether an area is set is mirrored to the renderer** (`screenshot:has-area` for the starting value,
+`screenshot:area-changed` for every later change - every write goes through main's `setCaptureTarget`), and
+the web app **disables its capture buttons until there is one**: capturing with no area opens the picker,
+and while that picker is waiting both capture controls no-op behind the in-flight guard, which reads as the
+notes popover having frozen. Setting the area is therefore the visible first step. Defence in depth for the
+same trap: a UI capture or change-area click while a picker is *already* open now **re-surfaces that
+overlay** (`show` + focus on the cursor's display) instead of silently returning its pending promise, so an
+overlay that slipped behind another window can always be reached. The hotkey path deliberately does not
+re-surface - it auto-repeats at ~30Hz while held and would fight the user's drag. An **older shell** without
+the bridge reports "area set" so it keeps its original pick-on-first-capture behaviour against a newer web
+build. The grabbed image
 is resized so its **long edge is capped at 2560px** (`MAX_LONG_EDGE`) and a **320px-long-edge JPEG
 thumbnail** is derived from it, then both are pushed to the renderer as raw bytes - main never touches the
 recording clock or uploads anything. The **renderer** (`Recorder.tsx`) is the only side that knows about
@@ -586,8 +597,10 @@ the web app):
 
 | Channel | Direction | Payload |
 |---|---|---|
-| `screenshot:capture` | renderer → main (invoke) | none - captures now, opening the picker first if this recording has no target yet |
+| `screenshot:capture` | renderer → main (invoke) | none - captures now; opens the picker if this recording has no target yet, or re-surfaces one already waiting |
 | `screenshot:change-area` | renderer → main (invoke) | none - forgets the cached target and reopens the picker |
+| `screenshot:has-area` | renderer → main (invoke) | none → `boolean`: whether this recording has a capture area yet (the renderer's starting value) |
+| `screenshot:area-changed` | main → renderer (event) | `boolean` - the area was chosen (`true`) or cleared (`false`: new recording, re-pick, or a display that went away) |
 | `screenshot:captured` | main → renderer (event) | `{ full, thumb, width, height }` (PNG/JPEG bytes as `Uint8Array`) |
 | `picker:choose` | picker window → main (send) | the user's selection (`{ displayId, selection }` or a whole-monitor pick) |
 | `picker:cancel` | picker window → main (send) | none - the overlay was dismissed (Escape) without a choice |
@@ -664,7 +677,8 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   (respecting Settings → Chat Tools per-tool choices, but **not** the chat *master* switch — the MCP opt-in is holding a
   token), **minus `add_as_attachment`** (which needs an in-chat selection). `send_email` is included (it can only
   ever email the user's own address). Each tool carries an MCP **`readOnlyHint` annotation** (from
-  `IChatTool.ReadOnly` — true for every read/search tool, **false only for `send_email`**) plus
+  `IChatTool.ReadOnly` — true for every read/search tool, **false for the two write tools, `send_email` and
+  `run_formula`**) plus
   `destructiveHint=false`, so clients can group read-only vs write tools (`McpToolProjection.Annotations`). Tool
   results' in-app deep-links are rewritten to **absolute** URLs (`McpLinkRewriter`, against `App:PublicUrl` or the
   request origin) so they're clickable in Claude.
@@ -945,7 +959,7 @@ into it with no URL or per-user setup at all.
     token's scope travels onto the principal as a claim and `ApiTokenScopeMiddleware` (a pure `ApiTokenScopePolicy`
     plus a thin ASP.NET middleware, runs after authentication) rejects any unsafe verb (POST/PUT/PATCH/DELETE)
     from it with 403 — JWT/browser sessions carry no scope claim and are unaffected. The create-token UI
-    (Preferences → Developers) offers a scope radio and an optional expiry date picker.
+    (Preferences → Developers) offers a **"Read-only (cannot change anything)" checkbox** and an optional expiry date picker.
 - **Three independent platform integration toggles.** `PlatformSettings` carries three master switches, each a
   Platform Admin setting on **Settings → Integration** and independent of the others: `ApiAccessEnabled` (personal
   API tokens / the REST API, default **off**), `McpAccessEnabled` (the `/mcp` server and `dz_mcp_` tokens, default
@@ -965,7 +979,7 @@ into it with no URL or per-user setup at all.
   browsable in the in-app reference — no new endpoints were added for this.
 - **RBAC (user groups + platform permissions).** Authority comes from **group membership**, not from a role.
   A `UserGroup` carries a `[Flags] PlatformPermission` (`ManageRooms = 1`, `ManageUsers = 2`,
-  `ManagePlatform = 4`; append-only), users join via `UserGroupMember`, and a caller's effective permissions
+  `ManagePlatform = 4`, `ManageFormulas = 8`; append-only), users join via `UserGroupMember`, and a caller's effective permissions
   are the **union** of the flags on every group they belong to. `IUserPermissions` resolves that **from the
   database on each request** — never from a token claim, which would keep granting authority until it expired,
   long after the user left the group. `PermissionAuthorizationHandler` backs the policies `ManageRooms`,
@@ -1157,8 +1171,11 @@ into it with no URL or per-user setup at all.
   Overview calls **`GET /api/recordings/{id}/calendar-match`**, which asks `ListEventsAsync` for events across the
   user's selected calendars around the recording's wall-clock span (`CreatedAt` .. `+DurationMs`, padded ±30 min),
   and returns the **best time-overlapping** event (`GoogleCalendarClient.PickBest`) as `{ match }` (or `null`).
-  Read-only (`calendar.readonly`); 400s without the grant. The Overview shows the matched meeting with a link to
-  the Google Calendar event.
+  **All-day entries are excluded from matching**: a date-only event (holiday, birthday, out-of-office day) blankets
+  the whole day, so it would out-overlap every real meeting and would be auto-linked to anything recorded that day.
+  `CalendarEvent.AllDay` carries the flag (Google: a `date` rather than `dateTime` start; ICS: a date-only `DTSTART`)
+  and `PickBest` skips those events - they remain linkable **by hand**. Read-only (`calendar.readonly`); 400s without
+  the grant. The Overview shows the matched meeting with a link to the Google Calendar event.
 - **Persisted calendar links (Phase 2 feature):** the match above is a *suggestion* - a recording can also be
   **persistently linked** to an event via **`PUT /api/recordings/{id}/calendar-link`** `{ eventId, manual }`
   (owner-scoped, requires the grant), stored as a 1:1 **`RecordingCalendarLink`** (shared PK, cascade) holding a
@@ -1269,6 +1286,45 @@ Voiceprints are **per-user** (a user's voiceprints only match their own recordin
   **`UserSettings.UiLanguage`** and pass an `ExportStrings` to the (pure) formatters, which default to English.
   Transcript *content* already uses `EffectiveText` (translated when the user translated).
 
+## Help system (user documentation)
+
+- **Two surfaces, one content set.** A browsable **`/help`** page (grouped article tree + client-side
+  search, the same page shape as `/release-notes`) and **contextual help**: a `?` button beside a feature
+  that opens a short popover with a deep link to the full article. Both read the same Markdown files, and
+  the popover renders the article's own `summary` field, so the brief and full explanations cannot drift.
+- **Content is bundled, not served.** Articles are Markdown files at
+  **`apps/web/src/content/help/<locale>/<slug>.md`**, loaded by `lib/help/content.ts` via
+  `import.meta.glob(..., { query: "?raw", eager: true })` - the same auto-discovery idiom as the i18n
+  catalogs, so adding an article is a file drop with **no code change** and no API/DB surface. They live
+  under `apps/web/` because the web image's Docker build context is that directory (the repo-root `docs/`
+  folder is **not** visible to it).
+- **Front matter** is a deliberately non-YAML `key: value` block (`title`, `summary`, `group`, `order`)
+  parsed by `lib/help/parseArticle.ts`, so there is no parser dependency and content cannot grow structure
+  the loader does not understand.
+- **English-only prose, translatable structure.** `findArticle` resolves the requested locale and falls
+  back to `en`, so a `de/` folder can be added later without code changes. Only *chrome* (nav labels,
+  search box, buttons) lives in the i18n `help` namespace - long-form prose in JSON catalogs would be
+  unreviewable, and `locales.test.ts` key parity would force four-file edits per doc change.
+- **Routing.** `/help` and `/help/:slug` are **public** top-level routes (siblings of `/release-notes`),
+  outside `WorkspaceLayout`. `HelpProvider` is therefore mounted in **`main.tsx`**, not `WorkspaceLayout`,
+  so `?` buttons work on the standalone pages too; it renders one popover into `document.body` via a
+  portal at `z-[70]`, above modals (`z-50`) and the tour overlay (`z-[60]`). nginx's SPA fallback already
+  covers the deep links, so no infra change was needed.
+- **Screenshots are co-located with the article** (`content/help/<locale>/images/*.png`) and referenced
+  relatively (`![Alt](./images/x.png)`). Vite fingerprints assets, so the source path is not the build
+  path: `lib/help/images.ts` globs the images with `query: "?url"` and rewrites each relative `src` to the
+  emitted URL before rendering. A localised article uses its own screenshot when one exists and otherwise
+  falls back to the English one. Absolute (`public/`) and external URLs are left alone. Files under ~4 KB
+  are inlined as data URIs by Vite; larger ones are emitted separately.
+- **Merge gates.** `content/help/helpContent.test.ts` asserts every article is **ASCII only** (naming the
+  file, line, and offending character - this also enforces the no-em-dash rule mechanically), that each
+  declares a title, a popover-sized summary, and a known group, that **every referenced screenshot exists**
+  (a renamed or uncommitted image fails the build rather than shipping a broken picture), and that **every
+  `<HelpButton topic="...">` in the source resolves to a real article**, so a dangling `?` cannot merge.
+- **Not a fourth sync target.** The README Features table, `docs/features.md`, and the About-box
+  `CAPABILITIES` are *inventories*; help articles are task-oriented "how do I / what happens if" prose for
+  users in the app. They are different genres and are deliberately not kept in lockstep line for line.
+
 ## Audio storage & playback
 
 - Original blobs live in **MinIO**; the **API streams them back itself** (same-origin) rather than handing
@@ -1306,8 +1362,10 @@ Voiceprints are **per-user** (a user's voiceprints only match their own recordin
 ## GPU / worker notes
 
 The worker pins a **CUDA 12.8 (cu128)** torch stack so it runs on Blackwell / RTX 50-series (sm_120). Three
-non-obvious pins make whisperx 3.3.1 work (`ctranslate2==4.6.3`, `transformers==4.48.0` +
-`huggingface_hub==0.27.1`, and a `torch.load(weights_only=False)` shim for pyannote checkpoints). Diarization
+non-obvious pins make whisperx 3.3.1 work (`ctranslate2==4.6.3`, `transformers==4.53.3` +
+`huggingface_hub==0.35.3`, and a `torch.load(weights_only=False)` shim for pyannote checkpoints). The Hugging
+Face pair is capped below `huggingface_hub` 1.0 / `transformers` 5.x: hub 1.0 dropped the shim that maps the
+`use_auth_token` kwarg pyannote.audio 3.3.2 still passes to `hf_hub_download`. Diarization
 is **gated on Hugging Face**: you must set `HF_TOKEN` and accept the pyannote 3.1 + segmentation-3.0 terms, or
 jobs fail. CPU-only is possible (`DEVICE=cpu COMPUTE_TYPE=int8`, slow). Models load **lazily and are cached**
 across jobs. Real working-set VRAM is ~9 GB during transcription (large-v3 + align + pyannote). See the README

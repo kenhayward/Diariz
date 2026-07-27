@@ -377,3 +377,38 @@ one. Both report progress while they run: the panel shows the archive being buil
 many files are in so far, and elapsed time) before the download begins, and during a restore it distinguishes
 uploading the archive from the server applying it. Restore is destructive (replaces all data) and accepts a
 backup from this app version or an older, forward-migratable one.
+- **Help and documentation.** A browsable help section at **`/help`**: a fixed header, a resizable
+left-hand tree of articles grouped into Getting started / Working with recordings / Asking questions /
+Settings and sharing, and the selected article rendered on the right. A **search box** above the tree
+ranks articles by where the query matched (title, summary, heading, then body) and shows a snippet of
+the surrounding text; clearing it restores the tree exactly where you were. Every article has its own
+address (`/help/<slug>`), so links into the docs are stable and the browser's back button works. The
+page is **public**, like the release notes, so it can be read before signing in and opened in a new tab
+without losing your place in the app.
+Alongside it is **contextual help**: a small **`?`** placed next to a feature or a setting. Clicking one
+opens a popover with a two-or-three-sentence explanation and a **Read more** link straight to the
+matching article. The popover is rendered once at the top of the app and portalled over everything else,
+so a `?` inside a settings modal is never clipped by it, and only one is ever open at a time. The short
+text is the article's own `summary` field, so the brief and full explanations cannot drift apart.
+Articles are **plain Markdown files in the repository** (`apps/web/src/content/help/<locale>/`) with a
+small `title` / `summary` / `group` / `order` front-matter block, bundled into the web build - adding one
+is a file drop with no code change. Content is **ASCII only**, enforced by a test that names the file,
+line, and offending character. A second test scans the source for every `?` button and fails the build if
+one points at an article that does not exist. Prose is English for now; the loader already resolves a
+requested locale and falls back to English, so translations are a folder away. Reach the docs from the
+account menu, the About box, or the welcome panel.
+An **Advanced and admin** group covers the topics an administrator or power user needs in depth:
+configuring a formula field by field (the template blocks, break-after controls, merge fields, context
+toggles, sharing, and what blocks a deletion); meeting types and how one names the formula that
+generates its minutes; automations and Workflow Signals, including how an admin wires a destination once
+so formula authors just tick a box, and why personal subscribers get a thin payload while platform ones
+get the full output; users, groups and the four platform permissions, the access-request lifecycle, and
+how room permissions differ; connecting Claude over MCP for claude.ai, Claude Desktop, and Claude Code,
+with the reverse-proxy requirements that cause almost every connection failure; a step-by-step guide to
+the `n8n-nodes-diariz` community node; the equivalent recipe for Zapier, which is **deliberately honest
+that no Zapier app exists** and shows the Catch Hook plus custom-request path instead; and an overview of
+the REST API linking to the in-app reference and the OpenAPI document.
+Articles can carry **screenshots**, stored beside the article (`content/help/<locale>/images/`) and
+referenced relatively; the loader rewrites the path to the bundled asset, falls back to the English
+screenshot for an untranslated locale, and the content gate fails the build on an image that does not
+exist.

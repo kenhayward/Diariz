@@ -200,6 +200,11 @@ export default function UserMenu() {
               <MenuRow label={t("manageFormulas")} onSelect={run(() => setFormulasOpen(true))} />
             )}
             <MenuRow label={t("showTour")} onSelect={run(() => tour.start())} />
+            {/* A new tab, so opening the docs never discards what the user was doing. */}
+            <MenuRow
+              label={t("help:title")}
+              onSelect={run(() => window.open("/help", "_blank", "noopener"))}
+            />
             <MenuRow label={t("about")} onSelect={run(() => setAboutOpen(true))} />
           </div>
 

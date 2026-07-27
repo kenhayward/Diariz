@@ -6,6 +6,7 @@ import { normalizeBreaks, contentError, emptyContent } from "../lib/meetingTypeD
 import TemplateContentEditor from "./TemplateContentEditor";
 import { FormulaContextBits, type Formula, type FormulaScope } from "../lib/types";
 import FlaskIcon from "./FlaskIcon";
+import HelpButton from "./HelpButton";
 
 // Attachments (FormulaContextBits.Attachments) is intentionally omitted until attachment extraction
 // ships in a later phase - FormulaContextBuilder ignores the flag today, so surfacing it would be a no-op.
@@ -123,6 +124,7 @@ export default function FormulaEditModal({
         <h2 className="flex items-center gap-2 text-base font-semibold dark:text-gray-100">
           <FlaskIcon />
           {title}
+          <HelpButton topic="formula-configuration" />
         </h2>
 
         <label className="block text-sm">

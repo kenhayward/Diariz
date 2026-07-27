@@ -12,12 +12,14 @@ public record CalendarAttendee(string? Email, string? DisplayName, string? Respo
 /// (<see cref="Description"/>/<see cref="Location"/>/<see cref="Organizer"/>/<see cref="Attendees"/>) are
 /// populated by <see cref="GoogleCalendarClient.GetEventAsync"/> and the events list. <see cref="CalendarId"/>/
 /// <see cref="CalendarName"/>/<see cref="Color"/> identify which of the user's calendars the event is on (the
-/// colour is that calendar's Google background hex) so the UI can show and colour events from every calendar.</summary>
+/// colour is that calendar's Google background hex) so the UI can show and colour events from every calendar.
+/// <see cref="AllDay"/> marks a date-only entry (holiday, birthday, "out of office" day) rather than a timed
+/// meeting - such an entry is never picked by <see cref="GoogleCalendarClient.PickBest"/>.</summary>
 public record CalendarEvent(
     string Id, string? Summary, DateTimeOffset Start, DateTimeOffset End, string? HtmlLink,
     string? Description = null, string? Location = null,
     CalendarAttendee? Organizer = null, IReadOnlyList<CalendarAttendee>? Attendees = null,
-    string? CalendarId = null, string? CalendarName = null, string? Color = null);
+    string? CalendarId = null, string? CalendarName = null, string? Color = null, bool AllDay = false);
 
 /// <summary>One of the user's calendars from their calendarList (primary, secondary, shared/team, or a
 /// subscribed feed). <see cref="BackgroundColor"/>/<see cref="ForegroundColor"/> are Google's hex colours.</summary>
@@ -252,7 +254,7 @@ public class GoogleCalendarClient : IGoogleCalendarClient
     {
         var id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
         if (id is null) return null;
-        if (!TryReadTime(item, "start", out var start) || !TryReadTime(item, "end", out var end)) return null;
+        if (!TryReadTime(item, "start", out var start, out var allDay) || !TryReadTime(item, "end", out var end, out _)) return null;
 
         var summary = item.TryGetProperty("summary", out var s) ? s.GetString() : null;
         var htmlLink = item.TryGetProperty("htmlLink", out var h) ? h.GetString() : null;
@@ -269,7 +271,7 @@ public class GoogleCalendarClient : IGoogleCalendarClient
                 if (a.ValueKind == JsonValueKind.Object)
                     attendees.Add(ReadAttendee(a));
 
-        return new CalendarEvent(id, summary, start, end, htmlLink, description, location, organizer, attendees);
+        return new CalendarEvent(id, summary, start, end, htmlLink, description, location, organizer, attendees, AllDay: allDay);
     }
 
     private static CalendarAttendee ReadAttendee(JsonElement a) => new(
@@ -279,14 +281,17 @@ public class GoogleCalendarClient : IGoogleCalendarClient
         a.TryGetProperty("organizer", out var o) && o.ValueKind == JsonValueKind.True,
         a.TryGetProperty("self", out var se) && se.ValueKind == JsonValueKind.True);
 
-    /// <summary>The event that overlaps the recording's time span the most, or null when none overlap.
-    /// Pure so it can be unit-tested without the Calendar API.</summary>
+    /// <summary>The timed event that overlaps the recording's time span the most, or null when none overlap.
+    /// All-day entries are skipped outright: they blanket the whole day, so they would out-overlap every real
+    /// meeting, and a holiday/birthday/out-of-office day is not the meeting a recording came from. (They can
+    /// still be linked by hand from the picker.) Pure so it can be unit-tested without the Calendar API.</summary>
     public static CalendarEvent? PickBest(IReadOnlyList<CalendarEvent> events, DateTimeOffset recStart, DateTimeOffset recEnd)
     {
         CalendarEvent? best = null;
         var bestOverlap = TimeSpan.Zero;
         foreach (var e in events)
         {
+            if (e.AllDay) continue;
             var overlapStart = recStart > e.Start ? recStart : e.Start;
             var overlapEnd = recEnd < e.End ? recEnd : e.End;
             var overlap = overlapEnd - overlapStart;
@@ -299,15 +304,22 @@ public class GoogleCalendarClient : IGoogleCalendarClient
         return best;
     }
 
-    private static bool TryReadTime(JsonElement item, string name, out DateTimeOffset value)
+    /// <summary>Read a Google start/end node. <paramref name="allDay"/> reports which shape it used, so the
+    /// caller can tell a date-only entry from a timed meeting.</summary>
+    private static bool TryReadTime(JsonElement item, string name, out DateTimeOffset value, out bool allDay)
     {
         value = default;
+        allDay = false;
         if (!item.TryGetProperty(name, out var node) || node.ValueKind != JsonValueKind.Object) return false;
         // Timed events carry `dateTime` (RFC-3339 with offset); all-day events carry a `date` (yyyy-MM-dd).
         if (node.TryGetProperty("dateTime", out var dt) && dt.GetString() is { } dts &&
             DateTimeOffset.TryParse(dts, out value)) return true;
         if (node.TryGetProperty("date", out var d) && d.GetString() is { } ds &&
-            DateTimeOffset.TryParse(ds, out value)) return true;
+            DateTimeOffset.TryParse(ds, out value))
+        {
+            allDay = true;
+            return true;
+        }
         return false;
     }
 

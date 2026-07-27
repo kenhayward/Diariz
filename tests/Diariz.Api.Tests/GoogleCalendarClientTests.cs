@@ -72,6 +72,19 @@ public class GoogleCalendarClientTests
         var e = Assert.Single(events); // the broken one is skipped
         Assert.Equal("allday", e.Id);
         Assert.Null(e.Summary);
+        Assert.True(e.AllDay); // a `date` (not `dateTime`) start = all-day
+    }
+
+    [Fact]
+    public void ParseEvents_TimedEventsAreNotAllDay()
+    {
+        const string json = """
+        { "items": [
+          { "id": "e1", "start": { "dateTime": "2026-07-02T09:00:00Z" }, "end": { "dateTime": "2026-07-02T09:30:00Z" } }
+        ] }
+        """;
+
+        Assert.False(Assert.Single(GoogleCalendarClient.ParseEvents(json)).AllDay);
     }
 
     [Fact]
@@ -180,6 +193,29 @@ public class GoogleCalendarClientTests
         var events = new List<CalendarEvent>
         {
             new("x", "Earlier", At("2026-07-02T06:00:00Z"), At("2026-07-02T07:00:00Z"), null),
+        };
+        Assert.Null(GoogleCalendarClient.PickBest(events, At("2026-07-02T09:00:00Z"), At("2026-07-02T10:00:00Z")));
+    }
+
+    [Fact]
+    public void PickBest_IgnoresAllDayEvents_EvenWhenTheyOverlapMost()
+    {
+        var events = new List<CalendarEvent>
+        {
+            // An all-day event spans the whole recording, but it isn't a meeting - never match it.
+            new("holiday", "Company holiday", At("2026-07-02T00:00:00Z"), At("2026-07-03T00:00:00Z"), null, AllDay: true),
+            new("b", "Standup", At("2026-07-02T09:00:00Z"), At("2026-07-02T09:15:00Z"), null),
+        };
+        var best = GoogleCalendarClient.PickBest(events, At("2026-07-02T09:00:00Z"), At("2026-07-02T10:00:00Z"));
+        Assert.Equal("b", best!.Id);
+    }
+
+    [Fact]
+    public void PickBest_ReturnsNull_WhenOnlyAnAllDayEventOverlaps()
+    {
+        var events = new List<CalendarEvent>
+        {
+            new("holiday", "Company holiday", At("2026-07-02T00:00:00Z"), At("2026-07-03T00:00:00Z"), null, AllDay: true),
         };
         Assert.Null(GoogleCalendarClient.PickBest(events, At("2026-07-02T09:00:00Z"), At("2026-07-02T10:00:00Z")));
     }

@@ -1,0 +1,23 @@
+{
+  "title": "Hilfe",
+  "browseHelp": "Hilfe durchsuchen",
+  "backToApp": "Zurueck zur App",
+  "searchPlaceholder": "Hilfe durchsuchen",
+  "searchLabel": "Hilfeartikel durchsuchen",
+  "clearSearch": "Suche loeschen",
+  "noResults": "Keine Hilfeartikel passen zu \"{{query}}\".",
+  "resultCount_one": "{{count}} Ergebnis",
+  "resultCount_other": "{{count}} Ergebnisse",
+  "resizeList": "Artikelliste anpassen",
+  "notFoundTitle": "Artikel nicht gefunden",
+  "notFoundBody": "Unter dieser Adresse gibt es keinen Hilfeartikel. Waehlen Sie einen aus der Liste.",
+  "helpAbout": "Hilfe: {{topic}}",
+  "readMore": "Mehr erfahren",
+  "closeHelp": "Hilfe schliessen",
+  "groupGettingStarted": "Erste Schritte",
+  "groupRecordings": "Arbeiten mit Aufnahmen",
+  "groupAskingQuestions": "Fragen stellen",
+  "groupSettings": "Einstellungen und Freigabe",
+  "groupAdvanced": "Erweitert und Administration",
+  "groupOther": "Mehr"
+}

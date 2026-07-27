@@ -1,0 +1,23 @@
+{
+  "title": "Ayuda",
+  "browseHelp": "Explorar la ayuda",
+  "backToApp": "Volver a la aplicacion",
+  "searchPlaceholder": "Buscar en la ayuda",
+  "searchLabel": "Buscar articulos de ayuda",
+  "clearSearch": "Borrar la busqueda",
+  "noResults": "Ningun articulo de ayuda coincide con \"{{query}}\".",
+  "resultCount_one": "{{count}} resultado",
+  "resultCount_other": "{{count}} resultados",
+  "resizeList": "Cambiar el tamano de la lista",
+  "notFoundTitle": "Articulo no encontrado",
+  "notFoundBody": "No hay ningun articulo de ayuda en esta direccion. Elija uno de la lista.",
+  "helpAbout": "Ayuda: {{topic}}",
+  "readMore": "Leer mas",
+  "closeHelp": "Cerrar la ayuda",
+  "groupGettingStarted": "Primeros pasos",
+  "groupRecordings": "Trabajar con grabaciones",
+  "groupAskingQuestions": "Hacer preguntas",
+  "groupSettings": "Ajustes y uso compartido",
+  "groupAdvanced": "Avanzado y administracion",
+  "groupOther": "Mas"
+}

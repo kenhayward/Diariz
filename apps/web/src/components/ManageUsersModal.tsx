@@ -6,6 +6,7 @@ import { useAuth } from "../auth";
 import { api, apiErrorMessage } from "../lib/api";
 import { bytesToGb, formatBytes, gbToBytes } from "../lib/format";
 import type { AdminUser } from "../lib/types";
+import HelpButton from "./HelpButton";
 
 /// Admin-only user management: grant/deny access requests, change account type, enable/disable, and
 /// delete users. Destructive actions are hidden for the Platform Administrator and the current user
@@ -115,6 +116,9 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
               {t(key === "users" ? "usersTab" : "groupsTab")}
             </button>
           ))}
+          <span className="ml-auto self-center">
+            <HelpButton topic="users-and-groups" />
+          </span>
         </div>
 
         {/* Shared scrolling body between the fixed header/tabs and the shared footer. */}

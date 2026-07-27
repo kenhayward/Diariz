@@ -40,6 +40,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **n8n** | A published community node (\`n8n-nodes-diariz\`): a trigger that registers its own automation and verifies every signed delivery, plus an action node covering the whole REST API - with dropdowns listing your real recordings and formulas, files in and out, and a Run Formula step that waits for the document to finish. |
 | **Multi-user & groups** | User groups grant platform permissions (manage rooms / users / platform), with an approval lifecycle, per-user isolation, and Light/Dark/Auto themes. |
 | **Admin controls** | Storage quotas, optional audio auto-deletion, a global AI request timeout, separate platform toggles for API access, Claude/MCP, and Automations (webhooks), and whole-platform backup & restore. |
+| **Help & documentation** | A browsable help section at \`/help\` with a grouped article tree and instant search, plus contextual help throughout the app: a small \`?\` next to a feature opens a short explanation with a link straight to the full article. An **Advanced and admin** section covers configuring formulas, meeting types, Workflow Signals and webhooks, users and permissions, connecting Claude over MCP, building n8n and Zapier workflows, and the REST API. |
 
 The interface is localized (English, Spanish, French, German), and languages are community-extensible via simple JSON files.
 `.trim();
@@ -57,6 +58,147 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.162.2",
+    date: "2026-07-27",
+    pr: 363,
+    headline: "Security housekeeping on the transcription worker",
+    summary:
+      "A routine review of the security advisories raised against Diariz's dependencies. The transcription " +
+      "worker's Hugging Face libraries have been updated to a newer release that carries fixes for ten " +
+      "reported issues, and the rest of the advisories were assessed and found not to apply to how Diariz " +
+      "uses those libraries.\n\n" +
+      "There is nothing to do and nothing changes in the app: transcription, diarization and speaker " +
+      "identification all behave exactly as before. This entry is here so the update is on the record.",
+    changed: [
+      "Updated the transcription worker's Hugging Face libraries, picking up fixes for ten reported security issues.",
+    ],
+  },
+  {
+    version: "0.162.1",
+    date: "2026-07-27",
+    pr: 362,
+    headline: "All-day calendar entries are no longer auto-linked to recordings",
+    summary:
+      "When you open a recording that is not yet linked to a meeting, Diariz looks for the calendar event " +
+      "it overlaps and saves that link for you. An all-day entry - a holiday, a birthday, someone's " +
+      "out-of-office day - spans the entire day, so it always overlapped more than the real meeting did " +
+      "and got picked instead.\n\n" +
+      "Matching now considers only timed meetings. An all-day entry is never suggested and never linked " +
+      "automatically; if you do want one attached to a recording, you can still pick it by hand with " +
+      "**Change**. Recordings that were already linked to an all-day entry keep that link until you " +
+      "unlink them.",
+    fixed: [
+      "A recording is no longer automatically linked to an all-day calendar entry that happens to cover the day it was recorded.",
+      "The suggested-meeting prompt no longer offers all-day entries.",
+    ],
+  },
+  {
+    version: "0.162.0",
+    date: "2026-07-27",
+    pr: 361,
+    headline: "Help now covers the advanced and admin topics",
+    summary:
+      "The help section has a new **Advanced and admin** group for the things that are hard to work out " +
+      "by clicking around. It covers configuring a formula field by field - the template blocks, the " +
+      "merge fields, what the context toggles let the model see, and what stops a formula being deleted " +
+      "- along with meeting types and how one decides which formula writes your minutes.\n\n" +
+      "There is a full guide to automations and Workflow Signals, including the piece that is easy to " +
+      "miss: an administrator wires a destination once, and formula authors then just tick a box rather " +
+      "than pasting URLs. Users, groups and permissions gets its own article, explaining that authority " +
+      "always comes from a group rather than from a person, and how the room permissions differ from the " +
+      "platform ones.\n\n" +
+      "For connecting things up there are step-by-step guides to Claude over MCP, to building an n8n " +
+      "workflow with the Diariz node, to wiring Zapier, and an overview of the API. The Zapier guide says " +
+      "plainly that there is no Zapier app to install and shows you the webhook route instead, rather " +
+      "than sending you looking for something that does not exist.\n\n" +
+      "Help articles can now include screenshots, so the guides will gain pictures over time.",
+    added: [
+      "An Advanced and admin help group with eight articles: configuring a formula, meeting types, automations and Workflow Signals, users and permissions, connecting Claude (MCP), n8n, Zapier, and the API.",
+      "Help buttons on the formula editor, meeting types, Manage Users, Automations, Claude Access, and Developers.",
+      "Screenshots in help articles.",
+    ],
+    fixed: [
+      "Corrected three details in the internal platform reference that described the permission list, the Claude tool flags, and the API token scope control inaccurately.",
+    ],
+  },
+  {
+    version: "0.161.0",
+    date: "2026-07-27",
+    pr: 360,
+    headline: "Help is now built into the app",
+    summary:
+      "Diariz had no user-facing documentation - the guided tour gave you a one-off orientation, and after " +
+      "that you were on your own. There are now two ways to get an answer. A **help section** at `/help` " +
+      "carries articles grouped into Getting started, Working with recordings, Asking questions, and " +
+      "Settings and sharing, with a search box that finds the right article by title, summary, heading, or " +
+      "body text and shows you the matching words in context. Every article has its own address, so a link " +
+      "to one keeps working and the back button behaves. The page is public, so you can read it before " +
+      "signing in and open it in a new tab without losing your place in the app.\n\n" +
+      "Alongside it, a small **?** now sits next to features and settings. Clicking one opens a short " +
+      "explanation right where you are, with a link through to the full article if you want the detail - so " +
+      "you can find out what a setting does without going looking for the answer. The first of these are on " +
+      "Model Settings, Chat Tools, Formulas, and Voice Prints, and more will follow.\n\n" +
+      "Reach the help from the account menu, the About box, or the welcome panel.",
+    added: [
+      "A browsable help section at /help: grouped article tree, resizable list, and instant search across every article.",
+      "Contextual help: a ? beside a feature opens a short explanation with a link to the full article.",
+      "Twelve articles covering capture, uploads, transcripts and speakers, the recording hub, summaries and minutes, action items, search and tags, chat, formulas, model settings, and rooms.",
+      "Help links in the account menu, the About box, and the welcome panel.",
+    ],
+    fixed: [
+      "Long-form documents no longer render with stray line breaks part-way through a paragraph.",
+    ],
+  },
+  {
+    version: "0.160.5",
+    date: "2026-07-27",
+    pr: 359,
+    headline: "Screenshot capture waits until you have chosen an area",
+    summary:
+      "In the desktop app, taking a screenshot before choosing a capture area appeared to break the notes " +
+      "popover: the first click opened the area picker, and until that picker was dealt with neither the " +
+      "capture button nor the change-area button did anything. If the overlay was not obvious - or had " +
+      "slipped behind another window - it looked like both buttons had simply stopped working. Capture is " +
+      "now greyed out until an area has been set, with a tooltip saying so, which makes choosing the area " +
+      "the clear first step. As a safety net, clicking either button while the picker is already open now " +
+      "brings that overlay back to the front instead of doing nothing.",
+    fixed: [
+      "The capture screenshot button is disabled until a capture area is set, so it can no longer be clicked into a state where both screenshot buttons seem dead.",
+      "Clicking capture or change area while the area picker is already open re-surfaces the picker instead of silently doing nothing.",
+    ],
+  },
+  {
+    version: "0.160.4",
+    date: "2026-07-27",
+    pr: 358,
+    headline: "A simpler desktop app icon",
+    summary:
+      "The desktop app icon is now the same simple mark the Diariz n8n integration uses - a white " +
+      "microphone on an indigo rounded square. The previous icon carried a lot of detail that turned to " +
+      "mush at the sizes Windows actually draws it: 16 pixels in the taskbar and the system tray. This one " +
+      "is a single high-contrast shape, so it stays readable that small. Only the desktop app changes - " +
+      "the website, the About box, and the browser tab icon keep the fuller artwork, which has the room " +
+      "to show it.",
+    changed: [
+      "The desktop app icon (installer, window, tray, and notifications) is now a simpler microphone mark that stays legible at taskbar and tray sizes.",
+    ],
+  },
+  {
+    version: "0.160.3",
+    date: "2026-07-27",
+    pr: 357,
+    headline: "New app icon for the desktop app",
+    summary:
+      "The desktop app has a new icon. It replaces the old artwork everywhere the app shows one: the " +
+      "installer, the Start menu and taskbar, the app window, the system tray, and desktop notifications. " +
+      "This is artwork only - nothing about how the app behaves changes, and the web app is untouched. " +
+      "Installing the new version is what picks it up; Windows sometimes keeps showing the old icon in a " +
+      "pinned taskbar shortcut until you unpin and re-pin it.",
+    changed: [
+      "New desktop app icon, used for the installer, window, tray, and notifications.",
+    ],
+  },
   {
     version: "0.160.2",
     date: "2026-07-27",
