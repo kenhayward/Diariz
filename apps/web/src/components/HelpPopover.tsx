@@ -59,7 +59,7 @@ export default function HelpPopover({
         <h3 className="text-sm font-semibold dark:text-gray-100">{article.title}</h3>
         <div
           className="chat-md mt-1 text-sm text-gray-600 dark:text-gray-300 [&_a]:text-blue-600 [&_a]:underline [&_strong]:font-semibold"
-          dangerouslySetInnerHTML={{ __html: renderMarkdown(article.summary) }}
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(article.summary, { breaks: false }) }}
         />
         <div className="mt-3 flex items-center justify-between">
           <a

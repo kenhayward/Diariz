@@ -46,6 +46,13 @@ describe("Help page", () => {
     expect(main.textContent).not.toContain("## The template");
   });
 
+  it("does not turn the source's hard wrapping into line breaks", () => {
+    // Articles are wrapped in the source for readable diffs. Rendering them with chat's `breaks: true`
+    // put a <br> at the end of every wrapped line, which read as ragged short lines.
+    const { container } = renderAt("/help/what-is-diariz");
+    expect(container.querySelectorAll("main .chat-md br")).toHaveLength(0);
+  });
+
   it("shows a not-found message for an unknown slug", () => {
     renderAt("/help/no-such-article");
     expect(screen.getByRole("main").textContent).toContain("Article not found");

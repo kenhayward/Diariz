@@ -104,7 +104,9 @@ export default function Help() {
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{article.summary}</p>
               <div
                 className="chat-md mt-6 text-sm text-gray-700 dark:text-gray-300 [&_a]:text-blue-600 [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_blockquote]:text-gray-500 [&_code]:rounded [&_code]:bg-black/10 [&_code]:px-1 [&_h2]:mb-2 [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mb-1 [&_h3]:mt-4 [&_h3]:text-base [&_h3]:font-semibold [&_li]:ml-5 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:mb-3 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-black/10 [&_pre]:p-3 [&_strong]:font-semibold [&_ul]:mb-3"
-                dangerouslySetInnerHTML={{ __html: renderMarkdown(article.body) }}
+                // Authored prose, hard-wrapped in the source: standard paragraph semantics, not chat's
+                // one-newline-is-a-line-break.
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(article.body, { breaks: false }) }}
               />
             </article>
           ) : (
