@@ -58,6 +58,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.160.4",
+    date: "2026-07-27",
+    pr: 358,
+    headline: "A simpler desktop app icon",
+    summary:
+      "The desktop app icon is now the same simple mark the Diariz n8n integration uses - a white " +
+      "microphone on an indigo rounded square. The previous icon carried a lot of detail that turned to " +
+      "mush at the sizes Windows actually draws it: 16 pixels in the taskbar and the system tray. This one " +
+      "is a single high-contrast shape, so it stays readable that small. Only the desktop app changes - " +
+      "the website, the About box, and the browser tab icon keep the fuller artwork, which has the room " +
+      "to show it.",
+    changed: [
+      "The desktop app icon (installer, window, tray, and notifications) is now a simpler microphone mark that stays legible at taskbar and tray sizes.",
+    ],
+  },
+  {
     version: "0.160.3",
     date: "2026-07-27",
     pr: 357,
