@@ -58,6 +58,41 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.160.2",
+    date: "2026-07-27",
+    pr: 356,
+    headline: "Signing in with Google from the desktop app no longer leaves the browser hanging",
+    summary:
+      "Signing in with Google from the desktop app opens your normal browser for Google's confirmation " +
+      "screen, then hands the result back to the app. The app signed in correctly, but the browser tab was " +
+      "left behind still showing a spinner, as though it were waiting for something - there was nothing to " +
+      "wait for, and closing it was safe. The tab now lands on a short Diariz page confirming you are " +
+      "signed in and telling you it can be closed, with an Open Diariz button in case your browser did not " +
+      "switch to the app on its own. Nothing changes about how the sign-in itself works, and browser " +
+      "sign-in was never affected.",
+    fixed: [
+      "Desktop Google sign-in now finishes on a \"You're signed in - you can close this tab\" page instead of leaving the browser tab spinning on Google's confirmation screen.",
+      "Added an Open Diariz button on that page for browsers that block an app being launched automatically.",
+    ],
+  },
+  {
+    version: "0.160.1",
+    date: "2026-07-25",
+    pr: 355,
+    headline: "Security patches for the desktop packaging toolchain",
+    summary:
+      "Two denial-of-service advisories against `brace-expansion`, plus one against `tar`, reached the " +
+      "repository through the tooling that builds the desktop installer. Nothing in the app itself was " +
+      "affected: these are build-time packages only, and a production-only audit of the desktop workspace " +
+      "reported no vulnerabilities either before or after. The installer you download is unchanged. This " +
+      "updates the pinned versions so the machine that cuts a release is running patched tooling, and " +
+      "clears the outstanding security alerts against the desktop workspace.",
+    fixed: [
+      "Updated brace-expansion (1.1.16 / 2.1.2 / 5.0.8) in the desktop build toolchain, resolving a denial-of-service advisory.",
+      "Updated tar to 7.5.22 in the desktop build toolchain.",
+    ],
+  },
+  {
     version: "0.160.0",
     date: "2026-07-25",
     pr: 353,

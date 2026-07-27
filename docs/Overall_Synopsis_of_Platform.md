@@ -1116,8 +1116,11 @@ into it with no URL or per-user setup at all.
   webviews, so the Electron shell runs consent in the **system browser** and gets the result back via a custom
   protocol. `google/start` carries a **`desktopChallenge`** (the S256 of a PKCE verifier the app holds) in the
   encrypted state cookie; on success `google/callback` mints a **single-use, 2-minute code** in Redis
-  (`IDesktopAuthCodeStore`, GETDEL) and **302s to `diariz://auth/callback?code=…`** (a raw redirect, reached
-  only from the encrypted-state desktop flow — never an open redirect). The desktop app redeems the code at
+  (`IDesktopAuthCodeStore`, GETDEL) and returns a **small "you can close this tab" HTML page** that launches
+  `diariz://auth/callback?code=…` (script navigation, plus a manual **Open Diariz** link for browsers that block
+  a scripted external-protocol launch). It is deliberately a page, not a 302 to the custom scheme: a browser
+  cannot commit a non-HTTP navigation as a document, so a redirect launches the app but aborts the navigation,
+  leaving the tab parked on Google's consent page with its loading animation still running. The desktop app redeems the code at
   **`POST /api/auth/desktop/exchange`** by sending its `verifier`; the server checks `S256(verifier)` against the
   bound challenge (constant-time) and returns the JWT. The token never travels in a URL. The Electron shell owns the
   `diariz://` scheme (`electron-builder` `protocols` + `setAsDefaultProtocolClient`), opens the start URL with

@@ -4442,7 +4442,7 @@
     },
     "/api/auth/google/callback": {
       "get": {
-        "description": "Where Google returns after consent. **Not called by your code** - Google redirects the browser here. It verifies the state, exchanges the authorization code, resolves the account, and redirects onward; it never returns JSON.\n\nThe token is **never put in a URL**. A browser sign-in leaves it in a short-lived HttpOnly cookie that the app trades in at the exchange endpoint; a desktop sign-in redirects to a `diariz://` link carrying a single-use code. That way the token stays out of access logs, referrers, and browser history.",
+        "description": "Where Google returns after consent. **Not called by your code** - Google redirects the browser here. It verifies the state, exchanges the authorization code, resolves the account, and redirects onward; it never returns JSON.\n\nThe token is **never put in a URL**. A browser sign-in leaves it in a short-lived HttpOnly cookie that the app trades in at the exchange endpoint; a desktop sign-in returns a small page that launches a `diariz://` link carrying a single-use code. That way the token stays out of access logs, referrers, and browser history.",
         "parameters": [
           {
             "in": "query",
