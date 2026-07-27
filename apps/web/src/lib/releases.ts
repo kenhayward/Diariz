@@ -59,6 +59,25 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.162.1",
+    date: "2026-07-27",
+    pr: 362,
+    headline: "All-day calendar entries are no longer auto-linked to recordings",
+    summary:
+      "When you open a recording that is not yet linked to a meeting, Diariz looks for the calendar event " +
+      "it overlaps and saves that link for you. An all-day entry - a holiday, a birthday, someone's " +
+      "out-of-office day - spans the entire day, so it always overlapped more than the real meeting did " +
+      "and got picked instead.\n\n" +
+      "Matching now considers only timed meetings. An all-day entry is never suggested and never linked " +
+      "automatically; if you do want one attached to a recording, you can still pick it by hand with " +
+      "**Change**. Recordings that were already linked to an all-day entry keep that link until you " +
+      "unlink them.",
+    fixed: [
+      "A recording is no longer automatically linked to an all-day calendar entry that happens to cover the day it was recorded.",
+      "The suggested-meeting prompt no longer offers all-day entries.",
+    ],
+  },
+  {
     version: "0.162.0",
     date: "2026-07-27",
     pr: 361,

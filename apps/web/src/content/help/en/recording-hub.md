@@ -31,6 +31,10 @@ organiser, and description, with **Change** and **Unlink** actions. If it is not
 calendar suggests a match, the suggestion appears ready to accept in one click. The card is hidden
 when there is nothing to show.
 
+Only timed meetings are matched. An all-day entry - a holiday, a birthday, an out-of-office day -
+covers the whole day, so it is never suggested and never linked for you automatically. You can still
+choose one yourself with **Change**.
+
 ## Naming
 
 A meeting gets an automatic title, and the summariser fills in a proper name once it runs. You can

@@ -708,13 +708,15 @@ public class RecordingsController : ControllerBase
     }
 
     /// <summary>Find the Google Calendar meeting this recording was most likely captured during (by time
-    /// overlap against the recording's wall-clock span). Requires the user to have granted Calendar access.
-    /// Returns <c>{ match: null }</c> when nothing overlaps.</summary>
+    /// overlap against the recording's wall-clock span). All-day entries are never matched. Requires the user
+    /// to have granted Calendar access. Returns <c>{ match: null }</c> when nothing overlaps.</summary>
     [HttpGet("{id:guid}/calendar-match")]
     [EndpointSummary("Suggest the calendar event this recording belongs to")]
     [EndpointDescription(
         "Looks for the Google Calendar meeting the recording was most likely captured during, by overlapping " +
-        "its wall-clock span against your events. This only suggests - nothing is stored until you confirm it " +
+        "its wall-clock span against your events. Only timed meetings are considered - an all-day entry " +
+        "(holiday, birthday, out-of-office day) is never suggested or linked automatically, though you can " +
+        "still link one by hand. This only suggests - nothing is stored until you confirm it " +
         "with the calendar-link endpoint. Returns `{ \"match\": null }` when nothing overlaps, and requires you " +
         "to have connected Google Calendar.")]
     public async Task<IActionResult> CalendarMatch(Guid id, CancellationToken ct)

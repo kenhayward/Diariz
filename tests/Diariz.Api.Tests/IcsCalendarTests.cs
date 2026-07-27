@@ -73,6 +73,14 @@ public class IcsCalendarTests
     }
 
     [Fact]
+    public void ParseEvents_FlagsAllDayEvents()
+    {
+        var events = Parse();
+        Assert.True(events.Single(e => e.Summary == "Company holiday").AllDay);
+        Assert.False(events.Single(e => e.Summary == "Standup").AllDay);
+    }
+
+    [Fact]
     public void ParseEvents_ExpandsRecurrenceIntoDistinctInstances()
     {
         var coffees = Parse().Where(e => e.Summary == "Coffee").ToList();

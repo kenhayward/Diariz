@@ -1901,6 +1901,30 @@ public class RecordingsControllerTests
     }
 
     [Fact]
+    public async Task CalendarMatch_NeverSuggestsAnAllDayEvent()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var rec = await SeedRecordingAt(db, userId, DateTimeOffset.Parse("2026-07-02T09:00:00Z"), 600_000);
+        GrantCalendar(db, userId);
+        await db.SaveChangesAsync();
+        var cal = new FakeCalendarClient
+        {
+            // An all-day entry covers the recording completely, but it is not the meeting it came from.
+            Events = new List<CalendarEvent>
+            {
+                new("holiday", "Company holiday", DateTimeOffset.Parse("2026-07-02T00:00:00Z"),
+                    DateTimeOffset.Parse("2026-07-03T00:00:00Z"), null, AllDay: true),
+            },
+        };
+        var controller = Build(db, userId, new FakeJobQueue(), calendar: cal);
+
+        var ok = Assert.IsType<OkObjectResult>(await controller.CalendarMatch(rec.Id, default));
+        Assert.Contains("\"match\":null", System.Text.Json.JsonSerializer.Serialize(ok.Value));
+    }
+
+    [Fact]
     public async Task CalendarMatch_WhenTokenExpired_ReturnsBadRequest()
     {
         using var db = TestDb.Create();
