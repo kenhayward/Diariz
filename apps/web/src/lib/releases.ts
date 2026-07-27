@@ -58,6 +58,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.160.3",
+    date: "2026-07-27",
+    pr: 357,
+    headline: "New app icon for the desktop app",
+    summary:
+      "The desktop app has a new icon. It replaces the old artwork everywhere the app shows one: the " +
+      "installer, the Start menu and taskbar, the app window, the system tray, and desktop notifications. " +
+      "This is artwork only - nothing about how the app behaves changes, and the web app is untouched. " +
+      "Installing the new version is what picks it up; Windows sometimes keeps showing the old icon in a " +
+      "pinned taskbar shortcut until you unpin and re-pin it.",
+    changed: [
+      "New desktop app icon, used for the installer, window, tray, and notifications.",
+    ],
+  },
+  {
     version: "0.160.2",
     date: "2026-07-27",
     pr: 356,
