@@ -59,6 +59,35 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.162.0",
+    date: "2026-07-27",
+    pr: 361,
+    headline: "Help now covers the advanced and admin topics",
+    summary:
+      "The help section has a new **Advanced and admin** group for the things that are hard to work out " +
+      "by clicking around. It covers configuring a formula field by field - the template blocks, the " +
+      "merge fields, what the context toggles let the model see, and what stops a formula being deleted " +
+      "- along with meeting types and how one decides which formula writes your minutes.\n\n" +
+      "There is a full guide to automations and Workflow Signals, including the piece that is easy to " +
+      "miss: an administrator wires a destination once, and formula authors then just tick a box rather " +
+      "than pasting URLs. Users, groups and permissions gets its own article, explaining that authority " +
+      "always comes from a group rather than from a person, and how the room permissions differ from the " +
+      "platform ones.\n\n" +
+      "For connecting things up there are step-by-step guides to Claude over MCP, to building an n8n " +
+      "workflow with the Diariz node, to wiring Zapier, and an overview of the API. The Zapier guide says " +
+      "plainly that there is no Zapier app to install and shows you the webhook route instead, rather " +
+      "than sending you looking for something that does not exist.\n\n" +
+      "Help articles can now include screenshots, so the guides will gain pictures over time.",
+    added: [
+      "An Advanced and admin help group with eight articles: configuring a formula, meeting types, automations and Workflow Signals, users and permissions, connecting Claude (MCP), n8n, Zapier, and the API.",
+      "Help buttons on the formula editor, meeting types, Manage Users, Automations, Claude Access, and Developers.",
+      "Screenshots in help articles.",
+    ],
+    fixed: [
+      "Corrected three details in the internal platform reference that described the permission list, the Claude tool flags, and the API token scope control inaccurately.",
+    ],
+  },
+  {
     version: "0.161.0",
     date: "2026-07-27",
     pr: 360,
