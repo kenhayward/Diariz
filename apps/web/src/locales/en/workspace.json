@@ -229,6 +229,7 @@
   "screenshotDownload": "Download screenshot",
   "screenshotDelete": "Delete screenshot",
   "screenshotCaptureButton": "Capture screenshot",
+  "screenshotCaptureNeedsArea": "Set a capture area first",
   "screenshotLimitReached": "Reached the limit of {{max}} screenshots for this recording - this capture was not kept.",
   "screenshotCaptureArea": "Change capture area",
   "screenshotPosition": "{{current}} of {{total}}",

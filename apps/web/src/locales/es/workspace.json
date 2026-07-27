@@ -229,6 +229,7 @@
   "screenshotDownload": "Descargar captura",
   "screenshotDelete": "Eliminar captura",
   "screenshotCaptureButton": "Capturar pantalla",
+  "screenshotCaptureNeedsArea": "Primero define un área de captura",
   "screenshotLimitReached": "Se alcanzó el límite de {{max}} capturas para esta grabación - esta captura no se guardó.",
   "screenshotCaptureArea": "Cambiar área de captura",
   "screenshotPosition": "{{current}} de {{total}}",

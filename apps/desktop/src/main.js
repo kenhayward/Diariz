@@ -225,7 +225,7 @@ function applyRecorderState(next) {
 
   if (next.phase === "recording" && prev.phase !== "recording") {
     recordingStartedAt = Date.now();
-    captureTarget = null; // each recording chooses its own capture area
+    setCaptureTarget(null); // each recording chooses its own capture area
   } else if (prev.phase === "recording" && next.phase !== "recording") {
     // Recording ended (stopped, errored, or the renderer dropped out) while the capture
     // overlay was up - don't strand an always-on-top window over every display; any
@@ -474,6 +474,17 @@ let pickerPromise = null;
 let captureInFlight = false;
 let lastCaptureAt = 0;
 
+/// Every write to `captureTarget` goes through here so the renderer can mirror the state: the web app
+/// disables its capture button until an area exists (capturing without one opens the picker and leaves the
+/// buttons inert until it settles, which reads as a frozen popover). Assigning the variable directly would
+/// leave the button stale, so there is deliberately no other assignment site.
+function setCaptureTarget(next) {
+  captureTarget = next;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("screenshot:area-changed", captureTarget !== null);
+  }
+}
+
 function closePickers() {
   for (const win of pickerWindows.values()) if (!win.isDestroyed()) win.destroy();
   pickerWindows = new Map();
@@ -483,7 +494,21 @@ function closePickers() {
 /// ({ displayId, selection }) or null if the user cancelled. If a picker is already
 /// showing, returns its existing promise instead of starting a second one.
 function openPicker() {
-  if (pickerPromise) return pickerPromise;
+  if (pickerPromise) {
+    // A picker is already waiting on a choice. Re-surface it rather than silently handing back the pending
+    // promise: from the app the click looked like nothing happened, and if the overlay had slipped behind
+    // another window there was no way left to reach it - both capture buttons appeared dead until the
+    // recording ended.
+    for (const win of pickerWindows.values()) {
+      if (win.isDestroyed()) continue;
+      win.setAlwaysOnTop(true, "screen-saver");
+      win.show();
+    }
+    const cursorDisplay = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    const onCursor = pickerWindows.get(cursorDisplay.id);
+    if (onCursor && !onCursor.isDestroyed()) onCursor.focus(); // Escape must reach an overlay
+    return pickerPromise;
+  }
   closePickers(); // defensive: clear any stray windows from a picker that didn't settle cleanly
   const attempt = new Promise((resolve, reject) => {
     try {
@@ -651,7 +676,7 @@ async function captureScreenshot() {
   captureInFlight = true;
   try {
     if (!captureTarget) {
-      captureTarget = await openPicker();
+      setCaptureTarget(await openPicker());
       if (!captureTarget) return; // cancelled - no capture, no error
     }
     // The picker await is unbounded (the user may sit on the overlay) and grab() is
@@ -660,7 +685,7 @@ async function captureScreenshot() {
     if (!canCapture(recorder) || !mainWindow) return;
     const shot = await grab(captureTarget);
     if (!shot) {
-      captureTarget = null; // display gone, or crop degenerated: re-prompt on the next capture
+      setCaptureTarget(null); // display gone, or crop degenerated: re-prompt on the next capture
       notifyCaptureFailed("unavailable");
       return;
     }
@@ -678,18 +703,27 @@ async function captureScreenshot() {
 }
 
 async function changeCaptureArea() {
-  captureTarget = null;
+  setCaptureTarget(null);
   if (!canCapture(recorder)) return;
   try {
-    captureTarget = await openPicker();
-    if (!canCapture(recorder)) captureTarget = null; // recording ended while the picker was open
+    setCaptureTarget(await openPicker());
+    if (!canCapture(recorder)) setCaptureTarget(null); // recording ended while the picker was open
   } catch {
     notifyCaptureFailed("error");
   }
 }
 
-ipcMain.handle("screenshot:capture", () => captureScreenshot());
+ipcMain.handle("screenshot:capture", () => {
+  // A picker is already waiting on a choice, so `captureScreenshot` would bail on its in-flight guard and
+  // the click would do nothing visible. Re-surface the overlay instead. Only the UI path does this: the
+  // global hotkey auto-repeats at ~30Hz while held, and re-focusing that fast would fight the user's drag.
+  if (pickerPromise) return void openPicker();
+  return captureScreenshot();
+});
 ipcMain.handle("screenshot:change-area", () => changeCaptureArea());
+// The renderer's starting value; every later change arrives on "screenshot:area-changed". A renderer that
+// reloads mid-recording re-asks rather than assuming no area is set.
+ipcMain.handle("screenshot:has-area", () => captureTarget !== null);
 
 // Track whether the user has already been notified that the accelerator couldn't be
 // registered, so a failed registration doesn't renotify on every tray refresh - only

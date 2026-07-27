@@ -229,6 +229,7 @@
   "screenshotDownload": "Screenshot herunterladen",
   "screenshotDelete": "Screenshot löschen",
   "screenshotCaptureButton": "Screenshot aufnehmen",
+  "screenshotCaptureNeedsArea": "Zuerst einen Aufnahmebereich festlegen",
   "screenshotLimitReached": "Limit von {{max}} Screenshots für diese Aufnahme erreicht - dieser Screenshot wurde nicht gespeichert.",
   "screenshotCaptureArea": "Aufnahmebereich ändern",
   "screenshotPosition": "{{current}} von {{total}}",

@@ -23,6 +23,8 @@ interface ScreenshotShell {
   canCaptureScreenshot?: boolean;
   captureScreenshot?: () => void;
   changeCaptureArea?: () => void;
+  hasCaptureArea?: () => Promise<boolean>;
+  onCaptureAreaChanged?: (cb: (hasArea: boolean) => void) => () => void;
   onScreenshotCaptured?: (cb: (payload: ShellPayload) => void) => () => void;
 }
 
@@ -59,4 +61,20 @@ export function requestCapture(): void {
 
 export function requestChangeArea(): void {
   shell()?.changeCaptureArea?.();
+}
+
+/// Whether the current recording already has a capture area. Capturing without one opens the shell's area
+/// picker and leaves the capture controls inert until it is dismissed, so the UI gates capture on this.
+/// An older shell (one without the bridge) reports true, keeping its existing pick-on-first-capture flow.
+export async function hasCaptureArea(): Promise<boolean> {
+  const api = shell();
+  if (!api?.hasCaptureArea) return true;
+  return api.hasCaptureArea();
+}
+
+/// Subscribe to capture-area changes. Returns an unsubscribe function (a no-op in a browser or an older shell).
+export function onCaptureAreaChanged(cb: (hasArea: boolean) => void): () => void {
+  const api = shell();
+  if (!api?.onCaptureAreaChanged) return () => {};
+  return api.onCaptureAreaChanged(cb);
 }
