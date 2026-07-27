@@ -1282,6 +1282,38 @@ Voiceprints are **per-user** (a user's voiceprints only match their own recordin
   **`UserSettings.UiLanguage`** and pass an `ExportStrings` to the (pure) formatters, which default to English.
   Transcript *content* already uses `EffectiveText` (translated when the user translated).
 
+## Help system (user documentation)
+
+- **Two surfaces, one content set.** A browsable **`/help`** page (grouped article tree + client-side
+  search, the same page shape as `/release-notes`) and **contextual help**: a `?` button beside a feature
+  that opens a short popover with a deep link to the full article. Both read the same Markdown files, and
+  the popover renders the article's own `summary` field, so the brief and full explanations cannot drift.
+- **Content is bundled, not served.** Articles are Markdown files at
+  **`apps/web/src/content/help/<locale>/<slug>.md`**, loaded by `lib/help/content.ts` via
+  `import.meta.glob(..., { query: "?raw", eager: true })` - the same auto-discovery idiom as the i18n
+  catalogs, so adding an article is a file drop with **no code change** and no API/DB surface. They live
+  under `apps/web/` because the web image's Docker build context is that directory (the repo-root `docs/`
+  folder is **not** visible to it).
+- **Front matter** is a deliberately non-YAML `key: value` block (`title`, `summary`, `group`, `order`)
+  parsed by `lib/help/parseArticle.ts`, so there is no parser dependency and content cannot grow structure
+  the loader does not understand.
+- **English-only prose, translatable structure.** `findArticle` resolves the requested locale and falls
+  back to `en`, so a `de/` folder can be added later without code changes. Only *chrome* (nav labels,
+  search box, buttons) lives in the i18n `help` namespace - long-form prose in JSON catalogs would be
+  unreviewable, and `locales.test.ts` key parity would force four-file edits per doc change.
+- **Routing.** `/help` and `/help/:slug` are **public** top-level routes (siblings of `/release-notes`),
+  outside `WorkspaceLayout`. `HelpProvider` is therefore mounted in **`main.tsx`**, not `WorkspaceLayout`,
+  so `?` buttons work on the standalone pages too; it renders one popover into `document.body` via a
+  portal at `z-[70]`, above modals (`z-50`) and the tour overlay (`z-[60]`). nginx's SPA fallback already
+  covers the deep links, so no infra change was needed.
+- **Merge gates.** `content/help/helpContent.test.ts` asserts every article is **ASCII only** (naming the
+  file, line, and offending character - this also enforces the no-em-dash rule mechanically), that each
+  declares a title, a popover-sized summary, and a known group, and that **every `<HelpButton topic="...">`
+  in the source resolves to a real article**, so a dangling `?` cannot merge.
+- **Not a fourth sync target.** The README Features table, `docs/features.md`, and the About-box
+  `CAPABILITIES` are *inventories*; help articles are task-oriented "how do I / what happens if" prose for
+  users in the app. They are different genres and are deliberately not kept in lockstep line for line.
+
 ## Audio storage & playback
 
 - Original blobs live in **MinIO**; the **API streams them back itself** (same-origin) rather than handing

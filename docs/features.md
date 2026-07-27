@@ -377,3 +377,23 @@ one. Both report progress while they run: the panel shows the archive being buil
 many files are in so far, and elapsed time) before the download begins, and during a restore it distinguishes
 uploading the archive from the server applying it. Restore is destructive (replaces all data) and accepts a
 backup from this app version or an older, forward-migratable one.
+- **Help and documentation.** A browsable help section at **`/help`**: a fixed header, a resizable
+left-hand tree of articles grouped into Getting started / Working with recordings / Asking questions /
+Settings and sharing, and the selected article rendered on the right. A **search box** above the tree
+ranks articles by where the query matched (title, summary, heading, then body) and shows a snippet of
+the surrounding text; clearing it restores the tree exactly where you were. Every article has its own
+address (`/help/<slug>`), so links into the docs are stable and the browser's back button works. The
+page is **public**, like the release notes, so it can be read before signing in and opened in a new tab
+without losing your place in the app.
+Alongside it is **contextual help**: a small **`?`** placed next to a feature or a setting. Clicking one
+opens a popover with a two-or-three-sentence explanation and a **Read more** link straight to the
+matching article. The popover is rendered once at the top of the app and portalled over everything else,
+so a `?` inside a settings modal is never clipped by it, and only one is ever open at a time. The short
+text is the article's own `summary` field, so the brief and full explanations cannot drift apart.
+Articles are **plain Markdown files in the repository** (`apps/web/src/content/help/<locale>/`) with a
+small `title` / `summary` / `group` / `order` front-matter block, bundled into the web build - adding one
+is a file drop with no code change. Content is **ASCII only**, enforced by a test that names the file,
+line, and offending character. A second test scans the source for every `?` button and fails the build if
+one points at an article that does not exist. Prose is English for now; the loader already resolves a
+requested locale and falls back to English, so translations are a folder away. Reach the docs from the
+account menu, the About box, or the welcome panel.

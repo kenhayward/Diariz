@@ -24,13 +24,23 @@ export default function EmptyDetail() {
         <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
           {isNew ? t("emptyWelcomeBody") : t("emptySelectBody")}
         </p>
-        <button
-          type="button"
-          onClick={tour.start}
-          className="mt-5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          {isNew ? t("takeTour") : t("account:showTour")}
-        </button>
+        <div className="mt-5 flex items-center justify-center gap-4">
+          <button
+            type="button"
+            onClick={tour.start}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            {isNew ? t("takeTour") : t("account:showTour")}
+          </button>
+          <a
+            href="/help"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-blue-600 hover:underline dark:text-blue-400"
+          >
+            {t("help:browseHelp")}
+          </a>
+        </div>
       </div>
     </div>
   );

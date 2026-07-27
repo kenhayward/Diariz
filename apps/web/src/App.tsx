@@ -9,6 +9,7 @@ import OAuthConsent from "./pages/OAuthConsent";
 import RequestAccess from "./pages/RequestAccess";
 import Setup from "./pages/Setup";
 import ReleaseNotes from "./pages/ReleaseNotes";
+import Help from "./pages/Help";
 import RecordingDetail from "./pages/RecordingDetail";
 import SectionDetail from "./pages/SectionDetail";
 import CalendarEventDetail from "./pages/CalendarEventDetail";
@@ -51,6 +52,10 @@ export default function App() {
       <Route path="/request-access" element={<RequestAccess />} />
       <Route path="/setup" element={<Setup />} />
       <Route path="/release-notes" element={<ReleaseNotes />} />
+      {/* Public, like the release notes: help is useful before signing in, and the contextual `?`
+          popovers deep link into it from anywhere. */}
+      <Route path="/help" element={<Help />} />
+      <Route path="/help/:slug" element={<Help />} />
       <Route
         path="/developers/api"
         element={

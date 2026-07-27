@@ -1,0 +1,22 @@
+{
+  "title": "Help",
+  "browseHelp": "Browse help",
+  "backToApp": "Back to app",
+  "searchPlaceholder": "Search help",
+  "searchLabel": "Search help articles",
+  "clearSearch": "Clear search",
+  "noResults": "No help articles match \"{{query}}\".",
+  "resultCount_one": "{{count}} result",
+  "resultCount_other": "{{count}} results",
+  "resizeList": "Resize the article list",
+  "notFoundTitle": "Article not found",
+  "notFoundBody": "There is no help article at this address. Pick one from the list to get started.",
+  "helpAbout": "Help: {{topic}}",
+  "readMore": "Read more",
+  "closeHelp": "Close help",
+  "groupGettingStarted": "Getting started",
+  "groupRecordings": "Working with recordings",
+  "groupAskingQuestions": "Asking questions",
+  "groupSettings": "Settings and sharing",
+  "groupOther": "More"
+}
