@@ -59,6 +59,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.162.2",
+    date: "2026-07-27",
+    pr: 363,
+    headline: "Security housekeeping on the transcription worker",
+    summary:
+      "A routine review of the security advisories raised against Diariz's dependencies. The transcription " +
+      "worker's Hugging Face libraries have been updated to a newer release that carries fixes for ten " +
+      "reported issues, and the rest of the advisories were assessed and found not to apply to how Diariz " +
+      "uses those libraries.\n\n" +
+      "There is nothing to do and nothing changes in the app: transcription, diarization and speaker " +
+      "identification all behave exactly as before. This entry is here so the update is on the record.",
+    changed: [
+      "Updated the transcription worker's Hugging Face libraries, picking up fixes for ten reported security issues.",
+    ],
+  },
+  {
     version: "0.162.1",
     date: "2026-07-27",
     pr: 362,
