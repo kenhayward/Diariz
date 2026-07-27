@@ -355,18 +355,17 @@ public class AuthControllerTests
         Assert.Contains("diariz_auth=", controller.Response.Headers.SetCookie.ToString());
     }
 
-    [Fact]
-    public async Task GoogleCallback_DesktopFlow_RedirectsToDeepLinkWithMintedCode()
+    /// <summary>Runs a full desktop-flow sign-in (start with a PKCE challenge, then the callback) and
+    /// returns whatever the callback produced, so the handoff-page tests can assert on it.</summary>
+    private static async Task<(AuthController Controller, IActionResult Result)> DesktopSignInAsync(
+        IdentityTestHost host)
     {
-        using var host = new IdentityTestHost();
-        await CreateGoogleUser(host, "g@x.test", "google-sub", UserStatus.Active);
         var google = new FakeGoogleAuthService
         {
             Enabled = true,
             Result = new GoogleUserInfo("google-sub", "g@x.test", true, "Grace", "https://pic/g.png", null),
         };
-        var codes = new FakeDesktopAuthCodeStore();
-        var controller = BuildController(host, google, PublicOpts, desktopCodes: codes);
+        var controller = BuildController(host, google, PublicOpts, desktopCodes: new FakeDesktopAuthCodeStore());
 
         // Start WITH a desktop challenge sets a desktop-marked state cookie.
         controller.ControllerContext = Http.Context();
@@ -376,13 +375,40 @@ public class AuthControllerTests
         var cbCtx = Http.Context();
         cbCtx.HttpContext.Request.Headers["Cookie"] = $"diariz_g_oauth={cookie}";
         controller.ControllerContext = cbCtx;
-        var redirect = Assert.IsType<RedirectResult>(
-            await controller.GoogleCallback("auth-code", google.CapturedState, null));
+        return (controller, await controller.GoogleCallback("auth-code", google.CapturedState, null));
+    }
 
-        // Hands back via the custom scheme, carrying a one-time code (not a token).
-        Assert.StartsWith("diariz://auth/callback?code=", redirect.Url);
+    [Fact]
+    public async Task GoogleCallback_DesktopFlow_ReturnsHtmlPageLaunchingDeepLinkWithMintedCode()
+    {
+        using var host = new IdentityTestHost();
+        await CreateGoogleUser(host, "g@x.test", "google-sub", UserStatus.Active);
+
+        var (controller, result) = await DesktopSignInAsync(host);
+
+        // A page, not a redirect: a browser cannot commit a diariz:// navigation as a document, so a 302
+        // to the custom scheme leaves the tab parked on Google's still-spinning consent page.
+        var page = Assert.IsType<ContentResult>(result);
+        Assert.Contains("text/html", page.ContentType);
+        // It launches the app itself, carrying the one-time code (not a token).
+        Assert.Contains("diariz://auth/callback?code=code-1", page.Content);
         // No SPA handoff cookie on the desktop path.
         Assert.DoesNotContain("diariz_auth=", controller.Response.Headers.SetCookie.ToString());
+    }
+
+    [Fact]
+    public async Task GoogleCallback_DesktopFlow_PageOffersManualLinkAndSaysTheTabCanBeClosed()
+    {
+        using var host = new IdentityTestHost();
+        await CreateGoogleUser(host, "g@x.test", "google-sub", UserStatus.Active);
+
+        var (_, result) = await DesktopSignInAsync(host);
+
+        var html = Assert.IsType<ContentResult>(result).Content!;
+        // A clickable fallback, for browsers that block a scripted external-protocol launch.
+        Assert.Contains("href=\"diariz://auth/callback?code=code-1\"", html);
+        // And the tab says what to do with itself, instead of looking like it is still working.
+        Assert.Contains("close this tab", html);
     }
 
     [Fact]
