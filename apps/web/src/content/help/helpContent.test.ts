@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { parseArticle } from "../../lib/help/parseArticle";
-import { HELP_INDEX, HELP_SLUGS } from "../../lib/help/content";
+import { parseArticle, DEFAULT_LOCALE } from "../../lib/help/parseArticle";
+import { HELP_INDEX, HELP_SLUGS, HELP_ASSETS } from "../../lib/help/content";
 import { HELP_GROUP_IDS } from "../../lib/help/groups";
+import { localImageRefs } from "../../lib/help/images";
 
 // The gate for authored help content. These are not tests of code so much as tests of the articles
 // themselves - they are what make it safe to add content without re-reading the loader.
@@ -62,6 +63,31 @@ describe("help article metadata", () => {
       expect(a.body.trim().length).toBeGreaterThan(0);
     });
   }
+});
+
+describe("help screenshots", () => {
+  // A renamed or uncommitted screenshot renders as a broken image, which is worse than no image at all.
+  // `resolveImages` leaves an unresolvable path untouched precisely so this test can name it.
+  //
+  // One test over all articles rather than one per article: articles without screenshots are the norm
+  // for now, and a per-article loop would generate an empty suite.
+  it("every referenced screenshot exists", () => {
+    const assetPaths = new Set(Object.keys(HELP_ASSETS));
+    const missing: string[] = [];
+
+    for (const [path, raw] of Object.entries(rawFiles)) {
+      const m = /\/([^/]+)\/([^/]+)\.md$/.exec(path);
+      const locale = m?.[1] ?? DEFAULT_LOCALE;
+      const slug = m?.[2] ?? path;
+      for (const ref of localImageRefs(parseArticle(slug, locale, raw).body)) {
+        if (!assetPaths.has(`${locale}/${ref}`) && !assetPaths.has(`${DEFAULT_LOCALE}/${ref}`)) {
+          missing.push(`${slug}: ${ref}`);
+        }
+      }
+    }
+
+    expect(missing).toEqual([]);
+  });
 });
 
 describe("contextual help topics", () => {

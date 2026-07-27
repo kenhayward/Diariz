@@ -677,7 +677,8 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   (respecting Settings → Chat Tools per-tool choices, but **not** the chat *master* switch — the MCP opt-in is holding a
   token), **minus `add_as_attachment`** (which needs an in-chat selection). `send_email` is included (it can only
   ever email the user's own address). Each tool carries an MCP **`readOnlyHint` annotation** (from
-  `IChatTool.ReadOnly` — true for every read/search tool, **false only for `send_email`**) plus
+  `IChatTool.ReadOnly` — true for every read/search tool, **false for the two write tools, `send_email` and
+  `run_formula`**) plus
   `destructiveHint=false`, so clients can group read-only vs write tools (`McpToolProjection.Annotations`). Tool
   results' in-app deep-links are rewritten to **absolute** URLs (`McpLinkRewriter`, against `App:PublicUrl` or the
   request origin) so they're clickable in Claude.
@@ -958,7 +959,7 @@ into it with no URL or per-user setup at all.
     token's scope travels onto the principal as a claim and `ApiTokenScopeMiddleware` (a pure `ApiTokenScopePolicy`
     plus a thin ASP.NET middleware, runs after authentication) rejects any unsafe verb (POST/PUT/PATCH/DELETE)
     from it with 403 — JWT/browser sessions carry no scope claim and are unaffected. The create-token UI
-    (Preferences → Developers) offers a scope radio and an optional expiry date picker.
+    (Preferences → Developers) offers a **"Read-only (cannot change anything)" checkbox** and an optional expiry date picker.
 - **Three independent platform integration toggles.** `PlatformSettings` carries three master switches, each a
   Platform Admin setting on **Settings → Integration** and independent of the others: `ApiAccessEnabled` (personal
   API tokens / the REST API, default **off**), `McpAccessEnabled` (the `/mcp` server and `dz_mcp_` tokens, default
@@ -978,7 +979,7 @@ into it with no URL or per-user setup at all.
   browsable in the in-app reference — no new endpoints were added for this.
 - **RBAC (user groups + platform permissions).** Authority comes from **group membership**, not from a role.
   A `UserGroup` carries a `[Flags] PlatformPermission` (`ManageRooms = 1`, `ManageUsers = 2`,
-  `ManagePlatform = 4`; append-only), users join via `UserGroupMember`, and a caller's effective permissions
+  `ManagePlatform = 4`, `ManageFormulas = 8`; append-only), users join via `UserGroupMember`, and a caller's effective permissions
   are the **union** of the flags on every group they belong to. `IUserPermissions` resolves that **from the
   database on each request** — never from a token claim, which would keep granting authority until it expired,
   long after the user left the group. `PermissionAuthorizationHandler` backs the policies `ManageRooms`,
@@ -1306,10 +1307,17 @@ Voiceprints are **per-user** (a user's voiceprints only match their own recordin
   so `?` buttons work on the standalone pages too; it renders one popover into `document.body` via a
   portal at `z-[70]`, above modals (`z-50`) and the tour overlay (`z-[60]`). nginx's SPA fallback already
   covers the deep links, so no infra change was needed.
+- **Screenshots are co-located with the article** (`content/help/<locale>/images/*.png`) and referenced
+  relatively (`![Alt](./images/x.png)`). Vite fingerprints assets, so the source path is not the build
+  path: `lib/help/images.ts` globs the images with `query: "?url"` and rewrites each relative `src` to the
+  emitted URL before rendering. A localised article uses its own screenshot when one exists and otherwise
+  falls back to the English one. Absolute (`public/`) and external URLs are left alone. Files under ~4 KB
+  are inlined as data URIs by Vite; larger ones are emitted separately.
 - **Merge gates.** `content/help/helpContent.test.ts` asserts every article is **ASCII only** (naming the
   file, line, and offending character - this also enforces the no-em-dash rule mechanically), that each
-  declares a title, a popover-sized summary, and a known group, and that **every `<HelpButton topic="...">`
-  in the source resolves to a real article**, so a dangling `?` cannot merge.
+  declares a title, a popover-sized summary, and a known group, that **every referenced screenshot exists**
+  (a renamed or uncommitted image fails the build rather than shipping a broken picture), and that **every
+  `<HelpButton topic="...">` in the source resolves to a real article**, so a dangling `?` cannot merge.
 - **Not a fourth sync target.** The README Features table, `docs/features.md`, and the About-box
   `CAPABILITIES` are *inventories*; help articles are task-oriented "how do I / what happens if" prose for
   users in the app. They are different genres and are deliberately not kept in lockstep line for line.

@@ -5,6 +5,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import type { ApiTokenCreated, WebhookCreated, WebhookSubscription } from "../lib/types";
 import { webhookEvents } from "../lib/webhookEvents";
 import type { TFunction } from "i18next";
+import HelpButton from "./HelpButton";
 
 type Provider = "zapier" | "n8n" | null;
 
@@ -121,7 +122,7 @@ export default function AutomationsSection() {
   return (
     <div className="space-y-3">
       <span className="mb-1 block text-sm text-gray-600 dark:text-gray-300">{t("automationsTitle")}</span>
-      <p className="text-xs text-gray-400 dark:text-gray-500">{t("automationsIntro")}</p>
+      <p className="text-xs text-gray-400 dark:text-gray-500">{t("automationsIntro")} <HelpButton topic="automations-and-signals" /></p>
 
       <div>
         <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">

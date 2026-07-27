@@ -9,6 +9,7 @@ import { serializeMeetingType, parseMeetingType, exportFilename, resolveFormulaN
 import MeetingTypeIcon from "./MeetingTypeIcon";
 import IconColorPicker from "./IconColorPicker";
 import { PrimaryFormulaPicker, AdditionalFormulasPicker } from "./FormulaPicker";
+import HelpButton from "./HelpButton";
 
 interface Draft {
   id: string | null; // null = a new (unsaved) type
@@ -194,7 +195,10 @@ export default function ManageMeetingTypesModal({ onClose }: { onClose: () => vo
         className="flex h-[85vh] w-[80vw] max-w-6xl flex-col rounded-lg border bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900"
       >
         <div className="flex items-center justify-between border-b px-5 py-3 dark:border-gray-700">
-          <h2 className="text-base font-semibold dark:text-gray-100">{t("workspace:mtTitle")}</h2>
+          <h2 className="flex items-center gap-1.5 text-base font-semibold dark:text-gray-100">
+            {t("workspace:mtTitle")}
+            <HelpButton topic="meeting-types" />
+          </h2>
           <button
             type="button"
             aria-label={t("common:close")}

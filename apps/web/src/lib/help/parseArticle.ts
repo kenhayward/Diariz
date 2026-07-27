@@ -16,6 +16,11 @@ export interface HelpArticle {
 /// Articles that forget to declare a group still have to land somewhere in the nav tree.
 export const FALLBACK_GROUP = "other";
 
+/// Article prose is authored in English; other locales are optional overlays that fall back to `en`.
+/// Lives here, in the module with no imports of its own, so both the loader and the image resolver can
+/// use it without forming an import cycle.
+export const DEFAULT_LOCALE = "en";
+
 /// Articles with no explicit `order` sort after the ones that have it.
 const DEFAULT_ORDER = 999;
 
