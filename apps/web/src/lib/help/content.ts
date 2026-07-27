@@ -1,8 +1,9 @@
-import { parseArticle, type HelpArticle } from "./parseArticle";
+import { parseArticle, DEFAULT_LOCALE, type HelpArticle } from "./parseArticle";
 import { HELP_GROUPS } from "./groups";
+import { buildAssetMap, resolveImages, type HelpAssets } from "./images";
 
-/// Article prose is authored in English; other locales are optional overlays that fall back to `en`.
-export const DEFAULT_LOCALE = "en";
+// Re-exported so callers keep importing locale concerns from the loader, not the parser.
+export { DEFAULT_LOCALE };
 
 export interface HelpGroup {
   id: string;
@@ -62,6 +63,21 @@ const modules = import.meta.glob("../../content/help/*/*.md", {
 }) as Record<string, string>;
 
 export const HELP_INDEX: HelpArticle[] = buildIndex(modules);
+
+// Screenshots co-located with the articles. Without `query: "?url"` Vite would try to *parse* the image;
+// this asks for the emitted, fingerprinted URL instead, which `resolveImages` swaps into the markdown.
+const assetModules = import.meta.glob("../../content/help/*/**/*.{png,jpg,jpeg,gif,svg,webp}", {
+  eager: true,
+  query: "?url",
+  import: "default",
+}) as Record<string, string>;
+
+export const HELP_ASSETS: HelpAssets = buildAssetMap(assetModules);
+
+/// An article's body with its relative image paths rewritten to bundled URLs, ready to render.
+export function articleBody(article: HelpArticle): string {
+  return resolveImages(article.body, article.locale, HELP_ASSETS);
+}
 
 /// Every slug that has an article, for the content gate's coverage check.
 export const HELP_SLUGS: string[] = [...new Set(HELP_INDEX.map((a) => a.slug))].sort();

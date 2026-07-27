@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import type { McpTokenCreated } from "../lib/types";
+import HelpButton from "./HelpButton";
 
 /// The Preferences "Claude / MCP access" section: shows the MCP endpoint URL, lets the user generate a
 /// personal access token (shown exactly once, with a ready-to-paste Claude config snippet), and lists /
@@ -81,7 +82,7 @@ export default function McpAccessSection() {
   return (
     <div className="border-t pt-3 dark:border-gray-700">
       <span className="mb-1 block text-sm text-gray-600 dark:text-gray-300">{t("mcpAccess")}</span>
-      <p className="text-xs text-gray-400 dark:text-gray-500">{t("mcpIntro")}</p>
+      <p className="text-xs text-gray-400 dark:text-gray-500">{t("mcpIntro")} <HelpButton topic="claude-mcp-setup" /></p>
 
       <div className="mt-2 flex items-center gap-2">
         <code className="flex-1 truncate rounded bg-gray-100 px-2 py-1 text-xs dark:bg-gray-800 dark:text-gray-200">

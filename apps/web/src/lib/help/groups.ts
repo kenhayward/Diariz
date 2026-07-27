@@ -11,6 +11,9 @@ export const HELP_GROUPS: { id: string; label: string }[] = [
   { id: "recordings", label: "groupRecordings" },
   { id: "asking-questions", label: "groupAskingQuestions" },
   { id: "settings", label: "groupSettings" },
+  // Admin and power-user territory: configuring formulas, RBAC, and the integration surfaces. Last,
+  // because most readers never need it.
+  { id: "advanced", label: "groupAdvanced" },
   { id: FALLBACK_GROUP, label: "groupOther" },
 ];
 

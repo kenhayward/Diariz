@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useParams } from "react-router-dom";
 import { renderMarkdown } from "../lib/markdown";
 import { useResizableWidth } from "../lib/useResizableWidth";
-import { HELP_INDEX, articleTree, findArticle } from "../lib/help/content";
+import { HELP_INDEX, articleBody, articleTree, findArticle } from "../lib/help/content";
 import { searchArticles } from "../lib/help/search";
 import { TAGLINE } from "../lib/releases";
 
@@ -103,10 +103,12 @@ export default function Help() {
               <h1 className="text-2xl font-semibold dark:text-gray-100">{article.title}</h1>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{article.summary}</p>
               <div
-                className="chat-md mt-6 text-sm text-gray-700 dark:text-gray-300 [&_a]:text-blue-600 [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_blockquote]:text-gray-500 [&_code]:rounded [&_code]:bg-black/10 [&_code]:px-1 [&_h2]:mb-2 [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mb-1 [&_h3]:mt-4 [&_h3]:text-base [&_h3]:font-semibold [&_li]:ml-5 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:mb-3 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-black/10 [&_pre]:p-3 [&_strong]:font-semibold [&_ul]:mb-3"
+                // `[&_img]:...` keeps a screenshot inside the column however large the PNG is - authors
+                // paste captures at whatever size their display produced.
+                className="chat-md mt-6 text-sm text-gray-700 dark:text-gray-300 [&_a]:text-blue-600 [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_blockquote]:text-gray-500 [&_code]:rounded [&_code]:bg-black/10 [&_code]:px-1 [&_h2]:mb-2 [&_h2]:mt-6 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mb-1 [&_h3]:mt-4 [&_h3]:text-base [&_h3]:font-semibold [&_img]:my-3 [&_img]:max-w-full [&_img]:rounded-lg [&_img]:border [&_img]:shadow-sm dark:[&_img]:border-gray-700 [&_li]:ml-5 [&_li]:list-disc [&_ol_li]:list-decimal [&_p]:mb-3 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-black/10 [&_pre]:p-3 [&_strong]:font-semibold [&_ul]:mb-3"
                 // Authored prose, hard-wrapped in the source: standard paragraph semantics, not chat's
                 // one-newline-is-a-line-break.
-                dangerouslySetInnerHTML={{ __html: renderMarkdown(article.body, { breaks: false }) }}
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(articleBody(article), { breaks: false }) }}
               />
             </article>
           ) : (
