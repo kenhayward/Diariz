@@ -1171,8 +1171,11 @@ into it with no URL or per-user setup at all.
   Overview calls **`GET /api/recordings/{id}/calendar-match`**, which asks `ListEventsAsync` for events across the
   user's selected calendars around the recording's wall-clock span (`CreatedAt` .. `+DurationMs`, padded ±30 min),
   and returns the **best time-overlapping** event (`GoogleCalendarClient.PickBest`) as `{ match }` (or `null`).
-  Read-only (`calendar.readonly`); 400s without the grant. The Overview shows the matched meeting with a link to
-  the Google Calendar event.
+  **All-day entries are excluded from matching**: a date-only event (holiday, birthday, out-of-office day) blankets
+  the whole day, so it would out-overlap every real meeting and would be auto-linked to anything recorded that day.
+  `CalendarEvent.AllDay` carries the flag (Google: a `date` rather than `dateTime` start; ICS: a date-only `DTSTART`)
+  and `PickBest` skips those events - they remain linkable **by hand**. Read-only (`calendar.readonly`); 400s without
+  the grant. The Overview shows the matched meeting with a link to the Google Calendar event.
 - **Persisted calendar links (Phase 2 feature):** the match above is a *suggestion* - a recording can also be
   **persistently linked** to an event via **`PUT /api/recordings/{id}/calendar-link`** `{ eventId, manual }`
   (owner-scoped, requires the grant), stored as a 1:1 **`RecordingCalendarLink`** (shared PK, cascade) holding a
