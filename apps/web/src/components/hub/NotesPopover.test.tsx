@@ -94,6 +94,39 @@ describe("NotesPopover screenshots", () => {
     expect(screen.queryByRole("button", { name: /capture screenshot/i })).toBeNull();
   });
 
+  // Capturing with no area chosen opens the area picker and leaves BOTH buttons inert until it is
+  // dismissed, which reads as "the buttons stopped working". Capture stays disabled until an area exists.
+  it("disables the capture button until a capture area has been set", () => {
+    const onCapture = vi.fn();
+    renderPopover({ shots: [], onChangeCaptureArea: () => {}, onCapture, captureAreaSet: false });
+
+    const button = screen.getByRole<HTMLButtonElement>("button", { name: /capture screenshot/i });
+    expect(button.disabled).toBe(true);
+
+    fireEvent.click(button);
+    expect(onCapture).not.toHaveBeenCalled();
+  });
+
+  it("enables the capture button once a capture area is set", () => {
+    const onCapture = vi.fn();
+    renderPopover({ shots: [], onChangeCaptureArea: () => {}, onCapture, captureAreaSet: true });
+
+    const button = screen.getByRole<HTMLButtonElement>("button", { name: /capture screenshot/i });
+    expect(button.disabled).toBe(false);
+
+    fireEvent.click(button);
+    expect(onCapture).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps setting the capture area available while capture is disabled", () => {
+    const onChangeCaptureArea = vi.fn();
+    renderPopover({ shots: [], onChangeCaptureArea, onCapture: () => {}, captureAreaSet: false });
+
+    fireEvent.click(screen.getByRole("button", { name: /capture area/i }));
+
+    expect(onChangeCaptureArea).toHaveBeenCalledTimes(1);
+  });
+
   it("renders the strip with no captures yet, without a stray thumbnail", () => {
     renderPopover({ shots: [], onChangeCaptureArea: () => {} });
 

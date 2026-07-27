@@ -58,6 +58,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.160.5",
+    date: "2026-07-27",
+    pr: 359,
+    headline: "Screenshot capture waits until you have chosen an area",
+    summary:
+      "In the desktop app, taking a screenshot before choosing a capture area appeared to break the notes " +
+      "popover: the first click opened the area picker, and until that picker was dealt with neither the " +
+      "capture button nor the change-area button did anything. If the overlay was not obvious - or had " +
+      "slipped behind another window - it looked like both buttons had simply stopped working. Capture is " +
+      "now greyed out until an area has been set, with a tooltip saying so, which makes choosing the area " +
+      "the clear first step. As a safety net, clicking either button while the picker is already open now " +
+      "brings that overlay back to the front instead of doing nothing.",
+    fixed: [
+      "The capture screenshot button is disabled until a capture area is set, so it can no longer be clicked into a state where both screenshot buttons seem dead.",
+      "Clicking capture or change area while the area picker is already open re-surfaces the picker instead of silently doing nothing.",
+    ],
+  },
+  {
     version: "0.160.4",
     date: "2026-07-27",
     pr: 358,

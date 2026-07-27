@@ -26,6 +26,11 @@ export type NotesPopoverProps = {
   onChangeCaptureArea?: () => void;
   /// Takes a screenshot without closing the popover. Absent in a plain browser, same as onChangeCaptureArea.
   onCapture?: () => void;
+  /// Whether this recording has a capture area yet. Capturing without one opens the area picker, and BOTH
+  /// buttons then no-op until that picker is dismissed - which reads as the popover having frozen. So capture
+  /// stays disabled until the area is set, making "set the area" the visible first step. Defaults to true:
+  /// callers that know nothing about the shell's area state (a plain browser, older tests) must not be gated.
+  captureAreaSet?: boolean;
 };
 
 /**
@@ -45,6 +50,7 @@ export default function NotesPopover({
   onDeleteShot,
   onChangeCaptureArea,
   onCapture,
+  captureAreaSet = true,
 }: NotesPopoverProps) {
   const { t } = useTranslation("workspace");
 
@@ -113,6 +119,8 @@ export default function NotesPopover({
                   <button
                     type="button"
                     onClick={onCapture}
+                    disabled={!captureAreaSet}
+                    title={captureAreaSet ? undefined : t("screenshotCaptureNeedsArea")}
                     style={{
                       fontFamily: "system-ui",
                       fontWeight: 500,
@@ -122,9 +130,12 @@ export default function NotesPopover({
                       border: "1px solid var(--hub-border)",
                       background: "transparent",
                       color: "var(--hub-text-2)",
-                      cursor: "pointer",
+                      cursor: captureAreaSet ? "pointer" : "not-allowed",
+                      opacity: captureAreaSet ? 1 : 0.5,
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--hub-surface-hover)")}
+                    onMouseEnter={(e) => {
+                      if (captureAreaSet) e.currentTarget.style.background = "var(--hub-surface-hover)";
+                    }}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                   >
                     {t("screenshotCaptureButton")}

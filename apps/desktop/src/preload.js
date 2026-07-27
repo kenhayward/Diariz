@@ -34,6 +34,17 @@ contextBridge.exposeInMainWorld("diariz", {
   /// Forget this recording's capture area and re-open the picker.
   changeCaptureArea: () => ipcRenderer.invoke("screenshot:change-area"),
 
+  /// Whether this recording has a capture area yet (the web app disables its capture button until it does).
+  hasCaptureArea: () => ipcRenderer.invoke("screenshot:has-area"),
+
+  /// Subscribe to capture-area changes: `cb` receives true once an area is chosen, false when it is cleared
+  /// (a new recording, a re-pick, or a capture that found its display gone). Returns an unsubscribe function.
+  onCaptureAreaChanged: (cb) => {
+    const listener = (_event, hasArea) => cb(hasArea);
+    ipcRenderer.on("screenshot:area-changed", listener);
+    return () => ipcRenderer.removeListener("screenshot:area-changed", listener);
+  },
+
   /// Subscribe to captured images. `cb` receives { full, thumb, width, height } where
   /// `full` and `thumb` are Uint8Arrays (PNG and JPEG) - Electron's structured-clone IPC
   /// turns the main process's Node Buffers into Uint8Array on arrival here, not

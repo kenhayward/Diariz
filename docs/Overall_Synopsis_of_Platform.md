@@ -571,7 +571,18 @@ meeting. On the **first** capture of a recording it opens a full-screen overlay 
 target (`{ displayId, selection }`) is cached in memory and reused for every later capture in that
 recording, and is cleared on every transition into "recording" so a stale rectangle from a previous monitor
 layout can never silently capture the wrong thing. A tray/recorder "Change capture area" action
-(`screenshot:change-area`) forgets the cached target and reopens the picker mid-meeting. The grabbed image
+(`screenshot:change-area`) forgets the cached target and reopens the picker mid-meeting.
+**Whether an area is set is mirrored to the renderer** (`screenshot:has-area` for the starting value,
+`screenshot:area-changed` for every later change - every write goes through main's `setCaptureTarget`), and
+the web app **disables its capture buttons until there is one**: capturing with no area opens the picker,
+and while that picker is waiting both capture controls no-op behind the in-flight guard, which reads as the
+notes popover having frozen. Setting the area is therefore the visible first step. Defence in depth for the
+same trap: a UI capture or change-area click while a picker is *already* open now **re-surfaces that
+overlay** (`show` + focus on the cursor's display) instead of silently returning its pending promise, so an
+overlay that slipped behind another window can always be reached. The hotkey path deliberately does not
+re-surface - it auto-repeats at ~30Hz while held and would fight the user's drag. An **older shell** without
+the bridge reports "area set" so it keeps its original pick-on-first-capture behaviour against a newer web
+build. The grabbed image
 is resized so its **long edge is capped at 2560px** (`MAX_LONG_EDGE`) and a **320px-long-edge JPEG
 thumbnail** is derived from it, then both are pushed to the renderer as raw bytes - main never touches the
 recording clock or uploads anything. The **renderer** (`Recorder.tsx`) is the only side that knows about
@@ -586,8 +597,10 @@ the web app):
 
 | Channel | Direction | Payload |
 |---|---|---|
-| `screenshot:capture` | renderer → main (invoke) | none - captures now, opening the picker first if this recording has no target yet |
+| `screenshot:capture` | renderer → main (invoke) | none - captures now; opens the picker if this recording has no target yet, or re-surfaces one already waiting |
 | `screenshot:change-area` | renderer → main (invoke) | none - forgets the cached target and reopens the picker |
+| `screenshot:has-area` | renderer → main (invoke) | none → `boolean`: whether this recording has a capture area yet (the renderer's starting value) |
+| `screenshot:area-changed` | main → renderer (event) | `boolean` - the area was chosen (`true`) or cleared (`false`: new recording, re-pick, or a display that went away) |
 | `screenshot:captured` | main → renderer (event) | `{ full, thumb, width, height }` (PNG/JPEG bytes as `Uint8Array`) |
 | `picker:choose` | picker window → main (send) | the user's selection (`{ displayId, selection }` or a whole-monitor pick) |
 | `picker:cancel` | picker window → main (send) | none - the overlay was dismissed (Escape) without a choice |
