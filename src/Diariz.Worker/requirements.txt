@@ -3,11 +3,20 @@ whisperx==3.3.1
 
 # Pin the Hugging Face libs to the pre-1.0 era. whisperx 3.3.1 leaves these
 # unpinned, so a fresh build otherwise drifts to the latest majors — but
-# huggingface_hub 1.0 (Oct 2025) removed the `use_auth_token` kwarg that
-# pyannote.audio 3.3.2 still passes to hf_hub_download, and transformers>=5
-# requires huggingface_hub>=1.0. These versions keep pyannote/whisperx working.
-transformers==4.48.0
-huggingface_hub==0.27.1
+# huggingface_hub 1.0 (Oct 2025) dropped the `@validate_hf_hub_args` shim that
+# maps the `use_auth_token` kwarg pyannote.audio 3.3.2 still passes to
+# hf_hub_download, and transformers>=5 requires huggingface_hub>=1.0. So the 4.x
+# transformers line is the ceiling until pyannote stops passing use_auth_token.
+#
+# 4.53.x is the lowest 4.x that clears every fixable transformers advisory
+# (the ReDoS/input-validation set, all first patched at <=4.53.0); it needs
+# huggingface_hub>=0.30,<1.0, and 0.35.3 is comfortably inside pyannote's
+# `huggingface-hub>=0.13.0`. The three remaining advisories need transformers>=5
+# and are dismissed as unreachable - they are all "attacker-controlled model
+# repo / malicious checkpoint" paths, and this worker only ever loads fixed,
+# server-configured models and never trains.
+transformers==4.53.3
+huggingface_hub==0.35.3
 
 # Speaker embeddings (voiceprints): ECAPA-TDNN, 192-d, Apache-2.0 code + weights.
 speechbrain==1.1.0

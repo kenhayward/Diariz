@@ -1362,8 +1362,10 @@ Voiceprints are **per-user** (a user's voiceprints only match their own recordin
 ## GPU / worker notes
 
 The worker pins a **CUDA 12.8 (cu128)** torch stack so it runs on Blackwell / RTX 50-series (sm_120). Three
-non-obvious pins make whisperx 3.3.1 work (`ctranslate2==4.6.3`, `transformers==4.48.0` +
-`huggingface_hub==0.27.1`, and a `torch.load(weights_only=False)` shim for pyannote checkpoints). Diarization
+non-obvious pins make whisperx 3.3.1 work (`ctranslate2==4.6.3`, `transformers==4.53.3` +
+`huggingface_hub==0.35.3`, and a `torch.load(weights_only=False)` shim for pyannote checkpoints). The Hugging
+Face pair is capped below `huggingface_hub` 1.0 / `transformers` 5.x: hub 1.0 dropped the shim that maps the
+`use_auth_token` kwarg pyannote.audio 3.3.2 still passes to `hf_hub_download`. Diarization
 is **gated on Hugging Face**: you must set `HF_TOKEN` and accept the pyannote 3.1 + segmentation-3.0 terms, or
 jobs fail. CPU-only is possible (`DEVICE=cpu COMPUTE_TYPE=int8`, slow). Models load **lazily and are cached**
 across jobs. Real working-set VRAM is ~9 GB during transcription (large-v3 + align + pyannote). See the README
