@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
+import HelpButton from "./HelpButton";
 
 /// Model Settings tab: the user's own OpenAI-compatible summarisation endpoint / model / key, plus the
 /// reasoning toggle + level. Self-contained (its own Save persists just these fields); the write is tri-state
@@ -59,7 +60,9 @@ export default function AiSettingsSection() {
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-gray-500 dark:text-gray-400">{t("aiIntro")}</p>
+      <p className="text-xs text-gray-500 dark:text-gray-400">
+        {t("aiIntro")} <HelpButton topic="ai-model-settings" />
+      </p>
       {/* Non-login field names + per-field autoComplete="off" stop password managers autofilling these. */}
       <label className="block text-sm">
         <span className={labelSpan}>{t("summaryEndpoint")}</span>

@@ -135,6 +135,14 @@ is **Major.Minor.Build** (currently `0.x`).
   table row, the matching `docs/features.md` bullet, and the About-box `CAPABILITIES` table row (plus
   **Architecture**/**Roadmap** in the README when relevant). The README deliberately does **not** carry a
   version number (it would drift) — the version lives only in `version.json` / `releases.ts`.
+- **User help articles are NOT a fourth sync target.** `apps/web/src/content/help/**` is task-oriented
+  "how do I / what happens if" prose written for a user inside the app; the README table,
+  `docs/features.md`, and `CAPABILITIES` are *inventories* of what exists. Different genres, deliberately
+  not kept in lockstep line for line. Update a help article when the **behaviour a user relies on**
+  changes, not merely because a feature row changed. Content is **ASCII only** and each article carries a
+  `title` / `summary` / `group` / `order` front-matter block; the `summary` is what the contextual `?`
+  popover shows, so keep it to two or three sentences. `content/help/helpContent.test.ts` enforces all of
+  that, and fails the build if a `<HelpButton topic="...">` points at an article that does not exist.
 - **Keep the architecture & schema docs current.** Two reference docs must not be allowed to drift:
   `docs/Overall_Synopsis_of_Platform.md` (components, data flow, cross-boundary contracts, deployment) and
   `docs/Data_Schema.md` (every Postgres table + column/key/index/cascade, the pgvector columns/dimensions, the

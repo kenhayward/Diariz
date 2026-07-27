@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import type { SpeakerProfile } from "../lib/types";
+import HelpButton from "./HelpButton";
 
 /// Manage enrolled people / voiceprints: rename, view & prune training contributions, merge two people,
 /// and erase one or all (GDPR). Voiceprints are biometric data — erasure reverts auto-applied labels.
@@ -55,7 +56,10 @@ export default function VoicePrintsSection() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <h3 className="shrink-0 text-base font-semibold dark:text-gray-100">{t("title")}</h3>
+      <h3 className="flex shrink-0 items-center gap-1.5 text-base font-semibold dark:text-gray-100">
+        {t("title")}
+        <HelpButton topic="transcription-and-speakers" />
+      </h3>
       <p className="mb-3 shrink-0 text-xs text-gray-500 dark:text-gray-400">{t("description")}</p>
 
       {error && <p className="mb-2 shrink-0 text-sm text-red-600 dark:text-red-400">{error}</p>}

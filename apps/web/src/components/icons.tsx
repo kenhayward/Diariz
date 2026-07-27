@@ -72,3 +72,14 @@ export const FolderIcon = ({ size = 14, title, color }: IconProps & { color?: st
     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
   </svg>
 );
+
+/// The contextual-help glyph: a circled question mark placed next to a feature or field. Feather
+/// `help-circle`, so it strokes and sizes with every other icon in the app (a solid white disc would
+/// vanish against the light-mode white surfaces these buttons sit on).
+export const HelpCircleIcon = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+    <line x1="12" y1="17" x2="12.01" y2="17" />
+  </svg>
+);

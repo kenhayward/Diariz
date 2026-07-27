@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
+import HelpButton from "./HelpButton";
 
 /// Chat Tools tab: the master chat-tool-calling switch plus a per-tool on/off table. Self-contained; its Save
 /// PUTs only the tool fields (tri-state), leaving the Model Settings and Recordings preferences untouched.
@@ -46,6 +47,7 @@ export default function ChatToolsSection() {
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={toolsEnabled} onChange={(e) => setToolsEnabled(e.target.checked)} />
         <span className="font-medium text-gray-700 dark:text-gray-200">{t("chatToolsEnabled")}</span>
+        <HelpButton topic="chat-over-transcripts" />
       </label>
       <p className="text-xs text-gray-400 dark:text-gray-500">{t("chatToolsHint")}</p>
       {data && data.tools.length > 0 && (

@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "./auth";
 import { ThemeProvider } from "./theme";
 import { LanguageProvider } from "./language";
+import { HelpProvider } from "./lib/help/HelpContext";
 import App from "./App";
 import "./index.css";
 
@@ -17,7 +18,12 @@ createRoot(document.getElementById("root")!).render(
         <LanguageProvider>
           <AuthProvider>
             <BrowserRouter>
-              <App />
+              {/* Outside WorkspaceLayout so the contextual `?` buttons work on the standalone pages
+                  (login, setup, help) as well as inside the workspace. Needs the router for its
+                  "Read more" links. */}
+              <HelpProvider>
+                <App />
+              </HelpProvider>
             </BrowserRouter>
           </AuthProvider>
         </LanguageProvider>

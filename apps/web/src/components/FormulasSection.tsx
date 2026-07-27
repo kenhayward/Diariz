@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import type { Formula } from "../lib/types";
 import FormulaEditModal from "./FormulaEditModal";
+import HelpButton from "./HelpButton";
 
 /// Formulas tab of Preferences: manage the caller's own Personal formulas (list/create/edit/delete).
 /// Platform/Diariz formulas are managed elsewhere (the Phase 3 admin popup) - this section only ever
@@ -34,7 +35,10 @@ export default function FormulasSection() {
 
   return (
     <div className="space-y-3">
-      <h3 className="text-base font-semibold dark:text-gray-100">{t("tabFormulas")}</h3>
+      <h3 className="flex items-center gap-1.5 text-base font-semibold dark:text-gray-100">
+        {t("tabFormulas")}
+        <HelpButton topic="formulas" />
+      </h3>
       <p className="text-xs text-gray-500 dark:text-gray-400">{t("formulasIntro")}</p>
 
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}

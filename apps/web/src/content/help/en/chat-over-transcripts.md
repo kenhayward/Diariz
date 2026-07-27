@@ -1,0 +1,55 @@
+---
+title: Chat over your meetings
+summary: Ask questions about one transcript, a folder, or your whole library. The chat works out its context from what you are looking at, and answers link back to the transcript.
+group: asking-questions
+order: 10
+---
+
+Chat needs an AI model to be configured. See [AI and model settings](/help/ai-model-settings).
+
+## Context is inferred, not picked
+
+You do not choose what the chat can see from a list. The label above the input tells you what it is
+about, and it updates as you move around:
+
+- **Current Transcript** when you have a meeting open.
+- **Current Folder** when you have a folder open. The folder's roll-up summary, minutes, and aggregated
+  actions become the context.
+- **Selected Transcripts** when you have ticked two or more in the list.
+- **All meetings** searches your whole library on demand instead of pre-loading transcripts.
+
+A context-usage dial shows how much of the model's context window you are using.
+
+## What you can do
+
+- **Stream replies** as they are generated.
+- **Attach PDFs or text files** to a question.
+- **Save conversations** and come back to them.
+- **Include attachments** to feed a meeting's attached documents to the model. Documents are read into
+  text, and URLs are fetched behind safety guards.
+- **Dictate** your question using the microphone button in the chat input.
+
+Answers cite their sources, and clicking a citation opens that moment in the transcript.
+
+## Commands
+
+- `/formula <name>` runs a formula on the recording you have open. See [Formulas](/help/formulas).
+- `/attach` saves the whole conversation as a Markdown attachment on the current transcript or folder.
+- `/help` lists the available commands.
+- `/context` shows what the chat can currently see.
+
+## Chat tools
+
+If you turn tools on in Preferences, the assistant can search your **whole** transcript library rather
+than just the current context: who said a phrase, what a person said about a topic, when a topic was
+discussed, how often something was mentioned, who attended, speaker talk time, and more. Answers come
+back as When, Who, and What.
+
+Two tools can act rather than just read:
+
+- **Email you.** It composes a subject and body and always sends to your own registered address. It
+  cannot email anyone else. A copy is filed onto the transcript as a Markdown attachment.
+- **Add as attachment.** It saves prepared content onto a transcript as a Markdown attachment.
+
+Chat and the tools search across every room you belong to, so a meeting shared into a room you are in
+turns up in your results.

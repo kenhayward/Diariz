@@ -40,6 +40,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **n8n** | A published community node (\`n8n-nodes-diariz\`): a trigger that registers its own automation and verifies every signed delivery, plus an action node covering the whole REST API - with dropdowns listing your real recordings and formulas, files in and out, and a Run Formula step that waits for the document to finish. |
 | **Multi-user & groups** | User groups grant platform permissions (manage rooms / users / platform), with an approval lifecycle, per-user isolation, and Light/Dark/Auto themes. |
 | **Admin controls** | Storage quotas, optional audio auto-deletion, a global AI request timeout, separate platform toggles for API access, Claude/MCP, and Automations (webhooks), and whole-platform backup & restore. |
+| **Help & documentation** | A browsable help section at \`/help\` with a grouped article tree and instant search, plus contextual help throughout the app: a small \`?\` next to a feature opens a short explanation with a link straight to the full article. |
 
 The interface is localized (English, Spanish, French, German), and languages are community-extensible via simple JSON files.
 `.trim();
@@ -57,6 +58,34 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.161.0",
+    date: "2026-07-27",
+    pr: 360,
+    headline: "Help is now built into the app",
+    summary:
+      "Diariz had no user-facing documentation - the guided tour gave you a one-off orientation, and after " +
+      "that you were on your own. There are now two ways to get an answer. A **help section** at `/help` " +
+      "carries articles grouped into Getting started, Working with recordings, Asking questions, and " +
+      "Settings and sharing, with a search box that finds the right article by title, summary, heading, or " +
+      "body text and shows you the matching words in context. Every article has its own address, so a link " +
+      "to one keeps working and the back button behaves. The page is public, so you can read it before " +
+      "signing in and open it in a new tab without losing your place in the app.\n\n" +
+      "Alongside it, a small **?** now sits next to features and settings. Clicking one opens a short " +
+      "explanation right where you are, with a link through to the full article if you want the detail - so " +
+      "you can find out what a setting does without going looking for the answer. The first of these are on " +
+      "Model Settings, Chat Tools, Formulas, and Voice Prints, and more will follow.\n\n" +
+      "Reach the help from the account menu, the About box, or the welcome panel.",
+    added: [
+      "A browsable help section at /help: grouped article tree, resizable list, and instant search across every article.",
+      "Contextual help: a ? beside a feature opens a short explanation with a link to the full article.",
+      "Twelve articles covering capture, uploads, transcripts and speakers, the recording hub, summaries and minutes, action items, search and tags, chat, formulas, model settings, and rooms.",
+      "Help links in the account menu, the About box, and the welcome panel.",
+    ],
+    fixed: [
+      "Long-form documents no longer render with stray line breaks part-way through a paragraph.",
+    ],
+  },
   {
     version: "0.160.5",
     date: "2026-07-27",
