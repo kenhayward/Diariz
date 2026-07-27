@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
@@ -249,9 +250,9 @@ public class AuthController : ControllerBase
         "It verifies the state, exchanges the authorization code, resolves the account, and redirects onward; " +
         "it never returns JSON.\n\n" +
         "The token is **never put in a URL**. A browser sign-in leaves it in a short-lived HttpOnly cookie " +
-        "that the app trades in at the exchange endpoint; a desktop sign-in redirects to a `diariz://` link " +
-        "carrying a single-use code. That way the token stays out of access logs, referrers, and browser " +
-        "history.")]
+        "that the app trades in at the exchange endpoint; a desktop sign-in returns a small page that launches " +
+        "a `diariz://` link carrying a single-use code. That way the token stays out of access logs, " +
+        "referrers, and browser history.")]
     public async Task<IActionResult> GoogleCallback(
         [FromQuery] string? code, [FromQuery] string? state, [FromQuery] string? error)
     {
@@ -325,7 +326,7 @@ public class AuthController : ControllerBase
         return result.Outcome switch
         {
             GoogleSignInOutcome.SignedIn => saved.DesktopChallenge is { } challenge
-                ? await DesktopSignedInRedirectAsync(result.User!, challenge)
+                ? await DesktopSignedInPageAsync(result.User!, challenge)
                 : await SignedInRedirectAsync(result.User!),
             GoogleSignInOutcome.AwaitingApproval => RedirectToLogin("pending"),
             GoogleSignInOutcome.Disabled => RedirectToLogin("disabled"),
@@ -446,16 +447,58 @@ public class AuthController : ControllerBase
         return Redirect(SafeRedirect.Within($"{WebBase()}{SpaCallbackPath}", AllowedRedirectHosts()));
     }
 
-    /// <summary>Desktop sign-in handoff: mint a single-use code bound to the app's PKCE challenge and
-    /// redirect the system browser to the diariz:// deep link. The JWT never rides in the URL - the app
-    /// redeems the code at <c>POST desktop/exchange</c> by proving it holds the verifier. Deliberately a
-    /// raw <see cref="ControllerBase.Redirect(string)"/> (not <see cref="SafeRedirect"/>): the custom
-    /// scheme is fixed and only reachable from an encrypted-state desktop flow.</summary>
-    private async Task<IActionResult> DesktopSignedInRedirectAsync(ApplicationUser user, string challenge)
+    /// <summary>Desktop sign-in handoff: mint a single-use code bound to the app's PKCE challenge and hand
+    /// the system browser a page that launches the diariz:// deep link. The JWT never rides in the URL - the
+    /// app redeems the code at <c>POST desktop/exchange</c> by proving it holds the verifier.
+    /// <para>Deliberately a <b>page</b> rather than a redirect to the custom scheme: a browser cannot commit a
+    /// non-HTTP navigation as a document, so a 302 to <c>diariz://</c> launches the app but aborts the
+    /// navigation - leaving the tab parked on Google's consent page with its loading animation running
+    /// forever. The page gives the browser something to land on, and a manual link for browsers that block a
+    /// scripted external-protocol launch.</para></summary>
+    private async Task<IActionResult> DesktopSignedInPageAsync(ApplicationUser user, string challenge)
     {
         var code = await _desktopCodes.MintAsync(user.Id, challenge, TimeSpan.FromMinutes(2));
-        return Redirect($"{DesktopCallbackUri}?code={Uri.EscapeDataString(code)}");
+        return Content(DesktopHandoffPage($"{DesktopCallbackUri}?code={Uri.EscapeDataString(code)}"),
+            "text/html; charset=utf-8");
     }
+
+    /// <summary>The "you can close this tab" page that ends a desktop sign-in in the system browser. The deep
+    /// link appears exactly once, HTML-encoded in the anchor; the script re-reads it from there rather than
+    /// interpolating it into JavaScript, so there is nothing to escape twice.</summary>
+    private static string DesktopHandoffPage(string deepLink) =>
+        $$"""
+        <!doctype html>
+        <html lang="en">
+        <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Signed in to Diariz</title>
+        <style>
+          :root { color-scheme: light dark; }
+          body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+                 font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+                 background: #f8fafc; color: #0f172a; }
+          main { max-width: 26rem; padding: 2rem; text-align: center; }
+          h1 { font-size: 1.375rem; margin: 0 0 .5rem; }
+          p { margin: 0 0 1.5rem; color: #475569; }
+          a { display: inline-block; padding: .625rem 1.25rem; border-radius: .5rem;
+              background: #2563eb; color: #fff; text-decoration: none; font-weight: 600; }
+          @media (prefers-color-scheme: dark) {
+            body { background: #0f172a; color: #e2e8f0; }
+            p { color: #94a3b8; }
+          }
+        </style>
+        </head>
+        <body>
+        <main>
+          <h1>You're signed in</h1>
+          <p>Diariz is opening now. You can close this tab.</p>
+          <a id="open" href="{{HtmlEncoder.Default.Encode(deepLink)}}">Open Diariz</a>
+        </main>
+        <script>location.href = document.getElementById("open").href;</script>
+        </body>
+        </html>
+        """;
 
     private CookieOptions HandoffCookieOptions() => new()
     {
