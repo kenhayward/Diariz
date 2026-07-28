@@ -182,4 +182,68 @@ public class MeetingTypeMinutesComposerTests
 
         Assert.Equal("Preamble.\n\n# S\n\nbody", await MeetingTypeMinutesComposer.ComposeAsync(content, Field, Prompt));
     }
+
+    // A field block defaults to "no break" so "Date: " + date reads as one line. That default is wrong for the
+    // two fields whose value is a Markdown TABLE - glued to the line before or after, the table stops being a
+    // table. So a table field always gets a paragraph gap on both sides, the same rule a horizontal rule has,
+    // whatever the author's break-after setting says.
+    [Fact]
+    public async Task A_table_field_always_gets_a_paragraph_gap_on_both_sides()
+    {
+        string Tables(string name) => name switch
+        {
+            "transcript" => "| Time | Speaker | Text |\n| --- | --- | --- |\n| 00:00 | Alice | Hi |",
+            "action_items" => "| Action | Owner | Due date |\n| --- | --- | --- |\n| Do X |  |  |",
+            _ => "",
+        };
+
+        var content = new TemplateContent(
+        [
+            new TemplateSection(1, "Appendix",
+            [
+                new TemplateBlock(TemplateBlock.Boilerplate, Text: "Full transcript:", BreakAfter: TemplateBlock.BreakNone),
+                new TemplateBlock(TemplateBlock.FieldKind, Field: "transcript", BreakAfter: TemplateBlock.BreakNone),
+                new TemplateBlock(TemplateBlock.Boilerplate, Text: "End."),
+            ]),
+        ]);
+
+        var md = await MeetingTypeMinutesComposer.ComposeAsync(content, Tables, Prompt);
+
+        Assert.Contains("Full transcript:\n\n| Time | Speaker | Text |", md);
+        Assert.Contains("| 00:00 | Alice | Hi |\n\nEnd.", md);
+    }
+
+    [Fact]
+    public async Task The_action_items_table_gets_the_same_gap()
+    {
+        var content = new TemplateContent(
+        [
+            new TemplateSection(1, "Actions",
+            [
+                new TemplateBlock(TemplateBlock.Boilerplate, Text: "Agreed:", BreakAfter: TemplateBlock.BreakNone),
+                new TemplateBlock(TemplateBlock.FieldKind, Field: "action_items", BreakAfter: TemplateBlock.BreakNone),
+            ]),
+        ]);
+
+        var md = await MeetingTypeMinutesComposer.ComposeAsync(
+            content, n => n == "action_items" ? "| Action | Owner | Due date |" : "", Prompt);
+
+        Assert.Contains("Agreed:\n\n| Action | Owner | Due date |", md);
+    }
+
+    // Non-table fields keep the inline join that makes "Date: 2026-07-06" one line.
+    [Fact]
+    public async Task A_scalar_field_still_joins_inline()
+    {
+        var content = new TemplateContent(
+        [
+            new TemplateSection(1, "Details",
+            [
+                new TemplateBlock(TemplateBlock.Boilerplate, Text: "Date: ", BreakAfter: TemplateBlock.BreakNone),
+                new TemplateBlock(TemplateBlock.FieldKind, Field: "date"),
+            ]),
+        ]);
+
+        Assert.Contains("Date: 2026-07-06", await MeetingTypeMinutesComposer.ComposeAsync(content, Field, Prompt));
+    }
 }

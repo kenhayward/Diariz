@@ -554,6 +554,7 @@
   "mtFieldOpt_attendees": "Participants",
   "mtFieldOpt_duration": "Durée",
   "mtFieldOpt_action_items": "Tableau des actions",
+  "mtFieldOpt_transcript": "Tableau de transcription (heure, intervenant, texte)",
   "mtFieldOpt_notes": "Notes enrichies (à partir de vos notes)",
   "mtTitleRequired": "Un titre est requis.",
   "mtGroupRequired": "Un nom de groupe est requis.",

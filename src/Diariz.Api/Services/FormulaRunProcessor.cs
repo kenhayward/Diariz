@@ -223,10 +223,17 @@ public static class FormulaRunProcessor
     {
         if (!TemplateContent.Fields.Any(content.HasField)) return _ => null;
 
-        var rec = await db.Recordings
+        IQueryable<Recording> query = db.Recordings
             .Include(r => r.Speakers)
-            .Include(r => r.Actions)
-            .FirstOrDefaultAsync(r => r.Id == recordingId, ct);
+            .Include(r => r.Actions);
+
+        // The segments are only worth loading for a template that asks for the transcript table - most don't.
+        if (content.HasField("transcript"))
+            query = query
+                .Include(r => r.Transcriptions.OrderByDescending(t => t.Version).Take(1))
+                    .ThenInclude(t => t.Segments.OrderBy(s => s.Ordinal));
+
+        var rec = await query.FirstOrDefaultAsync(r => r.Id == recordingId, ct);
         if (rec is null) return _ => null;
 
         var attendees = rec.Speakers.Select(s => s.DisplayName).ToList();
@@ -235,13 +242,22 @@ public static class FormulaRunProcessor
             .Select(a => new ExtractedAction(a.Text, a.Actor, a.Deadline))
             .ToList();
 
+        var names = rec.Speakers.ToDictionary(s => s.Label, s => s.DisplayName);
+        var segments = rec.Transcriptions.FirstOrDefault()?.Segments
+            .OrderBy(s => s.Ordinal)
+            .Select(s => new SegmentDto(
+                s.Id, s.SpeakerLabel,
+                names.TryGetValue(s.SpeakerLabel, out var dn) ? dn : s.SpeakerLabel,
+                s.StartMs, s.EndMs, s.Original, s.Revised))
+            .ToList() ?? [];
+
         var noteLines = content.HasField("notes") ? await LoadNoteLinesAsync(db, recordingId, ct) : [];
         var notesMarkdown = noteLines.Count > 0
             ? string.Join('\n', noteLines.Select(l => "- " + l.Trim()))
             : null;
 
         return name => TemplateFields.Resolve(
-            name, rec.CreatedAt, rec.Name ?? rec.Title, attendees, rec.DurationMs, actions, notesMarkdown);
+            name, rec.CreatedAt, rec.Name ?? rec.Title, attendees, rec.DurationMs, actions, notesMarkdown, segments);
     }
 
     /// <summary>Runs <paramref name="formula"/> over a FOLDER (section) as a map-reduce: run the formula on each

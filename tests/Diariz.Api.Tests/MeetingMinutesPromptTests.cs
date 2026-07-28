@@ -60,6 +60,30 @@ public class MeetingMinutesPromptTests
         Assert.Contains("| Book the room |  |  |", md);
     }
 
+    // The table alone, with no "## Action Items" heading: this is what the `action_items` merge field substitutes,
+    // where the template author has already written their own heading. RenderActionItems (above) keeps the heading
+    // because it appends a SECTION to model-written minutes, which have nothing to hang the table under.
+    [Fact]
+    public void ActionItemsTable_IsTheTableWithoutAHeading()
+    {
+        var md = MeetingMinutesPrompt.ActionItemsTable([new ExtractedAction("Send the report", "Bob", "2026-03-06")]);
+
+        Assert.DoesNotContain("#", md);
+        Assert.StartsWith("| Action | Owner | Due date |", md);
+        Assert.Contains("| Send the report | Bob | 2026-03-06 |", md);
+        Assert.Equal("", MeetingMinutesPrompt.ActionItemsTable(null));
+        Assert.Equal("", MeetingMinutesPrompt.ActionItemsTable([]));
+    }
+
+    [Fact]
+    public void RenderActionItems_IsTheHeadingPlusThatSameTable()
+    {
+        IReadOnlyList<ExtractedAction> actions = [new ExtractedAction("Send the report", "Bob", "2026-03-06")];
+        Assert.Equal(
+            "## Action Items\n\n" + MeetingMinutesPrompt.ActionItemsTable(actions),
+            MeetingMinutesPrompt.RenderActionItems(actions));
+    }
+
     [Fact]
     public void RenderActionItems_EscapesPipes_SkipsBlankRows_EmptyWhenNone()
     {

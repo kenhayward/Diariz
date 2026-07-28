@@ -157,8 +157,11 @@ elsewhere. Meeting types can be **exported to a JSON file and imported** back (t
 name, and the import tells you if this instance hasn't got one), so you can share them between accounts.
 - **Templates are built from blocks.** A formula's template — and therefore a minutes template — is H1/H2/H3
 sections whose blocks are **literal text**, **substituted recording values** (date, attendees, the action-items
-table, your notes, …), **instructions to the model**, or a **horizontal rule**. Each block has a **Break-after**
-control (no break / line break / paragraph) so you decide exactly where content runs together or separates; text
+table, the timestamped transcript table, your notes, …), **instructions to the model**, or a **horizontal rule**.
+Each block has a **Break-after**
+control (no break / line break / paragraph) so you decide exactly where content runs together or separates - the
+two table-valued fields always get a blank line either side regardless, since a glued table stops rendering as
+one; text
 blocks are an **auto-growing Markdown** box, and a **drag handle** moves any block within a section or into
 another. A section can also be **headless**, which is what a formula that is simply one instruction looks like.
 The templates Diariz ships with are **plain markdown files** in the repository, so you can read and review the
@@ -220,8 +223,11 @@ toggle, on by default so it never breaks an already-connected client); when it i
 any `dz_mcp_` token stop authenticating.
 - **Formulas: build a document, run it over a recording.** A **Formula** is a **template** plus a chosen
 **context**. The template is built from blocks - **headings**, **literal text**, **substituted meeting details**
-(date, time, title, attendees, duration, action items, your notes), **instructions to the model**, and horizontal
-rules - so it produces a properly laid-out document rather than whatever shape the model felt like. The context
+(date, time, title, attendees, duration, the action-items table, the **full timestamped transcript** as a
+Time/Speaker/Text table, your notes), **instructions to the model**, and horizontal
+rules - so it produces a properly laid-out document rather than whatever shape the model felt like. A
+substituted detail is stamped in deterministically and never enters a prompt, so a transcript appendix costs no
+tokens and is independent of what the formula lets the model read. The context
 (any mix of transcript, notes, summary, minutes, and action items) is what the formula is allowed to see. Run it
 over a recording to generate a named **Markdown Result** — open it, edit it in the same rich editor as minutes,
 download it as `.md`, or email it to yourself. A formula that is simply one instruction is just a template with

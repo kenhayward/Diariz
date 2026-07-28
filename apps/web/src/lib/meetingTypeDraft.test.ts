@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  FIELD_OPTIONS,
   addSection, removeSection, updateSection, moveSection,
   addBlock, removeBlock, updateBlock, moveBlock, moveBlockCrossSection, normalizeBreaks, contentError,
 } from "./meetingTypeDraft";
@@ -143,5 +144,21 @@ describe("contentError", () => {
 
   it("passes a horizontal-line block (needs neither text nor a field)", () => {
     expect(contentError({ sections: [{ level: 1, title: "S", blocks: [{ kind: "hr" }] }] })).toBeNull();
+  });
+
+  it("passes the transcript field", () => {
+    expect(
+      contentError({ sections: [{ level: 1, title: "S", blocks: [{ kind: "field", field: "transcript" }] }] }),
+    ).toBeNull();
+  });
+});
+
+// Must match the backend TemplateContent.Fields exactly - the server rejects a field it does not know, so a
+// drifted list here is a save that fails with a validation error the user cannot act on.
+describe("FIELD_OPTIONS", () => {
+  it("lists every substitutable recording value the backend accepts", () => {
+    expect([...FIELD_OPTIONS]).toEqual([
+      "date", "time", "title", "attendees", "duration", "action_items", "transcript", "notes",
+    ]);
   });
 });

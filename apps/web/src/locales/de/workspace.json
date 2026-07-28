@@ -554,6 +554,7 @@
   "mtFieldOpt_attendees": "Teilnehmer",
   "mtFieldOpt_duration": "Dauer",
   "mtFieldOpt_action_items": "Aktionstabelle",
+  "mtFieldOpt_transcript": "Transkripttabelle (Zeit, Sprecher, Text)",
   "mtFieldOpt_notes": "Erweiterte Notizen (aus Ihren Notizen)",
   "mtTitleRequired": "Ein Titel ist erforderlich.",
   "mtGroupRequired": "Ein Gruppenname ist erforderlich.",

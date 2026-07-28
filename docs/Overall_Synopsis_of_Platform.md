@@ -180,7 +180,10 @@ default timeout for its header phase and relies on client-disconnect for cancell
   a free-text `Overview` that frames the model. It carries **no prompts of its own** — it names the
   **`PrimaryFormulaId`**, the formula whose `TemplateContent` generates the minutes (H1/H2 **sections** whose
   blocks are **boilerplate text**, **substituted recording values** —
-  `date`/`time`/`title`/`attendees`/`duration`, and `action_items` which renders the deterministic actions table
+  `date`/`time`/`title`/`attendees`/`duration`, plus the two **table-valued** ones: `action_items` (the
+  deterministic actions table) and `transcript` (the full Time/Speaker/Text table, `TranscriptFormatter.MarkdownTable`,
+  shared with the Markdown export). Both render **bare** — the template supplies the heading — and the composer
+  gives them a paragraph gap on both sides regardless of `BreakAfter`, since a glued table stops being one
   — or **model prompts**), plus any **`MeetingTypeFormulas`** run alongside in the same pipeline (their results
   land in the recording's Formulas tab). So minutes and formulas are the same thing, authored the same way; any
   accessible formula can be a primary. A recording's `MeetingTypeId` (null → the seeded **General Meeting**
@@ -427,7 +430,9 @@ default timeout for its header phase and relies on client-disconnect for cancell
   **composes** the template (`MeetingTypeMinutesComposer`, shared with the minutes pipeline, as is the field
   substitution in `TemplateFields`): headings and boilerplate are emitted verbatim, `field` blocks are
   substituted from the recording, and each `prompt` block is one LLM call (that prompt as the system message,
-  the assembled context as the user message). A formula that is *just* a prompt is stored as one **headless
+  the assembled context as the user message). A `field` is stamped into the **output only** and never enters a
+  prompt, so the unbounded `transcript` field costs no tokens and is independent of `FormulaContext` (which
+  governs only what the model reads); its segments are loaded lazily, only when the template asks for it. A formula that is *just* a prompt is stored as one **headless
   (`level: 0`) section holding one prompt block**, so it composes to exactly one call with that prompt and no
   heading around it - which is why making formulas structured changed no existing formula's output. A `Formula` has a **`FormulaScope`**: `Personal` (owned by one user, `OwnerUserId` set,
   always usable by its owner, cascade-deleted with the user), `Platform` (shared, admin-managed), or `Diariz`

@@ -73,11 +73,12 @@ public static class MeetingTypeMinutesComposer
 
     /// <summary>The whitespace between a rendered block and the next one. Honors the preceding block's explicit
     /// <c>BreakAfter</c>; a null value falls back to the legacy rule (glue only when the next block is a field). A
-    /// horizontal rule on either side always forces a paragraph gap, so "text\n---" can't be read as a setext H2.</summary>
+    /// horizontal rule on either side always forces a paragraph gap, so "text\n---" can't be read as a setext H2 -
+    /// and so does a table-valued field, which would otherwise inherit a field's inline default and be glued to
+    /// the line above or below, where Markdown stops seeing a table at all.</summary>
     private static string Separator(TemplateBlock prev, TemplateBlock next)
     {
-        if (prev.Kind == TemplateBlock.HorizontalLine || next.Kind == TemplateBlock.HorizontalLine)
-            return "\n\n";
+        if (StandsAlone(prev) || StandsAlone(next)) return "\n\n";
         return (prev.BreakAfter ?? LegacyBreak(next)) switch
         {
             TemplateBlock.BreakNone => "",
@@ -85,6 +86,12 @@ public static class MeetingTypeMinutesComposer
             _ => "\n\n", // BreakParagraph (and any unexpected value) => paragraph gap
         };
     }
+
+    /// <summary>Blocks that must have a blank line either side whatever the author asked for: a horizontal rule,
+    /// and a field whose value is a Markdown table (see <see cref="TemplateContent.TableFields"/>).</summary>
+    private static bool StandsAlone(TemplateBlock b) =>
+        b.Kind == TemplateBlock.HorizontalLine ||
+        (b.Kind == TemplateBlock.FieldKind && TemplateContent.TableFields.Contains(b.Field ?? ""));
 
     private static string LegacyBreak(TemplateBlock next) =>
         next.Kind == TemplateBlock.FieldKind ? TemplateBlock.BreakNone : TemplateBlock.BreakParagraph;

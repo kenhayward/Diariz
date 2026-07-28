@@ -9,11 +9,18 @@ namespace Diariz.Api.Services;
 public record TemplateContent(IReadOnlyList<TemplateSection> Sections)
 {
     /// <summary>The recording values a <c>field</c> block may substitute. <c>action_items</c> renders the
-    /// recording's canonical Action Items table (see <see cref="MeetingMinutesPrompt.RenderActionItems"/>);
-    /// <c>notes</c> renders the Enhanced notes section (the user's note lines expanded from the transcript,
-    /// see <see cref="NotesComposer"/>).</summary>
+    /// recording's canonical Action Items table (see <see cref="MeetingMinutesPrompt.ActionItemsTable"/>);
+    /// <c>transcript</c> renders the full timestamped Time/Speaker/Text table (see
+    /// <see cref="TranscriptFormatter.MarkdownTable"/>); <c>notes</c> renders the Enhanced notes section (the
+    /// user's note lines expanded from the transcript, see <see cref="NotesComposer"/>).</summary>
     public static readonly IReadOnlyList<string> Fields =
-        ["date", "time", "title", "attendees", "duration", "action_items", "notes"];
+        ["date", "time", "title", "attendees", "duration", "action_items", "transcript", "notes"];
+
+    /// <summary>The fields whose value is a Markdown TABLE rather than a phrase. The composer gives these a
+    /// paragraph gap on both sides whatever the block's break-after says: a field defaults to "no break" so
+    /// "Date: " and the date read as one line, and a table glued to the line above or below stops being a
+    /// table.</summary>
+    public static readonly IReadOnlyList<string> TableFields = ["action_items", "transcript"];
 
     /// <summary>Whether any section contains a <c>field</c> block substituting <paramref name="name"/>.</summary>
     public bool HasField(string name) =>

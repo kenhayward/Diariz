@@ -59,6 +59,33 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.163.0",
+    date: "2026-07-28",
+    pr: 365,
+    headline: "Drop the full transcript into a formula's document",
+    summary:
+      "A formula's template can substitute details of the meeting - its date, its attendees, the action " +
+      "items - straight into the document it produces. There is now one more to choose: **Transcript " +
+      "table**, which stamps in the whole conversation as a table of **Time, Speaker and Text**, one row " +
+      "per segment, timestamped and attributed to the speakers as you have named them.\n\n" +
+      "It is a substitution, not something the model writes, so it is exact, it is free, and it does not " +
+      "need the Transcript context toggle ticked - that toggle only governs what the model gets to read. " +
+      "Put a Transcript field at the end of a template and every document that formula produces carries " +
+      "the full record behind it. The field is available in personal and platform formulas alike, and is " +
+      "documented in the merge-fields table in **Help, Configuring a formula**.\n\n" +
+      "The Action items field has been tidied to match. It used to bring its own \"Action Items\" heading " +
+      "with it, which sat under whatever heading the template already had - so minutes showed the heading " +
+      "twice. It now substitutes the table alone, like every other field, and the heading you write is " +
+      "the only one you get.",
+    added: [
+      "A **Transcript table** merge field for formula templates: the full transcript as a Time / Speaker / Text table, in personal and platform formulas.",
+    ],
+    changed: [
+      "The Action items merge field now substitutes just the table - the template's own heading is no longer duplicated by one embedded in the field.",
+      "Both table fields always get a blank line above and below them, whatever their Break-after is set to, so a table can never be glued to the line beside it and stop rendering.",
+    ],
+  },
+  {
     version: "0.162.2",
     date: "2026-07-27",
     pr: 363,
