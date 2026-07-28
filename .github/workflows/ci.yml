@@ -54,6 +54,13 @@ jobs:
       - name: Install
         working-directory: apps/web
         run: npm ci
+      # `npm run build` is `tsc && vite build`, so this is the only gate covering two things
+      # vitest never touches: the TypeScript typecheck (tests are excluded from the build's tsc via
+      # tsconfig.json) and the production Vite/PostCSS/Tailwind pipeline. Runs before the tests so a
+      # type error or a broken build dependency fails in seconds rather than after the full suite.
+      - name: Build
+        working-directory: apps/web
+        run: npm run build
       - name: Test
         working-directory: apps/web
         run: npm test
