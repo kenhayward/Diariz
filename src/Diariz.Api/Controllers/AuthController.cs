@@ -39,7 +39,8 @@ public class AuthController : ControllerBase
         UserManager<ApplicationUser> users, ITokenService tokens, IPlatformSettingsService platform,
         IGoogleAuthService google, IGoogleSignInHandler googleSignIn, IOptions<GoogleAuthOptions> googleOpts,
         IOptions<AppPublicOptions> appOpts, IDataProtectionProvider dataProtection, ILogger<AuthController> logger,
-        DiarizDbContext db, IGoogleTokenProtector tokenProtector, IDesktopAuthCodeStore desktopCodes)
+        DiarizDbContext db, IGoogleTokenProtector tokenProtector, IDesktopAuthCodeStore desktopCodes,
+        IPeopleDirectory people)
     {
         _users = users;
         _tokens = tokens;
@@ -53,7 +54,10 @@ public class AuthController : ControllerBase
         _db = db;
         _tokenProtector = tokenProtector;
         _desktopCodes = desktopCodes;
+        _people = people;
     }
+
+    private readonly IPeopleDirectory _people;
 
     private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
@@ -168,6 +172,11 @@ public class AuthController : ControllerBase
         user.Status = UserStatus.Active;
         user.EmailConfirmed = true;
         await _users.UpdateAsync(user); // also rotates the security stamp → setup token is now single-use
+
+        // Setup is where an account becomes Active and gets its real name, so it is the point at which the
+        // user becomes a routable person. The backfill covers everyone who existed before this shipped.
+        await _people.EnsureForUserAsync(user.Id);
+        await _people.SyncFromUserAsync(user.Id);
 
         return await TokenResponse(user);
     }

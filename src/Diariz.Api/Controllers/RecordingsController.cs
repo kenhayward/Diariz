@@ -29,6 +29,7 @@ public class RecordingsController : ControllerBase
     private readonly ISpeakerIdentifier _identifier;
     private readonly UploadOptions _uploads;
     private readonly IRoomScope _rooms;
+    private readonly IPeopleDirectory _people;
     private readonly IWebhookPublisher _webhooks;
     private readonly IOptions<AppPublicOptions> _appOpts;
     private readonly IExportLocalizer? _exportLocalizer;
@@ -39,7 +40,8 @@ public class RecordingsController : ControllerBase
         DiarizDbContext db, IAudioStorage storage, IJobQueue queue,
         IHubContext<TranscriptionHub> hub, IConfiguration config,
         ISummarizationSettingsResolver summarization, IEmailSender email, ISpeakerIdentifier identifier,
-        IOptions<UploadOptions> uploads, IRoomScope rooms, IWebhookPublisher webhooks,
+        IOptions<UploadOptions> uploads, IRoomScope rooms, IPeopleDirectory people,
+        IWebhookPublisher webhooks,
         IOptions<AppPublicOptions> appOpts, IExportLocalizer? exportLocalizer = null,
         IGoogleCalendarClient? calendar = null)
     {
@@ -52,6 +54,7 @@ public class RecordingsController : ControllerBase
         _identifier = identifier;
         _uploads = uploads.Value;
         _rooms = rooms;
+        _people = people;
         _webhooks = webhooks;
         _appOpts = appOpts;
         _exportLocalizer = exportLocalizer;
@@ -201,7 +204,7 @@ public class RecordingsController : ControllerBase
             .ToList();
         var speakers = rec.Speakers
             .OrderBy(s => s.Label)
-            .Select(s => new SpeakerInfoDto(s.Label, s.DisplayName, s.ProfileId, s.IdentifiedAuto, s.IsMultiSpeaker))
+            .Select(s => new SpeakerInfoDto(s.Label, s.DisplayName, s.PersonId, s.IdentifiedAuto, s.IsMultiSpeaker))
             .ToList();
         var current = rec.Transcriptions.FirstOrDefault();
         TranscriptionDto? tDto = current is null ? null : new(
@@ -399,7 +402,7 @@ public class RecordingsController : ControllerBase
         // A free-text rename detaches the speaker from any voiceprint (it's now hand-typed text)
         // and exits "Multiple Speakers" mode (the user has named a single person).
         speaker.DisplayName = req.DisplayName;
-        speaker.ProfileId = null;
+        speaker.PersonId = null;
         speaker.IdentifiedAuto = false;
         speaker.IsMultiSpeaker = false;
         await _db.SaveChangesAsync();
@@ -431,7 +434,7 @@ public class RecordingsController : ControllerBase
         }
         speaker.IsMultiSpeaker = true;
         speaker.DisplayName = Speaker.MultiSpeakerName;
-        speaker.ProfileId = null;
+        speaker.PersonId = null;
         speaker.IdentifiedAuto = false;
         await _db.SaveChangesAsync();
         return NoContent();
@@ -459,7 +462,7 @@ public class RecordingsController : ControllerBase
         if (req.ProfileId is null)
         {
             // Unassign → revert to the anonymous label (and exit "Multiple Speakers" mode).
-            speaker.ProfileId = null;
+            speaker.PersonId = null;
             speaker.DisplayName = speaker.Label;
             speaker.IdentifiedAuto = false;
             speaker.IsMultiSpeaker = false;
@@ -467,11 +470,11 @@ public class RecordingsController : ControllerBase
             return NoContent();
         }
 
-        var profile = await _db.SpeakerProfiles
-            .FirstOrDefaultAsync(p => p.Id == req.ProfileId && p.UserId == UserId);
+        var profile = await _db.People
+            .FirstOrDefaultAsync(p => p.Id == req.ProfileId && p.CreatedByUserId == UserId);
         if (profile is null) return NotFound();
 
-        speaker.ProfileId = profile.Id;
+        speaker.PersonId = profile.Id;
         speaker.DisplayName = profile.Name;
         speaker.IdentifiedAuto = false; // an explicit manual assignment
         speaker.IsMultiSpeaker = false; // naming a single person exits "Multiple Speakers" mode
@@ -481,21 +484,21 @@ public class RecordingsController : ControllerBase
         // which only exists once the worker has run — skip gracefully when it hasn't.
         if (speaker.Embedding is not null)
         {
-            var already = await _db.ProfileContributions
-                .AnyAsync(c => c.ProfileId == profile.Id && c.SpeakerId == speaker.Id);
+            var already = await _db.VoiceSamples
+                .AnyAsync(c => c.PersonId == profile.Id && c.SpeakerId == speaker.Id);
             if (!already)
             {
-                _db.ProfileContributions.Add(new ProfileContribution
+                _db.VoiceSamples.Add(new VoiceSample
                 {
                     Id = Guid.NewGuid(),
-                    ProfileId = profile.Id,
+                    PersonId = profile.Id,
                     SpeakerId = speaker.Id,
                     RecordingId = rec.Id,
                     Embedding = speaker.Embedding,
                 });
 
-                var snapshots = await _db.ProfileContributions
-                    .Where(c => c.ProfileId == profile.Id)
+                var snapshots = await _db.VoiceSamples
+                    .Where(c => c.PersonId == profile.Id)
                     .Select(c => c.Embedding)
                     .ToListAsync();
                 snapshots.Add(speaker.Embedding); // the not-yet-saved contribution
@@ -541,7 +544,7 @@ public class RecordingsController : ControllerBase
         string KeyFor(string label)
         {
             if (!speakers.TryGetValue(label, out var sp)) return $"l:{label}";
-            if (sp.ProfileId is Guid pid) return $"p:{pid}";
+            if (sp.PersonId is Guid pid) return $"p:{pid}";
             return string.IsNullOrEmpty(sp.DisplayName) ? $"l:{label}" : $"n:{sp.DisplayName}";
         }
 
@@ -1203,8 +1206,23 @@ public class RecordingsController : ControllerBase
             await _storage.DeleteAsync(key);
         foreach (var key in await ScreenshotKeysAsync(rec.Id))
             await _storage.DeleteAsync(key);
+
+        // The cascade takes this recording's speakers and, through them, any voice samples they contributed
+        // to someone's voiceprint - silently. Note who is affected before the rows go, because afterwards
+        // there is nothing left to join on, and a person left holding a SampleCount for samples that no
+        // longer exist also keeps a centroid built from audio that no longer exists.
+        var affectedPeople = await _db.Speakers
+            .Where(s => s.RecordingId == rec.Id && s.PersonId != null)
+            .Select(s => s.PersonId!.Value)
+            .Distinct()
+            .ToListAsync();
+
         _db.Recordings.Remove(rec);
         await _db.SaveChangesAsync();
+
+        foreach (var personId in affectedPeople)
+            await _people.RecomputeVoiceprintAsync(personId);
+
         return NoContent();
     }
 
@@ -1353,7 +1371,7 @@ public class RecordingsController : ControllerBase
                         s.SpeakerLabel,
                         sp?.DisplayName ?? s.SpeakerLabel,
                         s.StartMs, s.EndMs, s.EffectiveText,
-                        sp?.ProfileId, sp?.IdentifiedAuto ?? false, sp?.IsMultiSpeaker ?? false);
+                        sp?.PersonId, sp?.IdentifiedAuto ?? false, sp?.IsMultiSpeaker ?? false);
                 })
                 .ToList();
             return new MergeSourceInput(idx, rec.DurationMs, segs);
@@ -1390,7 +1408,7 @@ public class RecordingsController : ControllerBase
             _db.Speakers.Add(new Speaker
             {
                 Id = Guid.NewGuid(), RecordingId = survivor.Id, Label = sp.Label, DisplayName = sp.DisplayName,
-                ProfileId = sp.ProfileId, IdentifiedAuto = sp.IdentifiedAuto, IsMultiSpeaker = sp.IsMultiSpeaker,
+                PersonId = sp.PersonId, IdentifiedAuto = sp.IdentifiedAuto, IsMultiSpeaker = sp.IsMultiSpeaker,
             });
 
         survivor.Error = null;

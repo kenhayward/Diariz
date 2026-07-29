@@ -25,7 +25,7 @@ public class UserProfilePermissionsTests
 
         var sut = new UserProfileController(
             host.Users, host.Db, Tokens(), new PlatformSettingsService(host.Db),
-            new UserPermissions(host.Db))
+            new UserPermissions(host.Db), new PeopleDirectory(host.Db))
         {
             ControllerContext = Http.Context(user.Id),
         };

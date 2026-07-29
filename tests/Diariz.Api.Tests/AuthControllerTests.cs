@@ -37,7 +37,8 @@ public class AuthControllerTests
             NullLogger<AuthController>.Instance,
             host.Db,
             new GoogleTokenProtector(new EphemeralDataProtectionProvider()),
-            desktopCodes ?? new FakeDesktopAuthCodeStore());
+            desktopCodes ?? new FakeDesktopAuthCodeStore(),
+            new PeopleDirectory(host.Db));
     }
 
     private static async Task<ApplicationUser> CreateUser(

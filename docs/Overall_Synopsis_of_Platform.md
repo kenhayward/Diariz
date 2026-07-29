@@ -1262,14 +1262,31 @@ into it with no URL or per-user setup at all.
   **`GET /api/languages`** (anonymous, so the signup page offers a language selector too). This underpins the
   localization & translation feature.
 
-## Speaker identification (voiceprints)
+## People and speaker identification (voiceprints)
 
-Enrol a person once (from a recording's speaker) and Diariz recognises that voice in future recordings. A
-**`SpeakerProfile`** holds a centroid voiceprint (L2-normalised mean of its **`ProfileContribution`**
-snapshots); matching is pgvector cosine distance. The **People** screen manages voiceprints — rename, view
-training contributions, add/remove a contribution (recomputes the centroid), merge duplicates, and **erase**
-one or all (GDPR): erasing reverts auto-applied labels to the anonymous label but keeps names typed by hand.
-Voiceprints are **per-user** (a user's voiceprints only match their own recordings). See
+A **`Person`** is someone who appears in meetings: a name plus optional contact details (`Title`,
+`CompanyName`, `Email`, `Phone`) and an `IsInternal` marker, with the **voiceprint as an optional
+attribute**. A person added by hand, or one who set `VoiceprintOptOut`, has a null `Embedding` and is simply
+skipped by identification. Enrol a person once (from a recording's speaker) and Diariz recognises that voice
+in future recordings: the centroid is the L2-normalised mean of its **`VoiceSample`** snapshots, and matching
+is a pgvector cosine distance restricted to people who have an embedding and have not opted out.
+
+**Every user account is also a person.** `IPeopleDirectory` (`Services/PeopleDirectory.cs`, modelled on
+`RoomScope.PersonalRoomIdAsync` down to the find-or-create race handling) provisions the linked `Person` on
+demand and keeps its name and email following the account — including fanning a rename out onto every
+`Speaker` already identified as them, because `Speaker.DisplayName` is denormalised rather than joined. It
+also owns `RecomputeVoiceprintAsync`, which rebuilds the centroid and sample count from the remaining voice
+samples and is called after a recording delete, since that cascade silently removes training data.
+
+> **The `Person`/`VoiceSample` types map to the `SpeakerProfiles`/`ProfileContributions` tables**, and
+> `Person.CreatedByUserId` to the `"UserId"` column. Renaming those would be a destructive rename, forcing a
+> `MaintenanceController.CurrentFormat` bump that hard-rejects every older backup archive. Beware in raw SQL:
+> `"UserId"` is who *enrolled* the person; `"LinkedUserId"` is the account the person *is*.
+
+The **People** screen manages voiceprints — rename, view training samples, add/remove one (recomputes the
+centroid), merge duplicates, and **erase** one or all (GDPR): erasing reverts auto-applied labels to the
+anonymous label but keeps names typed by hand. Voiceprints are currently **per-user** (a user's voiceprints
+only match their own recordings). See
 [`Speaker_Identification_and_Verification.md`](Speaker_Identification_and_Verification.md).
 
 ## Localization (web UI)

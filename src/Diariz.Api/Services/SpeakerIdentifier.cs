@@ -8,7 +8,7 @@ using Pgvector.EntityFrameworkCore;
 namespace Diariz.Api.Services;
 
 /// <summary>A matched voiceprint and how close it was (cosine distance, lower = closer).</summary>
-public record SpeakerMatch(Guid ProfileId, string Name, double Distance);
+public record SpeakerMatch(Guid PersonId, string Name, double Distance);
 
 public interface ISpeakerIdentifier
 {
@@ -37,9 +37,13 @@ public class SpeakerIdentifier : ISpeakerIdentifier
 
         // Voiceprints are scoped by the owner's personal room now (members share a room's voiceprints).
         var roomId = await _rooms.PersonalRoomIdAsync(userId, ct);
-        var best = await _db.SpeakerProfiles
-            .Where(p => p.RoomId == roomId)
-            .Select(p => new { p.Id, p.Name, Distance = p.Embedding.CosineDistance(embedding) })
+
+        // A person's voiceprint is optional, so most of the directory has no embedding to compare against:
+        // someone added by hand, or one who opted out and had theirs erased. Both must be excluded before
+        // the distance projection - CosineDistance over a NULL column does not do anything useful.
+        var best = await _db.People
+            .Where(p => p.RoomId == roomId && p.Embedding != null && !p.VoiceprintOptOut)
+            .Select(p => new { p.Id, p.Name, Distance = p.Embedding!.CosineDistance(embedding) })
             .OrderBy(x => x.Distance)
             .FirstOrDefaultAsync(ct);
 

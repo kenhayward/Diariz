@@ -38,7 +38,7 @@ public class SpeakerProfilesController : ControllerBase
     public async Task<IReadOnlyList<SpeakerProfileDto>> List()
     {
         var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        return await _db.SpeakerProfiles
+        return await _db.People
             .Where(p => p.RoomId == roomId)
             .OrderBy(p => p.Name)
             .Select(p => new SpeakerProfileDto(p.Id, p.Name, p.SampleCount))
@@ -58,14 +58,14 @@ public class SpeakerProfilesController : ControllerBase
     public async Task<ActionResult<SpeakerProfileDetailDto>> Get(Guid id)
     {
         var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        var profile = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == id && p.RoomId == roomId);
+        var profile = await _db.People.FirstOrDefaultAsync(p => p.Id == id && p.RoomId == roomId);
         if (profile is null) return NotFound();
 
-        var identifiedCount = await _db.Speakers.CountAsync(s => s.ProfileId == id);
+        var identifiedCount = await _db.Speakers.CountAsync(s => s.PersonId == id);
 
         // Stitch recording display names + speaker labels in memory (provider-agnostic; no FK on RecordingId).
-        var raw = await _db.ProfileContributions
-            .Where(c => c.ProfileId == id)
+        var raw = await _db.VoiceSamples
+            .Where(c => c.PersonId == id)
             .OrderBy(c => c.CreatedAt)
             .Select(c => new { c.Id, c.RecordingId, c.SpeakerId, c.CreatedAt })
             .ToListAsync();
@@ -119,13 +119,13 @@ public class SpeakerProfilesController : ControllerBase
         if (string.IsNullOrWhiteSpace(name)) return BadRequest("A name is required.");
 
         var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        var profile = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == id && p.RoomId == roomId);
+        var profile = await _db.People.FirstOrDefaultAsync(p => p.Id == id && p.RoomId == roomId);
         if (profile is null) return NotFound();
 
         profile.Name = name;
         profile.UpdatedAt = DateTimeOffset.UtcNow;
         // Keep the linked recording-speakers' shown name in sync with the person's new name.
-        foreach (var s in await _db.Speakers.Where(s => s.ProfileId == id).ToListAsync())
+        foreach (var s in await _db.Speakers.Where(s => s.PersonId == id).ToListAsync())
             s.DisplayName = name;
 
         await _db.SaveChangesAsync();
@@ -157,27 +157,27 @@ public class SpeakerProfilesController : ControllerBase
         if (speaker.Embedding is null)
             return BadRequest("This speaker has no voice embedding yet (re-transcribe to compute one).");
 
-        var profile = new SpeakerProfile
+        var profile = new Person
         {
             Id = Guid.NewGuid(),
-            UserId = UserId,
-            RoomId = await _rooms.PersonalRoomIdAsync(UserId), // populated now; queries flip to it in Phase 4
+            CreatedByUserId = UserId,
+            RoomId = await _rooms.PersonalRoomIdAsync(UserId), // provenance only; nothing filters on it
             Name = name,
             Embedding = speaker.Embedding,
             SampleCount = 1,
         };
-        _db.SpeakerProfiles.Add(profile);
-        _db.ProfileContributions.Add(new ProfileContribution
+        _db.People.Add(profile);
+        _db.VoiceSamples.Add(new VoiceSample
         {
             Id = Guid.NewGuid(),
-            ProfileId = profile.Id,
+            PersonId = profile.Id,
             SpeakerId = speaker.Id,
             RecordingId = req.RecordingId,
             Embedding = speaker.Embedding,
         });
 
         // Assign the source speaker to the new profile (manual, not auto).
-        speaker.ProfileId = profile.Id;
+        speaker.PersonId = profile.Id;
         speaker.DisplayName = name;
         speaker.IdentifiedAuto = false;
 
@@ -197,19 +197,19 @@ public class SpeakerProfilesController : ControllerBase
     public async Task<IActionResult> RemoveContribution(Guid id, Guid contributionId)
     {
         var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        var profile = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == id && p.RoomId == roomId);
+        var profile = await _db.People.FirstOrDefaultAsync(p => p.Id == id && p.RoomId == roomId);
         if (profile is null) return NotFound();
 
-        var contribution = await _db.ProfileContributions
-            .FirstOrDefaultAsync(c => c.Id == contributionId && c.ProfileId == id);
+        var contribution = await _db.VoiceSamples
+            .FirstOrDefaultAsync(c => c.Id == contributionId && c.PersonId == id);
         if (contribution is null) return NotFound();
 
-        var remaining = await _db.ProfileContributions
-            .Where(c => c.ProfileId == id && c.Id != contributionId).ToListAsync();
+        var remaining = await _db.VoiceSamples
+            .Where(c => c.PersonId == id && c.Id != contributionId).ToListAsync();
         if (remaining.Count == 0)
             return BadRequest("A voiceprint needs at least one sample. Delete the person instead.");
 
-        _db.ProfileContributions.Remove(contribution);
+        _db.VoiceSamples.Remove(contribution);
         RecomputeCentroid(profile, remaining);
         await _db.SaveChangesAsync();
         return NoContent();
@@ -230,22 +230,22 @@ public class SpeakerProfilesController : ControllerBase
         if (req.SourceId == id) return BadRequest("Cannot merge a person into itself.");
 
         var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        var target = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == id && p.RoomId == roomId);
-        var source = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == req.SourceId && p.RoomId == roomId);
+        var target = await _db.People.FirstOrDefaultAsync(p => p.Id == id && p.RoomId == roomId);
+        var source = await _db.People.FirstOrDefaultAsync(p => p.Id == req.SourceId && p.RoomId == roomId);
         if (target is null || source is null) return NotFound();
 
-        var targetContribs = await _db.ProfileContributions.Where(c => c.ProfileId == target.Id).ToListAsync();
-        var sourceContribs = await _db.ProfileContributions.Where(c => c.ProfileId == source.Id).ToListAsync();
-        foreach (var c in sourceContribs) c.ProfileId = target.Id;
+        var targetContribs = await _db.VoiceSamples.Where(c => c.PersonId == target.Id).ToListAsync();
+        var sourceContribs = await _db.VoiceSamples.Where(c => c.PersonId == source.Id).ToListAsync();
+        foreach (var c in sourceContribs) c.PersonId = target.Id;
 
-        foreach (var s in await _db.Speakers.Where(s => s.ProfileId == source.Id).ToListAsync())
+        foreach (var s in await _db.Speakers.Where(s => s.PersonId == source.Id).ToListAsync())
         {
-            s.ProfileId = target.Id;
+            s.PersonId = target.Id;
             s.DisplayName = target.Name;
         }
 
         RecomputeCentroid(target, targetContribs.Concat(sourceContribs).ToList());
-        _db.SpeakerProfiles.Remove(source);
+        _db.People.Remove(source);
         await _db.SaveChangesAsync();
         return NoContent();
     }
@@ -263,11 +263,11 @@ public class SpeakerProfilesController : ControllerBase
     public async Task<IActionResult> Delete(Guid id)
     {
         var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        var profile = await _db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == id && p.RoomId == roomId);
+        var profile = await _db.People.FirstOrDefaultAsync(p => p.Id == id && p.RoomId == roomId);
         if (profile is null) return NotFound();
 
         await UnlinkAndRevertAsync([id]);
-        _db.SpeakerProfiles.Remove(profile); // cascades ProfileContributions
+        _db.People.Remove(profile); // cascades VoiceSamples
         await _db.SaveChangesAsync();
         return NoContent();
     }
@@ -284,11 +284,11 @@ public class SpeakerProfilesController : ControllerBase
     public async Task<IActionResult> DeleteAll()
     {
         var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        var profiles = await _db.SpeakerProfiles.Where(p => p.RoomId == roomId).ToListAsync();
+        var profiles = await _db.People.Where(p => p.RoomId == roomId).ToListAsync();
         if (profiles.Count == 0) return NoContent();
 
         await UnlinkAndRevertAsync(profiles.Select(p => p.Id).ToList());
-        _db.SpeakerProfiles.RemoveRange(profiles); // cascades ProfileContributions
+        _db.People.RemoveRange(profiles); // cascades VoiceSamples
         await _db.SaveChangesAsync();
         return NoContent();
     }
@@ -298,10 +298,10 @@ public class SpeakerProfilesController : ControllerBase
     private async Task UnlinkAndRevertAsync(IReadOnlyCollection<Guid> profileIds)
     {
         var linked = await _db.Speakers
-            .Where(s => s.ProfileId != null && profileIds.Contains(s.ProfileId.Value)).ToListAsync();
+            .Where(s => s.PersonId != null && profileIds.Contains(s.PersonId.Value)).ToListAsync();
         foreach (var s in linked)
         {
-            s.ProfileId = null;
+            s.PersonId = null;
             if (s.IdentifiedAuto)
             {
                 s.DisplayName = s.Label; // revert the auto label
@@ -313,7 +313,7 @@ public class SpeakerProfilesController : ControllerBase
     /// <summary>Set the profile's centroid to the L2-normalised mean of the given contributions and
     /// update its sample count. Embeddings are only present under the real provider (vector(192)); when
     /// absent (the in-memory unit provider) the centroid is left unchanged but the count is still updated.</summary>
-    private static void RecomputeCentroid(SpeakerProfile profile, IReadOnlyCollection<ProfileContribution> contributions)
+    private static void RecomputeCentroid(Person profile, IReadOnlyCollection<VoiceSample> contributions)
     {
         var snapshots = contributions.Where(c => c.Embedding is not null).Select(c => c.Embedding.ToArray()).ToList();
         var centroid = Voiceprints.Centroid(snapshots);

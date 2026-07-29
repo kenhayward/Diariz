@@ -21,8 +21,10 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<SectionMinutes> SectionMinutes => Set<SectionMinutes>();
     public DbSet<SectionAttachment> SectionAttachments => Set<SectionAttachment>();
     public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
-    public DbSet<SpeakerProfile> SpeakerProfiles => Set<SpeakerProfile>();
-    public DbSet<ProfileContribution> ProfileContributions => Set<ProfileContribution>();
+    /// <summary>The people directory. Backed by the <c>SpeakerProfiles</c> table - see the mapping note in
+    /// <c>OnModelCreating</c> for why the table name did not follow the rename.</summary>
+    public DbSet<Person> People => Set<Person>();
+    public DbSet<VoiceSample> VoiceSamples => Set<VoiceSample>();
     public DbSet<RecordingAction> RecordingActions => Set<RecordingAction>();
     public DbSet<RecordingTag> RecordingTags => Set<RecordingTag>();
     public DbSet<MeetingNote> MeetingNotes => Set<MeetingNote>();
@@ -458,48 +460,83 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         {
             e.HasIndex(s => new { s.RecordingId, s.Label }).IsUnique();
             e.Property(s => s.DisplayName).HasMaxLength(256);
+            // The CLR property is PersonId; the column stays "ProfileId" (see the Person mapping below).
+            e.Property(s => s.PersonId).HasColumnName("ProfileId");
             if (isNpgsql)
                 e.Property(s => s.Embedding).HasColumnType("vector(192)"); // ECAPA-TDNN dimension
             else
                 e.Ignore(s => s.Embedding);
-            // Identifying a speaker links it to a profile; deleting the profile just unlinks (SetNull).
-            e.HasOne(s => s.Profile)
+            // Identifying a speaker links it to a person; deleting the person just unlinks (SetNull).
+            e.HasOne(s => s.Person)
                 .WithMany()
-                .HasForeignKey(s => s.ProfileId)
+                .HasForeignKey(s => s.PersonId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
 
-        // Enrolled voiceprints (per-user). The centroid is a pgvector column on Postgres; ignored under
-        // the in-memory test provider (matching is integration-tested only).
-        builder.Entity<SpeakerProfile>(e =>
+        // The people directory. Platform-wide, and the voiceprint is optional: Embedding is nullable, so a
+        // person added by hand (or one who opted out) is a first-class row. The centroid is a pgvector
+        // column on Postgres; ignored under the in-memory test provider (matching is integration-tested).
+        //
+        // NAMING: the CLR type is Person but the table stays "SpeakerProfiles", and Person.CreatedByUserId
+        // stays column "UserId". Renaming either would be a destructive rename, which forces a
+        // MaintenanceController.CurrentFormat bump and hard-rejects every older backup archive with no
+        // conversion path. Beware in raw SQL: "UserId" is who *enrolled* the person, "LinkedUserId" is the
+        // account the person *is*. See docs/Data_Schema.md.
+        builder.Entity<Person>(e =>
         {
-            e.HasIndex(p => p.UserId);
+            e.ToTable("SpeakerProfiles");
+            e.Property(p => p.CreatedByUserId).HasColumnName("UserId");
+            e.HasIndex(p => p.CreatedByUserId);
+            e.HasIndex(p => p.Email);
             e.Property(p => p.Name).HasMaxLength(256);
+            e.Property(p => p.Title).HasMaxLength(128);
+            e.Property(p => p.CompanyName).HasMaxLength(256);
+            e.Property(p => p.Email).HasMaxLength(256);
+            e.Property(p => p.Phone).HasMaxLength(64);
             if (isNpgsql)
+            {
                 e.Property(p => p.Embedding).HasColumnType("vector(192)");
+                // One account is one person. Filtered so the many unlinked people (clients, guests) do not
+                // collide on null - same shape as the Room.OwnerUserId index above.
+                e.HasIndex(p => p.LinkedUserId).IsUnique().HasFilter("\"LinkedUserId\" IS NOT NULL");
+            }
             else
+            {
                 e.Ignore(p => p.Embedding);
-            e.HasOne(p => p.User)
+            }
+
+            // Both links cascade, matching what deleting a user has always done to their voiceprints. It is
+            // also the honest GDPR answer: SetNull would leave an orphan row still holding the deleted
+            // person's name, email and phone, which is the opposite of erasure. Whether an *externally*
+            // enrolled person should outlive the colleague who enrolled them is a real question, but it
+            // belongs with the platform-scope change, not here.
+            e.HasOne(p => p.CreatedBy)
                 .WithMany()
-                .HasForeignKey(p => p.UserId)
+                .HasForeignKey(p => p.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(p => p.LinkedUser)
+                .WithMany()
+                .HasForeignKey(p => p.LinkedUserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        builder.Entity<ProfileContribution>(e =>
+        builder.Entity<VoiceSample>(e =>
         {
-            e.HasIndex(c => c.ProfileId);
+            e.ToTable("ProfileContributions");
+            e.Property(v => v.PersonId).HasColumnName("ProfileId");
+            e.HasIndex(v => v.PersonId);
             if (isNpgsql)
-                e.Property(c => c.Embedding).HasColumnType("vector(192)");
+                e.Property(v => v.Embedding).HasColumnType("vector(192)");
             else
-                e.Ignore(c => c.Embedding);
-            e.HasOne(c => c.Profile)
-                .WithMany(p => p.Contributions)
-                .HasForeignKey(c => c.ProfileId)
+                e.Ignore(v => v.Embedding);
+            e.HasOne(v => v.Person)
+                .WithMany(p => p.VoiceSamples)
+                .HasForeignKey(v => v.PersonId)
                 .OnDelete(DeleteBehavior.Cascade);
-            // The contributing speaker; deleting the recording's speaker drops the contribution.
-            e.HasOne(c => c.Speaker)
+            // The contributing speaker; deleting the recording's speaker drops the sample.
+            e.HasOne(v => v.Speaker)
                 .WithMany()
-                .HasForeignKey(c => c.SpeakerId)
+                .HasForeignKey(v => v.SpeakerId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

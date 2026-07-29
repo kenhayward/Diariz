@@ -70,12 +70,12 @@ public class TranscriptMergerTests
         var result = TranscriptMerger.Merge(sources);
 
         var alice = result.Speakers.Single(s => s.Label == "S1-SPEAKER_00");
-        Assert.Equal(profile, alice.ProfileId);
+        Assert.Equal(profile, alice.PersonId);
         Assert.True(alice.IdentifiedAuto);
         Assert.False(alice.IsMultiSpeaker);
 
         var multi = result.Speakers.Single(s => s.Label == "S2-SPEAKER_01");
-        Assert.Null(multi.ProfileId);
+        Assert.Null(multi.PersonId);
         Assert.True(multi.IsMultiSpeaker);
     }
 }

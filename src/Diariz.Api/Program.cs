@@ -192,6 +192,7 @@ builder.Services.AddScoped<IUserPermissions, UserPermissions>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 // Rooms. Nothing consumes this yet - phases 2b-2d wire it into the controllers.
 builder.Services.AddScoped<IRoomScope, RoomScope>();
+builder.Services.AddScoped<IPeopleDirectory, PeopleDirectory>();
 
 // ---- Redis job queue ----
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>

@@ -201,6 +201,11 @@ standard **VoxCeleb1-O** test for rough comparison; real-world numbers on meetin
   laws like Illinois BIPA. Implications: obtain **explicit consent** to enrol; allow **deletion** of voiceprints
   (right to erasure); store them **encrypted and per-user**; document purpose and retention. This is a policy
   decision, not just an engineering one.
+- **A voiceprint is optional on a person.** `Person.Embedding` is nullable, so someone can be in the directory
+  with contact details and no biometric at all, and `Person.VoiceprintOptOut` records that they asked not to be
+  voice-printed. `SpeakerIdentifier` filters on `Embedding != null && !VoiceprintOptOut` before the distance
+  query, so both cases are simply never candidates. This is what makes "hold the person, not the biometric" a
+  representable state rather than a deletion.
 - **Failure modes & fairness:** accuracy degrades on short/noisy/cross-channel audio and can vary across
   demographics; always keep an **"unknown"** outcome and surface confidence rather than asserting identity.
 - **Anti-spoofing** (replay/synthetic-voice detection) is a separate problem; embedding similarity alone does

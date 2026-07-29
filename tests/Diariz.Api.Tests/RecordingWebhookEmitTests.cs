@@ -124,7 +124,7 @@ public class RecordingWebhookEmitTests
         publisher = new CapturingWebhookPublisher();
         return new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
             resolver, new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()),
-            new RoomScope(db), publisher, Options.Create(new AppPublicOptions()))
+            new RoomScope(db), new PeopleDirectory(db), publisher, Options.Create(new AppPublicOptions()))
         {
             ControllerContext = Http.Context(userId)
         };

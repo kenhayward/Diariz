@@ -219,7 +219,7 @@ public class RoomsIntegrationTests(ContainersFixture fx)
         var chatId = Guid.NewGuid();
         var personalTypeId = Guid.NewGuid();
         var platformTypeId = Guid.NewGuid();
-        db.SpeakerProfiles.Add(new SpeakerProfile { Id = profileId, UserId = userId, Name = "V", Embedding = new Vector(new float[192]), SampleCount = 1 });
+        db.People.Add(new Person { Id = profileId, CreatedByUserId = userId, Name = "V", Embedding = new Vector(new float[192]), SampleCount = 1 });
         db.ChatSessions.Add(new ChatSession { Id = chatId, UserId = userId, Title = "C", MessagesJson = "[]" });
         db.MeetingTypes.Add(new MeetingType { Id = personalTypeId, UserId = userId, Title = "Mine" });
         db.MeetingTypes.Add(new MeetingType { Id = platformTypeId, UserId = null, Title = "Platform", Key = $"k{Guid.NewGuid():N}" });
@@ -230,7 +230,7 @@ public class RoomsIntegrationTests(ContainersFixture fx)
 
         db.ChangeTracker.Clear();
         var room = await db.Rooms.Where(r => r.OwnerUserId == userId).Select(r => r.Id).SingleAsync();
-        Assert.Equal(room, (await db.SpeakerProfiles.FindAsync(profileId))!.RoomId);
+        Assert.Equal(room, (await db.People.FindAsync(profileId))!.RoomId);
         Assert.Equal(room, (await db.ChatSessions.FindAsync(chatId))!.RoomId);
         Assert.Equal(room, (await db.MeetingTypes.FindAsync(personalTypeId))!.RoomId);
         Assert.Null((await db.MeetingTypes.FindAsync(platformTypeId))!.RoomId);

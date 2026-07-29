@@ -23,7 +23,7 @@ public class SpeakerLabelingTests
 
         await SpeakerLabeling.ApplyAsync([sp], Guid.NewGuid(), id);
 
-        Assert.Equal(profileId, sp.ProfileId);
+        Assert.Equal(profileId, sp.PersonId);
         Assert.Equal("Alice", sp.DisplayName);
         Assert.True(sp.IdentifiedAuto);
     }
@@ -32,12 +32,12 @@ public class SpeakerLabelingTests
     public async Task Reverts_Stale_Auto_When_No_Match()
     {
         var sp = Spk("SPEAKER_00", "Alice", auto: true, new Vector(new[] { 0.1f }));
-        sp.ProfileId = Guid.NewGuid();
+        sp.PersonId = Guid.NewGuid();
         var id = new FakeSpeakerIdentifier { Match = null };
 
         await SpeakerLabeling.ApplyAsync([sp], Guid.NewGuid(), id);
 
-        Assert.Null(sp.ProfileId);
+        Assert.Null(sp.PersonId);
         Assert.Equal("SPEAKER_00", sp.DisplayName);
         Assert.False(sp.IdentifiedAuto);
     }
@@ -77,7 +77,7 @@ public class SpeakerLabelingTests
         await SpeakerLabeling.ApplyAsync([sp], Guid.NewGuid(), id);
 
         Assert.Equal(Speaker.MultiSpeakerName, sp.DisplayName);
-        Assert.Null(sp.ProfileId);
+        Assert.Null(sp.PersonId);
         Assert.Equal(0, id.Calls); // not even queried
     }
 }

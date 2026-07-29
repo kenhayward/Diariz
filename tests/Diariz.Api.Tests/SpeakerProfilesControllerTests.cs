@@ -39,8 +39,8 @@ public class SpeakerProfilesControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        db.SpeakerProfiles.Add(new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice", SampleCount = 2 });
-        db.SpeakerProfiles.Add(new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Someone else" });
+        db.People.Add(new Person { Id = Guid.NewGuid(), CreatedByUserId = userId, RoomId = RoomOf(db, userId), Name = "Alice", SampleCount = 2 });
+        db.People.Add(new Person { Id = Guid.NewGuid(), CreatedByUserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Someone else" });
         await db.SaveChangesAsync();
         var controller = Build(db, userId);
 
@@ -74,12 +74,12 @@ public class SpeakerProfilesControllerTests
         Assert.Equal("Alice", dto.Name);
         Assert.Equal(1, dto.SampleCount);
 
-        var profile = await db.SpeakerProfiles.SingleAsync();
-        Assert.Equal(userId, profile.UserId);
-        Assert.Single(await db.ProfileContributions.Where(c => c.ProfileId == profile.Id).ToListAsync());
+        var profile = await db.People.SingleAsync();
+        Assert.Equal(userId, profile.CreatedByUserId);
+        Assert.Single(await db.VoiceSamples.Where(c => c.PersonId == profile.Id).ToListAsync());
 
         var sp = await db.Speakers.SingleAsync(s => s.Id == speaker.Id);
-        Assert.Equal(profile.Id, sp.ProfileId);
+        Assert.Equal(profile.Id, sp.PersonId);
         Assert.Equal("Alice", sp.DisplayName);
         Assert.False(sp.IdentifiedAuto);
     }
@@ -97,7 +97,7 @@ public class SpeakerProfilesControllerTests
         var result = await controller.Create(new CreateSpeakerProfileRequest("Alice", rec.Id, "SPEAKER_00"));
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
-        Assert.Empty(await db.SpeakerProfiles.ToListAsync());
+        Assert.Empty(await db.People.ToListAsync());
     }
 
     [Fact]
@@ -146,23 +146,23 @@ public class SpeakerProfilesControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var rec = await SeedRecording(db, userId);
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice" };
-        db.SpeakerProfiles.Add(profile);
+        var profile = new Person { Id = Guid.NewGuid(), CreatedByUserId = userId, RoomId = RoomOf(db, userId), Name = "Alice" };
+        db.People.Add(profile);
         // One auto-identified speaker (revert) and one manually-renamed-then-assigned speaker (keep name).
         var auto = new Speaker
         {
             Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00",
-            DisplayName = "Alice", ProfileId = profile.Id, IdentifiedAuto = true
+            DisplayName = "Alice", PersonId = profile.Id, IdentifiedAuto = true
         };
         var manual = new Speaker
         {
             Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_01",
-            DisplayName = "Alice", ProfileId = profile.Id, IdentifiedAuto = false
+            DisplayName = "Alice", PersonId = profile.Id, IdentifiedAuto = false
         };
         db.Speakers.AddRange(auto, manual);
-        db.ProfileContributions.Add(new ProfileContribution
+        db.VoiceSamples.Add(new VoiceSample
         {
-            Id = Guid.NewGuid(), ProfileId = profile.Id, SpeakerId = manual.Id, RecordingId = rec.Id
+            Id = Guid.NewGuid(), PersonId = profile.Id, SpeakerId = manual.Id, RecordingId = rec.Id
         });
         await db.SaveChangesAsync();
         var controller = Build(db, userId);
@@ -170,16 +170,16 @@ public class SpeakerProfilesControllerTests
         var result = await controller.Delete(profile.Id);
 
         Assert.IsType<NoContentResult>(result);
-        Assert.Empty(await db.SpeakerProfiles.ToListAsync());
-        Assert.Empty(await db.ProfileContributions.ToListAsync()); // cascaded
+        Assert.Empty(await db.People.ToListAsync());
+        Assert.Empty(await db.VoiceSamples.ToListAsync()); // cascaded
 
         var autoReloaded = await db.Speakers.SingleAsync(s => s.Id == auto.Id);
-        Assert.Null(autoReloaded.ProfileId);
+        Assert.Null(autoReloaded.PersonId);
         Assert.Equal("SPEAKER_00", autoReloaded.DisplayName); // reverted to label
         Assert.False(autoReloaded.IdentifiedAuto);
 
         var manualReloaded = await db.Speakers.SingleAsync(s => s.Id == manual.Id);
-        Assert.Null(manualReloaded.ProfileId);
+        Assert.Null(manualReloaded.PersonId);
         Assert.Equal("Alice", manualReloaded.DisplayName); // hand-assigned name kept
     }
 
@@ -187,15 +187,15 @@ public class SpeakerProfilesControllerTests
     public async Task Delete_OnAnotherUsersProfile_ReturnsNotFound()
     {
         using var db = TestDb.Create();
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
-        db.SpeakerProfiles.Add(profile);
+        var profile = new Person { Id = Guid.NewGuid(), CreatedByUserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
+        db.People.Add(profile);
         await db.SaveChangesAsync();
         var controller = Build(db, Guid.NewGuid());
 
         var result = await controller.Delete(profile.Id);
 
         Assert.IsType<NotFoundResult>(result);
-        Assert.Single(await db.SpeakerProfiles.ToListAsync());
+        Assert.Single(await db.People.ToListAsync());
     }
 
     // ---- Rename ----
@@ -206,12 +206,12 @@ public class SpeakerProfilesControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var rec = await SeedRecording(db, userId);
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice" };
-        db.SpeakerProfiles.Add(profile);
+        var profile = new Person { Id = Guid.NewGuid(), CreatedByUserId = userId, RoomId = RoomOf(db, userId), Name = "Alice" };
+        db.People.Add(profile);
         db.Speakers.Add(new Speaker
         {
             Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00",
-            DisplayName = "Alice", ProfileId = profile.Id, IdentifiedAuto = true
+            DisplayName = "Alice", PersonId = profile.Id, IdentifiedAuto = true
         });
         await db.SaveChangesAsync();
         var controller = Build(db, userId);
@@ -219,7 +219,7 @@ public class SpeakerProfilesControllerTests
         var result = await controller.Rename(profile.Id, new RenameSpeakerProfileRequest("Alice Smith"));
 
         Assert.IsType<NoContentResult>(result);
-        Assert.Equal("Alice Smith", (await db.SpeakerProfiles.SingleAsync()).Name);
+        Assert.Equal("Alice Smith", (await db.People.SingleAsync()).Name);
         Assert.Equal("Alice Smith", (await db.Speakers.SingleAsync()).DisplayName);
     }
 
@@ -228,8 +228,8 @@ public class SpeakerProfilesControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice" };
-        db.SpeakerProfiles.Add(profile);
+        var profile = new Person { Id = Guid.NewGuid(), CreatedByUserId = userId, RoomId = RoomOf(db, userId), Name = "Alice" };
+        db.People.Add(profile);
         await db.SaveChangesAsync();
         var controller = Build(db, userId);
 
@@ -240,8 +240,8 @@ public class SpeakerProfilesControllerTests
     public async Task Rename_OnAnotherUsersProfile_ReturnsNotFound()
     {
         using var db = TestDb.Create();
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
-        db.SpeakerProfiles.Add(profile);
+        var profile = new Person { Id = Guid.NewGuid(), CreatedByUserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
+        db.People.Add(profile);
         await db.SaveChangesAsync();
         var controller = Build(db, Guid.NewGuid());
 
@@ -257,17 +257,17 @@ public class SpeakerProfilesControllerTests
         var userId = Guid.NewGuid();
         var rec = await SeedRecording(db, userId);
         rec.Name = "Team Sync";
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice", SampleCount = 1 };
-        db.SpeakerProfiles.Add(profile);
+        var profile = new Person { Id = Guid.NewGuid(), CreatedByUserId = userId, RoomId = RoomOf(db, userId), Name = "Alice", SampleCount = 1 };
+        db.People.Add(profile);
         var speaker = new Speaker
         {
             Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00",
-            DisplayName = "Alice", ProfileId = profile.Id
+            DisplayName = "Alice", PersonId = profile.Id
         };
         db.Speakers.Add(speaker);
-        db.ProfileContributions.Add(new ProfileContribution
+        db.VoiceSamples.Add(new VoiceSample
         {
-            Id = Guid.NewGuid(), ProfileId = profile.Id, SpeakerId = speaker.Id, RecordingId = rec.Id
+            Id = Guid.NewGuid(), PersonId = profile.Id, SpeakerId = speaker.Id, RecordingId = rec.Id
         });
         // The speaker's first segment is at 3s — that's the play offset surfaced to the UI.
         var tr = new Transcription { Id = Guid.NewGuid(), RecordingId = rec.Id, Model = "m", Version = 1 };
@@ -292,8 +292,8 @@ public class SpeakerProfilesControllerTests
     public async Task Get_OnAnotherUsersProfile_ReturnsNotFound()
     {
         using var db = TestDb.Create();
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
-        db.SpeakerProfiles.Add(profile);
+        var profile = new Person { Id = Guid.NewGuid(), CreatedByUserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
+        db.People.Add(profile);
         await db.SaveChangesAsync();
         var controller = Build(db, Guid.NewGuid());
 
@@ -308,19 +308,19 @@ public class SpeakerProfilesControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var rec = await SeedRecording(db, userId);
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice", SampleCount = 2 };
-        db.SpeakerProfiles.Add(profile);
-        var c1 = new ProfileContribution { Id = Guid.NewGuid(), ProfileId = profile.Id, SpeakerId = Guid.NewGuid(), RecordingId = rec.Id };
-        var c2 = new ProfileContribution { Id = Guid.NewGuid(), ProfileId = profile.Id, SpeakerId = Guid.NewGuid(), RecordingId = rec.Id };
-        db.ProfileContributions.AddRange(c1, c2);
+        var profile = new Person { Id = Guid.NewGuid(), CreatedByUserId = userId, RoomId = RoomOf(db, userId), Name = "Alice", SampleCount = 2 };
+        db.People.Add(profile);
+        var c1 = new VoiceSample { Id = Guid.NewGuid(), PersonId = profile.Id, SpeakerId = Guid.NewGuid(), RecordingId = rec.Id };
+        var c2 = new VoiceSample { Id = Guid.NewGuid(), PersonId = profile.Id, SpeakerId = Guid.NewGuid(), RecordingId = rec.Id };
+        db.VoiceSamples.AddRange(c1, c2);
         await db.SaveChangesAsync();
         var controller = Build(db, userId);
 
         var result = await controller.RemoveContribution(profile.Id, c1.Id);
 
         Assert.IsType<NoContentResult>(result);
-        Assert.Single(await db.ProfileContributions.Where(c => c.ProfileId == profile.Id).ToListAsync());
-        Assert.Equal(1, (await db.SpeakerProfiles.SingleAsync()).SampleCount);
+        Assert.Single(await db.VoiceSamples.Where(c => c.PersonId == profile.Id).ToListAsync());
+        Assert.Equal(1, (await db.People.SingleAsync()).SampleCount);
     }
 
     [Fact]
@@ -329,25 +329,25 @@ public class SpeakerProfilesControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var rec = await SeedRecording(db, userId);
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice", SampleCount = 1 };
-        db.SpeakerProfiles.Add(profile);
-        var only = new ProfileContribution { Id = Guid.NewGuid(), ProfileId = profile.Id, SpeakerId = Guid.NewGuid(), RecordingId = rec.Id };
-        db.ProfileContributions.Add(only);
+        var profile = new Person { Id = Guid.NewGuid(), CreatedByUserId = userId, RoomId = RoomOf(db, userId), Name = "Alice", SampleCount = 1 };
+        db.People.Add(profile);
+        var only = new VoiceSample { Id = Guid.NewGuid(), PersonId = profile.Id, SpeakerId = Guid.NewGuid(), RecordingId = rec.Id };
+        db.VoiceSamples.Add(only);
         await db.SaveChangesAsync();
         var controller = Build(db, userId);
 
         var result = await controller.RemoveContribution(profile.Id, only.Id);
 
         Assert.IsType<BadRequestObjectResult>(result);
-        Assert.Single(await db.ProfileContributions.ToListAsync()); // not removed
+        Assert.Single(await db.VoiceSamples.ToListAsync()); // not removed
     }
 
     [Fact]
     public async Task RemoveContribution_OnAnotherUsersProfile_ReturnsNotFound()
     {
         using var db = TestDb.Create();
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
-        db.SpeakerProfiles.Add(profile);
+        var profile = new Person { Id = Guid.NewGuid(), CreatedByUserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
+        db.People.Add(profile);
         await db.SaveChangesAsync();
         var controller = Build(db, Guid.NewGuid());
 
@@ -362,16 +362,16 @@ public class SpeakerProfilesControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var rec = await SeedRecording(db, userId);
-        var target = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice", SampleCount = 1 };
-        var source = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Allie", SampleCount = 1 };
-        db.SpeakerProfiles.AddRange(target, source);
-        db.ProfileContributions.AddRange(
-            new ProfileContribution { Id = Guid.NewGuid(), ProfileId = target.Id, SpeakerId = Guid.NewGuid(), RecordingId = rec.Id },
-            new ProfileContribution { Id = Guid.NewGuid(), ProfileId = source.Id, SpeakerId = Guid.NewGuid(), RecordingId = rec.Id });
+        var target = new Person { Id = Guid.NewGuid(), CreatedByUserId = userId, RoomId = RoomOf(db, userId), Name = "Alice", SampleCount = 1 };
+        var source = new Person { Id = Guid.NewGuid(), CreatedByUserId = userId, RoomId = RoomOf(db, userId), Name = "Allie", SampleCount = 1 };
+        db.People.AddRange(target, source);
+        db.VoiceSamples.AddRange(
+            new VoiceSample { Id = Guid.NewGuid(), PersonId = target.Id, SpeakerId = Guid.NewGuid(), RecordingId = rec.Id },
+            new VoiceSample { Id = Guid.NewGuid(), PersonId = source.Id, SpeakerId = Guid.NewGuid(), RecordingId = rec.Id });
         var speaker = new Speaker
         {
             Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_01",
-            DisplayName = "Allie", ProfileId = source.Id, IdentifiedAuto = true
+            DisplayName = "Allie", PersonId = source.Id, IdentifiedAuto = true
         };
         db.Speakers.Add(speaker);
         await db.SaveChangesAsync();
@@ -380,11 +380,11 @@ public class SpeakerProfilesControllerTests
         var result = await controller.Merge(target.Id, new MergeSpeakerProfilesRequest(source.Id));
 
         Assert.IsType<NoContentResult>(result);
-        Assert.Null(await db.SpeakerProfiles.FirstOrDefaultAsync(p => p.Id == source.Id));
-        Assert.Equal(2, await db.ProfileContributions.CountAsync(c => c.ProfileId == target.Id));
-        Assert.Equal(2, (await db.SpeakerProfiles.SingleAsync(p => p.Id == target.Id)).SampleCount);
+        Assert.Null(await db.People.FirstOrDefaultAsync(p => p.Id == source.Id));
+        Assert.Equal(2, await db.VoiceSamples.CountAsync(c => c.PersonId == target.Id));
+        Assert.Equal(2, (await db.People.SingleAsync(p => p.Id == target.Id)).SampleCount);
         var sp = await db.Speakers.SingleAsync(s => s.Id == speaker.Id);
-        Assert.Equal(target.Id, sp.ProfileId);
+        Assert.Equal(target.Id, sp.PersonId);
         Assert.Equal("Alice", sp.DisplayName);
     }
 
@@ -393,8 +393,8 @@ public class SpeakerProfilesControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice" };
-        db.SpeakerProfiles.Add(profile);
+        var profile = new Person { Id = Guid.NewGuid(), CreatedByUserId = userId, RoomId = RoomOf(db, userId), Name = "Alice" };
+        db.People.Add(profile);
         await db.SaveChangesAsync();
         var controller = Build(db, userId);
 
@@ -406,14 +406,14 @@ public class SpeakerProfilesControllerTests
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
-        var target = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice" };
-        var othersSource = new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
-        db.SpeakerProfiles.AddRange(target, othersSource);
+        var target = new Person { Id = Guid.NewGuid(), CreatedByUserId = userId, RoomId = RoomOf(db, userId), Name = "Alice" };
+        var othersSource = new Person { Id = Guid.NewGuid(), CreatedByUserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
+        db.People.AddRange(target, othersSource);
         await db.SaveChangesAsync();
         var controller = Build(db, userId);
 
         Assert.IsType<NotFoundResult>(await controller.Merge(target.Id, new MergeSpeakerProfilesRequest(othersSource.Id)));
-        Assert.Equal(2, await db.SpeakerProfiles.CountAsync());
+        Assert.Equal(2, await db.People.CountAsync());
     }
 
     // ---- Erase all ----
@@ -424,28 +424,28 @@ public class SpeakerProfilesControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var rec = await SeedRecording(db, userId);
-        var a = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Alice" };
-        var b = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, RoomId = RoomOf(db, userId), Name = "Bob" };
-        db.SpeakerProfiles.AddRange(a, b);
+        var a = new Person { Id = Guid.NewGuid(), CreatedByUserId = userId, RoomId = RoomOf(db, userId), Name = "Alice" };
+        var b = new Person { Id = Guid.NewGuid(), CreatedByUserId = userId, RoomId = RoomOf(db, userId), Name = "Bob" };
+        db.People.AddRange(a, b);
         db.Speakers.AddRange(
-            new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Alice", ProfileId = a.Id, IdentifiedAuto = true },
-            new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_01", DisplayName = "Bob", ProfileId = b.Id, IdentifiedAuto = false });
+            new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Alice", PersonId = a.Id, IdentifiedAuto = true },
+            new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_01", DisplayName = "Bob", PersonId = b.Id, IdentifiedAuto = false });
         // Another user's profile must be untouched.
-        db.SpeakerProfiles.Add(new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" });
+        db.People.Add(new Person { Id = Guid.NewGuid(), CreatedByUserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" });
         await db.SaveChangesAsync();
         var controller = Build(db, userId);
 
         var result = await controller.DeleteAll();
 
         Assert.IsType<NoContentResult>(result);
-        Assert.Empty(await db.SpeakerProfiles.Where(p => p.UserId == userId).ToListAsync());
-        Assert.Single(await db.SpeakerProfiles.ToListAsync()); // the other user's profile remains
+        Assert.Empty(await db.People.Where(p => p.CreatedByUserId == userId).ToListAsync());
+        Assert.Single(await db.People.ToListAsync()); // the other user's profile remains
 
         var auto = await db.Speakers.SingleAsync(s => s.Label == "SPEAKER_00");
-        Assert.Null(auto.ProfileId);
+        Assert.Null(auto.PersonId);
         Assert.Equal("SPEAKER_00", auto.DisplayName); // reverted
         var manual = await db.Speakers.SingleAsync(s => s.Label == "SPEAKER_01");
-        Assert.Null(manual.ProfileId);
+        Assert.Null(manual.PersonId);
         Assert.Equal("Bob", manual.DisplayName); // kept
     }
 }
