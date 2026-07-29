@@ -89,7 +89,7 @@ public sealed class MeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerator
         }
 
         var input = new MinutesComposition(
-            content, overview, name => ResolveField(name, context, actions, notesMarkdown),
+            content, overview, name => ResolveField(name, context, actions, notesMarkdown, segments),
             minutesContext, config, preamble);
 
         return await strategy.GenerateAsync(input, ct);
@@ -174,6 +174,8 @@ public sealed class MeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerator
 
     /// <summary>Field substitution is shared with the formula run pipeline - see <see cref="TemplateFields"/>.</summary>
     private static string? ResolveField(
-        string name, MeetingMinutesContext ctx, IReadOnlyList<ExtractedAction> actions, string? notesMarkdown) =>
-        TemplateFields.Resolve(name, ctx.MeetingDate, ctx.Title, ctx.Attendees, ctx.DurationMs, actions, notesMarkdown);
+        string name, MeetingMinutesContext ctx, IReadOnlyList<ExtractedAction> actions, string? notesMarkdown,
+        IReadOnlyList<SegmentDto> segments) =>
+        TemplateFields.Resolve(
+            name, ctx.MeetingDate, ctx.Title, ctx.Attendees, ctx.DurationMs, actions, notesMarkdown, segments);
 }

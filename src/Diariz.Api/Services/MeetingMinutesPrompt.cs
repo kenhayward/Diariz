@@ -100,22 +100,33 @@ Duration:{meeting_duration}
         return [new ChatMessage("system", rendered), new ChatMessage("user", transcript)];
     }
 
-    /// <summary>Build the deterministic <c>## Action Items</c> Markdown table from the recording's canonical
-    /// actions (the Actions panel) — the model is told NOT to produce one, so this is the single source. Owner
-    /// and due date are left blank when unknown; pipe characters are escaped so the table stays intact. Returns
-    /// an empty string when there are no actions (the section is then omitted).</summary>
-    public static string RenderActionItems(IReadOnlyList<ExtractedAction>? actions)
+    /// <summary>The deterministic Action Items Markdown table from the recording's canonical actions (the Actions
+    /// panel) — the model is told NOT to produce one, so this is the single source. Owner and due date are left
+    /// blank when unknown; pipe characters are escaped so the table stays intact. Returns an empty string when
+    /// there are no actions.
+    ///
+    /// <para>No heading: this is what a template's <c>action_items</c> merge field substitutes, and the template
+    /// author has already written the heading they want above it. <see cref="RenderActionItems"/> adds one, for
+    /// the case where the table is appended to model-written minutes with nothing to hang it under.</para></summary>
+    public static string ActionItemsTable(IReadOnlyList<ExtractedAction>? actions)
     {
         var items = actions?.Where(a => !string.IsNullOrWhiteSpace(a.Text)).ToList() ?? [];
         if (items.Count == 0) return "";
 
         var sb = new StringBuilder();
-        sb.Append("## Action Items\n\n");
         sb.Append("| Action | Owner | Due date |\n");
         sb.Append("| --- | --- | --- |\n");
         foreach (var a in items)
             sb.Append($"| {Cell(a.Text)} | {Cell(a.Actor)} | {Cell(a.Deadline)} |\n");
         return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>The <c>## Action Items</c> section: the heading plus <see cref="ActionItemsTable"/>. Empty when
+    /// there are no actions (the section is then omitted).</summary>
+    public static string RenderActionItems(IReadOnlyList<ExtractedAction>? actions)
+    {
+        var table = ActionItemsTable(actions);
+        return table.Length == 0 ? "" : "## Action Items\n\n" + table;
     }
 
     /// <summary>Append the deterministic Action Items section to the model's minutes (blank-line separated).

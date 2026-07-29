@@ -7,7 +7,12 @@ namespace Diariz.Api.Services;
 /// drift because only the minutes generator knew how to substitute anything.
 ///
 /// The valid names are <see cref="TemplateContent.Fields"/>. A field that has no value resolves to null, and the
-/// composer drops the block (and the section, if that empties it).</summary>
+/// composer drops the block (and the section, if that empties it).
+///
+/// A field is stamped into the OUTPUT document; it never enters a prompt. So <c>transcript</c> - which is
+/// unbounded, one table row per segment - costs no tokens: it is the whole transcript as an appendix, not
+/// something the model is asked to read. That is also why it is independent of the formula's context flags,
+/// which govern only what the model sees.</summary>
 public static class TemplateFields
 {
     public static string? Resolve(
@@ -17,14 +22,16 @@ public static class TemplateFields
         IReadOnlyList<string> attendees,
         long? durationMs,
         IReadOnlyList<ExtractedAction> actions,
-        string? notesMarkdown) => name switch
+        string? notesMarkdown,
+        IReadOnlyList<SegmentDto>? segments = null) => name switch
     {
         "date" => meetingDate?.ToString("yyyy-MM-dd"),
         "time" => meetingDate?.ToString("HH:mm"),
         "title" => string.IsNullOrWhiteSpace(title) ? null : title.Trim(),
         "attendees" => AttendeeFormatter.Summarize(attendees),
         "duration" => FormatDuration(durationMs),
-        "action_items" => NullIfEmpty(MeetingMinutesPrompt.RenderActionItems(actions)),
+        "action_items" => NullIfEmpty(MeetingMinutesPrompt.ActionItemsTable(actions)),
+        "transcript" => NullIfEmpty(TranscriptFormatter.MarkdownTable(segments ?? [])),
         "notes" => notesMarkdown,
         _ => null,
     };

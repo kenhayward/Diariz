@@ -123,6 +123,22 @@ public class TemplateContentTests
         Assert.Contains("date", TemplateContent.Fields);
         Assert.Contains("attendees", TemplateContent.Fields);
         Assert.Contains("action_items", TemplateContent.Fields);
+        Assert.Contains("transcript", TemplateContent.Fields);
+    }
+
+    [Fact]
+    public void Validate_accepts_the_transcript_field()
+    {
+        var content = new TemplateContent(
+            [new TemplateSection(1, "Appendix", [new TemplateBlock(TemplateBlock.FieldKind, Field: "transcript")])]);
+        Assert.True(content.Validate().Ok);
+    }
+
+    [Fact]
+    public void TableFields_are_the_substitutions_whose_value_is_a_markdown_table()
+    {
+        Assert.Equal(["action_items", "transcript"], TemplateContent.TableFields.OrderBy(f => f));
+        Assert.All(TemplateContent.TableFields, f => Assert.Contains(f, TemplateContent.Fields));
     }
 
     [Theory]

@@ -65,4 +65,21 @@ describe("TemplateContentEditor", () => {
 
     expect((onChange.mock.calls.at(-1)![0] as TemplateContent).sections[0].level).toBe(0);
   });
+
+  // The field picker is the same control in a personal and a platform formula (both go through
+  // FormulaEditModal), so this covers the option being offered in both.
+  it("offers the transcript field and selects it", () => {
+    const onChange = vi.fn();
+    const fieldBlock: TemplateContent = {
+      sections: [{ level: 1, title: "S", blocks: [{ kind: "field", field: "date", breakAfter: "none" }] }],
+    };
+    render(<Host initial={fieldBlock} onChange={onChange} />);
+
+    const picker = screen.getByLabelText("mtKindField") as HTMLSelectElement;
+    expect([...picker.options].map((o) => o.value)).toContain("transcript");
+
+    fireEvent.change(picker, { target: { value: "transcript" } });
+
+    expect((onChange.mock.calls.at(-1)![0] as TemplateContent).sections[0].blocks[0].field).toBe("transcript");
+  });
 });

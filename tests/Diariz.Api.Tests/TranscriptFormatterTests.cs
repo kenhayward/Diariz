@@ -43,6 +43,39 @@ public class TranscriptFormatterTests
         Assert.Contains("Summary\n—", TranscriptFormatter.ToText("x", null, Segments));
     }
 
+    // The Time/Speaker/Text table is its own renderer so the `transcript` merge field and the Markdown export
+    // emit the identical table (see TemplateFields). ToMarkdown is asserted below to embed exactly this.
+    [Fact]
+    public void MarkdownTable_IsTheTimeSpeakerTextTable_EscapingPipesAndNewlines()
+    {
+        var segs = new List<SegmentDto>
+        {
+            new(Guid.NewGuid(), "S", "Al|ce", 0, 1000, "a | b"),
+            new(Guid.NewGuid(), "S", "Bob", 64000, 66500, "one\ntwo"),
+        };
+
+        var table = TranscriptFormatter.MarkdownTable(segs);
+
+        var sep = "| " + new string('-', 13) + " | " + new string('-', 16) + " | " + new string('-', 71) + " |";
+        Assert.StartsWith("| Time | Speaker | Text |\n" + sep + "\n", table);
+        Assert.Contains("| 00:00 | Al\\|ce | a \\| b |", table);
+        Assert.Contains("| 01:04 | Bob | one<br>two |", table); // newlines can't survive inside a table cell
+        Assert.False(table.EndsWith('\n'));                     // a value, not a section - the caller spaces it
+    }
+
+    [Fact]
+    public void MarkdownTable_IsEmptyWhenThereAreNoSegments()
+    {
+        Assert.Equal("", TranscriptFormatter.MarkdownTable([]));
+    }
+
+    [Fact]
+    public void ToMarkdown_EmbedsTheSharedTable()
+    {
+        var md = TranscriptFormatter.ToMarkdown("Team Sync", "The summary.", Segments);
+        Assert.Contains(TranscriptFormatter.MarkdownTable(Segments), md);
+    }
+
     [Fact]
     public void ToMarkdown_HasHeadingsAndATable_EscapingPipes()
     {

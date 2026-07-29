@@ -70,6 +70,9 @@ Every block except a Line has a **Break after** control deciding what follows it
 New Field blocks default to **No break** (so `Date: ` and the date sit together); Text, Prompt, and Line
 blocks default to **Paragraph**.
 
+The two fields that produce a **table** - Action items and Transcript - always get a blank line above and
+below them whatever you set here. A table glued to the line before or after it stops being a table.
+
 ### Merge fields
 
 A **Field** block substitutes one of:
@@ -81,8 +84,17 @@ A **Field** block substitutes one of:
 | **Title** | The meeting name |
 | **Attendees** | Identified people, then a count of the rest |
 | **Duration** | How long the recording ran |
-| **Action items table** | The extracted actions as a table |
+| **Action items table** | The extracted actions as a table - Action, Owner, Due date |
+| **Transcript table (time, speaker, text)** | The whole transcript as a table - Time, Speaker, Text |
 | **Enhanced notes (from your notes)** | Your notes expanded from the transcript |
+
+Each field is the value on its own, with no heading - write your own heading above it if you want one.
+
+**Transcript** stamps every segment of the meeting into the document, one row per segment, timestamped
+`mm:ss` and attributed to the speaker as you have named them. It is never sent to the model, so it costs
+nothing extra to produce and does not need the **Transcript** context toggle ticked - that toggle governs
+only what the model reads. It is the way to append a full record to a document, but a long meeting makes
+a long table, so put it last, or in a section of its own.
 
 Note that in a **folder-wide** run there is no single recording, so field blocks resolve to nothing and
 are dropped. Keep merge fields for formulas you intend to run on one meeting.

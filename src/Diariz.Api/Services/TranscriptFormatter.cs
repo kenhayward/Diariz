@@ -67,6 +67,24 @@ public static class TranscriptFormatter
             sb.Append('\n');
         }
         sb.Append("## ").Append(s10n.Transcript).Append("\n\n");
+        AppendTranscriptTable(sb, segments, s10n);
+        return sb.ToString();
+    }
+
+    /// <summary>The Time/Speaker/Text table on its own - no heading, no trailing newline - or "" when there are no
+    /// segments. This is the whole value of a template's <c>transcript</c> merge field (see
+    /// <see cref="TemplateFields"/>), and the same table <see cref="ToMarkdown"/> embeds, so a transcript stamped
+    /// into a formula's document and one exported as Markdown are byte-identical.</summary>
+    public static string MarkdownTable(IReadOnlyList<SegmentDto> segments, ExportStrings? strings = null)
+    {
+        if (segments is not { Count: > 0 }) return "";
+        var sb = new StringBuilder();
+        AppendTranscriptTable(sb, segments, strings ?? ExportStrings.English);
+        return sb.ToString().TrimEnd('\n');
+    }
+
+    private static void AppendTranscriptTable(StringBuilder sb, IReadOnlyList<SegmentDto> segments, ExportStrings s10n)
+    {
         // 13/16/71% column widths are carried by the separator-row dash counts (how pandoc/MultiMarkdown
         // size columns); GFM/kramdown ignore the extra dashes, so no stray attribute line is needed.
         sb.Append("| ").Append(s10n.Time).Append(" | ").Append(s10n.Speaker).Append(" | ").Append(s10n.Text).Append(" |\n")
@@ -75,7 +93,6 @@ public static class TranscriptFormatter
         foreach (var s in segments)
             sb.Append("| ").Append(Clock(s.StartMs)).Append(" | ").Append(Md(s.SpeakerDisplay))
               .Append(" | ").Append(Md(s.Text)).Append(" |\n");
-        return sb.ToString();
     }
 
     /// <summary>Rich Text Format: bold headings, the summary, an actions table (if any), then a table of

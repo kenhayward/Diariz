@@ -1,7 +1,9 @@
 import type { TemplateContent, TemplateSection, TemplateBlock, TemplateBlockKind } from "./types";
 
 /// The substitutable recording fields a `field` block may use (must match the backend `TemplateContent.Fields`).
-export const FIELD_OPTIONS = ["date", "time", "title", "attendees", "duration", "action_items", "notes"] as const;
+export const FIELD_OPTIONS = [
+  "date", "time", "title", "attendees", "duration", "action_items", "transcript", "notes",
+] as const;
 
 export function newBlock(kind: TemplateBlockKind): TemplateBlock {
   if (kind === "field") return { kind, field: "date", breakAfter: "none" };
