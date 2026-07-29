@@ -157,6 +157,10 @@ renames, prunes training samples, merges duplicates, and erases voiceprints (GDP
 GDPR, withdrawing consent to hold your own biometric is yours to exercise, not an administrator's to grant.
 The trade-off of a shared directory is deliberate and worth stating plainly: a voiceprint enrolled by one
 person will identify that human in **everyone's** recordings.
+A **People** page (account menu, or *Manage people* on a recording's Speakers tab) lists everyone with a
+search box and filters for internal, external, and whether a voiceprint is held; selecting someone opens an
+editor beside the list. The Speakers tab on a recording shows an identified speaker's **title, company** and
+**internal/external** marker inline, so you can see who was in the meeting without leaving the transcript.
 A person carries a **job title, company, email address, phone number** and an **internal/external** marker
 alongside their name, and Diariz reports entries that look like **duplicates** of each other - by email, or
 by name once case and spacing are normalised - for a human to merge. It never merges on its own: a merge

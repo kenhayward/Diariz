@@ -16,7 +16,6 @@ vi.mock("./GoogleAccountSection", () => ({ default: () => <div>GOOGLE_SECTION</d
 vi.mock("./CalendarFeedsSection", () => ({ default: () => <div>FEEDS_SECTION</div> }));
 vi.mock("./McpAccessSection", () => ({ default: () => <div>CLAUDE_SECTION</div> }));
 vi.mock("./DeveloperAccessSection", () => ({ default: () => <div>DEVELOPERS_SECTION</div> }));
-vi.mock("./VoicePrintsSection", () => ({ default: () => <div>VOICEPRINTS_SECTION</div> }));
 vi.mock("./AutomationsSection", () => ({ default: () => <div>AUTOMATIONS_SECTION</div> }));
 
 import { api } from "../lib/api";
@@ -41,7 +40,7 @@ describe("PreferencesModal", () => {
     renderModal();
 
     expect(screen.getByText("Jane Doe")).toBeTruthy();
-    for (const name of [/profile/i, /google account/i, /calendar feeds/i, /claude access/i, /voice prints/i])
+    for (const name of [/profile/i, /google account/i, /calendar feeds/i, /claude access/i])
       expect(screen.getByRole("tab", { name })).toBeTruthy();
     expect(screen.getByText("PROFILE_SECTION")).toBeTruthy();
   });
@@ -90,8 +89,10 @@ describe("PreferencesModal", () => {
 
   it("switches the content panel when another tab is selected", () => {
     renderModal();
-    fireEvent.click(screen.getByRole("tab", { name: /voice prints/i }));
-    expect(screen.getByText("VOICEPRINTS_SECTION")).toBeTruthy();
+    // Voice Prints moved out to the top-level People page: a platform-wide directory is not a personal
+    // preference, so it is no longer a tab here.
+    fireEvent.click(screen.getByRole("tab", { name: /calendar feeds/i }));
+    expect(screen.getByText("FEEDS_SECTION")).toBeTruthy();
     expect(screen.queryByText("PROFILE_SECTION")).toBeNull();
   });
 

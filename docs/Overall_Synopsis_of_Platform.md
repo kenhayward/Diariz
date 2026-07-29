@@ -1358,6 +1358,26 @@ unidentified. That is a correctness trade-off, not just a performance one.
 **Revisit past roughly 25,000 enrolled people**, where the scan crosses ~10 ms. It is an additive migration
 whenever it is wanted, so deferring costs nothing.
 
+### The People screen
+
+`apps/web/src/pages/People.tsx` at **`/people`** - a top-level route, not a Preferences tab, because a
+platform-wide directory is not a personal setting. Master-detail: search + filter chips over
+`GET /api/people`, `components/PersonEditor.tsx` beside it, and a duplicates banner over
+`GET /api/people/duplicates` offering a one-click merge (never automatic). `PreferencesModal` lost its
+`voiceprints` tab and `VoicePrintsSection` is deleted.
+
+The editor renders the two permission rules **differently on purpose**, and the difference is load-bearing:
+
+- **Opt-out is always shown**, with the person's real value, merely `disabled` when the viewer may not
+  change it - a viewer needs to see that someone opted out even when they cannot alter it.
+- **Erase voiceprint is hidden entirely** - an action you cannot perform should not advertise itself.
+
+Both read `PersonDto.CanManageBiometrics` (the server's answer) rather than recomputing `ManagePeople ||
+IsSelf`. `toggleOptOut` **also guards in the handler**: the `disabled` attribute is presentation, and a
+programmatic click still reaches the handler, so relying on it alone would make the permission a styling
+detail. `PersonEditor.test.tsx` pins all of this, because the asymmetry is exactly the kind of thing a
+later tidy-up collapses into one branch.
+
 ### The People API
 
 `PeopleController` at **`/api/people`** replaces `api/speaker-profiles`, which is deleted. Replacement rather

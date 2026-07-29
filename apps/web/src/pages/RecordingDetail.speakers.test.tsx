@@ -73,8 +73,9 @@ function speakerRowButton() {
 }
 
 const speaker = (over: Partial<SpeakerInfo> = {}): SpeakerInfo => ({
-  label: "SPEAKER_00", displayName: "SPEAKER_00", profileId: null,
-  identifiedAuto: false, isMultiSpeaker: false, ...over,
+  label: "SPEAKER_00", displayName: "SPEAKER_00", personId: null,
+  identifiedAuto: false, isMultiSpeaker: false,
+  title: null, companyName: null, email: null, phone: null, isInternal: null, ...over,
 });
 
 function openAssign() {
@@ -98,7 +99,7 @@ describe("SpeakerRow", () => {
 
   it("the Unassign action passes null", () => {
     const onAssign = vi.fn();
-    row(speaker({ displayName: "Alice", profileId: "p1", identifiedAuto: true }), { onAssign });
+    row(speaker({ displayName: "Alice", personId: "p1", identifiedAuto: true }), { onAssign });
 
     openAssign();
     fireEvent.click(screen.getByRole("option", { name: "Unassigned" }));
@@ -138,7 +139,7 @@ describe("SpeakerRow", () => {
   });
 
   it("shows an auto badge only when identified automatically", () => {
-    row(speaker({ displayName: "Alice", profileId: "p1", identifiedAuto: true }));
+    row(speaker({ displayName: "Alice", personId: "p1", identifiedAuto: true }));
     expect(screen.getByText("auto")).toBeTruthy();
   });
 
@@ -209,5 +210,39 @@ describe("SpeakerRow", () => {
     fireEvent.click(screen.getByRole("button", { name: /delete alice's segments/i }));
     expect(onDelete).toHaveBeenCalledWith("Alice");
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  // ---- Person details on an identified speaker ----
+
+  it("shows the identified person's title and company", () => {
+    row(speaker({
+      displayName: "Ada Lovelace", personId: "p1", identifiedAuto: true,
+      title: "Engineer", companyName: "Analytical Engines", isInternal: true,
+    }));
+
+    expect(screen.getByText(/Engineer at Analytical Engines/i)).toBeTruthy();
+    expect(screen.getByText("Internal")).toBeTruthy();
+  });
+
+  it("marks an external person as external", () => {
+    row(speaker({ displayName: "Grace Hopper", personId: "p2", title: "Admiral", isInternal: false }));
+
+    expect(screen.getByText("External")).toBeTruthy();
+  });
+
+  /// Nothing is known about an anonymous speaker, so nothing is claimed about them.
+  it("shows no person details for an anonymous speaker", () => {
+    row(speaker());
+
+    expect(screen.queryByText("Internal")).toBeNull();
+    expect(screen.queryByText("External")).toBeNull();
+  });
+
+  /// Overlapping voices are not one person, so the server sends no details and the row must not invent any.
+  it("shows no person details for a Multiple Speakers slot", () => {
+    row(speaker({ displayName: "Multiple Speakers", isMultiSpeaker: true }));
+
+    expect(screen.queryByText("Internal")).toBeNull();
+    expect(screen.queryByText("External")).toBeNull();
   });
 });

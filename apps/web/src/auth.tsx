@@ -23,6 +23,7 @@ interface AuthState {
   isAdmin: boolean;
   isPlatformAdmin: boolean;
   canManageFormulas: boolean;
+  canManagePeople: boolean;
   initials: string;
   /// Profile picture URL from a linked Google account, or null (then the avatar shows initials).
   pictureUrl: string | null;
@@ -55,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = permissions.manageUsers;
   const isPlatformAdmin = permissions.managePlatform;
   const canManageFormulas = permissions.manageFormulas;
+  const canManagePeople = permissions.managePeople;
 
   function setSession(accessToken: string) {
     setToken(accessToken);
@@ -130,6 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdmin,
         isPlatformAdmin,
         canManageFormulas,
+        canManagePeople,
         initials,
         pictureUrl,
         login,

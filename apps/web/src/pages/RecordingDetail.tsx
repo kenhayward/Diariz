@@ -235,7 +235,6 @@ export default function RecordingDetail() {
   // The active gapless play ranges ([] = continuous). Drives per-speaker AND "play selected"; onTimeUpdate
   // skips the gaps between ranges.
   const speakerRangesRef = useRef<PlayRange[]>([]);
-  const [peopleOpen, setPeopleOpen] = useState(false);
   // Segment Select mode (local to this recording — distinct from the recordings/actions shared selection).
   const [selectMode, setSelectMode] = useState(false);
   const [selectedSegIds, setSelectedSegIds] = useState<Set<string>>(new Set());
@@ -1280,7 +1279,7 @@ export default function RecordingDetail() {
       icon: <SpeakersGlyph size={15} />,
       toolbar: (
         <>
-          <ToolbarButton label={t("workspace:managePeople")} icon={UsersIcon} onClick={() => setPeopleOpen(true)} />
+          <ToolbarButton label={t("workspace:managePeople")} icon={UsersIcon} onClick={() => navigate("/people")} />
           <ToolbarButton
             label={t("workspace:reidentifyAction")}
             icon={RefreshIcon}
@@ -1664,7 +1663,6 @@ export default function RecordingDetail() {
         />
       )}
       {downloading && <DownloadTranscriptModal recordingId={id} onClose={() => setDownloading(false)} />}
-      {peopleOpen && <PreferencesModal initialTab="voiceprints" onClose={() => setPeopleOpen(false)} />}
       {linkModalOpen && (
         <CalendarLinkModal recordingId={id} aroundDate={rec.createdAt} onClose={() => setLinkModalOpen(false)} />
       )}
@@ -2038,6 +2036,31 @@ export function SpeakerRow({
           onMulti={onMulti}
         />
       </div>
+      {/* Who this person is, when we know. Deliberately absent for an anonymous speaker and for a
+          "Multiple Speakers" slot - the server sends null for both, and inventing something here would
+          claim more than Diariz knows. */}
+      {info?.personId && !info.isMultiSpeaker && (info.title || info.companyName || info.isInternal !== null) && (
+        <span className="flex min-w-0 shrink items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+          {(info.title || info.companyName) && (
+            <span className="truncate">
+              {info.title && info.companyName
+                ? t("speakerAt", { title: info.title, company: info.companyName })
+                : (info.title ?? info.companyName)}
+            </span>
+          )}
+          {info.isInternal !== null && (
+            <span
+              className={`shrink-0 rounded px-1 text-[10px] font-medium ${
+                info.isInternal
+                  ? "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
+                  : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+              }`}
+            >
+              {info.isInternal ? t("speakerInternal") : t("speakerExternal")}
+            </span>
+          )}
+        </span>
+      )}
       <span className="w-40 shrink-0 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
         {t("speakerSegmentCount", { count })} · {formatDuration(durationMs)}
       </span>

@@ -17,7 +17,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume), system audio, or both mixed together on one device - system audio works in Chromium browsers ("Share audio") and seamlessly in the desktop app; schedule a recording to auto-stop at a set time or after 15/30/60 minutes; or upload files (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A). |
 | **Transcribe & diarize** | Server-side WhisperX (word-level timestamps) with pyannote speaker diarization; speaker-labelled, editable, playable segments you can re-transcribe any time. |
 | **Recording hub** | Every meeting opens on a hub: a summary card (meeting type, key facts, the summary inline) over tiles for transcript, actions, speakers, notes, files, and formulas - each showing its count and a preview, with new-note / add-file / run-formula available in place. The transcript embeds a conversation-flow player showing who spoke when, which doubles as the scrubber. |
-| **People and speaker identification** | One shared directory of the people in your meetings, where a voiceprint is optional - someone can be listed with no biometric held, or opt out, which erases theirs. Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). Assign a speaker from the Speakers tab or straight from the label on any transcript row, as you read or listen. A person carries a job title, company, email, phone and an internal/external marker, and likely duplicates are reported for you to merge. Browsing the directory needs the Manage people permission; opting yourself out, and searching to name a speaker, never do. |
+| **People and speaker identification** | One shared directory of the people in your meetings, where a voiceprint is optional - someone can be listed with no biometric held, or opt out, which erases theirs. Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). Assign a speaker from the Speakers tab or straight from the label on any transcript row, as you read or listen. A **People** page lists everyone, with search and filters; a person carries a job title, company, email, phone and an internal/external marker, and likely duplicates are pointed out for you to merge. The Speakers tab shows an identified speaker's title and company inline. Browsing the directory needs the Manage people permission; opting yourself out, and searching to name a speaker, never do. |
 | **Notes** | Take your own note lines live during a meeting (timestamped, crash-safe); they appear inline in the transcript at the moment you wrote them, steer the minutes, and can be woven into an enhanced-notes section linking to the exact transcript moments. |
 | **Meeting screenshots** | Capture the screen during a recording from the desktop app - a hotkey, the tray menu, or the app itself - choosing a screen or a rectangle on the first capture and reusing it after; captures appear in the transcript at the moment they were taken, as a full-size viewer with zoom and pan to read a capture at native resolution, and in a Notes-tab section. |
 | **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable. A meeting type carries no prompts of its own: it names the **formula** that generates its minutes, plus any others to run alongside (their documents appear in the Formulas tab). Minutes and formulas are the same machinery - any formula you can use can produce your minutes. Templates are built from blocks (H1-H3 headings, literal text, substituted details, model prompts, rules, drag-to-reorder) with JSON import/export. |
@@ -58,6 +58,37 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.167.0",
+    date: "2026-07-29",
+    pr: 371,
+    headline: "A People screen, and speakers that say who they are",
+    summary:
+      "The last few releases built a people directory that only an API could see. This one puts it on " +
+      "screen. **People** is now its own page rather than a tab tucked inside Preferences, which is where " +
+      "a list shared by everyone belongs.\n\n" +
+      "You can add someone who has never been recorded - a client you are about to meet - and give them a " +
+      "job title, company, email address and phone number, and mark them internal or external. **Nobody " +
+      "needs a voiceprint.** Diariz will simply not recognise them by voice, which is the point: holding " +
+      "someone's contact details and holding their biometric are now separate decisions.\n\n" +
+      "When two colleagues have each added the same person, the page says so and offers to merge them. It " +
+      "never merges on its own - that deletes one of the two records and cannot be undone.\n\n" +
+      "**Opting someone out of voice-printing** is a tick-box with a plain warning about what it destroys. " +
+      "The state is always visible even to people who cannot change it, so nobody is left guessing. " +
+      "Opting *yourself* out never needs a permission.\n\n" +
+      "The Speakers tab on a recording now shows an identified speaker's job title, company, and whether " +
+      "they are internal or external, so you can see who was in the meeting without leaving the transcript.",
+    added: [
+      "A **People** page listing everyone who appears in your meetings, with search and filters for internal, external, and whether a voiceprint is held.",
+      "Editing a person's job title, company, email address, phone number and internal/external marker.",
+      "**Possible duplicates** are pointed out on the page, by email address or by name, with a one-click merge.",
+      "The Speakers tab shows an identified speaker's title, company and internal/external marker.",
+      "A help article covering the directory, opting out, and merging duplicates.",
+    ],
+    changed: [
+      "Voice Prints has moved out of Preferences to the People page - a directory shared by everyone is not a personal setting. Browsing it needs the Manage people permission.",
+    ],
+  },
   {
     version: "0.166.0",
     date: "2026-07-29",
