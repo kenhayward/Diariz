@@ -415,4 +415,121 @@ public class PeopleControllerTests
         Assert.IsType<NoContentResult>(
             await Build(db, Guid.NewGuid(), PlatformPermission.ManagePlatform).DeleteAllVoiceprints());
     }
+
+    // ---- Merge ----
+    //
+    // Merge deletes the source row outright, so anything the source alone was carrying is destroyed unless it
+    // is explicitly moved first. The account link is the dangerous one: losing it detaches a real user from
+    // the directory, and because the self-exception on the biometric gate resolves through LinkedUserId, that
+    // user silently loses the ability to opt themselves out of voice-printing - a GDPR right, failing closed
+    // and without a message.
+
+    [Fact]
+    public async Task Merge_MovesSamplesAndSpeakersToTheTarget_AndDeletesTheSource()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var target = await SeedPerson(db, "Ada Lovelace");
+        var source = await SeedPerson(db, "Ada L");
+        var rec = new Recording { Id = Guid.NewGuid(), UserId = userId, Status = RecordingStatus.Transcribed };
+        db.Recordings.Add(rec);
+        var speakerId = Guid.NewGuid();
+        db.Speakers.Add(new Speaker
+        {
+            Id = speakerId, RecordingId = rec.Id, Label = "SPEAKER_00",
+            DisplayName = "Ada L", PersonId = source.Id,
+        });
+        db.VoiceSamples.Add(new VoiceSample
+        {
+            Id = Guid.NewGuid(), PersonId = source.Id, RecordingId = rec.Id, SpeakerId = speakerId,
+        });
+        await db.SaveChangesAsync();
+
+        Assert.IsType<NoContentResult>(
+            await Build(db, userId).Merge(target.Id, new MergePeopleRequest(source.Id)));
+
+        Assert.Null(await db.People.SingleOrDefaultAsync(p => p.Id == source.Id));
+        Assert.Equal(target.Id, (await db.VoiceSamples.SingleAsync()).PersonId);
+        var speaker = await db.Speakers.SingleAsync();
+        Assert.Equal(target.Id, speaker.PersonId);
+        Assert.Equal("Ada Lovelace", speaker.DisplayName);
+    }
+
+    [Fact]
+    public async Task Merge_CarriesTheAccountLinkFromTheSource()
+    {
+        using var db = TestDb.Create();
+        var actor = Guid.NewGuid();
+        var account = Guid.NewGuid();
+        Users.Ensure(db, account);
+        var target = await SeedPerson(db, "Ada Lovelace");
+        var source = await SeedPerson(db, "Ada L", linkedUserId: account);
+
+        Assert.IsType<NoContentResult>(
+            await Build(db, actor).Merge(target.Id, new MergePeopleRequest(source.Id)));
+
+        Assert.Equal(account, (await db.People.SingleAsync(p => p.Id == target.Id)).LinkedUserId);
+    }
+
+    [Fact]
+    public async Task Merge_KeepsTheTargetsOwnAccountLink()
+    {
+        using var db = TestDb.Create();
+        var actor = Guid.NewGuid();
+        var account = Guid.NewGuid();
+        Users.Ensure(db, account);
+        var target = await SeedPerson(db, "Ada Lovelace", linkedUserId: account);
+        var source = await SeedPerson(db, "Ada L");
+
+        Assert.IsType<NoContentResult>(
+            await Build(db, actor).Merge(target.Id, new MergePeopleRequest(source.Id)));
+
+        Assert.Equal(account, (await db.People.SingleAsync(p => p.Id == target.Id)).LinkedUserId);
+    }
+
+    /// Two accounts are two humans, whatever their names look like. There is no correct answer to which link
+    /// survives, so refuse rather than pick one - and say which two, because the duplicates banner will keep
+    /// offering the pair otherwise.
+    [Fact]
+    public async Task Merge_WhenBothArePeopleWithAccounts_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var actor = Guid.NewGuid();
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        Users.Ensure(db, first);
+        Users.Ensure(db, second);
+        var target = await SeedPerson(db, "Ada Lovelace", linkedUserId: first);
+        var source = await SeedPerson(db, "Ada L", linkedUserId: second);
+
+        Assert.IsType<BadRequestObjectResult>(
+            await Build(db, actor).Merge(target.Id, new MergePeopleRequest(source.Id)));
+
+        Assert.Equal(2, await db.People.CountAsync());
+        Assert.Equal(second, (await db.People.SingleAsync(p => p.Id == source.Id)).LinkedUserId);
+    }
+
+    /// The target is the record being kept, so its own details win. The source's are salvage: they fill the
+    /// gaps rather than overwrite, because a merge should never lose a contact detail that existed a moment
+    /// ago.
+    [Fact]
+    public async Task Merge_FillsOnlyTheContactFieldsTheTargetLacks()
+    {
+        using var db = TestDb.Create();
+        var actor = Guid.NewGuid();
+        var target = await SeedPerson(db, "Ada Lovelace", company: "Analytical Engines");
+        var source = await SeedPerson(db, "Ada L", email: "ada@example.com", company: "Somewhere Else");
+        source.Title = "Mathematician";
+        source.Phone = "0100";
+        await db.SaveChangesAsync();
+
+        Assert.IsType<NoContentResult>(
+            await Build(db, actor).Merge(target.Id, new MergePeopleRequest(source.Id)));
+
+        var kept = await db.People.SingleAsync(p => p.Id == target.Id);
+        Assert.Equal("Analytical Engines", kept.CompanyName);
+        Assert.Equal("ada@example.com", kept.Email);
+        Assert.Equal("Mathematician", kept.Title);
+        Assert.Equal("0100", kept.Phone);
+    }
 }

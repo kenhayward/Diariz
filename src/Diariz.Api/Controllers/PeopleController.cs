@@ -350,8 +350,11 @@ public class PeopleController : ControllerBase
         "once as \"Sam\" and once as \"Samantha\", or once per colleague who enrolled them. The source's " +
         "voice samples move across, every recording labelled with it is relabelled, the voiceprint is " +
         "recomputed from the combined samples, and the **source person is deleted**.\n\n" +
-        "There is no un-merge, so check the direction: the person in the path survives. The directory is " +
-        "shared, so a wrong merge affects everyone's recordings - hence **Manage people**.")]
+        "There is no un-merge, so check the direction: the person in the path survives - though it inherits " +
+        "the source's account link, and any contact detail it was missing. The directory is " +
+        "shared, so a wrong merge affects everyone's recordings - hence **Manage people**.\n\n" +
+        "Two people who each have a Diariz account cannot be merged: they are two different humans, and one " +
+        "of them would be detached from their account.")]
     public async Task<IActionResult> Merge(Guid id, MergePeopleRequest req)
     {
         if (req.SourceId == id) return BadRequest("Cannot merge a person into itself.");
@@ -360,6 +363,13 @@ public class PeopleController : ControllerBase
         var target = await _db.People.FirstOrDefaultAsync(p => p.Id == id);
         var source = await _db.People.FirstOrDefaultAsync(p => p.Id == req.SourceId);
         if (target is null || source is null) return NotFound();
+
+        // Two accounts are two humans whatever their names look like, and there is no right answer to which
+        // link survives. Refuse instead of silently picking one.
+        if (target.LinkedUserId is not null && source.LinkedUserId is not null)
+            return BadRequest(
+                "Both of these people have a Diariz account, so they are two different people. Merging them " +
+                "would detach one of them from their account. Rename one instead, or delete it.");
 
         foreach (var sample in await _db.VoiceSamples.Where(v => v.PersonId == source.Id).ToListAsync())
             sample.PersonId = target.Id;
@@ -370,11 +380,39 @@ public class PeopleController : ControllerBase
             speaker.DisplayName = target.Name;
         }
 
+        // The source row is about to be deleted, so anything only it holds is destroyed unless it moves now.
+        //
+        // The account link matters most. Losing it detaches a real user from the directory, and because the
+        // biometric self-exception resolves through LinkedUserId, that user silently loses the ability to opt
+        // themselves out of voice-printing - a GDPR right, failing closed and with nothing on screen to say
+        // so. It happened in production before this guard existed.
+        var carriedLink = target.LinkedUserId ?? source.LinkedUserId;
+
+        // Contact details are salvage, not a takeover: the target is the record being kept, so its own values
+        // win and the source only fills the gaps. A merge should never lose a detail that existed a moment
+        // ago, nor overwrite one the user just typed.
+        target.Email = Fill(target.Email, source.Email);
+        target.Title = Fill(target.Title, source.Title);
+        target.CompanyName = Fill(target.CompanyName, source.CompanyName);
+        target.Phone = Fill(target.Phone, source.Phone);
+
+        // Both rows briefly hold the same LinkedUserId here, and one account is one person - the filtered
+        // unique index would reject that if the UPDATE landed before the DELETE. EF Core orders the delete
+        // first, so a single SaveChanges is safe today; it is not a documented guarantee, which is why
+        // PeopleSchemaTests proves it against real Postgres rather than the in-memory provider, which
+        // enforces no index at all.
+        target.LinkedUserId = carriedLink;
         _db.People.Remove(source);
         await _db.SaveChangesAsync();
+
         await _people.RecomputeVoiceprintAsync(target.Id);
         return NoContent();
     }
+
+    /// <summary>Keeps what the surviving record already has, falling back to the record being absorbed.
+    /// Whitespace counts as absent - a field the user cleared is not a value worth preserving.</summary>
+    private static string? Fill(string? keep, string? salvage) =>
+        string.IsNullOrWhiteSpace(keep) ? salvage : keep;
 
     // ---- Voiceprints ----
 

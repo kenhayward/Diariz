@@ -90,6 +90,12 @@ public class AuthController : ControllerBase
             return StatusCode(StatusCodes.Status403Forbidden,
                 "Your account has been disabled. Contact an administrator.");
 
+        // Self-heal the directory. Signing in is the one path every user takes, so it is the only place a
+        // missing person can actually be repaired: the equivalent call on the People list sits behind
+        // ManagePeople, which is precisely the permission an affected user is least likely to hold. It is
+        // idempotent, so the cost is one lookup per session.
+        await _people.EnsureForUserAsync(user.Id);
+
         return await TokenResponse(user);
     }
 

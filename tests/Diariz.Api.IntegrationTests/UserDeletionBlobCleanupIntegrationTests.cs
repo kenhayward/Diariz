@@ -69,7 +69,7 @@ public class UserDeletionBlobCleanupIntegrationTests(ContainersFixture fx)
         UserManager<ApplicationUser> users, DiarizDbContext db, Guid callerId, IAudioStorage storage) =>
         new(users, new FakeEmailSender(), db, new PlatformSettingsService(db),
             Options.Create(new AppPublicOptions { PublicUrl = "http://localhost:8081" }), new UserPermissions(db),
-            storage, NullLogger<AdminUsersController>.Instance)
+            storage, new PeopleDirectory(db), NullLogger<AdminUsersController>.Instance)
         {
             ControllerContext = Http.Context(callerId),
         };

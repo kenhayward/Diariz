@@ -44,7 +44,7 @@ public class RoomMemberSweepIntegrationTests(ContainersFixture fx)
     private static AdminUsersController AdminUsers(UserManager<ApplicationUser> users, DiarizDbContext db, Guid callerId) =>
         new(users, new FakeEmailSender(), db, new PlatformSettingsService(db),
             Options.Create(new AppPublicOptions { PublicUrl = "http://localhost:8081" }), new UserPermissions(db),
-            new FakeAudioStorage(), NullLogger<AdminUsersController>.Instance)
+            new FakeAudioStorage(), new PeopleDirectory(db), NullLogger<AdminUsersController>.Instance)
         {
             ControllerContext = Http.Context(callerId),
         };

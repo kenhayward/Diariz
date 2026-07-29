@@ -31,12 +31,13 @@ public class AdminUsersController : ControllerBase
     private readonly AppPublicOptions _appOpts;
     private readonly IUserPermissions _permissions;
     private readonly IAudioStorage _storage;
+    private readonly IPeopleDirectory _people;
     private readonly ILogger<AdminUsersController> _logger;
 
     public AdminUsersController(
         UserManager<ApplicationUser> users, IEmailSender email, DiarizDbContext db,
         IPlatformSettingsService platform, IOptions<AppPublicOptions> appOpts, IUserPermissions permissions,
-        IAudioStorage storage, ILogger<AdminUsersController> logger)
+        IAudioStorage storage, IPeopleDirectory people, ILogger<AdminUsersController> logger)
     {
         _users = users;
         _email = email;
@@ -45,6 +46,7 @@ public class AdminUsersController : ControllerBase
         _appOpts = appOpts.Value;
         _permissions = permissions;
         _storage = storage;
+        _people = people;
         _logger = logger;
     }
 
@@ -125,6 +127,10 @@ public class AdminUsersController : ControllerBase
             user.Status = UserStatus.Active;
             user.EmailConfirmed = true;
             await _users.UpdateAsync(user);
+
+            // This branch skips the setup link, and setup is where everyone else becomes a person - so
+            // provision here or a Google user ends up signed in but absent from the directory.
+            await _people.EnsureForUserAsync(user.Id);
             return new GrantResultDto(Emailed: false, SetupUrl: null);
         }
 
