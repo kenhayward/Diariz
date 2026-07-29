@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const logout = vi.fn();
@@ -45,7 +46,10 @@ function renderMenu() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <UserMenu />
+      {/* The People row navigates rather than opening a modal, so the menu needs a router. */}
+      <MemoryRouter>
+        <UserMenu />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }

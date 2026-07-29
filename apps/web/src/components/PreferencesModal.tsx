@@ -12,7 +12,6 @@ import GoogleAccountSection from "./GoogleAccountSection";
 import CalendarFeedsSection from "./CalendarFeedsSection";
 import McpAccessSection from "./McpAccessSection";
 import DeveloperAccessSection from "./DeveloperAccessSection";
-import VoicePrintsSection from "./VoicePrintsSection";
 import FormulasSection from "./FormulasSection";
 import AutomationsSection from "./AutomationsSection";
 
@@ -26,8 +25,7 @@ export type PreferencesTab =
   | "feeds"
   | "claude"
   | "developers"
-  | "automations"
-  | "voiceprints";
+  | "automations";
 
 /// Personal preferences, organised as a vertical-tabbed modal (a left nav headed by the user's avatar/name,
 /// with a content panel on the right). Each tab self-saves; the footer only closes. Sized to 80vw x 80vh
@@ -63,7 +61,6 @@ export default function PreferencesModal({
     { id: "claude", label: t("tabClaudeAccess") },
     ...(profile?.apiAccessEnabled ? [{ id: "developers" as const, label: t("tabDevelopers") }] : []),
     ...(profile?.webhooksEnabled ? [{ id: "automations" as const, label: t("tabAutomations") }] : []),
-    { id: "voiceprints", label: t("tabVoicePrints") },
   ];
 
   // The backdrop does NOT close on click (Close/Escape only) — prevents accidental dismissal mid-edit.
@@ -119,7 +116,6 @@ export default function PreferencesModal({
             {tab === "claude" && <McpAccessSection />}
             {tab === "developers" && <DeveloperAccessSection />}
             {tab === "automations" && <AutomationsSection />}
-            {tab === "voiceprints" && <VoicePrintsSection />}
           </div>
           <div className="flex items-center justify-end border-t px-5 py-3 dark:border-gray-700">
             <button

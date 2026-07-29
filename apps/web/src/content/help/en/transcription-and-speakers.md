@@ -25,6 +25,10 @@ Once you enrol a person, Diariz recognises their voice in later recordings autom
 stored voiceprints, including merging duplicates and erasing them, from the **Voice Prints** tab in
 Preferences.
 
+Once a speaker is identified, the Speakers tab shows who they are - their job title, their company, and
+whether they are internal or external - so you can read the room without leaving the transcript. Manage
+those details on the **People** page; see [The people directory](/help/people-directory).
+
 **People are shared across the whole platform.** One person is one record, however many colleagues have
 recorded them - which is what makes an erasure request a single deletion. The trade-off is worth knowing:
 a voiceprint someone else enrolled will also name that person in your recordings. Browsing the directory,

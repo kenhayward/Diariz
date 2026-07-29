@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { useState, type CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -65,7 +66,8 @@ function MenuRow({
  */
 export default function UserMenu() {
   const { t } = useTranslation("account");
-  const { initials, pictureUrl, email, fullName, isAdmin, isPlatformAdmin, canManageFormulas, logout } = useAuth();
+  const { initials, pictureUrl, email, fullName, isAdmin, isPlatformAdmin, canManageFormulas, canManagePeople, logout } = useAuth();
+  const navigate = useNavigate();
   const tour = useTour();
   const { data: storage } = useQuery({ queryKey: ["user-storage"], queryFn: api.getUserStorage });
   const { isOpen, toggle, close } = useHubPopover();
@@ -199,6 +201,7 @@ export default function UserMenu() {
             {canManageFormulas && (
               <MenuRow label={t("manageFormulas")} onSelect={run(() => setFormulasOpen(true))} />
             )}
+            {canManagePeople && <MenuRow label={t("people")} onSelect={run(() => navigate("/people"))} />}
             <MenuRow label={t("showTour")} onSelect={run(() => tour.start())} />
             {/* A new tab, so opening the docs never discards what the user was doing. */}
             <MenuRow

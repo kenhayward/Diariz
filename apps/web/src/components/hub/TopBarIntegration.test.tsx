@@ -112,6 +112,7 @@ vi.mock("../../lib/pendingNotes", () => ({
 
 import { getStream } from "../../lib/audioSource";
 import { HubPopoverProvider } from "./hubPopovers";
+import { MemoryRouter } from "react-router-dom";
 import Recorder from "../Recorder";
 import UserMenu from "../UserMenu";
 
@@ -148,10 +149,13 @@ function renderHub() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <HubPopoverProvider>
-        <Recorder compact onUploaded={() => {}} />
-        <UserMenu />
-      </HubPopoverProvider>
+      {/* UserMenu's People row navigates, so the menu needs a router. */}
+      <MemoryRouter>
+        <HubPopoverProvider>
+          <Recorder compact onUploaded={() => {}} />
+          <UserMenu />
+        </HubPopoverProvider>
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
