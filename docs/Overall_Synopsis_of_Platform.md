@@ -776,7 +776,10 @@ toggle is off.
   matching subscription — it never throws (a publish failure is logged, not surfaced to the triggering
   request/worker).
 - **Envelope + Standard Webhooks-style signing.** `WebhookPayload.Build` serializes a thin
-  `{ id, type, created, data }` JSON envelope once; that exact string is stored as `WebhookDelivery.PayloadJson`
+  `{ id, type, created, data }` JSON envelope once, **camelCase throughout** — the publish sites write anonymous
+  objects whose members are already camelCase, but the serializer's `PropertyNamingPolicy` is what keeps a nested
+  record in line (`WebhookLinks` shipped as `data.links.Api`/`.Web` beside its camelCase siblings until 0.163.1,
+  and any nested type a future event adds would repeat that without the policy); that exact string is stored as `WebhookDelivery.PayloadJson`
   (a `text` column, deliberately **not** `jsonb`) and is **never re-serialized** between store and send, because
   the HMAC signature is computed over the literal stored bytes. `WebhookDeliveryProcessor` signs and POSTs it with
   three headers: `webhook-id` (the stable `evt_…` idempotency key, constant across retries), `webhook-timestamp`
@@ -839,7 +842,7 @@ with Diariz and needs no server-side support beyond the REST API and the webhook
 - **Signature verification is mandatory and byte-exact.** The webhook declares `rawBody: true` and
   `nodes/Diariz/signature.ts` recomputes `v1,base64(HMAC-SHA256(secret, "<id>.<timestamp>.<body>"))` over the
   original bytes — a re-serialised body would never match, since the envelope is C#-compact JSON written with
-  `DefaultIgnoreCondition: WhenWritingNull`. Comparison is `timingSafeEqual`, several space-delimited
+  `DefaultIgnoreCondition: WhenWritingNull` and `PropertyNamingPolicy: CamelCase`. Comparison is `timingSafeEqual`, several space-delimited
   signatures are accepted (secret rotation), and a timestamp more than 5 minutes out is rejected as a replay.
   A failed check answers `401` and emits nothing, so Diariz retries on its normal backoff.
 - **Cross-language contract test.** `tests/Diariz.Api.Tests/WebhookSignerFixtureTests.cs` writes signing

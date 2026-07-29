@@ -59,6 +59,27 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.163.1",
+    date: "2026-07-29",
+    pr: 366,
+    headline: "Webhook payloads are camelCase throughout",
+    summary:
+      "Every outbound webhook carries a `data.links` object with an API link and a web link to the " +
+      "recording. Those two keys shipped as **`Api`** and **`Web`**, capitalised, while every field " +
+      "beside them - `recordingId`, `status`, `summary` - was camelCase. One object in the payload " +
+      "followed a different convention to the rest of it.\n\n" +
+      "They are now `api` and `web`, and the envelope is uniformly camelCase. The naming is applied by " +
+      "the serializer rather than field by field, so any nested object a future event adds is covered " +
+      "automatically instead of quietly reintroducing the same split.\n\n" +
+      "**This changes the shape of a payload your automation receives.** If you read `links.Api` or " +
+      "`links.Web` anywhere - an n8n expression, a Zapier step, your own handler - change it to " +
+      "`links.api` / `links.web`. Nothing else about the payload, the signing, or the headers moves, " +
+      "and the `n8n-nodes-diariz` node passes the payload through untouched, so it needs no update.",
+    fixed: [
+      "`data.links.Api` / `data.links.Web` in outbound webhook payloads are now `data.links.api` / `data.links.web`, matching every other field in the envelope.",
+    ],
+  },
+  {
     version: "0.163.0",
     date: "2026-07-28",
     pr: 365,
