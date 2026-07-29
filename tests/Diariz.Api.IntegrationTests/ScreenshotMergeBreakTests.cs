@@ -26,7 +26,7 @@ public class ScreenshotMergeBreakTests(ContainersFixture fx)
             db, Options.Create(new SummarizationOptions { ApiBase = "http://llm.test/v1" }), new FakeApiKeyProtector());
         return new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(), config,
             resolver, new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()), new RoomScope(db),
-            new CapturingWebhookPublisher(), Options.Create(new AppPublicOptions()))
+            new PeopleDirectory(db), new CapturingWebhookPublisher(), Options.Create(new AppPublicOptions()))
         {
             ControllerContext = Http.Context(userId)
         };

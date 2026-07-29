@@ -23,16 +23,18 @@ public class UserProfileController : ControllerBase
     private readonly ITokenService _tokens;
     private readonly IPlatformSettingsService _platform;
     private readonly IUserPermissions _permissions;
+    private readonly IPeopleDirectory _people;
 
     public UserProfileController(
         UserManager<ApplicationUser> users, DiarizDbContext db, ITokenService tokens,
-        IPlatformSettingsService platform, IUserPermissions permissions)
+        IPlatformSettingsService platform, IUserPermissions permissions, IPeopleDirectory people)
     {
         _users = users;
         _db = db;
         _tokens = tokens;
         _platform = platform;
         _permissions = permissions;
+        _people = people;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -94,6 +96,10 @@ public class UserProfileController : ControllerBase
 
         user.FullName = Blank(req.FullName);
         await _users.UpdateAsync(user);
+
+        // A user is also a person, and their name is denormalised onto every speaker they have been
+        // identified as - so a rename here has to reach the directory, or past transcripts keep the old one.
+        await _people.SyncFromUserAsync(UserId);
 
         var s = await _db.UserSettings.FindAsync(UserId);
         if (s is null)

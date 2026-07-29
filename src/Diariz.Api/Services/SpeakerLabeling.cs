@@ -22,14 +22,14 @@ public static class SpeakerLabeling
             var match = await identifier.IdentifyAsync(userId, sp.Embedding, ct);
             if (match is not null)
             {
-                sp.ProfileId = match.ProfileId;
+                sp.PersonId = match.PersonId;
                 sp.DisplayName = match.Name;
                 sp.IdentifiedAuto = true;
             }
             else if (sp.IdentifiedAuto)
             {
                 // Previously auto-identified but no longer matches → revert to the anonymous label.
-                sp.ProfileId = null;
+                sp.PersonId = null;
                 sp.DisplayName = sp.Label;
                 sp.IdentifiedAuto = false;
             }

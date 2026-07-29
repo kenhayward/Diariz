@@ -92,6 +92,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddPlatformIntegrationToggles` | `PlatformSettings.McpAccessEnabled` (bool, not-null, **default true**, existing row updated to true so an already-connected MCP client is not broken) + `PlatformSettings.WebhooksEnabled` (bool, not-null, default false) — split the single implicit "integrations" surface into three independent admin toggles (API access already existed; MCP and Webhooks join it) — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddWebhooks` | `Webhooks` (a user's outbound webhook subscription, backing the `WebhookSubscription` entity - table name predates a later rename; `Scope` int 0=Personal/1=Platform, default Personal, Phase 2 only supports Personal; `OwnerUserId` FK `ON DELETE CASCADE`; `SecretEncrypted` **text**, Data-Protection-encrypted HMAC secret; `EventTypes` **text**, comma-separated event keys; index `OwnerUserId`) + `WebhookDeliveries` (one queued/sent event per matching subscription; `SubscriptionId` FK `ON DELETE CASCADE`; `PayloadJson` **text, not jsonb** - preserved byte-for-byte so the HMAC signature computed over it stays valid across retries; `Status` int enum `Pending/Delivered/Failed`; composite index `(Status, NextAttemptAt)` - the delivery worker's due-poll query; index `SubscriptionId`) — additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddWorkflowSignals` | `Webhooks.SignalFilter` (varchar(1024) null, comma-separated Workflow Signal keys this subscription routes on; empty/null deliberately matches nothing, so a Platform subscription must pick at least one signal to ever fire) + `WorkflowSignals` (the admin-defined named routing vocabulary; `Key` varchar(64) **unique**, immutable after creation; `Label` varchar(200); `Description` text null; `IsActive` bool) + `FormulaWorkflowSignals` (join table, composite PK `(FormulaId, WorkflowSignalId)`, both FKs `ON DELETE CASCADE`, index `WorkflowSignalId`) - Phase 3 of the Integrations roadmap: lets a formula author attach one or more admin-defined signals to a formula and a Platform Administrator route a `Webhooks` row of `Scope = Platform` to those same signals, so the formula's completion/failure event fans out across every user through that one wired automation. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddPersonDirectory` | Turns `SpeakerProfiles` into the people directory (CLR type `Person`). `Embedding`, `UserId` and `RoomId` become **nullable** (`DROP NOT NULL`), so a person can exist with no voiceprint; adds `Title`, `CompanyName`, `Email`, `Phone`, `IsInternal`, `VoiceprintOptOut`, `LinkedUserId`; adds an `(Email)` index and a **filtered unique** `(LinkedUserId) WHERE NOT NULL`; `COMMENT ON COLUMN` documents the `UserId`/`LinkedUserId` split. **Backfills** one person per Active user (`PersonForUserBackfill`; Requested/Invited accounts get theirs at CompleteSetup). The tables and columns are **not** renamed - only the CLR types are - so this is additive plus three `DROP NOT NULL`s: forward-restore-safe, **no `MaintenanceController.CurrentFormat` bump** |
 | `AddWebhookDeliveryLastAttemptAt` | `WebhookDeliveries.LastAttemptAt` (timestamptz null) - records when the worker last contacted the target, so the delivery worker can enforce a per-subscription rolling-minute rate cap (`WebhookOptions.MaxPerSubscriptionPerMinute`, default 120) that paces bursts to a single fan-out automation. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
@@ -534,35 +535,63 @@ Per-recording diarization label → display name, plus its voiceprint and any id
 | `Label` | text | raw diarization label |
 | `DisplayName` | varchar(256) | user-facing name (defaults to the label) |
 | `Embedding` | **vector(192)** null | ECAPA per-speaker voiceprint from the worker; Postgres-only |
-| `ProfileId` | uuid FK → SpeakerProfiles null | the identified person; **SetNull** on profile delete |
+| `ProfileId` | uuid FK → SpeakerProfiles null | = CLR `PersonId`; the identified person; **SetNull** on person delete |
 | `IdentifiedAuto` | bool | true when name/profile were set by auto-ID (vs a manual rename) |
 | `IsMultiSpeaker` | bool | user marked this slot as overlapping speech ("Multiple Speakers"); never auto-identified or enrolled into a voiceprint |
 
 Unique index: `(RecordingId, Label)`.
 
-#### `SpeakerProfiles`
-An enrolled person's voiceprint (per user). Biometric data — GDPR-erasable.
+#### `SpeakerProfiles` — the people directory (CLR type `Person`)
+
+> **The table name does not match the CLR type, deliberately.** The entity is `Person` (and
+> `ProfileContribution` is `VoiceSample`), but the tables keep their original names because renaming them
+> is a destructive rename: it would force a `MaintenanceController.CurrentFormat` bump, which hard-rejects
+> every backup archive taken before that point with no conversion path. The mapping is pinned with
+> `ToTable`/`HasColumnName` in `DiarizDbContext.OnModelCreating`.
+
+Someone who appears in meetings. The **voiceprint is optional** — a person added by hand, or one who has
+opted out, has a null `Embedding`. Biometric data — GDPR-erasable.
+
+**Two columns mean different things and are easy to confuse in raw SQL** (both carry a `COMMENT ON COLUMN`
+so `\d+` shows it):
+
+| C# property | Column | Meaning |
+|---|---|---|
+| `CreatedByUserId` | `"UserId"` | who **enrolled** this person. Provenance only, never filtered on |
+| `LinkedUserId` | `"LinkedUserId"` | which account this person **is** |
+| `Speaker.PersonId` | `"ProfileId"` | (on `Speakers`) the identified person |
 
 | Column | Type | Notes |
 |---|---|---|
 | `Id` | uuid PK | |
-| `UserId` | uuid FK → AspNetUsers | cascade |
-| `RoomId` | uuid not-null | the owner's personal room. Plain column, no FK yet (Phase 4); populated on create, still queried by `UserId` for now |
-| `Name` | varchar(256) | |
-| `Embedding` | **vector(192)** | centroid = L2-normalised mean of contribution snapshots; Postgres-only |
-| `SampleCount` | int | number of contributing speakers averaged in |
+| `UserId` | uuid FK → AspNetUsers **null** | = `CreatedByUserId`; who enrolled them. Cascade. Nullable so the backfill can provision a person nobody enrolled |
+| `RoomId` | uuid **null** | the room they were first enrolled from. Provenance only, no FK |
+| `LinkedUserId` | uuid FK → AspNetUsers null | the account this person is. Cascade — deleting the account removes the directory entry, rather than orphaning a row that still holds their name and email |
+| `Name` | varchar(256) | for a linked person this follows the account (`IPeopleDirectory.SyncFromUserAsync`) |
+| `Title` | varchar(128) null | |
+| `CompanyName` | varchar(256) null | |
+| `Email` | varchar(256) null | for a linked person this follows the account |
+| `Phone` | varchar(64) null | |
+| `IsInternal` | bool | colleague vs external party; drives routing decisions downstream |
+| `VoiceprintOptOut` | bool | they asked not to be voice-printed; excluded from automatic identification |
+| `Embedding` | **vector(192) null** | centroid = L2-normalised mean of voice-sample snapshots; **null when they have no voiceprint**. Postgres-only |
+| `SampleCount` | int | number of voice samples averaged in; kept in step by `RecomputeVoiceprintAsync` |
 | `CreatedAt` / `UpdatedAt` | timestamptz | |
 
-Index: `(UserId)`. Children: `ProfileContributions` (cascade). Matching against new `Speaker.Embedding`s is a
-**pgvector cosine distance** query (`Embedding.CosineDistance(vec)`), accepted when `≤ Identification:Threshold`.
+Indexes: `(UserId)`, `(Email)`, and a **filtered unique** `(LinkedUserId) WHERE "LinkedUserId" IS NOT NULL` —
+one account is one person, while the many people with no account do not collide on null. Children:
+`ProfileContributions` (cascade). Matching against new `Speaker.Embedding`s is a **pgvector cosine distance**
+query (`Embedding.CosineDistance(vec)`), restricted to people who have an embedding and have not opted out,
+and accepted when `≤ Identification:Threshold`.
 
-#### `ProfileContributions`
-Training provenance for a profile (which recording-speakers feed the centroid).
+#### `ProfileContributions` — voice samples (CLR type `VoiceSample`)
+Training provenance for a person's voiceprint (which recording-speakers feed the centroid). Table name kept
+for the same backup-compatibility reason as `SpeakerProfiles` above.
 
 | Column | Type | Notes |
 |---|---|---|
 | `Id` | uuid PK | |
-| `ProfileId` | uuid FK → SpeakerProfiles | cascade |
+| `ProfileId` | uuid FK → SpeakerProfiles | = CLR `PersonId`; cascade |
 | `SpeakerId` | uuid FK → Speakers | cascade (deleting the source speaker drops the contribution) |
 | `RecordingId` | uuid | loose Guid for display; **no FK** |
 | `Embedding` | **vector(192)** | snapshot of the contributing speaker's embedding (lets the centroid be recomputed without the worker) |

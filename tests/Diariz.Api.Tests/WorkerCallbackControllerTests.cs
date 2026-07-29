@@ -240,7 +240,7 @@ public class WorkerCallbackControllerTests
 
         var sp = await db.Speakers.SingleAsync(s => s.RecordingId == recordingId && s.Label == "SPEAKER_00");
         Assert.NotNull(sp.Embedding);
-        Assert.Equal(profileId, sp.ProfileId);
+        Assert.Equal(profileId, sp.PersonId);
         Assert.Equal("Alice", sp.DisplayName);
         Assert.True(sp.IdentifiedAuto);
     }
@@ -257,7 +257,7 @@ public class WorkerCallbackControllerTests
             Speakers: [new SpeakerEmbeddingResult("SPEAKER_00", [0.1f, 0.2f])]));
 
         var sp = await db.Speakers.SingleAsync(s => s.RecordingId == recordingId);
-        Assert.Null(sp.ProfileId);
+        Assert.Null(sp.PersonId);
         Assert.Equal("SPEAKER_00", sp.DisplayName);
         Assert.False(sp.IdentifiedAuto);
         Assert.NotNull(sp.Embedding); // embedding still stored for later enrolment

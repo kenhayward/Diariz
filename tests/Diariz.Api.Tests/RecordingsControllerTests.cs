@@ -30,7 +30,7 @@ public class RecordingsControllerTests
             new FakeApiKeyProtector());
         return new RecordingsController(db, storage ?? new FakeAudioStorage(), queue, new FakeHubContext(), config,
             resolver, email ?? new FakeEmailSender(), identifier ?? new FakeSpeakerIdentifier(),
-            Options.Create(uploads ?? new UploadOptions()), new RoomScope(db), new CapturingWebhookPublisher(),
+            Options.Create(uploads ?? new UploadOptions()), new RoomScope(db), new PeopleDirectory(db), new CapturingWebhookPublisher(),
             Options.Create(new AppPublicOptions()), exportLocalizer, calendar)
         {
             ControllerContext = Http.Context(userId)
@@ -633,12 +633,12 @@ public class RecordingsControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var rec = await SeedRecording(db, userId, versions: 1);
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Alice" };
-        db.SpeakerProfiles.Add(profile);
+        var profile = new Person { Id = Guid.NewGuid(), CreatedByUserId = userId, Name = "Alice" };
+        db.People.Add(profile);
         db.Speakers.Add(new Speaker
         {
             Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00",
-            DisplayName = "Alice", ProfileId = profile.Id, IdentifiedAuto = true
+            DisplayName = "Alice", PersonId = profile.Id, IdentifiedAuto = true
         });
         await db.SaveChangesAsync();
         var controller = Build(db, userId, new FakeJobQueue());
@@ -647,7 +647,7 @@ public class RecordingsControllerTests
 
         var sp = await db.Speakers.SingleAsync(s => s.RecordingId == rec.Id);
         Assert.Equal("Carol", sp.DisplayName);
-        Assert.Null(sp.ProfileId);
+        Assert.Null(sp.PersonId);
         Assert.False(sp.IdentifiedAuto);
     }
 
@@ -688,8 +688,8 @@ public class RecordingsControllerTests
         var userId = Guid.NewGuid();
         var rec = await SeedRecording(db, userId, versions: 1);
         db.Speakers.Add(new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "SPEAKER_00" });
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Alice" };
-        db.SpeakerProfiles.Add(profile);
+        var profile = new Person { Id = Guid.NewGuid(), CreatedByUserId = userId, Name = "Alice" };
+        db.People.Add(profile);
         await db.SaveChangesAsync();
         var controller = Build(db, userId, new FakeJobQueue());
 
@@ -697,7 +697,7 @@ public class RecordingsControllerTests
 
         Assert.IsType<NoContentResult>(result);
         var sp = await db.Speakers.SingleAsync(s => s.RecordingId == rec.Id);
-        Assert.Equal(profile.Id, sp.ProfileId);
+        Assert.Equal(profile.Id, sp.PersonId);
         Assert.Equal("Alice", sp.DisplayName);
         Assert.False(sp.IdentifiedAuto); // explicit manual assignment
     }
@@ -708,12 +708,12 @@ public class RecordingsControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var rec = await SeedRecording(db, userId, versions: 1);
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Alice" };
-        db.SpeakerProfiles.Add(profile);
+        var profile = new Person { Id = Guid.NewGuid(), CreatedByUserId = userId, Name = "Alice" };
+        db.People.Add(profile);
         db.Speakers.Add(new Speaker
         {
             Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00",
-            DisplayName = "Alice", ProfileId = profile.Id, IdentifiedAuto = true
+            DisplayName = "Alice", PersonId = profile.Id, IdentifiedAuto = true
         });
         await db.SaveChangesAsync();
         var controller = Build(db, userId, new FakeJobQueue());
@@ -722,7 +722,7 @@ public class RecordingsControllerTests
 
         Assert.IsType<NoContentResult>(result);
         var sp = await db.Speakers.SingleAsync(s => s.RecordingId == rec.Id);
-        Assert.Null(sp.ProfileId);
+        Assert.Null(sp.PersonId);
         Assert.Equal("SPEAKER_00", sp.DisplayName);
         Assert.False(sp.IdentifiedAuto);
     }
@@ -734,15 +734,15 @@ public class RecordingsControllerTests
         var userId = Guid.NewGuid();
         var rec = await SeedRecording(db, userId, versions: 1);
         db.Speakers.Add(new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "SPEAKER_00" });
-        var othersProfile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Name = "Theirs" };
-        db.SpeakerProfiles.Add(othersProfile);
+        var othersProfile = new Person { Id = Guid.NewGuid(), CreatedByUserId = Guid.NewGuid(), Name = "Theirs" };
+        db.People.Add(othersProfile);
         await db.SaveChangesAsync();
         var controller = Build(db, userId, new FakeJobQueue());
 
         var result = await controller.AssignSpeaker(rec.Id, "SPEAKER_00", new AssignSpeakerRequest(othersProfile.Id));
 
         Assert.IsType<NotFoundResult>(result);
-        Assert.Null((await db.Speakers.SingleAsync(s => s.RecordingId == rec.Id)).ProfileId);
+        Assert.Null((await db.Speakers.SingleAsync(s => s.RecordingId == rec.Id)).PersonId);
     }
 
     [Fact]
@@ -763,8 +763,8 @@ public class RecordingsControllerTests
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var rec = await SeedRecording(db, userId, versions: 1);
-        var profile = new SpeakerProfile { Id = Guid.NewGuid(), UserId = userId, Name = "Alice" };
-        db.SpeakerProfiles.Add(profile);
+        var profile = new Person { Id = Guid.NewGuid(), CreatedByUserId = userId, Name = "Alice" };
+        db.People.Add(profile);
         await db.SaveChangesAsync();
         var controller = Build(db, userId, new FakeJobQueue());
 
@@ -1097,7 +1097,7 @@ public class RecordingsControllerTests
         db.Speakers.Add(new Speaker
         {
             Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00",
-            DisplayName = "Alice", ProfileId = profileId, IdentifiedAuto = true,
+            DisplayName = "Alice", PersonId = profileId, IdentifiedAuto = true,
         });
         await db.SaveChangesAsync();
         var controller = Build(db, userId, new FakeJobQueue());
@@ -1107,7 +1107,7 @@ public class RecordingsControllerTests
         Assert.IsType<NoContentResult>(result);
         var sp = await db.Speakers.SingleAsync(s => s.RecordingId == rec.Id && s.Label == "SPEAKER_00");
         Assert.True(sp.IsMultiSpeaker);
-        Assert.Null(sp.ProfileId);
+        Assert.Null(sp.PersonId);
         Assert.False(sp.IdentifiedAuto);
         Assert.Equal(Speaker.MultiSpeakerName, sp.DisplayName);
     }
@@ -1319,8 +1319,8 @@ public class RecordingsControllerTests
         // ...but both reassigned to the same person.
         var profileId = Guid.NewGuid();
         db.Speakers.AddRange(
-            new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Alice", ProfileId = profileId },
-            new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_01", DisplayName = "Alice", ProfileId = profileId });
+            new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Alice", PersonId = profileId },
+            new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_01", DisplayName = "Alice", PersonId = profileId });
         await db.SaveChangesAsync();
         var controller = Build(db, userId, new FakeJobQueue());
 
@@ -1588,6 +1588,46 @@ public class RecordingsControllerTests
         Assert.IsType<NoContentResult>(result);
         Assert.Null(await db.Recordings.FindAsync(rec.Id));
         Assert.False(storage.Objects.ContainsKey(rec.BlobKey));
+    }
+
+    /// <summary>Deleting a recording takes its speakers, and with them any voice samples they contributed to
+    /// someone's voiceprint. Nothing used to recompute afterwards, so a person kept a SampleCount for samples
+    /// that no longer existed - and a centroid built from audio that no longer existed.
+    ///
+    /// This asserts the controller *invokes* the recompute: the person is seeded deliberately out of step
+    /// (SampleCount 5 against one real sample), so only a recompute can bring it back to the truth. The
+    /// cascade itself is not enforced by the in-memory provider, so the end-to-end version of this lives in
+    /// RecordingDeletionVoiceprintTests in the integration project.</summary>
+    [Fact]
+    public async Task Delete_RecomputesTheVoiceprintOfEveryPersonItContributedTo()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var rec = await SeedRecording(db, userId, versions: 1);
+
+        var person = new Person { Id = Guid.NewGuid(), Name = "Enrolled", SampleCount = 5 };
+        db.People.Add(person);
+        var speaker = new Speaker
+        {
+            Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00",
+            DisplayName = "Enrolled", PersonId = person.Id,
+        };
+        db.Speakers.Add(speaker);
+        db.VoiceSamples.Add(new VoiceSample
+        {
+            Id = Guid.NewGuid(), PersonId = person.Id, SpeakerId = speaker.Id, RecordingId = rec.Id,
+        });
+        await db.SaveChangesAsync();
+
+        var result = await controllerFor(db, userId).Delete(rec.Id);
+
+        Assert.IsType<NoContentResult>(result);
+        var reloaded = await db.People.SingleAsync(p => p.Id == person.Id);
+        Assert.NotEqual(5, reloaded.SampleCount);
+        Assert.Equal(await db.VoiceSamples.CountAsync(v => v.PersonId == person.Id), reloaded.SampleCount);
+
+        RecordingsController controllerFor(DiarizDbContext ctx, Guid uid) =>
+            Build(ctx, uid, new FakeJobQueue());
     }
 
     [Fact]

@@ -59,6 +59,28 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.163.2",
+    date: "2026-07-29",
+    pr: 367,
+    headline: "Groundwork: a voiceprint is now optional on a person",
+    summary:
+      "Diariz has always stored voiceprints rather than people: a name, a voice, and nothing else. That " +
+      "made a person who has never been voice-printed impossible to record at all, which is backwards - " +
+      "the biometric should be the optional part, not the mandatory one.\n\n" +
+      "This release lays the groundwork. A person can now exist with no voiceprint, and carries a job " +
+      "title, company, email address, phone number and an internal/external marker alongside their name. " +
+      "Every user account is automatically a person too, with their name and email kept in step, so " +
+      "existing accounts appear in the directory without anyone re-entering them.\n\n" +
+      "**Nothing changes in the app yet.** There is no new screen and no new API in this release - the " +
+      "editing, the directory, and sending these details on to your automations all follow. What ships " +
+      "here is the foundation, plus one fix worth having on its own: deleting a recording used to leave " +
+      "the voiceprints it had trained reporting samples that no longer existed, and quietly matching " +
+      "against audio that had been deleted.",
+    fixed: [
+      "Deleting a recording now correctly rebuilds the voiceprint of anyone it had contributed a voice sample to, instead of leaving a stale sample count and a voiceprint trained on deleted audio.",
+    ],
+  },
+  {
     version: "0.163.1",
     date: "2026-07-29",
     pr: 366,

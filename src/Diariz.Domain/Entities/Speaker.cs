@@ -21,9 +21,10 @@ public class Speaker
     /// <summary>This speaker's voice embedding (ECAPA, 192-d) from the worker. Null until computed.</summary>
     public Vector? Embedding { get; set; }
 
-    /// <summary>The enrolled person this speaker is identified as, or null when anonymous.</summary>
-    public Guid? ProfileId { get; set; }
-    public SpeakerProfile? Profile { get; set; }
+    /// <summary>The person this speaker is identified as, or null when anonymous. Maps to the
+    /// <c>"ProfileId"</c> column - see the table-naming note on <see cref="Entities.Person"/>.</summary>
+    public Guid? PersonId { get; set; }
+    public Person? Person { get; set; }
 
     /// <summary>True when <see cref="DisplayName"/>/<see cref="ProfileId"/> were set by automatic
     /// identification (vs. a manual rename/assignment). Lets re-identification and GDPR erasure revert
