@@ -69,6 +69,22 @@ public class AuthControllerTests
         Assert.IsType<AuthResponse>(Assert.IsType<OkObjectResult>(result).Value);
     }
 
+    /// Signing in is the one path every user takes, so it is where a missing directory entry can actually be
+    /// repaired. The self-heal on the People list cannot do it: that sits behind ManagePeople, which the
+    /// affected user is least likely to hold. Provisioning is idempotent, so this costs one lookup a session.
+    [Fact]
+    public async Task Login_ProvisionsAPersonForAnAccountThatHasNone()
+    {
+        using var host = new IdentityTestHost();
+        var user = await CreateUser(host, "a@x.test", GoodPassword, UserStatus.Active);
+        host.Db.People.RemoveRange(host.Db.People.Where(p => p.LinkedUserId == user.Id));
+        await host.Db.SaveChangesAsync();
+
+        await BuildController(host).Login(new LoginRequest("a@x.test", GoodPassword));
+
+        Assert.Equal(1, await host.Db.People.CountAsync(p => p.LinkedUserId == user.Id));
+    }
+
     [Fact]
     public async Task Login_WrongPassword_ReturnsUnauthorized()
     {

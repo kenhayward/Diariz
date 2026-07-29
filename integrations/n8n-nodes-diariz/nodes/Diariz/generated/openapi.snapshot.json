@@ -7059,7 +7059,7 @@
     },
     "/api/people/{id}/merge": {
       "post": {
-        "description": "Folds `sourceId` into the person in the path when the same human is in the directory twice - say once as \"Sam\" and once as \"Samantha\", or once per colleague who enrolled them. The source's voice samples move across, every recording labelled with it is relabelled, the voiceprint is recomputed from the combined samples, and the **source person is deleted**.\n\nThere is no un-merge, so check the direction: the person in the path survives. The directory is shared, so a wrong merge affects everyone's recordings - hence **Manage people**.",
+        "description": "Folds `sourceId` into the person in the path when the same human is in the directory twice - say once as \"Sam\" and once as \"Samantha\", or once per colleague who enrolled them. The source's voice samples move across, every recording labelled with it is relabelled, the voiceprint is recomputed from the combined samples, and the **source person is deleted**.\n\nThere is no un-merge, so check the direction: the person in the path survives - though it inherits the source's account link, and any contact detail it was missing. The directory is shared, so a wrong merge affects everyone's recordings - hence **Manage people**.\n\nTwo people who each have a Diariz account cannot be merged: they are two different humans, and one of them would be detached from their account.",
         "parameters": [
           {
             "in": "path",

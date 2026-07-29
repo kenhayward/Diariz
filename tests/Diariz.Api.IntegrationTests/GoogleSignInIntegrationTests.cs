@@ -116,7 +116,8 @@ public class GoogleSignInIntegrationTests(ContainersFixture fx)
         Perms.Grant(db, admin.Id, Perms.Administrator); // authority is group membership, not a role claim
         var adminCtrl = new AdminUsersController(users, new FakeEmailSender { Sent = false }, db, platform,
             Options.Create(new AppPublicOptions { PublicUrl = "http://localhost:8081" }),
-            new UserPermissions(db), new FakeAudioStorage(), NullLogger<AdminUsersController>.Instance)
+            new UserPermissions(db), new FakeAudioStorage(), new PeopleDirectory(db),
+            NullLogger<AdminUsersController>.Instance)
         {
             ControllerContext = Http.Context(admin.Id),
         };

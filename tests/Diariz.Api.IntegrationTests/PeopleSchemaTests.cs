@@ -1,4 +1,5 @@
 using Diariz.Api.IntegrationTests.Infrastructure;
+using Diariz.Api.Tests.Infrastructure;
 using Diariz.Api.Services;
 using Diariz.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -126,6 +127,37 @@ public class PeopleSchemaTests(ContainersFixture fx)
         await db.SaveChangesAsync();
 
         Assert.Null(await db.People.SingleOrDefaultAsync(p => p.Id == person.Id));
+    }
+
+    /// <summary>The merge path claims the source's account link for the target. Both rows exist while that
+    /// happens, and the filtered unique index permits only one person per account - so the source must
+    /// release the link in an earlier round trip than the target claims it. EF Core gives no ordering
+    /// guarantee within a single SaveChanges, and the in-memory provider enforces no index at all, so this is
+    /// the only layer that can prove the sequence is safe.</summary>
+    [Fact]
+    public async Task Merge_CarryingTheAccountLink_DoesNotTripTheOneAccountOnePersonIndex()
+    {
+        await using var db = fx.CreateDbContext();
+        var actor = await SeedUserAsync(db);
+        var account = await SeedUserAsync(db);
+        Perms.Grant(db, actor.Id, PlatformPermission.ManagePeople);
+
+        var target = new Person { Id = Guid.NewGuid(), Name = "Sam" };
+        var source = new Person { Id = Guid.NewGuid(), Name = "Samantha", LinkedUserId = account.Id };
+        db.People.AddRange(target, source);
+        await db.SaveChangesAsync();
+
+        var controller = new Diariz.Api.Controllers.PeopleController(
+            db, new RoomScope(db), new PeopleDirectory(db), new UserPermissions(db))
+        {
+            ControllerContext = Http.Context(actor.Id),
+        };
+
+        var result = await controller.Merge(target.Id, new Diariz.Api.Contracts.MergePeopleRequest(source.Id));
+
+        Assert.IsType<Microsoft.AspNetCore.Mvc.NoContentResult>(result);
+        Assert.Equal(account.Id, (await db.People.SingleAsync(p => p.Id == target.Id)).LinkedUserId);
+        Assert.Null(await db.People.SingleOrDefaultAsync(p => p.Id == source.Id));
     }
 
     private static async Task<ApplicationUser> SeedUserAsync(

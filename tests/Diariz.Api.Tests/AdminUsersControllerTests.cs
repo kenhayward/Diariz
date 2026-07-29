@@ -17,7 +17,8 @@ public class AdminUsersControllerTests
         IdentityTestHost host, Guid adminId, FakeEmailSender? email = null, FakeAudioStorage? storage = null) =>
         new(host.Users, email ?? new FakeEmailSender(), host.Db, new PlatformSettingsService(host.Db),
             Options.Create(new AppPublicOptions { PublicUrl = "http://localhost:8081" }),
-            new UserPermissions(host.Db), storage ?? new FakeAudioStorage(), NullLogger<AdminUsersController>.Instance)
+            new UserPermissions(host.Db), storage ?? new FakeAudioStorage(), new PeopleDirectory(host.Db),
+            NullLogger<AdminUsersController>.Instance)
         {
             ControllerContext = Http.Context(adminId),
         };
@@ -205,6 +206,27 @@ public class AdminUsersControllerTests
         Assert.True(grant.Emailed);
         Assert.Null(grant.SetupUrl);
         Assert.Single(email.Messages);
+    }
+
+    /// A Google-linked account is activated on the spot - it already has a credential, so it never goes
+    /// through the setup link that provisions everyone else. Without this it becomes a signed-in user with no
+    /// entry in the directory, unroutable and unable to opt out of voice-printing.
+    [Fact]
+    public async Task Grant_OnAGoogleLinkedAccount_ProvisionsTheirPerson()
+    {
+        using var host = new IdentityTestHost();
+        await host.SeedRolesAsync();
+        var admin = await Seed(host, "admin@x.test", Roles.Administrator);
+        var pending = await Seed(host, "want@x.test", Roles.Standard, UserStatus.Requested);
+        pending.GoogleSubject = "google-subject-123";
+        await host.Users.UpdateAsync(pending);
+        host.Db.People.RemoveRange(host.Db.People.Where(p => p.LinkedUserId == pending.Id));
+        await host.Db.SaveChangesAsync();
+
+        await Build(host, admin.Id).Grant(pending.Id);
+
+        Assert.Equal(UserStatus.Active, (await host.Users.FindByIdAsync(pending.Id.ToString()))!.Status);
+        Assert.Equal(1, await host.Db.People.CountAsync(p => p.LinkedUserId == pending.Id));
     }
 
     [Fact]

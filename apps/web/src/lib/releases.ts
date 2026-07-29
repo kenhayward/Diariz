@@ -59,6 +59,32 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.168.1",
+    date: "2026-07-29",
+    pr: 374,
+    headline: "Fix: merging two people could cut someone off from their own account",
+    summary:
+      "Merging two directory records deleted one of them, and anything only that record held went with it - " +
+      "including the link to a Diariz account. The person who was merged away stayed signed in and working, " +
+      "but was no longer in the directory as themselves: nothing could route mail to them, and, because the " +
+      "right to opt out of voice-printing is granted by that link, **they quietly lost the ability to opt " +
+      "themselves out**. Nothing said so.\n\n" +
+      "A merge now carries the account link onto the surviving record, along with any job title, company, " +
+      "email address or phone number the survivor was missing. The survivor's own details always win - the " +
+      "other record only fills the gaps - so a merge cannot lose a detail that was there a moment before. " +
+      "Merging two records that each have an account is now refused outright: two accounts are two people, " +
+      "however alike the names look.\n\n" +
+      "Separately, two accounts could end up missing from the directory entirely. Signing in now puts that " +
+      "right, and an account granted access through Google - which skips the setup step everyone else goes " +
+      "through - is added when it is granted.",
+    fixed: [
+      "Merging two people discarded the account link, detaching a real user from their own directory record and taking away their ability to opt out of voice-printing.",
+      "A merge could lose a job title, company, email address or phone number that only the absorbed record held.",
+      "Merging two people who each have a Diariz account is now refused rather than silently detaching one of them.",
+      "An account granted access via Google, or otherwise missing from the directory, is now added on grant and repaired at sign-in.",
+    ],
+  },
+  {
     version: "0.168.0",
     date: "2026-07-29",
     pr: 373,

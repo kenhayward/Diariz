@@ -1431,6 +1431,22 @@ disagree.
 enrolled the same colleague privately now both appear. It **never merges automatically**: merge destroys the
 source row, has no undo, and under a shared directory a bad one damages everyone's recordings.
 
+**Merge salvages the source before deleting it**, which is not optional bookkeeping. `LinkedUserId` moves to
+the survivor if the survivor has none: losing it detaches a real account from the directory, and because the
+biometric self-exception resolves through `LinkedUserId`, that user silently loses the ability to opt
+themselves out of voice-printing — a GDPR right, failing closed with nothing on screen. Contact fields move
+the same way but only into gaps (the survivor's own values win), so a merge never destroys a detail that
+existed a moment earlier. **Two linked people cannot be merged at all** (400): two accounts are two humans,
+and there is no correct answer to which link survives. Both rows briefly hold the same `LinkedUserId`, which
+the filtered unique index would reject if the UPDATE preceded the DELETE — EF orders the delete first, and
+`PeopleSchemaTests` proves that against real Postgres, since the in-memory provider enforces no index.
+
+**Provisioning has three call sites, not one.** `CompleteSetup` covers the invite path, `Grant` covers a
+Google-linked account (activated on the spot, so it never sees a setup link), and **`Login` self-heals** —
+the only path every user takes, and therefore the only one that can repair an account the directory has
+already lost. The equivalent call on `GET /api/people` is behind `ManagePeople`, which an affected user is
+the least likely to hold.
+
 ## Localization (web UI)
 
 - The interface is localized with **react-i18next**. Strings live in JSON catalogs at
