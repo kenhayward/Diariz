@@ -88,12 +88,13 @@ public class UserGroupsIntegrationTests(ContainersFixture fx)
         Assert.True(platform.IsSystem);
         Assert.Equal(
             PlatformPermission.ManageRooms | PlatformPermission.ManageUsers | PlatformPermission.ManagePlatform
-                | PlatformPermission.ManageFormulas,
+                | PlatformPermission.ManageFormulas | PlatformPermission.ManagePeople,
             platform.Permissions);
 
         Assert.False(admins.IsSystem);
         Assert.Equal(
-            PlatformPermission.ManageRooms | PlatformPermission.ManageUsers | PlatformPermission.ManageFormulas,
+            PlatformPermission.ManageRooms | PlatformPermission.ManageUsers | PlatformPermission.ManageFormulas
+                | PlatformPermission.ManagePeople,
             admins.Permissions);
         Assert.False(admins.Permissions.HasFlag(PlatformPermission.ManagePlatform));
     }

@@ -71,14 +71,20 @@ public static class Seeder
 
     /// <summary>Ensure both seeded groups exist with the right flags. Idempotent; runs on every boot.
     /// Administrators deliberately does NOT carry ManagePlatform: that flag confers backup/restore and
-    /// platform-settings writes, which the Administrator role has never had.</summary>
+    /// platform-settings writes, which the Administrator role has never had.
+    ///
+    /// <para><b>A new PlatformPermission must be added here</b>, or nobody can ever hold it: EnsureGroup ORs
+    /// these flags onto the existing rows, so an already-deployed platform picks a new one up on its next
+    /// boot without a migration. ManagePeople shipped without this and left the People page unreachable -
+    /// <c>SeederPeoplePermissionTests</c> now fails if any permission is neither seeded nor tickable.</para></summary>
     public static async Task SeedGroupsAsync(DiarizDbContext db)
     {
         await EnsureGroup(db, PlatformAdminsGroup, isSystem: true,
             PlatformPermission.ManageRooms | PlatformPermission.ManageUsers | PlatformPermission.ManagePlatform
-                | PlatformPermission.ManageFormulas);
+                | PlatformPermission.ManageFormulas | PlatformPermission.ManagePeople);
         await EnsureGroup(db, AdminsGroup, isSystem: false,
-            PlatformPermission.ManageRooms | PlatformPermission.ManageUsers | PlatformPermission.ManageFormulas);
+            PlatformPermission.ManageRooms | PlatformPermission.ManageUsers | PlatformPermission.ManageFormulas
+                | PlatformPermission.ManagePeople);
         await db.SaveChangesAsync();
 
         static async Task EnsureGroup(DiarizDbContext db, string name, bool isSystem, PlatformPermission perms)
