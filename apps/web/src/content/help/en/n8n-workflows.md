@@ -105,9 +105,15 @@ they are internal or external.
 - Email the people who were there, once contact details are switched on for that automation:
   `{{ $json.attendees.filter(a => a.email).map(a => a.email).join(",") }}`
 
-That last one needs **Include attendee contact details** ticked on the automation in Diariz. Without it the
-`email` and `phone` fields are not in the payload at all, so the expression yields an empty string rather
-than a wrong answer.
+That last one needs **Include Attendee Contacts** turned on **in the Diariz Trigger node itself**. Without
+it the `email` and `phone` fields are not in the payload at all, so the expression yields an empty string
+rather than a wrong answer.
+
+Set it on the node rather than on the automation in Diariz. The trigger node creates and owns its
+automation, and re-creates it every time you publish the workflow - so a setting made on the Diariz side is
+wiped the next time you edit the workflow, and events quietly stop carrying contact details with nothing
+having visibly changed. Set on the node, it is re-applied on every publish. Turning it on or off also
+re-registers the automation, so it takes effect immediately.
 
 Note that a speaker Diariz could not identify has **no** `isInternal` field at all, rather than a null one -
 nothing is claimed about someone it does not recognise. Test for `=== false` rather than relying on

@@ -61,7 +61,8 @@ voiceprint, not about pretending they were not in the room.
 ### Contact details are opt-in
 
 Email addresses and phone numbers are **not** sent unless you tick **Include attendee contact details** on
-that automation. An automation posts to whatever URL you give it, so leaving this off by default stops every
+that automation. If the automation was created by an **n8n Diariz Trigger**, set it on the node instead -
+the node re-creates its automation on every publish and would otherwise reset your choice. An automation posts to whatever URL you give it, so leaving this off by default stops every
 event quietly handing your contact list to the destination. When it is off, those fields are missing from the
 payload entirely rather than empty, so your workflow can tell "not allowed" apart from "not known".
 

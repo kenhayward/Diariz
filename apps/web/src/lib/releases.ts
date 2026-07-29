@@ -59,6 +59,35 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.169.0",
+    date: "2026-07-29",
+    pr: 375,
+    headline: "Merging explains itself, and n8n keeps your attendee-contacts choice",
+    summary:
+      "Merging two people used to ask a single question - merge this into that? - and give you no way to " +
+      "see what it would actually do. It now opens a window that spells out those two records " +
+      "specifically: which one survives, how many voice samples move and where, which details the survivor " +
+      "picks up, and what is deleted. **You can swap the direction**, which matters more than it sounds: " +
+      "the record you keep wins on every detail it already has, so the direction decides the result.\n\n" +
+      "Two records that each have a Diariz account are now refused in the window itself, with the reason, " +
+      "rather than failing after you have committed to something you were told cannot be undone. A new " +
+      "help article covers what merging does.\n\n" +
+      "Separately, an n8n fix worth knowing about if you use the Diariz Trigger. **Include Attendee " +
+      "Contacts** is now an option on the trigger node. It used to be set only in Diariz, but the node " +
+      "creates and owns its own automation and re-creates it every time you publish the workflow - so the " +
+      "setting was silently reset whenever you edited the workflow, and attendee email addresses quietly " +
+      "stopped arriving with nothing in Diariz having changed. Set on the node, it survives every publish.",
+    added: [
+      "A merge review window describing exactly what a merge would do to the two records in front of you, with the direction swappable.",
+      "**Include Attendee Contacts** as an option on the n8n Diariz Trigger node, so the choice survives re-publishing the workflow.",
+      "A **Merging two people** help article, reachable from the merge window.",
+    ],
+    changed: [
+      "Merging a suggested duplicate now takes two deliberate steps - review, then confirm - instead of one browser prompt.",
+      "Two people who each have a Diariz account can no longer be merged, and the merge window says why.",
+    ],
+  },
+  {
     version: "0.168.1",
     date: "2026-07-29",
     pr: 374,

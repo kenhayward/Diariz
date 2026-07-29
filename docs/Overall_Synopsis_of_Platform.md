@@ -1441,6 +1441,20 @@ and there is no correct answer to which link survives. Both rows briefly hold th
 the filtered unique index would reject if the UPDATE preceded the DELETE — EF orders the delete first, and
 `PeopleSchemaTests` proves that against real Postgres, since the in-memory provider enforces no index.
 
+**The n8n trigger owns the contacts toggle.** `WebhookSubscription.IncludeAttendeeContacts` is a server-side
+per-subscription flag, but an n8n-created subscription is owned by the **Diariz Trigger node**, which deletes
+and re-creates it on every publish. A value set through the Diariz UI was therefore wiped whenever the
+workflow was edited - observed live: contacts stopped arriving with nothing in Diariz having changed. The
+node now carries an **Include Attendee Contacts** option (default off), sends it on every registration, and
+**compares it in `checkExists`** - without that comparison n8n would never call `create()` on an existing
+subscription, so toggling the option would do nothing.
+
+**Merging is confirmed through `MergePeopleDialog`**, not a `window.confirm`. The consequences differ per
+pair (a voiceprint may move, contact fields may be filled, an account link may transfer), so the explanation
+is computed from the two records rather than written as static copy; the **direction is swappable**, because
+the survivor keeps its own values and only fills gaps. A pair where both records are linked is refused in the
+UI with the reason, matching the server's 400 rather than discovering it after committing.
+
 **Provisioning has three call sites, not one.** `CompleteSetup` covers the invite path, `Grant` covers a
 Google-linked account (activated on the spot, so it never sees a setup link), and **`Login` self-heals** —
 the only path every user takes, and therefore the only one that can repair an account the directory has
