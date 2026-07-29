@@ -146,6 +146,13 @@ renames, prunes training samples, merges duplicates, and erases voiceprints (GDP
 GDPR, withdrawing consent to hold your own biometric is yours to exercise, not an administrator's to grant.
 The trade-off of a shared directory is deliberate and worth stating plainly: a voiceprint enrolled by one
 person will identify that human in **everyone's** recordings.
+A person carries a **job title, company, email address, phone number** and an **internal/external** marker
+alongside their name, and Diariz reports entries that look like **duplicates** of each other - by email, or
+by name once case and spacing are normalised - for a human to merge. It never merges on its own: a merge
+deletes the source record, cannot be undone, and in a shared directory affects everyone's recordings.
+The directory has its own REST surface at **`/api/people`** (replacing `/api/speaker-profiles`), including a
+**search** endpoint that deliberately needs no permission, so finding someone in order to name a speaker in
+your own recording is never gated.
 - **Summarize** recordings (with automatic naming) and generate a full set of **professional meeting minutes**
 (Markdown: headings, lists, tables — no emojis) as part of the pipeline; edit them in a **WYSIWYG editor**,
 re-create them, or **email them to yourself** (optionally with the recording's attachments). The minutes also

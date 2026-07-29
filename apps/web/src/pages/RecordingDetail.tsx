@@ -55,7 +55,7 @@ import { formatBytes, formatDate, formatDuration, formatDurationApprox } from ".
 import { hasRevisions, segmentText } from "../lib/transcriptView";
 import { fetchLanguages } from "../lib/languages";
 import { selectedMeetingType } from "../lib/meetingTypes";
-import type { MeetingNote, SegmentDto, SpeakerInfo, SpeakerProfile, FormulaResult } from "../lib/types";
+import type { MeetingNote, SegmentDto, SpeakerInfo, FormulaResult } from "../lib/types";
 
 // Feather-style icons for the panel toolbars and the per-speaker play control.
 const RefreshIcon = (
@@ -115,10 +115,6 @@ export default function RecordingDetail() {
       navigate("/", { replace: true });
     }
   }, [recError, navigate]);
-  const { data: profiles = [] } = useQuery({
-    queryKey: ["speaker-profiles"],
-    queryFn: api.listSpeakerProfiles,
-  });
   const { data: attachments = [] } = useQuery({
     queryKey: ["attachments", id],
     queryFn: () => api.listAttachments(id),
@@ -427,12 +423,12 @@ export default function RecordingDetail() {
     if (!name) return;
     setActionError(null);
     try {
-      await api.createSpeakerProfile(name, id, label);
+      await api.createPerson({ name, recordingId: id, label });
       // Awaited so the typeahead's spinner covers the refetch too - the new person isn't really "there"
       // until the reloaded lists show them.
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["recording", id] }),
-        qc.invalidateQueries({ queryKey: ["speaker-profiles"] }),
+        qc.invalidateQueries({ queryKey: ["people"] }),
       ]);
     } catch (e) {
       setActionError(apiErrorMessage(e, t("workspace:errCreatePerson")));
@@ -453,7 +449,6 @@ export default function RecordingDetail() {
 
   // The transcript rows carry the same assignment typeahead as the Speakers tab, driving the same handlers.
   const segmentAssign: SegmentAssign = {
-    profiles,
     infoOf: (label) => rec?.speakers.find((s) => s.label === label),
     onAssign: assignSpeaker,
     onCreate: newPerson,
@@ -1312,7 +1307,6 @@ export default function RecordingDetail() {
                     }
                     count={speakerCounts.get(label) ?? 0}
                     durationMs={speakerDurations.get(label) ?? 0}
-                    profiles={profiles}
                     canPlay={rec.hasAudio}
                     playing={playingSpeaker === label}
                     selected={selectedSpeaker === label}
@@ -1970,7 +1964,6 @@ export function SpeakerRow({
   initial,
   count,
   durationMs,
-  profiles,
   canPlay,
   playing,
   selected,
@@ -1986,7 +1979,6 @@ export function SpeakerRow({
   initial: string;
   count: number;
   durationMs: number;
-  profiles: SpeakerProfile[];
   canPlay: boolean;
   playing: boolean;
   selected: boolean;
@@ -2040,8 +2032,6 @@ export function SpeakerRow({
       <div onClick={stop} onKeyDown={stop}>
         <SpeakerAssign
           label={label}
-          profiles={profiles}
-          profileId={info?.profileId ?? null}
           isMulti={info?.isMultiSpeaker ?? false}
           onAssign={onAssign}
           onCreate={onCreate}
@@ -2084,7 +2074,6 @@ function NoteRow({ note, speaker }: { note: MeetingNote; speaker: string }) {
 /// speaker can be named while reading/playing the transcript. Omitted (Speakers tab, where the speaker row
 /// above already carries the typeahead) → the row shows a plain label as before.
 export type SegmentAssign = {
-  profiles: SpeakerProfile[];
   infoOf: (label: string) => SpeakerInfo | undefined;
   onAssign: (label: string, profileId: string | null) => void | Promise<void>;
   onCreate: (label: string, name: string) => void | Promise<void>;
@@ -2141,9 +2130,7 @@ function SegmentRow({
             label={seg.speaker}
             width="w-40"
             subtle
-            profiles={assign.profiles}
             displayName={speakerName}
-            profileId={assign.infoOf(seg.speaker)?.profileId ?? null}
             isMulti={assign.infoOf(seg.speaker)?.isMultiSpeaker ?? false}
             onAssign={(profileId) => assign.onAssign(seg.speaker, profileId)}
             onCreate={(name) => assign.onCreate(seg.speaker, name)}

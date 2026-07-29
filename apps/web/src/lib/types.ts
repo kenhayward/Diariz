@@ -241,15 +241,30 @@ export interface SpeakerInfo {
   isMultiSpeaker: boolean;
 }
 
-/// An enrolled person/voiceprint (per user).
-export interface SpeakerProfile {
+/// Someone who appears in meetings. Platform-wide, and the voiceprint is optional: `hasVoiceprint` is false
+/// for a person added by hand, or one who opted out and had theirs erased.
+export interface Person {
   id: string;
   name: string;
+  title: string | null;
+  companyName: string | null;
+  email: string | null;
+  phone: string | null;
+  isInternal: boolean;
+  voiceprintOptOut: boolean;
+  hasVoiceprint: boolean;
   sampleCount: number;
+  linkedUserId: string | null;
+  isSelf: boolean;
+  /// The server's own answer to "may I opt this person out / erase their voiceprint" (ManagePeople, or it
+  /// is you). Render those controls from this - do NOT recompute the rule here, or the two will drift.
+  canManageBiometrics: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
-/// One training sample feeding a voiceprint (the recording-speaker it came from).
-export interface SpeakerProfileContribution {
+/// One voice sample feeding a person's voiceprint (the recording-speaker it came from).
+export interface VoiceSample {
   id: string;
   recordingId: string;
   recordingName: string;
@@ -259,13 +274,17 @@ export interface SpeakerProfileContribution {
   createdAt: string;
 }
 
-/// A voiceprint with its training provenance and how many recording-speakers it currently labels.
-export interface SpeakerProfileDetail {
-  id: string;
-  name: string;
-  sampleCount: number;
+/// A group of people who look like the same human. `reason` is "email" or "name".
+export interface PersonDuplicateGroup {
+  reason: string;
+  people: Person[];
+}
+
+/// A person with their voiceprint's training provenance and how many recording-speakers they label.
+export interface PersonDetail {
+  person: Person;
   identifiedCount: number;
-  contributions: SpeakerProfileContribution[];
+  samples: VoiceSample[];
 }
 
 /// An action item extracted from (or hand-added to) a transcript. All fields are free text; `text` is

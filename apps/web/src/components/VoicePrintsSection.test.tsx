@@ -4,13 +4,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../lib/api", () => ({
   api: {
-    listSpeakerProfiles: vi.fn(),
-    getSpeakerProfile: vi.fn(),
-    renameSpeakerProfile: vi.fn(),
-    removeProfileContribution: vi.fn(),
-    mergeSpeakerProfiles: vi.fn(),
-    deleteSpeakerProfile: vi.fn(),
-    deleteAllSpeakerProfiles: vi.fn(),
+    listPeople: vi.fn(),
+    getPerson: vi.fn(),
+    updatePerson: vi.fn(),
+    removeVoiceSample: vi.fn(),
+    mergePeople: vi.fn(),
+    deletePerson: vi.fn(),
+    deleteAllVoiceprints: vi.fn(),
     audioUrl: vi.fn(),
   },
   apiErrorMessage: (e: unknown) => String(e),
@@ -18,7 +18,7 @@ vi.mock("../lib/api", () => ({
 
 import { api } from "../lib/api";
 import VoicePrintsSection from "./VoicePrintsSection";
-import type { SpeakerProfile, SpeakerProfileDetail } from "../lib/types";
+import type { Person, PersonDetail } from "../lib/types";
 
 const mock = (f: unknown) => f as ReturnType<typeof vi.fn>;
 const render_ = () => {
@@ -30,20 +30,26 @@ const render_ = () => {
   );
 };
 
-const people: SpeakerProfile[] = [
-  { id: "p1", name: "Alice", sampleCount: 2 },
-  { id: "p2", name: "Bob", sampleCount: 1 },
-];
+function person(id: string, name: string, sampleCount = 0): Person {
+  return {
+    id, name, title: null, companyName: null, email: null, phone: null,
+    isInternal: false, voiceprintOptOut: false, hasVoiceprint: sampleCount > 0, sampleCount,
+    linkedUserId: null, isSelf: false, canManageBiometrics: true,
+    createdAt: "2026-07-29T00:00:00Z", updatedAt: "2026-07-29T00:00:00Z",
+  };
+}
+
+const people: Person[] = [person("p1", "Alice", 2), person("p2", "Bob", 1)];
 
 describe("VoicePrintsSection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mock(api.listSpeakerProfiles).mockResolvedValue(people);
-    mock(api.renameSpeakerProfile).mockResolvedValue(undefined);
-    mock(api.mergeSpeakerProfiles).mockResolvedValue(undefined);
-    mock(api.deleteSpeakerProfile).mockResolvedValue(undefined);
-    mock(api.deleteAllSpeakerProfiles).mockResolvedValue(undefined);
-    mock(api.removeProfileContribution).mockResolvedValue(undefined);
+    mock(api.listPeople).mockResolvedValue(people);
+    mock(api.updatePerson).mockResolvedValue(undefined);
+    mock(api.mergePeople).mockResolvedValue(undefined);
+    mock(api.deletePerson).mockResolvedValue(undefined);
+    mock(api.deleteAllVoiceprints).mockResolvedValue(undefined);
+    mock(api.removeVoiceSample).mockResolvedValue(undefined);
     vi.spyOn(window, "confirm").mockReturnValue(true);
   });
 
@@ -67,7 +73,7 @@ describe("VoicePrintsSection", () => {
     fireEvent.change(input, { target: { value: "Alice Smith" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
-    await waitFor(() => expect(api.renameSpeakerProfile).toHaveBeenCalledWith("p1", "Alice Smith"));
+    await waitFor(() => expect(api.updatePerson).toHaveBeenCalledWith("p1", { name: "Alice Smith" }));
   });
 
   it("merges another person in (target, source)", async () => {
@@ -76,7 +82,7 @@ describe("VoicePrintsSection", () => {
     // On Alice's row, the merge dropdown lists Bob as a source.
     fireEvent.change(screen.getByLabelText("Merge a person into Alice"), { target: { value: "p2" } });
 
-    await waitFor(() => expect(api.mergeSpeakerProfiles).toHaveBeenCalledWith("p1", "p2"));
+    await waitFor(() => expect(api.mergePeople).toHaveBeenCalledWith("p1", "p2"));
   });
 
   it("deletes a person", async () => {
@@ -84,46 +90,44 @@ describe("VoicePrintsSection", () => {
     await screen.findByRole("button", { name: "Alice" });
     fireEvent.click(screen.getAllByRole("button", { name: /^delete$/i })[0]);
 
-    await waitFor(() => expect(api.deleteSpeakerProfile).toHaveBeenCalledWith("p1"));
+    await waitFor(() => expect(api.deletePerson).toHaveBeenCalledWith("p1"));
   });
 
   it("erases all voiceprints", async () => {
     render_();
     fireEvent.click(await screen.findByRole("button", { name: /erase all voiceprints/i }));
 
-    await waitFor(() => expect(api.deleteAllSpeakerProfiles).toHaveBeenCalled());
+    await waitFor(() => expect(api.deleteAllVoiceprints).toHaveBeenCalled());
   });
 
   it("expands a person and removes a training contribution", async () => {
-    const detail: SpeakerProfileDetail = {
-      id: "p1",
-      name: "Alice",
-      sampleCount: 2,
+    const detail: PersonDetail = {
+      person: person("p1", "Alice", 2),
       identifiedCount: 3,
-      contributions: [
+      samples: [
         { id: "c1", recordingId: "r1", recordingName: "Team Sync", speakerLabel: "SPEAKER_00", startMs: 3000, createdAt: "2026-06-27T00:00:00Z" },
       ],
     };
-    mock(api.getSpeakerProfile).mockResolvedValue(detail);
+    mock(api.getPerson).mockResolvedValue(detail);
     render_();
 
     fireEvent.click(await screen.findByLabelText("Expand Alice"));
     fireEvent.click(await screen.findByLabelText("Remove training sample from Team Sync"));
 
-    await waitFor(() => expect(api.removeProfileContribution).toHaveBeenCalledWith("p1", "c1"));
+    await waitFor(() => expect(api.removeVoiceSample).toHaveBeenCalledWith("p1", "c1"));
   });
 
   it("plays a training sample (resolves the recording's audio and seeks)", async () => {
-    const detail: SpeakerProfileDetail = {
+    const detail: PersonDetail = {
       id: "p1",
       name: "Alice",
       sampleCount: 1,
       identifiedCount: 1,
-      contributions: [
+      samples: [
         { id: "c1", recordingId: "r1", recordingName: "Team Sync", speakerLabel: "SPEAKER_00", startMs: 3000, createdAt: "2026-06-27T00:00:00Z" },
       ],
     };
-    mock(api.getSpeakerProfile).mockResolvedValue(detail);
+    mock(api.getPerson).mockResolvedValue(detail);
     mock(api.audioUrl).mockResolvedValue("blob:audio");
     const play = vi.spyOn(window.HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     render_();

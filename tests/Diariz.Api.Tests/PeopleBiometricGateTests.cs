@@ -17,7 +17,7 @@ namespace Diariz.Api.Tests;
 /// test per side of the predicate rather than a single happy-path case.</summary>
 public class PeopleBiometricGateTests
 {
-    private static SpeakerProfilesController Build(DiarizDbContext db, Guid userId)
+    private static PeopleController Build(DiarizDbContext db, Guid userId)
     {
         Users.Ensure(db, userId);
         return new(db, new Diariz.Api.Services.RoomScope(db), new Diariz.Api.Services.PeopleDirectory(db),
@@ -47,7 +47,7 @@ public class PeopleBiometricGateTests
         var caller = Guid.NewGuid();
         var person = await SeedPerson(db);
 
-        var result = await Build(db, caller).SetVoiceprintOptOut(person.Id, new SetVoiceprintOptOutRequest(true));
+        var result = await Build(db, caller).Update(person.Id, new UpdatePersonRequest(null, null, null, null, null, null, true));
 
         Assert.IsType<ForbidResult>(result);
         Assert.False((await db.People.SingleAsync(p => p.Id == person.Id)).VoiceprintOptOut);
@@ -62,7 +62,7 @@ public class PeopleBiometricGateTests
         Perms.Grant(db, caller, PlatformPermission.ManagePeople);
         var person = await SeedPerson(db);
 
-        var result = await Build(db, caller).SetVoiceprintOptOut(person.Id, new SetVoiceprintOptOutRequest(true));
+        var result = await Build(db, caller).Update(person.Id, new UpdatePersonRequest(null, null, null, null, null, null, true));
 
         Assert.IsType<NoContentResult>(result);
         Assert.True((await db.People.SingleAsync(p => p.Id == person.Id)).VoiceprintOptOut);
@@ -78,7 +78,7 @@ public class PeopleBiometricGateTests
         Users.Ensure(db, caller);
         var person = await SeedPerson(db, linkedUserId: caller);
 
-        var result = await Build(db, caller).SetVoiceprintOptOut(person.Id, new SetVoiceprintOptOutRequest(true));
+        var result = await Build(db, caller).Update(person.Id, new UpdatePersonRequest(null, null, null, null, null, null, true));
 
         Assert.IsType<NoContentResult>(result);
         Assert.True((await db.People.SingleAsync(p => p.Id == person.Id)).VoiceprintOptOut);
@@ -153,7 +153,7 @@ public class PeopleBiometricGateTests
 
         var result = await Build(db, caller).List();
 
-        Assert.Contains(Assert.IsAssignableFrom<IReadOnlyList<SpeakerProfileDto>>(
+        Assert.Contains(Assert.IsAssignableFrom<IReadOnlyList<PersonDto>>(
             Assert.IsType<OkObjectResult>(result.Result).Value), p => p.Name == "Enrolled by someone else");
     }
 }

@@ -55,6 +55,27 @@ The document is curated rather than the raw surface: the administrative and OAut
 out. Every published endpoint is required to carry a summary and a description, enforced by a test, so
 the reference cannot quietly fall behind the code.
 
+## The people directory
+
+The people who appear in your meetings live under **`/api/people`**. A person carries a name plus an
+optional job title, company, email address, phone number and an internal/external marker, and an optional
+voiceprint - so you can add a client you have never recorded, and their record is complete.
+
+- `GET /api/people` lists the directory, with filters for a search term, internal or external, and whether
+  a voiceprint is held. It needs the **Manage people** permission, because the directory is shared across
+  the whole platform.
+- `GET /api/people/search?q=` finds someone by name or email and needs **no permission at all**. It exists
+  so that naming a speaker in your own recording never requires one. It returns nothing below two
+  characters.
+- `GET /api/people/duplicates` reports entries that look like the same human, matched by email or by name.
+  It only reports - merging is left to you, because it deletes the source record and cannot be undone.
+
+Erasing a voiceprint and keeping the person are separate operations, deliberately:
+`DELETE /api/people/{id}/voiceprint` destroys the biometric and leaves the person in place, while
+`DELETE /api/people/{id}` removes them entirely.
+
+Note this replaces the older `/api/speaker-profiles` endpoints, which no longer exist.
+
 ## A common pattern: run a formula and collect the result
 
 There are no special endpoints for this - it is the ordinary formula API.

@@ -1,12 +1,33 @@
-import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SpeakerRow } from "./RecordingDetail";
-import type { SpeakerInfo, SpeakerProfile } from "../lib/types";
+import { api } from "../lib/api";
+import type { SpeakerInfo, Person } from "../lib/types";
 
-const profiles: SpeakerProfile[] = [
-  { id: "p1", name: "Alice", sampleCount: 1 },
-  { id: "p2", name: "Bob", sampleCount: 2 },
-];
+vi.mock("../lib/api", () => ({
+  api: { searchPeople: vi.fn() },
+  apiErrorMessage: (e: unknown) => String(e),
+}));
+
+const mock = (f: unknown) => f as ReturnType<typeof vi.fn>;
+
+function person(id: string, name: string): Person {
+  return {
+    id, name, title: null, companyName: null, email: null, phone: null,
+    isInternal: false, voiceprintOptOut: false, hasVoiceprint: true, sampleCount: 1,
+    linkedUserId: null, isSelf: false, canManageBiometrics: false,
+    createdAt: "2026-07-29T00:00:00Z", updatedAt: "2026-07-29T00:00:00Z",
+  };
+}
+
+const people = [person("p1", "Alice"), person("p2", "Bob")];
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mock(api.searchPeople).mockImplementation(async (q: string) =>
+    people.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())));
+});
 
 function row(
   info: SpeakerInfo | undefined,
@@ -25,13 +46,13 @@ function row(
   }> = {},
 ) {
   render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
     <SpeakerRow
       label="SPEAKER_00"
       info={info}
       initial={info?.displayName ?? "SPEAKER_00"}
       count={handlers.count ?? 3}
       durationMs={handlers.durationMs ?? 0}
-      profiles={profiles}
       canPlay={handlers.canPlay ?? true}
       playing={handlers.playing ?? false}
       selected={handlers.selected ?? false}
@@ -41,7 +62,8 @@ function row(
       onAssign={handlers.onAssign ?? (() => {})}
       onCreate={handlers.onCreate ?? (() => {})}
       onMulti={handlers.onMulti ?? (() => {})}
-    />,
+    />
+    </QueryClientProvider>,
   );
 }
 
@@ -61,12 +83,14 @@ function openAssign() {
 }
 
 describe("SpeakerRow", () => {
-  it("assigning via the typeahead picks the chosen person", () => {
+  it("assigning via the typeahead picks the chosen person", async () => {
     const onAssign = vi.fn();
     row(speaker(), { onAssign });
 
     openAssign();
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "Bob" } });
+    // Results come from the server now, so the option appears a tick later.
+    await screen.findByRole("option", { name: "Bob" });
     fireEvent.click(screen.getByRole("option", { name: "Bob" }));
 
     expect(onAssign).toHaveBeenCalledWith("p2");

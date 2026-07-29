@@ -66,7 +66,7 @@ public static class OpenApiCuration
         ["SectionFormulaResults"] = "Run a formula across a whole folder and manage the resulting documents. Access is gated by folder membership.",
         ["SectionPage"] = "A folder's detail page: aggregated stats, an LLM folder summary and minutes, and the actions, notes, and attachments across it and its sub-folders.",
         ["Sections"] = "Your folder tree (sections) - create, rename, reorder, and delete folders.",
-        ["SpeakerProfiles"] = "Enrolled voiceprints - create a profile from a recording's speaker, then list, rename, merge, and erase them (GDPR).",
+        ["People"] = "The people directory: the humans who appear in meetings, with their contact details and an optional voiceprint. Add and edit people, enrol and erase voiceprints, merge duplicates, and find likely ones. Shared platform-wide, so browsing needs the Manage people permission while searching to label a speaker does not.",
         ["Storage"] = "Your storage usage against your quota.",
         ["Tags"] = "Your aggregated tag cloud - every tag across your recordings with a count, summed weight, and the recordings behind each.",
         ["UserProfile"] = "Your own profile - display name and language preferences. Updating returns a fresh token so the new name applies immediately.",

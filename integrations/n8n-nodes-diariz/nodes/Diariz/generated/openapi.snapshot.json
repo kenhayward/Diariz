@@ -807,6 +807,74 @@
         ],
         "type": "object"
       },
+      "CreatePersonRequest": {
+        "properties": {
+          "companyName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "email": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isInternal": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "label": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "phone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "recordingId": {
+            "format": "uuid",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "voiceprintOptOut": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "title",
+          "companyName",
+          "email",
+          "phone",
+          "isInternal",
+          "voiceprintOptOut",
+          "recordingId",
+          "label"
+        ],
+        "type": "object"
+      },
       "CreateRecordingActionRequest": {
         "properties": {
           "actor": {
@@ -857,26 +925,6 @@
         },
         "required": [
           "name"
-        ],
-        "type": "object"
-      },
-      "CreateSpeakerProfileRequest": {
-        "properties": {
-          "label": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "recordingId": {
-            "format": "uuid",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "recordingId",
-          "label"
         ],
         "type": "object"
       },
@@ -979,6 +1027,22 @@
             "type": "boolean"
           }
         },
+        "type": "object"
+      },
+      "EnrolVoiceprintRequest": {
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "recordingId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "recordingId",
+          "label"
+        ],
         "type": "object"
       },
       "FolderHitDto": {
@@ -1721,6 +1785,18 @@
         ],
         "type": "object"
       },
+      "MergePeopleRequest": {
+        "properties": {
+          "sourceId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceId"
+        ],
+        "type": "object"
+      },
       "MergeRecordingsRequest": {
         "properties": {
           "ids": {
@@ -1733,18 +1809,6 @@
         },
         "required": [
           "ids"
-        ],
-        "type": "object"
-      },
-      "MergeSpeakerProfilesRequest": {
-        "properties": {
-          "sourceId": {
-            "format": "uuid",
-            "type": "string"
-          }
-        },
-        "required": [
-          "sourceId"
         ],
         "type": "object"
       },
@@ -1797,47 +1861,144 @@
         ],
         "type": "object"
       },
-      "PlatformPermission": {
-        "type": "integer"
-      },
-      "ProfileContributionDto": {
+      "PersonDetailDto": {
         "properties": {
-          "createdAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "id": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "recordingId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "recordingName": {
-            "type": "string"
-          },
-          "speakerLabel": {
-            "type": "string"
-          },
-          "startMs": {
-            "format": "int64",
+          "identifiedCount": {
+            "format": "int32",
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "type": [
               "integer",
               "string"
             ]
+          },
+          "person": {
+            "$ref": "#/components/schemas/PersonDto"
+          },
+          "samples": {
+            "items": {
+              "$ref": "#/components/schemas/VoiceSampleDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "person",
+          "identifiedCount",
+          "samples"
+        ],
+        "type": "object"
+      },
+      "PersonDto": {
+        "properties": {
+          "canManageBiometrics": {
+            "type": "boolean"
+          },
+          "companyName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "email": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "hasVoiceprint": {
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "isInternal": {
+            "type": "boolean"
+          },
+          "isSelf": {
+            "type": "boolean"
+          },
+          "linkedUserId": {
+            "format": "uuid",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "phone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sampleCount": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "voiceprintOptOut": {
+            "type": "boolean"
           }
         },
         "required": [
           "id",
-          "recordingId",
-          "recordingName",
-          "speakerLabel",
-          "startMs",
-          "createdAt"
+          "name",
+          "title",
+          "companyName",
+          "email",
+          "phone",
+          "isInternal",
+          "voiceprintOptOut",
+          "hasVoiceprint",
+          "sampleCount",
+          "linkedUserId",
+          "isSelf",
+          "canManageBiometrics",
+          "createdAt",
+          "updatedAt"
         ],
         "type": "object"
+      },
+      "PersonDuplicateGroupDto": {
+        "properties": {
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/PersonDto"
+            },
+            "type": "array"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "people"
+        ],
+        "type": "object"
+      },
+      "PlatformPermission": {
+        "type": "integer"
       },
       "RecordingActionDto": {
         "properties": {
@@ -2326,17 +2487,6 @@
         "type": "object"
       },
       "RenameSectionRequest": {
-        "properties": {
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "type": "object"
-      },
-      "RenameSpeakerProfileRequest": {
         "properties": {
           "name": {
             "type": "string"
@@ -3096,17 +3246,6 @@
         ],
         "type": "object"
       },
-      "SetVoiceprintOptOutRequest": {
-        "properties": {
-          "optOut": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "optOut"
-        ],
-        "type": "object"
-      },
       "SetupRequest": {
         "properties": {
           "email": {
@@ -3255,72 +3394,6 @@
           "displayName",
           "profileId",
           "identifiedAuto"
-        ],
-        "type": "object"
-      },
-      "SpeakerProfileDetailDto": {
-        "properties": {
-          "contributions": {
-            "items": {
-              "$ref": "#/components/schemas/ProfileContributionDto"
-            },
-            "type": "array"
-          },
-          "id": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "identifiedCount": {
-            "format": "int32",
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ]
-          },
-          "name": {
-            "type": "string"
-          },
-          "sampleCount": {
-            "format": "int32",
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "sampleCount",
-          "identifiedCount",
-          "contributions"
-        ],
-        "type": "object"
-      },
-      "SpeakerProfileDto": {
-        "properties": {
-          "id": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "sampleCount": {
-            "format": "int32",
-            "pattern": "^-?(?:0|[1-9]\\d*)$",
-            "type": [
-              "integer",
-              "string"
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "sampleCount"
         ],
         "type": "object"
       },
@@ -3673,6 +3746,62 @@
         },
         "required": [
           "text"
+        ],
+        "type": "object"
+      },
+      "UpdatePersonRequest": {
+        "properties": {
+          "companyName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "email": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isInternal": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "phone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "voiceprintOptOut": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "title",
+          "companyName",
+          "email",
+          "phone",
+          "isInternal",
+          "voiceprintOptOut"
         ],
         "type": "object"
       },
@@ -4123,6 +4252,45 @@
           "placementMode",
           "placementSectionId",
           "dictationServerAvailable"
+        ],
+        "type": "object"
+      },
+      "VoiceSampleDto": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "recordingId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "recordingName": {
+            "type": "string"
+          },
+          "speakerLabel": {
+            "type": "string"
+          },
+          "startMs": {
+            "format": "int64",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "recordingId",
+          "recordingName",
+          "speakerLabel",
+          "startMs",
+          "createdAt"
         ],
         "type": "object"
       },
@@ -6493,6 +6661,500 @@
         "summary": "Edit a meeting type",
         "tags": [
           "MeetingTypes"
+        ]
+      }
+    },
+    "/api/people": {
+      "get": {
+        "description": "Everyone in the directory, newest names first by name order, with optional filters. A person may have no voiceprint at all - `hasVoiceprint` is then false and Diariz will not recognise them by voice.\n\nRequires the **Manage people** permission, because the directory is platform-wide and therefore lists every external contact the organisation has recorded. To find someone in order to label a speaker, use the search endpoint instead - that one is open to everyone.\n\n`q` matches the name **and** the email address, case-insensitively.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "isInternal",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hasVoiceprint",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "take",
+            "schema": {
+              "format": "int32",
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "skip",
+            "schema": {
+              "format": "int32",
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List the people directory",
+        "tags": [
+          "People"
+        ]
+      },
+      "post": {
+        "description": "Adds someone to the directory. Only a name is required: a person with no voiceprint and no contact details is a perfectly ordinary record, and is what you get when adding a client you have not recorded yet.\n\nSupplying `recordingId` and `label` **enrols a voiceprint in the same call**, from that recording's diarized speaker - which is what the \"new person\" control on a transcript does. That speaker must already have an embedding (one is computed during transcription), otherwise 400.",
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePersonRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePersonRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePersonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonDto"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonDto"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Add a person",
+        "tags": [
+          "People"
+        ]
+      }
+    },
+    "/api/people/duplicates": {
+      "get": {
+        "description": "Groups of people who look like the same human, matched by email address or by name once case and spacing are normalised. A shared directory surfaces these: two colleagues who each enrolled the same client privately now both appear.\n\nThis **only reports**. Merging is never automatic, because it deletes the source person, cannot be undone, and in a shared directory a wrong merge affects everyone's recordings.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonDuplicateGroupDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonDuplicateGroupDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonDuplicateGroupDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Find likely duplicate people",
+        "tags": [
+          "People"
+        ]
+      }
+    },
+    "/api/people/search": {
+      "get": {
+        "description": "Finds people by name or email for a picker - what the speaker-assignment control on a transcript uses. **Open to every signed-in user**, because naming a speaker in your own recording is not a privileged act; listing the whole directory is, and has its own endpoint.\n\nReturns nothing for a query shorter than two characters, so a picker does not pull most of the directory on the first keystroke. Capped at 20 results.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PersonDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Search people by name",
+        "tags": [
+          "People"
+        ]
+      }
+    },
+    "/api/people/voiceprints": {
+      "delete": {
+        "description": "Deletes **every** person in the directory, with all their voiceprints and training data, in one call - the wholesale GDPR erasure. Automatic speaker identification stops platform-wide until people are enrolled again.\n\nSame labelling rule as deleting one person: automatically applied names revert to the anonymous label, hand-typed names are kept. There is no undo and no confirmation step, so gate it in your UI.\n\nRequires **Manage platform**: the directory is shared, so this wipes everyone's, not just yours.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Erase every voiceprint",
+        "tags": [
+          "People"
+        ]
+      }
+    },
+    "/api/people/{id}": {
+      "delete": {
+        "description": "Removes the person, their voiceprint and all its training data, and unlinks them from every recording - the **GDPR erasure** path, so nothing recognisable is retained.\n\nLabels are handled by origin: names applied **automatically** revert to the anonymous speaker label, while names you typed by hand are kept, since those are your words rather than derived from the biometric. Transcripts are otherwise untouched.\n\nRequires **Manage people**: the directory is shared, so this removes them from everyone's recordings. To erase only the biometric and keep the person, erase their voiceprint instead.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Delete a person",
+        "tags": [
+          "People"
+        ]
+      },
+      "get": {
+        "description": "One person in detail: their contact fields, the **voice samples** training their voiceprint - which recording and speaker each came from - and how many recording-speakers they currently label.\n\nUse it to audit what a voiceprint has learned from: a sample from a misattributed speaker is why recognition drifts, and can be removed individually. The embedding vector itself is never returned.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonDetailDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonDetailDto"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonDetailDto"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Get a person",
+        "tags": [
+          "People"
+        ]
+      },
+      "put": {
+        "description": "Updates a person's details. Every field is optional and **omitting one leaves it alone** - send only what changed.\n\nEditing anyone other than yourself requires the **Manage people** permission. **Name and email cannot be set on a person linked to a user account** (400): those follow the account, and a change here would be undone by the next sync.\n\nSetting `voiceprintOptOut` to true **erases the person's voiceprint** and every voice sample behind it, and stops them being matched from then on. Labels that identification applied revert to the anonymous speaker label; names typed by hand are kept, and stay linked to the person. Setting it back to false restores nothing.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePersonRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePersonRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePersonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Edit a person",
+        "tags": [
+          "People"
+        ]
+      }
+    },
+    "/api/people/{id}/merge": {
+      "post": {
+        "description": "Folds `sourceId` into the person in the path when the same human is in the directory twice - say once as \"Sam\" and once as \"Samantha\", or once per colleague who enrolled them. The source's voice samples move across, every recording labelled with it is relabelled, the voiceprint is recomputed from the combined samples, and the **source person is deleted**.\n\nThere is no un-merge, so check the direction: the person in the path survives. The directory is shared, so a wrong merge affects everyone's recordings - hence **Manage people**.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergePeopleRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergePeopleRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergePeopleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Merge two people",
+        "tags": [
+          "People"
+        ]
+      }
+    },
+    "/api/people/{id}/voiceprint": {
+      "delete": {
+        "description": "Destroys the voiceprint and every voice sample behind it, **keeping the person** and their contact details. Use it when the biometric should go but the record of who attended should not - the narrower half of the GDPR erasure path.\n\nLabels that identification applied revert to the anonymous speaker label; names typed by hand are kept. Unlike opting out, this does not stop them being enrolled again later.\n\nRequires **Manage people**, except on the person linked to your own account.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Erase a person's voiceprint",
+        "tags": [
+          "People"
+        ]
+      },
+      "post": {
+        "description": "Teaches this person's voice from one recording's diarized speaker: that speaker's embedding is added as a voice sample and the voiceprint is recomputed. From then on the same voice is recognised automatically in later recordings.\n\nThe speaker must already **have an embedding** - one is computed during transcription, so a recording made before voiceprints were enabled needs re-transcribing first (400). **409 when the person has opted out** of voice-printing.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrolVoiceprintRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrolVoiceprintRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrolVoiceprintRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Enrol a voiceprint",
+        "tags": [
+          "People"
+        ]
+      }
+    },
+    "/api/people/{id}/voiceprint/samples/{sampleId}": {
+      "delete": {
+        "description": "Drops one sample from a person's voiceprint and **recomputes it from what remains** - the fix when a misattributed speaker has been taught to the wrong person and recognition has started drifting.\n\nRemoving the **last** sample clears the voiceprint and leaves the person in the directory without one, so Diariz stops recognising them by voice. It does not delete them. Recordings already labelled keep their names either way.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sampleId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Remove a voice sample",
+        "tags": [
+          "People"
         ]
       }
     },
@@ -11236,364 +11898,6 @@
         ]
       }
     },
-    "/api/speaker-profiles": {
-      "delete": {
-        "description": "Deletes **every** person in the directory, with all their voiceprints and training data, in one call - the wholesale GDPR erasure. Automatic speaker identification stops platform-wide until people are enrolled again.\n\nSame labelling rule as erasing one person: automatically applied names revert to the anonymous label, hand-typed names are kept. There is no undo and no confirmation step, so gate it in your UI.\n\nRequires **Manage platform**: the directory is shared, so this wipes the voiceprints of everyone on the platform, not just the ones you enrolled.",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
-        "summary": "Erase all enrolled speakers",
-        "tags": [
-          "SpeakerProfiles"
-        ]
-      },
-      "get": {
-        "description": "Everyone in the people directory, with how many voice samples each voiceprint has learned from. A person may have no voiceprint at all - the sample count is then zero, and Diariz simply will not recognise them by voice.\n\nThe directory is **platform-wide**: one person is one record, however many people have recorded them. That is what makes an erasure request a single deletion. Because it therefore lists every external contact the organisation has recorded, browsing it requires the **Manage people** permission. Labelling a speaker does not - anyone can search for a person by name to assign them.",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/SpeakerProfileDto"
-                  },
-                  "type": "array"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/SpeakerProfileDto"
-                  },
-                  "type": "array"
-                }
-              },
-              "text/plain": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/SpeakerProfileDto"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "summary": "List your enrolled speakers",
-        "tags": [
-          "SpeakerProfiles"
-        ]
-      },
-      "post": {
-        "description": "Creates a voiceprint from one recording's diarized speaker: that speaker's embedding becomes the starting point, and the speaker is named and linked to the new person. From then on the same voice is recognised automatically in later recordings.\n\nThe speaker must already **have an embedding** - one is computed during transcription, so a recording made before voiceprints were enabled needs re-transcribing first (400). 404 when the recording is not yours or the label does not exist; 400 for an empty name.",
-        "requestBody": {
-          "content": {
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateSpeakerProfileRequest"
-              }
-            },
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateSpeakerProfileRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateSpeakerProfileRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SpeakerProfileDto"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SpeakerProfileDto"
-                }
-              },
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/SpeakerProfileDto"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "summary": "Enrol a speaker",
-        "tags": [
-          "SpeakerProfiles"
-        ]
-      }
-    },
-    "/api/speaker-profiles/{id}": {
-      "delete": {
-        "description": "Deletes the person's voiceprint and all its training data, and unlinks it from every recording - the **GDPR erasure** path for biometric data, so nothing recognisable is retained.\n\nLabels are handled by origin: names this voiceprint applied **automatically** revert to the anonymous speaker label, while names you typed or assigned by hand are kept, since those are your words rather than derived from the biometric. Transcripts are otherwise untouched.\n\nRequires the **Manage people** permission: the directory is shared, so deleting a person removes them from everyone's recordings. To erase only the biometric and keep the person, erase their voiceprint instead.",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
-        "summary": "Erase an enrolled speaker",
-        "tags": [
-          "SpeakerProfiles"
-        ]
-      },
-      "get": {
-        "description": "One person's voiceprint in detail: the **training contributions** feeding it - which recording and speaker each sample came from - and how many recording-speakers it currently labels.\n\nUse it to audit what a voiceprint has learned from: a contribution from a misattributed speaker is why recognition drifts, and can be removed individually. The embedding vector itself is never returned.",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SpeakerProfileDetailDto"
-                }
-              },
-              "text/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SpeakerProfileDetailDto"
-                }
-              },
-              "text/plain": {
-                "schema": {
-                  "$ref": "#/components/schemas/SpeakerProfileDetailDto"
-                }
-              }
-            },
-            "description": "OK"
-          }
-        },
-        "summary": "Get an enrolled speaker",
-        "tags": [
-          "SpeakerProfiles"
-        ]
-      },
-      "put": {
-        "description": "Corrects the person's name - for a spelling fix or a change of surname. The voiceprint is unchanged, so recognition is unaffected, and every recording labelled with this person picks up the new name.",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/RenameSpeakerProfileRequest"
-              }
-            },
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RenameSpeakerProfileRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RenameSpeakerProfileRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
-        "summary": "Rename an enrolled speaker",
-        "tags": [
-          "SpeakerProfiles"
-        ]
-      }
-    },
-    "/api/speaker-profiles/{id}/contributions/{contributionId}": {
-      "delete": {
-        "description": "Drops one sample from a voiceprint and **recomputes it from what remains** - the fix when a misattributed speaker has been taught to the wrong person and recognition has started drifting.\n\nRemoving the **last** sample clears the voiceprint and leaves the person in the directory without one, so Diariz stops recognising them by voice. It does not delete them. Recordings already labelled keep their names either way.",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "contributionId",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
-        "summary": "Remove a training sample",
-        "tags": [
-          "SpeakerProfiles"
-        ]
-      }
-    },
-    "/api/speaker-profiles/{id}/merge": {
-      "post": {
-        "description": "Folds `sourceId` into the person in the path when the same human has been enrolled twice - say once as \"Sam\" and once as \"Samantha\". The source's training samples move across, every recording labelled with it is relabelled, the voiceprint is recomputed from the combined samples, and the **source person is deleted**.\n\nThere is no un-merge, so check the direction: the person in the path survives. The directory is shared, so a bad merge affects everyone's recordings, not just yours - hence the **Manage people** permission.",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/MergeSpeakerProfilesRequest"
-              }
-            },
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MergeSpeakerProfilesRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MergeSpeakerProfilesRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
-        "summary": "Merge two enrolled speakers",
-        "tags": [
-          "SpeakerProfiles"
-        ]
-      }
-    },
-    "/api/speaker-profiles/{id}/voiceprint": {
-      "delete": {
-        "description": "Destroys the voiceprint and every voice sample behind it, **keeping the person** and their contact details. Use it when the biometric should go but the record of who attended should not - the narrower half of the GDPR erasure path.\n\nLabels that automatic identification applied revert to the anonymous speaker label; names typed by hand are kept. Unlike opting out, this does not stop them being enrolled again later.\n\nRequires the **Manage people** permission, except on the person linked to your own account.",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
-        "summary": "Erase a person's voiceprint",
-        "tags": [
-          "SpeakerProfiles"
-        ]
-      }
-    },
-    "/api/speaker-profiles/{id}/voiceprint-opt-out": {
-      "put": {
-        "description": "Records that this person does not want a voiceprint held for them. Turning it **on erases the one they have**, along with every voice sample behind it, and stops them being matched automatically from then on.\n\nLabels that automatic identification applied revert to the anonymous speaker label. Names typed by hand are kept, and stay pointing at the person: those are your statement about who was in the room, not something derived from their voice.\n\n**Turning it back off does not restore anything** - the biometric is gone, and they would have to be enrolled again from a recording.\n\nRequires the **Manage people** permission, except on the person linked to your own account: withdrawing consent to hold your own biometric data is always yours to do.",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetVoiceprintOptOutRequest"
-              }
-            },
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetVoiceprintOptOutRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SetVoiceprintOptOutRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
-        "summary": "Opt a person out of voice-printing",
-        "tags": [
-          "SpeakerProfiles"
-        ]
-      }
-    },
     "/api/tags": {
       "get": {
         "description": "Every topic tag across your meetings, each with how many recordings carry it, its summed weight, and the recording ids behind it - enough to render a weighted cloud and drill into any entry without a second call. Sorted by weight, heaviest first.\n\nTags are assigned automatically when a recording is summarised; there is no endpoint to set them by hand. Matching is **case-insensitive** and the most common casing is used for display, so LLM casing drift does not split an entry in two.\n\nWith no `roomId` this covers your own library; with one it covers the recordings placed in that room (404 if you are not a member).",
@@ -12583,6 +12887,10 @@
       "name": "MeetingTypes"
     },
     {
+      "description": "The people directory: the humans who appear in meetings, with their contact details and an optional voiceprint. Add and edit people, enrol and erase voiceprints, merge duplicates, and find likely ones. Shared platform-wide, so browsing needs the Manage people permission while searching to label a speaker does not.",
+      "name": "People"
+    },
+    {
       "description": "Action items for a single recording - extract them from the transcript, then list, add, edit, and remove.",
       "name": "RecordingActions"
     },
@@ -12621,10 +12929,6 @@
     {
       "description": "Your folder tree (sections) - create, rename, reorder, and delete folders.",
       "name": "Sections"
-    },
-    {
-      "description": "Enrolled voiceprints - create a profile from a recording's speaker, then list, rename, merge, and erase them (GDPR).",
-      "name": "SpeakerProfiles"
     },
     {
       "description": "Your storage usage against your quota.",

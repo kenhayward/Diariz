@@ -1,29 +1,50 @@
 import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import SpeakerAssign from "./SpeakerAssign";
-import type { SpeakerProfile } from "../lib/types";
+import { api } from "../lib/api";
+import type { Person } from "../lib/types";
 
-const profiles: SpeakerProfile[] = [
-  { id: "p1", name: "Alice", sampleCount: 2 },
-  { id: "p2", name: "Bob", sampleCount: 1 },
-  { id: "p3", name: "Alicia", sampleCount: 0 },
-];
+vi.mock("../lib/api", () => ({
+  api: { searchPeople: vi.fn() },
+  apiErrorMessage: (e: unknown) => String(e),
+}));
+
+const mock = (f: unknown) => f as ReturnType<typeof vi.fn>;
+
+function person(id: string, name: string, extra: Partial<Person> = {}): Person {
+  return {
+    id, name, title: null, companyName: null, email: null, phone: null,
+    isInternal: false, voiceprintOptOut: false, hasVoiceprint: false, sampleCount: 0,
+    linkedUserId: null, isSelf: false, canManageBiometrics: false,
+    createdAt: "2026-07-29T00:00:00Z", updatedAt: "2026-07-29T00:00:00Z", ...extra,
+  };
+}
+
+const people = [person("p1", "Alice"), person("p2", "Bob"), person("p3", "Alicia")];
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  // The server does the matching now, so the fake does too - the component no longer filters.
+  mock(api.searchPeople).mockImplementation(async (q: string) =>
+    people.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())));
+});
 
 function setup(overrides: Partial<React.ComponentProps<typeof SpeakerAssign>> = {}) {
   const onAssign = vi.fn();
   const onCreate = vi.fn();
   const onMulti = vi.fn();
   render(
-    <SpeakerAssign
-      label="SPEAKER_00"
-      profiles={profiles}
-      profileId={null}
-      isMulti={false}
-      onAssign={onAssign}
-      onCreate={onCreate}
-      onMulti={onMulti}
-      {...overrides}
-    />,
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <SpeakerAssign
+        label="SPEAKER_00"
+        isMulti={false}
+        onAssign={onAssign}
+        onCreate={onCreate}
+        onMulti={onMulti}
+        {...overrides}
+      />
+    </QueryClientProvider>,
   );
   return { onAssign, onCreate, onMulti };
 }
@@ -35,7 +56,7 @@ function openInput() {
 
 describe("SpeakerAssign", () => {
   it("shows the current assignment on the trigger", () => {
-    setup({ profileId: "p1" });
+    setup({ displayName: "Alice" });
     expect(screen.getByRole("button", { name: /assign speaker_00/i }).textContent).toContain("Alice");
   });
 
@@ -44,46 +65,52 @@ describe("SpeakerAssign", () => {
     expect(screen.getByRole("button", { name: /assign speaker_00/i }).textContent).toContain("Multiple Speakers");
   });
 
-  it("lists no people until the user types, then filters by contains", () => {
+  it("queries nothing until two characters are typed, then shows what the server returned", async () => {
     setup();
     openInput();
-    // Nothing typed yet → no person options (Alice/Bob/Alicia absent).
     expect(screen.queryByRole("option", { name: "Alice" })).toBeNull();
-    expect(screen.queryByRole("option", { name: "Bob" })).toBeNull();
+    expect(api.searchPeople).not.toHaveBeenCalled();
+
+    // One character must not query - otherwise the first keystroke pulls most of the directory.
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "a" } });
+    expect(api.searchPeople).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "ali" } });
-    // "ali" matches Alice and Alicia (case-insensitive contains), not Bob.
-    expect(screen.getByRole("option", { name: "Alice" })).toBeTruthy();
+    expect(await screen.findByRole("option", { name: "Alice" })).toBeTruthy();
     expect(screen.getByRole("option", { name: "Alicia" })).toBeTruthy();
     expect(screen.queryByRole("option", { name: "Bob" })).toBeNull();
+    expect(api.searchPeople).toHaveBeenCalledWith("ali");
   });
 
-  it("assigns the chosen person and closes", () => {
+  it("assigns the chosen person and closes", async () => {
     const { onAssign } = setup();
     openInput();
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "Bob" } });
+    // Re-query rather than clicking the awaited node: the results arriving re-renders the list, which
+    // detaches the element findBy returned.
+    await screen.findByRole("option", { name: "Bob" });
     fireEvent.click(screen.getByRole("option", { name: "Bob" }));
-    expect(onAssign).toHaveBeenCalledWith("p2");
+    await waitFor(() => expect(onAssign).toHaveBeenCalledWith("p2"));
     expect(screen.queryByRole("combobox")).toBeNull(); // closed
   });
 
-  it("offers Create for an unknown name and not for an exact match", () => {
+  it("offers Create for an unknown name and not for an exact match", async () => {
     const { onCreate } = setup();
     openInput();
 
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "Zara" } });
-    const create = screen.getByRole("option", { name: /create "zara"/i });
-    fireEvent.click(create);
+    fireEvent.click(await screen.findByRole("option", { name: /create "zara"/i }));
     expect(onCreate).toHaveBeenCalledWith("Zara");
 
     // Re-open and type an exact existing name → no Create row.
     openInput();
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "Alice" } });
+    await screen.findByRole("option", { name: "Alice" });
     expect(screen.queryByRole("option", { name: /create "alice"/i })).toBeNull();
   });
 
   it("exposes Multiple speakers and Unassign actions", () => {
-    const { onMulti, onAssign } = setup({ profileId: "p1" });
+    const { onMulti, onAssign } = setup({ displayName: "Alice" });
     openInput();
     fireEvent.click(screen.getByRole("option", { name: "Multiple Speakers" }));
     expect(onMulti).toHaveBeenCalledTimes(1);

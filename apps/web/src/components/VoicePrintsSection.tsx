@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
-import type { SpeakerProfile } from "../lib/types";
+import type { Person } from "../lib/types";
 import HelpButton from "./HelpButton";
 
 /// Manage enrolled people / voiceprints: rename, view & prune training contributions, merge two people,
@@ -12,8 +12,8 @@ export default function VoicePrintsSection() {
   const { t } = useTranslation("people");
   const qc = useQueryClient();
   const { data: people = [], isLoading } = useQuery({
-    queryKey: ["speaker-profiles"],
-    queryFn: api.listSpeakerProfiles,
+    queryKey: ["people"],
+    queryFn: () => api.listPeople(),
   });
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -23,7 +23,7 @@ export default function VoicePrintsSection() {
     setError(null);
     try {
       await fn();
-      qc.invalidateQueries({ queryKey: ["speaker-profiles"] });
+      qc.invalidateQueries({ queryKey: ["people"] });
       if (detailId) qc.invalidateQueries({ queryKey: ["speaker-profile", detailId] });
     } catch (e) {
       setError(apiErrorMessage(e));
@@ -32,7 +32,7 @@ export default function VoicePrintsSection() {
 
   async function eraseAll() {
     if (!window.confirm(t("confirmEraseAll"))) return;
-    await act(() => api.deleteAllSpeakerProfiles());
+    await act(() => api.deleteAllVoiceprints());
   }
 
   // Shared audio element so playing one sample stops the previous; resolve the presigned URL lazily.
@@ -121,8 +121,8 @@ function PersonRow({
   act,
   onPlay,
 }: {
-  person: SpeakerProfile;
-  others: SpeakerProfile[];
+  person: Person;
+  others: Person[];
   expanded: boolean;
   onToggle: () => void;
   act: (fn: () => Promise<unknown>, detailId?: string) => Promise<void>;
@@ -133,14 +133,14 @@ function PersonRow({
   const [name, setName] = useState(person.name);
   const { data: detail } = useQuery({
     queryKey: ["speaker-profile", person.id],
-    queryFn: () => api.getSpeakerProfile(person.id),
+    queryFn: () => api.getPerson(person.id),
     enabled: expanded,
   });
 
   async function saveName() {
     const trimmed = name.trim();
     setRenaming(false);
-    if (trimmed && trimmed !== person.name) await act(() => api.renameSpeakerProfile(person.id, trimmed), person.id);
+    if (trimmed && trimmed !== person.name) await act(() => api.updatePerson(person.id, { name: trimmed }), person.id);
   }
 
   return (
@@ -193,7 +193,7 @@ function PersonRow({
                   if (!sourceId) return;
                   const src = others.find((o) => o.id === sourceId);
                   if (src && window.confirm(t("confirmMerge", { source: src.name, target: person.name })))
-                    act(() => api.mergeSpeakerProfiles(person.id, sourceId), person.id);
+                    act(() => api.mergePeople(person.id, sourceId), person.id);
                 }}
                 className="rounded border px-1 py-1 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
               >
@@ -208,7 +208,7 @@ function PersonRow({
             <button
               onClick={() => {
                 if (window.confirm(t("confirmDelete", { name: person.name })))
-                  act(() => api.deleteSpeakerProfile(person.id));
+                  act(() => api.deletePerson(person.id));
               }}
               className="rounded border border-red-300 px-2 py-1 text-xs text-red-600 dark:border-red-800 dark:text-red-400"
             >
@@ -224,11 +224,11 @@ function PersonRow({
             {detail && (
               <p className="mb-1 text-xs text-gray-500 dark:text-gray-400">
                 {t("statsLabels", { count: detail.identifiedCount })} ·{" "}
-                {t("statsTrained", { count: detail.contributions.length })}
+                {t("statsTrained", { count: detail.samples.length })}
               </p>
             )}
             <ul className="space-y-1">
-              {detail?.contributions.map((c) => (
+              {detail?.samples.map((c) => (
                 <li key={c.id} className="flex items-center justify-between gap-2 text-xs">
                   <span className="min-w-0 truncate">
                     <span className="font-medium">{c.recordingName}</span>
@@ -244,7 +244,7 @@ function PersonRow({
                     </button>
                     <button
                       aria-label={t("removeAria", { name: c.recordingName })}
-                      onClick={() => act(() => api.removeProfileContribution(person.id, c.id), person.id)}
+                      onClick={() => act(() => api.removeVoiceSample(person.id, c.id), person.id)}
                       className="rounded border px-2 py-0.5 text-[11px] dark:border-gray-700"
                     >
                       {t("common:remove")}
