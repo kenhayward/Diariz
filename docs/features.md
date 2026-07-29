@@ -133,10 +133,19 @@ default off; Claude/MCP defaults on so an already-connected MCP client is not br
 - **Status bar** locked to the bottom of the app: left-aligned live progress (transcribing, summarising,
 merging, extracting actions, uploading, errors — in their tone colours) and right-aligned storage usage ·
 transcription usage · total transcripts.
-- **Identify speakers** across recordings: enrol a person from a recording's speaker and Diariz recognises
-that voice automatically in later recordings (SpeechBrain ECAPA voiceprints in pgvector, cosine matching),
-with manual reassignment. The **Voice Prints** tab (Preferences) renames, prunes training samples, merges
-duplicates, and erases voiceprints (GDPR — biometric data).
+- **People and speaker identification.** The people who appear in your meetings live in one **platform-wide
+directory**: one human is one record, however many people have recorded them, which is what makes an erasure
+request a single deletion rather than a hunt through every user's private set. A **voiceprint is optional** -
+someone can sit in the directory with no biometric held for them at all, and a person can be **opted out**,
+which erases the voiceprint they have and stops them being matched from then on. Enrol a person from a
+recording's speaker and Diariz recognises that voice automatically in later recordings (SpeechBrain ECAPA
+voiceprints in pgvector, cosine matching), with manual reassignment. The **Voice Prints** tab (Preferences)
+renames, prunes training samples, merges duplicates, and erases voiceprints (GDPR — biometric data).
+**Browsing** the directory, and editing, deleting or merging anyone other than yourself, needs the
+**Manage people** permission; labelling a speaker does not, and **opting yourself out never does** - under
+GDPR, withdrawing consent to hold your own biometric is yours to exercise, not an administrator's to grant.
+The trade-off of a shared directory is deliberate and worth stating plainly: a voiceprint enrolled by one
+person will identify that human in **everyone's** recordings.
 - **Summarize** recordings (with automatic naming) and generate a full set of **professional meeting minutes**
 (Markdown: headings, lists, tables — no emojis) as part of the pipeline; edit them in a **WYSIWYG editor**,
 re-create them, or **email them to yourself** (optionally with the recording's attachments). The minutes also

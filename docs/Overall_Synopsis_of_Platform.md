@@ -987,7 +987,7 @@ into it with no URL or per-user setup at all.
   browsable in the in-app reference — no new endpoints were added for this.
 - **RBAC (user groups + platform permissions).** Authority comes from **group membership**, not from a role.
   A `UserGroup` carries a `[Flags] PlatformPermission` (`ManageRooms = 1`, `ManageUsers = 2`,
-  `ManagePlatform = 4`, `ManageFormulas = 8`; append-only), users join via `UserGroupMember`, and a caller's effective permissions
+  `ManagePlatform = 4`, `ManageFormulas = 8`, `ManagePeople = 16`; append-only), users join via `UserGroupMember`, and a caller's effective permissions
   are the **union** of the flags on every group they belong to. `IUserPermissions` resolves that **from the
   database on each request** — never from a token claim, which would keep granting authority until it expired,
   long after the user left the group. `PermissionAuthorizationHandler` backs the policies `ManageRooms`,
@@ -1285,9 +1285,48 @@ samples and is called after a recording delete, since that cascade silently remo
 
 The **People** screen manages voiceprints — rename, view training samples, add/remove one (recomputes the
 centroid), merge duplicates, and **erase** one or all (GDPR): erasing reverts auto-applied labels to the
-anonymous label but keeps names typed by hand. Voiceprints are currently **per-user** (a user's voiceprints
-only match their own recordings). See
+anonymous label but keeps names typed by hand. See
 [`Speaker_Identification_and_Verification.md`](Speaker_Identification_and_Verification.md).
+
+### Platform scope, and what it costs
+
+The directory and its voiceprints are **platform-wide**, not per-user. One human is one row, which is what
+makes an erasure request a single delete rather than a hunt through every user's private set.
+
+**State the consequence plainly:** a voiceprint enrolled by one user identifies that person in *every* user's
+recordings, including private ones, and the directory lists every external contact the organisation has ever
+recorded. `ManagePeople` mitigates the second half by gating **browsing** — but nothing gates the first half,
+which is inherent to a shared directory rather than a permission problem.
+
+Gates (`SpeakerProfilesController`):
+
+| Operation | Requires |
+|---|---|
+| Browse / list the directory | `ManagePeople` |
+| Search by name to label a speaker; assign; create | nothing (any authenticated user) |
+| Rename, delete, merge | `ManagePeople` |
+| **Set `VoiceprintOptOut`, erase a voiceprint** | `ManagePeople` **or the person is you** |
+| Erase every voiceprint | `ManagePlatform` |
+
+That self exception is `CanManageBiometricsAsync`, kept as a **single predicate** used by both endpoints (and,
+from PR 3, projected onto the DTO the UI renders from) so the two cannot drift. Under GDPR, withdrawing
+consent to process your own biometric data is the data subject's right, so routing it through an
+administrator would be a weak posture.
+
+**Opt-out semantics** (`IPeopleDirectory.EraseVoiceprintAsync`) are deliberately narrower than deleting a
+person: the centroid and every `VoiceSample` go, labels that automatic identification applied revert to the
+anonymous label, but **names typed by hand are kept, still linked to the person** — those are the user's own
+assertion about who was in the room, not something derived from the biometric. Turning opt-out back off
+restores nothing. `SpeakerIdentifier` filters `Embedding != null && !VoiceprintOptOut` before the distance
+query, and `AssignSpeaker` still *names* an opted-out person but skips the training block.
+
+**Performance note.** That cosine query is now an unbounded scan — it was per-user, and is every enrolled
+person on the platform. There is **no HNSW/IVFFlat index** on `SpeakerProfiles.Embedding`; add one as an
+additive migration if the plan turns into a seq scan over more than a few hundred rows.
+
+`PersonDuplicates` (pure, static) reports likely duplicates by email and normalised name — two users who each
+enrolled the same colleague privately now both appear. It **never merges automatically**: merge destroys the
+source row, has no undo, and under a shared directory a bad one damages everyone's recordings.
 
 ## Localization (web UI)
 

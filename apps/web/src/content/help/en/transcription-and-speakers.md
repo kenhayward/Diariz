@@ -25,6 +25,24 @@ Once you enrol a person, Diariz recognises their voice in later recordings autom
 stored voiceprints, including merging duplicates and erasing them, from the **Voice Prints** tab in
 Preferences.
 
+**People are shared across the whole platform.** One person is one record, however many colleagues have
+recorded them - which is what makes an erasure request a single deletion. The trade-off is worth knowing:
+a voiceprint someone else enrolled will also name that person in your recordings. Browsing the directory,
+and editing or deleting anyone other than yourself, needs the **Manage people** permission. Naming a
+speaker on your own recording does not.
+
+**A person does not have to have a voiceprint.** They can be in the directory with nothing biometric held
+for them at all, and they can be **opted out** of voice-printing entirely.
+
+Opting someone out destroys the voiceprint they have, along with every voice sample behind it, and stops
+them being recognised from then on. Names that Diariz applied automatically go back to the anonymous
+speaker label. **Names you typed yourself are kept** - those are your record of who was in the room, not
+something worked out from their voice. Turning the setting back off does not bring the voiceprint back:
+they would have to be enrolled again from a recording.
+
+**You can always opt yourself out.** That one never needs a permission - choosing whether your own voice
+is held is yours to decide.
+
 **Renaming a speaker survives re-transcription.** The name is stored against the meeting, not against
 the transcript text, so re-running transcription does not undo your work.
 

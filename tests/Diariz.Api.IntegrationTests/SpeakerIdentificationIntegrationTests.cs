@@ -33,8 +33,20 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
         return user;
     }
 
+    /// <summary>Empties the directory before an identification assertion.
+    ///
+    /// Identification is platform-wide now, so "no match" is a claim about every row in the table - including
+    /// people other tests in this shared-container collection seeded. The per-user filter used to provide
+    /// that isolation for free; it does not exist any more, so the isolation has to be explicit.</summary>
+    private async Task ClearDirectoryAsync()
+    {
+        await using var db = fx.CreateDbContext();
+        db.People.RemoveRange(await db.People.ToListAsync());
+        await db.SaveChangesAsync();
+    }
+
     private static SpeakerIdentifier Identifier(Diariz.Domain.DiarizDbContext db, double threshold = 0.4) =>
-        new(db, Options.Create(new IdentificationOptions { Enabled = true, Threshold = threshold }), new RoomScope(db));
+        new(db, Options.Create(new IdentificationOptions { Enabled = true, Threshold = threshold }));
 
     // Voiceprints live in their owner's personal room now; mint it so the seeded profile is in scope.
     private static Task<Guid> RoomOf(Diariz.Domain.DiarizDbContext db, Guid owner) =>
@@ -77,6 +89,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
     [Fact]
     public async Task Identify_ReturnsNearestProfile_WithinThreshold()
     {
+        await ClearDirectoryAsync();
         var user = await SeedUser();
         var aliceId = Guid.NewGuid();
 
@@ -89,7 +102,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
 
         await using var db2 = fx.CreateDbContext();
         // Almost colinear with Alice's vector → tiny cosine distance.
-        var match = await Identifier(db2).IdentifyAsync(user.Id, Vec((0, 1f), (1, 0.1f)));
+        var match = await Identifier(db2).IdentifyAsync(Vec((0, 1f), (1, 0.1f)));
 
         Assert.NotNull(match);
         Assert.Equal(aliceId, match!.PersonId);
@@ -100,6 +113,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
     [Fact]
     public async Task Identify_ReturnsNull_WhenNearestExceedsThreshold()
     {
+        await ClearDirectoryAsync();
         var user = await SeedUser();
         await using (var db = fx.CreateDbContext())
         {
@@ -109,26 +123,54 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
 
         await using var db2 = fx.CreateDbContext();
         // Orthogonal to Alice's vector → cosine distance ≈ 1, well above the 0.4 threshold.
-        var match = await Identifier(db2).IdentifyAsync(user.Id, Vec((1, 1f)));
+        var match = await Identifier(db2).IdentifyAsync(Vec((1, 1f)));
 
         Assert.Null(match);
     }
 
+    /// <summary>The directory is platform-wide, so a voiceprint enrolled by one person identifies that human
+    /// in everyone's recordings. This is the real pgvector proof of the scope change, and it is the exact
+    /// inverse of the assertion it replaced. It is also the privacy consequence of the design: enrolling
+    /// someone is a platform-wide act, not a private one.</summary>
     [Fact]
-    public async Task Identify_IgnoresAnotherUsersProfiles()
+    public async Task Identify_MatchesAVoiceprintEnrolledByAnotherUser()
     {
-        var user = await SeedUser();
+        await ClearDirectoryAsync();
         var other = await SeedUser();
+        var theirsId = Guid.NewGuid();
         await using (var db = fx.CreateDbContext())
         {
-            db.People.Add(new Person { Id = Guid.NewGuid(), CreatedByUserId = other.Id, RoomId = await RoomOf(db, other.Id), Name = "Theirs", Embedding = Vec((0, 1f)) });
+            db.People.Add(new Person { Id = theirsId, CreatedByUserId = other.Id, RoomId = await RoomOf(db, other.Id), Name = "Theirs", Embedding = Vec((0, 1f)) });
             await db.SaveChangesAsync();
         }
 
         await using var db2 = fx.CreateDbContext();
-        var match = await Identifier(db2).IdentifyAsync(user.Id, Vec((0, 1f)));
+        var match = await Identifier(db2).IdentifyAsync(Vec((0, 1f)));
 
-        Assert.Null(match); // a perfect match, but it belongs to another user
+        Assert.NotNull(match);
+        Assert.Equal(theirsId, match!.PersonId);
+    }
+
+    /// <summary>Someone who asked not to be voice-printed is never a candidate, even while a stale embedding
+    /// is still on the row - the filter, not the erase, is what guarantees it.</summary>
+    [Fact]
+    public async Task Identify_IgnoresAnOptedOutPerson()
+    {
+        await ClearDirectoryAsync();
+        var user = await SeedUser();
+        await using (var db = fx.CreateDbContext())
+        {
+            db.People.Add(new Person
+            {
+                Id = Guid.NewGuid(), CreatedByUserId = user.Id, RoomId = await RoomOf(db, user.Id),
+                Name = "Opted out", Embedding = Vec((0, 1f)), VoiceprintOptOut = true,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await using var db2 = fx.CreateDbContext();
+
+        Assert.Null(await Identifier(db2).IdentifyAsync(Vec((0, 1f))));
     }
 
     [Fact]
@@ -198,8 +240,16 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
         Assert.Empty(await db2.VoiceSamples.Where(c => c.PersonId == profileId).ToListAsync());
     }
 
-    private SpeakerProfilesController ProfilesController(Diariz.Domain.DiarizDbContext db, Guid userId) =>
-        new(db, new RoomScope(db)) { ControllerContext = Http.Context(userId) };
+    private SpeakerProfilesController ProfilesController(Diariz.Domain.DiarizDbContext db, Guid userId)
+    {
+        // Destructive writes on the shared directory need ManagePeople now; these tests are about the
+        // pgvector behaviour underneath, not the gate (PeopleBiometricGateTests covers that).
+        Perms.Grant(db, userId, PlatformPermission.ManagePeople);
+        return new(db, new RoomScope(db), new PeopleDirectory(db), new UserPermissions(db))
+        {
+            ControllerContext = Http.Context(userId),
+        };
+    }
 
     [Fact]
     public async Task RemoveContribution_RecomputesCentroidFromRemaining()
@@ -291,6 +341,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
     [Fact]
     public async Task Reidentify_LabelsAnonymousSpeaker_AgainstStoredEmbedding()
     {
+        await ClearDirectoryAsync();
         var user = await SeedUser();
         var recId = Guid.NewGuid();
         var speakerId = Guid.NewGuid();
@@ -311,7 +362,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
         await using (var db = fx.CreateDbContext())
         {
             var speakers = await db.Speakers.Where(s => s.RecordingId == recId).ToListAsync();
-            await SpeakerLabeling.ApplyAsync(speakers, user.Id, Identifier(db));
+            await SpeakerLabeling.ApplyAsync(speakers, Identifier(db));
             await db.SaveChangesAsync();
         }
 

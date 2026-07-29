@@ -1775,6 +1775,9 @@
           "manageFormulas": {
             "type": "boolean"
           },
+          "managePeople": {
+            "type": "boolean"
+          },
           "managePlatform": {
             "type": "boolean"
           },
@@ -1789,7 +1792,8 @@
           "manageRooms",
           "manageUsers",
           "managePlatform",
-          "manageFormulas"
+          "manageFormulas",
+          "managePeople"
         ],
         "type": "object"
       },
@@ -3089,6 +3093,17 @@
         },
         "required": [
           "enabled"
+        ],
+        "type": "object"
+      },
+      "SetVoiceprintOptOutRequest": {
+        "properties": {
+          "optOut": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "optOut"
         ],
         "type": "object"
       },
@@ -6063,7 +6078,7 @@
     },
     "/api/groups": {
       "get": {
-        "description": "Every group, with its members and its platform permissions as a bitmask: `ManageRooms` 1, `ManageUsers` 2, `ManagePlatform` 4, `ManageFormulas` 8. **Platform authority comes from group membership** - there are no per-user permission flags - so this is where administrative power is granted.\n\nThe built-in Platform Administrators group is flagged `isSystem` and comes first; it is protected from deletion, renaming, and losing its last member. The whole section requires the Manage Users permission.",
+        "description": "Every group, with its members and its platform permissions as a bitmask: `ManageRooms` 1, `ManageUsers` 2, `ManagePlatform` 4, `ManageFormulas` 8, `ManagePeople` 16. **Platform authority comes from group membership** - there are no per-user permission flags - so this is where administrative power is granted.\n\nThe built-in Platform Administrators group is flagged `isSystem` and comes first; it is protected from deletion, renaming, and losing its last member. The whole section requires the Manage Users permission.",
         "responses": {
           "200": {
             "content": {
@@ -11223,7 +11238,7 @@
     },
     "/api/speaker-profiles": {
       "delete": {
-        "description": "Deletes **every** voiceprint you have enrolled, with all their training data, in one call - the wholesale GDPR erasure. Automatic speaker identification stops until you enrol again.\n\nSame labelling rule as erasing one person: automatically applied names revert to the anonymous label, hand-typed names are kept. There is no undo and no confirmation step, so gate it in your UI.",
+        "description": "Deletes **every** person in the directory, with all their voiceprints and training data, in one call - the wholesale GDPR erasure. Automatic speaker identification stops platform-wide until people are enrolled again.\n\nSame labelling rule as erasing one person: automatically applied names revert to the anonymous label, hand-typed names are kept. There is no undo and no confirmation step, so gate it in your UI.\n\nRequires **Manage platform**: the directory is shared, so this wipes the voiceprints of everyone on the platform, not just the ones you enrolled.",
         "responses": {
           "200": {
             "description": "OK"
@@ -11235,7 +11250,7 @@
         ]
       },
       "get": {
-        "description": "The people you have enrolled a voiceprint for, with how many samples each has learned from. These are what let Diariz recognise the same person across later recordings automatically.\n\nVoiceprints are **biometric data** and strictly per-user: yours are never visible to anyone else, even in a shared room.",
+        "description": "Everyone in the people directory, with how many voice samples each voiceprint has learned from. A person may have no voiceprint at all - the sample count is then zero, and Diariz simply will not recognise them by voice.\n\nThe directory is **platform-wide**: one person is one record, however many people have recorded them. That is what makes an erasure request a single deletion. Because it therefore lists every external contact the organisation has recorded, browsing it requires the **Manage people** permission. Labelling a speaker does not - anyone can search for a person by name to assign them.",
         "responses": {
           "200": {
             "content": {
@@ -11324,7 +11339,7 @@
     },
     "/api/speaker-profiles/{id}": {
       "delete": {
-        "description": "Deletes the person's voiceprint and all its training data, and unlinks it from every recording - the **GDPR erasure** path for biometric data, so nothing recognisable is retained.\n\nLabels are handled by origin: names this voiceprint applied **automatically** revert to the anonymous speaker label, while names you typed or assigned by hand are kept, since those are your words rather than derived from the biometric. Transcripts are otherwise untouched.",
+        "description": "Deletes the person's voiceprint and all its training data, and unlinks it from every recording - the **GDPR erasure** path for biometric data, so nothing recognisable is retained.\n\nLabels are handled by origin: names this voiceprint applied **automatically** revert to the anonymous speaker label, while names you typed or assigned by hand are kept, since those are your words rather than derived from the biometric. Transcripts are otherwise untouched.\n\nRequires the **Manage people** permission: the directory is shared, so deleting a person removes them from everyone's recordings. To erase only the biometric and keep the person, erase their voiceprint instead.",
         "parameters": [
           {
             "in": "path",
@@ -11432,7 +11447,7 @@
     },
     "/api/speaker-profiles/{id}/contributions/{contributionId}": {
       "delete": {
-        "description": "Drops one sample from a voiceprint and **recomputes it from what remains** - the fix when a misattributed speaker has been taught to the wrong person and recognition has started drifting.\n\nThe **last remaining sample cannot be removed** (400): a voiceprint with nothing to match against is meaningless, so delete the person instead. Recordings already labelled keep their names.",
+        "description": "Drops one sample from a voiceprint and **recomputes it from what remains** - the fix when a misattributed speaker has been taught to the wrong person and recognition has started drifting.\n\nRemoving the **last** sample clears the voiceprint and leaves the person in the directory without one, so Diariz stops recognising them by voice. It does not delete them. Recordings already labelled keep their names either way.",
         "parameters": [
           {
             "in": "path",
@@ -11466,7 +11481,7 @@
     },
     "/api/speaker-profiles/{id}/merge": {
       "post": {
-        "description": "Folds `sourceId` into the person in the path when the same human has been enrolled twice - say once as \"Sam\" and once as \"Samantha\". The source's training samples move across, every recording labelled with it is relabelled, the voiceprint is recomputed from the combined samples, and the **source person is deleted**.\n\nThere is no un-merge, so check the direction: the profile in the path survives.",
+        "description": "Folds `sourceId` into the person in the path when the same human has been enrolled twice - say once as \"Sam\" and once as \"Samantha\". The source's training samples move across, every recording labelled with it is relabelled, the voiceprint is recomputed from the combined samples, and the **source person is deleted**.\n\nThere is no un-merge, so check the direction: the person in the path survives. The directory is shared, so a bad merge affects everyone's recordings, not just yours - hence the **Manage people** permission.",
         "parameters": [
           {
             "in": "path",
@@ -11504,6 +11519,76 @@
           }
         },
         "summary": "Merge two enrolled speakers",
+        "tags": [
+          "SpeakerProfiles"
+        ]
+      }
+    },
+    "/api/speaker-profiles/{id}/voiceprint": {
+      "delete": {
+        "description": "Destroys the voiceprint and every voice sample behind it, **keeping the person** and their contact details. Use it when the biometric should go but the record of who attended should not - the narrower half of the GDPR erasure path.\n\nLabels that automatic identification applied revert to the anonymous speaker label; names typed by hand are kept. Unlike opting out, this does not stop them being enrolled again later.\n\nRequires the **Manage people** permission, except on the person linked to your own account.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Erase a person's voiceprint",
+        "tags": [
+          "SpeakerProfiles"
+        ]
+      }
+    },
+    "/api/speaker-profiles/{id}/voiceprint-opt-out": {
+      "put": {
+        "description": "Records that this person does not want a voiceprint held for them. Turning it **on erases the one they have**, along with every voice sample behind it, and stops them being matched automatically from then on.\n\nLabels that automatic identification applied revert to the anonymous speaker label. Names typed by hand are kept, and stay pointing at the person: those are your statement about who was in the room, not something derived from their voice.\n\n**Turning it back off does not restore anything** - the biometric is gone, and they would have to be enrolled again from a recording.\n\nRequires the **Manage people** permission, except on the person linked to your own account: withdrawing consent to hold your own biometric data is always yours to do.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetVoiceprintOptOutRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetVoiceprintOptOutRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetVoiceprintOptOutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Opt a person out of voice-printing",
         "tags": [
           "SpeakerProfiles"
         ]

@@ -17,7 +17,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume), system audio, or both mixed together on one device - system audio works in Chromium browsers ("Share audio") and seamlessly in the desktop app; schedule a recording to auto-stop at a set time or after 15/30/60 minutes; or upload files (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A). |
 | **Transcribe & diarize** | Server-side WhisperX (word-level timestamps) with pyannote speaker diarization; speaker-labelled, editable, playable segments you can re-transcribe any time. |
 | **Recording hub** | Every meeting opens on a hub: a summary card (meeting type, key facts, the summary inline) over tiles for transcript, actions, speakers, notes, files, and formulas - each showing its count and a preview, with new-note / add-file / run-formula available in place. The transcript embeds a conversation-flow player showing who spoke when, which doubles as the scrubber. |
-| **Speaker identification** | Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). Assign a speaker from the Speakers tab or straight from the label on any transcript row, as you read or listen. |
+| **People and speaker identification** | One shared directory of the people in your meetings, where a voiceprint is optional - someone can be listed with no biometric held, or opt out, which erases theirs. Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). Assign a speaker from the Speakers tab or straight from the label on any transcript row, as you read or listen. Browsing the directory needs the Manage people permission; opting yourself out never does. |
 | **Notes** | Take your own note lines live during a meeting (timestamped, crash-safe); they appear inline in the transcript at the moment you wrote them, steer the minutes, and can be woven into an enhanced-notes section linking to the exact transcript moments. |
 | **Meeting screenshots** | Capture the screen during a recording from the desktop app - a hotkey, the tray menu, or the app itself - choosing a screen or a rectangle on the first capture and reusing it after; captures appear in the transcript at the moment they were taken, as a full-size viewer with zoom and pan to read a capture at native resolution, and in a Notes-tab section. |
 | **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable. A meeting type carries no prompts of its own: it names the **formula** that generates its minutes, plus any others to run alongside (their documents appear in the Formulas tab). Minutes and formulas are the same machinery - any formula you can use can produce your minutes. Templates are built from blocks (H1-H3 headings, literal text, substituted details, model prompts, rules, drag-to-reorder) with JSON import/export. |
@@ -58,6 +58,41 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.164.0",
+    date: "2026-07-29",
+    pr: 368,
+    headline: "People are shared platform-wide, and anyone can opt out of voice-printing",
+    summary:
+      "Until now every person you enrolled was yours alone. If three colleagues each recorded the same " +
+      "client, Diariz held three separate voiceprints of them, and erasing that client meant finding all " +
+      "three. From this release there is **one shared directory**: one person is one record, however many " +
+      "people have recorded them, and an erasure request is a single deletion.\n\n" +
+      "**The trade-off is worth stating plainly.** A voiceprint someone else enrolled will now also name " +
+      "that person in your recordings. There is no setting that changes this - it is what a shared " +
+      "directory means. What is gated is **browsing**: seeing the whole directory, and editing, deleting " +
+      "or merging anyone other than yourself, needs the new **Manage people** permission, so a new starter " +
+      "does not arrive to a readable list of every external contact. Naming a speaker on your own " +
+      "recording needs nothing.\n\n" +
+      "**Anyone can now be opted out of voice-printing.** Opting someone out destroys their voiceprint and " +
+      "every sample behind it, and stops them being recognised from then on. Names Diariz applied " +
+      "automatically revert to the anonymous speaker label; **names you typed yourself are kept**, because " +
+      "those are your record of who was in the room rather than something worked out from their voice. " +
+      "Turning it back off does not bring the voiceprint back.\n\n" +
+      "**Opting yourself out never needs a permission.** Deciding whether your own voice is held is yours, " +
+      "not something to request from an administrator.",
+    added: [
+      "A **Manage people** permission, granted through groups, for browsing the directory and editing, deleting or merging anyone other than yourself.",
+      "**Opt out of voice-printing** for a person, which erases their voiceprint and its samples and excludes them from recognition. Always available on your own person, whatever your permissions.",
+      "**Erase a person's voiceprint** while keeping the person, for when the biometric should go but the record of who attended should not.",
+      "Duplicate detection across the shared directory, by email address and by name. It only ever reports: merging is always a person's decision, because it cannot be undone.",
+    ],
+    changed: [
+      "People and their voiceprints are now **platform-wide** rather than private to whoever enrolled them, so one person is one record and one deletion.",
+      "Removing the last training sample from a voiceprint now clears it and leaves the person in the directory, instead of refusing. That refusal only ever existed because a person could not be stored without a voiceprint.",
+      "Erasing every voiceprint now requires **Manage platform**, and clears the whole shared directory rather than only the people you enrolled.",
+    ],
+  },
   {
     version: "0.163.2",
     date: "2026-07-29",

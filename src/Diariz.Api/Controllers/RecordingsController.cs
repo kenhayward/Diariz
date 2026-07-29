@@ -470,8 +470,8 @@ public class RecordingsController : ControllerBase
             return NoContent();
         }
 
-        var profile = await _db.People
-            .FirstOrDefaultAsync(p => p.Id == req.ProfileId && p.CreatedByUserId == UserId);
+        // No ownership filter: the directory is platform-wide, so anyone may label a speaker as anyone.
+        var profile = await _db.People.FirstOrDefaultAsync(p => p.Id == req.ProfileId);
         if (profile is null) return NotFound();
 
         speaker.PersonId = profile.Id;
@@ -479,10 +479,14 @@ public class RecordingsController : ControllerBase
         speaker.IdentifiedAuto = false; // an explicit manual assignment
         speaker.IsMultiSpeaker = false; // naming a single person exits "Multiple Speakers" mode
 
-        // Train "by whole speakers": record this speaker as a contribution (once) and recompute the
-        // centroid from all of the profile's contribution snapshots. Requires the speaker embedding,
-        // which only exists once the worker has run — skip gracefully when it hasn't.
-        if (speaker.Embedding is not null)
+        // Train "by whole speakers": record this speaker as a voice sample (once) and recompute the
+        // centroid from all of the person's snapshots. Requires the speaker embedding, which only exists
+        // once the worker has run — skip gracefully when it hasn't.
+        //
+        // Naming an opted-out person is fine and still happens above; what must not happen is building a
+        // voiceprint for them. Saying "that was Alice" is your assertion about the meeting; holding Alice's
+        // biometric after she asked you not to is the thing she opted out of.
+        if (speaker.Embedding is not null && !profile.VoiceprintOptOut)
         {
             var already = await _db.VoiceSamples
                 .AnyAsync(c => c.PersonId == profile.Id && c.SpeakerId == speaker.Id);
@@ -604,7 +608,7 @@ public class RecordingsController : ControllerBase
             .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId);
         if (rec is null) return NotFound();
 
-        await SpeakerLabeling.ApplyAsync(rec.Speakers, rec.UserId, _identifier);
+        await SpeakerLabeling.ApplyAsync(rec.Speakers, _identifier);
         await _db.SaveChangesAsync();
         return NoContent();
     }

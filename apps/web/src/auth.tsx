@@ -7,7 +7,9 @@ import { refreshDelayMs } from "./lib/tokenRefresh";
 import { initialsFromName, initialsFromEmail } from "./lib/initials";
 
 /// No authority until the server says otherwise: the profile is fetched, not decoded from the token.
-const NO_PERMISSIONS: Permissions = { manageRooms: false, manageUsers: false, managePlatform: false, manageFormulas: false };
+const NO_PERMISSIONS: Permissions = {
+  manageRooms: false, manageUsers: false, managePlatform: false, manageFormulas: false, managePeople: false,
+};
 
 interface AuthState {
   isAuthed: boolean;

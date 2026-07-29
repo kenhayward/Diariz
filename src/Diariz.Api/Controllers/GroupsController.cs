@@ -25,7 +25,7 @@ public class GroupsController(DiarizDbContext db) : ControllerBase
     [EndpointSummary("List user groups")]
     [EndpointDescription(
         "Every group, with its members and its platform permissions as a bitmask: `ManageRooms` 1, " +
-        "`ManageUsers` 2, `ManagePlatform` 4, `ManageFormulas` 8. **Platform authority comes from group " +
+        "`ManageUsers` 2, `ManagePlatform` 4, `ManageFormulas` 8, `ManagePeople` 16. **Platform authority comes from group " +
         "membership** - there are no per-user permission flags - so this is where administrative power is " +
         "granted.\n\n" +
         "The built-in Platform Administrators group is flagged `isSystem` and comes first; it is protected " +

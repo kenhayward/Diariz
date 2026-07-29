@@ -70,6 +70,8 @@
   "permManageUsers": "Gérer les utilisateurs",
   "permManagePlatform": "Gérer la plateforme",
   "permManageFormulas": "Gérer les formules",
+  "permManagePeople": "Gerer les personnes",
+  "permManagePeopleHint": "Parcourir l'annuaire des personnes et modifier, supprimer ou fusionner toute personne autre que vous-meme. Se retirer soi-meme de l'empreinte vocale ne necessite jamais ce droit.",
   "deleteGroup": "Supprimer",
   "confirmDeleteGroup": "Supprimer le groupe \"{{name}}\" ? Ses membres conservent leurs comptes.",
   "newGroupName": "Nom du nouveau groupe",

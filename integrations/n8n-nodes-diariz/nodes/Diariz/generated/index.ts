@@ -760,7 +760,7 @@ const GENERATED: GeneratedResource[] = [
       {
         "value": "listUserGroups",
         "displayName": "List user groups",
-        "description": "Every group, with its members and its platform permissions as a bitmask: ManageRooms 1, ManageUsers 2, ManagePlatform 4, ManageFormulas 8. Platform authority comes from group membership - there are no per-user permission flags - so this is where administrative power is granted.",
+        "description": "Every group, with its members and its platform permissions as a bitmask: ManageRooms 1, ManageUsers 2, ManagePlatform 4, ManageFormulas 8, ManagePeople 16. Platform authority comes from group membership - there are no per-user permission flags - so this is where administrative power is granted.",
         "method": "GET",
         "path": "/api/groups",
         "pathParams": [],
@@ -2244,9 +2244,22 @@ const GENERATED: GeneratedResource[] = [
         "returnsArray": false
       },
       {
+        "value": "eraseAPersonSVoiceprint",
+        "displayName": "Erase a person's voiceprint",
+        "description": "Destroys the voiceprint and every voice sample behind it, keeping the person and their contact details. Use it when the biometric should go but the record of who attended should not - the narrower half of the GDPR erasure path.",
+        "method": "DELETE",
+        "path": "/api/speaker-profiles/{id}/voiceprint",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      },
+      {
         "value": "eraseAllEnrolledSpeakers",
         "displayName": "Erase all enrolled speakers",
-        "description": "Deletes every voiceprint you have enrolled, with all their training data, in one call - the wholesale GDPR erasure. Automatic speaker identification stops until you enrol again.",
+        "description": "Deletes every person in the directory, with all their voiceprints and training data, in one call - the wholesale GDPR erasure. Automatic speaker identification stops platform-wide until people are enrolled again.",
         "method": "DELETE",
         "path": "/api/speaker-profiles",
         "pathParams": [],
@@ -2283,7 +2296,7 @@ const GENERATED: GeneratedResource[] = [
       {
         "value": "listYourEnrolledSpeakers",
         "displayName": "List your enrolled speakers",
-        "description": "The people you have enrolled a voiceprint for, with how many samples each has learned from. These are what let Diariz recognise the same person across later recordings automatically.",
+        "description": "Everyone in the people directory, with how many voice samples each voiceprint has learned from. A person may have no voiceprint at all - the sample count is then zero, and Diariz simply will not recognise them by voice.",
         "method": "GET",
         "path": "/api/speaker-profiles",
         "pathParams": [],
@@ -2297,6 +2310,19 @@ const GENERATED: GeneratedResource[] = [
         "description": "Folds sourceId into the person in the path when the same human has been enrolled twice - say once as \"Sam\" and once as \"Samantha\". The source's training samples move across, every recording labelled with it is relabelled, the voiceprint is recomputed from the combined samples, and the source person is deleted.",
         "method": "POST",
         "path": "/api/speaker-profiles/{id}/merge",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      },
+      {
+        "value": "optAPersonOutOfVoicePrinting",
+        "displayName": "Opt a person out of voice-printing",
+        "description": "Records that this person does not want a voiceprint held for them. Turning it on erases the one they have, along with every voice sample behind it, and stops them being matched automatically from then on.",
+        "method": "PUT",
+        "path": "/api/speaker-profiles/{id}/voiceprint-opt-out",
         "pathParams": [
           "id"
         ],

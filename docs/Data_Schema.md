@@ -564,8 +564,8 @@ so `\d+` shows it):
 | Column | Type | Notes |
 |---|---|---|
 | `Id` | uuid PK | |
-| `UserId` | uuid FK → AspNetUsers **null** | = `CreatedByUserId`; who enrolled them. Cascade. Nullable so the backfill can provision a person nobody enrolled |
-| `RoomId` | uuid **null** | the room they were first enrolled from. Provenance only, no FK |
+| `UserId` | uuid FK → AspNetUsers **null** | = `CreatedByUserId`; who enrolled them. Cascade. Nullable so the backfill can provision a person nobody enrolled. **Provenance only - nothing filters on it** since the directory went platform-wide |
+| `RoomId` | uuid **null** | the room they were first enrolled from. **Provenance only**, no FK; still written on create, never read |
 | `LinkedUserId` | uuid FK → AspNetUsers null | the account this person is. Cascade — deleting the account removes the directory entry, rather than orphaning a row that still holds their name and email |
 | `Name` | varchar(256) | for a linked person this follows the account (`IPeopleDirectory.SyncFromUserAsync`) |
 | `Title` | varchar(128) null | |
@@ -833,7 +833,7 @@ resolved from the database on each request (never from a token claim).
 | `Description` | `text` null | |
 | `Icon` | `text` null | Icon key from the shared set (unused until Rooms) |
 | `Color` | `text` null | Hex swatch (unused until Rooms) |
-| `Permissions` | `int` NOT NULL | `[Flags] PlatformPermission`: `ManageRooms = 1`, `ManageUsers = 2`, `ManagePlatform = 4`. **Append-only** |
+| `Permissions` | `int` NOT NULL | `[Flags] PlatformPermission`: `ManageRooms = 1`, `ManageUsers = 2`, `ManagePlatform = 4`, `ManageFormulas = 8`, `ManagePeople = 16`. **Append-only** |
 | `IsSystem` | `bool` NOT NULL | True for the seeded `Platform Administrators`: undeletable, name/permissions immutable, last member cannot be removed |
 
 Seeded: `Platform Administrators` (`IsSystem`, flags `7`) and `Administrators` (flags `3` — **no**

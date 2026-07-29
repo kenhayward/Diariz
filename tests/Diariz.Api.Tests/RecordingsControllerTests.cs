@@ -727,8 +727,10 @@ public class RecordingsControllerTests
         Assert.False(sp.IdentifiedAuto);
     }
 
+    /// <summary>Inverted by platform scope: anyone may label a speaker as anyone in the shared directory.
+    /// Assigning is not a privileged act - it is how transcripts get named.</summary>
     [Fact]
-    public async Task AssignSpeaker_ToProfileOwnedByAnotherUser_ReturnsNotFound()
+    public async Task AssignSpeaker_ToAPersonEnrolledByAnotherUser_Succeeds()
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
@@ -741,8 +743,8 @@ public class RecordingsControllerTests
 
         var result = await controller.AssignSpeaker(rec.Id, "SPEAKER_00", new AssignSpeakerRequest(othersProfile.Id));
 
-        Assert.IsType<NotFoundResult>(result);
-        Assert.Null((await db.Speakers.SingleAsync(s => s.RecordingId == rec.Id)).PersonId);
+        Assert.IsType<NoContentResult>(result);
+        Assert.Equal(othersProfile.Id, (await db.Speakers.SingleAsync(s => s.RecordingId == rec.Id)).PersonId);
     }
 
     [Fact]

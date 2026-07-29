@@ -19,6 +19,15 @@ public interface IPeopleDirectory
     /// rows, clearing the voiceprint entirely when none are left. Call after anything that removes samples -
     /// including deleting a recording, which cascades them away without telling anyone.</summary>
     Task RecomputeVoiceprintAsync(Guid personId, CancellationToken ct = default);
+
+    /// <summary>Destroys the person's voiceprint - the centroid and every voice sample behind it - while
+    /// keeping the person. Reverts labels that automatic identification applied, but <b>keeps names typed by
+    /// hand, and keeps their link to the person</b>: those are the user's own assertion about who was in the
+    /// room, not something derived from the biometric.
+    ///
+    /// <para>Deliberately narrower than the full-delete path, which clears every link. Erasing a biometric is
+    /// not the same as forgetting that someone attended.</para></summary>
+    Task EraseVoiceprintAsync(Guid personId, CancellationToken ct = default);
 }
 
 /// <summary>Modelled on <see cref="RoomScope.PersonalRoomIdAsync"/>, down to the find-or-create race
@@ -95,6 +104,31 @@ public class PeopleDirectory(DiarizDbContext db) : IPeopleDirectory
         person.Embedding = Voiceprints.Centroid(snapshots);
         person.SampleCount = samples.Count;
         person.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task EraseVoiceprintAsync(Guid personId, CancellationToken ct = default)
+    {
+        var person = await db.People.FirstOrDefaultAsync(p => p.Id == personId, ct);
+        if (person is null) return;
+
+        person.Embedding = null;
+        person.SampleCount = 0;
+        person.UpdatedAt = DateTimeOffset.UtcNow;
+
+        db.VoiceSamples.RemoveRange(await db.VoiceSamples.Where(v => v.PersonId == personId).ToListAsync(ct));
+
+        foreach (var speaker in await db.Speakers.Where(s => s.PersonId == personId).ToListAsync(ct))
+        {
+            // Only auto-applied names came from the biometric, so only those revert. A name someone typed
+            // stays, and keeps pointing at the person - it is their statement about who was speaking, and
+            // erasing the voiceprint does not make it untrue.
+            if (!speaker.IdentifiedAuto) continue;
+            speaker.PersonId = null;
+            speaker.DisplayName = speaker.Label;
+            speaker.IdentifiedAuto = false;
+        }
 
         await db.SaveChangesAsync(ct);
     }

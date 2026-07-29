@@ -70,6 +70,8 @@
   "permManageUsers": "Gestionar usuarios",
   "permManagePlatform": "Gestionar plataforma",
   "permManageFormulas": "Gestionar fórmulas",
+  "permManagePeople": "Gestionar personas",
+  "permManagePeopleHint": "Consultar el directorio de personas y editar, eliminar o fusionar a cualquiera que no sea usted. Excluirse a si mismo de la huella de voz nunca requiere este permiso.",
   "deleteGroup": "Eliminar",
   "confirmDeleteGroup": "¿Eliminar el grupo \"{{name}}\"? Sus miembros conservan sus cuentas.",
   "newGroupName": "Nombre del nuevo grupo",

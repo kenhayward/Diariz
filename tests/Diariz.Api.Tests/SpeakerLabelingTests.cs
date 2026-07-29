@@ -21,7 +21,7 @@ public class SpeakerLabelingTests
         var profileId = Guid.NewGuid();
         var id = new FakeSpeakerIdentifier { Match = new SpeakerMatch(profileId, "Alice", 0.1) };
 
-        await SpeakerLabeling.ApplyAsync([sp], Guid.NewGuid(), id);
+        await SpeakerLabeling.ApplyAsync([sp], id);
 
         Assert.Equal(profileId, sp.PersonId);
         Assert.Equal("Alice", sp.DisplayName);
@@ -35,7 +35,7 @@ public class SpeakerLabelingTests
         sp.PersonId = Guid.NewGuid();
         var id = new FakeSpeakerIdentifier { Match = null };
 
-        await SpeakerLabeling.ApplyAsync([sp], Guid.NewGuid(), id);
+        await SpeakerLabeling.ApplyAsync([sp], id);
 
         Assert.Null(sp.PersonId);
         Assert.Equal("SPEAKER_00", sp.DisplayName);
@@ -48,7 +48,7 @@ public class SpeakerLabelingTests
         var sp = Spk("SPEAKER_00", "Bob", auto: false, new Vector(new[] { 0.1f }));
         var id = new FakeSpeakerIdentifier { Match = new SpeakerMatch(Guid.NewGuid(), "Alice", 0.1) };
 
-        await SpeakerLabeling.ApplyAsync([sp], Guid.NewGuid(), id);
+        await SpeakerLabeling.ApplyAsync([sp], id);
 
         Assert.Equal("Bob", sp.DisplayName);
         Assert.False(sp.IdentifiedAuto);
@@ -60,7 +60,7 @@ public class SpeakerLabelingTests
         var sp = Spk("SPEAKER_00", "SPEAKER_00", auto: false, embedding: null);
         var id = new FakeSpeakerIdentifier { Match = new SpeakerMatch(Guid.NewGuid(), "Alice", 0.1) };
 
-        await SpeakerLabeling.ApplyAsync([sp], Guid.NewGuid(), id);
+        await SpeakerLabeling.ApplyAsync([sp], id);
 
         Assert.Equal("SPEAKER_00", sp.DisplayName);
         Assert.Equal(0, id.Calls); // not even queried
@@ -74,7 +74,7 @@ public class SpeakerLabelingTests
         sp.IsMultiSpeaker = true;
         var id = new FakeSpeakerIdentifier { Match = new SpeakerMatch(Guid.NewGuid(), "Alice", 0.1) };
 
-        await SpeakerLabeling.ApplyAsync([sp], Guid.NewGuid(), id);
+        await SpeakerLabeling.ApplyAsync([sp], id);
 
         Assert.Equal(Speaker.MultiSpeakerName, sp.DisplayName);
         Assert.Null(sp.PersonId);

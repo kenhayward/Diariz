@@ -19,4 +19,11 @@ public enum PlatformPermission
 
     /// <summary>Create, edit and delete formulas.</summary>
     ManageFormulas = 8,
+
+    /// <summary>Browse the people directory, and edit, delete or merge people other than yourself. The
+    /// directory is platform-wide, so reading it exposes every external contact the organisation has ever
+    /// recorded - searching by name to label a speaker stays open to everyone, but browsing the list does
+    /// not. Does NOT gate a user's own biometric choices: opting out and erasing a voiceprint are always
+    /// permitted on the person linked to your own account.</summary>
+    ManagePeople = 16,
 }

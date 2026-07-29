@@ -9,9 +9,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Diariz.Api.Controllers;
 
-/// <summary>Enrolled voiceprints (per-user). Create a profile from a recording's speaker, list/rename/merge
-/// them, manage their training contributions, and erase one or all (GDPR) — which also reverts any
-/// auto-applied labels.</summary>
+/// <summary>The people directory. Create a person from a recording's speaker, list/rename/merge them,
+/// manage the voice samples training their voiceprint, and erase one or all (GDPR) — which also reverts any
+/// auto-applied labels.
+///
+/// <para><b>Platform-wide.</b> One human is one row, which is what makes an erasure request a single delete
+/// rather than a hunt through every user's private set. The consequence is that a voiceprint enrolled by one
+/// user identifies that person in everyone's recordings, and that the directory lists every external contact
+/// the organisation has recorded - so <b>browsing</b> it requires <see cref="PlatformPermission.ManagePeople"/>,
+/// while searching by name to label a speaker stays open to everyone.</para></summary>
 [ApiController]
 [Authorize]
 [Route("api/speaker-profiles")]
@@ -19,30 +25,50 @@ public class SpeakerProfilesController : ControllerBase
 {
     private readonly DiarizDbContext _db;
     private readonly Services.IRoomScope _rooms;
+    private readonly IPeopleDirectory _people;
+    private readonly IUserPermissions _permissions;
 
-    public SpeakerProfilesController(DiarizDbContext db, Services.IRoomScope rooms)
+    public SpeakerProfilesController(
+        DiarizDbContext db, Services.IRoomScope rooms, IPeopleDirectory people, IUserPermissions permissions)
     {
         _db = db;
         _rooms = rooms;
+        _people = people;
+        _permissions = permissions;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
+    private Task<bool> CanManagePeopleAsync() => _permissions.HasAsync(UserId, PlatformPermission.ManagePeople);
+
+    /// <summary>Whether the caller may change this person's <b>biometric</b> state - opting them out, or
+    /// erasing their voiceprint.
+    ///
+    /// <para>ManagePeople, <b>or the person is you</b>. The self exception is not an oversight: under GDPR,
+    /// withdrawing consent to process your own biometric data is the data subject's right, and routing that
+    /// through an administrator would be a weak posture. Keep it as one predicate - both endpoints and the
+    /// DTO flag the UI renders from must agree, or they will drift the first time one of them is edited.</para></summary>
+    private async Task<bool> CanManageBiometricsAsync(Person person) =>
+        person.LinkedUserId == UserId || await CanManagePeopleAsync();
+
     [HttpGet]
     [EndpointSummary("List your enrolled speakers")]
     [EndpointDescription(
-        "The people you have enrolled a voiceprint for, with how many samples each has learned from. These " +
-        "are what let Diariz recognise the same person across later recordings automatically.\n\n" +
-        "Voiceprints are **biometric data** and strictly per-user: yours are never visible to anyone else, " +
-        "even in a shared room.")]
-    public async Task<IReadOnlyList<SpeakerProfileDto>> List()
+        "Everyone in the people directory, with how many voice samples each voiceprint has learned from. A " +
+        "person may have no voiceprint at all - the sample count is then zero, and Diariz simply will not " +
+        "recognise them by voice.\n\n" +
+        "The directory is **platform-wide**: one person is one record, however many people have recorded " +
+        "them. That is what makes an erasure request a single deletion. Because it therefore lists every " +
+        "external contact the organisation has recorded, browsing it requires the **Manage people** " +
+        "permission. Labelling a speaker does not - anyone can search for a person by name to assign them.")]
+    public async Task<ActionResult<IReadOnlyList<SpeakerProfileDto>>> List()
     {
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        return await _db.People
-            .Where(p => p.RoomId == roomId)
+        if (!await CanManagePeopleAsync()) return Forbid();
+
+        return Ok(await _db.People
             .OrderBy(p => p.Name)
             .Select(p => new SpeakerProfileDto(p.Id, p.Name, p.SampleCount))
-            .ToListAsync();
+            .ToListAsync());
     }
 
     /// <summary>A voiceprint's training contributions (which recording-speakers feed it) and how many
@@ -57,8 +83,7 @@ public class SpeakerProfilesController : ControllerBase
         "returned.")]
     public async Task<ActionResult<SpeakerProfileDetailDto>> Get(Guid id)
     {
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        var profile = await _db.People.FirstOrDefaultAsync(p => p.Id == id && p.RoomId == roomId);
+        var profile = await _db.People.FirstOrDefaultAsync(p => p.Id == id);
         if (profile is null) return NotFound();
 
         var identifiedCount = await _db.Speakers.CountAsync(s => s.PersonId == id);
@@ -118,8 +143,7 @@ public class SpeakerProfilesController : ControllerBase
         var name = req.Name?.Trim() ?? "";
         if (string.IsNullOrWhiteSpace(name)) return BadRequest("A name is required.");
 
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        var profile = await _db.People.FirstOrDefaultAsync(p => p.Id == id && p.RoomId == roomId);
+        var profile = await _db.People.FirstOrDefaultAsync(p => p.Id == id);
         if (profile is null) return NotFound();
 
         profile.Name = name;
@@ -185,33 +209,78 @@ public class SpeakerProfilesController : ControllerBase
         return new SpeakerProfileDto(profile.Id, profile.Name, profile.SampleCount);
     }
 
-    /// <summary>Remove one training contribution and recompute the centroid from the remaining snapshots.
-    /// The last contribution can't be removed — delete the person instead (a voiceprint needs a sample).</summary>
+    /// <summary>Remove one voice sample and recompute the centroid from what remains. Removing the last one
+    /// simply clears the voiceprint - the person stays, without one.</summary>
     [HttpDelete("{id:guid}/contributions/{contributionId:guid}")]
     [EndpointSummary("Remove a training sample")]
     [EndpointDescription(
         "Drops one sample from a voiceprint and **recomputes it from what remains** - the fix when a " +
         "misattributed speaker has been taught to the wrong person and recognition has started drifting.\n\n" +
-        "The **last remaining sample cannot be removed** (400): a voiceprint with nothing to match against " +
-        "is meaningless, so delete the person instead. Recordings already labelled keep their names.")]
+        "Removing the **last** sample clears the voiceprint and leaves the person in the directory without " +
+        "one, so Diariz stops recognising them by voice. It does not delete them. Recordings already " +
+        "labelled keep their names either way.")]
     public async Task<IActionResult> RemoveContribution(Guid id, Guid contributionId)
     {
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        var profile = await _db.People.FirstOrDefaultAsync(p => p.Id == id && p.RoomId == roomId);
+        var profile = await _db.People.FirstOrDefaultAsync(p => p.Id == id);
         if (profile is null) return NotFound();
 
         var contribution = await _db.VoiceSamples
             .FirstOrDefaultAsync(c => c.Id == contributionId && c.PersonId == id);
         if (contribution is null) return NotFound();
 
-        var remaining = await _db.VoiceSamples
-            .Where(c => c.PersonId == id && c.Id != contributionId).ToListAsync();
-        if (remaining.Count == 0)
-            return BadRequest("A voiceprint needs at least one sample. Delete the person instead.");
-
+        // Removing the last sample used to be a 400. That guard only existed because Embedding was NOT NULL;
+        // now a person can legitimately hold no voiceprint, so this just clears it.
         _db.VoiceSamples.Remove(contribution);
-        RecomputeCentroid(profile, remaining);
         await _db.SaveChangesAsync();
+        await _people.RecomputeVoiceprintAsync(id);
+        return NoContent();
+    }
+
+    /// <summary>Opt a person in or out of voice-printing. Opting out erases any voiceprint they have.</summary>
+    [HttpPut("{id:guid}/voiceprint-opt-out")]
+    [EndpointSummary("Opt a person out of voice-printing")]
+    [EndpointDescription(
+        "Records that this person does not want a voiceprint held for them. Turning it **on erases the one " +
+        "they have**, along with every voice sample behind it, and stops them being matched automatically " +
+        "from then on.\n\n" +
+        "Labels that automatic identification applied revert to the anonymous speaker label. Names typed by " +
+        "hand are kept, and stay pointing at the person: those are your statement about who was in the room, " +
+        "not something derived from their voice.\n\n" +
+        "**Turning it back off does not restore anything** - the biometric is gone, and they would have to " +
+        "be enrolled again from a recording.\n\n" +
+        "Requires the **Manage people** permission, except on the person linked to your own account: " +
+        "withdrawing consent to hold your own biometric data is always yours to do.")]
+    public async Task<IActionResult> SetVoiceprintOptOut(Guid id, SetVoiceprintOptOutRequest req)
+    {
+        var person = await _db.People.FirstOrDefaultAsync(p => p.Id == id);
+        if (person is null) return NotFound();
+        if (!await CanManageBiometricsAsync(person)) return Forbid();
+
+        person.VoiceprintOptOut = req.OptOut;
+        person.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync();
+
+        if (req.OptOut) await _people.EraseVoiceprintAsync(id);
+        return NoContent();
+    }
+
+    /// <summary>Erase a person's voiceprint but keep the person.</summary>
+    [HttpDelete("{id:guid}/voiceprint")]
+    [EndpointSummary("Erase a person's voiceprint")]
+    [EndpointDescription(
+        "Destroys the voiceprint and every voice sample behind it, **keeping the person** and their contact " +
+        "details. Use it when the biometric should go but the record of who attended should not - the " +
+        "narrower half of the GDPR erasure path.\n\n" +
+        "Labels that automatic identification applied revert to the anonymous speaker label; names typed by " +
+        "hand are kept. Unlike opting out, this does not stop them being enrolled again later.\n\n" +
+        "Requires the **Manage people** permission, except on the person linked to your own account.")]
+    public async Task<IActionResult> DeleteVoiceprint(Guid id)
+    {
+        var person = await _db.People.FirstOrDefaultAsync(p => p.Id == id);
+        if (person is null) return NotFound();
+        if (!await CanManageBiometricsAsync(person)) return Forbid();
+
+        await _people.EraseVoiceprintAsync(id);
         return NoContent();
     }
 
@@ -224,14 +293,16 @@ public class SpeakerProfilesController : ControllerBase
         "as \"Sam\" and once as \"Samantha\". The source's training samples move across, every recording " +
         "labelled with it is relabelled, the voiceprint is recomputed from the combined samples, and the " +
         "**source person is deleted**.\n\n" +
-        "There is no un-merge, so check the direction: the profile in the path survives.")]
+        "There is no un-merge, so check the direction: the person in the path survives. The directory is " +
+        "shared, so a bad merge affects everyone's recordings, not just yours - hence the **Manage people** " +
+        "permission.")]
     public async Task<IActionResult> Merge(Guid id, MergeSpeakerProfilesRequest req)
     {
         if (req.SourceId == id) return BadRequest("Cannot merge a person into itself.");
+        if (!await CanManagePeopleAsync()) return Forbid();
 
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        var target = await _db.People.FirstOrDefaultAsync(p => p.Id == id && p.RoomId == roomId);
-        var source = await _db.People.FirstOrDefaultAsync(p => p.Id == req.SourceId && p.RoomId == roomId);
+        var target = await _db.People.FirstOrDefaultAsync(p => p.Id == id);
+        var source = await _db.People.FirstOrDefaultAsync(p => p.Id == req.SourceId);
         if (target is null || source is null) return NotFound();
 
         var targetContribs = await _db.VoiceSamples.Where(c => c.PersonId == target.Id).ToListAsync();
@@ -259,12 +330,15 @@ public class SpeakerProfilesController : ControllerBase
         "**GDPR erasure** path for biometric data, so nothing recognisable is retained.\n\n" +
         "Labels are handled by origin: names this voiceprint applied **automatically** revert to the " +
         "anonymous speaker label, while names you typed or assigned by hand are kept, since those are your " +
-        "words rather than derived from the biometric. Transcripts are otherwise untouched.")]
+        "words rather than derived from the biometric. Transcripts are otherwise untouched.\n\n" +
+        "Requires the **Manage people** permission: the directory is shared, so deleting a person removes " +
+        "them from everyone's recordings. To erase only the biometric and keep the person, erase their " +
+        "voiceprint instead.")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        var profile = await _db.People.FirstOrDefaultAsync(p => p.Id == id && p.RoomId == roomId);
+        var profile = await _db.People.FirstOrDefaultAsync(p => p.Id == id);
         if (profile is null) return NotFound();
+        if (!await CanManagePeopleAsync()) return Forbid();
 
         await UnlinkAndRevertAsync([id]);
         _db.People.Remove(profile); // cascades VoiceSamples
@@ -277,14 +351,18 @@ public class SpeakerProfilesController : ControllerBase
     [HttpDelete]
     [EndpointSummary("Erase all enrolled speakers")]
     [EndpointDescription(
-        "Deletes **every** voiceprint you have enrolled, with all their training data, in one call - the " +
-        "wholesale GDPR erasure. Automatic speaker identification stops until you enrol again.\n\n" +
+        "Deletes **every** person in the directory, with all their voiceprints and training data, in one call - " +
+        "the wholesale GDPR erasure. Automatic speaker identification stops platform-wide until people are " +
+        "enrolled again.\n\n" +
         "Same labelling rule as erasing one person: automatically applied names revert to the anonymous " +
-        "label, hand-typed names are kept. There is no undo and no confirmation step, so gate it in your UI.")]
+        "label, hand-typed names are kept. There is no undo and no confirmation step, so gate it in your UI.\n\n" +
+        "Requires **Manage platform**: the directory is shared, so this wipes the voiceprints of everyone on " +
+        "the platform, not just the ones you enrolled.")]
     public async Task<IActionResult> DeleteAll()
     {
-        var roomId = await _rooms.PersonalRoomIdAsync(UserId);
-        var profiles = await _db.People.Where(p => p.RoomId == roomId).ToListAsync();
+        if (!await _permissions.HasAsync(UserId, PlatformPermission.ManagePlatform)) return Forbid();
+
+        var profiles = await _db.People.ToListAsync();
         if (profiles.Count == 0) return NoContent();
 
         await UnlinkAndRevertAsync(profiles.Select(p => p.Id).ToList());
