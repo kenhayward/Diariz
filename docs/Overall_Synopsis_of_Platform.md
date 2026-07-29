@@ -1022,6 +1022,14 @@ into it with no URL or per-user setup at all.
     remain, unused, pending a later chore.
   - Groups are administered at **`/api/groups`** (`GroupsController`, `ManageUsers`) and in the web
     **Manage Users → Groups** tab. The web reads the caller's permissions from `GET /api/user/profile`.
+- **A new permission has two obligations, and missing either makes it ungrantable.** It must be added to
+  `Seeder.SeedGroupsAsync` (which ORs the flags onto the existing rows, so a deployed platform picks it up on
+  its next boot with no migration) **and** to `PERMISSION_BITS` in `apps/web/src/components/GroupsTab.tsx`,
+  which is the only UI that can set one. `ManagePeople` shipped with neither in 0.164.0 and left the People
+  page unreachable for everyone including platform administrators, because every test granted it explicitly
+  through `Perms.Grant` and so exercised the mechanism while saying nothing about whether it was obtainable.
+  Two guards now exist: `SeederPeoplePermissionTests.Every_platform_permission_is_granted_to_a_seeded_group`
+  and `groupsPermissionBits.test.ts`.
 - **Rooms (foundation; not yet wired into any controller).** A **room** is a workspace: folders, recordings,
   voiceprints, chats and meeting types live in one. Every user has exactly one **Personal room** — immutable and
   private, named after them, rendering their avatar rather than a stored icon. A recording's **main room is

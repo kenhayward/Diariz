@@ -59,6 +59,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.167.1",
+    date: "2026-07-29",
+    pr: 372,
+    headline: "Fix: nobody could reach the People page",
+    summary:
+      "The People page shipped behind a **Manage people** permission that nothing granted. It was not in " +
+      "either of the built-in administrator groups, and Settings, Groups had no tick-box for it - so there " +
+      "was no way to obtain it, and the page was unreachable even for a platform administrator.\n\n" +
+      "Both built-in groups now carry it, and existing installations pick it up on the next restart without " +
+      "any manual step. The tick-box is also there now, so you can grant it to any group you like.\n\n" +
+      "Two tests were added to stop this recurring: one fails if any permission is not granted to a " +
+      "built-in group, and one fails if the Groups screen falls behind the list of permissions.",
+    fixed: [
+      "The **People** page was unreachable: the Manage people permission was not granted to either built-in administrator group, and could not be ticked in Settings, Groups. Both are fixed, and existing installations gain it on the next restart.",
+    ],
+  },
+  {
     version: "0.167.0",
     date: "2026-07-29",
     pr: 371,

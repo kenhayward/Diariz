@@ -6,11 +6,16 @@ import type { Group } from "../lib/types";
 import GroupMembersModal from "./GroupMembersModal";
 
 /// The PlatformPermission bits, mirrored from the server enum. Append-only: never renumber.
-const PERMISSION_BITS = [
+///
+/// This screen is the only way to grant a platform permission, so a bit missing here is a permission
+/// nobody can ever hold. ManagePeople shipped that way once and left the People page unreachable;
+/// `groupsPermissionBits.test.ts` now fails when the list falls behind the enum.
+export const PERMISSION_BITS = [
   { bit: 1, key: "permManageRooms" },
   { bit: 2, key: "permManageUsers" },
   { bit: 4, key: "permManagePlatform" },
   { bit: 8, key: "permManageFormulas" },
+  { bit: 16, key: "permManagePeople" },
 ] as const;
 
 /// Groups administration: create a group, choose what it may do, and pick its members.
