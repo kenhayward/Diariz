@@ -1,0 +1,83 @@
+name: Publish n8n node
+
+# Publishes integrations/n8n-nodes-diariz to npm as n8n-nodes-diariz.
+#
+# Runs when the node's own files change on main, because that is when a new version is actually worth
+# having. The node's version mirrors /version.json (enforced by versionMirrors.test.ts), which every PR
+# bumps - so a merge that touches the node always arrives with a version npm has not seen.
+#
+# It is deliberately idempotent: npm refuses to overwrite a published version, so the job checks first and
+# skips rather than failing a build for a re-run, a revert, or a manual dispatch on an already-published
+# version. That check is also why this can safely be re-run by hand at any time.
+#
+# Requires an NPM_TOKEN secret: an npm automation token with publish rights on n8n-nodes-diariz.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "integrations/n8n-nodes-diariz/**"
+      - ".github/workflows/n8n-publish.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: integrations/n8n-nodes-diariz
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: integrations/n8n-nodes-diariz/package-lock.json
+          registry-url: "https://registry.npmjs.org"
+
+      # Nothing below runs if this version is already on npm. A publish is immutable, so "already there" is
+      # success, not an error - and treating it as one would make every unrelated re-run red.
+      - name: Decide whether to publish
+        id: check
+        run: |
+          local_version=$(node -p "require('./package.json').version")
+          published=$(npm view n8n-nodes-diariz@"$local_version" version 2>/dev/null || true)
+          if [ -n "$published" ]; then
+            echo "n8n-nodes-diariz@$local_version is already on npm - nothing to do."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Publishing n8n-nodes-diariz@$local_version"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "version=$local_version" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install
+        if: steps.check.outputs.publish == 'true'
+        run: npm ci
+
+      # prepublishOnly already runs build, lint and test, so a broken node cannot reach npm. Running the
+      # generator first catches the other direction: a node built from a stale OpenAPI snapshot. CI blocks
+      # that on the PR, but this job is also reachable by hand from any commit.
+      - name: Regenerate operations
+        if: steps.check.outputs.publish == 'true'
+        run: npm run generate
+
+      - name: Generated output is committed
+        if: steps.check.outputs.publish == 'true'
+        run: git diff --exit-code -- .
+
+      - name: Publish
+        if: steps.check.outputs.publish == 'true'
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Summary
+        if: steps.check.outputs.publish == 'true'
+        run: |
+          echo "Published n8n-nodes-diariz@${{ steps.check.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Update it in n8n under Settings > Community nodes." >> "$GITHUB_STEP_SUMMARY"

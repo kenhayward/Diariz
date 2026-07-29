@@ -18,7 +18,13 @@ In n8n, go to **Settings > Community Nodes > Install** and enter:
 n8n-nodes-diariz
 ```
 
-Self-hosted n8n only - community nodes cannot be installed on n8n Cloud.
+Self-hosted n8n only - community nodes cannot be installed on n8n Cloud. To pick up a newer version later,
+use **Settings > Community Nodes > n8n-nodes-diariz > Update**, and restart n8n if a new option does not
+appear.
+
+The node's version number is the **Diariz version it was built against** - `0.169.1` here means Diariz
+0.169.1 - so you can tell at a glance whether your node matches your server. It is published automatically
+whenever the node changes.
 
 ## Before you start
 
@@ -127,6 +133,13 @@ npm test      # unit tests
 npm run lint  # n8n community node linter
 npm run build
 ```
+
+### Publishing
+
+Pushing a change to `integrations/n8n-nodes-diariz` on `main` publishes the package to npm
+(`.github/workflows/n8n-publish.yml`), using the version in `package.json` - which mirrors the repository's
+`/version.json` and is bumped by every pull request. The job skips silently when that version is already on
+npm, so it is safe to re-run by hand from any commit.
 
 The long tail of operations is generated from Diariz's own OpenAPI document
 (`nodes/Diariz/generated/openapi.snapshot.json`). Regenerate with `npm run generate`. Continuous integration
