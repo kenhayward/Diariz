@@ -107,7 +107,7 @@ public class WorkerCallbackController : ControllerBase
             if (se.Embedding is not { Length: > 0 } || !byLabel.TryGetValue(se.Speaker, out var sp)) continue;
             sp.Embedding = new Vector(se.Embedding);
         }
-        await SpeakerLabeling.ApplyAsync(byLabel.Values, transcription.Recording.UserId, _identifier);
+        await SpeakerLabeling.ApplyAsync(byLabel.Values, _identifier);
 
         transcription.Recording.Error = null;  // clear any error from a prior failed attempt
 

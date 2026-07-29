@@ -533,6 +533,9 @@ export interface Permissions {
   manageUsers: boolean;
   managePlatform: boolean;
   manageFormulas: boolean;
+  /// Browse the people directory, and edit, delete or merge people other than yourself. Does not gate your
+  /// own biometric choices: opting out and erasing a voiceprint are always allowed on your own person.
+  managePeople: boolean;
 }
 
 /// A room the signed-in user belongs to. `permissions` is the caller's effective RoomPermission grid as a

@@ -70,6 +70,8 @@
   "permManageUsers": "Manage users",
   "permManagePlatform": "Manage platform",
   "permManageFormulas": "Manage formulas",
+  "permManagePeople": "Manage people",
+  "permManagePeopleHint": "Browse the people directory, and edit, delete or merge anyone other than yourself. Opting yourself out of voice-printing never needs this.",
   "deleteGroup": "Delete",
   "confirmDeleteGroup": "Delete the group \"{{name}}\"? Its members keep their accounts.",
   "newGroupName": "New group name",

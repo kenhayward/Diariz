@@ -11,10 +11,19 @@ namespace Diariz.Api.Tests;
 
 public class SpeakerProfilesControllerTests
 {
-    private static SpeakerProfilesController Build(DiarizDbContext db, Guid userId)
+    private static SpeakerProfilesController Build(
+        DiarizDbContext db, Guid userId, PlatformPermission perms = PlatformPermission.ManagePeople)
     {
         Users.Ensure(db, userId); // create paths mint the owner's personal room, which needs a real user row
-        return new(db, new Diariz.Api.Services.RoomScope(db)) { ControllerContext = Http.Context(userId) };
+        // The directory is platform-wide, so reading and destructive writes need ManagePeople. Default it on
+        // here so each test says what it is actually about; the gate itself is covered by
+        // PeopleBiometricGateTests.
+        Perms.Grant(db, userId, perms);
+        return new(db, new Diariz.Api.Services.RoomScope(db), new Diariz.Api.Services.PeopleDirectory(db),
+            new Diariz.Api.Services.UserPermissions(db))
+        {
+            ControllerContext = Http.Context(userId),
+        };
     }
 
     // Voiceprints are scoped by their owner's personal room now; mint it so a seeded profile is findable.
@@ -34,8 +43,11 @@ public class SpeakerProfilesControllerTests
 
     // ---- List ----
 
+    /// <summary>The directory is platform-wide: one human is one row, whoever enrolled them. This assertion
+    /// is the inverse of the one it replaced (which required a profile to belong to the caller) - that
+    /// inversion is the whole point of the scope change.</summary>
     [Fact]
-    public async Task List_ReturnsOnlyCallersProfiles()
+    public async Task List_ReturnsPeopleEnrolledByAnyone()
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
@@ -44,11 +56,12 @@ public class SpeakerProfilesControllerTests
         await db.SaveChangesAsync();
         var controller = Build(db, userId);
 
-        var profiles = await controller.List();
+        var profiles = Assert.IsAssignableFrom<IReadOnlyList<SpeakerProfileDto>>(
+            Assert.IsType<OkObjectResult>((await controller.List()).Result).Value);
 
-        var dto = Assert.Single(profiles);
-        Assert.Equal("Alice", dto.Name);
-        Assert.Equal(2, dto.SampleCount);
+        Assert.Equal(2, profiles.Count);
+        Assert.Contains(profiles, p => p.Name == "Alice" && p.SampleCount == 2);
+        Assert.Contains(profiles, p => p.Name == "Someone else");
     }
 
     // ---- Create ----
@@ -184,7 +197,10 @@ public class SpeakerProfilesControllerTests
     }
 
     [Fact]
-    public async Task Delete_OnAnotherUsersProfile_ReturnsNotFound()
+    /// <summary>Inverted by platform scope: the directory is shared, so a person enrolled by someone
+    /// else is a person you can act on. Authority now comes from the ManagePeople permission rather than
+    /// from who happened to enrol them - see PeopleBiometricGateTests.</summary>
+    public async Task Delete_OnAPersonEnrolledByAnotherUser_Succeeds()
     {
         using var db = TestDb.Create();
         var profile = new Person { Id = Guid.NewGuid(), CreatedByUserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
@@ -194,8 +210,8 @@ public class SpeakerProfilesControllerTests
 
         var result = await controller.Delete(profile.Id);
 
-        Assert.IsType<NotFoundResult>(result);
-        Assert.Single(await db.People.ToListAsync());
+        Assert.IsType<NoContentResult>(result);
+        Assert.Empty(await db.People.ToListAsync());
     }
 
     // ---- Rename ----
@@ -237,7 +253,10 @@ public class SpeakerProfilesControllerTests
     }
 
     [Fact]
-    public async Task Rename_OnAnotherUsersProfile_ReturnsNotFound()
+    /// <summary>Inverted by platform scope: the directory is shared, so a person enrolled by someone
+    /// else is a person you can act on. Authority now comes from the ManagePeople permission rather than
+    /// from who happened to enrol them - see PeopleBiometricGateTests.</summary>
+    public async Task Rename_OnAPersonEnrolledByAnotherUser_Succeeds()
     {
         using var db = TestDb.Create();
         var profile = new Person { Id = Guid.NewGuid(), CreatedByUserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
@@ -245,7 +264,8 @@ public class SpeakerProfilesControllerTests
         await db.SaveChangesAsync();
         var controller = Build(db, Guid.NewGuid());
 
-        Assert.IsType<NotFoundResult>(await controller.Rename(profile.Id, new RenameSpeakerProfileRequest("X")));
+        Assert.IsType<NoContentResult>(await controller.Rename(profile.Id, new RenameSpeakerProfileRequest("X")));
+        Assert.Equal("X", (await db.People.SingleAsync()).Name);
     }
 
     // ---- Get (detail) ----
@@ -289,7 +309,10 @@ public class SpeakerProfilesControllerTests
     }
 
     [Fact]
-    public async Task Get_OnAnotherUsersProfile_ReturnsNotFound()
+    /// <summary>Inverted by platform scope: the directory is shared, so a person enrolled by someone
+    /// else is a person you can act on. Authority now comes from the ManagePeople permission rather than
+    /// from who happened to enrol them - see PeopleBiometricGateTests.</summary>
+    public async Task Get_OnAPersonEnrolledByAnotherUser_Succeeds()
     {
         using var db = TestDb.Create();
         var profile = new Person { Id = Guid.NewGuid(), CreatedByUserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" };
@@ -297,7 +320,7 @@ public class SpeakerProfilesControllerTests
         await db.SaveChangesAsync();
         var controller = Build(db, Guid.NewGuid());
 
-        Assert.IsType<NotFoundResult>((await controller.Get(profile.Id)).Result);
+        Assert.Equal("Theirs", (await controller.Get(profile.Id)).Value!.Name);
     }
 
     // ---- Remove contribution ----
@@ -324,7 +347,7 @@ public class SpeakerProfilesControllerTests
     }
 
     [Fact]
-    public async Task RemoveContribution_LastOne_ReturnsBadRequest()
+    public async Task RemoveContribution_LastOne_ClearsTheVoiceprint()
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
@@ -338,8 +361,13 @@ public class SpeakerProfilesControllerTests
 
         var result = await controller.RemoveContribution(profile.Id, only.Id);
 
-        Assert.IsType<BadRequestObjectResult>(result);
-        Assert.Single(await db.VoiceSamples.ToListAsync()); // not removed
+        // The 400 this used to return only existed because Embedding was NOT NULL. A person may now hold no
+        // voiceprint, so removing the last sample simply clears it and leaves them in the directory.
+        Assert.IsType<NoContentResult>(result);
+        Assert.Empty(await db.VoiceSamples.ToListAsync());
+        var reloaded = await db.People.SingleAsync(p => p.Id == profile.Id);
+        Assert.Equal(0, reloaded.SampleCount);
+        Assert.NotNull(reloaded);
     }
 
     [Fact]
@@ -402,7 +430,10 @@ public class SpeakerProfilesControllerTests
     }
 
     [Fact]
-    public async Task Merge_WhenSourceOwnedByAnotherUser_ReturnsNotFound()
+    /// <summary>Inverted by platform scope: the directory is shared, so a person enrolled by someone
+    /// else is a person you can act on. Authority now comes from the ManagePeople permission rather than
+    /// from who happened to enrol them - see PeopleBiometricGateTests.</summary>
+    public async Task Merge_FoldsInAPersonEnrolledByAnotherUser()
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
@@ -412,14 +443,19 @@ public class SpeakerProfilesControllerTests
         await db.SaveChangesAsync();
         var controller = Build(db, userId);
 
-        Assert.IsType<NotFoundResult>(await controller.Merge(target.Id, new MergeSpeakerProfilesRequest(othersSource.Id)));
-        Assert.Equal(2, await db.People.CountAsync());
+        // Two users independently enrolling the same human is precisely the duplicate that platform scope
+        // surfaces, so merging across that boundary has to work.
+        Assert.IsType<NoContentResult>(await controller.Merge(target.Id, new MergeSpeakerProfilesRequest(othersSource.Id)));
+        Assert.Equal("Alice", (await db.People.SingleAsync()).Name);
     }
 
     // ---- Erase all ----
 
+    /// <summary>Wiping the shared directory is a platform act, so it needs ManagePlatform rather than
+    /// ManagePeople - and it now takes <em>everyone</em>, not just the people the caller enrolled. That last
+    /// part is the inversion: this test used to assert another user's profile survived.</summary>
     [Fact]
-    public async Task DeleteAll_RemovesAllProfiles_RevertsAutoLabels_KeepsManualNames()
+    public async Task DeleteAll_RemovesEveryPerson_RevertsAutoLabels_KeepsManualNames()
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
@@ -430,16 +466,15 @@ public class SpeakerProfilesControllerTests
         db.Speakers.AddRange(
             new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_00", DisplayName = "Alice", PersonId = a.Id, IdentifiedAuto = true },
             new Speaker { Id = Guid.NewGuid(), RecordingId = rec.Id, Label = "SPEAKER_01", DisplayName = "Bob", PersonId = b.Id, IdentifiedAuto = false });
-        // Another user's profile must be untouched.
+        // A person enrolled by someone else goes too - the directory is one shared thing.
         db.People.Add(new Person { Id = Guid.NewGuid(), CreatedByUserId = Guid.NewGuid(), RoomId = Guid.NewGuid(), Name = "Theirs" });
         await db.SaveChangesAsync();
-        var controller = Build(db, userId);
+        var controller = Build(db, userId, PlatformPermission.ManagePlatform);
 
         var result = await controller.DeleteAll();
 
         Assert.IsType<NoContentResult>(result);
-        Assert.Empty(await db.People.Where(p => p.CreatedByUserId == userId).ToListAsync());
-        Assert.Single(await db.People.ToListAsync()); // the other user's profile remains
+        Assert.Empty(await db.People.ToListAsync()); // everyone, including the person someone else enrolled
 
         var auto = await db.Speakers.SingleAsync(s => s.Label == "SPEAKER_00");
         Assert.Null(auto.PersonId);

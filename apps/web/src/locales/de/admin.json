@@ -70,6 +70,8 @@
   "permManageUsers": "Benutzer verwalten",
   "permManagePlatform": "Plattform verwalten",
   "permManageFormulas": "Formeln verwalten",
+  "permManagePeople": "Personen verwalten",
+  "permManagePeopleHint": "Das Personenverzeichnis durchsuchen und alle ausser Ihnen selbst bearbeiten, loeschen oder zusammenfuehren. Der eigene Widerspruch gegen den Stimmabdruck erfordert dies nie.",
   "deleteGroup": "Löschen",
   "confirmDeleteGroup": "Gruppe \"{{name}}\" löschen? Die Mitglieder behalten ihre Konten.",
   "newGroupName": "Name der neuen Gruppe",

@@ -306,7 +306,7 @@ public sealed class FakeSpeakerIdentifier : ISpeakerIdentifier
     public SpeakerMatch? Match { get; set; }
     public int Calls { get; private set; }
 
-    public Task<SpeakerMatch?> IdentifyAsync(Guid userId, Pgvector.Vector embedding, CancellationToken ct = default)
+    public Task<SpeakerMatch?> IdentifyAsync(Pgvector.Vector embedding, CancellationToken ct = default)
     {
         Calls++;
         return Task.FromResult(Match);

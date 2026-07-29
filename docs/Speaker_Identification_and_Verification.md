@@ -206,6 +206,20 @@ standard **VoxCeleb1-O** test for rough comparison; real-world numbers on meetin
   voice-printed. `SpeakerIdentifier` filters on `Embedding != null && !VoiceprintOptOut` before the distance
   query, so both cases are simply never candidates. This is what makes "hold the person, not the biometric" a
   representable state rather than a deletion.
+- **Scope is platform-wide, and that is a real trade-off.** One human is one row, so an erasure request is a
+  single delete rather than a hunt through every user's private set — the reason for the design. The cost is
+  that a voiceprint enrolled by one user identifies that person in *every* user's recordings. The
+  `ManagePeople` permission gates **browsing** the directory (which would otherwise expose every external
+  contact the organisation has recorded), but nothing gates the cross-user matching itself: that is inherent
+  to a shared directory, not a permission problem. Say so when seeking consent to enrol.
+- **Opt-out erases the biometric, not the memory.** Setting `VoiceprintOptOut` clears the centroid, deletes
+  every `VoiceSample`, and reverts labels that identification applied — but **keeps names a human typed**, and
+  keeps them linked to the person. Those are the user's assertion about who was in the room, not something
+  derived from the voice. Clearing the flag restores nothing. If the intent is "remove me entirely", that is
+  deleting the person, and the UI must make the difference obvious.
+- **Withdrawal of consent must not need an administrator.** `ManagePeople` gates opting *other people* out;
+  a user may always opt out the person linked to their own account. Both endpoints resolve this through one
+  predicate (`CanManageBiometricsAsync`) so the rule cannot drift between them.
 - **Failure modes & fairness:** accuracy degrades on short/noisy/cross-channel audio and can vary across
   demographics; always keep an **"unknown"** outcome and surface confidence rather than asserting identity.
 - **Anti-spoofing** (replay/synthetic-voice detection) is a separate problem; embedding similarity alone does

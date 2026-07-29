@@ -324,6 +324,8 @@ public record CreateSpeakerProfileRequest(string Name, Guid RecordingId, string 
 public record AssignSpeakerRequest(Guid? ProfileId);
 public record RenameSpeakerProfileRequest(string Name);
 public record MergeSpeakerProfilesRequest(Guid SourceId);
+/// <summary>Whether this person should be voice-printed. Turning it on erases any voiceprint they have.</summary>
+public record SetVoiceprintOptOutRequest(bool OptOut);
 /// <summary>One enrolled training sample feeding a voiceprint: the recording/speaker it came from, and
 /// the start (ms) of that speaker's first segment so the UI can play a sample to identify them.</summary>
 public record ProfileContributionDto(
@@ -376,7 +378,8 @@ public record UserProfileDto(
     PermissionsDto? Permissions = null);
 
 /// <summary>A user's platform permissions, expanded into booleans so the client never does bit arithmetic.</summary>
-public record PermissionsDto(bool ManageRooms, bool ManageUsers, bool ManagePlatform, bool ManageFormulas);
+public record PermissionsDto(
+    bool ManageRooms, bool ManageUsers, bool ManagePlatform, bool ManageFormulas, bool ManagePeople);
 
 /// <summary>A room the caller belongs to. <paramref name="Permissions"/> is the caller's effective
 /// <see cref="RoomPermission"/> grid as an <b>int</b> bitmask - a [Flags] enum would serialize as "A, B" under
