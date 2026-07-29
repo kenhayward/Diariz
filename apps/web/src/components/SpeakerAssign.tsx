@@ -1,19 +1,23 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import type { SpeakerProfile } from "../lib/types";
+import { api } from "../lib/api";
 
 /// Typeahead replacement for the speaker-assignment dropdown. The trigger shows the current assignment;
-/// opening it reveals an input. The people list appears only once the user types (there are now too many
-/// enrolled people for a flat list), filtered by a case-insensitive "contains". A typed name with no exact
-/// match offers a "Create" row (enrol a new person). "Multiple speakers" and "Unassign" are always
-/// reachable in a footer. Closes on outside-click or Escape — same popover behaviour as KebabMenu.
+/// opening it reveals an input. A typed name with no exact match offers a "Create" row (add a new person).
+/// "Multiple speakers" and "Unassign" are always reachable in a footer. Closes on outside-click or Escape —
+/// same popover behaviour as KebabMenu.
+///
+/// Results come from the server as you type, against the **ungated** people-search endpoint. It used to
+/// filter a prefetched copy of the whole directory, which stopped working the moment listing the directory
+/// required the Manage people permission: a user without it would see an empty picker and be unable to
+/// label anyone in their own recording. Searching to name a speaker is not a privileged act, so it has its
+/// own open endpoint.
 ///
 /// Handlers may return a promise: the popover then stays open showing a spinner until it settles, because
-/// enrolling a new person round-trips the API and refetches the (large) people list, which takes seconds.
+/// adding a new person round-trips the API and refetches, which takes a moment.
 export default function SpeakerAssign({
   label,
-  profiles,
-  profileId,
   isMulti,
   displayName,
   width = "w-64",
@@ -23,8 +27,6 @@ export default function SpeakerAssign({
   onMulti,
 }: {
   label: string;
-  profiles: SpeakerProfile[];
-  profileId: string | null;
   isMulti: boolean;
   /// Shown on the trigger when no profile is assigned. Defaults to "Unassigned"; the transcript passes the
   /// segment's speaker name so a row keeps reading as it did before the dropdown replaced the plain label.
@@ -59,13 +61,17 @@ export default function SpeakerAssign({
     };
   }, [open, busy]);
 
-  const current = isMulti
-    ? t("multipleSpeakers")
-    : (profiles.find((p) => p.id === profileId)?.name ?? displayName ?? t("unassigned"));
+  const current = isMulti ? t("multipleSpeakers") : (displayName ?? t("unassigned"));
 
   const q = query.trim();
-  const matches = q ? profiles.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())) : [];
-  const hasExact = profiles.some((p) => p.name.toLowerCase() === q.toLowerCase());
+  // Two characters before querying, so the first keystroke does not fetch most of the directory. The
+  // server applies the same floor.
+  const { data: matches = [] } = useQuery({
+    queryKey: ["people-search", q],
+    queryFn: () => api.searchPeople(q),
+    enabled: open && q.length >= 2,
+  });
+  const hasExact = matches.some((p) => p.name.toLowerCase() === q.toLowerCase());
 
   async function choose(fn: () => void | Promise<void>) {
     const pending = fn();
@@ -133,6 +139,11 @@ export default function SpeakerAssign({
               {matches.map((p) => (
                 <button key={p.id} type="button" role="option" onClick={() => choose(() => onAssign(p.id))} className={optionClass}>
                   {p.name}
+                  {(p.title || p.companyName) && (
+                    <span className="ml-1 text-gray-400 dark:text-gray-500">
+                      {[p.title, p.companyName].filter(Boolean).join(", ")}
+                    </span>
+                  )}
                 </button>
               ))}
               {!hasExact && (

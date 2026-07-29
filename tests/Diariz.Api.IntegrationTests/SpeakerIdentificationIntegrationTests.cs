@@ -240,7 +240,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
         Assert.Empty(await db2.VoiceSamples.Where(c => c.PersonId == profileId).ToListAsync());
     }
 
-    private SpeakerProfilesController ProfilesController(Diariz.Domain.DiarizDbContext db, Guid userId)
+    private PeopleController ProfilesController(Diariz.Domain.DiarizDbContext db, Guid userId)
     {
         // Destructive writes on the shared directory need ManagePeople now; these tests are about the
         // pgvector behaviour underneath, not the gate (PeopleBiometricGateTests covers that).
@@ -252,7 +252,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
     }
 
     [Fact]
-    public async Task RemoveContribution_RecomputesCentroidFromRemaining()
+    public async Task RemoveVoiceSample_RecomputesCentroidFromRemaining()
     {
         var user = await SeedUser();
         var profileId = Guid.NewGuid();
@@ -277,7 +277,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
 
         await using (var db = fx.CreateDbContext())
         {
-            var result = await ProfilesController(db, user.Id).RemoveContribution(profileId, dropId);
+            var result = await ProfilesController(db, user.Id).RemoveVoiceSample(profileId, dropId);
             Assert.IsType<NoContentResult>(result);
         }
 
@@ -317,7 +317,7 @@ public class SpeakerIdentificationIntegrationTests(ContainersFixture fx)
 
         await using (var db = fx.CreateDbContext())
         {
-            var result = await ProfilesController(db, user.Id).Merge(targetId, new MergeSpeakerProfilesRequest(sourceId));
+            var result = await ProfilesController(db, user.Id).Merge(targetId, new MergePeopleRequest(sourceId));
             Assert.IsType<NoContentResult>(result);
         }
 

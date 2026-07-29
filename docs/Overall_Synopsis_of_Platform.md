@@ -1320,9 +1320,54 @@ assertion about who was in the room, not something derived from the biometric. T
 restores nothing. `SpeakerIdentifier` filters `Embedding != null && !VoiceprintOptOut` before the distance
 query, and `AssignSpeaker` still *names* an opted-out person but skips the training block.
 
-**Performance note.** That cosine query is now an unbounded scan — it was per-user, and is every enrolled
-person on the platform. There is **no HNSW/IVFFlat index** on `SpeakerProfiles.Embedding`; add one as an
-additive migration if the plan turns into a seq scan over more than a few hundred rows.
+**Performance note — measured, and deliberately left alone.** The cosine query is a **sequential scan** over
+every enrolled person, and always was: there is no HNSW/IVFFlat index on `SpeakerProfiles.Embedding`. It
+scales linearly at roughly **0.35 ms per 1,000 people** (measured on `pgvector/pgvector:pg16`, 192-d, the
+exact filter + order + limit the identifier issues):
+
+| People | Plan | Execution |
+|---|---|---|
+| 250 | Seq Scan | 0.12 ms |
+| 5,000 | Seq Scan | 1.9 ms |
+| 25,000 | Seq Scan | 8.8 ms |
+| 100,000 | Seq Scan | 35.0 ms |
+| 100,000 + HNSW | Index Scan | 0.42 ms |
+
+Identification runs **once per speaker per transcription**, so at a realistic directory size (hundreds to low
+thousands) even a 24-speaker meeting costs tens of milliseconds in total. An index is not warranted, and the
+reason is not only the 102 MB it would add against an 87 MB table: **HNSW is approximate**, so it can miss the
+true nearest neighbour, and for threshold-based biometric identification a miss means a speaker silently stays
+unidentified. That is a correctness trade-off, not just a performance one.
+
+**Revisit past roughly 25,000 enrolled people**, where the scan crosses ~10 ms. It is an additive migration
+whenever it is wanted, so deferring costs nothing.
+
+### The People API
+
+`PeopleController` at **`/api/people`** replaces `api/speaker-profiles`, which is deleted. Replacement rather
+than deprecation: this is 0.x with no external consumers, and two surfaces would double the n8n node's
+operation list and drift.
+
+| Route | Gate |
+|---|---|
+| `GET /api/people` (`?q=&internal=&hasVoiceprint=&take=&skip=`) | `ManagePeople` |
+| `GET /api/people/search?q=` | **none** |
+| `GET /api/people/{id}`, `GET /api/people/duplicates` | `ManagePeople` for duplicates |
+| `POST /api/people` (optionally enrols in the same call), `PUT /api/people/{id}` | edit needs `ManagePeople` unless it is you |
+| `DELETE /api/people/{id}`, `POST /api/people/{id}/merge` | `ManagePeople` |
+| `POST`/`DELETE /api/people/{id}/voiceprint`, `DELETE .../voiceprint/samples/{sampleId}` | `ManagePeople` or it is you |
+| `DELETE /api/people/voiceprints` | `ManagePlatform` |
+
+**`search` is ungated on purpose, and the reason is a bug this fixed.** The recording page used to prefetch
+the whole directory to fill the speaker-assignment picker. The moment listing the directory required
+`ManagePeople` (0.164.0), a user without it opened a recording to an empty picker and could not name a
+speaker at all. Naming a speaker in your own meeting is not an administrative act, so it has its own open
+endpoint, and `SpeakerAssign` now queries it as you type. `RecordingDetail.test.tsx` carries a guard
+asserting the page never calls the gated listing.
+
+`PersonDto` carries **`CanManageBiometrics`** - the server's own answer to `ManagePeople || IsSelf`. Clients
+render the opt-out and erase controls from that flag rather than recomputing the rule, so the two cannot
+disagree.
 
 `PersonDuplicates` (pure, static) reports likely duplicates by email and normalised name — two users who each
 enrolled the same colleague privately now both appear. It **never merges automatically**: merge destroys the

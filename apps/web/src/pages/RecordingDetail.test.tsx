@@ -59,7 +59,7 @@ vi.mock("../lib/api", () => ({
     createAction: vi.fn(),
     updateAction: vi.fn(),
     deleteAction: vi.fn(),
-    listSpeakerProfiles: vi.fn(),
+    searchPeople: vi.fn(),
     getProfile: vi.fn().mockResolvedValue(null),
     listAttachments: vi.fn().mockResolvedValue([]),
     addFileAttachment: vi.fn(),
@@ -171,7 +171,7 @@ describe("RecordingDetail", () => {
     (api.retranscribe as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.summarize as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.audioUrl as ReturnType<typeof vi.fn>).mockResolvedValue("blob:audio");
-    (api.listSpeakerProfiles as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (api.searchPeople as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (api.listAttachments as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (api.listScreenshots as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (api.generateMeetingMinutes as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
@@ -486,7 +486,12 @@ describe("RecordingDetail", () => {
   });
 
   it("assigns a speaker from the transcript row's dropdown without selecting the segment", async () => {
-    (api.listSpeakerProfiles as ReturnType<typeof vi.fn>).mockResolvedValue([{ id: "p2", name: "Bob", sampleCount: 1 }]);
+    (api.searchPeople as ReturnType<typeof vi.fn>).mockResolvedValue([{
+      id: "p2", name: "Bob", title: null, companyName: null, email: null, phone: null,
+      isInternal: false, voiceprintOptOut: false, hasVoiceprint: true, sampleCount: 1,
+      linkedUserId: null, isSelf: false, canManageBiometrics: false,
+      createdAt: "2026-07-29T00:00:00Z", updatedAt: "2026-07-29T00:00:00Z",
+    }]);
     (api.assignSpeaker as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     renderPage(base);
     await loaded();
@@ -496,11 +501,26 @@ describe("RecordingDetail", () => {
     // reading the transcript.
     fireEvent.click(await screen.findByRole("button", { name: "Assign SPEAKER_00 to a person" }));
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "Bob" } });
+    await screen.findByRole("option", { name: "Bob" });
     fireEvent.click(screen.getByRole("option", { name: "Bob" }));
 
     await waitFor(() => expect(api.assignSpeaker).toHaveBeenCalledWith("rec-123", "SPEAKER_00", "p2"));
     // Using the dropdown must not double as clicking the row (which would select the segment).
     expect(screen.getByRole("button", { name: /play selected/i }).hasAttribute("disabled")).toBe(true);
+  });
+
+  /// Regression guard. The page used to prefetch the whole directory to populate this picker, and the
+  /// moment listing the directory required the Manage people permission, a user without it opened a
+  /// recording to an empty picker and could not label anyone. Naming a speaker is not a privileged act, so
+  /// the page must only ever use the ungated search endpoint.
+  it("never calls the permission-gated directory listing", async () => {
+    renderPage(base);
+    await loaded();
+    openTab("Transcript");
+    await screen.findByRole("button", { name: "Assign SPEAKER_00 to a person" });
+
+    expect((api as unknown as Record<string, unknown>).listPeople).toBeUndefined();
+    expect(api.searchPeople).not.toHaveBeenCalled(); // not until the user actually types
   });
 
   it("shows the current speaker name on the transcript row's dropdown", async () => {

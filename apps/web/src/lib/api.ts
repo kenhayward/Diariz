@@ -57,9 +57,10 @@ import type {
   SectionAttachmentItem,
   TagCloudEntry,
   SetupValidation,
-  SpeakerProfile,
+  Person,
+  PersonDetail,
+  PersonDuplicateGroup,
   GoogleCalendarListItem,
-  SpeakerProfileDetail,
   Group,
   UpdateUserProfile,
   RestoreResult,
@@ -702,49 +703,82 @@ export const api = {
     await http.post(`/api/actions/complete`, { ids, completed });
   },
 
-  // ---- Speaker identification (voiceprints) ----
+  // ---- People directory (and their optional voiceprints) ----
 
-  async listSpeakerProfiles(): Promise<SpeakerProfile[]> {
-    const { data } = await http.get<SpeakerProfile[]>("/api/speaker-profiles");
+  /// The whole directory. Requires the ManagePeople permission - for a picker, use searchPeople instead,
+  /// which is open to everyone precisely so labelling a speaker never needs a permission.
+  async listPeople(opts?: {
+    q?: string; isInternal?: boolean; hasVoiceprint?: boolean; take?: number; skip?: number;
+  }): Promise<Person[]> {
+    const { data } = await http.get<Person[]>("/api/people", { params: opts });
     return data;
   },
 
-  /// Enrol a new person from one of a recording's diarized speakers (its embedding seeds the voiceprint).
-  async createSpeakerProfile(name: string, recordingId: string, label: string): Promise<SpeakerProfile> {
-    const { data } = await http.post<SpeakerProfile>("/api/speaker-profiles", { name, recordingId, label });
+  /// Find people for a picker. Ungated. Returns nothing below two characters, so a typeahead does not pull
+  /// most of the directory on the first keystroke.
+  async searchPeople(q: string): Promise<Person[]> {
+    const { data } = await http.get<Person[]>("/api/people/search", { params: { q } });
     return data;
   },
 
-  /// Reassign a recording's speaker to an enrolled voiceprint, or pass null to unassign.
+  async getPerson(id: string): Promise<PersonDetail> {
+    const { data } = await http.get<PersonDetail>(`/api/people/${id}`);
+    return data;
+  },
+
+  async findPersonDuplicates(): Promise<PersonDuplicateGroup[]> {
+    const { data } = await http.get<PersonDuplicateGroup[]>("/api/people/duplicates");
+    return data;
+  },
+
+  /// Add someone. Passing recordingId + label also enrols a voiceprint from that recording's speaker,
+  /// which is what the "new person" control on a transcript does.
+  async createPerson(input: {
+    name: string; title?: string | null; companyName?: string | null; email?: string | null;
+    phone?: string | null; isInternal?: boolean | null; voiceprintOptOut?: boolean | null;
+    recordingId?: string | null; label?: string | null;
+  }): Promise<Person> {
+    const { data } = await http.post<Person>("/api/people", input);
+    return data;
+  },
+
+  /// Edit a person. Omitted fields are left alone. Setting voiceprintOptOut true erases their voiceprint.
+  async updatePerson(id: string, input: {
+    name?: string | null; title?: string | null; companyName?: string | null; email?: string | null;
+    phone?: string | null; isInternal?: boolean | null; voiceprintOptOut?: boolean | null;
+  }): Promise<void> {
+    await http.put(`/api/people/${id}`, input);
+  },
+
+  async deletePerson(id: string): Promise<void> {
+    await http.delete(`/api/people/${id}`);
+  },
+
+  async mergePeople(id: string, sourceId: string): Promise<void> {
+    await http.post(`/api/people/${id}/merge`, { sourceId });
+  },
+
+  async enrolVoiceprint(id: string, recordingId: string, label: string): Promise<void> {
+    await http.post(`/api/people/${id}/voiceprint`, { recordingId, label });
+  },
+
+  /// Erase the biometric but keep the person.
+  async deleteVoiceprint(id: string): Promise<void> {
+    await http.delete(`/api/people/${id}/voiceprint`);
+  },
+
+  async removeVoiceSample(id: string, sampleId: string): Promise<void> {
+    await http.delete(`/api/people/${id}/voiceprint/samples/${sampleId}`);
+  },
+
+  /// Reassign a recording's speaker to a person, or pass null to unassign.
   async assignSpeaker(id: string, label: string, profileId: string | null): Promise<void> {
     await http.put(`/api/recordings/${id}/speakers/${encodeURIComponent(label)}/assign`, { profileId });
   },
 
-  async deleteSpeakerProfile(profileId: string): Promise<void> {
-    await http.delete(`/api/speaker-profiles/${profileId}`);
-  },
-
-  /// People management (PR2): detail with training contributions, rename, merge, and full erase.
-  async getSpeakerProfile(id: string): Promise<SpeakerProfileDetail> {
-    const { data } = await http.get<SpeakerProfileDetail>(`/api/speaker-profiles/${id}`);
-    return data;
-  },
-
-  async renameSpeakerProfile(id: string, name: string): Promise<void> {
-    await http.put(`/api/speaker-profiles/${id}`, { name });
-  },
-
-  async removeProfileContribution(id: string, contributionId: string): Promise<void> {
-    await http.delete(`/api/speaker-profiles/${id}/contributions/${contributionId}`);
-  },
-
-  async mergeSpeakerProfiles(id: string, sourceId: string): Promise<void> {
-    await http.post(`/api/speaker-profiles/${id}/merge`, { sourceId });
-  },
-
-  /// GDPR: erase all of the caller's voiceprints (auto-labels revert; manual names kept).
-  async deleteAllSpeakerProfiles(): Promise<void> {
-    await http.delete("/api/speaker-profiles");
+  /// GDPR: erase every voiceprint on the platform (auto-labels revert; manual names kept).
+  async deleteAllVoiceprints(): Promise<void> {
+    await http.delete("/api/people/voiceprints");
   },
 
   async listSections(roomId?: string | null): Promise<SectionDto[]> {

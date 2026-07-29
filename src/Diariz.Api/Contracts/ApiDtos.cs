@@ -318,21 +318,53 @@ public record ActionListItemDto(
 /// <summary>Mark a set of actions complete (or not). Ids not owned by the caller are ignored.</summary>
 public record CompleteActionsRequest(IReadOnlyList<Guid> Ids, bool Completed);
 
-// ---- Speaker identification (voiceprints) ----
-public record SpeakerProfileDto(Guid Id, string Name, int SampleCount);
-public record CreateSpeakerProfileRequest(string Name, Guid RecordingId, string Label);
+// ---- People directory (and their optional voiceprints) ----
+
+/// <summary>Someone who appears in meetings. <paramref name="HasVoiceprint"/> is false for the ordinary case
+/// of a person added by hand, or one who opted out and had theirs erased.
+///
+/// <para><paramref name="CanManageBiometrics"/> is the <b>server's</b> answer to whether the caller may opt
+/// this person out or erase their voiceprint (<c>ManagePeople</c>, or the person is the caller). Clients must
+/// render those controls from this flag rather than recomputing the rule, or the two drift the first time
+/// either is edited.</para></summary>
+public record PersonDto(
+    Guid Id, string Name, string? Title, string? CompanyName, string? Email, string? Phone,
+    bool IsInternal, bool VoiceprintOptOut, bool HasVoiceprint, int SampleCount,
+    Guid? LinkedUserId, bool IsSelf, bool CanManageBiometrics,
+    DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+
+/// <summary>One voice sample feeding a person's voiceprint: the recording/speaker it came from, and the
+/// start (ms) of that speaker's first segment so the UI can play a sample to identify them.</summary>
+public record VoiceSampleDto(
+    Guid Id, Guid RecordingId, string RecordingName, string SpeakerLabel, long StartMs, DateTimeOffset CreatedAt);
+
+/// <summary>A person with their voiceprint's training provenance and how many recording-speakers they
+/// currently label.</summary>
+public record PersonDetailDto(PersonDto Person, int IdentifiedCount, IReadOnlyList<VoiceSampleDto> Samples);
+
+/// <summary>Create a person. Everything but the name is optional, and supplying
+/// <paramref name="RecordingId"/> + <paramref name="Label"/> enrols a voiceprint in the same call - which is
+/// what the "new person" affordance on a transcript does.</summary>
+public record CreatePersonRequest(
+    string Name, string? Title, string? CompanyName, string? Email, string? Phone,
+    bool? IsInternal, bool? VoiceprintOptOut, Guid? RecordingId, string? Label);
+
+/// <summary>Edit a person. Every field is nullable and <b>null means "not supplied"</b>, not "clear it" - so
+/// a client can send only what it changed.</summary>
+public record UpdatePersonRequest(
+    string? Name, string? Title, string? CompanyName, string? Email, string? Phone,
+    bool? IsInternal, bool? VoiceprintOptOut);
+
+public record EnrolVoiceprintRequest(Guid RecordingId, string Label);
+public record MergePeopleRequest(Guid SourceId);
+
+/// <summary>People who look like the same human. <paramref name="Reason"/> is <c>email</c> or <c>name</c>.
+/// Reported only - merging is always a person's decision, because it cannot be undone.</summary>
+public record PersonDuplicateGroupDto(string Reason, IReadOnlyList<PersonDto> People);
+
 public record AssignSpeakerRequest(Guid? ProfileId);
-public record RenameSpeakerProfileRequest(string Name);
-public record MergeSpeakerProfilesRequest(Guid SourceId);
 /// <summary>Whether this person should be voice-printed. Turning it on erases any voiceprint they have.</summary>
 public record SetVoiceprintOptOutRequest(bool OptOut);
-/// <summary>One enrolled training sample feeding a voiceprint: the recording/speaker it came from, and
-/// the start (ms) of that speaker's first segment so the UI can play a sample to identify them.</summary>
-public record ProfileContributionDto(
-    Guid Id, Guid RecordingId, string RecordingName, string SpeakerLabel, long StartMs, DateTimeOffset CreatedAt);
-/// <summary>A voiceprint with its training provenance and how many recording-speakers it currently labels.</summary>
-public record SpeakerProfileDetailDto(
-    Guid Id, string Name, int SampleCount, int IdentifiedCount, IReadOnlyList<ProfileContributionDto> Contributions);
 /// <summary>Per-recording speaker: its label, shown name, the matched voiceprint (if any), whether
 /// the name was set automatically, and whether it's flagged "Multiple Speakers" (overlapping speech).</summary>
 public record SpeakerInfoDto(

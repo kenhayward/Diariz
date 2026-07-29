@@ -961,6 +961,192 @@ const GENERATED: GeneratedResource[] = [
     ]
   },
   {
+    "tag": "People",
+    "displayName": "People",
+    "value": "people",
+    "operations": [
+      {
+        "value": "addAPerson",
+        "displayName": "Add a person",
+        "description": "Adds someone to the directory. Only a name is required: a person with no voiceprint and no contact details is a perfectly ordinary record, and is what you get when adding a client you have not recorded yet.",
+        "method": "POST",
+        "path": "/api/people",
+        "pathParams": [],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      },
+      {
+        "value": "deleteAPerson",
+        "displayName": "Delete a person",
+        "description": "Removes the person, their voiceprint and all its training data, and unlinks them from every recording - the GDPR erasure path, so nothing recognisable is retained.",
+        "method": "DELETE",
+        "path": "/api/people/{id}",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      },
+      {
+        "value": "editAPerson",
+        "displayName": "Edit a person",
+        "description": "Updates a person's details. Every field is optional and omitting one leaves it alone - send only what changed.",
+        "method": "PUT",
+        "path": "/api/people/{id}",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      },
+      {
+        "value": "enrolAVoiceprint",
+        "displayName": "Enrol a voiceprint",
+        "description": "Teaches this person's voice from one recording's diarized speaker: that speaker's embedding is added as a voice sample and the voiceprint is recomputed. From then on the same voice is recognised automatically in later recordings.",
+        "method": "POST",
+        "path": "/api/people/{id}/voiceprint",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      },
+      {
+        "value": "eraseAPersonSVoiceprint",
+        "displayName": "Erase a person's voiceprint",
+        "description": "Destroys the voiceprint and every voice sample behind it, keeping the person and their contact details. Use it when the biometric should go but the record of who attended should not - the narrower half of the GDPR erasure path.",
+        "method": "DELETE",
+        "path": "/api/people/{id}/voiceprint",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      },
+      {
+        "value": "eraseEveryVoiceprint",
+        "displayName": "Erase every voiceprint",
+        "description": "Deletes every person in the directory, with all their voiceprints and training data, in one call - the wholesale GDPR erasure. Automatic speaker identification stops platform-wide until people are enrolled again.",
+        "method": "DELETE",
+        "path": "/api/people/voiceprints",
+        "pathParams": [],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      },
+      {
+        "value": "findLikelyDuplicatePeople",
+        "displayName": "Find likely duplicate people",
+        "description": "Groups of people who look like the same human, matched by email address or by name once case and spacing are normalised. A shared directory surfaces these: two colleagues who each enrolled the same client privately now both appear.",
+        "method": "GET",
+        "path": "/api/people/duplicates",
+        "pathParams": [],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": true
+      },
+      {
+        "value": "getAPerson",
+        "displayName": "Get a person",
+        "description": "One person in detail: their contact fields, the voice samples training their voiceprint - which recording and speaker each came from - and how many recording-speakers they currently label.",
+        "method": "GET",
+        "path": "/api/people/{id}",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      },
+      {
+        "value": "listThePeopleDirectory",
+        "displayName": "List the people directory",
+        "description": "Everyone in the directory, newest names first by name order, with optional filters. A person may have no voiceprint at all - hasVoiceprint is then false and Diariz will not recognise them by voice.",
+        "method": "GET",
+        "path": "/api/people",
+        "pathParams": [],
+        "queryParams": [
+          {
+            "name": "q",
+            "required": false,
+            "description": "q"
+          },
+          {
+            "name": "isInternal",
+            "required": false,
+            "description": "isInternal"
+          },
+          {
+            "name": "hasVoiceprint",
+            "required": false,
+            "description": "hasVoiceprint"
+          },
+          {
+            "name": "take",
+            "required": false,
+            "description": "take"
+          },
+          {
+            "name": "skip",
+            "required": false,
+            "description": "skip"
+          }
+        ],
+        "hasBody": false,
+        "returnsArray": true
+      },
+      {
+        "value": "mergeTwoPeople",
+        "displayName": "Merge two people",
+        "description": "Folds sourceId into the person in the path when the same human is in the directory twice - say once as \"Sam\" and once as \"Samantha\", or once per colleague who enrolled them. The source's voice samples move across, every recording labelled with it is relabelled, the voiceprint is recomputed from the combined samples, and the source person is deleted.",
+        "method": "POST",
+        "path": "/api/people/{id}/merge",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      },
+      {
+        "value": "removeAVoiceSample",
+        "displayName": "Remove a voice sample",
+        "description": "Drops one sample from a person's voiceprint and recomputes it from what remains - the fix when a misattributed speaker has been taught to the wrong person and recognition has started drifting.",
+        "method": "DELETE",
+        "path": "/api/people/{id}/voiceprint/samples/{sampleId}",
+        "pathParams": [
+          "id",
+          "sampleId"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      },
+      {
+        "value": "searchPeopleByName",
+        "displayName": "Search people by name",
+        "description": "Finds people by name or email for a picker - what the speaker-assignment control on a transcript uses. Open to every signed-in user, because naming a speaker in your own recording is not a privileged act; listing the whole directory is, and has its own endpoint.",
+        "method": "GET",
+        "path": "/api/people/search",
+        "pathParams": [],
+        "queryParams": [
+          {
+            "name": "q",
+            "required": false,
+            "description": "q"
+          }
+        ],
+        "hasBody": false,
+        "returnsArray": true
+      }
+    ]
+  },
+  {
     "tag": "Recordings",
     "displayName": "Recording",
     "value": "recordings",
@@ -2218,138 +2404,6 @@ const GENERATED: GeneratedResource[] = [
         "description": "Sets the folder's minutes to your own Markdown, creating them if there are none. Works with no LLM configured, marks them user-edited, and clears any generation error - so it also rescues a folder stuck in Failed. The remembered meeting type is left as it is. Needs ManageContents.",
         "method": "PUT",
         "path": "/api/sections/{id}/minutes",
-        "pathParams": [
-          "id"
-        ],
-        "queryParams": [],
-        "hasBody": true,
-        "returnsArray": false
-      }
-    ]
-  },
-  {
-    "tag": "SpeakerProfiles",
-    "displayName": "Speaker Profile",
-    "value": "speakerProfiles",
-    "operations": [
-      {
-        "value": "enrolASpeaker",
-        "displayName": "Enrol a speaker",
-        "description": "Creates a voiceprint from one recording's diarized speaker: that speaker's embedding becomes the starting point, and the speaker is named and linked to the new person. From then on the same voice is recognised automatically in later recordings.",
-        "method": "POST",
-        "path": "/api/speaker-profiles",
-        "pathParams": [],
-        "queryParams": [],
-        "hasBody": true,
-        "returnsArray": false
-      },
-      {
-        "value": "eraseAPersonSVoiceprint",
-        "displayName": "Erase a person's voiceprint",
-        "description": "Destroys the voiceprint and every voice sample behind it, keeping the person and their contact details. Use it when the biometric should go but the record of who attended should not - the narrower half of the GDPR erasure path.",
-        "method": "DELETE",
-        "path": "/api/speaker-profiles/{id}/voiceprint",
-        "pathParams": [
-          "id"
-        ],
-        "queryParams": [],
-        "hasBody": false,
-        "returnsArray": false
-      },
-      {
-        "value": "eraseAllEnrolledSpeakers",
-        "displayName": "Erase all enrolled speakers",
-        "description": "Deletes every person in the directory, with all their voiceprints and training data, in one call - the wholesale GDPR erasure. Automatic speaker identification stops platform-wide until people are enrolled again.",
-        "method": "DELETE",
-        "path": "/api/speaker-profiles",
-        "pathParams": [],
-        "queryParams": [],
-        "hasBody": false,
-        "returnsArray": false
-      },
-      {
-        "value": "eraseAnEnrolledSpeaker",
-        "displayName": "Erase an enrolled speaker",
-        "description": "Deletes the person's voiceprint and all its training data, and unlinks it from every recording - the GDPR erasure path for biometric data, so nothing recognisable is retained.",
-        "method": "DELETE",
-        "path": "/api/speaker-profiles/{id}",
-        "pathParams": [
-          "id"
-        ],
-        "queryParams": [],
-        "hasBody": false,
-        "returnsArray": false
-      },
-      {
-        "value": "getAnEnrolledSpeaker",
-        "displayName": "Get an enrolled speaker",
-        "description": "One person's voiceprint in detail: the training contributions feeding it - which recording and speaker each sample came from - and how many recording-speakers it currently labels.",
-        "method": "GET",
-        "path": "/api/speaker-profiles/{id}",
-        "pathParams": [
-          "id"
-        ],
-        "queryParams": [],
-        "hasBody": false,
-        "returnsArray": false
-      },
-      {
-        "value": "listYourEnrolledSpeakers",
-        "displayName": "List your enrolled speakers",
-        "description": "Everyone in the people directory, with how many voice samples each voiceprint has learned from. A person may have no voiceprint at all - the sample count is then zero, and Diariz simply will not recognise them by voice.",
-        "method": "GET",
-        "path": "/api/speaker-profiles",
-        "pathParams": [],
-        "queryParams": [],
-        "hasBody": false,
-        "returnsArray": true
-      },
-      {
-        "value": "mergeTwoEnrolledSpeakers",
-        "displayName": "Merge two enrolled speakers",
-        "description": "Folds sourceId into the person in the path when the same human has been enrolled twice - say once as \"Sam\" and once as \"Samantha\". The source's training samples move across, every recording labelled with it is relabelled, the voiceprint is recomputed from the combined samples, and the source person is deleted.",
-        "method": "POST",
-        "path": "/api/speaker-profiles/{id}/merge",
-        "pathParams": [
-          "id"
-        ],
-        "queryParams": [],
-        "hasBody": true,
-        "returnsArray": false
-      },
-      {
-        "value": "optAPersonOutOfVoicePrinting",
-        "displayName": "Opt a person out of voice-printing",
-        "description": "Records that this person does not want a voiceprint held for them. Turning it on erases the one they have, along with every voice sample behind it, and stops them being matched automatically from then on.",
-        "method": "PUT",
-        "path": "/api/speaker-profiles/{id}/voiceprint-opt-out",
-        "pathParams": [
-          "id"
-        ],
-        "queryParams": [],
-        "hasBody": true,
-        "returnsArray": false
-      },
-      {
-        "value": "removeATrainingSample",
-        "displayName": "Remove a training sample",
-        "description": "Drops one sample from a voiceprint and recomputes it from what remains - the fix when a misattributed speaker has been taught to the wrong person and recognition has started drifting.",
-        "method": "DELETE",
-        "path": "/api/speaker-profiles/{id}/contributions/{contributionId}",
-        "pathParams": [
-          "id",
-          "contributionId"
-        ],
-        "queryParams": [],
-        "hasBody": false,
-        "returnsArray": false
-      },
-      {
-        "value": "renameAnEnrolledSpeaker",
-        "displayName": "Rename an enrolled speaker",
-        "description": "Corrects the person's name - for a spelling fix or a change of surname. The voiceprint is unchanged, so recognition is unaffected, and every recording labelled with this person picks up the new name.",
-        "method": "PUT",
-        "path": "/api/speaker-profiles/{id}",
         "pathParams": [
           "id"
         ],
