@@ -30,6 +30,7 @@
   "linkedFieldsLocked": "This person has a Diariz account, so their name and email address come from their account.",
   "hasVoiceprint": "Has a voiceprint",
   "noVoiceprint": "No voiceprint",
+  "voiceprintShort": "voice",
   "eraseVoiceprint": "Erase voiceprint",
   "confirmEraseVoiceprint": "Erase {{name}}'s voiceprint? They stay in the directory with their details; only the voiceprint and its samples go.",
   "duplicatesHeading": "Possible duplicates",

@@ -109,8 +109,9 @@ That last one needs **Include attendee contact details** ticked on the automatio
 `email` and `phone` fields are not in the payload at all, so the expression yields an empty string rather
 than a wrong answer.
 
-Note `isInternal` is `null` for a speaker Diariz could not identify, so test for `=== false` rather than
-relying on falsiness if you mean "definitely external".
+Note that a speaker Diariz could not identify has **no** `isInternal` field at all, rather than a null one -
+nothing is claimed about someone it does not recognise. Test for `=== false` rather than relying on
+falsiness if you mean "definitely external", since a missing field is falsy too.
 
 ## A worked example: summarise a meeting into Slack
 

@@ -790,9 +790,11 @@ toggle is off.
 - **`attendees[]` on every `recording.*` event.** `Services/AttendeePayload.ForRecordingAsync` returns one
   entry per speaker ordered by diarization label (stable across events for the same recording):
   `label, name, personId, isMultiSpeaker, identifiedAuto, isInternal`, plus `title`, `companyName`, `email`
-  and `phone` when contacts are permitted. `isInternal` is **null** for an unidentified speaker - nobody has
-  said - and a `IsMultiSpeaker` slot carries no person details at all, since it is overlapping audio rather
-  than one human. An **opted-out** person still appears by name: opting out concerns holding the voiceprint,
+  and `phone` when contacts are permitted. `isInternal` and `personId` are **absent** (not null) for an
+  unidentified speaker - the envelope serialises with `WhenWritingNull`, so nothing unknown is stated at all -
+  and a `IsMultiSpeaker` slot carries no person details either, since it is overlapping audio rather than one
+  human. `AttendeePayloadTests` builds its JSON through `WebhookPayload` for exactly this reason: it
+  previously used plain serialisation, kept the nulls, and so asserted a shape production never emits. An **opted-out** person still appears by name: opting out concerns holding the voiceprint,
   not the fact that they attended. `recording.created` and `recording.transcription_failed` carry `[]` (no
   speakers exist yet), deliberately rather than omitting the key - a uniform shape is kinder to a workflow.
 - **The contacts gate.** `WebhookSubscription.IncludeAttendeeContacts` (bool, NOT NULL, default false) is
@@ -1368,11 +1370,23 @@ whenever it is wanted, so deferring costs nothing.
 
 ### The People screen
 
-`apps/web/src/pages/People.tsx` at **`/people`** - a top-level route, not a Preferences tab, because a
-platform-wide directory is not a personal setting. Master-detail: search + filter chips over
-`GET /api/people`, `components/PersonEditor.tsx` beside it, and a duplicates banner over
-`GET /api/people/duplicates` offering a one-click merge (never automatic). `PreferencesModal` lost its
-`voiceprints` tab and `VoicePrintsSection` is deleted.
+`apps/web/src/components/PeopleModal.tsx` - a **modal**, not a route. The directory is nearly always
+consulted *while reading a transcript* ("who is this speaker?"), so a route would throw that context away;
+it opens from the account menu and from **Manage people** on the Speakers tab, and matches the shape of the
+other account-menu modals. It is also not a Preferences tab, because a platform-wide directory is not a
+personal setting.
+
+Master-detail: search + filter chips over `GET /api/people`, `components/PersonEditor.tsx` beside it, and a
+duplicates banner over `GET /api/people/duplicates` offering a one-click merge (never automatic).
+`PreferencesModal` lost its `voiceprints` tab and `VoicePrintsSection` is deleted.
+
+**Only the list scrolls.** The editor is a fixed panel, so a field never moves out from under the cursor as
+the list beside it scrolls, and a long directory cannot push the form off screen. List rows are one line -
+name plus a voiceprint marker - so a large directory stays scannable.
+
+The `q` parameter on `GET /api/people` matches **name, email or company**. `GET /api/people/search`
+deliberately does **not** match company: it feeds the speaker-assign typeahead, where a company match would
+offer up every colleague at the same employer when you typed a firm's name.
 
 The editor renders the two permission rules **differently on purpose**, and the difference is load-bearing:
 

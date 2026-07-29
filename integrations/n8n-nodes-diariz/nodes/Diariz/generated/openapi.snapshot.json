@@ -6712,7 +6712,7 @@
     },
     "/api/people": {
       "get": {
-        "description": "Everyone in the directory, newest names first by name order, with optional filters. A person may have no voiceprint at all - `hasVoiceprint` is then false and Diariz will not recognise them by voice.\n\nRequires the **Manage people** permission, because the directory is platform-wide and therefore lists every external contact the organisation has recorded. To find someone in order to label a speaker, use the search endpoint instead - that one is open to everyone.\n\n`q` matches the name **and** the email address, case-insensitively.",
+        "description": "Everyone in the directory, newest names first by name order, with optional filters. A person may have no voiceprint at all - `hasVoiceprint` is then false and Diariz will not recognise them by voice.\n\nRequires the **Manage people** permission, because the directory is platform-wide and therefore lists every external contact the organisation has recorded. To find someone in order to label a speaker, use the search endpoint instead - that one is open to everyone.\n\n`q` matches the name, the email address **and** the company, case-insensitively - so you can find everyone from one client without knowing their names.",
         "parameters": [
           {
             "in": "query",

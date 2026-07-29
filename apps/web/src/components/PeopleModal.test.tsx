@@ -1,20 +1,18 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
-import People from "./People";
+import PeopleModal from "./PeopleModal";
 import { api } from "../lib/api";
 import type { Person, PersonDuplicateGroup } from "../lib/types";
 
 vi.mock("../auth", () => ({ useAuth: () => ({ permissions: { managePeople: true } }) }));
-vi.mock("../components/HelpButton", () => ({ default: () => null }));
+vi.mock("./HelpButton", () => ({ default: () => null }));
 
 vi.mock("../lib/api", () => ({
   api: {
     listPeople: vi.fn(),
     findPersonDuplicates: vi.fn(),
     mergePeople: vi.fn(),
-    createPerson: vi.fn(),
     updatePerson: vi.fn(),
     deletePerson: vi.fn(),
     deleteVoiceprint: vi.fn(),
@@ -38,12 +36,10 @@ const people = [
   person("p2", "Grace Hopper", { companyName: "US Navy" }),
 ];
 
-function render_() {
+function render_(onClose = () => {}) {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <MemoryRouter initialEntries={["/people"]}>
-        <People />
-      </MemoryRouter>
+      <PeopleModal onClose={onClose} />
     </QueryClientProvider>,
   );
 }
@@ -55,7 +51,7 @@ beforeEach(() => {
   mock(api.mergePeople).mockResolvedValue(undefined);
 });
 
-describe("People", () => {
+describe("PeopleModal", () => {
   it("lists the directory", async () => {
     render_();
 
@@ -63,14 +59,28 @@ describe("People", () => {
     expect(screen.getByRole("button", { name: /Grace Hopper/ })).toBeTruthy();
   });
 
+  /// One line per person: the name and the voiceprint marker share a row, so a long directory stays
+  /// scannable without a second line per entry.
+  it("marks who has a voiceprint on the same row as the name", async () => {
+    render_();
+
+    const withPrint = await screen.findByRole("button", { name: /Ada Lovelace/ });
+    const without = screen.getByRole("button", { name: /Grace Hopper/ });
+
+    expect(withPrint.getAttribute("aria-pressed")).toBe("false");
+    expect(withPrint.textContent).toContain("Ada Lovelace");
+    expect(within(withPrint).queryByLabelText("Has a voiceprint")).toBeTruthy();
+    expect(within(without).queryByLabelText("No voiceprint")).toBeTruthy();
+  });
+
   it("searches the directory server-side", async () => {
     render_();
     await screen.findByRole("button", { name: /Ada Lovelace/ });
 
-    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "lovelace" } });
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "navy" } });
 
     await waitFor(() =>
-      expect(api.listPeople).toHaveBeenCalledWith(expect.objectContaining({ q: "lovelace" })));
+      expect(api.listPeople).toHaveBeenCalledWith(expect.objectContaining({ q: "navy" })));
   });
 
   it("filters to internal people", async () => {
@@ -121,5 +131,31 @@ describe("People", () => {
     await screen.findByRole("button", { name: /Ada Lovelace/ });
 
     expect(screen.queryByRole("button", { name: /merge/i })).toBeNull();
+  });
+
+  // ---- Modal behaviour: it exists so a transcript stays in context, so closing must be easy. ----
+
+  it("closes from the footer button", async () => {
+    const onClose = vi.fn();
+    render_(onClose);
+    await screen.findByRole("button", { name: /Ada Lovelace/ });
+
+    // Two ways out: the header cross and the footer button. The footer one is last in the DOM, and is the
+    // one asked for - a modal opened over a transcript needs an obvious way back.
+    const closes = screen.getAllByRole("button", { name: "Close" });
+    expect(closes).toHaveLength(2);
+    fireEvent.click(closes[closes.length - 1]);
+
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("closes on Escape", async () => {
+    const onClose = vi.fn();
+    render_(onClose);
+    await screen.findByRole("button", { name: /Ada Lovelace/ });
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalled();
   });
 });

@@ -27,9 +27,9 @@ export const GATED_API_METHODS: Readonly<Record<string, string>> = {
 /// permission. Adding to this list is a decision that the surface is administrative - not a way to silence
 /// the test.
 export const PERMISSION_GATED_SURFACES: readonly string[] = [
-  // The directory page and its editor are reachable only with ManagePeople - the page checks the same
+  // The directory modal and its editor are reachable only with ManagePeople - the modal checks the same
   // permission the endpoints enforce, and renders an explanation instead when it is absent.
-  "pages/People.tsx",
+  "components/PeopleModal.tsx",
   "components/PersonEditor.tsx",
 ];
 

@@ -30,6 +30,7 @@
   "linkedFieldsLocked": "Diese Person hat ein Diariz-Konto, daher stammen Name und E-Mail aus dem Konto.",
   "hasVoiceprint": "Hat einen Stimmabdruck",
   "noVoiceprint": "Kein Stimmabdruck",
+  "voiceprintShort": "Stimme",
   "eraseVoiceprint": "Stimmabdruck loeschen",
   "confirmEraseVoiceprint": "Stimmabdruck von {{name}} loeschen? Die Person bleibt mit ihren Details im Verzeichnis; nur der Stimmabdruck und seine Proben werden entfernt.",
   "duplicatesHeading": "Moegliche Duplikate",
