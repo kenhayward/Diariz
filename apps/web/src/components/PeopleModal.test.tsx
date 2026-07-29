@@ -113,17 +113,29 @@ describe("PeopleModal", () => {
   });
 
   /// Reported, never automatic: a merge deletes the source record, cannot be undone, and in a shared
-  /// directory affects everyone's recordings.
-  it("offers to merge a reported duplicate", async () => {
+  /// directory affects everyone's recordings. The banner therefore opens the review dialog rather than
+  /// merging on the spot - it takes a second, deliberate click to destroy anything.
+  it("opens the review dialog for a reported duplicate rather than merging on the spot", async () => {
     const dupes: PersonDuplicateGroup[] = [{ reason: "email", people: [people[0], people[1]] }];
     mock(api.findPersonDuplicates).mockResolvedValue(dupes);
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     render_();
 
-    fireEvent.click(await screen.findByRole("button", { name: /merge/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Review and merge" }));
+
+    expect(screen.getByRole("dialog", { name: "Merge two records" })).toBeTruthy();
+    expect(api.mergePeople).not.toHaveBeenCalled();
+  });
+
+  it("merges once the review dialog is confirmed", async () => {
+    const dupes: PersonDuplicateGroup[] = [{ reason: "email", people: [people[0], people[1]] }];
+    mock(api.findPersonDuplicates).mockResolvedValue(dupes);
+    mock(api.mergePeople).mockResolvedValue(undefined);
+    render_();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Review and merge" }));
+    fireEvent.click(screen.getByRole("button", { name: "Merge" }));
 
     await waitFor(() => expect(api.mergePeople).toHaveBeenCalledWith("p1", "p2"));
-    confirmSpy.mockRestore();
   });
 
   it("says nothing about duplicates when there are none", async () => {

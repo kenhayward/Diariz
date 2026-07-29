@@ -1,7 +1,43 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import type { IDataObject, IHookFunctions } from "n8n-workflow";
 import { EVENT_OPTIONS } from "../nodes/Diariz/events";
 import { DiarizTrigger } from "../nodes/Diariz/DiarizTrigger.node";
+
+/// A minimal IHookFunctions good enough to drive the registration lifecycle. It records every HTTP call so a
+/// test can assert on the body Diariz is actually sent.
+function hookContext(opts: {
+  params?: IDataObject;
+  staticData?: IDataObject;
+  existing?: IDataObject[];
+  url?: string;
+}) {
+  const calls: { method: string; path: string; body?: IDataObject }[] = [];
+  const staticData = opts.staticData ?? {};
+  const params: IDataObject = { events: ["recording.summarized"], ...(opts.params ?? {}) };
+
+  const ctx = {
+    calls,
+    staticData,
+    getWorkflowStaticData: () => staticData,
+    getNodeWebhookUrl: () => opts.url ?? "https://n8n.example.com/webhook/abc",
+    getNodeParameter: (name: string, fallback?: unknown) =>
+      name in params ? params[name] : fallback,
+    getWorkflow: () => ({ name: "Test Workflow" }),
+    getNode: () => ({ name: "Diariz Trigger" }),
+    helpers: {
+      httpRequestWithAuthentication: async (_cred: string, o: { method: string; url: string; body?: IDataObject }) => {
+        const path = o.url.replace("https://diariz.example.com", "");
+        calls.push({ method: o.method, path, body: o.body });
+        if (o.method === "GET") return opts.existing ?? [];
+        if (o.method === "POST") return { id: "sub-1", secret: "shh" };
+        return {};
+      },
+    },
+    getCredentials: async () => ({ baseUrl: "https://diariz.example.com" }),
+  };
+  return ctx as unknown as IHookFunctions & { calls: typeof calls; staticData: IDataObject };
+}
 
 test("offers all nine subscribable events", () => {
   assert.equal(EVENT_OPTIONS.length, 9);
@@ -58,4 +94,65 @@ test("implements the full self-registration lifecycle", () => {
 test("uses plain hyphens in every user-facing string", () => {
   const text = JSON.stringify(new DiarizTrigger().description) + JSON.stringify(EVENT_OPTIONS);
   assert.ok(!/[–—]/.test(text), "found an en or em dash in user-facing copy");
+});
+
+// ---- Attendee contacts -------------------------------------------------------------------------------
+//
+// The subscription is owned by this node, not by the user: re-publishing a workflow deletes and recreates it.
+// So a setting that lives only on the Diariz side is silently reset every time the workflow is edited, which
+// is exactly what happened in testing - contacts stopped arriving with nothing in Diariz having changed. The
+// setting has to live here, where the thing that owns the subscription can re-apply it.
+
+test("offers an attendee-contacts option, off by default", () => {
+  const d = new DiarizTrigger().description;
+  const prop = d.properties.find((p) => p.name === "includeAttendeeContacts");
+  assert.ok(prop, "the trigger should expose includeAttendeeContacts");
+  assert.equal(prop!.type, "boolean");
+  assert.equal(prop!.default, false, "contact details are personal data - opt in, never out");
+});
+
+test("sends the attendee-contacts choice when it registers", async () => {
+  const t = new DiarizTrigger();
+  const ctx = hookContext({ params: { includeAttendeeContacts: true } });
+
+  await t.webhookMethods.default.create.call(ctx);
+
+  const post = ctx.calls.find((c) => c.method === "POST");
+  assert.ok(post, "expected a subscription to be created");
+  assert.equal(post!.body!.includeAttendeeContacts, true);
+});
+
+test("defaults the attendee-contacts choice to off when it registers", async () => {
+  const t = new DiarizTrigger();
+  const ctx = hookContext({});
+
+  await t.webhookMethods.default.create.call(ctx);
+
+  assert.equal(ctx.calls.find((c) => c.method === "POST")!.body!.includeAttendeeContacts, false);
+});
+
+test("re-registers when the attendee-contacts choice no longer matches the subscription", async () => {
+  const t = new DiarizTrigger();
+  const url = "https://n8n.example.com/webhook/abc";
+  const ctx = hookContext({
+    params: { includeAttendeeContacts: true },
+    staticData: { subscriptionId: "sub-1", secret: "shh" },
+    existing: [{ id: "sub-1", url, includeAttendeeContacts: false }],
+  });
+
+  // Turning the option on has to take effect on a subscription that already exists, and create() is the only
+  // place that can re-apply it - n8n calls it only when checkExists says no.
+  assert.equal(await t.webhookMethods.default.checkExists.call(ctx), false);
+});
+
+test("leaves a matching subscription alone", async () => {
+  const t = new DiarizTrigger();
+  const url = "https://n8n.example.com/webhook/abc";
+  const ctx = hookContext({
+    params: { includeAttendeeContacts: true },
+    staticData: { subscriptionId: "sub-1", secret: "shh" },
+    existing: [{ id: "sub-1", url, includeAttendeeContacts: true }],
+  });
+
+  assert.equal(await t.webhookMethods.default.checkExists.call(ctx), true);
 });

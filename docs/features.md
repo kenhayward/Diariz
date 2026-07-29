@@ -96,7 +96,8 @@ person details at all, since it is overlapping audio rather than one human. Some
 voice-printing still appears by name**: opting out concerns holding their voiceprint, not the fact that they
 attended.
 Attendees' **email addresses and phone numbers are opt-in per automation** (**Include attendee contact
-details**, off by default). An automation posts to an arbitrary URL, so without that gate every event would fan
+details**, off by default; on an n8n-created automation the equivalent option lives on the Diariz Trigger
+node, which owns the subscription and re-applies it on every publish). An automation posts to an arbitrary URL, so without that gate every event would fan
 the directory's contact details out to whoever owns it; when it is off those keys are **absent** from the
 payload rather than null, so a receiver cannot mistake "not permitted" for "not known". Each
 delivery is a **Standard Webhooks-style signed** POST (HMAC-SHA256 over the exact payload bytes, timestamp and

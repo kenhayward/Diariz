@@ -5,7 +5,8 @@ import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth";
 import HelpButton from "./HelpButton";
 import PersonEditor from "./PersonEditor";
-import type { Person } from "../lib/types";
+import MergePeopleDialog from "./MergePeopleDialog";
+import type { PersonDuplicateGroup } from "../lib/types";
 
 type Filter = "all" | "internal" | "external" | "hasVoiceprint";
 
@@ -26,6 +27,7 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [merging, setMerging] = useState<PersonDuplicateGroup | null>(null);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -55,17 +57,18 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
 
   const selected = people.find((p) => p.id === selectedId) ?? null;
 
-  async function merge(target: Person, source: Person) {
-    if (!window.confirm(t("people:confirmMerge", { source: source.name, target: target.name }))) return;
+  async function merge(targetId: string, sourceId: string) {
     setError(null);
     try {
-      await api.mergePeople(target.id, source.id);
+      await api.mergePeople(targetId, sourceId);
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["people"] }),
         qc.invalidateQueries({ queryKey: ["people-duplicates"] }),
       ]);
+      setMerging(null);
     } catch (e) {
       setError(apiErrorMessage(e, t("people:errSaveFailed")));
+      setMerging(null);
     }
   }
 
@@ -127,10 +130,10 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
                       {group.people.length > 1 && (
                         <button
                           type="button"
-                          onClick={() => merge(group.people[0], group.people[1])}
+                          onClick={() => setMerging(group)}
                           className="rounded border border-amber-400 px-2 py-0.5 text-amber-900 dark:border-amber-600 dark:text-amber-200"
                         >
-                          {t("people:mergeDuplicate", { name: group.people[0].name })}
+                          {t("people:mergeReview")}
                         </button>
                       )}
                     </li>
@@ -210,6 +213,15 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
               </div>
             </div>
           </div>
+        )}
+
+        {merging && (
+          <MergePeopleDialog
+            people={[merging.people[0], merging.people[1]]}
+            reason={merging.reason}
+            onMerge={merge}
+            onClose={() => setMerging(null)}
+          />
         )}
 
         <div className="flex justify-end border-t px-5 py-3 dark:border-gray-700">

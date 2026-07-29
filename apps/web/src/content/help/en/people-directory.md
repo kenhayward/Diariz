@@ -58,12 +58,9 @@ It only ever points them out. **Merging is always your decision**, because it de
 records, cannot be undone, and in a shared directory affects everyone's recordings. Check the direction
 before you merge: the person you are merging *into* is the one that survives.
 
-The survivor keeps its own details, and picks up anything it was missing from the record being absorbed -
-so a merge never loses a job title, company, email address or phone number that existed a moment earlier.
-If either record belongs to a Diariz account, the survivor becomes that account's person.
-
-Two records that *each* belong to a Diariz account cannot be merged at all. Two accounts are two people,
-however alike their names look, and merging them would cut one of them off from their own record.
+Choosing **Review and merge** opens a window that spells out what would happen to those two records
+specifically - which one survives, what moves across, and what is deleted - and lets you swap the direction
+before committing. See [Merging two people](/help/merging-people).
 
 ## People with a Diariz account
 

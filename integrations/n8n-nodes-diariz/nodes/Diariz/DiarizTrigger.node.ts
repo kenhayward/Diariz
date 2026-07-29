@@ -55,6 +55,14 @@ export class DiarizTrigger implements INodeType {
         description:
           "Whether to return only the event data instead of the full event envelope with its ID, type and timestamp",
       },
+      {
+        displayName: "Include Attendee Contacts",
+        name: "includeAttendeeContacts",
+        type: "boolean",
+        default: false,
+        description:
+          "Whether to include each attendee's job title, company, email address and phone number in the event. Turn this on to route email straight from the payload. It sends personal data to this webhook URL, so it is off unless you ask for it.",
+      },
     ],
   };
 
@@ -67,8 +75,18 @@ export class DiarizTrigger implements INodeType {
         if (!data.subscriptionId || !data.secret) return false;
 
         const url = this.getNodeWebhookUrl("default");
+        const wantsContacts = this.getNodeParameter("includeAttendeeContacts", false) as boolean;
         const existing = (await diarizApiRequest.call(this, "GET", "/api/user/webhooks")) as IDataObject[];
-        return existing.some((s) => s.id === data.subscriptionId && s.url === url);
+
+        // The contacts setting has to be compared, not just the identity. create() is the only place that can
+        // re-apply it, and n8n calls create() only when this says no - so without the comparison, turning the
+        // option on would do nothing to a subscription that already exists.
+        return existing.some(
+          (s) =>
+            s.id === data.subscriptionId &&
+            s.url === url &&
+            (s.includeAttendeeContacts ?? false) === wantsContacts,
+        );
       },
 
       async create(this: IHookFunctions): Promise<boolean> {
@@ -85,10 +103,14 @@ export class DiarizTrigger implements INodeType {
           await diarizApiRequest.call(this, "DELETE", `/api/user/webhooks/${stale.id}`);
         }
 
+        // Sent on every registration, including the re-registration a re-publish causes. This node owns the
+        // subscription's whole lifecycle, so a setting held only on the Diariz side is wiped the next time the
+        // workflow is edited - which is why the choice lives on the node rather than in Diariz.
         const created = (await diarizApiRequest.call(this, "POST", "/api/user/webhooks", {
           name: `n8n: ${this.getWorkflow().name ?? "workflow"}`,
           url,
           eventTypes: events,
+          includeAttendeeContacts: this.getNodeParameter("includeAttendeeContacts", false) as boolean,
         })) as IDataObject;
 
         data.subscriptionId = created.id;
