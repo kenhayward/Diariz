@@ -115,10 +115,12 @@ is **Major.Minor.Build** (currently `0.x`).
   → `0.2.0`); any other PR (fix / chore / docs / refactor) bumps **Build +1** (e.g. `0.2.0` → `0.2.1`).
   **Only bump Major when the user explicitly asks.**
 - **The canonical version is `/version.json`.** Bump it in lockstep with its mirrors:
-  `apps/web/package.json`, `apps/desktop/package.json`, and `src/Diariz.Api/Diariz.Api.csproj`
-  (`<Version>`). The web build injects it (`__APP_VERSION__` via `vite.config.ts`/`vitest.config.ts`)
-  and the API reports it at `GET /health`. `RELEASES[0].version` in `apps/web/src/lib/releases.ts`
-  **must equal** `version.json` (asserted by `releases.test.ts`).
+  `apps/web/package.json`, `apps/desktop/package.json`, `src/Diariz.Api/Diariz.Api.csproj`
+  (`<Version>`), and `integrations/n8n-nodes-diariz/package.json` (which is what npm publishes under, so a
+  stale one cannot be corrected after the fact). The web build injects it (`__APP_VERSION__` via
+  `vite.config.ts`/`vitest.config.ts`) and the API reports it at `GET /health`. `RELEASES[0].version` in
+  `apps/web/src/lib/releases.ts` **must equal** `version.json` (asserted by `releases.test.ts`), and
+  `versionMirrors.test.ts` asserts every mirror.
 - **Add a release entry** to the top of `RELEASES` in `apps/web/src/lib/releases.ts` with: `version`,
   `date`, `pr` (the GitHub PR number), `headline`, a **PR-level prose `summary`** (enough for a user to
   understand the impact), and `added`/`changed`/`fixed` bullet lists as applicable.
@@ -170,8 +172,10 @@ is **Major.Minor.Build** (currently `0.x`).
 
 - **Release checklist (run this for every user-facing PR).** Update all of these **in lockstep, in the same
   PR** (details for each are in the bullets above):
-  1. `version.json` **and** its three mirrors (`apps/web/package.json`, `apps/desktop/package.json`,
-     `src/Diariz.Api/Diariz.Api.csproj`).
+  1. `version.json` **and** its four mirrors (`apps/web/package.json`, `apps/desktop/package.json`,
+     `src/Diariz.Api/Diariz.Api.csproj`, `integrations/n8n-nodes-diariz/package.json`).
+     `apps/web/src/lib/versionMirrors.test.ts` fails the build if any of them drifts - it exists because the
+     n8n node silently sat at `0.1.0` for ~70 releases, and an npm version cannot be corrected once published.
   2. The `RELEASES[0]` entry in `apps/web/src/lib/releases.ts` (must equal `version.json`).
   3. The About-box **`CAPABILITIES`** table row in `releases.ts` (on a scope change) + `AboutModal.tsx`
      disclaimers (on a new third-party library/model).

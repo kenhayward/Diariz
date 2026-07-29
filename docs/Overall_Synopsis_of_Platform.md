@@ -33,7 +33,7 @@ infrastructure services.
 | **Worker** | Python: WhisperX (large-v3), pyannote 3.1, SpeechBrain ECAPA, CUDA | `src/Diariz.Worker` | GPU transcription → alignment → diarization → per-speaker voiceprints |
 | **Web** | React 19 + TypeScript + Vite + Tailwind v4 | `apps/web` | SPA UI (served by nginx in Docker) |
 | **Desktop** | Electron thin shell - Windows tray + **macOS (beta) menu-bar** | `apps/desktop` | Mic + system audio (Windows loopback / macOS ScreenCaptureKit), tray recording; auto-update on Windows, manual update check on macOS; loads the web app from the server origin |
-| **n8n node** | TypeScript, zero runtime dependencies, MIT | `integrations/n8n-nodes-diariz` | Published npm package (`n8n-nodes-diariz`) installed into a **user's own n8n**, not deployed with Diariz: a self-registering webhook trigger and a full REST action node. Versions independently of `version.json`. |
+| **n8n node** | TypeScript, zero runtime dependencies, MIT | `integrations/n8n-nodes-diariz` | Published npm package (`n8n-nodes-diariz`) installed into a **user's own n8n**, not deployed with Diariz: a self-registering webhook trigger and a full REST action node. **Mirrors `version.json`** so the node's number names the Diariz version it wraps. |
 
 Infrastructure (via Docker Compose, project name **`diariz`**):
 
@@ -847,6 +847,14 @@ toggle is off.
 
 A published npm package installed into a **user's own n8n** (Settings → Community Nodes). It is not deployed
 with Diariz and needs no server-side support beyond the REST API and the webhook endpoints already described.
+
+- **Versioning and publishing.** The package version is a **fifth mirror of `/version.json`**
+  (`versionMirrors.test.ts` enforces it), so a node's number names the Diariz version it was generated
+  against. `.github/workflows/n8n-publish.yml` publishes to npm on any push to `main` that touches
+  `integrations/n8n-nodes-diariz/**`, and **skips when that version is already published** — npm forbids
+  overwriting, so "already there" is success rather than a failed build. This exists because the node was
+  published once at `0.1.0` and then sat there through roughly seventy releases while the API moved under it;
+  because npm versions are immutable, that could not be corrected retrospectively.
 
 - **Two nodes plus a credential.** `DiarizTrigger` (webhook trigger), `Diariz` (action), `DiarizApi`
   (bearer credential: base URL + `dz_api_` token). The credential test calls `GET /api/user/profile` and uses

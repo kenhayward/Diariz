@@ -59,6 +59,30 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.169.1",
+    date: "2026-07-29",
+    pr: 376,
+    headline: "The n8n node is published automatically, and its version now means something",
+    summary:
+      "The Diariz node for n8n was published to npm once, in July, at version 0.1.0 - and stayed there " +
+      "while the API it wraps moved through roughly seventy releases. Nothing bumped it and nothing " +
+      "published it, so anyone installing it had no way to tell which version of Diariz it matched, and " +
+      "improvements to the node never reached anybody.\n\n" +
+      "The node's version now mirrors the Diariz version, so **0.169.1 of the node means Diariz 0.169.1**, " +
+      "and it publishes itself whenever it changes. Update it in n8n under Settings, Community nodes.\n\n" +
+      "Nothing in the app itself changes. Version numbers were only ever kept in step by hand across five " +
+      "files, which is how this drifted unnoticed; a test now fails the build if any of them disagree.",
+    added: [
+      "The n8n community node publishes to npm automatically when it changes, so a fix to it actually reaches you.",
+    ],
+    changed: [
+      "The n8n node's version number now matches the Diariz version it was built against, jumping from 0.1.0 to 0.169.1.",
+    ],
+    fixed: [
+      "The n8n node had been stuck at its first published version since July, missing every improvement made since.",
+    ],
+  },
+  {
     version: "0.169.0",
     date: "2026-07-29",
     pr: 375,
