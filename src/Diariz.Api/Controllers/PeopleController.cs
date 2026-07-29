@@ -75,7 +75,8 @@ public class PeopleController : ControllerBase
         "Requires the **Manage people** permission, because the directory is platform-wide and therefore " +
         "lists every external contact the organisation has recorded. To find someone in order to label a " +
         "speaker, use the search endpoint instead - that one is open to everyone.\n\n" +
-        "`q` matches the name **and** the email address, case-insensitively.")]
+        "`q` matches the name, the email address **and** the company, case-insensitively - so you can find " +
+        "everyone from one client without knowing their names.")]
     public async Task<ActionResult<IReadOnlyList<PersonDto>>> List(
         string? q = null, bool? isInternal = null, bool? hasVoiceprint = null, int? take = null, int? skip = null)
     {
@@ -90,7 +91,8 @@ public class PeopleController : ControllerBase
         {
             var needle = q.Trim().ToLower();
             query = query.Where(p => p.Name.ToLower().Contains(needle)
-                                     || (p.Email != null && p.Email.ToLower().Contains(needle)));
+                                     || (p.Email != null && p.Email.ToLower().Contains(needle))
+                                     || (p.CompanyName != null && p.CompanyName.ToLower().Contains(needle)));
         }
 
         if (isInternal is { } internalOnly) query = query.Where(p => p.IsInternal == internalOnly);

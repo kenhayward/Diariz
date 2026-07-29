@@ -245,4 +245,22 @@ describe("SpeakerRow", () => {
     expect(screen.queryByText("Internal")).toBeNull();
     expect(screen.queryByText("External")).toBeNull();
   });
+
+  /// Regression guard. Removing the prefetched people list left the trigger resolving its label from
+  /// displayName alone, and this call site never passed it - so every identified speaker read
+  /// "Unassigned" while the row's own auto badge and Internal/External chip said otherwise.
+  it("shows the assigned person's name on the trigger, not Unassigned", () => {
+    row(speaker({ displayName: "Kevin O'Leary", personId: "p1", identifiedAuto: true, isInternal: false }));
+
+    const trigger = screen.getByRole("button", { name: "Assign SPEAKER_00 to a person" });
+    expect(trigger.textContent).toContain("Kevin O'Leary");
+    expect(trigger.textContent).not.toContain("Unassigned");
+  });
+
+  it("still says Unassigned for a speaker nobody has named", () => {
+    row(speaker());
+
+    expect(screen.getByRole("button", { name: "Assign SPEAKER_00 to a person" }).textContent)
+      .toContain("Unassigned");
+  });
 });

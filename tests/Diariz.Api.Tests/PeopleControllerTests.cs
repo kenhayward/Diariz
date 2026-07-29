@@ -86,6 +86,30 @@ public class PeopleControllerTests
         Assert.Equal("Grace Hopper", Assert.Single(byEmail).Name);
     }
 
+    /// <summary>Company matters for the directory: "show me everyone from Acme" is a real question, and the
+    /// person asking may not know their names. Search (the speaker picker) deliberately does NOT match
+    /// company - there it would surface colleagues who were never in the meeting.</summary>
+    [Fact]
+    public async Task List_FiltersByQuery_MatchingCompany()
+    {
+        using var db = TestDb.Create();
+        await SeedPerson(db, "Ada Lovelace", company: "Analytical Engines");
+        await SeedPerson(db, "Grace Hopper", company: "US Navy");
+
+        var hits = Ok(await Build(db, Guid.NewGuid()).List(q: "analytical"));
+
+        Assert.Equal("Ada Lovelace", Assert.Single(hits).Name);
+    }
+
+    [Fact]
+    public async Task Search_DoesNotMatchCompany()
+    {
+        using var db = TestDb.Create();
+        await SeedPerson(db, "Ada Lovelace", company: "Analytical Engines");
+
+        Assert.Empty(Ok(await Build(db, Guid.NewGuid(), PlatformPermission.None).Search("analytical")));
+    }
+
     [Fact]
     public async Task List_FiltersByInternal()
     {

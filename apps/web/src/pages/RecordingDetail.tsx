@@ -26,6 +26,7 @@ import MoveToSectionModal from "../components/MoveToSectionModal";
 import ShareToRoomModal from "../components/ShareToRoomModal";
 import { useRoom } from "../lib/rooms";
 import DownloadTranscriptModal from "../components/DownloadTranscriptModal";
+import PeopleModal from "../components/PeopleModal";
 import SummaryEditModal from "../components/SummaryEditModal";
 import MeetingMinutesEditModal from "../components/MeetingMinutesEditModal";
 import EmailMinutesModal from "../components/EmailMinutesModal";
@@ -181,6 +182,7 @@ export default function RecordingDetail() {
     retry: false,
   });
   const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [peopleOpen, setPeopleOpen] = useState(false);
 
   // Auto-save the best time-overlap match the first time an unlinked recording is opened, so the calendar
   // icon + Overview details appear with no clicks. Manual links and existing links are never touched, and it
@@ -1279,7 +1281,7 @@ export default function RecordingDetail() {
       icon: <SpeakersGlyph size={15} />,
       toolbar: (
         <>
-          <ToolbarButton label={t("workspace:managePeople")} icon={UsersIcon} onClick={() => navigate("/people")} />
+          <ToolbarButton label={t("workspace:managePeople")} icon={UsersIcon} onClick={() => setPeopleOpen(true)} />
           <ToolbarButton
             label={t("workspace:reidentifyAction")}
             icon={RefreshIcon}
@@ -1663,6 +1665,7 @@ export default function RecordingDetail() {
         />
       )}
       {downloading && <DownloadTranscriptModal recordingId={id} onClose={() => setDownloading(false)} />}
+      {peopleOpen && <PeopleModal onClose={() => setPeopleOpen(false)} />}
       {linkModalOpen && (
         <CalendarLinkModal recordingId={id} aroundDate={rec.createdAt} onClose={() => setLinkModalOpen(false)} />
       )}
@@ -2030,6 +2033,13 @@ export function SpeakerRow({
       <div onClick={stop} onKeyDown={stop}>
         <SpeakerAssign
           label={label}
+          // The trigger reads its current label from here. Without it every identified speaker showed
+          // "Unassigned" while the row's own badges said otherwise.
+          //
+          // Only when it differs from the raw label: this row already prints SPEAKER_nn in the column to
+          // the left, so echoing it in the dropdown would say nothing. The transcript row passes its name
+          // unconditionally on purpose - there the trigger replaces the speaker label itself.
+          displayName={info && info.displayName !== label ? info.displayName : undefined}
           isMulti={info?.isMultiSpeaker ?? false}
           onAssign={onAssign}
           onCreate={onCreate}

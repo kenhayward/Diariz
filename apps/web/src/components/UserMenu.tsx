@@ -1,4 +1,3 @@
-import { useNavigate } from "react-router-dom";
 import { useState, type CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -14,6 +13,7 @@ import SettingsModal from "./SettingsModal";
 import PreferencesModal from "./PreferencesModal";
 import ManageUsersModal from "./ManageUsersModal";
 import ManageFormulasModal from "./ManageFormulasModal";
+import PeopleModal from "./PeopleModal";
 import AboutModal from "./AboutModal";
 
 // One menu row inside the account popover. Rows are padded, rounded and highlight on hover; the footer
@@ -67,7 +67,6 @@ function MenuRow({
 export default function UserMenu() {
   const { t } = useTranslation("account");
   const { initials, pictureUrl, email, fullName, isAdmin, isPlatformAdmin, canManageFormulas, canManagePeople, logout } = useAuth();
-  const navigate = useNavigate();
   const tour = useTour();
   const { data: storage } = useQuery({ queryKey: ["user-storage"], queryFn: api.getUserStorage });
   const { isOpen, toggle, close } = useHubPopover();
@@ -76,6 +75,7 @@ export default function UserMenu() {
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [usersOpen, setUsersOpen] = useState(false);
   const [formulasOpen, setFormulasOpen] = useState(false);
+  const [peopleOpen, setPeopleOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
 
   // Run a menu action: close the popover, then open the chosen modal / start the tour.
@@ -201,7 +201,7 @@ export default function UserMenu() {
             {canManageFormulas && (
               <MenuRow label={t("manageFormulas")} onSelect={run(() => setFormulasOpen(true))} />
             )}
-            {canManagePeople && <MenuRow label={t("people")} onSelect={run(() => navigate("/people"))} />}
+            {canManagePeople && <MenuRow label={t("people")} onSelect={run(() => setPeopleOpen(true))} />}
             <MenuRow label={t("showTour")} onSelect={run(() => tour.start())} />
             {/* A new tab, so opening the docs never discards what the user was doing. */}
             <MenuRow
@@ -222,6 +222,7 @@ export default function UserMenu() {
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       {usersOpen && <ManageUsersModal onClose={() => setUsersOpen(false)} />}
       {formulasOpen && <ManageFormulasModal onClose={() => setFormulasOpen(false)} />}
+      {peopleOpen && <PeopleModal onClose={() => setPeopleOpen(false)} />}
       {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
     </div>
   );
