@@ -25,8 +25,8 @@ const rec = (over: Partial<RecordingDetail> = {}): RecordingDetail =>
     maxSpeakers: null,
     speakerNames: {},
     speakers: [
-      { label: "SPEAKER_00", displayName: "Ken Hayward", profileId: null, identifiedAuto: false, isMultiSpeaker: false },
-      { label: "SPEAKER_01", displayName: "Marie Dubois", profileId: null, identifiedAuto: false, isMultiSpeaker: false },
+      { label: "SPEAKER_00", displayName: "Ken Hayward", personId: null, identifiedAuto: false, isMultiSpeaker: false },
+      { label: "SPEAKER_01", displayName: "Marie Dubois", personId: null, identifiedAuto: false, isMultiSpeaker: false },
     ],
     current: {
       id: "t1",

@@ -114,7 +114,8 @@ public class PlatformWebhooksController : ControllerBase
     private static WebhookSubscriptionDto ToDto(WebhookSubscription s) => new(
         s.Id, s.Name, s.Url, WebhookEventTypes.Split(s.EventTypes), s.IsActive, s.ConsecutiveFailures,
         s.DisabledReason, s.LastDeliveryAt, s.LastStatus, s.CreatedAt,
-        Scope: "Platform", SignalFilter: WebhookSignals.Split(s.SignalFilter));
+        Scope: "Platform", SignalFilter: WebhookSignals.Split(s.SignalFilter),
+        IncludeAttendeeContacts: s.IncludeAttendeeContacts);
 
     private static string Base64Url(byte[] bytes) =>
         Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');

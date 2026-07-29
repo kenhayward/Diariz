@@ -263,6 +263,8 @@
   "evtFormulaCompleted": "A formula finishes",
   "evtFormulaFailed": "A formula fails",
   "automationCreate": "Create automation",
+  "automationIncludeContacts": "Include attendee contact details",
+  "automationIncludeContactsHint": "Sends each attendee's email address and phone number to this URL, alongside their name, job title and company. Leave it off unless the destination needs to contact people.",
   "automationSecretOnce": "Signing secret (shown once) - optional, use it to verify requests really came from Diariz.",
   "automationCreateError": "Could not create the automation.",
   "automationHintZapier": "In Zapier: add a 'Webhooks by Zapier - Catch Hook' trigger and paste its Custom Webhook URL here.",

@@ -202,9 +202,14 @@ public class RecordingsController : ControllerBase
             .OrderBy(a => a.Ordinal)
             .Select(a => new RecordingActionDto(a.Id, a.Text, a.Actor, a.Deadline, a.Ordinal, a.Completed, a.CompletedAt))
             .ToList();
+        var personIds = rec.Speakers.Where(s => s.PersonId is not null).Select(s => s.PersonId!.Value).Distinct().ToList();
+        var people = personIds.Count == 0
+            ? new Dictionary<Guid, Person>()
+            : await _db.People.Where(p => personIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id);
+
         var speakers = rec.Speakers
             .OrderBy(s => s.Label)
-            .Select(s => new SpeakerInfoDto(s.Label, s.DisplayName, s.PersonId, s.IdentifiedAuto, s.IsMultiSpeaker))
+            .Select(s => Describe(s, people))
             .ToList();
         var current = rec.Transcriptions.FirstOrDefault();
         TranscriptionDto? tDto = current is null ? null : new(
@@ -321,6 +326,10 @@ public class RecordingsController : ControllerBase
         {
             recordingId = rec.Id, name = rec.Name ?? rec.Title, source = rec.Source.ToString(),
             status = rec.Status.ToString(), links = WebhookPayload.For(publicUrl, rec.Id),
+            // Always an empty array here - nothing has been transcribed yet, so there are no speakers. The
+            // key is present anyway: a uniform shape across every recording event is kinder to a workflow
+            // than one that sometimes has no `attendees` at all.
+            attendees = Array.Empty<object>(),
         });
 
         // The folder is a property of the placement, not the recording: create the main placement in the
@@ -459,7 +468,7 @@ public class RecordingsController : ControllerBase
         var speaker = rec.Speakers.FirstOrDefault(s => s.Label == label);
         if (speaker is null) return NotFound();
 
-        if (req.ProfileId is null)
+        if (req.PersonId is null)
         {
             // Unassign → revert to the anonymous label (and exit "Multiple Speakers" mode).
             speaker.PersonId = null;
@@ -471,7 +480,7 @@ public class RecordingsController : ControllerBase
         }
 
         // No ownership filter: the directory is platform-wide, so anyone may label a speaker as anyone.
-        var profile = await _db.People.FirstOrDefaultAsync(p => p.Id == req.ProfileId);
+        var profile = await _db.People.FirstOrDefaultAsync(p => p.Id == req.PersonId);
         if (profile is null) return NotFound();
 
         speaker.PersonId = profile.Id;
@@ -1670,5 +1679,18 @@ public class RecordingsController : ControllerBase
         await _queue.EnqueueAsync(new TranscriptionJob(rec.Id, transcription.Id, rec.BlobKey, transcription.Model,
             rec.MinSpeakers, rec.MaxSpeakers));
         await _hub.NotifyStatusAsync(rec.UserId, rec.Id, rec.Status.ToString());
+    }
+
+    /// <summary>Projects a speaker plus, when it was identified as someone, that person's details - so the
+    /// Speakers panel needs no second call. A "Multiple Speakers" slot is deliberately left bare: it is
+    /// overlapping audio, not one person, so attaching a job title to it would be a lie.</summary>
+    private static SpeakerInfoDto Describe(Speaker s, IReadOnlyDictionary<Guid, Person> people)
+    {
+        if (s.IsMultiSpeaker || s.PersonId is not { } personId || !people.TryGetValue(personId, out var person))
+            return new SpeakerInfoDto(s.Label, s.DisplayName, s.PersonId, s.IdentifiedAuto, s.IsMultiSpeaker);
+
+        return new SpeakerInfoDto(
+            s.Label, s.DisplayName, s.PersonId, s.IdentifiedAuto, s.IsMultiSpeaker,
+            person.Title, person.CompanyName, person.Email, person.Phone, person.IsInternal);
     }
 }

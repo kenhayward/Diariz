@@ -15,6 +15,69 @@ public class WebhookPublisherTests
         SecretEncrypted = "c", EventTypes = events, IsActive = active,
     };
 
+    /// <summary>The contacts gate. An automation posts to an arbitrary URL, so attendees' email addresses
+    /// and phone numbers only go to a subscription whose owner deliberately ticked the box - everything
+    /// else gets the contact-free body from the same event.</summary>
+    [Fact]
+    public async Task Contacts_reach_only_the_subscription_that_opted_in()
+    {
+        var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var optedIn = Sub(owner, "recording.summarized");
+        optedIn.IncludeAttendeeContacts = true;
+        db.Webhooks.Add(optedIn);
+        db.Webhooks.Add(Sub(owner, "recording.summarized")); // default: off
+        await db.SaveChangesAsync();
+
+        var pub = new WebhookPublisher(db, NullLogger<WebhookPublisher>.Instance);
+        await pub.PublishAsync(WebhookEventTypes.RecordingSummarized, owner,
+            new { recordingId = Guid.NewGuid(), attendees = new[] { new { name = "Ada" } } },
+            dataWithContacts: new { recordingId = Guid.NewGuid(), attendees = new[] { new { name = "Ada", email = "ada@example.com" } } });
+
+        var bodies = await db.WebhookDeliveries.ToDictionaryAsync(d => d.SubscriptionId, d => d.PayloadJson);
+        Assert.Equal(2, bodies.Count);
+        Assert.Contains("ada@example.com", bodies[optedIn.Id]);
+        Assert.DoesNotContain("ada@example.com", bodies.Single(b => b.Key != optedIn.Id).Value);
+    }
+
+    /// <summary>Both deliveries of one event must keep the same event id, or a subscriber deduplicating on
+    /// it would treat the pair as two different meetings.</summary>
+    [Fact]
+    public async Task Contacts_body_shares_the_event_id_with_the_plain_one()
+    {
+        var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var optedIn = Sub(owner, "recording.summarized");
+        optedIn.IncludeAttendeeContacts = true;
+        db.Webhooks.Add(optedIn);
+        db.Webhooks.Add(Sub(owner, "recording.summarized"));
+        await db.SaveChangesAsync();
+
+        var pub = new WebhookPublisher(db, NullLogger<WebhookPublisher>.Instance);
+        await pub.PublishAsync(WebhookEventTypes.RecordingSummarized, owner,
+            new { recordingId = Guid.NewGuid() }, dataWithContacts: new { recordingId = Guid.NewGuid() });
+
+        Assert.Single((await db.WebhookDeliveries.ToListAsync()).Select(d => d.EventId).Distinct());
+    }
+
+    /// <summary>Without a contact-bearing body, the opt-in changes nothing - it must not fall back to some
+    /// other shape.</summary>
+    [Fact]
+    public async Task Opting_in_without_a_contacts_body_still_gets_the_plain_one()
+    {
+        var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var optedIn = Sub(owner, "formula_result.completed");
+        optedIn.IncludeAttendeeContacts = true;
+        db.Webhooks.Add(optedIn);
+        await db.SaveChangesAsync();
+
+        var pub = new WebhookPublisher(db, NullLogger<WebhookPublisher>.Instance);
+        await pub.PublishAsync(WebhookEventTypes.FormulaResultCompleted, owner, new { marker = "plain" });
+
+        Assert.Contains("plain", (await db.WebhookDeliveries.SingleAsync()).PayloadJson);
+    }
+
     [Fact]
     public async Task Publishes_one_delivery_per_matching_active_subscription()
     {

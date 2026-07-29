@@ -5,8 +5,14 @@ import type { SpeakerInfo } from "./types";
 const sp = (over: Partial<SpeakerInfo>): SpeakerInfo => ({
   label: "SPEAKER_00",
   displayName: "SPEAKER_00",
-  profileId: null,
+  personId: null,
   identifiedAuto: false,
+  isMultiSpeaker: false,
+  title: null,
+  companyName: null,
+  email: null,
+  phone: null,
+  isInternal: null,
   ...over,
 });
 
@@ -20,7 +26,9 @@ describe("isSpeakerAssigned", () => {
   });
 
   it("is true when linked to a profile", () => {
-    expect(isSpeakerAssigned(sp({ profileId: "abc", displayName: "Alice" }))).toBe(true);
+    expect(isSpeakerAssigned(sp({ personId: "abc", displayName: "Alice" }))).toBe(true);
+    // Isolates the person link: the name still matches the label, so only personId can make it assigned.
+    expect(isSpeakerAssigned(sp({ personId: "abc" }))).toBe(true);
   });
 });
 
@@ -39,7 +47,7 @@ describe("allSpeakersAssigned", () => {
     expect(
       allSpeakersAssigned([
         sp({ displayName: "Alice" }),
-        sp({ label: "SPEAKER_01", profileId: "p1", displayName: "Bob" }),
+        sp({ label: "SPEAKER_01", personId: "p1", displayName: "Bob" }),
       ]),
     ).toBe(true);
   });

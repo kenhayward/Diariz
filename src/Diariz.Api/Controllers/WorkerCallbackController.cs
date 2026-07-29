@@ -145,11 +145,19 @@ public class WorkerCallbackController : ControllerBase
             ? $"{Request.Scheme}://{Request.Host}" : _appOpts.Value.PublicUrl;
         var rec = transcription.Recording;
         if (rec.Status == RecordingStatus.Transcribed || rec.Status == RecordingStatus.Summarizing)
-            await _webhooks.PublishAsync(WebhookEventTypes.RecordingTranscribed, rec.UserId, new
+        {
+            object Body(IReadOnlyList<object> attendees) => new
             {
                 recordingId = rec.Id, name = rec.Name ?? rec.Title, status = rec.Status.ToString(),
                 durationMs = body.DurationMs, links = WebhookPayload.For(publicUrl, rec.Id),
-            });
+                attendees,
+            };
+
+            await _webhooks.PublishAsync(
+                WebhookEventTypes.RecordingTranscribed, rec.UserId,
+                Body(await AttendeePayload.ForRecordingAsync(_db, rec.Id, includeContacts: false)),
+                dataWithContacts: Body(await AttendeePayload.ForRecordingAsync(_db, rec.Id, includeContacts: true)));
+        }
 
         return Ok();
     }
@@ -177,6 +185,8 @@ public class WorkerCallbackController : ControllerBase
         {
             recordingId = rec.Id, name = rec.Name ?? rec.Title, status = RecordingStatus.Failed.ToString(),
             error = body.Error, links = WebhookPayload.For(publicUrl, rec.Id),
+            // A failed transcription produced no speakers; the key is present for shape consistency.
+            attendees = Array.Empty<object>(),
         });
 
         return Ok();

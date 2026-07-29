@@ -234,7 +234,14 @@ export interface TranscriptionDto {
 export interface SpeakerInfo {
   label: string;
   displayName: string;
-  profileId: string | null;
+  personId: string | null;
+  /// The person's details, when this speaker was identified as someone. All null for an anonymous speaker
+  /// and for a "Multiple Speakers" slot, which is not one person.
+  title: string | null;
+  companyName: string | null;
+  email: string | null;
+  phone: string | null;
+  isInternal: boolean | null;
   identifiedAuto: boolean;
   /// The user has marked this slot as overlapping/simultaneous speech ("Multiple Speakers").
   /// Such a speaker is never auto-identified or enrolled into a voiceprint.
@@ -993,6 +1000,7 @@ export interface WebhookSubscription {
   eventTypes: string[];
   isActive: boolean;
   consecutiveFailures: number;
+  includeAttendeeContacts: boolean;
   disabledReason: string | null;
   lastDeliveryAt: string | null;
   lastStatus: string | null;
@@ -1024,6 +1032,9 @@ export interface CreateWebhookBody {
   name: string;
   url: string;
   eventTypes: string[];
+  /// Send attendees' email addresses and phone numbers in the payload. Off unless explicitly set - an
+  /// automation posts to an arbitrary URL, so contact details are opt-in per subscription.
+  includeAttendeeContacts?: boolean;
 }
 export interface UpdateWebhookBody extends CreateWebhookBody {
   isActive: boolean;

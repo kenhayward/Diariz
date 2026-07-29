@@ -772,8 +772,8 @@ export const api = {
   },
 
   /// Reassign a recording's speaker to a person, or pass null to unassign.
-  async assignSpeaker(id: string, label: string, profileId: string | null): Promise<void> {
-    await http.put(`/api/recordings/${id}/speakers/${encodeURIComponent(label)}/assign`, { profileId });
+  async assignSpeaker(id: string, label: string, personId: string | null): Promise<void> {
+    await http.put(`/api/recordings/${id}/speakers/${encodeURIComponent(label)}/assign`, { personId });
   },
 
   /// GDPR: erase every voiceprint on the platform (auto-labels revert; manual names kept).

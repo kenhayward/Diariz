@@ -1769,6 +1769,9 @@ namespace Diariz.Domain.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool>("IncludeAttendeeContacts")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 

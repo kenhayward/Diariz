@@ -93,6 +93,25 @@ document that is still generating, so the node polls until it is ready.
 - **Timeout (Seconds)** - default 300. On timeout the node throws; the document may still finish later,
   so fetch it by id or switch to the trigger-based approach.
 
+## Routing on who was in the meeting
+
+Every recording event carries an **attendees** list, so you can branch on the people rather than fetching
+them. Each entry has the name, the person it was identified as, their job title and company, and whether
+they are internal or external.
+
+- Route by who attended: `{{ $json.attendees.map(a => a.name).join(", ") }}`
+- Only continue for meetings with an external party:
+  `{{ $json.attendees.some(a => a.isInternal === false) }}`
+- Email the people who were there, once contact details are switched on for that automation:
+  `{{ $json.attendees.filter(a => a.email).map(a => a.email).join(",") }}`
+
+That last one needs **Include attendee contact details** ticked on the automation in Diariz. Without it the
+`email` and `phone` fields are not in the payload at all, so the expression yields an empty string rather
+than a wrong answer.
+
+Note `isInternal` is `null` for a speaker Diariz could not identify, so test for `=== false` rather than
+relying on falsiness if you mean "definitely external".
+
 ## A worked example: summarise a meeting into Slack
 
 1. **Diariz Trigger** - event **Recording Transcribed**.

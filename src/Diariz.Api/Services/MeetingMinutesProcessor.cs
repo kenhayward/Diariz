@@ -104,7 +104,7 @@ public static class MeetingMinutesProcessor
                     .Select(m => m.Title)
                     .FirstOrDefaultAsync(ct);
             await PublishMinutesReadyAsync(
-                webhooks, publicUrl, rec, markdown, rec.MeetingTypeId, meetingTypeName, logger, ct);
+                db, webhooks, publicUrl, rec, markdown, rec.MeetingTypeId, meetingTypeName, logger, ct);
         }
         catch (Exception ex)
         {
@@ -170,12 +170,14 @@ public static class MeetingMinutesProcessor
     /// it without a second call. Swallows its own failures - the minutes are already persisted and must not be
     /// flipped by a broken publisher (see SummarizationProcessor, which established the pattern).</summary>
     private static async Task PublishMinutesReadyAsync(
-        IWebhookPublisher webhooks, string publicUrl, Recording rec, string minutesText,
+        DiarizDbContext db, IWebhookPublisher webhooks, string publicUrl, Recording rec, string minutesText,
         Guid? meetingTypeId, string? meetingTypeName, ILogger logger, CancellationToken ct)
     {
         try
         {
-            await webhooks.PublishAsync(WebhookEventTypes.RecordingMinutesReady, rec.UserId, new
+            // The same body twice, differing only in whether the attendees carry contact details. Only
+            // subscriptions that opted in receive the second one.
+            object Body(IReadOnlyList<object> attendees) => new
             {
                 recordingId = rec.Id,
                 name = rec.Name ?? rec.Title,
@@ -184,7 +186,14 @@ public static class MeetingMinutesProcessor
                 meetingTypeId,
                 meetingTypeName,
                 links = WebhookPayload.For(publicUrl, rec.Id),
-            }, ct: ct);
+                attendees,
+            };
+
+            await webhooks.PublishAsync(
+                WebhookEventTypes.RecordingMinutesReady, rec.UserId,
+                Body(await AttendeePayload.ForRecordingAsync(db, rec.Id, includeContacts: false, ct)),
+                dataWithContacts: Body(await AttendeePayload.ForRecordingAsync(db, rec.Id, includeContacts: true, ct)),
+                ct: ct);
         }
         catch (Exception ex)
         {
