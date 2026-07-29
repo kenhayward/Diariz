@@ -10,9 +10,16 @@ public interface IWebhookPublisher
     /// <summary>Enqueues one <see cref="WebhookDelivery"/> per matching subscription. Personal subs (owned by
     /// <paramref name="ownerUserId"/>) get the thin <paramref name="data"/> body; platform subs whose SignalFilter
     /// intersects <paramref name="signals"/> get <paramref name="platformData"/> (the inline-output body) when
-    /// supplied, else the thin body. Best-effort: never throws.</summary>
+    /// supplied, else the thin body. Best-effort: never throws.
+    ///
+    /// <para><paramref name="dataWithContacts"/> is the same body but carrying attendees' email addresses and
+    /// phone numbers. A subscription only receives it when its owner has ticked
+    /// <see cref="WebhookSubscription.IncludeAttendeeContacts"/> - without that, an automation pointed at any
+    /// URL would fan the directory's contact details out to it. Built lazily, so the ordinary case where
+    /// nobody has opted in costs nothing.</para></summary>
     Task PublishAsync(string eventType, Guid ownerUserId, object data,
-        IReadOnlyList<string>? signals = null, object? platformData = null, CancellationToken ct = default);
+        IReadOnlyList<string>? signals = null, object? platformData = null, object? dataWithContacts = null,
+        CancellationToken ct = default);
 }
 
 public sealed class WebhookPublisher : IWebhookPublisher
@@ -23,7 +30,8 @@ public sealed class WebhookPublisher : IWebhookPublisher
     public WebhookPublisher(DiarizDbContext db, ILogger<WebhookPublisher> log) { _db = db; _log = log; }
 
     public async Task PublishAsync(string eventType, Guid ownerUserId, object data,
-        IReadOnlyList<string>? signals = null, object? platformData = null, CancellationToken ct = default)
+        IReadOnlyList<string>? signals = null, object? platformData = null, object? dataWithContacts = null,
+        CancellationToken ct = default)
     {
         try
         {
@@ -48,8 +56,16 @@ public sealed class WebhookPublisher : IWebhookPublisher
             var thinBody = WebhookPayload.Build(eventId, eventType, now, data);
             var platformBody = platformData is null ? thinBody : WebhookPayload.Build(eventId, eventType, now, platformData);
 
-            foreach (var s in personal) Enqueue(s, eventId, eventType, thinBody, now);
-            foreach (var s in platform) Enqueue(s, eventId, eventType, platformBody, now);
+            // Only serialized when something actually asked for contacts - the default is nobody.
+            string? contactsBody = null;
+            string BodyFor(WebhookSubscription s, string standard)
+            {
+                if (!s.IncludeAttendeeContacts || dataWithContacts is null) return standard;
+                return contactsBody ??= WebhookPayload.Build(eventId, eventType, now, dataWithContacts);
+            }
+
+            foreach (var s in personal) Enqueue(s, eventId, eventType, BodyFor(s, thinBody), now);
+            foreach (var s in platform) Enqueue(s, eventId, eventType, BodyFor(s, platformBody), now);
             await _db.SaveChangesAsync(ct);
         }
         catch (Exception ex)

@@ -42,7 +42,8 @@ public static class SummarizationProcessor
                 rec.Error = null;
                 await db.SaveChangesAsync(ct);
                 await hub.NotifyStatusAsync(rec.UserId, rec.Id, RecordingStatus.Summarized.ToString());
-                await PublishSummarizedAsync(webhooks, publicUrl, rec, transcription.Summary.Text, logger, ct);
+                await PublishSummarizedAsync(
+                db, webhooks, publicUrl, rec, transcription.Summary.Text, logger, ct);
                 return;
             }
 
@@ -84,7 +85,8 @@ public static class SummarizationProcessor
             rec.Error = null;
             await db.SaveChangesAsync(ct);
             await hub.NotifyStatusAsync(rec.UserId, rec.Id, RecordingStatus.Summarized.ToString());
-            await PublishSummarizedAsync(webhooks, publicUrl, rec, summary.Text, logger, ct);
+            await PublishSummarizedAsync(
+                db, webhooks, publicUrl, rec, summary.Text, logger, ct);
         }
         catch (Exception ex)
         {
@@ -102,19 +104,28 @@ public static class SummarizationProcessor
     /// Swallows its own failures - the summary is already persisted and must not be flipped to Failed by a
     /// broken publisher (see FormulaRunProcessor, which learned the same lesson).</summary>
     private static async Task PublishSummarizedAsync(
-        IWebhookPublisher webhooks, string publicUrl, Recording rec, string summaryText,
+        DiarizDbContext db, IWebhookPublisher webhooks, string publicUrl, Recording rec, string summaryText,
         ILogger logger, CancellationToken ct)
     {
         try
         {
-            await webhooks.PublishAsync(WebhookEventTypes.RecordingSummarized, rec.UserId, new
+            // The same body twice, differing only in whether the attendees carry contact details. Only
+            // subscriptions that opted in receive the second one.
+            object Body(IReadOnlyList<object> attendees) => new
             {
                 recordingId = rec.Id,
                 name = rec.Name ?? rec.Title,
                 status = rec.Status.ToString(),
                 summary = summaryText,
                 links = WebhookPayload.For(publicUrl, rec.Id),
-            }, ct: ct);
+                attendees,
+            };
+
+            await webhooks.PublishAsync(
+                WebhookEventTypes.RecordingSummarized, rec.UserId,
+                Body(await AttendeePayload.ForRecordingAsync(db, rec.Id, includeContacts: false, ct)),
+                dataWithContacts: Body(await AttendeePayload.ForRecordingAsync(db, rec.Id, includeContacts: true, ct)),
+                ct: ct);
         }
         catch (Exception ex)
         {

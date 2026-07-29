@@ -362,13 +362,21 @@ public record MergePeopleRequest(Guid SourceId);
 /// Reported only - merging is always a person's decision, because it cannot be undone.</summary>
 public record PersonDuplicateGroupDto(string Reason, IReadOnlyList<PersonDto> People);
 
-public record AssignSpeakerRequest(Guid? ProfileId);
+public record AssignSpeakerRequest(Guid? PersonId);
 /// <summary>Whether this person should be voice-printed. Turning it on erases any voiceprint they have.</summary>
 public record SetVoiceprintOptOutRequest(bool OptOut);
 /// <summary>Per-recording speaker: its label, shown name, the matched voiceprint (if any), whether
 /// the name was set automatically, and whether it's flagged "Multiple Speakers" (overlapping speech).</summary>
+/// <summary>Per-recording speaker: its label, shown name, the person it was identified as (if any), whether
+/// the name was set automatically, and whether it is flagged "Multiple Speakers" (overlapping speech).
+///
+/// <para>The person's details are carried here so a client showing the Speakers panel does not need a second
+/// call per speaker. They are all null for an anonymous speaker, and for a "Multiple Speakers" slot, which
+/// is by definition not one person.</para></summary>
 public record SpeakerInfoDto(
-    string Label, string DisplayName, Guid? ProfileId, bool IdentifiedAuto, bool IsMultiSpeaker = false);
+    string Label, string DisplayName, Guid? PersonId, bool IdentifiedAuto, bool IsMultiSpeaker = false,
+    string? Title = null, string? CompanyName = null, string? Email = null, string? Phone = null,
+    bool? IsInternal = null);
 public record RenameRecordingRequest(string? Name);
 /// <summary>Diarization speaker-count hints. Either bound may be null (= no bound / auto).</summary>
 public record SpeakerHints(int? Min, int? Max);
@@ -635,15 +643,17 @@ public record UpdateFormulaResultRequest(string Text);
 public record WebhookSubscriptionDto(
     Guid Id, string Name, string Url, string[] EventTypes, bool IsActive, int ConsecutiveFailures,
     string? DisabledReason, DateTimeOffset? LastDeliveryAt, string? LastStatus, DateTimeOffset CreatedAt,
-    string Scope, string[] SignalFilter);
+    string Scope, string[] SignalFilter, bool IncludeAttendeeContacts);
 
 /// <summary>Returned only from <c>Create</c> - the plaintext signing <see cref="Secret"/> is shown once and
 /// never persisted or returned again.</summary>
 public record WebhookCreatedDto(Guid Id, string Name, string Url, string[] EventTypes, string Secret);
 
-public record CreateWebhookRequest(string? Name, string Url, string[] EventTypes);
+public record CreateWebhookRequest(
+    string? Name, string Url, string[] EventTypes, bool? IncludeAttendeeContacts = null);
 
-public record UpdateWebhookRequest(string? Name, string Url, string[] EventTypes, bool IsActive);
+public record UpdateWebhookRequest(
+    string? Name, string Url, string[] EventTypes, bool IsActive, bool? IncludeAttendeeContacts = null);
 
 /// <summary>Creates an admin-owned, signal-routed Platform webhook subscription (Phase 3). Requires a
 /// non-empty <see cref="SignalFilter"/> - a Platform subscription with no signal fires on nothing.</summary>

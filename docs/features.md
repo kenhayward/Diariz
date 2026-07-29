@@ -87,7 +87,18 @@ outbound webhooks from **Preferences → Automations**: pick which events fire i
 finished or failed, a summary / meeting minutes / action items / tags ready, formula run finished or failed), paste
 your tool's webhook URL, and send a test event. The four **AI-output events each carry what they produced** - the
 summary text, the minutes Markdown, the extracted actions, the tags - so a workflow acts on the result directly
-instead of triggering on transcription and polling to find out whether the model had finished. Each
+instead of triggering on transcription and polling to find out whether the model had finished.
+Every recording event also carries an **`attendees`** list: one entry per speaker, ordered by diarization label,
+with the name shown on the transcript, the **person** they were identified as, their **job title**, **company**
+and **internal/external** marker - enough to route on without calling back for it. An unidentified speaker
+carries a null person and a null internal flag (nobody has said), and a "Multiple Speakers" slot carries no
+person details at all, since it is overlapping audio rather than one human. Someone who has **opted out of
+voice-printing still appears by name**: opting out concerns holding their voiceprint, not the fact that they
+attended.
+Attendees' **email addresses and phone numbers are opt-in per automation** (**Include attendee contact
+details**, off by default). An automation posts to an arbitrary URL, so without that gate every event would fan
+the directory's contact details out to whoever owns it; when it is off those keys are **absent** from the
+payload rather than null, so a receiver cannot mistake "not permitted" for "not known". Each
 delivery is a **Standard Webhooks-style signed** POST (HMAC-SHA256 over the exact payload bytes, timestamp and
 delivery-id headers) so the receiver can verify authenticity; failed deliveries are **retried automatically with
 backoff**, deliveries to a single automation are **rate-limited per minute** and a `429 Too Many Requests` is honored

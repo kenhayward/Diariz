@@ -28,6 +28,12 @@ public class WebhookSubscription
 
     public bool IsActive { get; set; } = true;
 
+    /// <summary>Send attendees' email addresses and phone numbers in the payload. <b>Off by default, and
+    /// deliberately opt-in per subscription:</b> an automation points at an arbitrary URL, so without this
+    /// every event would fan the directory's contact details out to whoever owns it. Names, job titles,
+    /// companies and the internal/external marker are always sent; only the contact details are gated.</summary>
+    public bool IncludeAttendeeContacts { get; set; }
+
     /// <summary>Consecutive failed deliveries; reset to 0 on any success. Auto-disable at the threshold.</summary>
     public int ConsecutiveFailures { get; set; }
 

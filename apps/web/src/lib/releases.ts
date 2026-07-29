@@ -36,7 +36,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
 | **API access** | Generate a personal API token (when enabled), read-only or read-write, with an optional expiry date, to call the REST API as yourself, with a built-in API reference documenting every endpoint - what it does, who may call it, and what it changes. |
-| **Automations (webhooks)** | When enabled, register outbound webhooks from Preferences that fire when a recording is created, finishes or fails transcription, a summary / meeting minutes / action items / tags become ready (each carrying its output), or a formula finishes or fails - signed deliveries with automatic retries (rate-limited per automation and 429-aware), a test-event button, and auto-pause after repeated failures. Admins can also define named Workflow Signals and wire a platform automation to one, so a formula author just picks "When this finishes, trigger: ..." in the formula editor - no URL or per-user setup - and the formula's output is delivered inline to everyone routed through that signal. |
+| **Automations (webhooks)** | When enabled, register outbound webhooks from Preferences that fire when a recording is created, finishes or fails transcription, a summary / meeting minutes / action items / tags become ready (each carrying its output), or a formula finishes or fails. Every recording event also carries an **attendees** list - who spoke, the person they are, their title, company, and internal or external - with email addresses and phone numbers included only when that automation opts in. Signed deliveries with automatic retries (rate-limited per automation and 429-aware), a test-event button, and auto-pause after repeated failures. Admins can also define named Workflow Signals and wire a platform automation to one, so a formula author just picks "When this finishes, trigger: ..." in the formula editor - no URL or per-user setup - and the formula's output is delivered inline to everyone routed through that signal. |
 | **n8n** | A published community node (\`n8n-nodes-diariz\`): a trigger that registers its own automation and verifies every signed delivery, plus an action node covering the whole REST API - with dropdowns listing your real recordings and formulas, files in and out, and a Run Formula step that waits for the document to finish. |
 | **Multi-user & groups** | User groups grant platform permissions (manage rooms / users / platform), with an approval lifecycle, per-user isolation, and Light/Dark/Auto themes. |
 | **Admin controls** | Storage quotas, optional audio auto-deletion, a global AI request timeout, separate platform toggles for API access, Claude/MCP, and Automations (webhooks), and whole-platform backup & restore. |
@@ -58,6 +58,33 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.166.0",
+    date: "2026-07-29",
+    pr: 370,
+    headline: "Automations now say who was in the meeting",
+    summary:
+      "Every recording event sent to an automation now carries an **attendees** list: who spoke, which " +
+      "person in the directory they are, their job title and company, and whether they are internal or " +
+      "external. Until now a workflow was told a meeting had finished but nothing about who was in it, so " +
+      "anything that needed to route on the people had to call back for the details.\n\n" +
+      "**Email addresses and phone numbers are opt-in, per automation.** An automation posts to whatever " +
+      "URL you give it, so contact details are only included when you tick **Include attendee contact " +
+      "details** on that automation. Names, titles, companies and the internal/external marker are always " +
+      "sent. Someone who has opted out of voice-printing still appears by name: opting out is about " +
+      "holding their voiceprint, not about pretending they were not there.\n\n" +
+      "The recording view's own data now carries the same details for identified speakers, so anything " +
+      "reading a recording knows who its speakers are without a second lookup.\n\n" +
+      "**One API change:** a speaker's `profileId` is now `personId`, matching the rest of the people work.",
+    added: [
+      "An **attendees** list on every recording event sent to an automation: name, the person they were identified as, job title, company, and internal or external.",
+      "**Include attendee contact details**, a per-automation setting (off by default) that adds attendees' email addresses and phone numbers to the payload.",
+      "A recording's speakers now carry the person's title, company, email, phone and internal/external marker.",
+    ],
+    changed: [
+      "A speaker's `profileId` is now `personId`, in both the recording data and the speaker-assignment request.",
+    ],
+  },
   {
     version: "0.165.0",
     date: "2026-07-29",

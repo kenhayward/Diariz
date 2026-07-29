@@ -27,6 +27,7 @@ export default function AutomationsSection() {
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [includeContacts, setIncludeContacts] = useState(false);
   const [provider, setProvider] = useState<Provider>(null);
   const [created, setCreated] = useState<WebhookCreated | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +77,7 @@ export default function AutomationsSection() {
         url: hook.url,
         eventTypes: hook.eventTypes,
         isActive: true,
+        includeAttendeeContacts: hook.includeAttendeeContacts,
       });
       qc.invalidateQueries({ queryKey: ["webhooks"] });
     } catch (e) {
@@ -100,11 +102,13 @@ export default function AutomationsSection() {
         name: name.trim() || t("automationDefaultName"),
         url,
         eventTypes,
+        includeAttendeeContacts: includeContacts,
       });
       setCreated(result);
       setName("");
       setUrl("");
       setSelected({});
+      setIncludeContacts(false);
       qc.invalidateQueries({ queryKey: ["webhooks"] });
     } catch (e) {
       setError(apiErrorMessage(e, t("automationCreateError")));
@@ -204,6 +208,21 @@ export default function AutomationsSection() {
         aria-label={t("automationDefaultName")}
         className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
       />
+
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={includeContacts}
+          onChange={(e) => setIncludeContacts(e.target.checked)}
+          className="mt-0.5"
+        />
+        <span>
+          <span className="text-gray-700 dark:text-gray-200">{t("automationIncludeContacts")}</span>
+          <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
+            {t("automationIncludeContactsHint")}
+          </span>
+        </span>
+      </label>
 
       <div className="flex items-center gap-3">
         <button

@@ -44,6 +44,27 @@ Each automation card then offers **Send test event**, **Recent deliveries** (the
 The four AI-output events carry **their output inline** - the summary text, the minutes Markdown, the
 actions, the tags - so your workflow does not need a second call back to the API.
 
+## Who was in the meeting
+
+Every recording event also carries an **attendees** list, so a workflow can decide what to do based on who
+was there. Each entry has:
+
+- the **name** shown on the transcript, and the **person** in the directory it was identified as
+- their **job title**, **company**, and whether they are **internal or external**
+- whether the name was applied automatically, and whether the slot is "Multiple Speakers"
+
+An unidentified speaker has no person and no internal/external answer - nobody has said. A "Multiple
+Speakers" slot carries no person details either, because it is overlapping voices rather than one human.
+Someone who has opted out of voice-printing **still appears by name**: opting out is about not holding their
+voiceprint, not about pretending they were not in the room.
+
+### Contact details are opt-in
+
+Email addresses and phone numbers are **not** sent unless you tick **Include attendee contact details** on
+that automation. An automation posts to whatever URL you give it, so leaving this off by default stops every
+event quietly handing your contact list to the destination. When it is off, those fields are missing from the
+payload entirely rather than empty, so your workflow can tell "not allowed" apart from "not known".
+
 ## Workflow Signals
 
 The problem Workflow Signals solve: without them, every formula author who wants their output delivered

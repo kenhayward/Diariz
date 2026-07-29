@@ -263,6 +263,8 @@
   "evtFormulaCompleted": "Une formule se termine",
   "evtFormulaFailed": "Une formule échoue",
   "automationCreate": "Créer l'automatisation",
+  "automationIncludeContacts": "Inclure les coordonnees des participants",
+  "automationIncludeContactsHint": "Envoie l'adresse e-mail et le numero de telephone de chaque participant a cette URL, avec son nom, sa fonction et sa societe. Laissez cette option desactivee sauf si la destination doit contacter ces personnes.",
   "automationSecretOnce": "Clé de signature (affichée une seule fois) - facultatif, elle permet de vérifier que les requêtes proviennent bien de Diariz.",
   "automationCreateError": "Impossible de créer l'automatisation.",
   "automationHintZapier": "Dans Zapier : ajoutez un déclencheur 'Webhooks by Zapier - Catch Hook' et collez ici son Custom Webhook URL.",

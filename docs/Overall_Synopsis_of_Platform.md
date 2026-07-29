@@ -787,6 +787,22 @@ toggle is off.
   — the same header names/format used by the Standard Webhooks spec, so existing verification libraries work
   unmodified. The per-subscription signing secret (`dz_whsec_…`, shown once at creation) is encrypted at rest via
   `IWebhookSecretProtector` (ASP.NET Data Protection, same keyring as the summarisation API-key protector).
+- **`attendees[]` on every `recording.*` event.** `Services/AttendeePayload.ForRecordingAsync` returns one
+  entry per speaker ordered by diarization label (stable across events for the same recording):
+  `label, name, personId, isMultiSpeaker, identifiedAuto, isInternal`, plus `title`, `companyName`, `email`
+  and `phone` when contacts are permitted. `isInternal` is **null** for an unidentified speaker - nobody has
+  said - and a `IsMultiSpeaker` slot carries no person details at all, since it is overlapping audio rather
+  than one human. An **opted-out** person still appears by name: opting out concerns holding the voiceprint,
+  not the fact that they attended. `recording.created` and `recording.transcription_failed` carry `[]` (no
+  speakers exist yet), deliberately rather than omitting the key - a uniform shape is kinder to a workflow.
+- **The contacts gate.** `WebhookSubscription.IncludeAttendeeContacts` (bool, NOT NULL, default false) is
+  opt-in **per subscription**, because an automation posts to an arbitrary URL and would otherwise fan the
+  directory's contact details out to whoever owns it. The publish sites build the body twice through a local
+  `Body(attendees)` function and pass the second as `dataWithContacts`; `WebhookPublisher` picks per
+  subscription, **reusing its existing thin-vs-full split** rather than adding a second mechanism, and only
+  serialises the contact-bearing body if something actually asked for it. Both share one `eventId`, so a
+  subscriber deduplicating on it does not see two meetings. When contacts are off the keys are **absent**,
+  not null, so a receiver cannot read "not permitted" as "not known".
 - **Postgres-backed delivery queue, not Redis.** `WebhookDelivery` rows *are* the queue: `Status`
   (`Pending`/`Delivered`/`Failed`) + `NextAttemptAt` double as both the retry schedule and a durable audit log
   (surfaced to the user via `GET /api/user/webhooks/{id}/deliveries`). `WebhookDeliveryWorker` (a `BackgroundService`,

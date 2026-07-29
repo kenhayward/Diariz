@@ -184,7 +184,7 @@
       },
       "AssignSpeakerRequest": {
         "properties": {
-          "profileId": {
+          "personId": {
             "format": "uuid",
             "type": [
               "null",
@@ -193,7 +193,7 @@
           }
         },
         "required": [
-          "profileId"
+          "personId"
         ],
         "type": "object"
       },
@@ -935,6 +935,12 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "includeAttendeeContacts": {
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "name": {
             "type": [
@@ -3368,11 +3374,29 @@
       },
       "SpeakerInfoDto": {
         "properties": {
+          "companyName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "displayName": {
             "type": "string"
           },
+          "email": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "identifiedAuto": {
             "type": "boolean"
+          },
+          "isInternal": {
+            "type": [
+              "null",
+              "boolean"
+            ]
           },
           "isMultiSpeaker": {
             "default": false,
@@ -3381,8 +3405,20 @@
           "label": {
             "type": "string"
           },
-          "profileId": {
+          "personId": {
             "format": "uuid",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "phone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "title": {
             "type": [
               "null",
               "string"
@@ -3392,7 +3428,7 @@
         "required": [
           "label",
           "displayName",
-          "profileId",
+          "personId",
           "identifiedAuto"
         ],
         "type": "object"
@@ -4011,6 +4047,12 @@
             },
             "type": "array"
           },
+          "includeAttendeeContacts": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
           "isActive": {
             "type": "boolean"
           },
@@ -4414,6 +4456,9 @@
             "format": "uuid",
             "type": "string"
           },
+          "includeAttendeeContacts": {
+            "type": "boolean"
+          },
           "isActive": {
             "type": "boolean"
           },
@@ -4458,7 +4503,8 @@
           "lastStatus",
           "createdAt",
           "scope",
-          "signalFilter"
+          "signalFilter",
+          "includeAttendeeContacts"
         ],
         "type": "object"
       },

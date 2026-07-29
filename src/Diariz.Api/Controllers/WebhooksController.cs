@@ -78,6 +78,7 @@ public class WebhooksController : ControllerBase
             Id = Guid.NewGuid(), OwnerUserId = UserId, Scope = WebhookScope.Personal,
             Name = string.IsNullOrWhiteSpace(req.Name) ? "Automation" : req.Name.Trim(),
             Url = req.Url.Trim(), SecretEncrypted = _protector.Protect(secret)!, EventTypes = WebhookEventTypes.Join(events),
+            IncludeAttendeeContacts = req.IncludeAttendeeContacts ?? false,
         };
         _db.Webhooks.Add(row);
         await _db.SaveChangesAsync();
@@ -108,6 +109,8 @@ public class WebhooksController : ControllerBase
         row.EventTypes = WebhookEventTypes.Join(events);
         if (req.IsActive && !row.IsActive) { row.ConsecutiveFailures = 0; row.DisabledReason = null; }
         row.IsActive = req.IsActive;
+        // Omitted means "leave it alone", so an older client cannot silently turn contact sharing off.
+        if (req.IncludeAttendeeContacts is { } contacts) row.IncludeAttendeeContacts = contacts;
         await _db.SaveChangesAsync();
         return ToDto(row);
     }
@@ -188,7 +191,8 @@ public class WebhooksController : ControllerBase
     private static WebhookSubscriptionDto ToDto(WebhookSubscription s) => new(
         s.Id, s.Name, s.Url, WebhookEventTypes.Split(s.EventTypes), s.IsActive, s.ConsecutiveFailures,
         s.DisabledReason, s.LastDeliveryAt, s.LastStatus, s.CreatedAt,
-        Scope: "Personal", SignalFilter: WebhookSignals.Split(s.SignalFilter));
+        Scope: "Personal", SignalFilter: WebhookSignals.Split(s.SignalFilter),
+        IncludeAttendeeContacts: s.IncludeAttendeeContacts);
 
     private static string Base64Url(byte[] bytes) =>
         Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
