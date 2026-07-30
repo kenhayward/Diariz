@@ -40,7 +40,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **n8n** | A published community node (\`n8n-nodes-diariz\`): a trigger that registers its own automation and verifies every signed delivery, plus an action node covering the whole REST API - with dropdowns listing your real recordings and formulas, files in and out, and a Run Formula step that waits for the document to finish. |
 | **Multi-user & groups** | User groups grant platform permissions (manage rooms / users / platform), with an approval lifecycle, per-user isolation, and Light/Dark/Auto themes. |
 | **Admin controls** | Storage quotas, optional audio auto-deletion, a global AI request timeout, separate platform toggles for API access, Claude/MCP, and Automations (webhooks), and whole-platform backup & restore. |
-| **Help & documentation** | A browsable help section at \`/help\` with a grouped article tree and instant search, plus contextual help throughout the app: a small \`?\` next to a feature opens a short explanation with a link straight to the full article. An **Advanced and admin** section covers configuring formulas, meeting types, Workflow Signals and webhooks, users and permissions, connecting Claude over MCP, building n8n and Zapier workflows, and the REST API. |
+| **Help & documentation** | A browsable help section at \`/help\` with a grouped article tree and instant search, plus contextual help throughout the app: a small \`?\` next to a feature opens a short explanation with a link straight to the full article. An **Advanced and admin** section covers configuring formulas, meeting types, Workflow Signals and webhooks, users and permissions, connecting Claude over MCP, building n8n and Zapier workflows, and the REST API. A **CRM integration** section covers wiring Diariz to any CRM through n8n or Zapier, with a worked EspoCRM example. |
 
 The interface is localized (English, Spanish, French, German), and languages are community-extensible via simple JSON files.
 `.trim();
@@ -58,6 +58,34 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.171.4",
+    date: "2026-07-30",
+    pr: 382,
+    headline: "New help section: connecting Diariz to your CRM",
+    summary:
+      "Diariz has no CRM connector, and is not going to grow one. Adding a button per CRM means picking " +
+      "winners, holding your CRM credentials, and shipping an update every time a vendor changes an API. " +
+      "Instead Diariz emits signed events and exposes its whole REST API, and you join the two with n8n or " +
+      "Zapier - which already speak to your CRM, and keep the credentials on your side.\n\n" +
+      "What was missing was not plumbing but instructions. A new **CRM integration** section in the help " +
+      "explains the approach: what is worth sending to a CRM and what is not, how to work out which " +
+      "customer a meeting was with, and why folders and meeting types already give you the " +
+      "customer-by-customer view most people are trying to build.\n\n" +
+      "A second article works the whole thing through against **EspoCRM**, an open-source CRM, with six " +
+      "recipes: log every meeting with its summary, raise tasks from action items, file recordings under " +
+      "the right customer automatically, brief the AI from your CRM before the meeting starts, send task " +
+      "completion back, and keep people's job titles, companies and phone numbers up to date from the CRM " +
+      "so the contact card on a speaker is right without anyone retyping it. Only the field names are " +
+      "EspoCRM-specific - the shapes work against any CRM with a REST API.\n\n" +
+      "It also warns about the two mistakes everybody makes: forgetting to switch on attendee contact " +
+      "details, so every lookup silently finds nobody; and copying deal data into Diariz, where it goes " +
+      "quietly out of date.\n\n" +
+      "Documentation only - nothing in the app behaves differently.",
+    added: [
+      "A CRM integration section in the help, with an overview of the approach and a worked EspoCRM example.",
+    ],
+  },
   {
     version: "0.171.3",
     date: "2026-07-30",

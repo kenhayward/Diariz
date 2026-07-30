@@ -14,6 +14,10 @@ export const HELP_GROUPS: { id: string; label: string }[] = [
   // Admin and power-user territory: configuring formulas, RBAC, and the integration surfaces. Last,
   // because most readers never need it.
   { id: "advanced", label: "groupAdvanced" },
+  // A worked pattern rather than a feature: Diariz ships no CRM connector, so these articles teach the
+  // n8n/Zapier recipes that stand in for one. Separated from "advanced" because the reader is chasing an
+  // outcome ("get my meetings into the CRM") rather than configuring a Diariz surface.
+  { id: "crm", label: "groupCrm" },
   { id: FALLBACK_GROUP, label: "groupOther" },
 ];
 
