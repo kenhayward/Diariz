@@ -136,10 +136,15 @@ npm run build
 
 ### Publishing
 
-Pushing a change to `integrations/n8n-nodes-diariz` on `main` publishes the package to npm
-(`.github/workflows/n8n-publish.yml`), using the version in `package.json` - which mirrors the repository's
-`/version.json` and is bumped by every pull request. The job skips silently when that version is already on
-npm, so it is safe to re-run by hand from any commit.
+Changing anything the package actually ships, on `main`, publishes it to npm
+(`.github/workflows/n8n-publish.yml`) using the version in `package.json` - which mirrors the repository's
+`/version.json` and is bumped by every pull request.
+
+**A version bump alone does not publish.** Because the version mirrors the repository, `package.json`
+changes on every merge, so it is excluded from the trigger; otherwise every merge would publish an
+identical package under a new number. The job also skips when its version is already on npm, so it is safe
+to re-run by hand from any commit - and `workflow_dispatch` will publish whatever is on `main` if you need
+to force one out.
 
 The long tail of operations is generated from Diariz's own OpenAPI document
 (`nodes/Diariz/generated/openapi.snapshot.json`). Regenerate with `npm run generate`. Continuous integration

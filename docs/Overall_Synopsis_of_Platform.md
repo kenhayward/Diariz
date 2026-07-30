@@ -850,11 +850,18 @@ with Diariz and needs no server-side support beyond the REST API and the webhook
 
 - **Versioning and publishing.** The package version is a **fifth mirror of `/version.json`**
   (`versionMirrors.test.ts` enforces it), so a node's number names the Diariz version it was generated
-  against. `.github/workflows/n8n-publish.yml` publishes to npm on any push to `main` that touches
-  `integrations/n8n-nodes-diariz/**`, and **skips when that version is already published** — npm forbids
-  overwriting, so "already there" is success rather than a failed build. This exists because the node was
-  published once at `0.1.0` and then sat there through roughly seventy releases while the API moved under it;
-  because npm versions are immutable, that could not be corrected retrospectively.
+  against. `.github/workflows/n8n-publish.yml` publishes to npm on a push to `main` touching
+  `integrations/n8n-nodes-diariz/**` **except `package.json`**, and **skips when that version is already
+  published** — npm forbids overwriting, so "already there" is success rather than a failed build. This
+  exists because the node was published once at `0.1.0` and then sat there through roughly seventy releases
+  while the API moved under it; because npm versions are immutable, that could not be corrected
+  retrospectively.
+
+  **The exclusion is the whole filter.** Mirroring the version means `package.json` changes on *every* merge,
+  so including it made the path filter match everything — four npm versions of byte-identical node code went
+  out (0.170.0 through 0.171.2) before it was spotted. The two decisions were made in the same PR and defeat
+  each other: whenever a file is both "part of the package" and "touched by every release", it cannot also be
+  a useful trigger.
 
 - **Two nodes plus a credential.** `DiarizTrigger` (webhook trigger), `Diariz` (action), `DiarizApi`
   (bearer credential: base URL + `dz_api_` token). The credential test calls `GET /api/user/profile` and uses
