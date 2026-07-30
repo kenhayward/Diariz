@@ -592,5 +592,7 @@
   "roomRecordings_other": "{{count}} enregistrements",
   "roomSharedPrefix": "partagée",
   "yourRooms": "Vos salles",
-  "editPersonAction": "Modifier {{name}}"
+  "editPersonAction": "Modifier {{name}}",
+  "speakerNoContactDetails": "Aucune coordonnee enregistree.",
+  "speakerAddContactDetails": "Ajouter des coordonnees"
 }

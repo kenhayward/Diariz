@@ -592,5 +592,7 @@
   "roomRecordings_other": "{{count}} recordings",
   "roomSharedPrefix": "shared",
   "yourRooms": "Your rooms",
-  "editPersonAction": "Edit {{name}}"
+  "editPersonAction": "Edit {{name}}",
+  "speakerNoContactDetails": "No contact details recorded.",
+  "speakerAddContactDetails": "Add details"
 }

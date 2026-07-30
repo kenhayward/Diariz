@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
 import SpeakerContactCard, { contactSummary } from "./SpeakerContactCard";
 import type { SpeakerInfo } from "../lib/types";
 
@@ -56,17 +56,55 @@ describe("SpeakerContactCard", () => {
     expect(container.textContent).toBe("");
   });
 
-  it("renders nothing when the person is known but carries no details at all", () => {
-    const bare = speaker({ title: null, companyName: null, email: null, phone: null, isInternal: null });
-    const { container } = render(<SpeakerContactCard info={bare} />);
+  // ---- The empty state ----
+  //
+  // Most identified people carry nothing but a name, because enrolling a voice is all it takes to create one.
+  // The card used to render name-and-marker for those - the same two things already on the row above it, in a
+  // thin box that reads as nothing at all. Saying the details are missing, and offering to add them, is the
+  // difference between a useless card and a useful one.
 
-    expect(container.textContent).toBe("");
+  const bare = () => speaker({ title: null, companyName: null, email: null, phone: null });
+
+  it("says so when a known person has no contact details", () => {
+    render(<SpeakerContactCard info={bare()} />);
+
+    expect(screen.getByText(/No contact details/i)).toBeTruthy();
+  });
+
+  it("offers to add them when the viewer may edit people", () => {
+    const onEdit = vi.fn();
+    render(<SpeakerContactCard info={bare()} canManagePeople onEdit={onEdit} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Add details/i }));
+
+    expect(onEdit).toHaveBeenCalled();
+  });
+
+  it("does not offer it without the permission", () => {
+    render(<SpeakerContactCard info={bare()} onEdit={() => {}} />);
+
+    expect(screen.queryByRole("button", { name: /Add details/i })).toBeNull();
+    expect(screen.getByText(/No contact details/i)).toBeTruthy();
+  });
+
+  it("says nothing about missing details once there is something to show", () => {
+    render(<SpeakerContactCard info={speaker()} canManagePeople onEdit={() => {}} />);
+
+    expect(screen.queryByText(/No contact details/i)).toBeNull();
   });
 });
 
 /// The chip's tooltip and the card read from one function on purpose - two renderings of the same person
 /// that could disagree is exactly the kind of drift nobody notices.
 describe("contactSummary", () => {
+  /// Repeating the name and the marker the row already shows is what made the tooltip pointless. When there
+  /// is nothing to add, say that instead.
+  it("says the details are missing rather than echoing the row", () => {
+    const bare = speaker({ title: null, companyName: null, email: null, phone: null });
+
+    expect(contactSummary(bare)).toBe("Lizzie Mcneil\nNo contact details recorded");
+  });
+
   it("lists every detail that is known, one per line", () => {
     expect(contactSummary(speaker())).toBe(
       "Lizzie Mcneil\nPresenter\nBBC\nlizzie@bbc.test\n020 7946 0000\nExternal",
@@ -79,8 +117,8 @@ describe("contactSummary", () => {
     );
   });
 
-  it("is just the name when nothing else is known", () => {
+  it("is the name plus the missing-details line when nothing else is known", () => {
     const bare = speaker({ title: null, companyName: null, email: null, phone: null, isInternal: null });
-    expect(contactSummary(bare)).toBe("Lizzie Mcneil");
+    expect(contactSummary(bare)).toBe("Lizzie Mcneil\nNo contact details recorded");
   });
 });

@@ -592,5 +592,7 @@
   "roomRecordings_other": "{{count}} grabaciones",
   "roomSharedPrefix": "compartida",
   "yourRooms": "Tus salas",
-  "editPersonAction": "Editar a {{name}}"
+  "editPersonAction": "Editar a {{name}}",
+  "speakerNoContactDetails": "No hay datos de contacto.",
+  "speakerAddContactDetails": "Anadir datos"
 }

@@ -31,6 +31,10 @@ whether they are internal or external - so you can read the room without leaving
 segments puts a contact card above them, where their email address and phone number are links you can act
 on.
 
+Most people in the directory have nothing but a name - enrolling a voice is all it takes to create one - so
+both the tooltip and the card will often say **no contact details are recorded**, with a shortcut to add
+them. That is the honest answer: Diariz knows who spoke, not how to reach them, until somebody says.
+
 If you can manage people, a **pencil** on the speaker's row opens their details for editing without leaving
 the transcript. It edits the same shared record the People directory does, so a correction made here is a
 correction everywhere. Manage
