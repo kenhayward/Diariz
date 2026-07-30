@@ -35,6 +35,9 @@ public class MeetingMinutesWorker : BackgroundService
         _log = log;
     }
 
+    /// <summary>Recovers jobs orphaned when a previous instance was killed mid-job.</summary>
+    private readonly StreamReclaimer _reclaimer = new();
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // Always listen: even with no server-default endpoint, individual users may configure their own
@@ -59,6 +62,13 @@ public class MeetingMinutesWorker : BackgroundService
             }
 
             // StackExchange.Redis has no blocking read; poll with a short delay when idle.
+            if (entries.Length == 0)
+            {
+                // Idle is the moment to pick up anything an instance that was killed mid-job left behind.
+                entries = await _reclaimer.ReclaimDueAsync(
+                    db, _opts.StreamKey, _opts.ConsumerGroup, _opts.ConsumerName, _log);
+            }
+
             if (entries.Length == 0)
             {
                 await Delay(TimeSpan.FromSeconds(1), stoppingToken);

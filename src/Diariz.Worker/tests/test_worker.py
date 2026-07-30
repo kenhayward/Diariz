@@ -159,16 +159,31 @@ def test_handle_merge_failure_reports_and_cleans_up(monkeypatch, tmp_path):
 # ---- Consume loop (dispatch + resilience) ----
 
 class _FakeRedis:
-    """Minimal Redis stand-in: `responses` is a list of XREADGROUP return values, yielded per poll."""
-    def __init__(self, responses):
+    """Minimal Redis stand-in: `responses` is a list of XREADGROUP return values, yielded per poll.
+
+    `pending` maps a stream key to the xpending_range rows it should report, so the reclaim path can be
+    exercised without a real Redis."""
+    def __init__(self, responses, pending=None):
         self._responses = list(responses)
         self.acked = []
+        self.claimed = []
+        self.refreshed = []
+        self._pending = dict(pending or {})
 
     def xreadgroup(self, group, consumer, streams, count, block):
         return self._responses.pop(0) if self._responses else []
 
     def xack(self, stream, group, msg_id):
         self.acked.append((stream, msg_id))
+
+    def xpending_range(self, stream, group, min, max, count, idle=None):
+        self.last_idle_filter = idle
+        return list(self._pending.get(stream, []))
+
+    def xclaim(self, stream, group, consumer, min_idle_time, message_ids):
+        # min_idle_time 0 is a keepalive refresh by the owner; anything else is a steal from a dead one.
+        (self.refreshed if min_idle_time == 0 else self.claimed).append((stream, message_ids[0]))
+        return [(message_ids[0], {"job": json.dumps({"TranscriptionId": "recovered"})})]
 
 
 def _keep_going(n):
@@ -220,3 +235,69 @@ def test_run_loop_survives_redis_timeout_and_connection_errors(monkeypatch):
     worker.run_loop(r, keep_going=_keep_going(2))  # two flaky polls, then stop — must not raise
 
     assert r.polls == 2
+
+
+# ---- Orphaned-job recovery ----
+#
+# XACK lives in a `finally`, which never runs when the process is killed (a container restart, an OOM).
+# The message then sits in the group's pending list forever, because the loop only ever reads ">" (new
+# messages). The recording is left in Transcribing with nothing to move it on. These cover the reclaim.
+
+def test_reclaim_stale_claims_a_message_abandoned_by_a_dead_worker():
+    r = _FakeRedis([], pending={
+        worker.config.STREAM_KEY: [
+            {"message_id": "7-0", "consumer": "worker-1", "time_since_delivered": 900_000, "times_delivered": 1},
+        ]
+    })
+
+    recovered = worker.reclaim_stale(r, worker.config.STREAM_KEY)
+
+    assert [m[0] for m in recovered] == ["7-0"]
+    assert r.claimed == [(worker.config.STREAM_KEY, "7-0")]
+    # Only messages idle beyond the threshold are even considered - a job a healthy worker is still
+    # working on must never be stolen out from under it.
+    assert r.last_idle_filter == worker.RECLAIM_MIN_IDLE_MS
+
+
+def test_reclaim_stale_drops_a_message_that_keeps_killing_the_worker():
+    """The poison-message guard. Reclaiming reintroduces the loop that acking-in-finally exists to
+    prevent, so a message that has already been delivered too many times is acked and abandoned rather
+    than handed to the worker again to crash it again."""
+    r = _FakeRedis([], pending={
+        worker.config.STREAM_KEY: [
+            {"message_id": "8-0", "consumer": "worker-1", "time_since_delivered": 900_000,
+             "times_delivered": worker.RECLAIM_MAX_DELIVERIES + 1},
+        ]
+    })
+
+    recovered = worker.reclaim_stale(r, worker.config.STREAM_KEY)
+
+    assert recovered == []
+    assert r.claimed == []
+    assert r.acked == [(worker.config.STREAM_KEY, "8-0")]
+
+
+def test_run_loop_processes_a_reclaimed_job_when_no_new_ones_arrive(monkeypatch):
+    handled = []
+    monkeypatch.setattr(worker, "handle", lambda job: handled.append(job))
+    r = _FakeRedis([], pending={
+        worker.config.STREAM_KEY: [
+            {"message_id": "7-0", "consumer": "worker-1", "time_since_delivered": 900_000, "times_delivered": 1},
+        ]
+    })
+
+    worker.run_loop(r, keep_going=_keep_going(1))
+
+    assert handled == [{"TranscriptionId": "recovered"}]
+    assert r.acked == [(worker.config.STREAM_KEY, "7-0")]
+
+
+def test_refresh_claim_resets_the_idle_clock_without_stealing():
+    """A transcription can legitimately run for tens of minutes, during which its message looks idle.
+    Refreshing the claim while working is what makes a short reclaim threshold safe."""
+    r = _FakeRedis([])
+
+    worker.refresh_claim(r, worker.config.STREAM_KEY, "5-0")
+
+    assert r.refreshed == [(worker.config.STREAM_KEY, "5-0")]
+    assert r.claimed == []

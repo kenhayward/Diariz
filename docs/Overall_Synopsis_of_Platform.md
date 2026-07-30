@@ -102,6 +102,63 @@ the migrate-and-seed block costs well under a second on a warm database. Note th
 on the API healthcheck is a **first-boot** allowance (real migrations, bucket creation, seed user), not the
 restart cost - reading it as the latter previously produced an estimate ten times too high.
 
+#### Which containers are safe to redeploy, and when
+
+"A recording is running" hides three different in-flight states, and they carry very different risk. The
+capture itself is the safest of the three, because it is entirely client-side.
+
+| Container | Capture in progress | Upload in flight (the ~30s body transfer after Stop) | Processing in flight (transcribe/summarise/minutes/actions/tags) |
+|---|---|---|---|
+| **api** | Safe (measured) | Safe (measured - nginx buffers the body) | **Delays the job** - it is reclaimed, not lost |
+| **web** | Safe | **Kills the upload** | Safe |
+| **worker** | Safe | Safe | **Delays the job** - reclaimed after 10 min idle |
+| **redis** | Safe | Risky | Risky (queue survives a restart now, but reconnects churn) |
+| **postgres** | Safe | **Upload fails** | Fails |
+| **minio** | Safe | **Upload fails** | Fails |
+
+Three things are worth knowing because they are the opposite of what you would guess:
+
+- **`web` is more dangerous than `api` during an upload.** An API restart is survivable *because* nginx
+  buffers the request body; nothing protects against nginx itself going away mid-transfer. Worse, a dead
+  nginx gives the browser a connection error rather than a 502, and `lib/retry.ts` deliberately does not
+  retry those (they are ambiguous - the request may have been processed). That upload falls to the
+  recovery banner. An outer proxy may convert it to a 502, in which case the retry does fire; untested.
+- **Killing `api` or `worker` mid-job no longer strands it.** It used to: `XACK` sits in a `finally` that
+  never runs when a process is killed, and every consumer reads only `">"`, so the message stayed pending
+  forever and the recording sat in `Transcribing` with nothing to move it on. `StreamReclaimer` (API) and
+  `worker.reclaim_stale` (Python) now take over messages idle past a threshold. The job is delayed, not
+  lost. See the orphaned-job recovery note below.
+- **Redis is now persistent** (`appendonly yes` + a `redisdata` volume). Before that a Redis restart
+  silently discarded every queued job.
+
+Practical rule: `api` and `web` - the two you actually ship - are fine to redeploy whenever. Check the
+queue first if you want to avoid even a delay:
+
+```
+docker compose exec redis redis-cli XPENDING transcription-jobs workers
+```
+
+Treat `postgres`, `redis` and `minio` as maintenance-window work.
+
+#### Orphaned-job recovery
+
+Every stream consumer acks in a `finally`, which handles a job that *throws* but not one whose process is
+*killed*. The reclaim closes that, and the interesting part is the threshold:
+
+- **API workers** use `StreamReclaimer` with a **10-minute** idle threshold, checked at most once a
+  minute per stream. Ten minutes clears the longest legitimate run, since LLM calls are bounded by
+  `PlatformSettings.LlmTimeoutSeconds` (default 120s). A shorter threshold would let one instance steal a
+  job another was still working on and run it twice.
+- **The Python worker cannot rely on a margin** - a long transcription legitimately runs for tens of
+  minutes, during which its message looks idle. It therefore **refreshes its own claim** every 60s while
+  working (`worker.claim_keepalive`), so "idle" genuinely means "nobody is on it", and a 10-minute
+  threshold stays safe.
+- **Both cap redeliveries** (`RECLAIM_MAX_DELIVERIES` / `StreamReclaimer.MaxDeliveries`, default 3).
+  Reclaiming otherwise reintroduces the poison-message loop that acking-in-finally exists to prevent: a
+  job that kills the worker would be handed straight to its replacement, forever. Past the cap the
+  message is acked and abandoned with a loud log, on the reasoning that it is likelier the cause of the
+  deaths than a casualty of them.
+
 **This is not zero-downtime**, and the stack cannot currently provide it: the API binds a fixed host port
 and hosts 13 in-process `BackgroundService` singletons, one of which (`WebhookDeliveryProcessor`) claims
 work without a row lock and would double-send from a second replica. See the roadmap - though at a

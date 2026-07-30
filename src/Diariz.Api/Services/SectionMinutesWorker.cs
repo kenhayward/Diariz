@@ -36,6 +36,9 @@ public class SectionMinutesWorker : BackgroundService
         _log = log;
     }
 
+    /// <summary>Recovers jobs orphaned when a previous instance was killed mid-job.</summary>
+    private readonly StreamReclaimer _reclaimer = new();
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var db = _redis.GetDatabase();
@@ -55,6 +58,13 @@ public class SectionMinutesWorker : BackgroundService
                 _log.LogError(ex, "Error reading the section-minutes stream");
                 await Delay(TimeSpan.FromSeconds(2), stoppingToken);
                 continue;
+            }
+
+            if (entries.Length == 0)
+            {
+                // Idle is the moment to pick up anything an instance that was killed mid-job left behind.
+                entries = await _reclaimer.ReclaimDueAsync(
+                    db, _opts.StreamKey, _opts.ConsumerGroup, _opts.ConsumerName, _log);
             }
 
             if (entries.Length == 0)

@@ -59,6 +59,30 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.174.0",
+    date: "2026-07-30",
+    pr: 386,
+    headline: "A recording can no longer get stuck part-way through processing",
+    summary:
+      "If the server was restarted while a recording was being transcribed or summarised - a deployment, " +
+      "a crash, the machine running out of memory - that recording could be left sitting at " +
+      "\"Transcribing\" forever. Nothing was lost, but nothing moved it on either, and the only way out " +
+      "was to run it again by hand.\n\n" +
+      "The cause was that a job is only marked done once it finishes. A job whose worker is **killed** " +
+      "part-way never reaches that point, and nothing afterwards went looking for it.\n\n" +
+      "Now it does. A job abandoned for ten minutes is picked up by whichever worker is free and run " +
+      "again, so a restart delays a recording rather than stranding it. A long transcription is not at " +
+      "risk of being picked up twice: a worker that is still busy keeps saying so.\n\n" +
+      "There is a limit, on purpose. A job that has failed repeatedly is set aside rather than retried " +
+      "forever, because at that point it is more likely to be the thing causing the failures.\n\n" +
+      "Separately, the queue itself now survives a restart. It was previously held only in memory, so " +
+      "restarting that part of the stack silently discarded anything waiting to be processed.",
+    fixed: [
+      "A recording could be left stuck at Transcribing or Summarizing forever if the server was restarted while it was being processed. Abandoned jobs are now picked up and finished.",
+      "Queued jobs were discarded entirely if the queue was restarted; the queue is now persisted to disk.",
+    ],
+  },
+  {
     version: "0.173.0",
     date: "2026-07-30",
     pr: 384,
