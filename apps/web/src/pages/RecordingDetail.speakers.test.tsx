@@ -263,4 +263,22 @@ describe("SpeakerRow", () => {
     expect(screen.getByRole("button", { name: "Assign SPEAKER_00 to a person" }).textContent)
       .toContain("Unassigned");
   });
+
+  /// The row shows a job title and a company and has no room for more, so the chip carries the rest. Pinning
+  /// it here rather than only in SpeakerContactCard.test proves the wiring, not just the helper.
+  it("hangs the full contact details off the internal/external chip", () => {
+    row(
+      speaker({
+        displayName: "Lizzie Mcneil", personId: "p1", title: "Presenter",
+        companyName: "BBC", email: "lizzie@bbc.test", phone: "020 7946 0000", isInternal: false,
+      }),
+    );
+
+    const chip = screen.getByText("External");
+    const tip = chip.getAttribute("title") ?? "";
+    expect(tip).toContain("Lizzie Mcneil");
+    expect(tip).toContain("lizzie@bbc.test");
+    expect(tip).toContain("BBC");
+    expect(tip).toContain("020 7946 0000");
+  });
 });

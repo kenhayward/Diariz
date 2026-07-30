@@ -28,6 +28,10 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [merging, setMerging] = useState<PersonDuplicateGroup | null>(null);
+  // This sitting only, deliberately: the pair really might be the same person, and hiding a suggestion
+  // forever is not a decision to take from a banner with one click and no undo. State lives in the modal,
+  // so closing and reopening brings everything back.
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -56,6 +60,12 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
   });
 
   const selected = people.find((p) => p.id === selectedId) ?? null;
+
+  // Identity is the people in the group, not its position: a merge elsewhere reorders the list, and a
+  // dismissal keyed on the index would then hide the wrong pair.
+  const groupKey = (g: PersonDuplicateGroup) =>
+    `${g.reason}:${g.people.map((p) => p.id).sort().join(",")}`;
+  const visibleDuplicates = duplicates.filter((g) => !dismissed.has(groupKey(g)));
 
   async function merge(targetId: string, sourceId: string) {
     setError(null);
@@ -114,12 +124,12 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
           <p className="p-6 text-sm text-gray-500 dark:text-gray-400">{t("people:optOutLockedHint")}</p>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-3 p-4">
-            {duplicates.length > 0 && (
+            {visibleDuplicates.length > 0 && (
               <div className="shrink-0 rounded border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-700 dark:bg-amber-950">
                 <p className="font-medium text-amber-900 dark:text-amber-200">{t("people:duplicatesHeading")}</p>
                 <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-300">{t("people:duplicatesHint")}</p>
                 <ul className="mt-2 space-y-1">
-                  {duplicates.map((group, i) => (
+                  {visibleDuplicates.map((group, i) => (
                     <li key={i} className="flex flex-wrap items-center gap-2 text-xs">
                       <span className="text-gray-600 dark:text-gray-300">
                         {group.reason === "email"
@@ -136,6 +146,16 @@ export default function PeopleModal({ onClose }: { onClose: () => void }) {
                           {t("people:mergeReview")}
                         </button>
                       )}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDismissed((cur) => new Set(cur).add(groupKey(group)))
+                        }
+                        title={t("people:dismissDuplicateHint")}
+                        className="text-amber-800 underline dark:text-amber-300"
+                      >
+                        {t("people:dismissDuplicate")}
+                      </button>
                     </li>
                   ))}
                 </ul>

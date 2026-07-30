@@ -1457,6 +1457,18 @@ node now carries an **Include Attendee Contacts** option (default off), sends it
 **compares it in `checkExists`** - without that comparison n8n would never call `create()` on an existing
 subscription, so toggling the option would do nothing.
 
+**Duplicate suggestions can be dismissed for the sitting** - `PeopleModal` holds a `Set` of group keys in
+component state, so closing the modal restores everything. Keyed on the **people in the group**, never its
+index: a merge reorders the list, and an index-keyed dismissal would then hide the wrong pair. Deliberately
+not persisted - a pair dismissed today becomes a genuine duplicate the moment someone fills in the missing
+email address, and a permanent hide is not a decision to take from a banner with one click and no undo.
+
+**`SpeakerContactCard` is the only place inside a transcript** where a person's email address and phone
+number are reachable; it renders above the selected speaker's segments, with `mailto:`/`tel:` links (the
+`tel:` href strips the spaces a readable number is written with). Its `contactSummary` helper also fills the
+Speakers-row chip's tooltip, so the two renderings of one person cannot drift apart. Both render nothing for
+an anonymous speaker, a multi-speaker slot, or a person carrying nothing but a name.
+
 **Merging is confirmed through `MergePeopleDialog`**, not a `window.confirm`. The consequences differ per
 pair (a voiceprint may move, contact fields may be filled, an account link may transfer), so the explanation
 is computed from the two records rather than written as static copy; the **direction is swappable**, because

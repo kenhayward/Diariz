@@ -26,7 +26,10 @@ stored voiceprints, including merging duplicates and erasing them, from the **Vo
 Preferences.
 
 Once a speaker is identified, the Speakers tab shows who they are - their job title, their company, and
-whether they are internal or external - so you can read the room without leaving the transcript. Manage
+whether they are internal or external - so you can read the room without leaving the transcript. Hovering the
+**Internal** or **External** marker shows the rest of their details, and clicking a speaker to read their
+segments puts a contact card above them, where their email address and phone number are links you can act
+on. Manage
 those details in **People**, which opens over the transcript so you do not lose your place; see
 [The people directory](/help/people-directory).
 
