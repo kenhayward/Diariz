@@ -16,9 +16,13 @@ import PersonEditor from "./PersonEditor";
 export default function EditPersonModal({
   personId,
   onClose,
+  onSaved,
 }: {
   personId: string;
   onClose: () => void;
+  /// Fired after a successful save, before closing, so the panel that opened this can refetch. Without it the
+  /// speaker row and contact card keep the details they were first rendered with.
+  onSaved?: () => void;
 }) {
   const { t } = useTranslation(["people", "common"]);
   const { permissions } = useAuth();
@@ -60,6 +64,13 @@ export default function EditPersonModal({
             person={data.person}
             canManagePeople={permissions.managePeople}
             onClose={onClose}
+            // One person, opened over the thing that showed them: saving is the end of the task, not a step
+            // in a longer one. The directory keeps its editor open on purpose - there you move down a list.
+            onSaved={() => {
+              onSaved?.();
+              onClose();
+            }}
+            showDestructiveActions={false}
           />
         )}
       </div>

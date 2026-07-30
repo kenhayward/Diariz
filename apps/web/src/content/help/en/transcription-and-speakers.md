@@ -36,7 +36,8 @@ both the tooltip and the card will often say **no contact details are recorded**
 them. That is the honest answer: Diariz knows who spoke, not how to reach them, until somebody says.
 
 If you can manage people, a **pencil** on the speaker's row opens their details for editing without leaving
-the transcript. It edits the same shared record the People directory does, so a correction made here is a
+the transcript. Saving closes it and the panel updates straight away. It offers contact details only -
+erasing a voiceprint and deleting a person live in **People**, where you can see who else they affect. It edits the same shared record the People directory does, so a correction made here is a
 correction everywhere. Manage
 those details in **People**, which opens over the transcript so you do not lose your place; see
 [The people directory](/help/people-directory).

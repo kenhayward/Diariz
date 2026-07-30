@@ -1683,7 +1683,14 @@ export default function RecordingDetail() {
       {downloading && <DownloadTranscriptModal recordingId={id} onClose={() => setDownloading(false)} />}
       {peopleOpen && <PeopleModal onClose={() => setPeopleOpen(false)} />}
       {editingPersonId && (
-        <EditPersonModal personId={editingPersonId} onClose={() => setEditingPersonId(null)} />
+        <EditPersonModal
+          personId={editingPersonId}
+          onClose={() => setEditingPersonId(null)}
+          // The speaker rows and the contact card are rendered from this recording's own payload, which
+          // carries a snapshot of each person. Editing the person elsewhere leaves that snapshot stale, so
+          // the panel kept showing the old details until the row was changed.
+          onSaved={() => void qc.invalidateQueries({ queryKey: ["recording", id] })}
+        />
       )}
       {linkModalOpen && (
         <CalendarLinkModal recordingId={id} aroundDate={rec.createdAt} onClose={() => setLinkModalOpen(false)} />

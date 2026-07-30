@@ -100,4 +100,55 @@ describe("EditPersonModal", () => {
 
     expect(await screen.findByText(/Could not load/i)).toBeTruthy();
   });
+
+  // ---- Single-person editing is a different job from browsing a directory ----
+  //
+  // In the directory the editor sits beside a list and you move from person to person, so saving leaves it
+  // open. Here there is one person and the panel is over your transcript: saving is the end of the task.
+
+  it("closes once the save succeeds", async () => {
+    render_();
+    fireEvent.change(await screen.findByLabelText("Job title"), { target: { value: "Host" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it("stays open when the save fails, so the edits are not lost", async () => {
+    mock(api.updatePerson).mockRejectedValue(new Error("nope"));
+    render_();
+    fireEvent.change(await screen.findByLabelText("Job title"), { target: { value: "Host" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(api.updatePerson).toHaveBeenCalled());
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  /// Tells the opener that the person changed, so a speaker panel showing their details can refetch. Without
+  /// it the row and the contact card keep the values they were rendered with.
+  it("reports the save to whoever opened it", async () => {
+    const onSaved = vi.fn();
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <EditPersonModal personId="p1" onClose={onClose} onSaved={onSaved} />
+      </QueryClientProvider>,
+    );
+    fireEvent.change(await screen.findByLabelText("Job title"), { target: { value: "Host" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+  });
+
+  /// Erasing a voiceprint and deleting a person are directory-scale acts with no undo. Offering them beside a
+  /// job title, to someone who came here to correct a spelling, invites the wrong click.
+  it("offers no destructive actions", async () => {
+    render_();
+    await screen.findByLabelText("Name");
+
+    expect(screen.queryByRole("button", { name: /Erase voiceprint/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+  });
 });
