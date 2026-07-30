@@ -95,9 +95,17 @@ Three client behaviours cover the API's own restart window: uploads retry past a
 (`lib/tokenRefresh.ts`), and the SignalR hub reconnects indefinitely instead of giving up after ~42s
 (`lib/signalrRetry.ts`).
 
+**Measured cost of an API redeploy: about 3 seconds** (2026-07-30, local stack at 0.173.0, polling every
+250 ms across a `--force-recreate`). nginx stays up throughout and answers **502** - never a connection
+failure - which is precisely what the upload retry handles. Container start to `Now listening on` is ~1.8 s;
+the migrate-and-seed block costs well under a second on a warm database. Note that the `start_period: 60s`
+on the API healthcheck is a **first-boot** allowance (real migrations, bucket creation, seed user), not the
+restart cost - reading it as the latter previously produced an estimate ten times too high.
+
 **This is not zero-downtime**, and the stack cannot currently provide it: the API binds a fixed host port
 and hosts 13 in-process `BackgroundService` singletons, one of which (`WebhookDeliveryProcessor`) claims
-work without a row lock and would double-send from a second replica. See the roadmap.
+work without a row lock and would double-send from a second replica. See the roadmap - though at a
+three-second window the case for that work is weak.
 
 ## Architecture at a glance
 

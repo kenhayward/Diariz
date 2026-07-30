@@ -302,18 +302,23 @@ half of the fleet was built for this.
 
 **Delivery sketch.**
 
-1. Measure the actual API restart window on the dev server, and trim startup (migrations plus five seeders
-   run before it listens). The cheapest win, and it shrinks every remaining symptom at once. *This is the
-   one Tier 1 item not yet done - it needs a measurement first, not a guess.*
+1. ~~Measure the API restart window and trim startup.~~ **Done, and it removed its own next step.**
+   Measured 2026-07-30: the gap is **about 3 seconds**, not the 30-60 that had been assumed from the
+   compose `start_period` (which is a first-boot allowance, not a restart cost). Startup does no
+   meaningful work on a warm database - migrations resolve to "already up to date" in ~360 ms. There is
+   nothing to trim.
 2. Make the webhook delivery queue safe to run twice (lease / `SKIP LOCKED`), and decide what retention
    and the backfills do with two instances.
 3. Redis SignalR backplane.
 4. Move migrations out of app startup; adopt expand/contract as the standing rule for schema changes.
 5. Health-checked proxy, drop the fixed host ports, run two API replicas.
 
-**Worth being honest about the trade.** Steps 2-5 are a genuine project, and they buy a few seconds of
-invisibility that the Tier 1 work has already made harmless. Do it when the platform has users who would
-actually notice, not before.
+**Worth being honest about the trade, and the measurement sharpened it.** Steps 2-5 are a genuine project,
+and they would buy invisibility over a **three-second** window that the Tier 1 client-side work already
+handles - uploads retry past it, the session no longer lapses because of it, and the hub reconnects
+through it. That is a much weaker case than it looked when the window was assumed to be a minute. Do this
+only when the platform has users who would actually notice three seconds, or when a second replica is
+wanted for capacity rather than deployment - at which point items 2-4 stop being optional regardless.
 
 ---
 
