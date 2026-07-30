@@ -53,7 +53,11 @@ if errorlevel 1 goto :fail
 rem ---------------------------------------------------------------- web ---
 echo.
 echo [3/4] Building and starting the web container ...
-docker compose up -d --build web
+rem --no-deps is essential, not tidiness. web depends_on api (service_healthy), so without it compose
+rem rebuilds and RECREATES the API here too - a second restart, happening at the exact moment nginx is
+rem also down. That is precisely the both-at-once outage this script's ordering exists to avoid, and it
+rem was observed doing it: a health poll caught one sample with the API and nginx down together.
+docker compose up -d --build --no-deps web
 if errorlevel 1 (
     echo.
     echo FAILED: the web container did not start. Recent output:
@@ -123,7 +127,11 @@ if !ELAPSED! GEQ %TIMEOUT_SECONDS% (
 )
 
 echo       %SERVICE%: !HEALTH! ^(!ELAPSED!s^)
-timeout /t %POLL_SECONDS% /nobreak >nul
+rem `timeout /t` needs a real console: run from anything with redirected stdin it fails outright with
+rem "Input redirection is not supported", which turns this into a busy-loop and makes the elapsed
+rem figures fiction. ping to loopback is the portable cmd sleep - n+1 pings is n seconds.
+set /a PINGS=%POLL_SECONDS%+1
+ping -n !PINGS! 127.0.0.1 >nul
 set /a ELAPSED+=%POLL_SECONDS%
 goto :wait_loop
 
