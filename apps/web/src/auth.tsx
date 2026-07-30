@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, getToken, setToken } from "./lib/api";
 import type { Permissions } from "./lib/types";
 import { emailFromToken, fullNameFromToken, pictureFromToken, userIdFromToken } from "./lib/jwt";
-import { refreshDelayMs } from "./lib/tokenRefresh";
+import { refreshDelayMs, refreshRetryDelayMs } from "./lib/tokenRefresh";
 import { initialsFromName, initialsFromEmail } from "./lib/initials";
 
 /// No authority until the server says otherwise: the profile is fetched, not decoded from the token.
@@ -85,12 +85,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     let timer: number | undefined;
 
+    // Consecutive failed refreshes, so the retry ladder backs off. Reset on any success.
+    let attempt = 0;
+
     async function doRefresh() {
       try {
         const res = await api.refresh();
+        attempt = 0;
         if (!cancelled) setSession(res.accessToken); // updates token → effect reschedules
       } catch {
-        // ignore — leave the current token; a later request will surface any auth failure
+        // A failure here is usually the server being briefly unreachable (a redeploy, a dropped
+        // connection), not the session being invalid - so try again rather than letting it lapse.
+        // Rescheduling used to happen only via setSession() on success, which meant one failure ended
+        // the sliding session and left Stop to land on a 401.
+        if (cancelled) return;
+        timer = window.setTimeout(doRefresh, refreshRetryDelayMs(attempt++));
       }
     }
 

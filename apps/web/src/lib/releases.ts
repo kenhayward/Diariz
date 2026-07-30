@@ -59,6 +59,33 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.173.0",
+    date: "2026-07-30",
+    pr: 384,
+    headline: "A server update no longer interrupts a meeting you are recording",
+    summary:
+      "Recording has always happened entirely in your browser - the audio never touches the server until " +
+      "you press Stop, and it is saved on your machine before the upload is even attempted. So updating " +
+      "the server during a meeting could never lose a recording.\n\n" +
+      "What it could do is make the moment you pressed Stop fail, leaving you to find the recovery banner " +
+      "and try again. Three things now cover that window.\n\n" +
+      "**The upload waits it out.** If the server is briefly unreachable, the upload retries for up to " +
+      "half a minute before giving up, so a restart passes unnoticed. It only retries when it can tell " +
+      "the request never reached the server - never when the outcome is unclear, because uploading the " +
+      "same meeting twice would be worse than an error.\n\n" +
+      "**Your session no longer lapses because of a blip.** Diariz quietly renews your sign-in during a " +
+      "long meeting. Previously a single failed renewal was the end of it, and Stop an hour later would " +
+      "throw you to the login page. It now keeps trying.\n\n" +
+      "**Live updates come back on their own.** The connection that reports transcribing, summarising and " +
+      "done used to stop trying after about 40 seconds - shorter than a server restart - and stayed dead " +
+      "until you reloaded. It now reconnects for as long as it takes.",
+    changed: [
+      "An upload interrupted by a server restart now retries automatically instead of failing to the recovery banner.",
+      "The silent sign-in renewal retries after a failure rather than letting the session lapse, so pressing Stop after a long meeting no longer risks landing on the login page.",
+      "Live status updates reconnect indefinitely after a server restart instead of giving up after about 40 seconds.",
+    ],
+  },
+  {
     version: "0.172.0",
     date: "2026-07-30",
     pr: 383,

@@ -261,6 +261,62 @@ to the worker and incremental SignalR updates.
 
 ---
 
+## Theme 5 - Zero-downtime redeploys
+
+**The idea.** Ship a new API or web image without any user noticing, including users mid-recording.
+
+**What is already true, and is easy to under-rate.** Redeploying during a recording is **already
+non-destructive**. Capture is entirely client-side, the API is contacted once at Stop, and the audio is
+stashed to IndexedDB before that upload is attempted. As of the Tier 1 work below, uploads also retry past
+a gateway error, the sliding-session refresh retries instead of lapsing, and the SignalR hub reconnects
+indefinitely rather than giving up after ~42 seconds. So the remaining gap is **visibility, not safety**:
+a redeploy costs a short window in which the API answers 502 and live status updates pause.
+
+Full analysis, with the measurements still outstanding: `docs/Research/zero-downtime-redeploy.md`.
+
+**What blocks true zero-downtime.** Not the recording path, and not the web tier - the SPA is a single
+bundle with one lazy route, so replacing the web container is nearly free for a loaded tab. It is that
+**the API assumes there is exactly one of it**:
+
+- **`WebhookDeliveryProcessor` claims work without a lock.** It selects `Pending` rows whose
+  `NextAttemptAt` has passed and only writes their status after POSTing the whole batch, so two replicas
+  would both select and **both deliver** the same rows. A stable `webhook-id` means a careful receiver
+  could dedupe, but sending everything twice is not a deployment strategy. Needs a lease or
+  `FOR UPDATE SKIP LOCKED`.
+- **SignalR has no backplane.** Clients join a per-user group on whichever instance they connected to;
+  an event published from another instance would never reach them. Redis is already in the stack, so this
+  is `AddStackExchangeRedis` - a real change, not a flag.
+- **Migrations run at app startup and assume one schema version at a time.** Two replicas means old and
+  new code against one schema simultaneously, so every migration becomes expand/contract and
+  `MigrateAsync` should move out of startup into a one-shot job. This also interacts with the
+  backup-restore format fence.
+- **The retention and backfill services would run twice.** `AudioRetention` **deletes**; the embedding,
+  storage and tag backfills would race and duplicate work. Each needs a leader lock or an explicit
+  decision.
+- **Fixed host ports.** `api` binds `8080:8080` and `web` binds `8081:80`, so there is nowhere for a
+  second container to go. Replicas need a health-checked proxy (Traefik, Caddy, nginx upstreams) in front.
+
+The Redis-stream consumers (summarisation, minutes, actions, tags, formulas, section roll-ups, embeddings)
+are **already safe** - they read through consumer groups, which distribute rather than duplicate. That
+half of the fleet was built for this.
+
+**Delivery sketch.**
+
+1. Measure the actual API restart window on the dev server, and trim startup (migrations plus five seeders
+   run before it listens). The cheapest win, and it shrinks every remaining symptom at once. *This is the
+   one Tier 1 item not yet done - it needs a measurement first, not a guess.*
+2. Make the webhook delivery queue safe to run twice (lease / `SKIP LOCKED`), and decide what retention
+   and the backfills do with two instances.
+3. Redis SignalR backplane.
+4. Move migrations out of app startup; adopt expand/contract as the standing rule for schema changes.
+5. Health-checked proxy, drop the fixed host ports, run two API replicas.
+
+**Worth being honest about the trade.** Steps 2-5 are a genuine project, and they buy a few seconds of
+invisibility that the Tier 1 work has already made harmless. Do it when the platform has users who would
+actually notice, not before.
+
+---
+
 ## Cross-cutting foundations
 
 Some work underpins several themes and is best built once, early:

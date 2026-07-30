@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { refreshDelayMs } from "./tokenRefresh";
+import { refreshDelayMs, refreshRetryDelayMs, REFRESH_RETRY_DELAYS_MS } from "./tokenRefresh";
 
 // Build a JWT-shaped string with the given exp (seconds). Only the payload matters here.
 function tokenWithExp(expSeconds: number): string {
@@ -34,5 +34,31 @@ describe("refreshDelayMs", () => {
   it("honours a custom skew", () => {
     const now = 0;
     expect(refreshDelayMs(tokenWithExp(300), now, 120_000)).toBe((300 - 120) * 1000);
+  });
+});
+
+// A failed refresh used to be the end of it: rescheduling only happened as a side effect of a SUCCESSFUL
+// refresh updating the token, so one failure (an API redeploy, a dropped connection) inside the 60s
+// pre-expiry window left the session to lapse - and Stop then landed on a 401, which redirects to /login
+// and unmounts the recorder mid-meeting. These delays are what let it try again.
+describe("refreshRetryDelayMs", () => {
+  it("backs off over the first attempts", () => {
+    expect(refreshRetryDelayMs(0)).toBe(REFRESH_RETRY_DELAYS_MS[0]);
+    expect(refreshRetryDelayMs(1)).toBe(REFRESH_RETRY_DELAYS_MS[1]);
+    expect(refreshRetryDelayMs(2)).toBe(REFRESH_RETRY_DELAYS_MS[2]);
+  });
+
+  it("keeps trying at the final interval rather than giving up", () => {
+    // The token outlives the retry ladder (120 minutes vs a few minutes of retries), so stopping early
+    // would strand a session that a slightly longer outage would have saved.
+    const last = REFRESH_RETRY_DELAYS_MS[REFRESH_RETRY_DELAYS_MS.length - 1];
+    expect(refreshRetryDelayMs(REFRESH_RETRY_DELAYS_MS.length)).toBe(last);
+    expect(refreshRetryDelayMs(99)).toBe(last);
+  });
+
+  it("rises, so a long outage is not hammered", () => {
+    for (let i = 1; i < REFRESH_RETRY_DELAYS_MS.length; i++) {
+      expect(REFRESH_RETRY_DELAYS_MS[i]).toBeGreaterThan(REFRESH_RETRY_DELAYS_MS[i - 1]);
+    }
   });
 });
