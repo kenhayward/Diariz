@@ -63,6 +63,42 @@ it (the API reaches MinIO in-network at `minio:9000`), so port-forward or `docke
 In-container, services address each other by Compose service name (`minio:9000`, `redis:6379`,
 `postgres:5432`, `api:8080`) - publishing a port changes nothing about that private path.
 
+### Redeploying while the platform is in use
+
+**Recordings survive a redeploy.** Capture is entirely client-side (an in-memory `Blob[]` in the page,
+with notes and screenshots stashed in IndexedDB as they are taken) and the API is contacted exactly once,
+at Stop. Nothing streams to the server during a meeting, so restarting the API cannot end one. The client
+also stashes the finished audio to IndexedDB **before** attempting the upload, so even an upload that
+fails outright is recoverable from the banner rather than lost. See
+`docs/Research/zero-downtime-redeploy.md` for the full analysis.
+
+**Redeploy `api` and `web` as separate steps, API first:**
+
+```
+docker compose up -d --build api     # wait for it to report healthy
+docker compose up -d --build web
+```
+
+`web` is not merely the SPA - it is also the reverse proxy for `/api`, `/hubs`, `/mcp`, `/connect` and
+`/.well-known` (`apps/web/nginx.conf`). A single `docker compose up -d` takes both down at once, so the
+path to the API is broken at the same moment the API itself is restarting, widening the outage for no
+reason. Bringing the API up first means the proxy is only ever briefly absent in front of a *healthy*
+upstream.
+
+Replacing the `web` container is close to free for anyone already in the app: the SPA builds to a single
+bundle with exactly one lazy route (the API reference), and every `import.meta.glob` is `eager`, so a
+loaded tab needs nothing further from that container. The usual stale-chunk hazard of an SPA redeploy does
+not apply here - **but it would the moment a second `lazy()` import is added**, so keep that in mind.
+
+Three client behaviours cover the API's own restart window: uploads retry past a gateway error
+(`lib/retry.ts`), the sliding-session token refresh retries on failure rather than lapsing
+(`lib/tokenRefresh.ts`), and the SignalR hub reconnects indefinitely instead of giving up after ~42s
+(`lib/signalrRetry.ts`).
+
+**This is not zero-downtime**, and the stack cannot currently provide it: the API binds a fixed host port
+and hosts 13 in-process `BackgroundService` singletons, one of which (`WebhookDeliveryProcessor`) claims
+work without a row lock and would double-send from a second replica. See the roadmap.
+
 ## Architecture at a glance
 
 ```

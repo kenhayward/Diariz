@@ -37,6 +37,7 @@ import NotesPopover from "./hub/NotesPopover";
 import HubIconButton from "./hub/HubIconButton";
 import { useHubPopover } from "./hub/hubPopovers";
 import { AUDIO_ACCEPT_ATTR } from "../lib/audioFormats";
+import { retryOnGatewayError } from "../lib/retry";
 import { useUpload } from "../lib/uploadContext";
 import {
   savePendingRecording,
@@ -839,7 +840,11 @@ export default function Recorder({
     if (userId) await savePendingRecording(rec);
 
     try {
-      const created = await api.upload(blob, title, durationMs, source, pendingSectionRef.current, pendingRoomRef.current);
+      // Retried past a proxy-level gateway error, so an API redeploy during a meeting is not felt as a
+      // failed upload. Only 502/503/504 are retried - see retry.ts for why a bare network error is not.
+      const created = await retryOnGatewayError(() =>
+        api.upload(blob, title, durationMs, source, pendingSectionRef.current, pendingRoomRef.current),
+      );
       if (userId) await clearPendingRecording(userId);
       setPending(null);
       // Attach any live notes / screenshots to the new recording (failure keeps them durable + shows the
@@ -876,7 +881,9 @@ export default function Recorder({
     setBusy(true);
     setError(null);
     try {
-      const created = await api.upload(pending.blob, pending.title, pending.durationMs, pending.source);
+      const created = await retryOnGatewayError(() =>
+        api.upload(pending.blob, pending.title, pending.durationMs, pending.source),
+      );
       if (userId) await clearPendingRecording(userId);
       setPending(null);
       // Recovered audio adopts any note lines stashed with it (recordingId null = never attached). Milder
