@@ -37,7 +37,11 @@ const people = [
 ];
 
 function render_(onClose = () => {}) {
-  render(
+  render_v(onClose);
+}
+
+function render_v(onClose = () => {}) {
+  return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <PeopleModal onClose={onClose} />
     </QueryClientProvider>,
@@ -169,5 +173,66 @@ describe("PeopleModal", () => {
     fireEvent.keyDown(document, { key: "Escape" });
 
     expect(onClose).toHaveBeenCalled();
+  });
+
+  // ---- Dismissing a suggestion ----
+  //
+  // A suggestion you disagree with is not actionable and not removable: there is nothing to merge and nothing
+  // to correct, so it sits at the top of the directory permanently. Dismissing is deliberately for this
+  // sitting only - the pair really might be the same person, and a decision to hide it forever is not one to
+  // take from a banner.
+
+  it("hides a dismissed suggestion", async () => {
+    mock(api.findPersonDuplicates).mockResolvedValue([
+      { reason: "name", people: [people[0], people[1]] },
+    ] as PersonDuplicateGroup[]);
+    render_();
+    await screen.findByRole("button", { name: "Review and merge" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+
+    expect(screen.queryByRole("button", { name: "Review and merge" })).toBeNull();
+  });
+
+  it("leaves the other suggestions in place", async () => {
+    const third = person("p3", "Carol Shaw");
+    mock(api.findPersonDuplicates).mockResolvedValue([
+      { reason: "name", people: [people[0], people[1]] },
+      { reason: "email", people: [people[1], third] },
+    ] as PersonDuplicateGroup[]);
+    render_();
+    await screen.findByText(/Same name/);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Dismiss" })[0]);
+
+    expect(screen.queryByText(/Same name/)).toBeNull();
+    expect(screen.getByText(/Same email address/)).toBeTruthy();
+  });
+
+  it("drops the whole banner once every suggestion is dismissed", async () => {
+    mock(api.findPersonDuplicates).mockResolvedValue([
+      { reason: "name", people: [people[0], people[1]] },
+    ] as PersonDuplicateGroup[]);
+    render_();
+    await screen.findByText("Possible duplicates");
+
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+
+    expect(screen.queryByText("Possible duplicates")).toBeNull();
+  });
+
+  /// Reopening the directory is a fresh sitting, so the suggestion comes back. Nothing was recorded about it.
+  it("brings a dismissed suggestion back when the directory is reopened", async () => {
+    mock(api.findPersonDuplicates).mockResolvedValue([
+      { reason: "name", people: [people[0], people[1]] },
+    ] as PersonDuplicateGroup[]);
+    const { unmount } = render_v();
+    await screen.findByRole("button", { name: "Review and merge" });
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    unmount();
+
+    render_();
+
+    expect(await screen.findByRole("button", { name: "Review and merge" })).toBeTruthy();
   });
 });

@@ -27,6 +27,7 @@ import ShareToRoomModal from "../components/ShareToRoomModal";
 import { useRoom } from "../lib/rooms";
 import DownloadTranscriptModal from "../components/DownloadTranscriptModal";
 import PeopleModal from "../components/PeopleModal";
+import SpeakerContactCard, { contactSummary } from "../components/SpeakerContactCard";
 import SummaryEditModal from "../components/SummaryEditModal";
 import MeetingMinutesEditModal from "../components/MeetingMinutesEditModal";
 import EmailMinutesModal from "../components/EmailMinutesModal";
@@ -1334,6 +1335,11 @@ export default function RecordingDetail() {
                         selectedSpeaker,
                   })}
                 </h4>
+                {/* The one place inside a transcript where a person's email and phone are reachable. */}
+                {(() => {
+                  const info = rec.speakers.find((s) => s.label === selectedSpeaker);
+                  return info ? <SpeakerContactCard info={info} /> : null;
+                })()}
                 <ul className="space-y-2">
                   {rec.current.segments
                     .filter((s) => s.speaker === selectedSpeaker)
@@ -2060,7 +2066,13 @@ export function SpeakerRow({
           )}
           {info.isInternal !== null && (
             <span
-              className={`shrink-0 rounded px-1 text-[10px] font-medium ${
+              // The row has room for a job title and a company and no more, so the rest of the person hangs
+              // off the chip. Same text as the contact card below, from one function, so they cannot drift.
+              title={contactSummary(info, {
+                internal: t("speakerInternal"),
+                external: t("speakerExternal"),
+              })}
+              className={`shrink-0 cursor-help rounded px-1 text-[10px] font-medium ${
                 info.isInternal
                   ? "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
                   : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"

@@ -46,6 +46,10 @@ themselves out of voice-printing. Rename one of the records instead, or delete i
 
 ## If the pair is not really a duplicate
 
-Ignore it. Nothing happens to records you leave alone, and the suggestion costs nothing. Diariz spots pairs
-by matching email address, or by matching name once spacing and capitals are ignored - so two different
-people who genuinely share a name will keep being suggested, and should keep being ignored.
+**Dismiss** hides that suggestion while you are in the directory, so the ones behind it are easier to work
+through. It is not a permanent decision and nothing is recorded: reopen People and every suggestion is back.
+That is deliberate, because a pair you dismiss today may be a genuine duplicate once someone fills in the
+missing email address.
+
+Diariz spots pairs by matching email address, or by matching name once spacing and capitals are ignored - so
+two different people who genuinely share a name will keep being suggested, and can keep being dismissed.

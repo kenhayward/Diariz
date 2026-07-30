@@ -17,7 +17,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume), system audio, or both mixed together on one device - system audio works in Chromium browsers ("Share audio") and seamlessly in the desktop app; schedule a recording to auto-stop at a set time or after 15/30/60 minutes; or upload files (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A). |
 | **Transcribe & diarize** | Server-side WhisperX (word-level timestamps) with pyannote speaker diarization; speaker-labelled, editable, playable segments you can re-transcribe any time. |
 | **Recording hub** | Every meeting opens on a hub: a summary card (meeting type, key facts, the summary inline) over tiles for transcript, actions, speakers, notes, files, and formulas - each showing its count and a preview, with new-note / add-file / run-formula available in place. The transcript embeds a conversation-flow player showing who spoke when, which doubles as the scrubber. |
-| **People and speaker identification** | One shared directory of the people in your meetings, where a voiceprint is optional - someone can be listed with no biometric held, or opt out, which erases theirs. Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). Assign a speaker from the Speakers tab or straight from the label on any transcript row, as you read or listen. A **People** directory opens over whatever you are reading; it lists everyone one to a line, searchable by name, email or company; a person carries a job title, company, email, phone and an internal/external marker, and likely duplicates are pointed out for you to merge. The Speakers tab shows an identified speaker's title and company inline. Browsing the directory needs the Manage people permission; opting yourself out, and searching to name a speaker, never do. |
+| **People and speaker identification** | One shared directory of the people in your meetings, where a voiceprint is optional - someone can be listed with no biometric held, or opt out, which erases theirs. Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). Assign a speaker from the Speakers tab or straight from the label on any transcript row, as you read or listen. A **People** directory opens over whatever you are reading; it lists everyone one to a line, searchable by name, email or company; a person carries a job title, company, email, phone and an internal/external marker, and likely duplicates are pointed out for you to merge. The Speakers tab shows an identified speaker's title and company inline, with a contact card (email and phone as links) above their segments. Browsing the directory needs the Manage people permission; opting yourself out, and searching to name a speaker, never do. |
 | **Notes** | Take your own note lines live during a meeting (timestamped, crash-safe); they appear inline in the transcript at the moment you wrote them, steer the minutes, and can be woven into an enhanced-notes section linking to the exact transcript moments. |
 | **Meeting screenshots** | Capture the screen during a recording from the desktop app - a hotkey, the tray menu, or the app itself - choosing a screen or a rectangle on the first capture and reusing it after; captures appear in the transcript at the moment they were taken, as a full-size viewer with zoom and pan to read a capture at native resolution, and in a Notes-tab section. |
 | **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable. A meeting type carries no prompts of its own: it names the **formula** that generates its minutes, plus any others to run alongside (their documents appear in the Formulas tab). Minutes and formulas are the same machinery - any formula you can use can produce your minutes. Templates are built from blocks (H1-H3 headings, literal text, substituted details, model prompts, rules, drag-to-reorder) with JSON import/export. |
@@ -58,6 +58,30 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.170.0",
+    date: "2026-07-30",
+    pr: 377,
+    headline: "Contact details where you actually need them, and dismissable duplicate suggestions",
+    summary:
+      "Three things about people, all found by using the directory rather than reading it.\n\n" +
+      "**A contact card above a speaker's segments.** Click a speaker on the Speakers tab and their card " +
+      "now sits above their words: name, job title, company, and their email address and phone number as " +
+      "links you can act on. Inside a transcript this is the only place those reach you - the speaker row " +
+      "itself has room for a job title and a company and no more.\n\n" +
+      "**Hover the Internal or External marker** on that row and the rest of the person appears in a " +
+      "tooltip, so you can check who someone is without opening anything.\n\n" +
+      "**Duplicate suggestions can now be dismissed.** A suggestion you disagree with was previously " +
+      "immovable - nothing to merge, nothing to correct - and it sat at the top of the directory in front " +
+      "of the suggestions you did want. Dismiss hides it while you are there. Nothing is recorded and " +
+      "reopening People brings it back, which is on purpose: a pair you dismiss today becomes a real " +
+      "duplicate the moment somebody fills in the missing email address.",
+    added: [
+      "A contact card above a selected speaker's segments, with the email address and phone number as links.",
+      "A tooltip on the Internal / External marker showing the speaker's full details.",
+      "**Dismiss** on a duplicate suggestion, for the current visit to the directory only.",
+    ],
+  },
   {
     version: "0.169.1",
     date: "2026-07-29",

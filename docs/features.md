@@ -158,6 +158,12 @@ renames, prunes training samples, merges duplicates, and erases voiceprints (GDP
 GDPR, withdrawing consent to hold your own biometric is yours to exercise, not an administrator's to grant.
 The trade-off of a shared directory is deliberate and worth stating plainly: a voiceprint enrolled by one
 person will identify that human in **everyone's** recordings.
+On a recording's Speakers tab, hovering an identified speaker's **Internal**/**External** marker shows their
+full details, and selecting that speaker puts a **contact card** above their segments - the only place inside
+a transcript where their **email address and phone number** are reachable, both as links. Suggested duplicates
+carry a **Dismiss** control that hides one for the current visit only; nothing is recorded, because a pair
+dismissed today becomes a genuine duplicate as soon as a missing email address is filled in.
+
 The **People** directory (account menu, or *Manage people* on a recording's Speakers tab) opens as a
 window **over** what you are reading rather than navigating away, because the usual reason to open it is a
 question about the transcript in front of you. It lists everyone one to a line - name plus a marker for

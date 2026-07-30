@@ -53,5 +53,7 @@
   "mergeEffectRelabel": "Sprecher mit der Bezeichnung \"{{source}}\" werden in allen Aufnahmen zu \"{{target}}\".",
   "mergeEffectFinal": "\"{{name}}\" wird geloscht. Das lasst sich nicht ruckgangig machen.",
   "mergeBlockedBothAccounts": "Diese Eintrage haben jeweils ein eigenes Diariz-Konto und sind daher zwei verschiedene Personen, so ahnlich die Namen auch aussehen. Beim Zusammenfuhren wurde eine davon vom eigenen Konto getrennt, deshalb ist es nicht moglich.",
-  "mergeReview": "Prufen und zusammenfuhren"
+  "mergeReview": "Prufen und zusammenfuhren",
+  "dismissDuplicate": "Ausblenden",
+  "dismissDuplicateHint": "Blendet diesen Vorschlag fur diesen Besuch aus. Beim nachsten Offnen von Personen ist er wieder da."
 }
