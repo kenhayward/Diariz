@@ -131,12 +131,25 @@ Three things are worth knowing because they are the opposite of what you would g
 - **Redis is now persistent** (`appendonly yes` + a `redisdata` volume). Before that a Redis restart
   silently discarded every queued job.
 
-Practical rule: `api` and `web` - the two you actually ship - are fine to redeploy whenever. Check the
-queue first if you want to avoid even a delay:
+Practical rule: `api` and `web` - the two you actually ship - are fine to redeploy whenever.
+**`deploy/BringUpWebApi.cmd` does the whole sequence**, including the in-flight check below.
+
+If you want to avoid even a delay, check the streams the API itself consumes. Note that
+`transcription-jobs` and `audio-merge-jobs` are **not** among them - those belong to the worker
+container, which an `api`/`web` redeploy never touches, so checking them before one answers the wrong
+question:
 
 ```
-docker compose exec redis redis-cli XPENDING transcription-jobs workers
+docker compose exec redis redis-cli XPENDING summarization-jobs summarizers
+docker compose exec redis redis-cli XPENDING meeting-minutes-jobs minute-takers
+docker compose exec redis redis-cli XPENDING actions-jobs actions-extractors
+docker compose exec redis redis-cli XPENDING tag-cloud-jobs tag-extractors
+docker compose exec redis redis-cli XPENDING formula-run-jobs formula-runners
+docker compose exec redis redis-cli XPENDING embedding-jobs embedders
 ```
+
+A non-zero count is a job in flight. Since 0.174.0 that is a **delay, not a loss** - it is reclaimed once
+its message has been idle ten minutes - so it is a reason to pause, not a reason not to deploy.
 
 Treat `postgres`, `redis` and `minio` as maintenance-window work.
 
