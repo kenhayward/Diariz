@@ -1476,7 +1476,14 @@ the control that opens it. Unlike every other modal here it **does not close on 
 Escape**: half-typed edits are lost by a stray click and cannot be recovered, so the only ways out are Save
 and Cancel.
 
-**`SpeakerContactCard` is the only place inside a transcript** where a person's email address and phone
+**`SpeakerContactCard` renders for any identified speaker**, including one whose record holds nothing but a
+name - which is most of them, since enrolling a voice creates a person with no contact details at all. It
+originally required at least one detail before rendering, so exactly those people got nothing; and because
+`isInternal` is never null for them, what did render was a thin box repeating the name and marker from the row
+above. Both read as "no card". It now states that no details are recorded and offers to add them
+(`ManagePeople`, into `EditPersonModal`), and `contactSummary` says the same rather than echoing the row.
+
+It is also the only place inside a transcript where a person's email address and phone
 number are reachable; it renders above the selected speaker's segments, with `mailto:`/`tel:` links (the
 `tel:` href strips the spaces a readable number is written with). Its `contactSummary` helper also fills the
 Speakers-row chip's tooltip, so the two renderings of one person cannot drift apart. Both render nothing for

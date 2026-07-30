@@ -592,5 +592,7 @@
   "roomRecordings_other": "{{count}} Aufnahmen",
   "roomSharedPrefix": "geteilt",
   "yourRooms": "Deine Räume",
-  "editPersonAction": "{{name}} bearbeiten"
+  "editPersonAction": "{{name}} bearbeiten",
+  "speakerNoContactDetails": "Keine Kontaktdaten hinterlegt.",
+  "speakerAddContactDetails": "Daten erganzen"
 }

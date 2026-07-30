@@ -59,6 +59,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.171.1",
+    date: "2026-07-30",
+    pr: 379,
+    headline: "Fix: the speaker contact card was invisible for most people",
+    summary:
+      "Enrolling someone's voice creates a person with nothing but a name, so most identified speakers have " +
+      "no job title, company, email or phone. The contact card refused to appear for exactly those people - " +
+      "and when it did appear it showed the name and the Internal/External marker, which the row above it " +
+      "already shows. Hovering that marker repeated the same two things. Both read as nothing happening.\n\n" +
+      "The card now appears for **every** identified speaker. When there is nothing recorded it says so, and " +
+      "offers to add the details there and then if you can manage people. The tooltip says the same rather " +
+      "than echoing the row.",
+    fixed: [
+      "The speaker contact card did not appear for a person with no contact details recorded - which is most people - and showed only what the row already said when it did.",
+      "Hovering the Internal / External marker repeated the name and marker instead of saying no details were recorded.",
+    ],
+  },
+  {
     version: "0.171.0",
     date: "2026-07-30",
     pr: 378,

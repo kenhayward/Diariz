@@ -1342,7 +1342,13 @@ export default function RecordingDetail() {
                 {/* The one place inside a transcript where a person's email and phone are reachable. */}
                 {(() => {
                   const info = rec.speakers.find((s) => s.label === selectedSpeaker);
-                  return info ? <SpeakerContactCard info={info} /> : null;
+                  return info ? (
+                    <SpeakerContactCard
+                      info={info}
+                      canManagePeople={permissions.managePeople}
+                      onEdit={() => setEditingPersonId(info.personId)}
+                    />
+                  ) : null;
                 })()}
                 <ul className="space-y-2">
                   {rec.current.segments
@@ -2082,6 +2088,7 @@ export function SpeakerRow({
               title={contactSummary(info, {
                 internal: t("speakerInternal"),
                 external: t("speakerExternal"),
+                none: t("speakerNoContactDetails"),
               })}
               className={`shrink-0 cursor-help rounded px-1 text-[10px] font-medium ${
                 info.isInternal

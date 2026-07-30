@@ -1,18 +1,33 @@
 import { useTranslation } from "react-i18next";
 import type { SpeakerInfo } from "../lib/types";
 
-/// Whether we know enough about this speaker to say anything about them as a person.
+/// Whether this speaker is a person at all. An anonymous speaker and a "Multiple Speakers" slot are not one -
+/// the server sends null for every detail on both - so neither gets a card.
+function isPerson(info: SpeakerInfo): boolean {
+  return Boolean(info.personId) && !info.isMultiSpeaker;
+}
+
+/// Whether we hold anything about them beyond their name and whether they are a colleague.
 ///
-/// An anonymous speaker and a "Multiple Speakers" slot are not one person - the server sends null for every
-/// detail on both - and a speaker whose person record carries nothing but a name has nothing to show either.
-function hasDetails(info: SpeakerInfo): boolean {
-  if (!info.personId || info.isMultiSpeaker) return false;
-  return Boolean(info.title || info.companyName || info.email || info.phone || info.isInternal !== null);
+/// Most people in the directory have only a name, because enrolling a voice is all it takes to create one.
+/// The card used to require this before rendering at all, so those people got nothing; it now renders and
+/// says the details are missing, which is both true and actionable.
+function hasContactDetails(info: SpeakerInfo): boolean {
+  return Boolean(info.title || info.companyName || info.email || info.phone);
 }
 
 /// The person, as plain lines of text. Used for the Speakers-tab chip tooltip as well as the card below, so
 /// the two cannot end up describing the same person differently.
-export function contactSummary(info: SpeakerInfo, labels?: { internal: string; external: string }): string {
+export function contactSummary(
+  info: SpeakerInfo,
+  labels?: { internal: string; external: string; none: string },
+): string {
+  // Nothing beyond the name and the marker means the tooltip repeats the row it hangs off, which is what
+  // made it pointless. Say the details are missing instead.
+  if (!hasContactDetails(info)) {
+    return [info.displayName, labels?.none ?? "No contact details recorded"].join("\n");
+  }
+
   return [
     info.displayName,
     info.title,
@@ -30,10 +45,18 @@ export function contactSummary(info: SpeakerInfo, labels?: { internal: string; e
 /// This is the only place inside a transcript where a person's email address and phone number are reachable -
 /// the Speakers row has room for a job title and a company and no more. Both are links rather than text,
 /// because the reason to look someone up mid-transcript is almost always to contact them.
-export default function SpeakerContactCard({ info }: { info: SpeakerInfo }) {
+export default function SpeakerContactCard({
+  info,
+  canManagePeople = false,
+  onEdit,
+}: {
+  info: SpeakerInfo;
+  canManagePeople?: boolean;
+  onEdit?: () => void;
+}) {
   const { t } = useTranslation(["workspace", "people"]);
 
-  if (!hasDetails(info)) return null;
+  if (!isPerson(info)) return null;
 
   const role = [info.title, info.companyName].filter(Boolean).join(", ");
   // tel: does not tolerate the spaces a readable phone number is written with, so the href is stripped while
@@ -57,6 +80,17 @@ export default function SpeakerContactCard({ info }: { info: SpeakerInfo }) {
           </span>
         )}
       </div>
+
+      {!hasContactDetails(info) && (
+        <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+          {t("workspace:speakerNoContactDetails")}
+          {canManagePeople && onEdit && (
+            <button type="button" onClick={onEdit} className="underline">
+              {t("workspace:speakerAddContactDetails")}
+            </button>
+          )}
+        </p>
+      )}
 
       {(info.email || info.phone) && (
         <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
