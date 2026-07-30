@@ -1,6 +1,6 @@
 ---
 title: Worked example: EspoCRM
-summary: Four n8n recipes that log meetings into EspoCRM with their summaries, raise tasks from action items, file recordings under the right customer, and brief the AI from the CRM before a meeting starts.
+summary: Six n8n recipes that log meetings into EspoCRM with their summaries, raise tasks from action items, file recordings under the right customer, brief the AI from the CRM before a meeting, and keep people up to date.
 group: crm
 order: 20
 ---
@@ -276,6 +276,83 @@ main reason to add that custom field.
 
 ---
 
+## Recipe 6: keep Diariz people up to date from EspoCRM
+
+Your CRM already knows everyone's job title, company and phone number, and somebody maintains it. This
+copies those three fields onto the matching people in Diariz, so a speaker's contact card is right
+without anyone retyping it.
+
+**Only those three fields.** The reasons are worth understanding, because each one is a way this recipe
+can go wrong.
+
+- **Never send the name or the email address of a person who has a Diariz account.** Those follow the
+  account, and Diariz answers **400** if you try. A recipe that sends every field fails on every
+  colleague.
+- **Never send the email address at all.** It is what you matched on. Diariz stores the address that
+  identified the person, which is often not the one your CRM lists first, so overwriting it can break
+  the match that found them next time.
+- **Never send internal/external or the voiceprint opt-out.** The first is a Diariz judgement, not a
+  CRM one. The second is consent to hold biometric data, and nothing outside Diariz should touch it.
+
+**Your API token needs the Manage people permission**, unless it happens to be your own record.
+
+**1. Schedule Trigger** - daily is plenty. Job titles do not change hourly.
+
+**2. HTTP Request** - EspoCRM contacts modified since the last run:
+
+```
+GET https://crm.example.com/api/v1/Contact
+  ?where[0][type]=after
+  &where[0][attribute]=modifiedAt
+  &where[0][value]={{ $json.lastRun }}
+  &maxSize=200
+```
+
+**3. HTTP Request** - find the person in Diariz:
+
+```
+GET {{ $credentials.baseUrl }}/api/people/search?q={{ $json.emailAddress }}
+```
+
+This endpoint is open to everyone and matches on name, email **and** company, so it is also how you
+would find everybody from one client.
+
+**4. IF node** - stop when nothing came back.
+
+**Do not create a person here.** It is tempting, and it fills your directory with hundreds of people who
+have never been in a meeting, which makes the speaker picker and the duplicate suggestions worse for
+everyone. Let people appear when they actually attend something.
+
+**5. Set node** - build a body containing only what is safe to send:
+
+```
+{
+  "title": "{{ $json.crmTitle }}",
+  "companyName": "{{ $json.accountName }}",
+  "phone": "{{ $json.phoneNumber }}"
+}
+```
+
+Use the **account's** name rather than whatever is typed on the contact. Diariz stores the company as
+plain text, so the only thing that makes it useful for grouping is everybody spelling it the same way.
+Taking it from the account record is what guarantees that.
+
+Omitting a field leaves it alone, so send only what your CRM actually has. An empty string is a value
+and will blank it.
+
+**6. HTTP Request** - `PUT {{ $credentials.baseUrl }}/api/people/{{ $json.personId }}`
+
+### What you get
+
+Job title and company appear next to the speaker in the Speakers tab, and the contact card above their
+segments gets a working phone link. Minutes that name a job title get it right. Nobody typed anything.
+
+### What this recipe deliberately does not do
+
+It does not bring across departments, addresses, social links, lifecycle stage, lead source or record
+owner. Diariz has nowhere to put them and no use for them, and a field nobody reads is still a field
+somebody has to keep correct.
+
 ## When it does not work
 
 | Symptom | Usually |
@@ -286,7 +363,8 @@ main reason to add that custom field.
 | Meetings on the wrong day | Datetimes sent as local time. EspoCRM wants UTC. |
 | Everyone in the company appearing as a customer | Filtering on `isInternal` being falsy instead of `=== false`. Unidentified speakers have no such field. |
 | It worked, then stopped | **Preferences**, **Automations** has a delivery log with the HTTP status your n8n instance returned. An automation auto-pauses after repeated failures. |
-| 403 from Diariz on a write | The API token is read-only, or has expired. |
+| 403 from Diariz on a write | The API token is read-only, or has expired. Updating people also needs the **Manage people** permission. |
+| 400 "Name and email follow the linked user account" | Recipe 6 is sending a name or an email for somebody who has a Diariz account. Send only title, company and phone. |
 
 ## Where to take it next
 

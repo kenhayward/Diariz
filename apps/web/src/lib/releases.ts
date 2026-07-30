@@ -72,11 +72,12 @@ export const RELEASES: Release[] = [
       "explains the approach: what is worth sending to a CRM and what is not, how to work out which " +
       "customer a meeting was with, and why folders and meeting types already give you the " +
       "customer-by-customer view most people are trying to build.\n\n" +
-      "A second article works the whole thing through against **EspoCRM**, an open-source CRM, with five " +
+      "A second article works the whole thing through against **EspoCRM**, an open-source CRM, with six " +
       "recipes: log every meeting with its summary, raise tasks from action items, file recordings under " +
-      "the right customer automatically, brief the AI from your CRM before the meeting starts, and send " +
-      "task completion back. Only the field names are EspoCRM-specific - the shapes work against any CRM " +
-      "with a REST API.\n\n" +
+      "the right customer automatically, brief the AI from your CRM before the meeting starts, send task " +
+      "completion back, and keep people's job titles, companies and phone numbers up to date from the CRM " +
+      "so the contact card on a speaker is right without anyone retyping it. Only the field names are " +
+      "EspoCRM-specific - the shapes work against any CRM with a REST API.\n\n" +
       "It also warns about the two mistakes everybody makes: forgetting to switch on attendee contact " +
       "details, so every lookup silently finds nobody; and copying deal data into Diariz, where it goes " +
       "quietly out of date.\n\n" +

@@ -285,9 +285,10 @@ integration as a worked pattern:
 - **`crm-integration.md`** — the approach: why there is no connector, what is worth sending, the email
   join key and the contacts-gate trap, folders/meeting types as the customer and kind dimensions, the
   link-not-mirror rule, and the four sync directions.
-- **`crm-espocrm.md`** — five worked n8n recipes against EspoCRM: log the meeting with its summary
+- **`crm-espocrm.md`** — six worked n8n recipes against EspoCRM: log the meeting with its summary
   (incl. the `diarizRecordingId` upsert key), tasks from action items, file into a customer folder,
-  the pre-meeting CRM briefing, and task completion back. Plus a troubleshooting table.
+  the pre-meeting CRM briefing, task completion back, and the person-details sync of section 11.
+  Plus a troubleshooting table.
 
 *Still open:* an exportable n8n workflow JSON per recipe would lower the effort further; the articles
 describe the nodes but the reader still wires them. Worth doing only once someone has actually used one.
@@ -480,6 +481,89 @@ a resolution step on the n8n side.
 
 If only one thing gets built, make it direction **C** — it is free, and it changes the output the user
 actually reads.
+
+---
+
+## 11. CRM contact fields vs the Diariz person record
+
+Prompted by the idea of a recipe that keeps Diariz people up to date from CRM contacts. The question
+underneath it: **is the Diariz person model missing anything important?**
+
+### 11.1 What Diariz holds
+
+`Person` (`src/Diariz.Domain/Entities/Person.cs`), editable fields only:
+`Name` (one string), `Title`, `CompanyName` (free text), `Email` (one), `Phone` (one), `IsInternal`,
+`VoiceprintOptOut`. Plus `Id`, `LinkedUserId`, timestamps, and the voiceprint.
+
+`UpdatePersonRequest` accepts exactly `Name, Title, CompanyName, Email, Phone, IsInternal,
+VoiceprintOptOut`, and **null means "not supplied", not "clear it"**
+(`src/Diariz.Api/Contracts/ApiDtos.cs:352-356`).
+
+### 11.2 The union of what CRMs keep
+
+Common across Salesforce, HubSpot, EspoCRM, SuiteCRM, Twenty and Odoo:
+
+| Group | Typical CRM fields | Diariz equivalent |
+|---|---|---|
+| **Identity** | salutation, first name, middle name, last name, suffix, preferred name, pronouns | `Name` — **one string** |
+| **Work** | job title, department, **account (a relation)**, reports-to, assistant, buying role | `Title`; `CompanyName` as **free text**; nothing else |
+| **Email** | primary + additional addresses, each typed, one flagged primary | `Email` — **one, untyped** |
+| **Phone** | mobile / work / home / fax / other, typed, one primary | `Phone` — **one, untyped** |
+| **Address** | mailing + other: street, city, region, postcode, country | none |
+| **Web** | website, LinkedIn, social handles | none |
+| **Ownership** | record owner, team/territory, created/modified by and at, last activity | timestamps only |
+| **Lifecycle** | lead source, lifecycle stage (lead/MQL/SQL/customer), active flag | none |
+| **Consent** | email opt-out, do-not-call, marketing subscription, GDPR lawful basis | `VoiceprintOptOut` only, which is about biometrics, not contact |
+| **Other** | description, tags, language, timezone, birthdate, custom fields | none |
+
+Diariz also holds two things a CRM does not: **`IsInternal`** (a CRM implies this by Contact-vs-User
+rather than storing it) and **`VoiceprintOptOut`** (biometric consent, which has no CRM analogue and must
+never be written by a sync).
+
+### 11.3 Are we missing anything important?
+
+Judged strictly by whether it would improve speaker naming, the contact card, the minutes, or an
+automation Diariz cannot otherwise run. Most of the list above is **correctly absent** — Diariz is not a
+CRM, and address, social, lifecycle stage, owner, source, timezone and birthday have no job here.
+
+**Worth having:**
+
+| Gap | Importance | Assessment |
+|---|---|---|
+| **Structured name (first / last)** | Medium-high | The most consequential structural difference. Transcripts say "Sam"; the CRM says `firstName=Samir, lastName=Patel`; Diariz stores the single string "Samir Patel". Duplicate detection normalises the whole name, so "Sam Patel" and "Samir Patel" never group. A first-name field would improve both matching and duplicate reporting. **But** `Name` is what renders on a transcript row, and one display string is exactly right for that — splitting it risks the displayed name drifting from the spoken one. **Verdict: useful, not urgent.** The cheap fix is for the sync to compose `first + " " + last` consistently so at least everything agrees. |
+| **External id (G1)** | High | Already identified. Without it every sync re-matches on email. |
+| **Account as a relation (G4)** | Medium | Real, but the CRM's job. The cheap fix is to sync the CRM's **canonical** account name, so every Diariz person from one customer at least carries the identical string and the existing free-text search behaves like a grouping. |
+| **Typed multi-value email / phone** | Low | One of each is enough for a contact card. **But see the trap below** — the single `Email` is not "the primary address", it is "the address we matched on", and those differ. |
+| **Contact consent / do-not-contact** | Low in Diariz, real in the automation | Diariz never emails a contact itself: `POST /recordings/{id}/email` has **no recipient parameter and mails only the caller** (`RecordingsController.cs:626-632`). But Diariz hands attendee addresses to automations, and the n8n help article shows exactly that. There is no field saying "this person must not be contacted". **Do not add one.** A copied consent flag is precisely the mirror mistake section 10.2 warns against, and a stale consent record is the one kind of stale data with legal consequences. The automation should read consent from the CRM at send time. |
+
+**Not worth having, stated so nobody builds them:** department, addresses, social links, lifecycle
+stage, lead source, record owner, territory, language, timezone, birthdate.
+
+### 11.4 The sync recipe, and why it is smaller than it looks
+
+Three traps decide the design:
+
+1. **`PUT /api/people/{id}` returns 400 for a linked person** if the body carries `Name` or `Email`:
+   *"Name and email follow the linked user account and cannot be set here"*
+   (`PeopleController.Update`). A naive send-everything sync therefore **fails on every colleague who
+   has a Diariz account**.
+2. **Never overwrite `Email`.** It is the join key. The stored address is the one that matched an
+   attendee, which is often not the CRM's primary; replacing it can break the very match that found
+   the person.
+3. **Never send `IsInternal` or `VoiceprintOptOut`.** The first is a Diariz judgement (a colleague can
+   also exist as a CRM contact), the second is biometric consent.
+
+Strip those out and **only three fields are left worth syncing: `title`, `companyName`, `phone`.**
+
+That is a much better outcome than it sounds, because those three are exactly what the Speakers tab and
+the contact card display. The recipe is small, safe, cannot corrupt the join key, cannot fight the
+account directory, and its effect is immediately visible where users actually look.
+
+Shipped as **Recipe 6** in `crm-espocrm.md`.
+
+Notes for whoever builds it: `GET /api/people/search?q=` is ungated and matches name, email and company;
+`PUT /api/people/{id}` needs **Manage people** unless it is you, so the token owner needs that
+permission; and the sync should **not** create a person on a miss (lazy enrichment only, per 10.4 B).
 
 ---
 
