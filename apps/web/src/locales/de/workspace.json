@@ -591,5 +591,6 @@
   "roomRecordings_one": "{{count}} Aufnahme",
   "roomRecordings_other": "{{count}} Aufnahmen",
   "roomSharedPrefix": "geteilt",
-  "yourRooms": "Deine Räume"
+  "yourRooms": "Deine Räume",
+  "editPersonAction": "{{name}} bearbeiten"
 }

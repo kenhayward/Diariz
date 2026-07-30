@@ -43,6 +43,8 @@ function row(
     durationMs: number;
     canPlay: boolean;
     playing: boolean;
+    canManagePeople: boolean;
+    onEditPerson: () => void;
   }> = {},
 ) {
   render(
@@ -62,6 +64,8 @@ function row(
       onAssign={handlers.onAssign ?? (() => {})}
       onCreate={handlers.onCreate ?? (() => {})}
       onMulti={handlers.onMulti ?? (() => {})}
+      canManagePeople={handlers.canManagePeople ?? true}
+      onEditPerson={handlers.onEditPerson ?? (() => {})}
     />
     </QueryClientProvider>,
   );
@@ -280,5 +284,35 @@ describe("SpeakerRow", () => {
     expect(tip).toContain("lizzie@bbc.test");
     expect(tip).toContain("BBC");
     expect(tip).toContain("020 7946 0000");
+  });
+
+  // ---- Editing the person from the row ----
+  //
+  // Correcting a speaker's details is a thing you want while reading their words, not after a trip through a
+  // directory of everyone. It edits the shared person record, so it is gated on the same permission the
+  // endpoints enforce.
+
+  it("offers an edit control for an identified speaker", () => {
+    const onEditPerson = vi.fn();
+    row(speaker({ displayName: "Lizzie Mcneil", personId: "p1", isInternal: false }), { onEditPerson });
+
+    fireEvent.click(screen.getByRole("button", { name: /Edit Lizzie Mcneil/i }));
+
+    expect(onEditPerson).toHaveBeenCalled();
+  });
+
+  it("hides it without the Manage people permission", () => {
+    row(speaker({ displayName: "Lizzie Mcneil", personId: "p1" }), { canManagePeople: false });
+
+    expect(screen.queryByRole("button", { name: /Edit Lizzie Mcneil/i })).toBeNull();
+  });
+
+  /// There is no person behind either, so there is nothing to open.
+  it("hides it for an unidentified speaker and for a multi-speaker slot", () => {
+    row(speaker({ displayName: "SPEAKER_00", personId: null }));
+    expect(screen.queryByRole("button", { name: /^Edit /i })).toBeNull();
+
+    row(speaker({ displayName: "Multiple Speakers", personId: "p1", isMultiSpeaker: true }));
+    expect(screen.queryByRole("button", { name: /^Edit /i })).toBeNull();
   });
 });

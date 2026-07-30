@@ -18,13 +18,27 @@ public static class PersonDuplicates
     public const string ReasonEmail = "email";
     public const string ReasonName = "name";
 
-    /// <summary>Groups of two or more likely-duplicate people. Email is the stronger signal, so a pair caught
-    /// by email is not reported again under name.</summary>
+    /// <summary>Groups of two or more likely-duplicate people. Email is the stronger signal, so a set of
+    /// people caught by email is not reported a second time under name.
+    ///
+    /// <para><b>Suppression is by the set, not by the people in it</b>, and the difference is the whole point.
+    /// Excluding people from the name pass once they appeared in an email group meant a weak email
+    /// coincidence silently destroyed a strong name match: in production, one person had been given an email
+    /// address belonging to someone else's account, which grouped those two and thereby made a genuine
+    /// same-name pair impossible to report at all. It was only found by editing the email to break the
+    /// coincidence.</para>
+    ///
+    /// <para>So one person may appear in several suggestions. Each is a separate claim about a separate pair
+    /// and deserves its own answer; the UI lets a suggestion be dismissed for exactly this reason.</para>
+    /// </summary>
     public static IReadOnlyList<PersonDuplicateGroup> Find(IEnumerable<Person> people)
     {
         var all = people.ToList();
         var groups = new List<PersonDuplicateGroup>();
-        var grouped = new HashSet<Guid>();
+        var reported = new HashSet<string>();
+
+        static string SetKey(IEnumerable<Person> group) =>
+            string.Join(",", group.Select(p => p.Id).Order());
 
         foreach (var group in all
                      .Where(p => !string.IsNullOrWhiteSpace(p.Email))
@@ -32,13 +46,13 @@ public static class PersonDuplicates
                      .Where(g => g.Count() > 1))
         {
             groups.Add(new PersonDuplicateGroup(ReasonEmail, group.ToList()));
-            foreach (var p in group) grouped.Add(p.Id);
+            reported.Add(SetKey(group));
         }
 
         foreach (var group in all
-                     .Where(p => !grouped.Contains(p.Id) && !string.IsNullOrWhiteSpace(p.Name))
+                     .Where(p => !string.IsNullOrWhiteSpace(p.Name))
                      .GroupBy(p => NormalizeName(p.Name))
-                     .Where(g => g.Count() > 1))
+                     .Where(g => g.Count() > 1 && !reported.Contains(SetKey(g))))
         {
             groups.Add(new PersonDuplicateGroup(ReasonName, group.ToList()));
         }

@@ -55,5 +55,6 @@
   "mergeBlockedBothAccounts": "Diese Eintrage haben jeweils ein eigenes Diariz-Konto und sind daher zwei verschiedene Personen, so ahnlich die Namen auch aussehen. Beim Zusammenfuhren wurde eine davon vom eigenen Konto getrennt, deshalb ist es nicht moglich.",
   "mergeReview": "Prufen und zusammenfuhren",
   "dismissDuplicate": "Ausblenden",
-  "dismissDuplicateHint": "Blendet diesen Vorschlag fur diesen Besuch aus. Beim nachsten Offnen von Personen ist er wieder da."
+  "dismissDuplicateHint": "Blendet diesen Vorschlag fur diesen Besuch aus. Beim nachsten Offnen von Personen ist er wieder da.",
+  "editPersonTitle": "Person bearbeiten"
 }

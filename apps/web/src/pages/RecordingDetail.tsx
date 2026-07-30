@@ -27,6 +27,7 @@ import ShareToRoomModal from "../components/ShareToRoomModal";
 import { useRoom } from "../lib/rooms";
 import DownloadTranscriptModal from "../components/DownloadTranscriptModal";
 import PeopleModal from "../components/PeopleModal";
+import EditPersonModal from "../components/EditPersonModal";
 import SpeakerContactCard, { contactSummary } from "../components/SpeakerContactCard";
 import SummaryEditModal from "../components/SummaryEditModal";
 import MeetingMinutesEditModal from "../components/MeetingMinutesEditModal";
@@ -184,6 +185,7 @@ export default function RecordingDetail() {
   });
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
+  const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
 
   // Auto-save the best time-overlap match the first time an unlinked recording is opened, so the calendar
   // icon + Overview details appear with no clicks. Manual links and existing links are never touched, and it
@@ -228,7 +230,7 @@ export default function RecordingDetail() {
   // The current user's name, shown as the "speaker" on their notes woven into the transcript. `id` (the
   // caller's user id) tells the recording's owner apart from a room co-viewer, who can read its notes and
   // screenshots but never add/edit/delete them (the API 404s those routes for anyone but the owner).
-  const { id: myId, fullName, email } = useAuth();
+  const { id: myId, fullName, email, permissions } = useAuth();
   const audioRef = useRef<HTMLAudioElement>(null);
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
   // Per-speaker audition: the label currently playing and that speaker's (merged) play ranges.
@@ -1318,6 +1320,8 @@ export default function RecordingDetail() {
                     onAssign={(profileId) => assignSpeaker(label, profileId)}
                     onCreate={(name) => newPerson(label, name)}
                     onMulti={() => markMulti(label)}
+                    canManagePeople={permissions.managePeople}
+                    onEditPerson={() => setEditingPersonId(info?.personId ?? null)}
                   />
                 );
               })}
@@ -1672,6 +1676,9 @@ export default function RecordingDetail() {
       )}
       {downloading && <DownloadTranscriptModal recordingId={id} onClose={() => setDownloading(false)} />}
       {peopleOpen && <PeopleModal onClose={() => setPeopleOpen(false)} />}
+      {editingPersonId && (
+        <EditPersonModal personId={editingPersonId} onClose={() => setEditingPersonId(null)} />
+      )}
       {linkModalOpen && (
         <CalendarLinkModal recordingId={id} aroundDate={rec.createdAt} onClose={() => setLinkModalOpen(false)} />
       )}
@@ -1980,6 +1987,8 @@ export function SpeakerRow({
   onAssign,
   onCreate,
   onMulti,
+  canManagePeople,
+  onEditPerson,
 }: {
   label: string;
   info: SpeakerInfo | undefined;
@@ -1995,6 +2004,8 @@ export function SpeakerRow({
   onAssign: (profileId: string | null) => void;
   onCreate: (name: string) => void;
   onMulti: () => void;
+  canManagePeople: boolean;
+  onEditPerson: () => void;
 }) {
   const { t } = useTranslation("workspace");
   // The display name for the per-speaker action labels (the assignment typeahead owns the editing UI).
@@ -2087,6 +2098,12 @@ export function SpeakerRow({
         {t("speakerSegmentCount", { count })} · {formatDuration(durationMs)}
       </span>
       <div className="flex items-center gap-0.5" onClick={stop} onKeyDown={stop}>
+        {/* Correcting who someone is belongs where you noticed they were wrong. Only for a real person - an
+            anonymous speaker and a multi-speaker slot have no record to edit - and only with the permission
+            the endpoint behind it enforces. */}
+        {canManagePeople && info?.personId && !info.isMultiSpeaker && (
+          <ToolbarButton label={t("editPersonAction", { name })} icon={PencilIcon} onClick={onEditPerson} />
+        )}
         {canPlay && (
           <ToolbarButton
             label={playing ? t("pauseSpeaker") : t("playSpeaker", { label: name })}

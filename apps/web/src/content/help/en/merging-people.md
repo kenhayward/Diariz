@@ -53,3 +53,7 @@ missing email address.
 
 Diariz spots pairs by matching email address, or by matching name once spacing and capitals are ignored - so
 two different people who genuinely share a name will keep being suggested, and can keep being dismissed.
+
+One person can appear in more than one suggestion, which is intentional: they might genuinely be a duplicate
+of two different records for two different reasons. Each suggestion is a separate question and gets its own
+answer.

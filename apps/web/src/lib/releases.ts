@@ -17,7 +17,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume), system audio, or both mixed together on one device - system audio works in Chromium browsers ("Share audio") and seamlessly in the desktop app; schedule a recording to auto-stop at a set time or after 15/30/60 minutes; or upload files (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A). |
 | **Transcribe & diarize** | Server-side WhisperX (word-level timestamps) with pyannote speaker diarization; speaker-labelled, editable, playable segments you can re-transcribe any time. |
 | **Recording hub** | Every meeting opens on a hub: a summary card (meeting type, key facts, the summary inline) over tiles for transcript, actions, speakers, notes, files, and formulas - each showing its count and a preview, with new-note / add-file / run-formula available in place. The transcript embeds a conversation-flow player showing who spoke when, which doubles as the scrubber. |
-| **People and speaker identification** | One shared directory of the people in your meetings, where a voiceprint is optional - someone can be listed with no biometric held, or opt out, which erases theirs. Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). Assign a speaker from the Speakers tab or straight from the label on any transcript row, as you read or listen. A **People** directory opens over whatever you are reading; it lists everyone one to a line, searchable by name, email or company; a person carries a job title, company, email, phone and an internal/external marker, and likely duplicates are pointed out for you to merge. The Speakers tab shows an identified speaker's title and company inline, with a contact card (email and phone as links) above their segments. Browsing the directory needs the Manage people permission; opting yourself out, and searching to name a speaker, never do. |
+| **People and speaker identification** | One shared directory of the people in your meetings, where a voiceprint is optional - someone can be listed with no biometric held, or opt out, which erases theirs. Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). Assign a speaker from the Speakers tab or straight from the label on any transcript row, as you read or listen. A **People** directory opens over whatever you are reading; it lists everyone one to a line, searchable by name, email or company; a person carries a job title, company, email, phone and an internal/external marker, and likely duplicates are pointed out for you to merge. The Speakers tab shows an identified speaker's title and company inline, with a contact card (email and phone as links) above their segments and a pencil to edit that person in place. Browsing the directory needs the Manage people permission; opting yourself out, and searching to name a speaker, never do. |
 | **Notes** | Take your own note lines live during a meeting (timestamped, crash-safe); they appear inline in the transcript at the moment you wrote them, steer the minutes, and can be woven into an enhanced-notes section linking to the exact transcript moments. |
 | **Meeting screenshots** | Capture the screen during a recording from the desktop app - a hotkey, the tray menu, or the app itself - choosing a screen or a rectangle on the first capture and reusing it after; captures appear in the transcript at the moment they were taken, as a full-size viewer with zoom and pan to read a capture at native resolution, and in a Notes-tab section. |
 | **Summaries & minutes** | Auto summary plus full professional meeting minutes, editable in a rich editor and emailable. A meeting type carries no prompts of its own: it names the **formula** that generates its minutes, plus any others to run alongside (their documents appear in the Formulas tab). Minutes and formulas are the same machinery - any formula you can use can produce your minutes. Templates are built from blocks (H1-H3 headings, literal text, substituted details, model prompts, rules, drag-to-reorder) with JSON import/export. |
@@ -58,6 +58,31 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.171.0",
+    date: "2026-07-30",
+    pr: 378,
+    headline: "Edit a speaker's details in place, and see every duplicate Diariz found",
+    summary:
+      "**A pencil on the speaker's row.** If you can manage people, correcting who someone is no longer " +
+      "means leaving the transcript and finding them in a list of everyone - the pencil opens their " +
+      "details right there. It is the same editor the directory uses and edits the same shared record, so " +
+      "a correction made here is a correction everywhere. It will not close on a stray click outside it, " +
+      "because half-typed edits are not recoverable.\n\n" +
+      "**A duplicate-detection fix worth explaining.** A person could only ever appear in one suggestion, " +
+      "so a weak coincidence could hide a real match. In practice: one record had been given an email " +
+      "address belonging to somebody else's account, Diariz reported that pair, and in doing so it made a " +
+      "genuine same-name pair impossible to report at all. The only way to see the real one was to edit " +
+      "the email address and break the coincidence.\n\n" +
+      "Suggestions are now judged one pair at a time, so a person can appear in more than one. Each is a " +
+      "separate question with its own answer, and any of them can be dismissed.",
+    added: [
+      "A pencil on an identified speaker's row that edits their person record without leaving the transcript (needs Manage people).",
+    ],
+    fixed: [
+      "Duplicate detection could hide a genuine match: a person caught by one coincidence was excluded from every other comparison, so a real same-name pair could not be reported until the coincidence was edited away.",
+    ],
+  },
   {
     version: "0.170.0",
     date: "2026-07-30",

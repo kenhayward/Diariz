@@ -55,5 +55,6 @@
   "mergeBlockedBothAccounts": "Cada uno de estos registros tiene una cuenta de Diariz, asi que son dos personas distintas, por parecidos que sean los nombres. Combinarlos dejaria a una de ellas sin su propia cuenta, por lo que no esta permitido.",
   "mergeReview": "Revisar y combinar",
   "dismissDuplicate": "Descartar",
-  "dismissDuplicateHint": "Oculta esta sugerencia mientras estas aqui. Volvera a aparecer la proxima vez que abras Personas."
+  "dismissDuplicateHint": "Oculta esta sugerencia mientras estas aqui. Volvera a aparecer la proxima vez que abras Personas.",
+  "editPersonTitle": "Editar persona"
 }

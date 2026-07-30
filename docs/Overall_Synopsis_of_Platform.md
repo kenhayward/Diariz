@@ -1439,6 +1439,13 @@ disagree.
 enrolled the same colleague privately now both appear. It **never merges automatically**: merge destroys the
 source row, has no undo, and under a shared directory a bad one damages everyone's recordings.
 
+**Suppression is by the reported set, not by the people in it.** The original implementation removed people
+from the name pass once they had appeared in an email group, so a weak email coincidence silently destroyed a
+strong name match: in production one person had been given an email address belonging to someone else's
+account, which grouped those two and thereby made a genuine same-name pair **impossible to report at all** —
+found only by editing the email to break the coincidence. One person may therefore appear in several
+suggestions; each is a separate claim about a separate pair, which is also why the UI can dismiss one.
+
 **Merge salvages the source before deleting it**, which is not optional bookkeeping. `LinkedUserId` moves to
 the survivor if the survivor has none: losing it detaches a real account from the directory, and because the
 biometric self-exception resolves through `LinkedUserId`, that user silently loses the ability to opt
@@ -1462,6 +1469,12 @@ component state, so closing the modal restores everything. Keyed on the **people
 index: a merge reorders the list, and an index-keyed dismissal would then hide the wrong pair. Deliberately
 not persisted - a pair dismissed today becomes a genuine duplicate the moment someone fills in the missing
 email address, and a permanent hide is not a decision to take from a banner with one click and no undo.
+
+**`EditPersonModal`** opens one person's details from the speaker they were identified as — the same
+`PersonEditor` the directory uses, so there is no second set of validation rules. Gated on `ManagePeople` at
+the control that opens it. Unlike every other modal here it **does not close on a backdrop click or on
+Escape**: half-typed edits are lost by a stray click and cannot be recovered, so the only ways out are Save
+and Cancel.
 
 **`SpeakerContactCard` is the only place inside a transcript** where a person's email address and phone
 number are reachable; it renders above the selected speaker's segments, with `mailto:`/`tel:` links (the

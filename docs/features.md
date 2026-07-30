@@ -160,7 +160,9 @@ The trade-off of a shared directory is deliberate and worth stating plainly: a v
 person will identify that human in **everyone's** recordings.
 On a recording's Speakers tab, hovering an identified speaker's **Internal**/**External** marker shows their
 full details, and selecting that speaker puts a **contact card** above their segments - the only place inside
-a transcript where their **email address and phone number** are reachable, both as links. Suggested duplicates
+a transcript where their **email address and phone number** are reachable, both as links. With **Manage
+people**, a **pencil** on the row edits that person's record in place - the same editor the directory uses,
+so one correction serves everywhere. Suggested duplicates
 carry a **Dismiss** control that hides one for the current visit only; nothing is recorded, because a pair
 dismissed today becomes a genuine duplicate as soon as a missing email address is filled in.
 

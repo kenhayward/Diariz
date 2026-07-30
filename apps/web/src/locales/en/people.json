@@ -55,5 +55,6 @@
   "mergeBlockedBothAccounts": "These records each have a Diariz account, so they are two different people - however alike the names look. Merging them would cut one of them off from their own account, so it is not allowed.",
   "mergeReview": "Review and merge",
   "dismissDuplicate": "Dismiss",
-  "dismissDuplicateHint": "Hide this suggestion while you are here. It comes back next time you open People."
+  "dismissDuplicateHint": "Hide this suggestion while you are here. It comes back next time you open People.",
+  "editPersonTitle": "Edit person"
 }
