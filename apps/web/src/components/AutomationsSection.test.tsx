@@ -108,7 +108,7 @@ describe("AutomationsSection", () => {
     expect(screen.getAllByText(/finishes transcribing/i).length).toBeGreaterThan(0);
   });
 
-  it("shows a paused status with a re-enable action for an auto-disabled automation", async () => {
+  it("shows a paused status with a resume action for an auto-disabled automation", async () => {
     vi.mocked(api.listWebhooks).mockResolvedValue([
       {
         id: "2",
@@ -137,13 +137,83 @@ describe("AutomationsSection", () => {
       lastStatus: null,
       createdAt: new Date().toISOString(),
     });
-    fireEvent.click(screen.getByRole("button", { name: /re-enable/i }));
+    fireEvent.click(screen.getByRole("button", { name: /resume/i }));
     await waitFor(() =>
       expect(updateWebhook).toHaveBeenCalledWith(
         "2",
         expect.objectContaining({ isActive: true, name: "Broken hook", url: "https://example.com/hook" }),
       ),
     );
+  });
+
+  // The pause half of the same button. Deliberately reversible: the alternative a user had was Delete,
+  // which destroys the signing secret and forces the receiving end to be reconfigured.
+  it("pauses an active automation without deleting it", async () => {
+    vi.mocked(api.listWebhooks).mockResolvedValue([
+      {
+        id: "3",
+        name: "Working hook",
+        url: "https://example.com/hook",
+        eventTypes: ["recording.created"],
+        isActive: true,
+        consecutiveFailures: 0,
+        disabledReason: null,
+        lastDeliveryAt: null,
+        lastStatus: null,
+        createdAt: new Date().toISOString(),
+        includeAttendeeContacts: true,
+      },
+    ]);
+    const updateWebhook = vi.mocked(api.updateWebhook).mockResolvedValue({
+      id: "3",
+      name: "Working hook",
+      url: "https://example.com/hook",
+      eventTypes: ["recording.created"],
+      isActive: false,
+      consecutiveFailures: 0,
+      disabledReason: null,
+      lastDeliveryAt: null,
+      lastStatus: null,
+      createdAt: new Date().toISOString(),
+    });
+    render(<Wrapped />);
+    fireEvent.click(await screen.findByRole("button", { name: /pause/i }));
+    await waitFor(() =>
+      expect(updateWebhook).toHaveBeenCalledWith(
+        "3",
+        // The whole record goes back, because the endpoint replaces rather than patches - losing
+        // includeAttendeeContacts here would silently stop contact details being sent.
+        expect.objectContaining({
+          isActive: false,
+          name: "Working hook",
+          url: "https://example.com/hook",
+          eventTypes: ["recording.created"],
+          includeAttendeeContacts: true,
+        }),
+      ),
+    );
+  });
+
+  // "Paused - check the URL" is right for an automation the server gave up on, and wrong for one the
+  // user paused on purpose. The two are told apart by whether the server set a disabledReason.
+  it("does not tell the user to check the URL when they paused it themselves", async () => {
+    vi.mocked(api.listWebhooks).mockResolvedValue([
+      {
+        id: "4",
+        name: "Deliberately off",
+        url: "https://example.com/hook",
+        eventTypes: ["recording.created"],
+        isActive: false,
+        consecutiveFailures: 0,
+        disabledReason: null,
+        lastDeliveryAt: null,
+        lastStatus: null,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+    render(<Wrapped />);
+    expect(await screen.findByText(/^paused$/i)).toBeTruthy();
+    expect(screen.queryByText(/check the URL/i)).toBeNull();
   });
 
   it("sends a test event", async () => {

@@ -36,7 +36,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
 | **API access** | Generate a personal API token (when enabled), read-only or read-write, with an optional expiry date, to call the REST API as yourself, with a built-in API reference documenting every endpoint - what it does, who may call it, and what it changes. |
-| **Automations (webhooks)** | When enabled, register outbound webhooks from Preferences that fire when a recording is created, finishes or fails transcription, a summary / meeting minutes / action items / tags become ready (each carrying its output), or a formula finishes or fails. Every recording event also carries an **attendees** list - who spoke, the person they are, their title, company, and internal or external - with email addresses and phone numbers included only when that automation opts in. Signed deliveries with automatic retries (rate-limited per automation and 429-aware), a test-event button, and auto-pause after repeated failures. Admins can also define named Workflow Signals and wire a platform automation to one, so a formula author just picks "When this finishes, trigger: ..." in the formula editor - no URL or per-user setup - and the formula's output is delivered inline to everyone routed through that signal. |
+| **Automations (webhooks)** | When enabled, register outbound webhooks from Preferences that fire when a recording is created, finishes or fails transcription, a summary / meeting minutes / action items / tags become ready (each carrying its output), or a formula finishes or fails. Every recording event also carries an **attendees** list - who spoke, the person they are, their title, company, and internal or external - with email addresses and phone numbers included only when that automation opts in. Signed deliveries with automatic retries (rate-limited per automation and 429-aware), a test-event button, auto-pause after repeated failures, and a Pause / Resume button that stops deliveries reversibly (deleting an automation discards its signing secret; pausing keeps it). Admins can also define named Workflow Signals and wire a platform automation to one, so a formula author just picks "When this finishes, trigger: ..." in the formula editor - no URL or per-user setup - and the formula's output is delivered inline to everyone routed through that signal. |
 | **n8n** | A published community node (\`n8n-nodes-diariz\`): a trigger that registers its own automation and verifies every signed delivery, plus an action node covering the whole REST API - with dropdowns listing your real recordings and formulas, files in and out, and a Run Formula step that waits for the document to finish. |
 | **Multi-user & groups** | User groups grant platform permissions (manage rooms / users / platform), with an approval lifecycle, per-user isolation, and Light/Dark/Auto themes. |
 | **Admin controls** | Storage quotas, optional audio auto-deletion, a global AI request timeout, separate platform toggles for API access, Claude/MCP, and Automations (webhooks), and whole-platform backup & restore. |
@@ -58,6 +58,33 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.172.0",
+    date: "2026-07-30",
+    pr: 383,
+    headline: "Pause an automation instead of deleting it, and a new tab icon",
+    summary:
+      "An automation could be switched off, but only by the server, and only after it had failed 15 times " +
+      "in a row. If you wanted one to stop - a workflow you were rebuilding, a system down for maintenance " +
+      "- your only option was **Delete**, which is worse than it sounds: deleting an automation throws away " +
+      "its signing secret, and re-creating it later issues a new one you have to go and update at the " +
+      "other end.\n\n" +
+      "Every automation card now has a single **Pause** / **Resume** button. A paused automation stops " +
+      "receiving events and keeps everything else, secret included. Resuming also clears the failure " +
+      "count, so it is now the same button that recovers one the server auto-paused.\n\n" +
+      "The status also tells the two apart. An automation the server gave up on still reads " +
+      "\"Paused - check the URL\"; one you paused yourself just reads \"Paused\", because there is nothing " +
+      "wrong with it.\n\n" +
+      "Separately, the browser tab icon was still an old logo. It is now the same microphone mark the " +
+      "desktop app uses.",
+    added: [
+      "A Pause / Resume button on every automation, so deliveries can be stopped without deleting the automation and losing its signing secret.",
+    ],
+    changed: [
+      "A manually paused automation reads \"Paused\" rather than \"Paused - check the URL\", which now means only that the server auto-paused it.",
+      "The browser tab icon is now the microphone mark used by the desktop app, replacing an older logo.",
+    ],
+  },
   {
     version: "0.171.4",
     date: "2026-07-30",
