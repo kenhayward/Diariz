@@ -25,7 +25,12 @@ The **signing secret is shown once**, at creation. Copy it then, or you will hav
 automation to get another.
 
 Each automation card then offers **Send test event**, **Recent deliveries** (the delivery log),
-**Re-enable** if it has been paused, and **Delete**.
+**Pause** / **Resume**, and **Delete**.
+
+**Pause is the reversible one.** A paused automation stops receiving events but keeps its settings and,
+crucially, its signing secret. Deleting one throws the secret away, and re-creating it later issues a new
+secret you would have to go and update at the receiving end. So if you only want deliveries to stop for a
+while - a workflow you are rebuilding, a system that is down for maintenance - pause it.
 
 ### The events
 
@@ -134,8 +139,9 @@ verification libraries work without modification:
 hours in total.
 
 **Auto-pause.** After 15 consecutive fully-failed deliveries the automation is paused and its card reads
-"Paused - check the URL". Use **Re-enable** once the endpoint is fixed. **Any single success resets the
-counter.**
+"Paused - check the URL", which is how you tell it apart from one you paused yourself (that just reads
+"Paused"). Use **Resume** once the endpoint is fixed - resuming also clears the failure count, so a single
+further failure will not immediately pause it again. **Any single success resets the counter** too.
 
 **Rate limiting is handled properly.** A `429 Too Many Requests` is **not** counted as a failure: it
 does not consume a retry attempt or move you toward auto-pause. The delivery is rescheduled using your

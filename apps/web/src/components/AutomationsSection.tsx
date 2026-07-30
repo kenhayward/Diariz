@@ -69,14 +69,18 @@ export default function AutomationsSection() {
     }
   }
 
-  async function reenable(hook: WebhookSubscription) {
+  /// Pause or resume without deleting. The endpoint replaces rather than patches, so the whole record goes
+  /// back - dropping includeAttendeeContacts here would silently stop contact details being sent. The server
+  /// clears the failure count when something is re-activated, which is also how an auto-paused automation
+  /// recovers, so both halves of the toggle go through this one call.
+  async function setActive(hook: WebhookSubscription, isActive: boolean) {
     setError(null);
     try {
       await api.updateWebhook(hook.id, {
         name: hook.name,
         url: hook.url,
         eventTypes: hook.eventTypes,
-        isActive: true,
+        isActive,
         includeAttendeeContacts: hook.includeAttendeeContacts,
       });
       qc.invalidateQueries({ queryKey: ["webhooks"] });
@@ -263,7 +267,7 @@ export default function AutomationsSection() {
             eventLabel={eventLabel}
             host={host}
             onSendTest={sendTest}
-            onReenable={reenable}
+            onSetActive={setActive}
             onRemove={remove}
           />
         ))}
@@ -282,7 +286,7 @@ function AutomationCard({
   eventLabel,
   host,
   onSendTest,
-  onReenable,
+  onSetActive,
   onRemove,
 }: {
   hook: WebhookSubscription;
@@ -291,10 +295,13 @@ function AutomationCard({
   eventLabel: (key: string) => string;
   host: (url: string) => string;
   onSendTest: (id: string) => void;
-  onReenable: (hook: WebhookSubscription) => void;
+  onSetActive: (hook: WebhookSubscription, isActive: boolean) => void;
   onRemove: (id: string) => void;
 }) {
   const paused = !hook.isActive;
+  // The server sets a reason only when it gave up on the endpoint itself. Without one, the user paused it
+  // deliberately, and telling them to go and check the URL would be nonsense.
+  const autoPaused = paused && hook.disabledReason != null;
   const [expanded, setExpanded] = useState(false);
   const { data: deliveries, isLoading } = useQuery({
     queryKey: ["webhook-deliveries", hook.id],
@@ -313,7 +320,7 @@ function AutomationCard({
               : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
           }`}
         >
-          {paused ? t("automationPaused") : t("automationActive")}
+          {!paused ? t("automationActive") : autoPaused ? t("automationPaused") : t("automationPausedManual")}
         </span>
       </div>
       <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">{host(hook.url)}</p>
@@ -341,11 +348,9 @@ function AutomationCard({
         <button type="button" onClick={() => onSendTest(hook.id)} className={btn}>
           {t("automationSendTest")}
         </button>
-        {paused && (
-          <button type="button" onClick={() => onReenable(hook)} className={btn}>
-            {t("automationReenable")}
-          </button>
-        )}
+        <button type="button" onClick={() => onSetActive(hook, paused)} className={btn}>
+          {paused ? t("automationResume") : t("automationPause")}
+        </button>
         <button
           type="button"
           onClick={() => setExpanded((e) => !e)}

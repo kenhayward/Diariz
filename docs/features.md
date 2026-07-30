@@ -105,7 +105,11 @@ delivery-id headers) so the receiver can verify authenticity; failed deliveries 
 backoff**, deliveries to a single automation are **rate-limited per minute** and a `429 Too Many Requests` is honored
 (rescheduled after its `Retry-After`, not counted as a failure) so a busy endpoint is neither hammered nor wrongly
 disabled, and a subscription is **auto-paused** after repeated genuine failures so a broken endpoint doesn't loop forever. A
-per-automation view shows recent deliveries and their status. This personal scope (a subscription only sees its own
+per-automation view shows recent deliveries and their status. A single **Pause / Resume** button stops and restarts
+deliveries without deleting the subscription - deleting one discards its signing secret and forces the receiving end to be
+reconfigured, so pausing is the reversible way to go quiet; resuming also clears the failure count, which is how an
+auto-paused automation recovers, and a card distinguishes "Paused - check the URL" (the server gave up) from a plain
+"Paused" (the user's own choice). This personal scope (a subscription only sees its own
 owner's recordings/formulas) sits alongside the platform scope described next.
 - **Workflow Signals and platform automations.** A Platform Administrator (Settings → Integration → Workflow Signals)
 defines named signals - a label, a description, and an immutable routing key - then wires a **platform automation**
