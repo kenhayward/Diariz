@@ -32,6 +32,17 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    # Redis holds the job queues (transcription, summarisation, minutes, actions, tags, formulas,
+    # embeddings, audio merge) as streams, plus their consumer-group state. Without persistence a restart
+    # silently discards every queued-but-unstarted job and every in-flight job's pending entry: recordings
+    # are left in Transcribing/Summarizing with nothing to move them on, and no error anywhere.
+    #
+    # appendonly is on rather than relying on the default RDB snapshots, which only fsync on a schedule
+    # (up to a minute of writes, or an hour on a quiet stack) - fine for a cache, not for a work queue
+    # where each lost entry is a meeting that never finishes processing.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -221,3 +232,4 @@ volumes:
   miniodata:
   workercache:
   apikeys:
+  redisdata:

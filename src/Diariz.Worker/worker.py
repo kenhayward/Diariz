@@ -7,6 +7,7 @@ Job payload (Redis stream field "job") is JSON produced by the .NET API:
 import json
 import logging
 import os
+import threading
 import time
 
 import redis
@@ -28,6 +29,76 @@ log = logging.getLogger("worker")
 # larger than this so a normal empty poll never trips it — only a genuinely unreachable Redis does.
 BLOCK_MS = 5000
 RECONNECT_DELAY = 2  # seconds to back off after a Redis timeout/disconnect before retrying
+
+# ---- Orphaned-job recovery ----
+#
+# XACK lives in a `finally`, which never runs when the process is *killed* rather than raising - a
+# container restart mid-transcription, an OOM. The message then stays in the consumer group's pending
+# list, and because the loop only reads ">" (new messages) nothing ever looks at it again: the recording
+# sits in Transcribing forever and needs a manual re-transcribe. Reclaiming stale pending messages is
+# what closes that.
+#
+# The threshold has to clear the longest *legitimate* job or a reclaim would steal work from a healthy
+# worker and duplicate it on the GPU. Rather than set it to hours, the worker refreshes its own claim
+# while it works (see refresh_claim / claim_keepalive), so "idle" really does mean "nobody is on it".
+RECLAIM_MIN_IDLE_MS = int(os.getenv("RECLAIM_MIN_IDLE_MS", str(10 * 60 * 1000)))  # 10 minutes
+RECLAIM_REFRESH_SECONDS = float(os.getenv("RECLAIM_REFRESH_SECONDS", "60"))
+# Reclaiming reintroduces exactly the poison-message loop that acking-in-finally exists to prevent: a
+# job that kills the worker would be picked up again by the next one, forever. Past this many deliveries
+# the message is acked and abandoned instead, loudly.
+RECLAIM_MAX_DELIVERIES = int(os.getenv("RECLAIM_MAX_DELIVERIES", "3"))
+
+
+def refresh_claim(r: redis.Redis, stream_key: str, msg_id: str) -> None:
+    """Reset a pending message's idle clock, marking it as still being worked on.
+
+    ``min_idle_time=0`` re-claims it for this same consumer unconditionally - it is a keepalive, not a
+    steal. Best-effort: a Redis hiccup here must not interrupt a transcription that is going fine."""
+    try:
+        r.xclaim(stream_key, config.CONSUMER_GROUP, config.CONSUMER_NAME,
+                 min_idle_time=0, message_ids=[msg_id])
+    except Exception:  # noqa: BLE001 - a failed keepalive is not worth losing the job over
+        log.debug("Claim refresh failed for %s on %s", msg_id, stream_key, exc_info=True)
+
+
+def claim_keepalive(r: redis.Redis, stream_key: str, msg_id: str) -> threading.Event:
+    """Refresh the claim on ``msg_id`` every RECLAIM_REFRESH_SECONDS until the returned event is set."""
+    done = threading.Event()
+
+    def loop() -> None:
+        while not done.wait(RECLAIM_REFRESH_SECONDS):
+            refresh_claim(r, stream_key, msg_id)
+
+    threading.Thread(target=loop, name=f"claim-keepalive-{msg_id}", daemon=True).start()
+    return done
+
+
+def reclaim_stale(r: redis.Redis, stream_key: str) -> list:
+    """Take over messages left pending by a worker that died, returning them as (id, fields) to process.
+
+    A message delivered more times than RECLAIM_MAX_DELIVERIES is acked and dropped rather than returned:
+    it is far more likely to be the thing that killed the previous workers than a victim of them."""
+    try:
+        pending = r.xpending_range(stream_key, config.CONSUMER_GROUP, min="-", max="+", count=10,
+                                   idle=RECLAIM_MIN_IDLE_MS)
+    except Exception:  # noqa: BLE001 - recovery is opportunistic; never break the main loop over it
+        log.debug("Could not read the pending list for %s", stream_key, exc_info=True)
+        return []
+
+    recovered = []
+    for entry in pending or []:
+        msg_id = entry["message_id"]
+        if int(entry.get("times_delivered", 1)) > RECLAIM_MAX_DELIVERIES:
+            log.error("Abandoning %s on %s after %s deliveries - it is likely the cause of the failures, "
+                      "not a casualty of them", msg_id, stream_key, entry.get("times_delivered"))
+            r.xack(stream_key, config.CONSUMER_GROUP, msg_id)
+            continue
+        log.warning("Reclaiming %s on %s, abandoned by %s after %s ms idle",
+                    msg_id, stream_key, entry.get("consumer"), entry.get("time_since_delivered"))
+        claimed = r.xclaim(stream_key, config.CONSUMER_GROUP, config.CONSUMER_NAME,
+                           min_idle_time=RECLAIM_MIN_IDLE_MS, message_ids=[msg_id])
+        recovered.extend(claimed or [])
+    return recovered
 
 
 def ensure_group(r: redis.Redis, stream_key: str) -> None:
@@ -101,10 +172,19 @@ def run_loop(r: redis.Redis, keep_going=lambda: True) -> None:
             log.warning("Redis unavailable (%s); retrying in %ds", e, RECONNECT_DELAY)
             time.sleep(RECONNECT_DELAY)
             continue
+        # Nothing new: use the idle moment to pick up anything a dead worker left behind. Doing it here
+        # rather than only at startup also recovers from another worker dying while this one runs.
         if not resp:
-            continue
+            resp = [(key, reclaim_stale(r, key))
+                    for key in (config.STREAM_KEY, config.MERGE_STREAM_KEY)]
+            if not any(messages for _, messages in resp):
+                continue
+
         for stream, messages in resp:
             for msg_id, fields in messages:
+                # Keep the claim fresh for as long as this takes, so a long transcription is never
+                # mistaken for an abandoned one and stolen by another worker.
+                done = claim_keepalive(r, stream, msg_id)
                 try:
                     job = json.loads(fields["job"])
                     if stream == config.MERGE_STREAM_KEY:
@@ -112,6 +192,7 @@ def run_loop(r: redis.Redis, keep_going=lambda: True) -> None:
                     else:
                         handle(job)
                 finally:
+                    done.set()
                     r.xack(stream, config.CONSUMER_GROUP, msg_id)
 
 
