@@ -19,8 +19,16 @@ vi.mock("../lib/signalr", () => ({
 // The transcript weaves the current user's notes in, so the page reads useAuth for the note "speaker" - and
 // for `id` (the caller's user id), to tell an owner from a room co-viewer. Mutable so a test can render as
 // someone other than the recording's owner.
-const authState: { id: string | null; fullName: string | null; email: string | null } = {
-  id: "u-owner", fullName: "Test User", email: "t@x.test",
+const authState: {
+  id: string | null;
+  fullName: string | null;
+  email: string | null;
+  // The page also reads permissions, to gate editing a speaker's person record. Present here because the
+  // real hook always returns it - a fake that omits a field the component reads does not fail like a missing
+  // permission, it fails like a blank page.
+  permissions: { managePeople: boolean };
+} = {
+  id: "u-owner", fullName: "Test User", email: "t@x.test", permissions: { managePeople: true },
 };
 vi.mock("../auth", () => ({ useAuth: () => authState }));
 // RecordingDetail reads the current room to gate Share / Remove-from-room / Delete + the calendar surface;

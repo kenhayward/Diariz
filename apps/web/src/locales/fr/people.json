@@ -55,5 +55,6 @@
   "mergeBlockedBothAccounts": "Ces deux fiches ont chacune un compte Diariz : ce sont donc deux personnes differentes, quelle que soit la ressemblance des noms. Les fusionner couperait l'une d'elles de son propre compte, ce qui n'est pas autorise.",
   "mergeReview": "Verifier et fusionner",
   "dismissDuplicate": "Ignorer",
-  "dismissDuplicateHint": "Masque cette suggestion pendant votre visite. Elle reapparaitra a la prochaine ouverture de Personnes."
+  "dismissDuplicateHint": "Masque cette suggestion pendant votre visite. Elle reapparaitra a la prochaine ouverture de Personnes.",
+  "editPersonTitle": "Modifier la personne"
 }

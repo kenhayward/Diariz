@@ -591,5 +591,6 @@
   "roomRecordings_one": "{{count}} recording",
   "roomRecordings_other": "{{count}} recordings",
   "roomSharedPrefix": "shared",
-  "yourRooms": "Your rooms"
+  "yourRooms": "Your rooms",
+  "editPersonAction": "Edit {{name}}"
 }

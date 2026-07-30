@@ -29,7 +29,11 @@ Once a speaker is identified, the Speakers tab shows who they are - their job ti
 whether they are internal or external - so you can read the room without leaving the transcript. Hovering the
 **Internal** or **External** marker shows the rest of their details, and clicking a speaker to read their
 segments puts a contact card above them, where their email address and phone number are links you can act
-on. Manage
+on.
+
+If you can manage people, a **pencil** on the speaker's row opens their details for editing without leaving
+the transcript. It edits the same shared record the People directory does, so a correction made here is a
+correction everywhere. Manage
 those details in **People**, which opens over the transcript so you do not lose your place; see
 [The people directory](/help/people-directory).
 
