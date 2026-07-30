@@ -22,10 +22,19 @@ export default function PersonEditor({
   person,
   canManagePeople,
   onClose,
+  onSaved,
+  showDestructiveActions = true,
 }: {
   person: Person;
   canManagePeople: boolean;
   onClose: () => void;
+  /// Called after a successful save. The directory ignores it - you carry on editing the next person - but a
+  /// caller editing one person alone uses it to close, and to refresh whatever was showing those details.
+  onSaved?: () => void;
+  /// Erasing a voiceprint and deleting a person are directory-scale acts with no undo. A caller focused on
+  /// one person's contact details turns them off, so they are not sitting beside a job title waiting for a
+  /// mis-click.
+  showDestructiveActions?: boolean;
 }) {
   const { t } = useTranslation("people");
   const qc = useQueryClient();
@@ -86,6 +95,7 @@ export default function PersonEditor({
         voiceprintOptOut: optOut,
       });
       setSaved(true);
+      onSaved?.();
     }, "errSaveFailed");
   }
 
@@ -182,7 +192,7 @@ export default function PersonEditor({
           {t("common:cancel")}
         </button>
 
-        {person.hasVoiceprint && person.canManageBiometrics && (
+        {showDestructiveActions && person.hasVoiceprint && person.canManageBiometrics && (
           <button
             type="button"
             onClick={() => {
@@ -196,7 +206,7 @@ export default function PersonEditor({
           </button>
         )}
 
-        {canManagePeople && (
+        {showDestructiveActions && canManagePeople && (
           <button
             type="button"
             onClick={() => {

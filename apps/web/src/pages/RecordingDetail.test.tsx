@@ -42,6 +42,8 @@ vi.mock("../lib/rooms", () => ({ useRoom: () => roomState }));
 vi.mock("../lib/api", () => ({
   api: {
     getRecording: vi.fn(),
+    getPerson: vi.fn(),
+    updatePerson: vi.fn(),
     retranscribe: vi.fn(),
     renameSpeaker: vi.fn(),
     renameRecording: vi.fn(),
@@ -1173,5 +1175,47 @@ describe("RecordingDetail", () => {
       </QueryClientProvider>,
     );
     await waitFor(() => expect(path).toBe("/"));
+  });
+
+  /// The speaker rows and the contact card render from this recording's own payload, which carries a snapshot
+  /// of each person. Editing that person elsewhere leaves the snapshot stale - the panel kept showing the old
+  /// details until you clicked a different row. This pins the refetch at the wiring, which is the only place
+  /// it can go wrong: EditPersonModal reports the save correctly on its own.
+  it("refetches the recording after editing a speaker's person, so the panel stops showing stale details", async () => {
+    const withSpeaker = {
+      ...base,
+      speakers: [
+        {
+          label: "SPEAKER_00", displayName: "Lizzie Mcneil", personId: "p1", title: null,
+          companyName: null, email: null, phone: null, isInternal: false,
+          identifiedAuto: true, isMultiSpeaker: false,
+        },
+      ],
+    };
+    (api.getRecording as ReturnType<typeof vi.fn>).mockResolvedValue(withSpeaker);
+    (api.getPerson as ReturnType<typeof vi.fn>).mockResolvedValue({
+      person: {
+        id: "p1", name: "Lizzie Mcneil", title: null, companyName: null, email: null, phone: null,
+        isInternal: false, voiceprintOptOut: false, hasVoiceprint: true, sampleCount: 2,
+        linkedUserId: null, isSelf: false, canManageBiometrics: true,
+        createdAt: "2026-07-30T00:00:00Z", updatedAt: "2026-07-30T00:00:00Z",
+      },
+      identifiedCount: 1,
+      samples: [],
+    });
+    (api.updatePerson as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+    renderPage(withSpeaker);
+    await waitFor(() => expect(api.getRecording).toHaveBeenCalledTimes(1));
+    await loaded();
+
+    fireEvent.click(screen.getByRole("button", { name: "Speakers" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Edit Lizzie Mcneil/i }));
+
+    fireEvent.change(await screen.findByLabelText("Job title"), { target: { value: "Presenter" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(api.updatePerson).toHaveBeenCalled());
+    await waitFor(() => expect(api.getRecording).toHaveBeenCalledTimes(2));
   });
 });

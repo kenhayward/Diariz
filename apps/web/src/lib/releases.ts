@@ -59,6 +59,28 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.171.2",
+    date: "2026-07-30",
+    pr: 380,
+    headline: "Fix: editing a speaker from the transcript now saves, closes and shows the result",
+    summary:
+      "Three things wrong with the pencil that edits a speaker's details.\n\n" +
+      "**Save left the window open**, as though there were more to do. Editing one person is a whole task, " +
+      "so saving now finishes it. It still stays open if the save fails, so nothing you typed is lost. The " +
+      "directory keeps its editor open on purpose - there you work down a list.\n\n" +
+      "**The panel behind it did not update.** The speaker rows and the contact card are drawn from a copy " +
+      "of each person taken when the recording loaded, so an edit made elsewhere left them showing the old " +
+      "details until you clicked a different speaker. Saving now refreshes them.\n\n" +
+      "**Erase voiceprint and Delete are gone from that window.** They affect every recording the person " +
+      "appears in and cannot be undone, which is not something to have sitting beside a job title. They " +
+      "remain in **People**, where the consequences are in view.",
+    fixed: [
+      "Saving a speaker's details from the transcript left the window open instead of closing it.",
+      "The Speakers panel and contact card kept showing pre-edit details until a different speaker was clicked.",
+      "The edit window offered Erase voiceprint and Delete - directory-scale actions with no undo - beside ordinary contact fields.",
+    ],
+  },
+  {
     version: "0.171.1",
     date: "2026-07-30",
     pr: 379,

@@ -1476,6 +1476,14 @@ the control that opens it. Unlike every other modal here it **does not close on 
 Escape**: half-typed edits are lost by a stray click and cannot be recovered, so the only ways out are Save
 and Cancel.
 
+`PersonEditor` takes two opt-in props for this caller. **`onSaved`** fires after a successful save: the modal
+closes on it (one person is a whole task; the directory deliberately stays open because you work down a list),
+and `RecordingDetail` invalidates `["recording", id]` on it — the speaker rows and contact card render from a
+**snapshot of each person carried in the recording payload**, so without that they kept showing pre-edit
+details until a different row was clicked. **`showDestructiveActions={false}`** hides erase-voiceprint and
+delete-person: directory-scale acts with no undo do not belong beside a job title, in front of someone who
+came to correct a spelling.
+
 **`SpeakerContactCard` renders for any identified speaker**, including one whose record holds nothing but a
 name - which is most of them, since enrolling a voice creates a person with no contact details at all. It
 originally required at least one detail before rendering, so exactly those people got nothing; and because
