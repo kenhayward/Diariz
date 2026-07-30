@@ -59,6 +59,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.171.3",
+    date: "2026-07-30",
+    pr: 381,
+    headline: "Fix: the n8n node was republished on every release, unchanged",
+    summary:
+      "The n8n community node is meant to publish to npm only when the node itself changes. Instead it " +
+      "published on every merge, because its version number mirrors the app's and therefore changes with " +
+      "every release - and the rule deciding whether to publish was watching the folder that number lives " +
+      "in. Versions 0.170.0 through 0.171.2 are identical node code under four different numbers.\n\n" +
+      "Nothing was broken by it and nothing needs reinstalling; the newest version is still the right one " +
+      "to have. It only made the version history noisy and said a package had changed when it had not.\n\n" +
+      "A version bump on its own no longer publishes.",
+    fixed: [
+      "The n8n community node was republished to npm on every release even when nothing in it had changed.",
+    ],
+  },
+  {
     version: "0.171.2",
     date: "2026-07-30",
     pr: 380,

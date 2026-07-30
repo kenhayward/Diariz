@@ -15,8 +15,17 @@ on:
   push:
     branches: [main]
     paths:
+      # package.json is EXCLUDED on purpose, and the exclusion is what makes this filter mean anything.
+      # The node's version mirrors /version.json, which every PR bumps - so package.json changes on every
+      # merge, and a filter that included it matched every merge too. Four npm versions of byte-identical
+      # node code went out that way before anyone noticed. Anything else here is a real change to what gets
+      # published; a version bump on its own is not.
+      #
+      # The workflow file is not a trigger either: editing the publisher does not change the package. Use
+      # workflow_dispatch to exercise it.
       - "integrations/n8n-nodes-diariz/**"
-      - ".github/workflows/n8n-publish.yml"
+      - "!integrations/n8n-nodes-diariz/package.json"
+      - "!integrations/n8n-nodes-diariz/package-lock.json"
   workflow_dispatch:
 
 permissions:
