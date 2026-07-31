@@ -155,6 +155,10 @@ services:
       Sentry__Dsn: ${SENTRY_API_DSN:-}
       Sentry__Environment: ${SENTRY_ENVIRONMENT:-development}
       Sentry__TracesSampleRate: ${SENTRY_TRACES_SAMPLE_RATE:-1.0}
+      # Browser DSN, served to the SPA at runtime by GET /api/config. Public by design (it ships in
+      # the JS bundle), and a SEPARATE GlitchTip project from Sentry__Dsn so browser noise does not
+      # bury server errors. Empty = the SPA reports nothing.
+      Sentry__BrowserDsn: ${SENTRY_BROWSER_DSN:-}
     volumes:
       - apikeys:/keys
     ports:
