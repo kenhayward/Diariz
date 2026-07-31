@@ -100,6 +100,23 @@ services:
       GLITCHTIP_ENABLE_DUCKDB: "true"
       GLITCHTIP_COLD_STORAGE_BUCKET: ${GLITCHTIP_COLD_STORAGE_BUCKET:-glitchtip}
       AWS_S3_ENDPOINT_URL: "http://minio:9000"
+      # REQUIRED once AWS_S3_ENDPOINT_URL is set, and easy to miss because nothing complains at boot.
+      # Setting the endpoint switches Django's default file storage to S3Boto3Storage, but the bucket
+      # is a SEPARATE setting - leave it unset and `diffsettings` shows
+      # `AWS_STORAGE_BUCKET_NAME = None` beside an active S3 backend. Every file write then has
+      # nowhere to go, and the symptom is a source map upload dying on
+      # `chunk-upload returned 500 Internal Server Error` with a bare Django error page.
+      #
+      # NOTE this is a different mechanism from GLITCHTIP_COLD_STORAGE_BUCKET above: that one is
+      # DuckDB's Parquet archive, this one is django-storages for uploaded files (source maps, debug
+      # symbols). Same bucket by design - both are GlitchTip's own data, the scoped MinIO key already
+      # grants s3:* on it, and sharing the variable stops the two drifting apart.
+      AWS_STORAGE_BUCKET_NAME: ${GLITCHTIP_COLD_STORAGE_BUCKET:-glitchtip}
+      # Namespace uploaded files under a prefix so they are visibly distinct from the Parquet archive
+      # sharing the bucket. Cold-storage cleanup is enabled by default; whether it is prefix-scoped
+      # has NOT been verified, so keeping the two apart is cheap insurance. If artifacts ever vanish
+      # after a cleanup run, that is the cause, and the fix is a bucket of their own.
+      AWS_LOCATION: "uploads"
       AWS_ACCESS_KEY_ID: ${GLITCHTIP_MINIO_ACCESS_KEY:?required - run deploy/ProvisionGlitchTipMinio.cmd}
       AWS_SECRET_ACCESS_KEY: ${GLITCHTIP_MINIO_SECRET_KEY:?required - run deploy/ProvisionGlitchTipMinio.cmd}
     ports:

@@ -175,10 +175,15 @@ services:
         # apps/web/package.json's version, the same value appVersion() falls back to at runtime.
         APP_VERSION: ${APP_VERSION:-}
         # Source map upload to GlitchTip (optional, see deploy/.env.example). Empty URL/org/project =
-        # the build stage logs a line and skips it; the image still builds either way.
+        # the build stage logs a line and skips it; the image still builds either way. But once all
+        # four ARE set, a FAILED upload now fails the build rather than warning - see the reasoning in
+        # apps/web/Dockerfile. GLITCHTIP_ORG is the lowercase SLUG from the URL, not the display name.
         GLITCHTIP_URL: ${GLITCHTIP_URL:-}
         GLITCHTIP_ORG: ${GLITCHTIP_ORG:-}
         GLITCHTIP_PROJECT: ${GLITCHTIP_PROJECT:-}
+        # Escape hatch: set to any non-empty value to downgrade a failed upload back to a warning, for
+        # when GlitchTip is down and the web app has to ship regardless.
+        GLITCHTIP_SOURCEMAPS_OPTIONAL: ${GLITCHTIP_SOURCEMAPS_OPTIONAL:-}
       # BuildKit secret for the GlitchTip auth token - never a build arg (an arg is recorded in the
       # image history and readable by anyone who can pull the image). See the top-level `secrets:`
       # block below: it is sourced straight from GLITCHTIP_TOKEN in .env, not a file on disk.
