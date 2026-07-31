@@ -237,15 +237,36 @@ Then start it:
 docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d glitchtip-postgres glitchtip
 ```
 
-Watch the first start - it runs migrations:
+Watch the first start. It runs migrations, builds the event partitions, and creates the cache table - a minute or so of output ending in `Listening at: http://0.0.0.0:8000`:
 
 ```bash
 docker compose logs -f glitchtip
 ```
 
-### 1f. Create the org and projects
+Confirm the database is actually populated before going further. This is worth the ten seconds:
 
-In the UI, create your account, then the organisation, then **three** projects:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.observability.yml exec glitchtip ./manage.py showmigrations | grep -c "\[X\]"
+```
+
+A number in the hundreds is right. **Zero means migrations did not run** - see the first Troubleshooting row, because the symptom you would otherwise meet is a login page with no way to sign up, which looks like a permissions problem and is not.
+
+### 1f. Create the first account and organisation
+
+Both of the lockdown flags in the overlay have a **first-run escape hatch**, so a brand new instance lets you in even though it is configured to let nobody in:
+
+- registration is open while `User` count is zero,
+- organisation creation is open while `Organization` count is zero (and superusers are exempt from that one permanently).
+
+The backend and the frontend apply the same rule, so the register link and the create-organisation form both appear on a fresh instance and both disappear once you have used them. **You do not need `createsuperuser`, and you do not need to temporarily flip either flag to `true`** - if either door looks shut on an empty instance, the cause is an unmigrated database, not the flags.
+
+So, in the UI:
+
+1. Visit the site and follow **Register** from the login page. GlitchTip identifies users by email address.
+2. It then takes you straight to **Create a New Organization**, captioned "This is the first step to get started with GlitchTip". Name it.
+3. Both doors are now shut behind you. Everyone after this arrives by invitation from the UI, which is what the SMTP settings are for.
+
+Then create **three** projects:
 
 | Project | Platform | Feeds |
 | --- | --- | --- |
@@ -254,8 +275,6 @@ In the UI, create your account, then the organisation, then **three** projects:
 | `diariz-web` | React | the SPA, and the desktop app |
 
 **Three, not one.** Browser errors are far noisier than server errors - extensions, stale tabs, flaky mobile networks - and would bury the server-side failures you actually need to see.
-
-The overlay already sets `ENABLE_USER_REGISTRATION=false` and `ENABLE_ORGANIZATION_CREATION=false`, so nobody can sign themselves up on what is a publicly reachable subdomain. Invite colleagues from the UI instead - which is what the SMTP settings are for.
 
 ---
 
@@ -336,6 +355,7 @@ Work down this list. Each one has failed for somebody.
 
 | Symptom | Cause |
 | --- | --- |
+| **The login page renders but there is no register link**, and you cannot get in at all | The database is unmigrated. The page is a static SPA so it renders regardless, but the settings call behind it 500s on `relation "socialaccount_socialapp" does not exist` and the link never appears. Cause: `GLITCHTIP_EMBED_WORKER: "true"` is missing from the overlay - the image only self-migrates when the Heroku `DYNO` variable is set, which under Compose it never is. Confirm with the `showmigrations` count in 1e; do **not** chase the registration flags |
 | `ImproperlyConfigured: The SECRET_KEY setting must not be empty` | `GLITCHTIP_SECRET_KEY` is unset or blank in `deploy/.env`. Run the 1e check; the fix is 1a |
 | `manifest unknown` pulling the image | An image tag that does not exist. GlitchTip dropped the `v` prefix after 6.0.3, so it is `6.2`, not `v6.2` |
 | Login says the password is wrong, and you are sure it is not | `GLITCHTIP_DOMAIN` is missing `https://`, or the proxy is not sending `X-Forwarded-Proto` |

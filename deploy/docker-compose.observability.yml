@@ -64,8 +64,32 @@ services:
       DEFAULT_FROM_EMAIL: ${GLITCHTIP_FROM_EMAIL:?required - run deploy/NewGlitchTipSecrets.cmd}
       EMAIL_URL: ${GLITCHTIP_EMAIL_URL:?required - run deploy/NewGlitchTipSecrets.cmd}
       # Internal tool on a public subdomain: no open registration, no new orgs.
+      #
+      # Both are safe to leave off from the very first boot - neither locks you out of your own
+      # empty instance. Each gate has a first-run escape hatch, in the backend AND mirrored in the
+      # frontend, so the bootstrap works with both set to false:
+      #   registration: `ENABLE_USER_REGISTRATION or not User.objects.exists()`
+      #   organization: `ENABLE_ORGANIZATION_CREATION or not Organization.objects.aexists()`
+      #                 (and superusers are exempt from the org gate regardless)
+      # So the first account signs up and creates the first org through the normal UI, and both
+      # doors shut behind it; everyone after that arrives by invitation. If the register link is
+      # missing on a fresh instance, the cause is NOT this flag - see GLITCHTIP_EMBED_WORKER below.
       ENABLE_USER_REGISTRATION: "false"
       ENABLE_ORGANIZATION_CREATION: "false"
+      # REQUIRED, and not the optional-looking flag it reads as. The image entrypoint (`bin/start.sh`)
+      # only runs `./manage.py migrate` when the Heroku `DYNO` env var is set; under Compose it is
+      # not, so the plain `web` role starts against an UNMIGRATED database. Every table is missing,
+      # and the symptom is not "migrations did not run" - it is a login page that renders fine (the
+      # SPA is static) with no register link, because the settings API 500s on
+      # `relation "socialaccount_socialapp" does not exist`. Upstream's own compose papers over this
+      # with a separate one-shot migrate service.
+      #
+      # Setting this flips SERVER_ROLE to `all_in_one`, which runs `bin/run-all-in-one.sh`:
+      # `migrate` + `maintain_partitions` (issue events live in PARTITIONED tables - without this
+      # ingest fails later, separately) + `createcachetable`, and then embeds the task worker in the
+      # web process. That last part is also required, not a bonus: the `web` role runs no worker at
+      # all, so alert emails, uptime checks and cleanup would silently never fire.
+      GLITCHTIP_EMBED_WORKER: "true"
       # Spans (as opposed to bare transactions) require DuckDB. It runs inside the existing Python
       # process writing Parquet, so this costs ~128 MB of RAM and no extra container.
       GLITCHTIP_ENABLE_DUCKDB: "true"

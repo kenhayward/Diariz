@@ -1766,6 +1766,21 @@ want it runs the platform exactly as before with zero extra containers.
 - **Shares the app's Redis**, on **DB index 1** (`VALKEY_URL=redis://redis:6379/1`) - the app's job queues
   live on index 0 and are untouched. Redis is optional for GlitchTip (it only speeds up caching and its task
   queue), so the blast radius of sharing it is small, and it saves standing up a second Redis container.
+- **A single all-in-one container**, via `GLITCHTIP_EMBED_WORKER: "true"`. That variable is required, not a
+  tuning knob: the image's entrypoint only self-migrates when the Heroku `DYNO` variable is set, so the plain
+  `web` role starts against an **unmigrated** database and runs **no task worker**. Setting it selects the
+  `all_in_one` role, which runs `migrate` + `maintain_partitions` (issue events are stored in partitioned
+  tables) + `createcachetable` on every boot and then embeds the task worker in the web process - one
+  container instead of upstream's separate `migrate` and `worker` services. The failure it prevents is
+  indirect: an unmigrated instance still serves the static SPA, so the only visible symptom is a login page
+  whose register link never appears.
+- **First user and first organisation.** The overlay ships `ENABLE_USER_REGISTRATION=false` and
+  `ENABLE_ORGANIZATION_CREATION=false` (it is an internal tool on a publicly reachable subdomain), which is
+  safe from the very first boot because both gates fall open while their table is empty -
+  `ENABLE_USER_REGISTRATION or not User.objects.exists()`, and likewise for `Organization`, with superusers
+  permanently exempt from the org gate. Both the API and the Angular frontend apply that rule, so the first
+  operator signs up and creates the org through the normal UI and both doors then shut behind them.
+  Everyone after that is invited.
 - **Deployed per-environment.** Each environment (dev, prod) that opts in runs its own GlitchTip instance
   with its own Postgres, bucket, DSNs, and users - nothing is shared between dev and prod, the same way the
   rest of the stack is deployed per-environment.

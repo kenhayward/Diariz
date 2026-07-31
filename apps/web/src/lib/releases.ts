@@ -59,6 +59,25 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.174.9",
+    date: "2026-07-31",
+    pr: 401,
+    headline: "The optional error tracker now sets itself up on first boot",
+    summary:
+      "A fresh install of the optional error tracker came up with an empty database, because the " +
+      "container only prepares itself automatically on a hosting platform we do not use. Nothing " +
+      "said so: the sign-in page looked completely normal, but offered no way to create the first " +
+      "account, so there was no way in at all. It now prepares its own database on every start, and " +
+      "the setup guide says exactly how the first account and organisation are created. Only affects " +
+      "self-hosters running that optional overlay; nothing in the app itself changes.",
+    fixed: [
+      "The optional error-tracking overlay started against an unprepared database, which showed up " +
+        "as a sign-in page with no way to register the first account.",
+      "Its background task queue was never running, so alert emails, uptime checks and cleanup " +
+        "would not have fired.",
+    ],
+  },
+  {
     version: "0.174.8",
     date: "2026-07-31",
     pr: 399,
