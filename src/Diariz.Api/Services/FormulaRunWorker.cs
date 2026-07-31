@@ -89,6 +89,7 @@ public class FormulaRunWorker : BackgroundService
                 var chat = scope.ServiceProvider.GetRequiredService<IChatStreamClient>();
                 var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
                 var webhooks = scope.ServiceProvider.GetRequiredService<IWebhookPublisher>();
+                using var jobTx = JobTelemetry.Begin("formula-run");
                 await FormulaRunProcessor.ProcessAsync(
                     ctx, chat, resolver, _hub, job, _opts.CombineCharBudget, _log, webhooks, _publicUrl, ct);
             }

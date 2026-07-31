@@ -59,6 +59,25 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.175.0",
+    date: "2026-08-01",
+    pr: 410,
+    headline: "Every AI call is now timed, with its token usage",
+    summary:
+      "Anything the app asks an AI model to do - summaries, minutes, tags, action items, formula runs, " +
+      "chat, dictation and search indexing - is now measured: how long the model took, and how many " +
+      "tokens it used. Until now none of it was visible. Work that happened in the background was " +
+      "especially blind: starting a formula run was recorded as taking a tenth of a second, because " +
+      "that is how long it took to accept the request, while the model call it kicked off was not " +
+      "recorded at all. Only prompt sizes and durations are recorded - never the contents of a prompt " +
+      "or a reply. Visible only to self-hosters running the optional error tracker.",
+    added: [
+      "Timing and token usage for every AI model call, including the ones that run in the background.",
+      "Background jobs (summaries, minutes, tags, actions, formula runs, search indexing) now report " +
+        "their full end-to-end duration instead of nothing at all.",
+    ],
+  },
+  {
     version: "0.174.13",
     date: "2026-07-31",
     pr: 407,

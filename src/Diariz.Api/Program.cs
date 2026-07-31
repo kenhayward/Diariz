@@ -281,16 +281,32 @@ builder.Services.AddScoped<ISpeakerIdentifier, SpeakerIdentifier>();
 // PlatformSettings.LlmTimeoutSeconds, applied via a linked CTS in each client) is the single authority -
 // otherwise a configured timeout above 100s was silently capped and slow local models timed out.
 static void NoHttpTimeout(HttpClient c) => c.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
-builder.Services.AddHttpClient<ISummarizationClient, SummarizationClient>(NoHttpTimeout);
-builder.Services.AddHttpClient<IDictationClient, DictationClient>(NoHttpTimeout);
-builder.Services.AddHttpClient<IActionsClient, ActionsClient>(NoHttpTimeout);
-builder.Services.AddHttpClient<ITranslationClient, TranslationClient>(NoHttpTimeout);
+
+// Every LLM client goes through AddLlmClient below rather than AddHttpClient directly, so LlmTelemetryHandler
+// times the call and records its token usage. Registering it once here - instead of instrumenting each client -
+// means a client added later is measured for free, which is the failure mode that matters: the gap this closes
+// existed because nothing outside the ASP.NET request pipeline was ever instrumented at all.
+builder.Services.AddSingleton<ILlmTrace, SentryLlmTrace>();
+builder.Services.AddTransient<LlmTelemetryHandler>();
+IHttpClientBuilder AddLlmClient<TClient, TImplementation>(Action<HttpClient>? configure = null)
+    where TClient : class where TImplementation : class, TClient
+{
+    var http = configure is null
+        ? builder.Services.AddHttpClient<TClient, TImplementation>()
+        : builder.Services.AddHttpClient<TClient, TImplementation>(configure);
+    return http.AddHttpMessageHandler<LlmTelemetryHandler>();
+}
+
+AddLlmClient<ISummarizationClient, SummarizationClient>(NoHttpTimeout);
+AddLlmClient<IDictationClient, DictationClient>(NoHttpTimeout);
+AddLlmClient<IActionsClient, ActionsClient>(NoHttpTimeout);
+AddLlmClient<ITranslationClient, TranslationClient>(NoHttpTimeout);
 builder.Services.AddScoped<ISummarizationSettingsResolver, SummarizationSettingsResolver>();
 builder.Services.AddHostedService<SummarizationWorker>();
 builder.Services.AddScoped<IFormulaRunner, FormulaRunner>();
 
 // ---- Meeting minutes (shares the per-user summarisation config; its own stream + consumer) ----
-builder.Services.AddHttpClient<IMeetingMinutesClient, MeetingMinutesClient>(NoHttpTimeout);
+AddLlmClient<IMeetingMinutesClient, MeetingMinutesClient>(NoHttpTimeout);
 // Template-driven generation: two strategies (per-section vs single-call), chosen per run by the platform mode.
 builder.Services.AddScoped<IMeetingTypeMinutesStrategy, PerSectionMinutesStrategy>();
 builder.Services.AddScoped<IMeetingTypeMinutesStrategy, SingleCallMinutesStrategy>();
@@ -307,13 +323,13 @@ builder.Services.AddHostedService<FormulaRunWorker>();
 builder.Services.AddHostedService<ActionsWorker>();
 // Tag-cloud extraction runs in the pipeline too (its own stream/worker), sharing the per-user summarisation
 // config; TagBackfillService enqueues jobs once at startup for recordings that predate the feature.
-builder.Services.AddHttpClient<ITagsClient, TagsClient>(NoHttpTimeout);
+AddLlmClient<ITagsClient, TagsClient>(NoHttpTimeout);
 builder.Services.AddHostedService<TagsWorker>();
 builder.Services.AddHostedService<TagBackfillService>();
 
 // ---- Semantic-search (RAG, M3) embeddings: its own endpoint/model config, stream + consumer, and a
 // one-time startup backfill that indexes the existing library once an embeddings endpoint is configured. ----
-builder.Services.AddHttpClient<IEmbeddingClient, EmbeddingClient>(NoHttpTimeout);
+AddLlmClient<IEmbeddingClient, EmbeddingClient>(NoHttpTimeout);
 builder.Services.AddScoped<IEmbeddingSettingsResolver, EmbeddingSettingsResolver>();
 builder.Services.AddHostedService<EmbeddingWorker>();
 builder.Services.AddHostedService<EmbeddingBackfillService>();
@@ -345,7 +361,7 @@ var exportLocalesRoot = Directory.Exists(Path.Combine(builder.Environment.Conten
 builder.Services.AddSingleton<IExportLocalizer>(_ => new JsonExportLocalizer(exportLocalesRoot));
 
 // ---- Chat (streaming, reuses the per-user summarisation LLM config) ----
-builder.Services.AddHttpClient<IChatStreamClient, ChatStreamClient>();
+AddLlmClient<IChatStreamClient, ChatStreamClient>();
 builder.Services.AddScoped<IChatContextResolver, ChatContextResolver>();
 builder.Services.AddSingleton<IAttachmentExtractor, AttachmentExtractor>();
 // URL-attachment fetcher: a named client with auto-redirect OFF so each hop is re-checked against the

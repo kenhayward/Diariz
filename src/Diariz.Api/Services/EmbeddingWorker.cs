@@ -84,6 +84,7 @@ public class EmbeddingWorker : BackgroundService
                 var ctx = scope.ServiceProvider.GetRequiredService<DiarizDbContext>();
                 var client = scope.ServiceProvider.GetRequiredService<IEmbeddingClient>();
                 var resolver = scope.ServiceProvider.GetRequiredService<IEmbeddingSettingsResolver>();
+                using var jobTx = JobTelemetry.Begin("embed");
                 await EmbeddingProcessor.ProcessAsync(ctx, client, resolver, job, _log, ct);
             }
         }

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
 using Diariz.Api.Services;
@@ -13,13 +14,18 @@ public sealed class FakeHttpMessageHandler : HttpMessageHandler
 {
     private readonly string _responseBody;
     private readonly HttpStatusCode _status;
+    private readonly string _mediaType;
     public HttpRequestMessage? LastRequest { get; private set; }
     public string? LastRequestBody { get; private set; }
 
-    public FakeHttpMessageHandler(string responseBody, HttpStatusCode status = HttpStatusCode.OK)
+    /// <param name="mediaType">Response content type. Defaults to JSON; pass <c>text/event-stream</c> to
+    /// exercise the streaming path, which telemetry must not buffer.</param>
+    public FakeHttpMessageHandler(
+        string responseBody, HttpStatusCode status = HttpStatusCode.OK, string mediaType = "application/json")
     {
         _responseBody = responseBody;
         _status = status;
+        _mediaType = mediaType;
     }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
@@ -27,7 +33,10 @@ public sealed class FakeHttpMessageHandler : HttpMessageHandler
         LastRequest = request;
         if (request.Content is not null)
             LastRequestBody = await request.Content.ReadAsStringAsync(ct);
-        return new HttpResponseMessage(_status) { Content = new StringContent(_responseBody) };
+        return new HttpResponseMessage(_status)
+        {
+            Content = new StringContent(_responseBody, Encoding.UTF8, _mediaType)
+        };
     }
 }
 
@@ -761,5 +770,37 @@ public sealed class CapturingWebhookPublisher : IWebhookPublisher
     {
         Published.Add((eventType, ownerUserId, data, signals ?? Array.Empty<string>(), platformData, dataWithContacts));
         return Task.CompletedTask;
+    }
+}
+
+/// <summary>Records the spans an <see cref="ILlmTrace"/> caller opened, so telemetry can be asserted
+/// without initialising the Sentry SDK. Follows the project's fakes-not-mocks convention.</summary>
+public sealed class FakeLlmTrace : ILlmTrace
+{
+    public sealed class Recorded
+    {
+        public string Op { get; init; } = "";
+        public string Description { get; init; } = "";
+        public bool Finished { get; set; }
+        public int? StatusCode { get; set; }
+        public LlmUsage? Usage { get; set; }
+    }
+
+    public List<Recorded> Spans { get; } = new();
+
+    public ILlmSpan StartSpan(string op, string description)
+    {
+        var rec = new Recorded { Op = op, Description = description };
+        Spans.Add(rec);
+        return new Span(rec);
+    }
+
+    private sealed class Span : ILlmSpan
+    {
+        private readonly Recorded _rec;
+        public Span(Recorded rec) => _rec = rec;
+        public void SetStatusCode(int statusCode) => _rec.StatusCode = statusCode;
+        public void SetUsage(LlmUsage usage) => _rec.Usage = usage;
+        public void Dispose() => _rec.Finished = true;
     }
 }

@@ -92,6 +92,7 @@ public class SectionMinutesWorker : BackgroundService
                 var combiner = scope.ServiceProvider.GetRequiredService<IMeetingMinutesClient>();
                 var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
                 var folderTemplate = _prompts.Get(FolderMinutesPrompt.TemplateName, FolderMinutesPrompt.DefaultTemplate);
+                using var jobTx = JobTelemetry.Begin("section-minutes");
                 await SectionMinutesProcessor.ProcessAsync(
                     ctx, generator, combiner, resolver, _hub, folderTemplate,
                     job, _minutesOpts.TranscriptCharBudget, _opts.CombineCharBudget, _log, ct);

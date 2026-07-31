@@ -1789,6 +1789,23 @@ want it runs the platform exactly as before with zero extra containers.
   crash takes GlitchTip down along with everything else. It only tells you about errors the *running*
   worker/API processes have reported to it, not that they stopped running.
 
+- **Every LLM call is timed, and its token usage recorded.** `LlmTelemetryHandler` (a `DelegatingHandler`) is
+  attached to all eight OpenAI-compatible typed clients - summarisation, minutes, tags, actions, translation,
+  embeddings, dictation and chat streaming - via the `AddLlmClient` helper in `Program.cs`, so instrumentation
+  is registered once rather than per client and anything added later is measured for free. Each call becomes a
+  `gen_ai.request` span carrying scheme/host/path (never the query string), the HTTP status, and the
+  `usage` token counts parsed out of the response by `LlmUsageParser`. **Only sizes and durations - never a
+  prompt or a completion**, which are meeting content.
+  - **Streaming responses are exempt from the body read.** `usage` needs a buffered JSON body, and buffering an
+    SSE stream would hold every token until the model finished, so `text/event-stream` responses are timed but
+    not parsed.
+  - **`JobTelemetry.Begin` gives background jobs a transaction.** Sentry's ASP.NET integration creates a
+    transaction per incoming HTTP request and nothing else, and a span with no parent transaction is dropped -
+    so before this, every LLM call made from a `BackgroundService` was invisible no matter how it was
+    instrumented. Each LLM-using worker (`Summarization`, `MeetingMinutes`, `Tags`, `Actions`, `Embedding`,
+    `SectionSummary`, `SectionMinutes`, `FormulaRun`) now opens a `queue.task` transaction per job. This is
+    also what gives a formula run an end-to-end duration: its HTTP endpoint only ever measured the enqueue
+    (~132 ms), because the model call happens on the worker afterwards.
 - **The worker, the API, and the SPA all report.** The transcription worker (`src/Diariz.Worker`) reports to GlitchTip
   when `SENTRY_DSN` is set (`SENTRY_ENVIRONMENT`, `SENTRY_TRACES_SAMPLE_RATE` tune the environment tag and
   trace sampling; see `deploy/docker-compose.yml`'s `worker` service and `src/Diariz.Worker/telemetry.py`).

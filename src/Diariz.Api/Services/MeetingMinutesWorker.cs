@@ -94,6 +94,7 @@ public class MeetingMinutesWorker : BackgroundService
                 var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
                 var queue = scope.ServiceProvider.GetRequiredService<IJobQueue>();
                 var webhooks = scope.ServiceProvider.GetRequiredService<IWebhookPublisher>();
+                using var jobTx = JobTelemetry.Begin("minutes");
                 await MeetingMinutesProcessor.ProcessAsync(
                     ctx, generator, resolver, _hub, queue, job, _opts.TranscriptCharBudget, _log,
                     webhooks, _publicUrl, ct);

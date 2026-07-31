@@ -98,6 +98,7 @@ public class TagsWorker : BackgroundService
                 var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
                 var webhooks = scope.ServiceProvider.GetRequiredService<IWebhookPublisher>();
                 // Read the (editable) template per job so edits apply without an API restart.
+                using var jobTx = JobTelemetry.Begin("tags");
                 await TagsProcessor.ProcessAsync(
                     ctx, client, resolver, _hub, job,
                     _prompts.Get("tagcloud", TagsPrompt.DefaultTemplate), _log, webhooks, _publicUrl, ct);
