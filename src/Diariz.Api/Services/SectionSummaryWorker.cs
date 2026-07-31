@@ -90,6 +90,7 @@ public class SectionSummaryWorker : BackgroundService
                 var resolver = scope.ServiceProvider.GetRequiredService<ISummarizationSettingsResolver>();
                 var perRecTemplate = _prompts.Get("summarise", SummarizationPrompt.DefaultTemplate);
                 var folderTemplate = _prompts.Get(FolderSummaryPrompt.TemplateName, FolderSummaryPrompt.DefaultTemplate);
+                using var jobTx = JobTelemetry.Begin("section-summary");
                 await SectionSummaryProcessor.ProcessAsync(
                     ctx, perRecording, combiner, resolver, _hub, perRecTemplate, folderTemplate,
                     job, _opts.CombineCharBudget, _log, ct);

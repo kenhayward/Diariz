@@ -100,6 +100,7 @@ public class ActionsWorker : BackgroundService
                 var webhooks = scope.ServiceProvider.GetRequiredService<IWebhookPublisher>();
                 // Read the (editable) template per job so edits apply without an API restart. The processor
                 // chains the minutes job when it finishes (so minutes render the canonical action set).
+                using var jobTx = JobTelemetry.Begin("actions");
                 await ActionsProcessor.ProcessAsync(
                     ctx, client, resolver, _hub, queue, job,
                     _prompts.Get("extract-actions", ActionsPrompt.DefaultTemplate), _log, webhooks, _publicUrl, ct);

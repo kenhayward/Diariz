@@ -97,6 +97,7 @@ public class SummarizationWorker : BackgroundService
                 var webhooks = scope.ServiceProvider.GetRequiredService<IWebhookPublisher>();
                 // Read the (editable) template per job so edits apply without an API restart.
                 var template = _prompts.Get("summarise", SummarizationPrompt.DefaultTemplate);
+                using var jobTx = JobTelemetry.Begin("summarize");
                 await SummarizationProcessor.ProcessAsync(
                     ctx, client, resolver, _hub, job, template, _log, webhooks, _publicUrl, ct);
             }
