@@ -1774,7 +1774,7 @@ want it runs the platform exactly as before with zero extra containers.
   crash takes GlitchTip down along with everything else. It only tells you about errors the *running*
   worker/API processes have reported to it, not that they stopped running.
 
-- **Both the worker and the API report.** The transcription worker (`src/Diariz.Worker`) reports to GlitchTip
+- **The worker, the API, and the SPA all report.** The transcription worker (`src/Diariz.Worker`) reports to GlitchTip
   when `SENTRY_DSN` is set (`SENTRY_ENVIRONMENT`, `SENTRY_TRACES_SAMPLE_RATE` tune the environment tag and
   trace sampling; see `deploy/docker-compose.yml`'s `worker` service and `src/Diariz.Worker/telemetry.py`).
   The API (`src/Diariz.Api`) reports the same way when `Sentry__Dsn` is set - `Program.cs` calls
@@ -1829,13 +1829,39 @@ want it runs the platform exactly as before with zero extra containers.
       once it is attached to an event (the replacement is rebuilt, which resets that breadcrumb's timestamp -
       sub-millisecond, and unavoidable through the public API).
 
-    **The two deny-lists are duplicated, and must be kept in step by hand.** `_DENY_EXACT`/`_DENY_SUBSTRING`
-    in `src/Diariz.Worker/telemetry.py` and `DenyExact`/`DenySubstring` in `SentryScrubber.cs` cover the same
-    names, and each runtime has a test pinning the shared set. That catches a *removal* from either side; it
-    cannot catch an *addition* made to only one, which is exactly how `embedding`/`embeddings` (the ECAPA
-    voiceprint vectors) once existed only in Python while the API is the runtime that actually stores them.
-    With the lists in step, no transcript content, credential, or biometric voiceprint vector is transmitted
-    to GlitchTip from either runtime.
+    **The three deny-lists are duplicated, and must be kept in step by hand.** `_DENY_EXACT`/`_DENY_SUBSTRING`
+    in `src/Diariz.Worker/telemetry.py`, `DenyExact`/`DenySubstring` in `SentryScrubber.cs`, and
+    `DENY_EXACT`/`DENY_SUBSTRING` in `apps/web/src/lib/telemetry.ts` cover the same names, and each runtime has
+    a test pinning the shared set. That catches a *removal* from any copy; it cannot catch an *addition* made
+    to only one, which is exactly how `embedding`/`embeddings` (the ECAPA voiceprint vectors) once existed only
+    in Python while the API is the runtime that actually stores them. With the lists in step, no transcript
+    content, credential, or biometric voiceprint vector is transmitted to GlitchTip from any of the three
+    runtimes.
+
+- **The SPA reports browser crashes too.** `apps/web/src/lib/telemetry.ts` initialises `@sentry/react` on
+  boot (`initTelemetry`, called from `main.tsx`) and wires `components/ErrorBoundary.tsx` to
+  `captureException`, so an uncaught render crash is reported with a stack trace instead of just leaving the
+  user on a blank page. Unlike the worker/API, whose DSNs come from env vars read once at process start, the
+  browser DSN is fetched at runtime from **`GET /api/config`** (which reflects `Sentry__BrowserDsn` /
+  `Sentry__Environment`) - the SPA is a single static bundle served identically to every environment (dev,
+  staging, prod), so the DSN cannot be baked in at build time the way it can for a server process; an empty
+  DSN leaves the SPA silently unreporting, matching the worker/API's "empty DSN = inert" behaviour. The
+  browser DSN is deliberately a **separate GlitchTip project** from `Sentry__Dsn` (`TelemetryOptions.BrowserDsn`,
+  same `Sentry` config section) - browser noise (ad blockers, extensions, stale tabs, flaky client networks) is
+  far higher-volume than server errors and would otherwise bury them in the same project. Because the
+  **desktop app loads the SPA from the server origin** rather than bundling its own copy, it inherits this
+  reporting automatically with no desktop-specific code or release.
+  - **Scrubbing is by field name and by URL, not by content inspection.** `beforeSend`/`beforeBreadcrumb`
+    recursively redact any object key matching the shared deny-list (the same categories as the worker/API:
+    transcript text, summaries, minutes, credentials, the ECAPA embedding vectors) and separately strip the
+    query string off every URL they touch - load-bearing because `@microsoft/signalr` appends
+    `?access_token=<JWT>` to the hub's negotiate/WebSocket URLs (a browser cannot set an Authorization header
+    on a WS handshake), which a key-name deny-list cannot reach since a query string is one opaque value, not
+    a named field. Console breadcrumbs below `warn` are dropped entirely, since their message is free text a
+    deny-list cannot vet; `warn`/`error`/`fatal` console breadcrumbs are kept and still pass through the same
+    key/URL scrub. This is narrower than the API's `SentryScrubber`, which also nulls the request body and
+    drops cookies outright - the browser SDK does not capture either by default, so there is nothing there to
+    strip.
 
 ## Platform backup & restore
 

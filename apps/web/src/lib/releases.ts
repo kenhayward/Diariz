@@ -59,6 +59,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.174.4",
+    date: "2026-07-31",
+    pr: 393,
+    headline: "Browser crashes are reported automatically",
+    summary:
+      "When a browser DSN is configured, a crash in the web app is now reported with a stack trace, " +
+      "so a problem you hit is visible without you having to report it. Meeting content, credentials " +
+      "and access tokens are stripped before anything is sent. This covers the desktop app too, since " +
+      "it loads the web app from your server. Deployments without a DSN are unchanged.",
+    added: [
+      "Optional browser crash reporting for the web and desktop apps.",
+    ],
+  },
+  {
     version: "0.174.3",
     date: "2026-07-31",
     pr: 392,
