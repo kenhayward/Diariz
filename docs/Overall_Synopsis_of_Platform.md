@@ -1894,6 +1894,27 @@ want it runs the platform exactly as before with zero extra containers.
     today only because this app's JWT travels as a query parameter, never a fragment; a future attribute or
     integration that surfaces fragment data would need its own scrub.
 
+- **Source maps are generated but never served, and uploaded to GlitchTip at image build time instead.**
+  `apps/web/vite.config.ts` sets `sourcemap: "hidden"` - the `.map` files are still built (so a stack trace
+  can be un-minified), but the `//# sourceMappingURL=` comment is omitted from the shipped bundles, so no
+  browser ever fetches them. `apps/web/Dockerfile`'s build stage then deletes any `.map` file that survives
+  into `/usr/share/nginx/html` (`RUN find ... -name '*.map' -delete`) as defence in depth - without that, the
+  files would stay fetchable by guessing the filename even though nothing links to them. Before that deletion,
+  a build stage step optionally uploads the maps to GlitchTip via `npx @glitchtip/cli sourcemaps upload`,
+  gated on four build inputs all being present: `GLITCHTIP_URL`/`GLITCHTIP_ORG`/`GLITCHTIP_PROJECT` (build
+  ARGs) and a `glitchtip_token` **BuildKit secret** (never a build ARG - an ARG is recorded in the image
+  history and readable by anyone who can pull the image). Missing any of the four just skips the upload with
+  a log line, so a developer build and a CI build both still succeed with zero GlitchTip credentials; a
+  reachable-but-failing upload (bad token, unreachable server) warns rather than failing the build, so the web
+  image still ships. The upload is tagged with the same release value `apps/web/src/lib/telemetry.ts`'s
+  `initTelemetry` sends as `release` (`__APP_VERSION__`, from `vite.config.ts`'s `appVersion()`) - the
+  Dockerfile re-derives the same fallback (`APP_VERSION` build ARG, else this package's `package.json`
+  version) so the two agree whether or not the ARG is passed, since a mismatch means GlitchTip cannot attach
+  the uploaded maps to incoming browser events. `--org`/`--project` must name the **same browser project** as
+  `SENTRY_BROWSER_DSN` above. Because the SPA is built inside `apps/web/Dockerfile` on the deploying server
+  rather than in GitHub CI, this upload step has to live there too - see `deploy/.env.example` for the build
+  command (`docker compose build --secret ... --build-arg ...`).
+
 ## Platform backup & restore
 
 `MaintenanceController` (Platform-Administrator only) exports/imports the **whole platform** as one `.zip`:
