@@ -59,6 +59,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.174.3",
+    date: "2026-07-31",
+    pr: 392,
+    headline: "API reports errors and endpoint timings",
+    summary:
+      "When a GlitchTip DSN is configured, the API now reports unhandled exceptions and records how " +
+      "long each endpoint takes, including the time spent waiting on the configured language model. " +
+      "Request bodies, credentials and meeting content are stripped before anything is sent. " +
+      "Deployments without a DSN are unchanged.",
+    added: [
+      "Optional API error reporting and per-endpoint timings.",
+    ],
+  },
+  {
     version: "0.174.2",
     date: "2026-07-31",
     pr: 391,

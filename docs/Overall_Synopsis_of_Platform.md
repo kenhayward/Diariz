@@ -1774,25 +1774,43 @@ want it runs the platform exactly as before with zero extra containers.
   crash takes GlitchTip down along with everything else. It only tells you about errors the *running*
   worker/API processes have reported to it, not that they stopped running.
 
-- **Worker reporting is live; the API's is not yet.** The transcription worker (`src/Diariz.Worker`) now
-  reports to GlitchTip when `SENTRY_DSN` is set (`SENTRY_ENVIRONMENT`, `SENTRY_TRACES_SAMPLE_RATE` tune the
-  environment tag and trace sampling; see `deploy/docker-compose.yml`'s `worker` service and
-  `src/Diariz.Worker/telemetry.py`). Instrumenting the API via `Sentry.AspNetCore` (`Sentry__Dsn`) is a later
-  phase.
+- **Both the worker and the API report.** The transcription worker (`src/Diariz.Worker`) reports to GlitchTip
+  when `SENTRY_DSN` is set (`SENTRY_ENVIRONMENT`, `SENTRY_TRACES_SAMPLE_RATE` tune the environment tag and
+  trace sampling; see `deploy/docker-compose.yml`'s `worker` service and `src/Diariz.Worker/telemetry.py`).
+  The API (`src/Diariz.Api`) reports the same way when `Sentry__Dsn` is set - `Program.cs` calls
+  `WebHost.UseSentry` behind an `if (telemetry.Enabled)` guard (`TelemetryOptions`, section `Sentry`), so an
+  unset DSN means the SDK is never initialised and there is zero overhead or network traffic.
   - **One transaction per job.** `worker.py` wraps each job in a `transcribe` transaction, with a `span` per
     stage - `download` (fetching the blob from MinIO), `asr`, `align`, `diarize`, `embeddings` (the ECAPA
     voiceprint step, gated by `ENABLE_SPEAKER_EMBEDDINGS`), and `callback` (posting the result back to the
     API) - so a slow job can be traced to the stage responsible for the wall-clock time.
-  - **Release tag from the API's `/health`.** `telemetry.release()` reads the platform version from
-    `GET {API_BASE_URL}/health` at worker startup and attaches it as the event's release. The worker image
-    carries no version of its own - `version.json` lives at the repo root, outside the worker's build context
-    - and hard-coding one in `.env` would drift silently the moment a release forgot to bump it; the worker
-    already waits for the API to be healthy before it starts, so the API is always reachable at that point.
-  - **Every event is scrubbed.** All outgoing events and transactions pass through `telemetry.scrub` (wired
-    as the SDK's `before_send`/`before_send_transaction` hooks), which recursively redacts any field whose key
-    matches a deny-list - transcript text, summaries, minutes, authorization/cookie headers, credentials, and
-    the ECAPA voiceprint embedding vectors - before the payload leaves the process. No transcript content or
-    biometric voiceprint vector is ever transmitted to GlitchTip.
+  - **API: unhandled exceptions and per-endpoint timings.** `Sentry.AspNetCore`'s middleware captures
+    unhandled exceptions with a stack trace and opens one transaction per request, named after the matched
+    route, so GlitchTip's performance view lists every endpoint with a request count and p50/p95 latency.
+  - **Outbound LLM calls appear as child spans.** With tracing on, Sentry's automatic `IHttpClientFactory`
+    instrumentation wraps every outgoing `HttpClient` call in a span parented to the current request
+    transaction - including the summarisation/chat/embedding/dictation calls to the configured LLM endpoint -
+    so a slow request can be attributed to time spent waiting on the model rather than on the API itself, with
+    its own duration visible independent of the parent.
+  - **Release tag from the assembly version, shared with the worker.** `Program.cs` reads
+    `Assembly.GetExecutingAssembly().GetName().Version` once at startup and uses it both as the API's Sentry
+    `Release` and as the `version` field `GET /health` reports - the same value `telemetry.release()` fetches
+    from `/health` for the worker's own release tag, so events from both runtimes land under one release in
+    GlitchTip. The worker already waits for the API to be healthy before it starts, so `/health` is always
+    reachable at that point.
+  - **Every event is scrubbed.** The worker's outgoing events and transactions pass through `telemetry.scrub`
+    (wired as the SDK's `before_send`/`before_send_transaction` hooks), which recursively redacts any field
+    whose key matches a deny-list - transcript text, summaries, minutes, authorization/cookie headers,
+    credentials, and the ECAPA voiceprint embedding vectors - before the payload leaves the process. The API's
+    events pass through `SentryScrubber` (`src/Diariz.Api/Services/SentryScrubber.cs`), wired as `SetBeforeSend`
+    / `SetBeforeBreadcrumb` in the same `UseSentry` block: it redacts any `Extra`/`Tag`/request-header field
+    matching the same kind of deny-list, but goes further for the fields a key-based list cannot reach - it
+    unconditionally nulls the request body (`Request.Data`), drops the query string and `Cookies` outright
+    (the SignalR hub takes its JWT as `?access_token=<JWT>`, so the query string alone can carry a bearer
+    token), and strips any leftover query portion from `Request.Url`. Breadcrumbs are redacted separately
+    through `SentryScrubber.ScrubBreadcrumb`, because a `Breadcrumb`'s `Data` has no setter once it is attached
+    to an event. No transcript content, credential, or biometric voiceprint vector is ever transmitted to
+    GlitchTip from either runtime.
 
 ## Platform backup & restore
 
