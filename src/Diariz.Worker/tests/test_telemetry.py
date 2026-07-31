@@ -105,6 +105,9 @@ def test_init_returns_false_when_dsn_is_only_whitespace(monkeypatch):
 
 
 def test_init_configures_the_sdk_with_pii_off_and_the_scrubber(monkeypatch):
+    # init() sets the module-global _enabled directly (not via monkeypatch), so without this the flag
+    # would leak True into every test that runs afterward and they'd try to import the real sentry_sdk.
+    monkeypatch.setattr(telemetry, "_enabled", False)
     fake_sdk = MagicMock()
     monkeypatch.setitem(sys.modules, "sentry_sdk", fake_sdk)
     monkeypatch.setenv("SENTRY_DSN", "https://key@errors.example/1")

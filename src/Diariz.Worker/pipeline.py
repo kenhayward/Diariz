@@ -8,6 +8,7 @@ import logging
 import numpy as np
 import whisperx
 
+import telemetry
 from config import config
 
 log = logging.getLogger("pipeline")
@@ -207,22 +208,26 @@ def transcribe(audio_path: str, min_speakers=None, max_speakers=None) -> dict:
             f"Audio is too long ({duration_ms // 1000}s); the limit is {int(config.MAX_AUDIO_SECONDS)}s.")
 
     # 1. Transcribe (backend-pluggable: faster-whisper on CUDA, openai-whisper on AMD ROCm)
-    asr = _asr(audio)
+    with telemetry.span("ai.asr", "asr"):
+        asr = _asr(audio)
     language = asr["language"]
 
     # 2. Word-level alignment
-    align_model, metadata = _get_align(language)
-    result = whisperx.align(
-        asr["segments"], align_model, metadata, audio, config.DEVICE,
-        return_char_alignments=False)
+    with telemetry.span("ai.align", "align"):
+        align_model, metadata = _get_align(language)
+        result = whisperx.align(
+            asr["segments"], align_model, metadata, audio, config.DEVICE,
+            return_char_alignments=False)
 
     # 3. Diarization (with optional speaker-count hints) + speaker assignment
-    diarize_segments = _diarize(audio, min_speakers, max_speakers)
-    result = whisperx.assign_word_speakers(diarize_segments, result)
+    with telemetry.span("ai.diarize", "diarize"):
+        diarize_segments = _diarize(audio, min_speakers, max_speakers)
+        result = whisperx.assign_word_speakers(diarize_segments, result)
 
     segments = _shape_segments(result["segments"])
 
     # 4. Per-speaker voiceprint embeddings (for identification against enrolled people)
-    speakers = _extract_speakers(audio, segments)
+    with telemetry.span("ai.embeddings", "embeddings"):
+        speakers = _extract_speakers(audio, segments)
 
     return {"language": language, "segments": segments, "speakers": speakers, "duration_ms": duration_ms}

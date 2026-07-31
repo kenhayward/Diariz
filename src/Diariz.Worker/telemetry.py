@@ -117,3 +117,11 @@ def span(op: str, name: str):
     import sentry_sdk
     with sentry_sdk.start_span(op=op, name=name):
         yield
+
+
+def capture_exception(error: BaseException) -> None:
+    """Report an exception that the worker has caught and handled. A no-op when reporting is off."""
+    if not _enabled:
+        return
+    import sentry_sdk
+    sentry_sdk.capture_exception(error)
