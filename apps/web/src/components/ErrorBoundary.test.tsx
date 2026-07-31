@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import ErrorBoundary from "./ErrorBoundary";
+import * as telemetry from "../lib/telemetry";
 
 function Boom(): React.ReactElement {
   throw new Error("kaboom");
@@ -49,5 +50,25 @@ describe("ErrorBoundary", () => {
     expect(screen.getByText("recovered")).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
     spy.mockRestore();
+  });
+
+  it("reports the error to telemetry and still renders the fallback", () => {
+    const captured: unknown[] = [];
+    vi.spyOn(telemetry, "captureException").mockImplementation((e) => void captured.push(e));
+
+    function Boom(): never {
+      throw new Error("kaboom");
+    }
+
+    render(
+      <ErrorBoundary resetKey="/x" message="It broke">
+        <Boom />
+      </ErrorBoundary>,
+    );
+
+    // The user-facing behaviour must be unchanged.
+    expect(screen.getByRole("alert").textContent).toContain("It broke");
+    // And the error is now reported.
+    expect(captured).toHaveLength(1);
   });
 });

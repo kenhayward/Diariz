@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { captureException } from "../lib/telemetry";
 
 interface Props {
   children: ReactNode;
@@ -31,6 +32,8 @@ export default class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: unknown) {
     // The error would otherwise vanish with the unmounted tree; log it so it is still diagnosable.
     console.error("Detail panel crashed:", error, info);
+    // And report it, so a crash a user hits is visible without them reporting it.
+    captureException(error);
   }
 
   render() {
