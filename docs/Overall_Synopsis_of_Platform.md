@@ -1870,7 +1870,15 @@ want it runs the platform exactly as before with zero extra containers.
       `url` and neither is deny-listed, so an earlier `data.url`-only rule passed
       `/setup?token=<account-activation credential>`, the OAuth authorize query, and
       `/login?returnTo=<encoded authorize URL>` through untouched. Every string value in a breadcrumb's
-      `data` is now stripped.
+      `data` is now stripped, **at every depth** - the same handler's console branch sets
+      `data: { arguments: handlerData.args, logger: "console" }` (the raw console call arguments) and
+      `warn`/`error` console breadcrumbs are deliberately kept, so a URL passed to `console.error` sat
+      one array level down and survived a top-level-only pass. Both scrubbers walk objects and arrays
+      recursively and are **cycle-guarded** (the current path is tracked in a `WeakSet`, and a repeat
+      becomes a `[circular]` marker, under a `MAX_DEPTH` backstop): breadcrumb data is arbitrary
+      app-supplied structure, and before the guard a self-referencing object threw
+      `RangeError: Maximum call stack size exceeded` out of a hook that runs inside the SDK's own
+      breadcrumb handler - a hang or throw there takes the page with it, which is worse than the leak.
     - `httpContextIntegration` copies the browser's `Referer` header onto `event.request.headers` - the
       **full previous URL**, which is the same credential whenever the user has just come from `/setup` or
       `/connect/authorize`. Every string header value is stripped, on error events and transactions alike.

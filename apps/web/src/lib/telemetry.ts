@@ -88,10 +88,35 @@ interface TransactionEventLike {
   [key: string]: unknown;
 }
 
+export const CIRCULAR = "[circular]";
+
 /**
- * Scrub a flat bag of string-keyed values: span/trace-context attributes (Sentry's `data`, i.e. span
- * attributes), breadcrumb `data`, and request headers. All three are the same shape and all three
- * carry URLs under key names this code does not get to choose.
+ * Depth ceiling for both recursive walks below.
+ *
+ * The `seen` set already makes cycles impossible, so this is purely a stack-overflow backstop for a
+ * pathologically deep (but acyclic) structure - these walks run inside error hooks, where a
+ * `RangeError` would drop the event and, on the breadcrumb path, throw from inside the SDK's own
+ * handler. 20 is far past anything real: the SDK's own `normalizeDepth` default is 3, so it flattens
+ * everything below that itself before an event is serialised.
+ */
+const MAX_DEPTH = 20;
+
+/** True for a value a recursive walk should descend into (object or array, but not null). */
+function isWalkable(value: unknown): value is object {
+  return !!value && typeof value === "object";
+}
+
+/**
+ * Scrub a bag of values: span/trace-context attributes (Sentry's `data`, i.e. span attributes),
+ * breadcrumb `data`, and request headers. All three are the same shape and all three carry URLs under
+ * key names this code does not get to choose.
+ *
+ * RECURSIVE, deliberately. A top-level-only pass left real leaks in nested structure - most concretely
+ * `data.arguments`, which breadcrumbs.js's `_getConsoleBreadcrumbHandler` sets to the raw console call
+ * arguments (`data: { arguments: handlerData.args, logger: "console" }`). `warn`/`error` console
+ * breadcrumbs are deliberately KEPT, so a URL passed to `console.error` sat one array level down and
+ * sailed through untouched. Both rules below therefore apply at EVERY depth, through objects and
+ * arrays alike.
  *
  * Auto-instrumented fetch/xhr spans (@sentry/core's getFetchSpanAttributes, @sentry/browser's
  * xhrCallback) put the FULL unsanitized request URL on attributes like `url`, `http.url` and
@@ -113,33 +138,56 @@ interface TransactionEventLike {
  * `null`/non-object input passes through unchanged rather than throwing - `data` can legitimately be
  * absent or null, and this runs inside a beforeSend / beforeSendTransaction / beforeBreadcrumb hook
  * where a throw would drop the whole event from the send pipeline.
+ *
+ * `seen` tracks the CURRENT PATH (added on the way down, removed on the way back up), so a genuine
+ * cycle becomes a `[circular]` marker while an object merely referenced twice as siblings is still
+ * scrubbed both times. See the note on `scrub` for why the guard has to exist.
  */
-function scrubAttributes<T>(data: T): T {
-  if (!data || typeof data !== "object") return data;
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
-    if (/(^|\.)query$/i.test(key)) {
-      out[key] = REDACTED;
-    } else if (typeof value === "string") {
-      out[key] = stripQueryString(value);
-    } else {
-      out[key] = value;
+function scrubAttributes<T>(data: T, seen: WeakSet<object> = new WeakSet(), depth = 0): T {
+  if (typeof data === "string") return stripQueryString(data) as unknown as T;
+  if (!isWalkable(data)) return data;
+  if (seen.has(data) || depth >= MAX_DEPTH) return CIRCULAR as unknown as T;
+  seen.add(data);
+  try {
+    if (Array.isArray(data)) {
+      return data.map((item) => scrubAttributes(item, seen, depth + 1)) as unknown as T;
     }
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
+      out[key] = /(^|\.)query$/i.test(key) ? REDACTED : scrubAttributes(value, seen, depth + 1);
+    }
+    return out as T;
+  } finally {
+    seen.delete(data);
   }
-  return out as T;
 }
 
-/** Recursively redact sensitive values. Pure: returns a new structure, never mutates the input. */
-function scrub<T>(value: T): T {
-  if (Array.isArray(value)) return value.map(scrub) as unknown as T;
-  if (value && typeof value === "object") {
+/**
+ * Recursively redact sensitive values by field name. Pure: returns a new structure, never mutates the
+ * input.
+ *
+ * Cycle-guarded for the same reason `scrubAttributes` is, and it is not theoretical: before the guard
+ * existed, handing `beforeBreadcrumb` a self-referencing `data` object threw
+ * `RangeError: Maximum call stack size exceeded` out of THIS function - breadcrumb data is arbitrary
+ * app-supplied structure, and a throw from inside a breadcrumb hook is worse than the leak the
+ * recursion was added to close, because it takes the page with it.
+ */
+function scrub<T>(value: T, seen: WeakSet<object> = new WeakSet(), depth = 0): T {
+  if (!isWalkable(value)) return value;
+  if (seen.has(value) || depth >= MAX_DEPTH) return CIRCULAR as unknown as T;
+  seen.add(value);
+  try {
+    if (Array.isArray(value)) {
+      return value.map((item) => scrub(item, seen, depth + 1)) as unknown as T;
+    }
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out[k] = isSensitiveKey(k) ? REDACTED : scrub(v);
+      out[k] = isSensitiveKey(k) ? REDACTED : scrub(v, seen, depth + 1);
     }
     return out as unknown as T;
+  } finally {
+    seen.delete(value);
   }
-  return value;
 }
 
 /**

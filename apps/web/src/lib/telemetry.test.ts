@@ -246,6 +246,81 @@ describe("beforeBreadcrumb", () => {
     expect(JSON.stringify(beforeBreadcrumb(crumb))).not.toContain("A_LIVE_JWT");
   });
 
+  // `data.arguments` is a REAL default shape, not a hypothetical: breadcrumbs.js's
+  // `_getConsoleBreadcrumbHandler` sets `data: { arguments: handlerData.args, logger: "console" }` -
+  // the raw console call arguments. warn/error console breadcrumbs are deliberately KEPT, so a
+  // top-level-only scrub leaves any URL passed to console.error fully intact.
+  it("strips a URL inside the console breadcrumb's arguments array", () => {
+    const crumb = {
+      category: "console",
+      level: "error",
+      message: "redirect failed /setup?token=SETUP-TOKEN-123",
+      data: { arguments: ["redirect failed", "/setup?token=SETUP-TOKEN-123"], logger: "console" },
+    } as any;
+
+    const cleaned = beforeBreadcrumb(crumb)!;
+
+    expect(JSON.stringify(cleaned)).not.toContain("SETUP-TOKEN-123");
+    expect(cleaned.data.arguments).toEqual(["redirect failed", "/setup"]);
+    expect(cleaned.data.logger).toBe("console");
+  });
+
+  it("strips a URL nested one object deep in breadcrumb data", () => {
+    const crumb = { category: "custom", data: { req: { url: "/x?token=SECRET" } } } as any;
+
+    const cleaned = beforeBreadcrumb(crumb)!;
+
+    expect(JSON.stringify(cleaned)).not.toContain("SECRET");
+    expect(cleaned.data.req.url).toBe("/x");
+  });
+
+  it("strips URLs inside an array of objects in breadcrumb data", () => {
+    const crumb = {
+      category: "console",
+      level: "warning",
+      data: {
+        arguments: [{ tries: [{ href: "/hubs/transcription?access_token=A_LIVE_JWT" }] }, "retrying"],
+      },
+    } as any;
+
+    const cleaned = beforeBreadcrumb(crumb)!;
+
+    expect(JSON.stringify(cleaned)).not.toContain("A_LIVE_JWT");
+    expect(cleaned.data.arguments[0].tries[0].href).toBe("/hubs/transcription");
+    expect(cleaned.data.arguments[1]).toBe("retrying");
+  });
+
+  it("redacts a nested *.query key, not just a top-level one", () => {
+    const crumb = { category: "custom", data: { req: { "http.query": "?access_token=A_LIVE_JWT" } } } as any;
+
+    const cleaned = beforeBreadcrumb(crumb)!;
+
+    expect(JSON.stringify(cleaned)).not.toContain("A_LIVE_JWT");
+    expect(cleaned.data.req["http.query"]).toBe(REDACTED);
+  });
+
+  // Breadcrumb data is arbitrary user-supplied structure, and this runs inside an error handler: a
+  // hang here takes the page with it, which is strictly worse than the leak being fixed.
+  it("does not hang or throw on a self-referential breadcrumb data object", () => {
+    const cycle: Record<string, unknown> = { url: "/x?token=SECRET" };
+    cycle.self = cycle;
+    const crumb = { category: "custom", data: { cycle } } as any;
+
+    let cleaned: any;
+    expect(() => {
+      cleaned = beforeBreadcrumb(crumb);
+    }).not.toThrow();
+    expect(JSON.stringify(cleaned)).not.toContain("SECRET");
+  });
+
+  it("does not hang on a cycle reached through an array", () => {
+    const arr: unknown[] = ["/x?token=SECRET"];
+    arr.push(arr);
+    const crumb = { category: "custom", data: { arr } } as any;
+
+    expect(() => beforeBreadcrumb(crumb)).not.toThrow();
+  });
+
   it("keeps non-URL breadcrumb data values untouched", () => {
     const crumb = { category: "fetch", data: { status_code: 200, method: "GET", url: "/api/x" } } as any;
 
@@ -491,6 +566,21 @@ describe("beforeSendTransaction", () => {
     expect(data["http.method"]).toBe("GET");
     expect(data["http.response.status_code"]).toBe(200);
     expect(data.url).toBe("/hubs/transcription");
+  });
+
+  // The same helper serves spans, so the recursion reaches nested span attributes too. This is
+  // additive - every flat-attribute assertion above still holds unchanged.
+  it("strips a URL nested inside a span attribute value", () => {
+    const tx = { spans: [{ data: { "http.request.body": { callback: "/x?access_token=A_LIVE_JWT" } } }] } as any;
+
+    expect(JSON.stringify(beforeSendTransaction(tx))).not.toContain("A_LIVE_JWT");
+  });
+
+  it("does not hang on a self-referential span attribute", () => {
+    const cycle: Record<string, unknown> = { url: "/x?access_token=A_LIVE_JWT" };
+    cycle.self = cycle;
+
+    expect(() => beforeSendTransaction({ spans: [{ data: { cycle } }] } as any)).not.toThrow();
   });
 
   it("does not throw on a span with no data", () => {
