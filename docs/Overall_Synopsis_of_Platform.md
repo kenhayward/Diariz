@@ -1863,6 +1863,37 @@ want it runs the platform exactly as before with zero extra containers.
     drops cookies outright - the browser SDK does not capture either by default, so there is nothing there to
     strip.
 
+- **Browser tracing joins the same trace as the API request it triggered - and depends on an outer-proxy
+  header passthrough that is easy to miss.** `initTelemetry` also enables `@sentry/react`'s
+  `browserTracingIntegration()`, sampled at the same `TracesSampleRate` the API/worker use (surfaced to the
+  browser via `GET /api/config`'s `sentryTracesSampleRate`). It times page loads and every outgoing
+  `fetch`/`XHR` call as a browser-side transaction, and by default the SDK attaches `sentry-trace` and
+  `baggage` headers to same-origin requests so the browser's transaction and the API's request transaction
+  are recorded as **one continuous trace** rather than two unrelated ones - which is how a slow page load
+  gets traced end to end into whichever server-side stage actually took the time.
+  - **Operational caveat: the outer reverse proxy must forward those two headers.** Anything sitting in
+    front of the stack - the app's own nginx (`apps/web/nginx.conf`) as well as any further reverse proxy an
+    operator puts in front of that (see the `/mcp` header-forwarding note above) - has to pass `sentry-trace`
+    and `baggage` through untouched on requests to `/api`. If a proxy strips or rewrites them, nothing errors
+    and nothing shows up as broken: tracing keeps working on both sides, it just silently degrades into two
+    disconnected halves (a browser transaction with no matching API transaction, and vice versa) that look
+    exactly like a deployment nobody misconfigured. This is the first thing to check if browser and API spans
+    stop lining up after a proxy change.
+  - **Scrubbing covers the transaction, not just error events.** `beforeSendTransaction` runs the same
+    field-name/URL scrub as `beforeSend`, applied to the transaction's `request.url` and every span's
+    `description` - and, beyond that, to each span's attribute bag (`spans[].data`) and the root span's
+    (`contexts.trace.data`). That extra reach is load-bearing: Sentry's automatic fetch/XHR instrumentation
+    puts the **full, unsanitized request URL** on span attributes such as `url`, `http.url`, and `url.full`,
+    and the raw query string alone on `http.query` - none of which the SDK's own sanitizer touches, since
+    that only cleans the span's name. An early cut of this hook scrubbed only descriptions and missed the
+    attribute bag, which was a real access-token leak (found in review, not by the SDK) since the SignalR hub
+    URL carries `?access_token=<JWT>`. `scrubAttributes` (`apps/web/src/lib/telemetry.ts`) redacts any
+    `*.query`-named attribute outright and strips the query string off every other URL-shaped string value, so
+    the fix generalizes to whatever attribute name the SDK adds next rather than hardcoding today's set.
+    **Known residual gap:** URL fragments (`http.fragment`) are not scrubbed by any of this - not exploitable
+    today only because this app's JWT travels as a query parameter, never a fragment; a future attribute or
+    integration that surfaces fragment data would need its own scrub.
+
 ## Platform backup & restore
 
 `MaintenanceController` (Platform-Administrator only) exports/imports the **whole platform** as one `.zip`:
