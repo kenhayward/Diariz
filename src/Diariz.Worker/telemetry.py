@@ -14,6 +14,8 @@ REDACTED = "[redacted]"
 _DENY_EXACT = frozenset({
     "text", "transcript", "transcription", "segments", "words", "summary",
     "minutes", "content", "authorization", "cookie", "cookies",
+    # ECAPA voiceprint vectors (biometric data identifying a speaker by voice).
+    "embedding", "embeddings",
 })
 
 # Substrings that mark a credential regardless of the surrounding name.

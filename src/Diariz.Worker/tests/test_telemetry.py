@@ -62,3 +62,22 @@ def test_scrub_does_not_mutate_the_input():
     telemetry.scrub(event)
 
     assert event["extra"]["text"] == "content"
+
+
+def test_is_sensitive_key_redacts_biometric_voiceprints_but_keeps_speaker_labels():
+    # Embedding and embeddings are ECAPA voiceprint vectors (biometric data).
+    assert telemetry.is_sensitive_key("Embedding")
+    assert telemetry.is_sensitive_key("embeddings")
+    # Speaker labels like SPEAKER_00 are diagnostic metadata with no personal info.
+    assert not telemetry.is_sensitive_key("Speaker")
+    assert not telemetry.is_sensitive_key("speakers")
+
+
+def test_scrub_redacts_voiceprints_but_keeps_speaker_labels():
+    event = {"extra": {"Speakers": [{"Speaker": "SPEAKER_00", "Embedding": [0.1, 0.2]}]}}
+
+    cleaned = telemetry.scrub(event)
+
+    speaker = cleaned["extra"]["Speakers"][0]
+    assert speaker["Speaker"] == "SPEAKER_00"
+    assert speaker["Embedding"] == telemetry.REDACTED
