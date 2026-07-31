@@ -87,6 +87,31 @@ Add it to the `diariz` network and forward to `glitchtip:8000` by service name. 
 
 The DSNs do not exist until GlitchTip is running and you have created the projects, so this cannot be done in one sitting. Pass 1 is everything needed to get it started.
 
+### Every variable, and where it comes from
+
+This is the complete set. **The six marked required have no fallback** - leave one empty and the container starts anyway and then fails, in a way that rarely points at the missing value.
+
+| Variable | Required | Comes from | If it is empty |
+| --- | --- | --- | --- |
+| `GLITCHTIP_SECRET_KEY` | **yes** | 1a, the secrets script | Container starts, then every request dies with `ImproperlyConfigured: The SECRET_KEY setting must not be empty` |
+| `GLITCHTIP_DOMAIN` | **yes** | 1c, by hand | Login fails with a CSRF error that reads as a wrong password |
+| `GLITCHTIP_EMAIL_URL` | **yes** | 1a, the secrets script | No invitations, no password resets |
+| `GLITCHTIP_FROM_EMAIL` | **yes** | 1a, the secrets script | As above |
+| `GLITCHTIP_MINIO_ACCESS_KEY` | **yes** | 1b, the MinIO script | Cold storage fails; spans are lost |
+| `GLITCHTIP_MINIO_SECRET_KEY` | **yes** | 1b, the MinIO script | As above |
+| `GLITCHTIP_POSTGRES_PASSWORD` | no | 1a, the secrets script | Falls back to `glitchtip` - fine locally, set it anywhere else |
+| `GLITCHTIP_PORT` | no | 1c | Defaults to `8000` |
+| `GLITCHTIP_BIND` | no | 1c | Defaults to `127.0.0.1` - see Topology, this is wrong for a remote proxy |
+| `GLITCHTIP_COLD_STORAGE_BUCKET` | no | 1c | Defaults to `glitchtip` |
+| `SENTRY_DSN` | pass 2 | GlitchTip UI | The worker reports nothing |
+| `SENTRY_API_DSN` | pass 2 | GlitchTip UI | The API reports nothing |
+| `SENTRY_BROWSER_DSN` | pass 2 | GlitchTip UI | The SPA reports nothing |
+| `SENTRY_ENVIRONMENT` | pass 2 | 1c | Defaults to `development` |
+| `SENTRY_TRACES_SAMPLE_RATE` | pass 2 | 1c | Defaults to `1.0` |
+| `GLITCHTIP_URL` / `_ORG` / `_PROJECT` / `_TOKEN` | pass 3 | GlitchTip UI | Source maps are not uploaded; the build says so and continues |
+
+The compose file rejects a missing required value up front with a message naming it, so a mistake here surfaces at `docker compose up` rather than in a Python traceback. Step 1e checks it explicitly before you start anything.
+
 ### 1a. Generate the secrets
 
 ```bash
@@ -96,7 +121,16 @@ NewGlitchTipSecrets.cmd
 
 Linux/macOS: `./new-glitchtip-secrets.sh`
 
-It generates `GLITCHTIP_SECRET_KEY` and `GLITCHTIP_POSTGRES_PASSWORD`, then prompts for your SMTP details and assembles `GLITCHTIP_EMAIL_URL` with the username and password correctly percent-encoded. Nothing is written to disk - copy the output into `deploy/.env` and close the window.
+Nothing is written to disk. **Copy all four of these into `deploy/.env`** and close the window:
+
+```bash
+GLITCHTIP_SECRET_KEY=<generated>
+GLITCHTIP_POSTGRES_PASSWORD=<generated>
+GLITCHTIP_EMAIL_URL=<assembled from your SMTP answers>
+GLITCHTIP_FROM_EMAIL=<your answer>
+```
+
+Three of those four are required, and `GLITCHTIP_SECRET_KEY` is the one whose absence is hardest to diagnose from the symptom. If you skip the SMTP prompts, come back and set `GLITCHTIP_EMAIL_URL` and `GLITCHTIP_FROM_EMAIL` before starting - GlitchTip needs them to send you a password reset, which is awkward to discover once you are locked out.
 
 Pass `/noemail` (or `--noemail`) if you want the random secrets only.
 
@@ -117,7 +151,12 @@ Linux/macOS: `./provision-glitchtip-minio.sh`
 
 This creates the `glitchtip` bucket and an access key scoped to it, then **proves the key cannot read the `recordings` bucket** before it exits. If that check fails, it refuses and tells you not to use the key.
 
-Copy the two lines it prints into `deploy/.env`.
+**Copy both lines it prints into `deploy/.env`** - both are required:
+
+```bash
+GLITCHTIP_MINIO_ACCESS_KEY=glitchtip-svc
+GLITCHTIP_MINIO_SECRET_KEY=<generated>
+```
 
 **Why not just use the MinIO root credentials?** They would give an error-tracking service read/write access to every user's recorded audio. GlitchTip needs somewhere to write Parquet files, nothing more.
 
@@ -125,10 +164,12 @@ Copy the two lines it prints into `deploy/.env`.
 
 The script runs `mc` **inside the MinIO container**, so the host needs nothing installed, it does not depend on MinIO's port being published, and the root credentials never appear in a host command line or shell history. It is safe to re-run: an existing key is left untouched unless you pass `/rotate`.
 
-### 1c. Fill in the rest of `.env`
+### 1c. The four you set by hand
+
+These are the only ones not produced by a script. They are **in addition to** the six from 1a and 1b - do not treat this block as the whole file.
 
 ```bash
-GLITCHTIP_DOMAIN=https://errors.dev.diariz.example.com
+GLITCHTIP_DOMAIN=https://errors.dev.diariz.example.com   # required
 GLITCHTIP_PORT=8000
 GLITCHTIP_BIND=10.0.5.20          # see Topology above
 GLITCHTIP_COLD_STORAGE_BUCKET=glitchtip
@@ -169,10 +210,30 @@ NPM's generated config already sets `Host` and `X-Forwarded-Proto`, so you shoul
 
 **Raw nginx instead?** Use the server block in `docs/superpowers/plans/2026-07-31-observability-phase1-worker-api.md`, Task 1 Step 4. Note the `map $http_upgrade $connection_upgrade` directive it includes must sit at `http` level, outside `server`, or nginx will not start.
 
-### 1e. Start it
+### 1e. Check `.env` is complete, then start
+
+**Do this first.** It takes a second and it is the difference between a clear message and reading a Python traceback.
+
+Start with the whole picture. This prints each variable's length and nothing else, so it is safe to paste anywhere:
 
 ```bash
 cd deploy
+awk -F= '/^GLITCHTIP_/{printf "%s length=%d\n", $1, length($2)}' .env
+```
+
+Any of the six required variables showing `length=0` - or missing from the list entirely - is a problem. A blank value is just as broken as an absent one, and is the easy mistake if you copied `.env.example` and filled it in as you went.
+
+Then let compose confirm:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.observability.yml config >/dev/null
+```
+
+Silence means you are good. A missing or blank **required** value stops the command outright, naming the variable and the script that produces it. Note it reports only the **first** problem it hits, which is why the length check above is worth running first - otherwise you fix one, re-run, and meet the next.
+
+Then start it:
+
+```bash
 docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d glitchtip-postgres glitchtip
 ```
 
@@ -275,6 +336,8 @@ Work down this list. Each one has failed for somebody.
 
 | Symptom | Cause |
 | --- | --- |
+| `ImproperlyConfigured: The SECRET_KEY setting must not be empty` | `GLITCHTIP_SECRET_KEY` is unset or blank in `deploy/.env`. Run the 1e check; the fix is 1a |
+| `manifest unknown` pulling the image | An image tag that does not exist. GlitchTip dropped the `v` prefix after 6.0.3, so it is `6.2`, not `v6.2` |
 | Login says the password is wrong, and you are sure it is not | `GLITCHTIP_DOMAIN` is missing `https://`, or the proxy is not sending `X-Forwarded-Proto` |
 | No emails at all | `EMAIL_URL` encoding - see pass 1a, and try an alphanumeric app-password |
 | The UI loads but events never arrive | Ingest blocked. Turn off Block Common Exploits; check the browser console for blocked requests |
