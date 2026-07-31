@@ -374,13 +374,15 @@ public class SentryScrubberTests
     }
 
     // --- Cross-runtime deny-list ------------------------------------------------------------
-    // The worker (src/Diariz.Worker/telemetry.py) and the API (SentryScrubber) each carry their own
-    // deny-list, and they had silently diverged: the ECAPA voiceprint fix ("embedding"/"embeddings")
-    // landed only in Python, and "note"/"notes" only in .NET - even though the API is the runtime
-    // that actually stores voiceprints. This test pins the shared set on the .NET side;
+    // The worker (src/Diariz.Worker/telemetry.py), the API (SentryScrubber) and the browser SPA
+    // (apps/web/src/lib/telemetry.ts) each carry their own deny-list, and they had silently
+    // diverged: the ECAPA voiceprint fix ("embedding"/"embeddings") landed only in Python, and
+    // "note"/"notes" only in .NET - even though the API is the runtime that actually stores
+    // voiceprints. This test pins the shared set on the .NET side;
     // tests/test_telemetry.py::test_the_shared_cross_runtime_deny_list_is_covered pins the same list
-    // on the Python side. Note what this does NOT catch: adding a NEW name to only one runtime is
-    // still invisible, because each test only knows its own copy.
+    // on the Python side, and the isSensitiveKey suite in apps/web/src/lib/telemetry.test.ts pins it
+    // in the browser. Note what this does NOT catch: adding a NEW name to only one runtime is still
+    // invisible, because each test only knows its own copy.
 
     public static TheoryData<string> SharedDenyList =>
     [

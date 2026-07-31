@@ -176,12 +176,13 @@ def test_span_delegates_to_the_sdk_when_enabled(monkeypatch):
 
 
 # ---- Cross-runtime deny-list -------------------------------------------------------------------
-# The worker and the API report to the same GlitchTip instance and must redact the same field names,
-# but each keeps its own list and they had silently diverged (see the comment above _DENY_EXACT in
-# telemetry.py). This pins the shared set on the Python side; the .NET side is pinned by
-# SentryScrubberTests.IsSensitiveKey_CoversEveryNameInTheCrossRuntimeDenyList in
-# tests/Diariz.Api.Tests/SentryScrubberTests.cs. Between them they catch a REMOVAL from either
-# runtime; neither can catch an ADDITION made to only one, so keep the lists in step by hand.
+# The worker, the API and the browser SPA report to the same GlitchTip instance and must redact the
+# same field names, but each keeps its own list and they had silently diverged (see the comment
+# above _DENY_EXACT in telemetry.py). This pins the shared set on the Python side; the .NET side is
+# pinned by SentryScrubberTests.IsSensitiveKey_CoversEveryNameInTheCrossRuntimeDenyList in
+# tests/Diariz.Api.Tests/SentryScrubberTests.cs, and the browser side by the isSensitiveKey suite in
+# apps/web/src/lib/telemetry.test.ts. Between the three they catch a REMOVAL from any one runtime;
+# none of them can catch an ADDITION made to only one, so keep the lists in step by hand.
 
 SHARED_DENY_LIST = [
     # Exact field names carrying meeting content or biometrics.

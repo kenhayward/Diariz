@@ -23,18 +23,21 @@ _enabled = False
 REDACTED = "[redacted]"
 
 # ---- Cross-runtime deny-list ------------------------------------------------------------------
-# KEEP IN SYNC WITH: src/Diariz.Api/Services/SentryScrubber.cs (DenyExact / DenySubstring).
-# The worker and the API report to the same GlitchTip instance and must redact the same names.
-# These two lists HAVE silently diverged before: "embedding"/"embeddings" (the ECAPA voiceprint
-# vectors) were added here only - even though the API is the runtime that actually stores them -
-# while "note"/"notes" existed only on the .NET side.
+# KEEP IN SYNC WITH:
+#   - src/Diariz.Api/Services/SentryScrubber.cs (DenyExact / DenySubstring)
+#   - apps/web/src/lib/telemetry.ts (DENY_EXACT / DENY_SUBSTRING)
+# The worker, the API and the browser SPA report to the same GlitchTip instance and must redact the
+# same names. These lists HAVE silently diverged before: "embedding"/"embeddings" (the ECAPA
+# voiceprint vectors) were added here only - even though the API is the runtime that actually stores
+# them - while "note"/"notes" existed only on the .NET side.
 #
 # What the guard-rail is, honestly: each runtime has a test that pins this shared set
 # (tests/test_telemetry.py::test_the_shared_cross_runtime_deny_list_is_covered here,
-# SentryScrubberTests.IsSensitiveKey_CoversEveryNameInTheCrossRuntimeDenyList there). That catches a
-# REMOVAL from either side. It cannot catch an ADDITION made to only one side - two tests in two
-# languages have no shared source of truth - so adding a name here means adding it there, and to the
-# browser SDK's list when phase 2 introduces a third copy.
+# SentryScrubberTests.IsSensitiveKey_CoversEveryNameInTheCrossRuntimeDenyList there, and
+# telemetry.test.ts's isSensitiveKey suite in the browser). That catches a REMOVAL from any one
+# copy. It cannot catch an ADDITION made to only one copy - three tests in three languages have no
+# shared source of truth - so adding a name here means adding it to the other two, and to their
+# tests.
 
 # Exact key names that carry meeting content or biometrics. Transcripts are this application's
 # payload; an event that leaks one cannot be un-sent.

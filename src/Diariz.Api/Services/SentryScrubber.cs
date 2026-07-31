@@ -14,18 +14,21 @@ public static class SentryScrubber
     public const string Redacted = "[redacted]";
 
     // ---- Cross-runtime deny-list ----------------------------------------------------------------
-    // KEEP IN SYNC WITH: src/Diariz.Worker/telemetry.py (_DENY_EXACT / _DENY_SUBSTRING).
-    // The worker and the API report to the same GlitchTip instance and must redact the same names.
-    // These two lists HAVE silently diverged before: "embedding"/"embeddings" (the ECAPA voiceprint
-    // vectors) were added to Python only - even though the API is the runtime that actually stores
-    // them - while "note"/"notes" existed only here.
+    // KEEP IN SYNC WITH:
+    //   - src/Diariz.Worker/telemetry.py (_DENY_EXACT / _DENY_SUBSTRING)
+    //   - apps/web/src/lib/telemetry.ts (DENY_EXACT / DENY_SUBSTRING)
+    // The worker, the API and the browser SPA report to the same GlitchTip instance and must redact
+    // the same names. These lists HAVE silently diverged before: "embedding"/"embeddings" (the ECAPA
+    // voiceprint vectors) were added to Python only - even though the API is the runtime that
+    // actually stores them - while "note"/"notes" existed only here.
     //
     // What the guard-rail is, honestly: each runtime has a test that pins this shared set
     // (SentryScrubberTests.IsSensitiveKey_CoversEveryNameInTheCrossRuntimeDenyList here,
-    // test_the_shared_cross_runtime_deny_list_is_covered in tests/test_telemetry.py there). That
-    // catches a REMOVAL from either side. It cannot catch an ADDITION made to only one side - two
-    // tests in two languages have no shared source of truth - so adding a name here means adding it
-    // there, and to the browser SDK's list when phase 2 introduces a third copy.
+    // test_the_shared_cross_runtime_deny_list_is_covered in tests/test_telemetry.py there, and
+    // telemetry.test.ts's isSensitiveKey suite in the browser). That catches a REMOVAL from any one
+    // copy. It cannot catch an ADDITION made to only one copy - three tests in three languages have
+    // no shared source of truth - so adding a name here means adding it to the other two, and to
+    // their tests.
 
     // Exact field names that carry meeting content or biometrics.
     private static readonly HashSet<string> DenyExact = new(StringComparer.OrdinalIgnoreCase)
