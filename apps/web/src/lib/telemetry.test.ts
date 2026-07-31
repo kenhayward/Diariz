@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { isSensitiveKey, stripQueryString, scrubUrlsIn, REDACTED } from "./telemetry";
-import { beforeSend, beforeBreadcrumb, initTelemetry } from "./telemetry";
+import { beforeSend, beforeBreadcrumb, beforeSendTransaction, initTelemetry } from "./telemetry";
 
 describe("isSensitiveKey", () => {
   it.each(["Authorization", "cookie", "password", "apiKey", "access_key", "accessKey", "token", "secret"])(
@@ -206,7 +206,155 @@ describe("initTelemetry", () => {
     // Both hooks must be wired - phase 1 shipped a leak because one of a pair was missed.
     expect(opts.beforeSend).toBe(beforeSend);
     expect(opts.beforeBreadcrumb).toBe(beforeBreadcrumb);
-    // Tracing arrives in a later release; this one is errors only.
-    expect(opts.tracesSampleRate ?? 0).toBe(0);
+    // Tracing is on as of this release, driven by the configured sample rate.
+    expect(opts.tracesSampleRate).toBe(1);
+  });
+});
+
+describe("initTelemetry with tracing", () => {
+  it("enables browser tracing at the configured sample rate", async () => {
+    const init = vi.fn();
+    stubConfig({
+      sentryDsn: "https://k@errors.example/2",
+      sentryEnvironment: "production",
+      sentryTracesSampleRate: 0.25,
+    });
+
+    await initTelemetry({ init } as any);
+
+    const opts = init.mock.calls[0][0];
+    expect(opts.tracesSampleRate).toBe(0.25);
+    expect(Array.isArray(opts.integrations)).toBe(true);
+  });
+
+  it("keeps every scrubbing hook wired once tracing is on", async () => {
+    const init = vi.fn();
+    stubConfig({ sentryDsn: "https://k@errors.example/2", sentryTracesSampleRate: 1 });
+
+    await initTelemetry({ init } as any);
+
+    const opts = init.mock.calls[0][0];
+    expect(opts.beforeSend).toBe(beforeSend);
+    expect(opts.beforeBreadcrumb).toBe(beforeBreadcrumb);
+    expect(opts.beforeSendTransaction).toBe(beforeSendTransaction);
+  });
+});
+
+describe("beforeSendTransaction", () => {
+  it("strips the access token from the transaction request URL", () => {
+    const tx = { request: { url: "/hubs/transcription?access_token=A_LIVE_JWT" } } as any;
+
+    expect(JSON.stringify(beforeSendTransaction(tx))).not.toContain("A_LIVE_JWT");
+  });
+
+  it("strips the access token from span descriptions", () => {
+    const tx = {
+      spans: [{ description: "GET /hubs/transcription?access_token=A_LIVE_JWT" }],
+    } as any;
+
+    const cleaned = beforeSendTransaction(tx)!;
+
+    expect(JSON.stringify(cleaned)).not.toContain("A_LIVE_JWT");
+    expect(cleaned.spans[0].description).toBe("GET /hubs/transcription");
+  });
+
+  it("does not throw on a bare transaction", () => {
+    expect(() => beforeSendTransaction({} as any)).not.toThrow();
+  });
+
+  // Realistic shape taken from @sentry/core's getFetchSpanAttributes / @sentry/browser's xhrCallback:
+  // auto-instrumented fetch/xhr spans carry the FULL unsanitized URL (with query) on `url`, `http.url`
+  // and `url.full`, plus the raw query string alone on `http.query` - none of these are touched by the
+  // SDK's own sanitizer, which only cleans the span's name/description.
+  it("strips the access token from fetch/xhr span attributes (url, http.url, url.full, http.query)", () => {
+    const tx = {
+      spans: [
+        {
+          description: "GET /hubs/transcription",
+          data: {
+            url: "/hubs/transcription?access_token=A_LIVE_JWT",
+            type: "fetch",
+            "http.method": "GET",
+            "sentry.origin": "auto.http.browser",
+            "sentry.op": "http.client",
+            "http.url": "https://app.example/hubs/transcription?access_token=A_LIVE_JWT",
+            "url.full": "https://app.example/hubs/transcription?access_token=A_LIVE_JWT",
+            "server.address": "app.example",
+            "http.query": "?access_token=A_LIVE_JWT",
+            "http.response.status_code": 200,
+          },
+        },
+      ],
+    } as any;
+
+    const cleaned = beforeSendTransaction(tx)!;
+
+    expect(JSON.stringify(cleaned)).not.toContain("A_LIVE_JWT");
+  });
+
+  it("strips the access token from contexts.trace.data on the root span", () => {
+    // spanToTransactionTraceContext (@sentry/core/utils/spanUtils.js) copies the root span's own
+    // `data` onto event.contexts.trace.data - when the root span IS the http.client span (e.g. a
+    // parentless negotiate/connect call with no page transaction as parent), the same unsanitized
+    // url/http.url/url.full/http.query attributes land there too.
+    const tx = {
+      contexts: {
+        trace: {
+          trace_id: "abc123",
+          span_id: "def456",
+          data: {
+            url: "/hubs/transcription?access_token=A_LIVE_JWT",
+            "http.url": "https://app.example/hubs/transcription?access_token=A_LIVE_JWT",
+            "url.full": "https://app.example/hubs/transcription?access_token=A_LIVE_JWT",
+            "http.query": "?access_token=A_LIVE_JWT",
+            "http.method": "GET",
+          },
+        },
+      },
+    } as any;
+
+    const cleaned = beforeSendTransaction(tx)!;
+
+    expect(JSON.stringify(cleaned)).not.toContain("A_LIVE_JWT");
+  });
+
+  it("keeps diagnostic attributes and the URL path, so the trace is still useful", () => {
+    const tx = {
+      spans: [
+        {
+          description: "GET /hubs/transcription",
+          data: {
+            url: "/hubs/transcription?access_token=A_LIVE_JWT",
+            "http.method": "GET",
+            "http.response.status_code": 200,
+          },
+        },
+      ],
+    } as any;
+
+    const cleaned = beforeSendTransaction(tx)!;
+    const data = cleaned.spans[0].data;
+
+    expect(data["http.method"]).toBe("GET");
+    expect(data["http.response.status_code"]).toBe(200);
+    expect(data.url).toBe("/hubs/transcription");
+  });
+
+  it("does not throw on a span with no data", () => {
+    const tx = { spans: [{ description: "GET /x" }] } as any;
+
+    expect(() => beforeSendTransaction(tx)).not.toThrow();
+  });
+
+  it("does not throw when a span's data is null", () => {
+    const tx = { spans: [{ description: "GET /x", data: null }] } as any;
+
+    expect(() => beforeSendTransaction(tx)).not.toThrow();
+  });
+
+  it("does not throw when contexts.trace has no data", () => {
+    const tx = { contexts: { trace: { trace_id: "abc" } } } as any;
+
+    expect(() => beforeSendTransaction(tx)).not.toThrow();
   });
 });

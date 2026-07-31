@@ -62,7 +62,69 @@ export function scrubUrlsIn(text: string): string {
 // Named imports (rather than `import * as Sentry`) so a bundler can tree-shake the integrations this
 // app never enables (session replay, user feedback, tracing) - referencing the whole namespace object
 // as a value (e.g. as a default parameter) defeats that, and pulls in ~150 kB gzipped of unused code.
-import { init as sentryInit, captureException as sentryCaptureException, type ErrorEvent, type Breadcrumb } from "@sentry/react";
+import {
+  init as sentryInit,
+  captureException as sentryCaptureException,
+  browserTracingIntegration,
+  type ErrorEvent,
+  type Breadcrumb,
+} from "@sentry/react";
+
+// @sentry/react does not publicly export a `TransactionEvent` type - only @sentry/core does, and that
+// package is a transitive dependency here, not a direct one, so importing from it would be fragile.
+//
+// This type exists to do a job, not just to satisfy tsc: it names every field beforeSendTransaction
+// must handle (request.url, spans[].description, spans[].data, contexts.trace.data) so that adding a
+// new field this hook needs to scrub means widening the type, which is a visible, reviewable change -
+// instead of a silently-untyped field a hook can quietly skip. A first cut of this type omitted
+// `spans[].data`, which is exactly how the span-attribute JWT leak (fixed alongside this comment)
+// shipped without tsc raising a signal. scrub() below is still generic and will preserve any field not
+// named here, but the point of this type is to keep that list honest.
+interface TransactionEventLike {
+  request?: { url?: string; [key: string]: unknown };
+  spans?: Array<{ description?: string; data?: Record<string, unknown> | null; [key: string]: unknown }>;
+  contexts?: { trace?: { data?: Record<string, unknown> | null; [key: string]: unknown }; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
+/**
+ * Scrub a span/trace-context attribute bag (Sentry's `data`, i.e. span attributes).
+ *
+ * Auto-instrumented fetch/xhr spans (@sentry/core's getFetchSpanAttributes, @sentry/browser's
+ * xhrCallback) put the FULL unsanitized request URL on attributes like `url`, `http.url` and
+ * `url.full`, and the raw query string alone on `http.query` - none of this is touched by the SDK's
+ * own sanitizer, which only cleans the span's name/description. The same attributes can also land on
+ * `contexts.trace.data` when the root span is itself an http.client span.
+ *
+ * Two rules, chosen to survive the SDK adding a new attribute rather than tracking today's exact set:
+ *   - A key that is exactly "query" or ends in ".query" (matches `http.query`, and any future
+ *     `*.query` attribute) holds a raw query string as its ENTIRE value - there is nothing before the
+ *     "?", so stripQueryString's "does the head look like a URL" check fails and it passes the value
+ *     through unchanged (verified: stripQueryString("?access_token=x") returns "?access_token=x").
+ *     So this is a value the whole key is redacted, not stripped.
+ *   - Every other string value gets stripQueryString applied. That function only touches a string
+ *     whose head looks like a URL (`http(s)://...` or a leading "/"), so it is a safe no-op for
+ *     methods, status codes, and any other non-URL attribute - and unlike hardcoding "url"/"http.url"/
+ *     "url.full", it also catches whatever URL-shaped attribute name the SDK adds next.
+ *
+ * `null`/non-object input passes through unchanged rather than throwing - span `data` can legitimately
+ * be absent or null, and this runs inside a beforeSendTransaction hook where a throw would drop the
+ * whole transaction from the send pipeline.
+ */
+function scrubAttributes<T>(data: T): T {
+  if (!data || typeof data !== "object") return data;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
+    if (/(^|\.)query$/i.test(key)) {
+      out[key] = REDACTED;
+    } else if (typeof value === "string") {
+      out[key] = stripQueryString(value);
+    } else {
+      out[key] = value;
+    }
+  }
+  return out as T;
+}
 
 /** Recursively redact sensitive values. Pure: returns a new structure, never mutates the input. */
 function scrub<T>(value: T): T {
@@ -109,6 +171,26 @@ export function beforeBreadcrumb(crumb: Breadcrumb): Breadcrumb | null {
   return cleaned;
 }
 
+/**
+ * Transaction hook. Separate from beforeSend because in this SDK (@sentry/react 10.69.0, verified
+ * against @sentry/core's client.js `processBeforeSend`) beforeSend is only invoked for error events
+ * (`isErrorEvent(event) && beforeSend`) - transaction events go through beforeSendTransaction instead.
+ * The .NET API shipped a JWT leak on exactly that gap, found only in a whole-branch review.
+ * Transactions fire on every navigation and request, so this is the higher-volume path of the two.
+ */
+export function beforeSendTransaction(event: TransactionEventLike): TransactionEventLike | null {
+  const cleaned = scrub(event);
+  if (cleaned.request?.url) cleaned.request.url = stripQueryString(cleaned.request.url);
+  for (const span of cleaned.spans ?? []) {
+    if (typeof span.description === "string") span.description = scrubUrlsIn(span.description);
+    if (span.data) span.data = scrubAttributes(span.data);
+  }
+  if (cleaned.contexts?.trace?.data) {
+    cleaned.contexts.trace.data = scrubAttributes(cleaned.contexts.trace.data);
+  }
+  return cleaned;
+}
+
 /** Injected so tests can assert the options without loading the real SDK. */
 interface SentryLike {
   init: (options: Record<string, unknown>) => void;
@@ -131,7 +213,11 @@ let enabled = false;
 export async function initTelemetry(sdk: SentryLike = { init: sentryInit }): Promise<boolean> {
   try {
     const res = await fetch("/api/config");
-    const cfg = (await res.json()) as { sentryDsn?: string; sentryEnvironment?: string };
+    const cfg = (await res.json()) as {
+      sentryDsn?: string;
+      sentryEnvironment?: string;
+      sentryTracesSampleRate?: number;
+    };
     const dsn = (cfg.sentryDsn ?? "").trim();
     if (!dsn) return false;
 
@@ -143,8 +229,11 @@ export async function initTelemetry(sdk: SentryLike = { init: sentryInit }): Pro
       sendDefaultPii: false,
       // GlitchTip does not support sessions.
       autoSessionTracking: false,
+      integrations: [browserTracingIntegration()],
+      tracesSampleRate: cfg.sentryTracesSampleRate ?? 1,
       beforeSend,
       beforeBreadcrumb,
+      beforeSendTransaction,
     });
     enabled = true;
     return true;

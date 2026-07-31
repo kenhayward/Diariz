@@ -59,6 +59,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.174.5",
+    date: "2026-07-31",
+    pr: 394,
+    headline: "Page loads and API calls are timed end to end",
+    summary:
+      "Browser requests are now timed and linked to the matching server request, so a slow page can be " +
+      "traced to whichever step actually took the time. Access tokens are stripped from every recorded " +
+      "URL. Deployments without a DSN are unchanged.",
+    added: [
+      "Optional end-to-end request timing from the browser through to the API.",
+    ],
+  },
+  {
     version: "0.174.4",
     date: "2026-07-31",
     pr: 393,
