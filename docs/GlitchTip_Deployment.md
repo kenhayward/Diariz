@@ -1,0 +1,301 @@
+# Deploying GlitchTip
+
+How to stand up self-hosted error tracking for a Diariz server, from nothing to verified.
+
+Do this **once per environment**. Dev and prod get completely separate instances - separate databases, separate secrets, separate hostnames, separate retention. Nothing is shared, deliberately: a dev instance full of test noise must never be the place you look for a production failure, and a shared signing key would let a session from one be replayed against the other.
+
+Everything here is optional. A Diariz server with no `SENTRY_*` values set reports nothing, loads no SDK, and opens no sockets.
+
+## What you are building
+
+| Piece | Where it runs |
+| --- | --- |
+| GlitchTip web + worker | One container, from `deploy/docker-compose.observability.yml` |
+| Its database | Its own Postgres container, its own volume |
+| Its cache/queue | The app's existing Redis, on **DB index 1** (the app's queues are on 0) |
+| Its cold storage | The app's existing MinIO, in its **own bucket** with a **scoped key** |
+
+Roughly 500 MB of RAM on top of the app.
+
+**One honest limitation:** GlitchTip runs on the same box as the app it watches, so it cannot tell you the box is down. It reports application failures, not infrastructure death. Uptime monitoring is a different tool.
+
+## Before you start
+
+- The app stack is up (`docker compose up -d`), including `minio` and `redis`.
+- You can add a DNS record and a proxy host for a new subdomain.
+- You know the SMTP details GlitchTip will send invitations and password resets from.
+
+---
+
+## Choosing a hostname
+
+```
+errors.diariz.example.com          production
+errors.dev.diariz.example.com      dev
+```
+
+The `errors.` prefix mirroring the app's hostname makes the pairing obvious, and separate hostnames keep the two instances independent as designed.
+
+**Two things worth knowing:**
+
+**Wildcard certificates only match one label.** `*.example.com` does **not** cover `errors.diariz.example.com`. If your proxy issues per-host Let's Encrypt certificates (Nginx Proxy Manager does, via HTTP-01), depth is irrelevant and you can ignore this. If you are installing a wildcard by hand, go flat instead: `errors-diariz.example.com`.
+
+**Cookies are not a concern here.** No `CookieOptions` in the Diariz API sets a `Domain`, so every app cookie is host-only and will not be sent to a sibling subdomain.
+
+---
+
+## Topology: where the proxy is
+
+This matters more than anything else in this document, because it decides three settings.
+
+### If your reverse proxy is far away on the network
+
+That is the assumption below: the proxy cannot join the app's Docker network, and cannot be moved.
+
+**GlitchTip must listen on an interface the proxy can route to.** The overlay defaults to `GLITCHTIP_BIND=127.0.0.1`, which is correct only for a proxy running directly on the same host. Set it to the host's private-network address:
+
+```bash
+GLITCHTIP_BIND=10.0.5.20      # this host's address on the network the proxy reaches
+GLITCHTIP_PORT=8000
+```
+
+Prefer a specific address over `0.0.0.0`: it limits the listener to one interface instead of every interface the host has.
+
+> **Docker's published ports bypass the host firewall.** Docker writes its own DNAT rules, so a `ports:` entry is reachable regardless of what `ufw` or Windows Firewall say. The same warning is already on the `postgres` service in `docker-compose.yml`. If the network between the proxy and this host is not trusted, restrict access to the proxy's address at the network layer, or put the two on a private link.
+
+**Then keep the server-side traffic off the proxy entirely.** The API and worker containers sit on the same Docker network as GlitchTip, so they can post events straight to it and never touch your distant proxy at all. That removes a whole class of failure: server-side error reporting keeps working when the proxy, its certificate, or the link is having a bad day.
+
+Do this by rewriting the **host** portion of the DSNs GlitchTip gives you (details in pass 2). The key and project id stay exactly as issued:
+
+| DSN | Host to use | Why |
+| --- | --- | --- |
+| `SENTRY_DSN` (worker) | `http://<key>@glitchtip:8000/<id>` | in-network, no proxy, no TLS |
+| `Sentry__Dsn` (API) | `http://<key>@glitchtip:8000/<id>` | same |
+| `SENTRY_BROWSER_DSN` | `https://<key>@errors.dev.diariz.example.com/<id>` | **must stay public** - this one runs in the user's browser |
+
+### If your reverse proxy is on the same host
+
+Leave `GLITCHTIP_BIND=127.0.0.1` and point the proxy at `127.0.0.1:8000`. Nothing is exposed beyond the host. You can still use the in-network DSNs above.
+
+### If your proxy is a container that could join the network
+
+Add it to the `diariz` network and forward to `glitchtip:8000` by service name. You can then delete the `ports:` block from the overlay entirely and publish nothing at all.
+
+---
+
+## Pass 1: before first boot
+
+The DSNs do not exist until GlitchTip is running and you have created the projects, so this cannot be done in one sitting. Pass 1 is everything needed to get it started.
+
+### 1a. Generate the secrets
+
+```bash
+cd deploy
+NewGlitchTipSecrets.cmd
+```
+
+Linux/macOS: `./new-glitchtip-secrets.sh`
+
+It generates `GLITCHTIP_SECRET_KEY` and `GLITCHTIP_POSTGRES_PASSWORD`, then prompts for your SMTP details and assembles `GLITCHTIP_EMAIL_URL` with the username and password correctly percent-encoded. Nothing is written to disk - copy the output into `deploy/.env` and close the window.
+
+Pass `/noemail` (or `--noemail`) if you want the random secrets only.
+
+**Why the secrets are hex.** A `.env` value gets read by docker compose, by a POSIX shell, and sometimes by a Windows shell. In `.env` a `$` is interpolated by compose and a `#` starts a comment; in a shell, quotes, spaces, backticks and `!` all need escaping. base64 avoids `$` and `#` but still produces `+`, `/` and `=`, which bite the moment someone pastes a value into a shell command. Hex is `[0-9a-f]` only, so it never needs escaping anywhere. 32 bytes is 256 bits.
+
+**Why `EMAIL_URL` needs encoding.** `smtp://user:password@host:port` is a URL, so the username and password are URL *components*, not free text. An `@` in the password ends the userinfo early, a `:` splits user from password, and a `/`, `?` or `#` terminates it. Any of those produces an authentication failure that looks like a wrong password rather than a parse error. The script percent-encodes everything outside the RFC 3986 unreserved set.
+
+> If your username or password needed encoding, the script says so. **Verify it**: after first start, trigger a password reset and confirm the mail arrives. If it does not, the simplest fix is an SMTP app-password made only of letters and digits, which needs no encoding at all.
+
+### 1b. Provision MinIO
+
+```bash
+cd deploy
+ProvisionGlitchTipMinio.cmd
+```
+
+Linux/macOS: `./provision-glitchtip-minio.sh`
+
+This creates the `glitchtip` bucket and an access key scoped to it, then **proves the key cannot read the `recordings` bucket** before it exits. If that check fails, it refuses and tells you not to use the key.
+
+Copy the two lines it prints into `deploy/.env`.
+
+**Why not just use the MinIO root credentials?** They would give an error-tracking service read/write access to every user's recorded audio. GlitchTip needs somewhere to write Parquet files, nothing more.
+
+**Why its own bucket and never a prefix inside `recordings`?** Platform restore *wipes* the recordings bucket before repopulating it. Cold storage under a prefix there would be silently destroyed by any restore. A separate bucket is invisible to both backup and restore, because `AudioStorage` scopes every S3 call to the single configured `Storage:Bucket`.
+
+The script runs `mc` **inside the MinIO container**, so the host needs nothing installed, it does not depend on MinIO's port being published, and the root credentials never appear in a host command line or shell history. It is safe to re-run: an existing key is left untouched unless you pass `/rotate`.
+
+### 1c. Fill in the rest of `.env`
+
+```bash
+GLITCHTIP_DOMAIN=https://errors.dev.diariz.example.com
+GLITCHTIP_PORT=8000
+GLITCHTIP_BIND=10.0.5.20          # see Topology above
+GLITCHTIP_COLD_STORAGE_BUCKET=glitchtip
+```
+
+> **`GLITCHTIP_DOMAIN` must include the scheme.** GlitchTip is Django, and derives its trusted CSRF origins from this value. Get it wrong and every login attempt fails with a CSRF error that **presents as a wrong password**. This is the single most common self-hosting mistake and it will cost you an hour if you do not know about it.
+
+### 1d. Set up the proxy
+
+**Nginx Proxy Manager** - Proxy Hosts, Add Proxy Host:
+
+| Tab | Field | Value |
+| --- | --- | --- |
+| Details | Domain Names | `errors.dev.diariz.example.com` |
+| Details | Scheme | `http` |
+| Details | Forward Hostname / IP | the GlitchTip host's address, e.g. `10.0.5.20` |
+| Details | Forward Port | `8000` |
+| Details | Cache Assets | off |
+| Details | Block Common Exploits | **off** |
+| Details | Websockets Support | **on** |
+| SSL | Certificate | request a new Let's Encrypt cert |
+| SSL | Force SSL | **on** |
+| SSL | HTTP/2 Support | on |
+
+**Turn Block Common Exploits off.** It pattern-matches query strings and request bodies, and error-tracking envelopes are opaque compressed payloads. It is a plausible source of mystery 403s on ingest that would look like the SDK silently failing.
+
+**Force SSL on.** A plain-http hit would make Django's CSRF origin check disagree with `GLITCHTIP_DOMAIN`.
+
+**Advanced tab** - NPM's default body limit is far below what a source-map upload needs:
+
+```nginx
+client_max_body_size 100m;
+proxy_read_timeout 300s;
+proxy_send_timeout 300s;
+```
+
+NPM's generated config already sets `Host` and `X-Forwarded-Proto`, so you should not need to add them. If login fails with a CSRF error anyway, that is the first thing to check.
+
+**Raw nginx instead?** Use the server block in `docs/superpowers/plans/2026-07-31-observability-phase1-worker-api.md`, Task 1 Step 4. Note the `map $http_upgrade $connection_upgrade` directive it includes must sit at `http` level, outside `server`, or nginx will not start.
+
+### 1e. Start it
+
+```bash
+cd deploy
+docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d glitchtip-postgres glitchtip
+```
+
+Watch the first start - it runs migrations:
+
+```bash
+docker compose logs -f glitchtip
+```
+
+### 1f. Create the org and projects
+
+In the UI, create your account, then the organisation, then **three** projects:
+
+| Project | Platform | Feeds |
+| --- | --- | --- |
+| `diariz-worker` | Python | the transcription worker |
+| `diariz-api` | .NET | the API |
+| `diariz-web` | React | the SPA, and the desktop app |
+
+**Three, not one.** Browser errors are far noisier than server errors - extensions, stale tabs, flaky mobile networks - and would bury the server-side failures you actually need to see.
+
+The overlay already sets `ENABLE_USER_REGISTRATION=false` and `ENABLE_ORGANIZATION_CREATION=false`, so nobody can sign themselves up on what is a publicly reachable subdomain. Invite colleagues from the UI instead - which is what the SMTP settings are for.
+
+---
+
+## Pass 2: the DSNs
+
+Copy each project's DSN from its settings page.
+
+```bash
+SENTRY_DSN=<diariz-worker DSN>
+SENTRY_API_DSN=<diariz-api DSN>
+SENTRY_BROWSER_DSN=<diariz-web DSN>
+SENTRY_ENVIRONMENT=development        # "production" on the prod box
+SENTRY_TRACES_SAMPLE_RATE=1.0
+```
+
+If your proxy is distant, rewrite the host on the two server-side DSNs as described in Topology - `http://<key>@glitchtip:8000/<id>`. Leave `SENTRY_BROWSER_DSN` public.
+
+**Leave the sample rate at 1.0.** GlitchTip's documentation suggests 0.01 because every HTTP request becomes a transaction, but that advice targets high-traffic sites. Your volume will not approach the ~30 GB per *million* events.
+
+Restart the app services to pick them up:
+
+```bash
+docker compose up -d --force-recreate api worker web
+```
+
+---
+
+## Pass 3: source maps
+
+Only once the source-map release has been deployed. Without these four values the web image still builds - it just prints a skip message, and production stack traces stay minified.
+
+```bash
+GLITCHTIP_URL=https://errors.dev.diariz.example.com
+GLITCHTIP_ORG=<org slug>
+GLITCHTIP_PROJECT=<the diariz-web project slug>
+GLITCHTIP_TOKEN=<auth token from GlitchTip: profile -> auth tokens>
+```
+
+Three things to get right:
+
+**`GLITCHTIP_PROJECT` must be the web project.** Maps uploaded to the worker or API project will never be applied to a browser stack trace.
+
+**`GLITCHTIP_URL` must be reachable from inside the build container.** That container has neither your host's loopback nor the compose network. The public domain always works. If your proxy is distant and you would rather not push ~90 files out and back, the host's private address (`http://10.0.5.20:8000`) works too and skips the proxy's body-size limit entirely.
+
+**The token is passed as a BuildKit secret, never a build ARG.** A build ARG is recorded in the image history and readable by anyone who can pull the image. The compose file already wires this correctly - you only need to set `GLITCHTIP_TOKEN` in `.env`.
+
+Then rebuild the web image:
+
+```bash
+docker compose up --build -d web
+```
+
+---
+
+## Verification
+
+Work down this list. Each one has failed for somebody.
+
+| # | Check | What it proves |
+| --- | --- | --- |
+| 1 | The UI loads over HTTPS on its own hostname | DNS, certificate, proxy routing |
+| 2 | **You can log in** | `GLITCHTIP_DOMAIN` scheme and `X-Forwarded-Proto` - fails as "wrong password" |
+| 3 | A password reset email arrives | SMTP, and your `EMAIL_URL` encoding |
+| 4 | Re-run the MinIO script; it still reports the key cannot read `recordings` | The scoped key is still scoped |
+| 5 | Transcribe something: a `transcribe` transaction appears with stage spans | Worker reporting and timing |
+| 6 | Break the worker deliberately; a traceback appears **and** the recording still fails cleanly in the app | Reporting did not change behaviour |
+| 7 | A browser error appears, attributed to release `0.174.x` | SPA reporting and `/api/config` |
+| 8 | A browser XHR and its API request appear in **one** trace | Trace headers survive the proxy |
+| 9 | **Open a captured event and read the whole payload** | See below |
+
+**Check 9 is the one that matters.** No transcript text, no summary, no `access_token`, no voiceprint vector, no request body. Eight separate leak paths were found by inspection while this feature was built; a ninth would be found the same way.
+
+**On check 8:** if the two halves appear as separate, unlinked traces, your proxy is stripping the `sentry-trace` and `baggage` request headers on the *app's* hostname. This fails silently - there is no error, the traces just never join.
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause |
+| --- | --- |
+| Login says the password is wrong, and you are sure it is not | `GLITCHTIP_DOMAIN` is missing `https://`, or the proxy is not sending `X-Forwarded-Proto` |
+| No emails at all | `EMAIL_URL` encoding - see pass 1a, and try an alphanumeric app-password |
+| The UI loads but events never arrive | Ingest blocked. Turn off Block Common Exploits; check the browser console for blocked requests |
+| Browser events missing but server events fine | An ad blocker. They pattern-match error-tracking ingest paths. Expect to lose some proportion silently |
+| Traces split into two halves | Proxy stripping `sentry-trace` / `baggage` |
+| Source maps upload but stack traces stay minified | Wrong project in `GLITCHTIP_PROJECT`, or a release mismatch |
+| The build cannot reach GlitchTip | `GLITCHTIP_URL` is a loopback address; the build container has its own |
+| `Access Denied` writing cold storage | The MinIO key or bucket name does not match `.env`; re-run the provisioning script |
+
+## Removing it
+
+```bash
+cd deploy
+docker compose -f docker-compose.yml -f docker-compose.observability.yml down glitchtip glitchtip-postgres
+docker volume rm diariz_glitchtipdata
+```
+
+Clear the `SENTRY_*` values from `.env` and recreate the app services. To clean up MinIO as well:
+
+```bash
+docker compose exec minio sh -c 'mc alias set r http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" && mc rb --force r/glitchtip && mc admin user remove r glitchtip-svc && mc admin policy remove r glitchtip-only'
+```
+
+Nothing in the app depends on any of it.

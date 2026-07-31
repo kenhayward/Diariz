@@ -1,0 +1,15 @@
+# Shell scripts must be checked out with LF, always.
+#
+# This repository is developed on Windows with core.autocrlf=true, which
+# rewrites checked-out files to CRLF. That is harmless for YAML, C# and
+# markdown, but it breaks shell scripts in two ways that are hard to
+# diagnose:
+#
+#   - a CRLF shebang makes the kernel look for an interpreter literally
+#     named "/usr/bin/env bash\r", which fails as "bad interpreter", and
+#   - deploy/glitchtip-minio/provision.sh is piped into the Linux `minio`
+#     container, where CRLF also breaks its heredoc terminator.
+#
+# Both would only appear on a fresh clone, not for whoever wrote the file,
+# which is the worst way to find out.
+*.sh text eol=lf
