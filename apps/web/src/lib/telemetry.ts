@@ -36,18 +36,25 @@ export function isSensitiveKey(key: string): boolean {
  * key-name deny-list cannot reach that - a query string is one opaque value, not a named field. The
  * path is kept because it is diagnostically useful and carries no credential.
  *
- * Anything that is not a URL is returned unchanged.
+ * Anything that is not a URL is returned unchanged. `null`/`undefined` coerce to `""` (matching
+ * isSensitiveKey's String() coercion above) rather than throwing - Task 3 wires this to Sentry
+ * fields typed `string | undefined`, and a throw here would happen inside a beforeSend hook, taking
+ * the whole scrub pipeline down at exactly the moment something has already gone wrong.
  */
 export function stripQueryString(value: string): string {
-  const cut = value.indexOf("?");
-  if (cut === -1) return value;
+  const raw = String(value ?? "");
+  const cut = raw.indexOf("?");
+  if (cut === -1) return raw;
   // Only treat it as a URL if what precedes the "?" looks like one; otherwise leave free text alone.
-  const head = value.slice(0, cut);
+  const head = raw.slice(0, cut);
   const isUrl = /^https?:\/\//i.test(head) || head.startsWith("/");
-  return isUrl ? head : value;
+  return isUrl ? head : raw;
 }
 
-/** Apply stripQueryString to every whitespace-separated token, for descriptions like "GET <url>". */
+/**
+ * Apply stripQueryString to every whitespace-separated token, for descriptions like "GET <url>".
+ * `null`/`undefined` coerce to `""` for the same reason as stripQueryString above.
+ */
 export function scrubUrlsIn(text: string): string {
-  return text.split(" ").map(stripQueryString).join(" ");
+  return String(text ?? "").split(" ").map(stripQueryString).join(" ");
 }

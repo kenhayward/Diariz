@@ -42,6 +42,16 @@ describe("stripQueryString", () => {
       "select * from recordings where id = ?",
     );
   });
+
+  it("returns an empty string for undefined rather than throwing", () => {
+    expect(() => stripQueryString(undefined as any)).not.toThrow();
+    expect(stripQueryString(undefined as any)).toBe("");
+  });
+
+  it("returns an empty string for null rather than throwing", () => {
+    expect(() => stripQueryString(null as any)).not.toThrow();
+    expect(stripQueryString(null as any)).toBe("");
+  });
 });
 
 describe("scrubUrlsIn", () => {
@@ -54,6 +64,16 @@ describe("scrubUrlsIn", () => {
 
   it("leaves free text alone", () => {
     expect(scrubUrlsIn("Detail panel crashed")).toBe("Detail panel crashed");
+  });
+
+  it("returns an empty string for undefined rather than throwing", () => {
+    expect(() => scrubUrlsIn(undefined as any)).not.toThrow();
+    expect(scrubUrlsIn(undefined as any)).toBe("");
+  });
+
+  it("returns an empty string for null rather than throwing", () => {
+    expect(() => scrubUrlsIn(null as any)).not.toThrow();
+    expect(scrubUrlsIn(null as any)).toBe("");
   });
 });
 

@@ -113,7 +113,15 @@ public static class SentryScrubber
 
     /// <summary>Return <paramref name="value"/> without its query string when it is an absolute URL
     /// that has one, else unchanged. Shared by <c>Request.Url</c> and span descriptions so there is
-    /// only ever one copy of this rule.</summary>
+    /// only ever one copy of this rule.
+    ///
+    /// Only recognises absolute URLs by design, not oversight: every caller here passes one.
+    /// <c>Request.Url</c> is populated by Sentry.AspNetCore as scheme://host+path; the SignalR
+    /// <c>?access_token=</c> case is defended separately by nulling <c>Request.QueryString</c> above;
+    /// and span descriptions come only from <c>IHttpClientFactory</c> instrumentation, which resolves
+    /// <c>BaseAddress</c> + a relative URI into an absolute one before any handler sees it. A relative
+    /// path is never seen here - unlike the browser SPA's copy of this function
+    /// (<c>apps/web/src/lib/telemetry.ts</c>), which does need to handle one.</summary>
     private static string StripQueryString(string value) =>
         Uri.TryCreate(value, UriKind.Absolute, out var url) && !string.IsNullOrEmpty(url.Query)
             ? url.GetLeftPart(UriPartial.Path)
