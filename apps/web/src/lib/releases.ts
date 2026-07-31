@@ -59,6 +59,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.174.8",
+    date: "2026-07-31",
+    pr: 399,
+    headline: "Missing observability settings now fail with a clear message",
+    summary:
+      "Setting up the optional error tracker with a required value left blank produced a confusing " +
+      "database traceback long after the mistake, rather than saying which setting was missing. Those " +
+      "settings are now checked before anything starts, naming the one at fault and the script that " +
+      "generates it. Only affects self-hosters running that optional overlay.",
+    changed: [
+      "The optional error-tracking overlay now refuses to start when a required setting is blank, " +
+        "naming the setting instead of failing later with an unrelated error.",
+    ],
+  },
+  {
     version: "0.174.7",
     date: "2026-07-31",
     pr: 398,

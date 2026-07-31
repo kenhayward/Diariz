@@ -50,12 +50,19 @@ services:
       DATABASE_URL: "postgres://glitchtip:${GLITCHTIP_POSTGRES_PASSWORD:-glitchtip}@glitchtip-postgres:5432/glitchtip"
       # DB index 1 - the app's queues live on index 0 and must not be disturbed.
       VALKEY_URL: "redis://redis:6379/1"
-      SECRET_KEY: ${GLITCHTIP_SECRET_KEY}
+      # The `:?` values below are REQUIRED and fail the compose command with the message shown if
+      # they are unset or blank. That is deliberate: with a plain ${VAR} an empty value substitutes
+      # silently, the container starts, and the failure surfaces much later as something unrelated -
+      # an empty SECRET_KEY gets you a Django ImproperlyConfigured traceback on the first request,
+      # which reads like a bug rather than a missing paste. Fail at `up`, naming the variable.
+      #
+      # Cost of this: `docker compose down` also parses the file, so it too needs the values present.
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY:?required - run deploy/NewGlitchTipSecrets.cmd and paste into deploy/.env}
       # MUST include the scheme. Django derives its trusted CSRF origins from this, and a mismatch
       # presents as "wrong password" on every login attempt rather than anything mentioning CSRF.
-      GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN}
-      DEFAULT_FROM_EMAIL: ${GLITCHTIP_FROM_EMAIL}
-      EMAIL_URL: ${GLITCHTIP_EMAIL_URL}
+      GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN:?required - the full external URL including https://}
+      DEFAULT_FROM_EMAIL: ${GLITCHTIP_FROM_EMAIL:?required - run deploy/NewGlitchTipSecrets.cmd}
+      EMAIL_URL: ${GLITCHTIP_EMAIL_URL:?required - run deploy/NewGlitchTipSecrets.cmd}
       # Internal tool on a public subdomain: no open registration, no new orgs.
       ENABLE_USER_REGISTRATION: "false"
       ENABLE_ORGANIZATION_CREATION: "false"
@@ -64,8 +71,8 @@ services:
       GLITCHTIP_ENABLE_DUCKDB: "true"
       GLITCHTIP_COLD_STORAGE_BUCKET: ${GLITCHTIP_COLD_STORAGE_BUCKET:-glitchtip}
       AWS_S3_ENDPOINT_URL: "http://minio:9000"
-      AWS_ACCESS_KEY_ID: ${GLITCHTIP_MINIO_ACCESS_KEY}
-      AWS_SECRET_ACCESS_KEY: ${GLITCHTIP_MINIO_SECRET_KEY}
+      AWS_ACCESS_KEY_ID: ${GLITCHTIP_MINIO_ACCESS_KEY:?required - run deploy/ProvisionGlitchTipMinio.cmd}
+      AWS_SECRET_ACCESS_KEY: ${GLITCHTIP_MINIO_SECRET_KEY:?required - run deploy/ProvisionGlitchTipMinio.cmd}
     ports:
       # Published for the OUTER reverse proxy only. Bind to localhost so it is not LAN-reachable:
       # Docker publishes to 0.0.0.0 by default AND writes its own DNAT rules, bypassing the host
