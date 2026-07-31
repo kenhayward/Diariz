@@ -59,6 +59,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.174.12",
+    date: "2026-07-31",
+    pr: 406,
+    headline: "Source map uploads work, and fail loudly when they do not",
+    summary:
+      "Uploading source maps to the optional error tracker failed with a server error, because the " +
+      "tracker had storage credentials but no bucket name to write files into. Worse, the build " +
+      "treated that as a warning and shipped anyway, so the only symptom was unreadable stack traces " +
+      "much later. The bucket is now set, and a failed upload stops the build unless you opt out.",
+    fixed: [
+      "Source map uploads to the optional error tracker failed with a 500, because the file storage " +
+        "backend was enabled without a bucket name.",
+      "A failed source map upload no longer passes silently; it stops the build unless " +
+        "GLITCHTIP_SOURCEMAPS_OPTIONAL is set.",
+    ],
+  },
+  {
     version: "0.174.11",
     date: "2026-07-31",
     pr: 403,

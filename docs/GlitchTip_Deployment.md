@@ -361,16 +361,26 @@ Only once the source-map release has been deployed. Without these four values th
 
 ```bash
 GLITCHTIP_URL=https://errors.dev.diariz.example.com
-GLITCHTIP_ORG=<org slug>
+GLITCHTIP_ORG=<org SLUG - lowercase, from the address bar>
 GLITCHTIP_PROJECT=<the diariz-web project slug>
 GLITCHTIP_TOKEN=<auth token from GlitchTip: profile -> auth tokens>
 ```
 
-Three things to get right:
+Four things to get right:
+
+**`GLITCHTIP_ORG` is the slug, not the name the UI shows you.** This one has already caught someone. The UI displays your organisation as you named it - `Diariz` - while the API addresses it by a lowercased slug, `diariz`. Read the slug out of the address bar when you are inside the project:
+
+```
+https://errors.dev.diariz.example.com/{org-slug}/{project-slug}/
+```
+
+or from `GET /api/0/organizations/` in a logged-in tab. Getting it wrong gives a 404 from the upload endpoint, not a helpful message.
 
 **`GLITCHTIP_PROJECT` must be the web project.** Maps uploaded to the worker or API project will never be applied to a browser stack trace.
 
 **`GLITCHTIP_URL` must be reachable from inside the build container.** That container has neither your host's loopback nor the compose network. The public domain always works. If your proxy is distant and you would rather not push ~90 files out and back, the host's private address (`http://10.0.5.20:8000`) works too and skips the proxy's body-size limit entirely.
+
+**A failed upload now fails the build.** Once all four values are set you have explicitly asked for readable stack traces, so silently shipping without them is the wrong default - a misconfigured org slug went unnoticed for a whole deployment that way. If GlitchTip is down and the web app has to ship regardless, set `GLITCHTIP_SOURCEMAPS_OPTIONAL=1` to downgrade it back to a warning.
 
 **The token is passed as a BuildKit secret, never a build ARG.** A build ARG is recorded in the image history and readable by anyone who can pull the image. The compose file already wires this correctly - you only need to set `GLITCHTIP_TOKEN` in `.env`.
 
@@ -418,6 +428,8 @@ Work down this list. Each one has failed for somebody.
 | The UI loads but events never arrive | Ingest blocked. Turn off Block Common Exploits; check the browser console for blocked requests |
 | Browser events missing but server events fine | An ad blocker. They pattern-match error-tracking ingest paths. Expect to lose some proportion silently |
 | Traces split into two halves | Proxy stripping `sentry-trace` / `baggage` |
+| `chunk-upload returned 500` during a source map upload | `AWS_STORAGE_BUCKET_NAME` unset on the GlitchTip container. Setting `AWS_S3_ENDPOINT_URL` switches Django to the S3 file backend, but the bucket is a separate setting; check with `./manage.py diffsettings` |
+| `chunk-upload returned 404` | `GLITCHTIP_ORG` is the display name rather than the lowercase slug |
 | Source maps upload but stack traces stay minified | Wrong project in `GLITCHTIP_PROJECT`, or a release mismatch |
 | The build cannot reach GlitchTip | `GLITCHTIP_URL` is a loopback address; the build container has its own |
 | `Access Denied` writing cold storage | The MinIO key or bucket name does not match `.env`; re-run the provisioning script |
