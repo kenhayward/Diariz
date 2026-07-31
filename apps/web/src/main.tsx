@@ -12,8 +12,10 @@ import "./index.css";
 
 const queryClient = new QueryClient();
 
-// Start reporting before the app renders, so a crash during first render is captured. Never blocks:
-// initTelemetry resolves false rather than throwing if the config request fails.
+// Start reporting before the app renders, so a crash during first render is captured. Never blocks
+// for long: initTelemetry resolves false rather than throwing if the config request fails, and it
+// bounds that request with its own CONFIG_TIMEOUT_MS - so an API that accepts the connection and then
+// hangs delays first paint by that timeout at most, not by the proxy's (60 s on nginx).
 void initTelemetry().finally(() => {
   createRoot(document.getElementById("root")!).render(
     <StrictMode>

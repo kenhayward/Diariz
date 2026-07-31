@@ -1862,6 +1862,40 @@ want it runs the platform exactly as before with zero extra containers.
     key/URL scrub. This is narrower than the API's `SentryScrubber`, which also nulls the request body and
     drops cookies outright - the browser SDK does not capture either by default, so there is nothing there to
     strip.
+  - **URL stripping is a rule over every string, never a list of key names.** Three of the SDK's **default**
+    integrations put credential-bearing URLs under key names this app does not choose, so `beforeSend`/
+    `beforeBreadcrumb` apply the strip to whole bags rather than to named fields:
+    - `breadcrumbsIntegration`'s history handler emits `{ category: "navigation", data: { from, to } }`,
+      where each value is `parseUrl(...).relative` - **path plus query plus hash**. Neither key is named
+      `url` and neither is deny-listed, so an earlier `data.url`-only rule passed
+      `/setup?token=<account-activation credential>`, the OAuth authorize query, and
+      `/login?returnTo=<encoded authorize URL>` through untouched. Every string value in a breadcrumb's
+      `data` is now stripped, **at every depth** - the same handler's console branch sets
+      `data: { arguments: handlerData.args, logger: "console" }` (the raw console call arguments) and
+      `warn`/`error` console breadcrumbs are deliberately kept, so a URL passed to `console.error` sat
+      one array level down and survived a top-level-only pass. Both scrubbers walk objects and arrays
+      recursively and are **cycle-guarded** (the current path is tracked in a `WeakSet`, and a repeat
+      becomes a `[circular]` marker, under a `MAX_DEPTH` backstop): breadcrumb data is arbitrary
+      app-supplied structure, and before the guard a self-referencing object threw
+      `RangeError: Maximum call stack size exceeded` out of a hook that runs inside the SDK's own
+      breadcrumb handler - a hang or throw there takes the page with it, which is worse than the leak.
+    - `httpContextIntegration` copies the browser's `Referer` header onto `event.request.headers` - the
+      **full previous URL**, which is the same credential whenever the user has just come from `/setup` or
+      `/connect/authorize`. Every string header value is stripped, on error events and transactions alike.
+    - Free text quotes URLs too, so `exception.values[].value` and `event.message` get the same
+      word-by-word `scrubUrlsIn` treatment the breadcrumb message and span descriptions already had.
+  - **Sessions are off by removing the integration, not by an option.** GlitchTip does not support session
+    envelopes. `autoSessionTracking: false` does **not** exist in `@sentry/react` 10.69.0 (zero occurrences
+    anywhere in the installed `@sentry/*` packages), so passing it did nothing and the SPA sent a session on
+    load and on every route change. `browserSessionIntegration` is a **default** integration and
+    `getIntegrationsToSetup` **merges** a supplied array with the defaults, so the only way to drop it is the
+    **function** form: `integrations: (defaults) => [...defaults.filter(i => i.name !== "BrowserSession"),
+    browserTracingIntegration()]`. The option object is typed `Pick<BrowserOptions, ...>` against the SDK's
+    own type precisely so the next non-existent option is a compile error rather than a silent no-op.
+  - **Telemetry never delays first paint by more than `CONFIG_TIMEOUT_MS` (2 s).** `main.tsx` gates the first
+    render on the `GET /api/config` read, so `initTelemetry` bounds it with an `AbortController` **and** a
+    race: an API that accepts the connection and then hangs costs 2 s, not the proxy's timeout (60 s on
+    nginx), after which the app renders with telemetry off.
 
 - **Browser tracing joins the same trace as the API request it triggered - and depends on an outer-proxy
   header passthrough that is easy to miss.** `initTelemetry` also enables `@sentry/react`'s
@@ -1893,6 +1927,47 @@ want it runs the platform exactly as before with zero extra containers.
     **Known residual gap:** URL fragments (`http.fragment`) are not scrubbed by any of this - not exploitable
     today only because this app's JWT travels as a query parameter, never a fragment; a future attribute or
     integration that surfaces fragment data would need its own scrub.
+
+- **Source maps are generated but never served, and uploaded to GlitchTip at image build time instead.**
+  `apps/web/vite.config.ts` sets `sourcemap: "hidden"` - the `.map` files are still built (so a stack trace
+  can be un-minified), but the `//# sourceMappingURL=` comment is omitted from the shipped bundles, so no
+  browser ever fetches them. `apps/web/Dockerfile`'s build stage then deletes any `.map` file that survives
+  into `/usr/share/nginx/html` (`RUN find ... -name '*.map' -delete`) as defence in depth - without that, the
+  files would stay fetchable by guessing the filename even though nothing links to them. Before that deletion,
+  a build stage step optionally runs `npx @glitchtip/cli sourcemaps inject ./dist` and then
+  `npx @glitchtip/cli sourcemaps upload ./dist`,
+  gated on four build inputs all being present: `GLITCHTIP_URL`/`GLITCHTIP_ORG`/`GLITCHTIP_PROJECT` (build
+  ARGs) and a `glitchtip_token` **BuildKit secret** (never a build ARG - an ARG is recorded in the image
+  history and readable by anyone who can pull the image). Missing any of the four just skips the upload with
+  a log line, so a developer build and a CI build both still succeed with zero GlitchTip credentials; a
+  reachable-but-failing upload (bad token, unreachable server) warns rather than failing the build, so the web
+  image still ships. The upload is tagged with the same release value `apps/web/src/lib/telemetry.ts`'s
+  `initTelemetry` sends as `release` (`__APP_VERSION__`, from `vite.config.ts`'s `appVersion()`) - the
+  Dockerfile re-derives the same fallback (`APP_VERSION` build ARG, else this package's `package.json`
+  version) so the two agree whether or not the ARG is passed, since a mismatch means GlitchTip cannot attach
+  the uploaded maps to incoming browser events. `--org`/`--project` must name the **same browser project** as
+  `SENTRY_BROWSER_DSN` above. **The `inject` step is what makes the upload mean anything:** because
+  `sourcemap: "hidden"` strips the `//# sourceMappingURL=` comment, an uploaded map has nothing tying it back
+  to the minified frame it explains, and GlitchTip silently leaves the trace minified. `inject` writes a
+  matching **debug ID** into each bundle and its map (`//# debugId=...` plus a `_sentryDebugIds` global, which
+  `@sentry/core`'s `prepareEvent` turns into the event's `debug_meta.images`), which is the link the upload
+  registers - so GlitchTip's documented flow is inject-then-upload. It rewrites `./dist` in place and contacts
+  no server, but stays inside the same credential gate: with no upload to pair them with, injected debug IDs
+  are dead weight in the shipped bundles. **`GLITCHTIP_URL` must be reachable from inside the build
+  container**, so it has to be the public domain: with the default `GLITCHTIP_BIND=127.0.0.1`, a
+  `http://127.0.0.1:8000` value reaches the *host's* loopback, not the builder's, and the upload warns
+  "connection refused" while the build still succeeds - an easy failure to miss. A compose service name
+  (`http://glitchtip:8000`) does not work either, since the build runs before and outside the compose network.
+  Because the SPA is built inside `apps/web/Dockerfile` on the deploying server
+  rather than in GitHub CI, this upload step has to live there too - and it is wired straight into
+  `deploy/docker-compose.yml`'s `web` service so the normal `docker compose up --build` picks it up with no
+  extra flags: `GLITCHTIP_URL`/`GLITCHTIP_ORG`/`GLITCHTIP_PROJECT`/`APP_VERSION` are service `build.args`
+  (each `${VAR:-}`, so unset stays blank) and the token is a service `build.secrets` entry backed by a
+  top-level `secrets: glitchtip_token: { environment: GLITCHTIP_TOKEN }` - Compose reads `GLITCHTIP_TOKEN`
+  straight out of `deploy/.env` and mounts it as a BuildKit secret, never a build ARG. That `environment:`
+  form always mounts the secret file, empty when the env var is unset, which is why the Dockerfile's gate
+  tests `-s` (non-empty) rather than `-f` (exists) - a bare `-f` would misread an empty file as "token
+  provided" under this wiring. See `deploy/.env.example` for the variables.
 
 ## Platform backup & restore
 

@@ -368,8 +368,11 @@ public class TelemetryOptions
     /// <summary>Server-side DSN. Empty disables reporting entirely - no SDK init, no network calls.</summary>
     public string Dsn { get; set; } = "";
 
-    /// <summary>DSN handed to the browser at runtime. Public by design (it ships in the JS bundle).
-    /// Unused until the SPA is instrumented; kept here so both live in one section.</summary>
+    /// <summary>DSN handed to the browser at runtime, served by the public <c>GET /api/config</c>
+    /// endpoint and used by the SPA's <c>initTelemetry</c> (apps/web/src/lib/telemetry.ts). Public by
+    /// design - it is readable by anyone who loads the app. Empty disables browser reporting.
+    /// Deliberately separate from <see cref="Dsn"/> so the browser and the API can report to different
+    /// projects; kept in this section so both live in one place.</summary>
     public string BrowserDsn { get; set; } = "";
 
     public string Environment { get; set; } = "development";

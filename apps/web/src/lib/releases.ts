@@ -59,6 +59,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.174.6",
+    date: "2026-07-31",
+    pr: 395,
+    headline: "Application source is no longer published to visitors",
+    summary:
+      "The web app previously shipped source maps to every visitor, which made its full source readable " +
+      "in the browser. Source maps are no longer served, in every deployment, with no configuration " +
+      "needed. When the error tracker upload is configured, they are uploaded there at build time " +
+      "instead, so crash reports stay readable for the operator. Without that configuration, source is " +
+      "still hidden from visitors, but crash reports in the error tracker stay minified.",
+    changed: [
+      "Source maps are no longer served to browsers. When the error tracker upload is configured, they " +
+        "are uploaded there at build time instead; without it, crash reports stay minified.",
+    ],
+  },
+  {
     version: "0.174.5",
     date: "2026-07-31",
     pr: 394,
