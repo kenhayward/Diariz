@@ -1949,14 +1949,24 @@ want it runs the platform exactly as before with zero extra containers.
   browser ever fetches them. `apps/web/Dockerfile`'s build stage then deletes any `.map` file that survives
   into `/usr/share/nginx/html` (`RUN find ... -name '*.map' -delete`) as defence in depth - without that, the
   files would stay fetchable by guessing the filename even though nothing links to them. Before that deletion,
-  a build stage step optionally runs `npx @glitchtip/cli sourcemaps inject ./dist` and then
-  `npx @glitchtip/cli sourcemaps upload ./dist`,
+  a build stage step optionally runs `npx @sentry/cli@3.6.2 sourcemaps inject ./dist` and then
+  `npx @sentry/cli@3.6.2 sourcemaps upload ./dist`,
   gated on four build inputs all being present: `GLITCHTIP_URL`/`GLITCHTIP_ORG`/`GLITCHTIP_PROJECT` (build
   ARGs) and a `glitchtip_token` **BuildKit secret** (never a build ARG - an ARG is recorded in the image
-  history and readable by anyone who can pull the image). Missing any of the four just skips the upload with
-  a log line, so a developer build and a CI build both still succeed with zero GlitchTip credentials; a
-  reachable-but-failing upload (bad token, unreachable server) warns rather than failing the build, so the web
-  image still ships. The upload is tagged with the same release value `apps/web/src/lib/telemetry.ts`'s
+  history and readable by anyone who can pull the image; it reaches the CLI as `SENTRY_AUTH_TOKEN` rather
+  than `--auth-token`, so it never appears in a process command line). Missing any of the four just skips the
+  upload with a log line, so a developer build and a CI build both still succeed with zero GlitchTip
+  credentials; a reachable-but-failing upload **fails the build**, unless `GLITCHTIP_SOURCEMAPS_OPTIONAL` is
+  set - shipping an image whose traces cannot be read is a decision, not a warning to be skimmed.
+  **Sentry's CLI, not GlitchTip's, and pinned.** GlitchTip speaks the Sentry protocol, and `@glitchtip/cli`
+  1.0.0 (its only published version) is broken for this: it uploads each file individually and then calls
+  `releases/{version}/assemble/` once per file, an endpoint that expects a single zip of all artifacts plus a
+  `manifest.json` - so the server raises `BadZipFile` per artifact and registers nothing. `--release` is
+  mandatory and selects that path, so no flag avoids it. Verified against 6.2.3: `@glitchtip/cli` produced
+  185 blobs, 0 files and 0 bundles; `sentry-cli` on the same server produced an artifact bundle that
+  assembled. **Assembly is asynchronous**, so the build's pass/fail check can only prove the upload
+  succeeded - a green build with still-minified traces means checking `File`/`DebugSymbolBundle` rows and the
+  container log for `assemble_artifacts`. The upload is tagged with the same release value `apps/web/src/lib/telemetry.ts`'s
   `initTelemetry` sends as `release` (`__APP_VERSION__`, from `vite.config.ts`'s `appVersion()`) - the
   Dockerfile re-derives the same fallback (`APP_VERSION` build ARG, else this package's `package.json`
   version) so the two agree whether or not the ARG is passed, since a mismatch means GlitchTip cannot attach

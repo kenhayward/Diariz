@@ -59,6 +59,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.174.13",
+    date: "2026-07-31",
+    pr: 407,
+    headline: "Crash reports from the browser can be read again",
+    summary:
+      "When the browser half of the app crashed, the report arrived as unreadable machine code " +
+      "instead of pointing at the line that broke. The tool the build used to upload the " +
+      "translation files put them in a shape the error tracker could not open, and reported success " +
+      "regardless, so nothing looked wrong until someone needed a crash report. The build now uses a " +
+      "tool that works, pinned to a known version. Only affects self-hosters running the optional " +
+      "error tracker.",
+    fixed: [
+      "Browser crash reports stayed unreadable because the build's upload tool produced files the " +
+        "error tracker rejected, while still reporting the upload as successful.",
+    ],
+  },
+  {
     version: "0.174.12",
     date: "2026-07-31",
     pr: 406,
