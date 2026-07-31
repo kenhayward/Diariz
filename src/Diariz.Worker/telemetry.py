@@ -22,17 +22,32 @@ _enabled = False
 
 REDACTED = "[redacted]"
 
-# Exact key names that carry meeting content. Transcripts are this application's payload; an event
-# that leaks one cannot be un-sent.
+# ---- Cross-runtime deny-list ------------------------------------------------------------------
+# KEEP IN SYNC WITH: src/Diariz.Api/Services/SentryScrubber.cs (DenyExact / DenySubstring).
+# The worker and the API report to the same GlitchTip instance and must redact the same names.
+# These two lists HAVE silently diverged before: "embedding"/"embeddings" (the ECAPA voiceprint
+# vectors) were added here only - even though the API is the runtime that actually stores them -
+# while "note"/"notes" existed only on the .NET side.
+#
+# What the guard-rail is, honestly: each runtime has a test that pins this shared set
+# (tests/test_telemetry.py::test_the_shared_cross_runtime_deny_list_is_covered here,
+# SentryScrubberTests.IsSensitiveKey_CoversEveryNameInTheCrossRuntimeDenyList there). That catches a
+# REMOVAL from either side. It cannot catch an ADDITION made to only one side - two tests in two
+# languages have no shared source of truth - so adding a name here means adding it there, and to the
+# browser SDK's list when phase 2 introduces a third copy.
+
+# Exact key names that carry meeting content or biometrics. Transcripts are this application's
+# payload; an event that leaks one cannot be un-sent.
 _DENY_EXACT = frozenset({
     "text", "transcript", "transcription", "segments", "words", "summary",
-    "minutes", "content", "authorization", "cookie", "cookies",
+    "minutes", "note", "notes", "content", "authorization", "cookie", "cookies",
     # ECAPA voiceprint vectors (biometric data identifying a speaker by voice).
     "embedding", "embeddings",
 })
 
-# Substrings that mark a credential regardless of the surrounding name.
-_DENY_SUBSTRING = ("secret", "token", "password", "api_key", "apikey", "access_key")
+# Substrings that mark a credential regardless of the surrounding name. Matched against the
+# lower-cased key, so both the snake_case and the run-together spellings are needed.
+_DENY_SUBSTRING = ("secret", "token", "password", "api_key", "apikey", "access_key", "accesskey")
 
 
 def is_sensitive_key(key: str) -> bool:
@@ -81,6 +96,9 @@ def init() -> bool:
         return False
 
     import sentry_sdk
+    # Imported here, not at module scope, for the same reason as sentry_sdk itself: a worker with no
+    # DSN must never load the SDK (and the test env does not install it).
+    from sentry_sdk.integrations.logging import LoggingIntegration
 
     sentry_sdk.init(
         dsn=dsn,
@@ -95,6 +113,12 @@ def init() -> bool:
         # name in the worker (raw_segments, asr, result, embeddings, ...) is not a maintainable defence,
         # so turn frame-local capture off entirely. Tracebacks (file/line/function/message) are unaffected.
         include_local_variables=False,
+        # worker.handle() deliberately does both `log.exception(...)` and `capture_exception(e)` -
+        # the explicit capture is what carries the job context. LoggingIntegration is on by default
+        # and promotes ERROR-level records to events, so every failed job filed TWO issues for the
+        # same failure. event_level=None turns that promotion off; level=INFO keeps log records
+        # arriving as breadcrumbs, which is the part worth having.
+        integrations=[LoggingIntegration(level=logging.INFO, event_level=None)],
         before_send=_before_send,
         before_send_transaction=_before_send,
     )

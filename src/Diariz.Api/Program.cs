@@ -74,14 +74,19 @@ if (telemetry.Enabled)
         o.TracesSampleRate = telemetry.TracesSampleRate;
         // Never attach request bodies, cookies or user identifiers automatically.
         o.SendDefaultPii = false;
-        // Two separate hooks because they redact two different shapes at two different lifecycle
-        // points. Scrub covers the SentryEvent (Extra/Tags/Request) - it is mutated in place and
-        // returned. Breadcrumbs (emitted for every Information+ ILogger call by
-        // Sentry.Extensions.Logging, on by default inside Sentry.AspNetCore) are immutable once
-        // attached to an event - Breadcrumb.Data has no setter and SentryEvent.Breadcrumbs exposes
-        // no replace API - so ScrubBreadcrumb runs earlier and returns a rebuilt replacement instead
-        // of editing in place. Omitting either hook leaves a disclosure path open.
+        // Three separate hooks because they redact three different shapes at three different
+        // lifecycle points. Omitting any one of them leaves a disclosure path open.
+        //  - Scrub covers the SentryEvent (Extra/Tags/Request), mutated in place and returned.
+        //  - ScrubTransaction covers the *transaction* envelope. BeforeSend does NOT run for
+        //    transactions, so without this the whole scrub was bypassed on the path that fires on
+        //    EVERY request at TracesSampleRate above - leaking the SignalR hub's ?access_token=<JWT>
+        //    and, via span descriptions, the query strings of outbound webhook URLs.
+        //  - Breadcrumbs (emitted for every Information+ ILogger call by Sentry.Extensions.Logging,
+        //    on by default inside Sentry.AspNetCore) are immutable once attached to an event -
+        //    Breadcrumb.Data has no setter and SentryEvent.Breadcrumbs exposes no replace API - so
+        //    ScrubBreadcrumb runs earlier and returns a rebuilt replacement instead.
         o.SetBeforeSend(SentryScrubber.Scrub);
+        o.SetBeforeSendTransaction(SentryScrubber.ScrubTransaction);
         o.SetBeforeBreadcrumb(SentryScrubber.ScrubBreadcrumb);
     });
 }
