@@ -61,6 +61,11 @@ services:
       # MUST include the scheme. Django derives its trusted CSRF origins from this, and a mismatch
       # presents as "wrong password" on every login attempt rather than anything mentioning CSRF.
       GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN:?required - the full external URL including https://}
+      # Optional hardening, permissive by default. MUST include the internal service name as well as
+      # the public hostname: the API and worker post to `http://glitchtip:8000`, so their requests
+      # carry `Host: glitchtip`, and Django rejects any host not listed. Setting this to the public
+      # hostname alone silently kills all server-side reporting while the browser keeps working.
+      ALLOWED_HOSTS: ${GLITCHTIP_ALLOWED_HOSTS:-*}
       DEFAULT_FROM_EMAIL: ${GLITCHTIP_FROM_EMAIL:?required - run deploy/NewGlitchTipSecrets.cmd}
       EMAIL_URL: ${GLITCHTIP_EMAIL_URL:?required - run deploy/NewGlitchTipSecrets.cmd}
       # Internal tool on a public subdomain: no open registration, no new orgs.
