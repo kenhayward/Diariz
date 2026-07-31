@@ -357,3 +357,27 @@ public class DictationOptions
     /// <summary>True when an STT endpoint is configured; otherwise the transcribe endpoint returns 400.</summary>
     public bool Enabled => !string.IsNullOrWhiteSpace(ApiBase);
 }
+
+/// <summary>Optional error + performance reporting to a Sentry-compatible endpoint (GlitchTip).
+/// Named TelemetryOptions rather than SentryOptions because Sentry.AspNetCore already exports that
+/// type name; the configuration section is still "Sentry".</summary>
+public class TelemetryOptions
+{
+    public const string Section = "Sentry";
+
+    /// <summary>Server-side DSN. Empty disables reporting entirely - no SDK init, no network calls.</summary>
+    public string Dsn { get; set; } = "";
+
+    /// <summary>DSN handed to the browser at runtime. Public by design (it ships in the JS bundle).
+    /// Unused until the SPA is instrumented; kept here so both live in one section.</summary>
+    public string BrowserDsn { get; set; } = "";
+
+    public string Environment { get; set; } = "development";
+
+    /// <summary>Fraction of requests traced. Defaults to everything: this deployment's volume is small,
+    /// and the SDK docs' 1% recommendation targets high-traffic sites.</summary>
+    public double TracesSampleRate { get; set; } = 1.0;
+
+    /// <summary>True when a DSN is configured; otherwise the SDK is never initialised.</summary>
+    public bool Enabled => !string.IsNullOrWhiteSpace(Dsn);
+}

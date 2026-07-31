@@ -726,6 +726,27 @@
         "resolved": "3.0.0",
         "contentHash": "RLUe1U5VzdY0gZxXIFAWy8YS6ChUPpcnQkdMg5KkITaSO4YkVdK4Vvq0zsmXeqx/q5rhaIjCUgxnKH4j+6r/RA=="
       },
+      "Sentry": {
+        "type": "Transitive",
+        "resolved": "6.8.0",
+        "contentHash": "amUjwslDtdx1p8r6z4APCxM8vHCKG4CBamPpSTwxmTMoBQ2CLwx2m3CaIttJXRT/hw9S5rNfXgjol2OqADytLQ=="
+      },
+      "Sentry.AspNetCore": {
+        "type": "Transitive",
+        "resolved": "6.8.0",
+        "contentHash": "yo9TeFZPgmhyu0Vj+Zq3VxRR8kDbhlNbRAQDANN+gTwETe5uDa/H1I91PntBD7jwhWa7P218bYU+LGYOipylYA==",
+        "dependencies": {
+          "Sentry.Extensions.Logging": "6.8.0"
+        }
+      },
+      "Sentry.Extensions.Logging": {
+        "type": "Transitive",
+        "resolved": "6.8.0",
+        "contentHash": "K7/Z7B8ec5c61ByzZOgxHxhcT+5yo7X6n7GchcaFI/X44Zn/ZsGqUFMqvypaILnc4JISAeppDTSiWdgWmflzbg==",
+        "dependencies": {
+          "Sentry": "6.8.0"
+        }
+      },
       "SharpZipLib": {
         "type": "Transitive",
         "resolved": "1.4.2",
@@ -899,6 +920,7 @@
           "OpenIddict.AspNetCore": "[7.5.0, )",
           "OpenIddict.EntityFrameworkCore": "[7.5.0, )",
           "Pgvector.EntityFrameworkCore": "[0.3.0, )",
+          "Sentry.AspNetCore": "[6.8.0, )",
           "StackExchange.Redis": "[3.0.0, )",
           "System.IO.Packaging": "[9.0.9, )",
           "UglyToad.PdfPig": "[1.7.0-custom-5, )"
@@ -907,7 +929,7 @@
       "diariz.api.testsupport": {
         "type": "Project",
         "dependencies": {
-          "Diariz.Api": "[0.149.0, )"
+          "Diariz.Api": "[0.174.2, )"
         }
       },
       "diariz.domain": {

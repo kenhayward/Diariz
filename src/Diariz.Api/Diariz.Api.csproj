@@ -38,6 +38,8 @@
          supplies the store wiring for AddCore().UseEntityFrameworkCore(). Pinned exactly (security-critical). -->
     <PackageReference Include="OpenIddict.AspNetCore" Version="7.5.0" />
     <PackageReference Include="OpenIddict.EntityFrameworkCore" Version="7.5.0" />
+    <!-- Error + performance reporting to a Sentry-compatible endpoint (GlitchTip); see TelemetryOptions. -->
+    <PackageReference Include="Sentry.AspNetCore" Version="6.8.0" />
     <PackageReference Include="StackExchange.Redis" Version="3.0.0" />
     <PackageReference Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
   </ItemGroup>
