@@ -65,10 +65,13 @@ export const RELEASES: Release[] = [
     headline: "Application source is no longer published to visitors",
     summary:
       "The web app previously shipped source maps to every visitor, which made its full source readable " +
-      "in the browser. They are now uploaded to the error tracker instead, so crash reports stay just as " +
-      "readable for the operator without publishing the source.",
+      "in the browser. Source maps are no longer served, in every deployment, with no configuration " +
+      "needed. When the error tracker upload is configured, they are uploaded there at build time " +
+      "instead, so crash reports stay readable for the operator. Without that configuration, source is " +
+      "still hidden from visitors, but crash reports in the error tracker stay minified.",
     changed: [
-      "Source maps are uploaded to the error tracker at build time rather than served to browsers.",
+      "Source maps are no longer served to browsers. When the error tracker upload is configured, they " +
+        "are uploaded there at build time instead; without it, crash reports stay minified.",
     ],
   },
   {
