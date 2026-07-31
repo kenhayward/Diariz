@@ -31,7 +31,9 @@
 | 3 | Tasks 6-8 | 0.174.3 | 1c - API |
 | - | Task 9 | none | 1d - prod rollout (operational, no code) |
 
-**Getting the `pr:` number right:** `RELEASES[0].pr` must be the real PR number, and it is needed *before* `gh pr create` has told you what it is. Do not guess "last + 1" - Dependabot PRs and issues share the sequence. Run `gh pr list --state all --limit 1` to see the highest number actually used, then use the next one, and correct it if `gh pr create` returns something different.
+**Getting the `pr:` number right:** `RELEASES[0].pr` must be the real PR number, and it is needed *before* `gh pr create` has told you what it is. Do not guess "last + 1" blindly - Dependabot PRs and issues share the sequence. Run `gh pr list --state all --limit 1` to see the highest number actually used, then use the next one, and correct it if `gh pr create` returns something different.
+
+The design/plan PR took **#389**, so the expected numbers are **390** (PR 1), **391** (PR 2) and **392** (PR 3). Re-check before each one - anything else merged in between shifts them.
 
 ---
 
@@ -274,7 +276,7 @@ Add to the top of `RELEASES` in `apps/web/src/lib/releases.ts` (get the real PR 
 {
   version: "0.174.1",
   date: "2026-07-31",
-  pr: 389,
+  pr: 390,
   headline: "Optional self-hosted error tracking",
   summary:
     "Adds an optional Docker Compose overlay for GlitchTip, a self-hosted error-tracking and " +
@@ -916,7 +918,7 @@ Same five files as Task 1 Step 7. Add to the top of `RELEASES`:
 {
   version: "0.174.2",
   date: "2026-07-31",
-  pr: 390,
+  pr: 391,
   headline: "Transcription worker reports failures and stage timings",
   summary:
     "When a GlitchTip DSN is configured, the transcription worker now reports unhandled failures " +
@@ -1305,7 +1307,7 @@ Record in `docs/Overall_Synopsis_of_Platform.md` that the API optionally reports
 {
   version: "0.174.3",
   date: "2026-07-31",
-  pr: 391,
+  pr: 392,
   headline: "API reports errors and endpoint timings",
   summary:
     "When a GlitchTip DSN is configured, the API now reports unhandled exceptions and records how " +
