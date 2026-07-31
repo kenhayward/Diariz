@@ -301,3 +301,56 @@ def test_refresh_claim_resets_the_idle_clock_without_stealing():
 
     assert r.refreshed == [(worker.config.STREAM_KEY, "5-0")]
     assert r.claimed == []
+
+
+# ---- Telemetry wiring ----
+
+def test_handle_runs_inside_a_telemetry_transaction(monkeypatch, tmp_path):
+    audio = tmp_path / "audio.wav"
+    audio.write_text("fake")
+    monkeypatch.setattr(worker.storage, "download", lambda key: str(audio))
+    monkeypatch.setattr(worker.pipeline, "transcribe",
+                        lambda path, min_s=None, max_s=None: {"language": "en", "segments": [], "speakers": []})
+    monkeypatch.setattr(worker.callback, "post_result", lambda *a, **k: None)
+
+    names = []
+
+    import contextlib
+
+    @contextlib.contextmanager
+    def fake_transaction(name, op="queue.task"):
+        names.append(name)
+        yield
+
+    monkeypatch.setattr(worker.telemetry, "transaction", fake_transaction)
+
+    worker.handle(_job("tid-t"))
+
+    assert names == ["transcribe"]
+
+
+def test_handle_reports_a_failure_and_still_cleans_up(monkeypatch, tmp_path):
+    audio = tmp_path / "audio.wav"
+    audio.write_text("fake")
+    monkeypatch.setattr(worker.storage, "download", lambda key: str(audio))
+
+    def boom(path, min_s=None, max_s=None):
+        raise RuntimeError("model load failed")
+
+    monkeypatch.setattr(worker.pipeline, "transcribe", boom)
+
+    posted = {}
+    monkeypatch.setattr(worker.callback, "post_failure",
+                        lambda tid, msg: posted.update(tid=tid, msg=msg))
+
+    captured = []
+    monkeypatch.setattr(worker.telemetry, "capture_exception", lambda e: captured.append(e))
+
+    worker.handle(_job("tid-f"))
+
+    # The existing contract is unchanged: the API is still told, and the temp file is still removed.
+    assert posted["tid"] == "tid-f"
+    assert not os.path.exists(str(audio))
+    # And the exception is now also reported.
+    assert len(captured) == 1
+    assert isinstance(captured[0], RuntimeError)

@@ -17,6 +17,7 @@ import callback
 import heartbeat
 import pipeline
 import storage
+import telemetry
 import torch_compat
 from config import config
 
@@ -119,14 +120,18 @@ def handle(job: dict) -> None:
     audio_path = None
     started = time.monotonic()
     try:
-        audio_path = storage.download(blob_key)
-        result = pipeline.transcribe(audio_path, job.get("MinSpeakers"), job.get("MaxSpeakers"))
-        # Full-pipeline wall-clock time (download + transcribe + diarize + embed), reported to the API.
-        processing_ms = int((time.monotonic() - started) * 1000)
-        callback.post_result(transcription_id, result["language"], result["segments"],
-                             result.get("speakers"), result.get("duration_ms"), processing_ms)
+        with telemetry.transaction("transcribe"):
+            with telemetry.span("storage.download", "download"):
+                audio_path = storage.download(blob_key)
+            result = pipeline.transcribe(audio_path, job.get("MinSpeakers"), job.get("MaxSpeakers"))
+            # Full-pipeline wall-clock time (download + transcribe + diarize + embed), reported to the API.
+            processing_ms = int((time.monotonic() - started) * 1000)
+            with telemetry.span("http.client", "callback"):
+                callback.post_result(transcription_id, result["language"], result["segments"],
+                                     result.get("speakers"), result.get("duration_ms"), processing_ms)
     except Exception as e:  # noqa: BLE001 - report and continue
         log.exception("Job failed for transcription %s", transcription_id)
+        telemetry.capture_exception(e)
         callback.post_failure(transcription_id, str(e))
     finally:
         if audio_path and os.path.exists(audio_path):
@@ -145,13 +150,15 @@ def handle_merge(job: dict) -> None:
     sources: list[str] = []
     output_path = None
     try:
-        sources = [storage.download(k) for k in blob_keys]
-        output_path, duration_ms, size_bytes = audio_merge.concat(sources)
-        storage.upload(output_key, output_path, audio_merge.OUTPUT_CONTENT_TYPE)
-        callback.post_merge_result(recording_id, output_key, audio_merge.OUTPUT_CONTENT_TYPE,
-                                   size_bytes, duration_ms, delete_ids)
+        with telemetry.transaction("audio-merge"):
+            sources = [storage.download(k) for k in blob_keys]
+            output_path, duration_ms, size_bytes = audio_merge.concat(sources)
+            storage.upload(output_key, output_path, audio_merge.OUTPUT_CONTENT_TYPE)
+            callback.post_merge_result(recording_id, output_key, audio_merge.OUTPUT_CONTENT_TYPE,
+                                       size_bytes, duration_ms, delete_ids)
     except Exception as e:  # noqa: BLE001 - report and continue
         log.exception("Audio merge failed for recording %s", recording_id)
+        telemetry.capture_exception(e)
         callback.post_merge_failure(recording_id, str(e))
     finally:
         for path in sources + ([output_path] if output_path else []):
@@ -200,6 +207,9 @@ def main() -> None:
     # Restore pre-2.6 torch.load behaviour before any model checkpoint is loaded
     # (pyannote/whisperx checkpoints fail under torch>=2.6's weights_only=True).
     torch_compat.restore_legacy_torch_load()
+
+    # Optional error/performance reporting. Inert unless SENTRY_DSN is set.
+    telemetry.init()
 
     # socket_timeout > BLOCK_MS so a normal blocking poll never trips it; socket_keepalive detects a
     # silently-dropped connection. (redis-py 8 otherwise lets a blocking XREADGROUP surface a socket

@@ -59,6 +59,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.174.2",
+    date: "2026-07-31",
+    pr: 391,
+    headline: "Transcription worker reports failures and stage timings",
+    summary:
+      "When a GlitchTip DSN is configured, the transcription worker now reports unhandled failures " +
+      "with a full traceback, and times each stage of a job - download, transcription, alignment, " +
+      "diarization, voiceprints and callback - so a slow job can be traced to the stage responsible. " +
+      "Transcript content is never transmitted. Deployments without a DSN are unchanged.",
+    added: [
+      "Optional worker error reporting and per-stage timings.",
+    ],
+  },
+  {
     version: "0.174.1",
     date: "2026-07-31",
     pr: 390,

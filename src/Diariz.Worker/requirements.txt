@@ -28,3 +28,7 @@ matplotlib==3.10.9
 redis==8.0.1
 boto3==1.43.40
 requests==2.34.2
+
+# Optional error + performance reporting (GlitchTip / Sentry-compatible). Imported lazily and only
+# when SENTRY_DSN is set, so it costs nothing on deployments that do not use it.
+sentry-sdk==2.66.1

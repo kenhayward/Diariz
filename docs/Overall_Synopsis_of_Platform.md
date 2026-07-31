@@ -1774,8 +1774,25 @@ want it runs the platform exactly as before with zero extra containers.
   crash takes GlitchTip down along with everything else. It only tells you about errors the *running*
   worker/API processes have reported to it, not that they stopped running.
 
-This task (see the observability design doc) only stands the overlay up; the worker and API do not yet send
-it anything - instrumenting them to report errors via a `SENTRY_DSN` / `Sentry__Dsn` is a later phase.
+- **Worker reporting is live; the API's is not yet.** The transcription worker (`src/Diariz.Worker`) now
+  reports to GlitchTip when `SENTRY_DSN` is set (`SENTRY_ENVIRONMENT`, `SENTRY_TRACES_SAMPLE_RATE` tune the
+  environment tag and trace sampling; see `deploy/docker-compose.yml`'s `worker` service and
+  `src/Diariz.Worker/telemetry.py`). Instrumenting the API via `Sentry.AspNetCore` (`Sentry__Dsn`) is a later
+  phase.
+  - **One transaction per job.** `worker.py` wraps each job in a `transcribe` transaction, with a `span` per
+    stage - `download` (fetching the blob from MinIO), `asr`, `align`, `diarize`, `embeddings` (the ECAPA
+    voiceprint step, gated by `ENABLE_SPEAKER_EMBEDDINGS`), and `callback` (posting the result back to the
+    API) - so a slow job can be traced to the stage responsible for the wall-clock time.
+  - **Release tag from the API's `/health`.** `telemetry.release()` reads the platform version from
+    `GET {API_BASE_URL}/health` at worker startup and attaches it as the event's release. The worker image
+    carries no version of its own - `version.json` lives at the repo root, outside the worker's build context
+    - and hard-coding one in `.env` would drift silently the moment a release forgot to bump it; the worker
+    already waits for the API to be healthy before it starts, so the API is always reachable at that point.
+  - **Every event is scrubbed.** All outgoing events and transactions pass through `telemetry.scrub` (wired
+    as the SDK's `before_send`/`before_send_transaction` hooks), which recursively redacts any field whose key
+    matches a deny-list - transcript text, summaries, minutes, authorization/cookie headers, credentials, and
+    the ECAPA voiceprint embedding vectors - before the payload leaves the process. No transcript content or
+    biometric voiceprint vector is ever transmitted to GlitchTip.
 
 ## Platform backup & restore
 
