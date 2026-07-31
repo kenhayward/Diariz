@@ -67,6 +67,7 @@ See **[docs/features.md](docs/features.md)** for the full prose description of e
 | Web UI | React + TypeScript + Vite + Tailwind | [apps/web](apps/web) |
 | Desktop app | Electron thin shell — Windows system-tray + **macOS (beta) menu-bar** (first-run server config, mic + system audio, tray recording; auto-update on Windows, manual update check on macOS) | [apps/desktop](apps/desktop) |
 | Orchestration | docker-compose (postgres/pgvector, redis, minio) | [deploy](deploy) |
+| Observability (optional) | Self-hosted [GlitchTip](https://glitchtip.com/): error tracking + transaction timings for the worker, API and SPA, each behind a scrubber that redacts credentials and meeting content. Opt-in compose overlay with its own Postgres and MinIO bucket; entirely inert unless a DSN is set | [overlay](deploy/docker-compose.observability.yml), [deployment runbook](docs/GlitchTip_Deployment.md) |
 
 Summaries and chat use any OpenAI-compatible LLM endpoint you configure (OpenAI, or a local server such
 as Ollama / LM Studio / vLLM) — see the Settings modal and `deploy/.env.example`. The API also hosts an
