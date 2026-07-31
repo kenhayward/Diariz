@@ -89,6 +89,12 @@ def init() -> bool:
         traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "1.0")),
         # Never attach request bodies, headers or user identifiers automatically.
         send_default_pii=False,
+        # The scrubber above matches on key names, but the SDK also captures every stack frame's
+        # local variables by default (event["exception"]["values"][*]["stacktrace"]["frames"][*]["vars"]),
+        # keyed by variable name rather than a field name scrub() ever sees. Enumerating every variable
+        # name in the worker (raw_segments, asr, result, embeddings, ...) is not a maintainable defence,
+        # so turn frame-local capture off entirely. Tracebacks (file/line/function/message) are unaffected.
+        include_local_variables=False,
         before_send=_before_send,
         before_send_transaction=_before_send,
     )

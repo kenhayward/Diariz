@@ -120,6 +120,7 @@ def test_init_configures_the_sdk_with_pii_off_and_the_scrubber(monkeypatch):
     kwargs = fake_sdk.init.call_args.kwargs
     assert kwargs["dsn"] == "https://key@errors.example/1"
     assert kwargs["send_default_pii"] is False
+    assert kwargs["include_local_variables"] is False
     assert kwargs["before_send"] is telemetry._before_send
     assert kwargs["before_send_transaction"] is telemetry._before_send
     assert kwargs["traces_sample_rate"] == 0.5
