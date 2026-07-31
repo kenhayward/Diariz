@@ -43,21 +43,39 @@ Confirmed live: with `ENABLE_USER_REGISTRATION=false` in the container's environ
 | MinIO bucket + scoped key provisioned | done |
 | Proxy configured (Nginx Proxy Manager, remote) | done |
 | Container up, **migrations applied**, worker embedded | done |
-| **First user + organisation** | **ready and waiting - needs you, see below** |
+| First user | created - `ken@stocks-hayward.com`, id 1, active, email unverified |
+| **Organisation** | **not yet - sign in and create it, see below** |
+| SMTP | **broken, fixed in the repo but `.env` still needs re-pasting** |
 | Three projects (`diariz-worker`, `diariz-api`, `diariz-web`) | not started |
 | Pass 2: DSNs into `.env`, restart app services | not started |
 | Pass 3: source-map credentials | not started |
 | Verification checklist | not started |
 
-### The one step that needs a human
+### The registration 500, and why it does not need re-registering
 
-Register the first account in the browser. Claude cannot create accounts or enter passwords, so this is yours to do:
+Signing up returned a 500 and afterwards the page said registration was unavailable. The account **was** created; the request then died sending the verification email:
 
-1. Open the GlitchTip URL and follow **Register** from the login page. It identifies users by email.
-2. It goes straight to **Create a New Organization** ("This is the first step to get started with GlitchTip"). Name it.
-3. Both doors shut behind you automatically. Everyone after this is invited.
+```
+smtplib.SMTPNotSupportedError: SMTP AUTH extension not supported by server.
+```
 
-Then carry on at **1f** in `docs/GlitchTip_Deployment.md` for the three projects, and pass 2 for the DSNs.
+With a user now in the table, the first-run registration window closed behind a half-finished signup.
+
+**Cause:** `GLITCHTIP_EMAIL_URL` used a plain `smtp://` scheme. django-environ only sets `EMAIL_USE_TLS` for `smtps`/`smtp+tls` and `EMAIL_USE_SSL` for `smtp+ssl`, so the connection was clear text - and Gmail only advertises AUTH after STARTTLS. `deploy/glitchtip-secrets/new-secrets.ps1` hardcoded `smtp://`, so **no URL it ever generated could authenticate anywhere**. Fixed in the repo; the generated `.env` value still has to be replaced by hand.
+
+**No need to register again.** `ACCOUNT_EMAIL_VERIFICATION` is `optional`, and the account is active with a usable password:
+
+1. Sign in at the GlitchTip URL with the email and password you just chose.
+2. It goes to **Create a New Organization** ("This is the first step to get started with GlitchTip"). Name it.
+3. Carry on at **1f** in `docs/GlitchTip_Deployment.md` for the three projects, then pass 2 for the DSNs.
+
+Fix the mail separately - nothing above is blocked on it, but invitations and password resets are:
+
+```
+GLITCHTIP_EMAIL_URL=smtp+tls://ken%40stocks-hayward.com:<app-password>@smtp.gmail.com:587
+```
+
+then `docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d glitchtip`. Verification checklist item 3 covers proving it.
 
 ---
 
