@@ -59,6 +59,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.174.10",
+    date: "2026-07-31",
+    pr: 402,
+    headline: "The optional error tracker's setup script now produces a working mail setting",
+    summary:
+      "The script that generates settings for the optional error tracker built its mail address " +
+      "without the part that turns on encryption, so the connection stayed unencrypted - and since " +
+      "mail servers only offer to accept a password once the connection is secure, sending failed " +
+      "every time. It surfaced at the worst moment: registering the very first account created the " +
+      "account, then failed sending its confirmation email, leaving an error page and no obvious way " +
+      "back in. The script now picks the right mode for the port, and the guide says what to do if " +
+      "you already hit it. Only affects self-hosters running that optional overlay.",
+    fixed: [
+      "The optional error tracker's setup script generated a mail setting that could never sign in " +
+        "to a mail server, so no invitations, confirmations or password resets were sent.",
+    ],
+  },
+  {
     version: "0.174.9",
     date: "2026-07-31",
     pr: 401,

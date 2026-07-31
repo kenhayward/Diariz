@@ -136,7 +136,11 @@ Pass `/noemail` (or `--noemail`) if you want the random secrets only.
 
 **Why the secrets are hex.** A `.env` value gets read by docker compose, by a POSIX shell, and sometimes by a Windows shell. In `.env` a `$` is interpolated by compose and a `#` starts a comment; in a shell, quotes, spaces, backticks and `!` all need escaping. base64 avoids `$` and `#` but still produces `+`, `/` and `=`, which bite the moment someone pastes a value into a shell command. Hex is `[0-9a-f]` only, so it never needs escaping anywhere. 32 bytes is 256 bits.
 
-**Why `EMAIL_URL` needs encoding.** `smtp://user:password@host:port` is a URL, so the username and password are URL *components*, not free text. An `@` in the password ends the userinfo early, a `:` splits user from password, and a `/`, `?` or `#` terminates it. Any of those produces an authentication failure that looks like a wrong password rather than a parse error. The script percent-encodes everything outside the RFC 3986 unreserved set.
+**Why the `EMAIL_URL` scheme matters.** It is `smtp+tls://user:password@host:port`, and the scheme is where the encryption mode lives - GlitchTip parses this with django-environ, which turns on STARTTLS only for `smtp+tls` (or `smtps`) and implicit TLS only for `smtp+ssl`. The script picks for you: `smtp+ssl` for port 465, `smtp+tls` for everything else.
+
+A plain `smtp://` connects in clear text, and servers only advertise the AUTH extension once the connection is secured - so authentication fails with `SMTPNotSupportedError: SMTP AUTH extension not supported by server`, which reads like a limitation of the server rather than a missing scheme. If you generated your `.env` with a script from before 0.174.10, check this line: it emitted `smtp://` unconditionally and no such URL can authenticate anywhere.
+
+**Why `EMAIL_URL` needs encoding.** It is a URL, so the username and password are URL *components*, not free text. An `@` in the password ends the userinfo early, a `:` splits user from password, and a `/`, `?` or `#` terminates it. Any of those produces an authentication failure that looks like a wrong password rather than a parse error. The script percent-encodes everything outside the RFC 3986 unreserved set.
 
 > If your username or password needed encoding, the script says so. **Verify it**: after first start, trigger a password reset and confirm the mail arrives. If it does not, the simplest fix is an SMTP app-password made only of letters and digits, which needs no encoding at all.
 
@@ -359,6 +363,8 @@ Work down this list. Each one has failed for somebody.
 | `ImproperlyConfigured: The SECRET_KEY setting must not be empty` | `GLITCHTIP_SECRET_KEY` is unset or blank in `deploy/.env`. Run the 1e check; the fix is 1a |
 | `manifest unknown` pulling the image | An image tag that does not exist. GlitchTip dropped the `v` prefix after 6.0.3, so it is `6.2`, not `v6.2` |
 | Login says the password is wrong, and you are sure it is not | `GLITCHTIP_DOMAIN` is missing `https://`, or the proxy is not sending `X-Forwarded-Proto` |
+| **Registering the first account returns a 500**, and afterwards the page says registration is unavailable | The account was created and the *verification email* failed, so the user now exists and the first-run registration window has closed behind it. You do not need to register again - `ACCOUNT_EMAIL_VERIFICATION` is `optional`, so sign in with the credentials you just chose and carry on to the organisation step. Then fix the mail: see the row below |
+| `SMTPNotSupportedError: SMTP AUTH extension not supported by server` | The `EMAIL_URL` scheme is plain `smtp://`, so the connection is never secured and the server will not offer AUTH. Use `smtp+tls://` (or `smtp+ssl://` on port 465) - see pass 1a |
 | No emails at all | `EMAIL_URL` encoding - see pass 1a, and try an alphanumeric app-password |
 | The UI loads but events never arrive | Ingest blocked. Turn off Block Common Exploits; check the browser console for blocked requests |
 | Browser events missing but server events fine | An ad blocker. They pattern-match error-tracking ingest paths. Expect to lose some proportion silently |

@@ -58,7 +58,20 @@ if ($NoEmail) {
 # EMAIL_URL.
 #
 # GlitchTip requires SMTP for invitations and password resets, and takes it
-# as a single URL: smtp://user:password@host:port
+# as a single URL: smtp+tls://user:password@host:port
+#
+# THE SCHEME CARRIES THE ENCRYPTION MODE, and it is not decoration. GlitchTip
+# parses this with django-environ, which sets EMAIL_USE_TLS only for `smtps`
+# and `smtp+tls`, and EMAIL_USE_SSL only for `smtp+ssl`. A plain `smtp://`
+# URL therefore connects in clear text - and because servers only advertise
+# the AUTH extension after the connection is secured, authentication fails
+# with `SMTPNotSupportedError: SMTP AUTH extension not supported by server`,
+# which reads like a server limitation rather than a missing scheme. This
+# script previously emitted `smtp://` unconditionally, so no generated URL
+# could authenticate anywhere.
+#
+# 465 is implicit TLS (SSL from the first byte); 587 and 25 are STARTTLS,
+# which upgrades an initially-plain connection.
 #
 # That is a URL, so the user and password are URL components, not free text.
 # An `@` in the password ends the userinfo early; a `:` splits user from
@@ -102,8 +115,11 @@ $encPass = [uri]::EscapeDataString($smtpPass)
 $fromEmail = Read-Host "DEFAULT_FROM_EMAIL [$smtpUser]"
 if ([string]::IsNullOrWhiteSpace($fromEmail)) { $fromEmail = $smtpUser }
 
+# Port 465 is implicit TLS; everything else (587, 25) upgrades via STARTTLS.
+if ($smtpPort -eq '465') { $scheme = 'smtp+ssl' } else { $scheme = 'smtp+tls' }
+
 Write-Host ''
-Write-Host "GLITCHTIP_EMAIL_URL=smtp://${encUser}:${encPass}@${smtpHost}:${smtpPort}"
+Write-Host "GLITCHTIP_EMAIL_URL=${scheme}://${encUser}:${encPass}@${smtpHost}:${smtpPort}"
 Write-Host "GLITCHTIP_FROM_EMAIL=$fromEmail"
 Write-Host ''
 
