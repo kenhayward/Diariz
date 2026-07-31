@@ -59,6 +59,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.174.1",
+    date: "2026-07-31",
+    pr: 390,
+    headline: "Optional self-hosted error tracking",
+    summary:
+      "Adds an optional Docker Compose overlay for GlitchTip, a self-hosted error-tracking and " +
+      "performance-monitoring service. Nothing is reported unless you run the overlay and set a DSN, " +
+      "so existing deployments are unchanged. This release only stands the service up - the worker and " +
+      "API start reporting to it in later releases.",
+    added: [
+      "Optional GlitchTip overlay (deploy/docker-compose.observability.yml) with its own database and object-storage bucket.",
+    ],
+  },
+  {
     version: "0.174.0",
     date: "2026-07-30",
     pr: 386,
