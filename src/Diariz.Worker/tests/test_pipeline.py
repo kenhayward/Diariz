@@ -193,3 +193,43 @@ def test_asr_openai_whisper_uses_fp32_on_cpu(monkeypatch):
     pipeline._asr("AUDIO")
 
     assert captured["kwargs"] == {"fp16": False}            # fp16 unsupported on CPU
+
+
+# ---- Telemetry spans cover the whole job ----
+#
+# whisperx.load_audio() is a full ffmpeg decode - the slowest single stage on a long upload - and
+# _shape_segments walks every word of the transcript. Both sat outside every span, so the span
+# breakdown did not add up to the job's wall-clock time and a job could look "unaccounted for".
+
+def test_transcribe_wraps_every_stage_including_the_decode_and_the_shaping(monkeypatch):
+    import contextlib
+
+    spans = []
+
+    @contextlib.contextmanager
+    def fake_span(op, name):
+        spans.append((op, name))
+        yield
+
+    monkeypatch.setattr(pipeline.telemetry, "span", fake_span)
+    monkeypatch.setattr(pipeline.whisperx, "load_audio", lambda path: np.zeros(16000))
+    monkeypatch.setattr(pipeline.config, "MAX_AUDIO_SECONDS", 0)
+    monkeypatch.setattr(pipeline, "_asr", lambda audio: {"language": "en", "segments": []})
+    monkeypatch.setattr(pipeline, "_get_align", lambda language: ("model", "meta"))
+    monkeypatch.setattr(pipeline.whisperx, "align", lambda *a, **k: {"segments": []})
+    monkeypatch.setattr(pipeline, "_diarize", lambda *a, **k: "diarization")
+    monkeypatch.setattr(pipeline.whisperx, "assign_word_speakers", lambda d, r: {"segments": []})
+    monkeypatch.setattr(pipeline, "_extract_speakers", lambda audio, segments: [])
+
+    out = pipeline.transcribe("/tmp/audio.wav")
+
+    assert out["language"] == "en"
+    # The decode and the shaping are now timed too, so the spans account for the wall clock.
+    assert spans == [
+        ("audio.decode", "decode"),
+        ("ai.asr", "asr"),
+        ("ai.align", "align"),
+        ("ai.diarize", "diarize"),
+        ("ai.shape", "shape"),
+        ("ai.embeddings", "embeddings"),
+    ]

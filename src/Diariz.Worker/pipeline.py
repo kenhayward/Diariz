@@ -200,7 +200,11 @@ def _too_long(duration_ms: int, max_seconds: float) -> bool:
 def transcribe(audio_path: str, min_speakers=None, max_speakers=None) -> dict:
     """Run transcription -> alignment -> diarization -> per-speaker embeddings.
     Returns {language, segments, speakers, duration_ms}. min/max_speakers are optional pyannote hints."""
-    audio = whisperx.load_audio(audio_path)
+    # 0. Decode to a 16 kHz mono waveform. This shells out to ffmpeg and is the slowest single
+    # stage on a long upload, so it gets its own span - without it the stage timings below do not
+    # add up to the job's wall-clock time and a slow job looks unaccounted for.
+    with telemetry.span("audio.decode", "decode"):
+        audio = whisperx.load_audio(audio_path)
 
     duration_ms = _duration_ms(audio)
     if _too_long(duration_ms, config.MAX_AUDIO_SECONDS):
@@ -224,7 +228,9 @@ def transcribe(audio_path: str, min_speakers=None, max_speakers=None) -> dict:
         diarize_segments = _diarize(audio, min_speakers, max_speakers)
         result = whisperx.assign_word_speakers(diarize_segments, result)
 
-    segments = _shape_segments(result["segments"])
+    # 3b. Reshape into the callback's segment contract (walks every word of the transcript).
+    with telemetry.span("ai.shape", "shape"):
+        segments = _shape_segments(result["segments"])
 
     # 4. Per-speaker voiceprint embeddings (for identification against enrolled people)
     with telemetry.span("ai.embeddings", "embeddings"):

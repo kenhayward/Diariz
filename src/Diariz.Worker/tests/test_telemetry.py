@@ -83,6 +83,7 @@ def test_scrub_redacts_voiceprints_but_keeps_speaker_labels():
     assert speaker["Embedding"] == telemetry.REDACTED
 
 
+import logging
 import sys
 from unittest.mock import MagicMock
 
@@ -108,8 +109,7 @@ def test_init_configures_the_sdk_with_pii_off_and_the_scrubber(monkeypatch):
     # init() sets the module-global _enabled directly (not via monkeypatch), so without this the flag
     # would leak True into every test that runs afterward and they'd try to import the real sentry_sdk.
     monkeypatch.setattr(telemetry, "_enabled", False)
-    fake_sdk = MagicMock()
-    monkeypatch.setitem(sys.modules, "sentry_sdk", fake_sdk)
+    fake_sdk, _ = _stub_sentry_sdk(monkeypatch)
     monkeypatch.setenv("SENTRY_DSN", "https://key@errors.example/1")
     monkeypatch.setenv("SENTRY_ENVIRONMENT", "development")
     monkeypatch.setenv("SENTRY_TRACES_SAMPLE_RATE", "0.5")
@@ -173,3 +173,67 @@ def test_span_delegates_to_the_sdk_when_enabled(monkeypatch):
         pass
 
     fake_sdk.start_span.assert_called_once_with(op="op.asr", name="ASR")
+
+
+# ---- Cross-runtime deny-list -------------------------------------------------------------------
+# The worker and the API report to the same GlitchTip instance and must redact the same field names,
+# but each keeps its own list and they had silently diverged (see the comment above _DENY_EXACT in
+# telemetry.py). This pins the shared set on the Python side; the .NET side is pinned by
+# SentryScrubberTests.IsSensitiveKey_CoversEveryNameInTheCrossRuntimeDenyList in
+# tests/Diariz.Api.Tests/SentryScrubberTests.cs. Between them they catch a REMOVAL from either
+# runtime; neither can catch an ADDITION made to only one, so keep the lists in step by hand.
+
+SHARED_DENY_LIST = [
+    # Exact field names carrying meeting content or biometrics.
+    "text", "transcript", "transcription", "segments", "words", "summary", "minutes",
+    "note", "notes", "content", "authorization", "cookie", "cookies",
+    "embedding", "embeddings",
+    # Substring markers for credentials.
+    "secret", "token", "password", "apikey", "api_key", "accesskey", "access_key",
+]
+
+
+@pytest.mark.parametrize("key", SHARED_DENY_LIST)
+def test_the_shared_cross_runtime_deny_list_is_covered(key):
+    assert telemetry.is_sensitive_key(key), (
+        f"'{key}' is on the deny-list shared with src/Diariz.Api/Services/SentryScrubber.cs "
+        "but this runtime no longer redacts it.")
+
+
+def _stub_sentry_sdk(monkeypatch):
+    """Put a fake sentry_sdk (and the logging-integration submodule init() imports) on sys.modules.
+
+    The submodule needs its own sys.modules entry: `from sentry_sdk.integrations.logging import ...`
+    goes through the import machinery, which checks sys.modules for the full dotted name before it
+    tries to walk into the (MagicMock, non-package) parent."""
+    fake_sdk = MagicMock()
+    fake_logging = MagicMock()
+    monkeypatch.setitem(sys.modules, "sentry_sdk", fake_sdk)
+    monkeypatch.setitem(sys.modules, "sentry_sdk.integrations", MagicMock())
+    monkeypatch.setitem(sys.modules, "sentry_sdk.integrations.logging", fake_logging)
+    return fake_sdk, fake_logging
+
+
+def test_init_stops_log_records_from_becoming_a_second_duplicate_event(monkeypatch):
+    # worker.handle() logs the failure with log.exception AND calls telemetry.capture_exception.
+    # sentry-sdk's LoggingIntegration is on by default and promotes ERROR records to events, so
+    # every failed job filed two issues. event_level=None turns that promotion off; level=INFO keeps
+    # log records arriving as breadcrumbs.
+    monkeypatch.setattr(telemetry, "_enabled", False)
+    fake_sdk, fake_logging = _stub_sentry_sdk(monkeypatch)
+    monkeypatch.setenv("SENTRY_DSN", "https://key@errors.example/1")
+    monkeypatch.setattr(telemetry, "release", lambda: "0.174.3")
+
+    assert telemetry.init() is True
+
+    fake_logging.LoggingIntegration.assert_called_once_with(
+        level=logging.INFO, event_level=None)
+    integrations = fake_sdk.init.call_args.kwargs["integrations"]
+    assert fake_logging.LoggingIntegration.return_value in integrations
+
+
+def test_importing_telemetry_does_not_import_the_sdk():
+    # The whole module is built around sentry_sdk being imported lazily inside init()/the context
+    # managers, so a deployment with no DSN (and the test env, which does not install it) pays
+    # nothing. A stray module-scope import of the logging integration would break that.
+    assert sys.modules.get("sentry_sdk") is None

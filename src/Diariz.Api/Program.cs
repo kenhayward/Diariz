@@ -17,6 +17,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using StackExchange.Redis;
 
+// Computed before the host is built: Sentry's Release option (below, in the UseSentry block) needs it
+// at host-configuration time. /health (near the bottom of this file) still reports the same value.
+var appVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+
 var builder = WebApplication.CreateBuilder(args);
 
 // ---- Options ----
@@ -44,6 +48,7 @@ builder.Services.Configure<ScreenshotOptions>(builder.Configuration.GetSection(S
 builder.Services.Configure<McpOptions>(builder.Configuration.GetSection(McpOptions.Section));
 builder.Services.Configure<McpOAuthOptions>(builder.Configuration.GetSection(McpOAuthOptions.Section));
 builder.Services.Configure<WebhookOptions>(builder.Configuration.GetSection(WebhookOptions.Section));
+builder.Services.Configure<TelemetryOptions>(builder.Configuration.GetSection(TelemetryOptions.Section));
 
 // Honour X-Forwarded-* from the reverse proxy (nginx/TLS terminator) so Request.Scheme/IsHttps reflect the
 // browser's HTTPS — needed for the OAuth state cookie's Secure flag and any request-derived URLs. The proxy
@@ -54,6 +59,37 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
     o.KnownIPNetworks.Clear();
     o.KnownProxies.Clear();
 });
+
+// ---- Optional error + performance reporting (GlitchTip / Sentry-compatible) ----
+// Entirely absent unless a DSN is configured, matching how Summarization/Dictation are gated.
+var telemetry = builder.Configuration.GetSection(TelemetryOptions.Section).Get<TelemetryOptions>()
+                ?? new TelemetryOptions();
+if (telemetry.Enabled)
+{
+    builder.WebHost.UseSentry(o =>
+    {
+        o.Dsn = telemetry.Dsn;
+        o.Environment = telemetry.Environment;
+        o.Release = appVersion;
+        o.TracesSampleRate = telemetry.TracesSampleRate;
+        // Never attach request bodies, cookies or user identifiers automatically.
+        o.SendDefaultPii = false;
+        // Three separate hooks because they redact three different shapes at three different
+        // lifecycle points. Omitting any one of them leaves a disclosure path open.
+        //  - Scrub covers the SentryEvent (Extra/Tags/Request), mutated in place and returned.
+        //  - ScrubTransaction covers the *transaction* envelope. BeforeSend does NOT run for
+        //    transactions, so without this the whole scrub was bypassed on the path that fires on
+        //    EVERY request at TracesSampleRate above - leaking the SignalR hub's ?access_token=<JWT>
+        //    and, via span descriptions, the query strings of outbound webhook URLs.
+        //  - Breadcrumbs (emitted for every Information+ ILogger call by Sentry.Extensions.Logging,
+        //    on by default inside Sentry.AspNetCore) are immutable once attached to an event -
+        //    Breadcrumb.Data has no setter and SentryEvent.Breadcrumbs exposes no replace API - so
+        //    ScrubBreadcrumb runs earlier and returns a rebuilt replacement instead.
+        o.SetBeforeSend(SentryScrubber.Scrub);
+        o.SetBeforeSendTransaction(SentryScrubber.ScrubTransaction);
+        o.SetBeforeBreadcrumb(SentryScrubber.ScrubBreadcrumb);
+    });
+}
 
 var jwt = builder.Configuration.GetSection(JwtOptions.Section).Get<JwtOptions>() ?? new JwtOptions();
 var storage = builder.Configuration.GetSection(StorageOptions.Section).Get<StorageOptions>() ?? new StorageOptions();
@@ -512,7 +548,6 @@ app.MapHub<TranscriptionHub>("/hubs/transcription");
 // MCP endpoint (Streamable HTTP), authenticated with the per-user MCP token scheme only.
 if (mcpOptions.Enabled)
     app.MapMcp("/mcp").RequireAuthorization(Diariz.Api.Auth.McpBearerAuthenticationHandler.SchemeName);
-var appVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
 app.MapGet("/health", () => Results.Ok(new { status = "ok", version = appVersion }));
 
 app.Run();
