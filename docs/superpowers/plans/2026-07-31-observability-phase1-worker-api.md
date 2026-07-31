@@ -92,7 +92,8 @@ services:
       retries: 10
 
   glitchtip:
-    image: glitchtip/glitchtip:v6.2
+    # No `v` prefix - GlitchTip dropped it after 6.0.3, and `v6.2` does not exist.
+    image: glitchtip/glitchtip:6.2
     restart: unless-stopped
     depends_on:
       glitchtip-postgres: { condition: service_healthy }
