@@ -1,0 +1,68 @@
+# Optional observability overlay: self-hosted GlitchTip (error tracking + transaction timings).
+#
+# Opt-in, and deliberately a separate file so the core stack is unchanged for anyone who does not
+# want it:
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+#
+# GlitchTip gets its OWN Postgres (not a second database inside the app's pgvector container):
+#   - the platform backup/restore operates on the app database; co-locating an observability tool's
+#     tables entangles two things with different retention and recovery semantics,
+#   - the postgres image only auto-creates POSTGRES_DB, and a second-database init script only runs
+#     on a FRESH volume - on the existing dev/prod boxes it would silently not run,
+#   - GlitchTip needs pg14+ while the app is pinned to 16 for pgvector; decoupling stops GlitchTip's
+#     upgrade cycle blocking the app's.
+#
+# It DOES share the app's Redis, on DB index 1. VALKEY_URL is optional for GlitchTip and only affects
+# caching and task-queue speed, so the blast radius is small and it saves a container.
+name: diariz
+
+services:
+  glitchtip-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: glitchtip
+      POSTGRES_USER: glitchtip
+      POSTGRES_PASSWORD: ${GLITCHTIP_POSTGRES_PASSWORD:-glitchtip}
+    volumes:
+      - glitchtipdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U glitchtip"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  glitchtip:
+    image: glitchtip/glitchtip:v6.2
+    restart: unless-stopped
+    depends_on:
+      glitchtip-postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment:
+      DATABASE_URL: "postgres://glitchtip:${GLITCHTIP_POSTGRES_PASSWORD:-glitchtip}@glitchtip-postgres:5432/glitchtip"
+      # DB index 1 - the app's queues live on index 0 and must not be disturbed.
+      VALKEY_URL: "redis://redis:6379/1"
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY}
+      # MUST include the scheme. Django derives its trusted CSRF origins from this, and a mismatch
+      # presents as "wrong password" on every login attempt rather than anything mentioning CSRF.
+      GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN}
+      DEFAULT_FROM_EMAIL: ${GLITCHTIP_FROM_EMAIL}
+      EMAIL_URL: ${GLITCHTIP_EMAIL_URL}
+      # Internal tool on a public subdomain: no open registration, no new orgs.
+      ENABLE_USER_REGISTRATION: "false"
+      ENABLE_ORGANIZATION_CREATION: "false"
+      # Spans (as opposed to bare transactions) require DuckDB. It runs inside the existing Python
+      # process writing Parquet, so this costs ~128 MB of RAM and no extra container.
+      GLITCHTIP_ENABLE_DUCKDB: "true"
+      GLITCHTIP_COLD_STORAGE_BUCKET: ${GLITCHTIP_COLD_STORAGE_BUCKET:-glitchtip}
+      AWS_S3_ENDPOINT_URL: "http://minio:9000"
+      AWS_ACCESS_KEY_ID: ${GLITCHTIP_MINIO_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${GLITCHTIP_MINIO_SECRET_KEY}
+    ports:
+      # Published for the OUTER reverse proxy only. Bind to localhost so it is not LAN-reachable:
+      # Docker publishes to 0.0.0.0 by default AND writes its own DNAT rules, bypassing the host
+      # firewall (same trap documented on the postgres service in docker-compose.yml).
+      - "${GLITCHTIP_BIND:-127.0.0.1}:${GLITCHTIP_PORT:-8000}:8000"
+
+volumes:
+  glitchtipdata:

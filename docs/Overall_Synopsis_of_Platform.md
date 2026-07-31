@@ -1746,6 +1746,37 @@ voiceprints are PyTorch and run on ROCm unchanged (PyTorch-ROCm keeps the `"cuda
 target: Strix Halo (gfx1151). The API/web are vendor-agnostic — only the worker image differs. The
 openai-whisper backend is slower than faster-whisper but accuracy is unchanged (the aligner re-times words).
 
+## Observability (optional): GlitchTip
+
+An **optional** self-hosted error-tracking and performance-monitoring service, [GlitchTip](https://glitchtip.com/)
+(a self-hostable Sentry-protocol server). It is not part of the core stack: it ships as a separate overlay
+compose file, `deploy/docker-compose.observability.yml`, layered on top of the main one -
+`docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d` - so anyone who does not
+want it runs the platform exactly as before with zero extra containers.
+
+- **Its own Postgres.** `glitchtip-postgres` (`postgres:16-alpine`) is a separate container and volume from
+  the app's `pgvector/pgvector:pg16` database — platform backup/restore (`MaintenanceController`, see below)
+  operates on the app database only, so co-locating GlitchTip's tables would entangle two things with
+  different retention and recovery semantics. It also decouples GlitchTip's own Postgres version from the
+  app's (which is pinned to 16 for pgvector).
+- **Its own MinIO bucket.** GlitchTip's DuckDB/Parquet cold storage for spans lives in a bucket of its own
+  (`glitchtip` by default, `GLITCHTIP_COLD_STORAGE_BUCKET`), reached with a scoped MinIO access key - never
+  the root credentials, and never a prefix inside the `recordings` bucket (a platform restore wipes and
+  re-seeds `recordings`, which would silently destroy the telemetry archive alongside it).
+- **Shares the app's Redis**, on **DB index 1** (`VALKEY_URL=redis://redis:6379/1`) - the app's job queues
+  live on index 0 and are untouched. Redis is optional for GlitchTip (it only speeds up caching and its task
+  queue), so the blast radius of sharing it is small, and it saves standing up a second Redis container.
+- **Deployed per-environment.** Each environment (dev, prod) that opts in runs its own GlitchTip instance
+  with its own Postgres, bucket, DSNs, and users - nothing is shared between dev and prod, the same way the
+  rest of the stack is deployed per-environment.
+- **Blast radius.** Because GlitchTip is co-located on the same box as the platform it is monitoring, it
+  **cannot report that the box itself is down** - a host outage, an out-of-disk condition, or a Docker daemon
+  crash takes GlitchTip down along with everything else. It only tells you about errors the *running*
+  worker/API processes have reported to it, not that they stopped running.
+
+This task (see the observability design doc) only stands the overlay up; the worker and API do not yet send
+it anything - instrumenting them to report errors via a `SENTRY_DSN` / `Sentry__Dsn` is a later phase.
+
 ## Platform backup & restore
 
 `MaintenanceController` (Platform-Administrator only) exports/imports the **whole platform** as one `.zip`:
