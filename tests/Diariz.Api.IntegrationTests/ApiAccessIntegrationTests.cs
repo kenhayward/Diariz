@@ -103,7 +103,21 @@ public class ApiAccessIntegrationTests(ContainersFixture fx)
         // Npgsql rejects a non-zero-offset DateTimeOffset written to a `timestamptz` column - the in-memory
         // provider used by the unit tests doesn't enforce this, so only a real-Postgres test catches it.
         var userId = await SeedUser();
-        var expires = new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.FromHours(5));
+
+        // Relative to today, NOT a literal date. This was `new DateTimeOffset(2026, 8, 1, 0, 0, 0, +05:00)`,
+        // which is 2026-07-31T19:00:00Z - so at 19:00 UTC on 2026-07-31 the test started failing on every
+        // run and stayed that way, because Create rejects an expiry that is not in the future
+        // (ApiTokensController: `exp <= DateTimeOffset.UtcNow` -> BadRequest, so `.Value` was null).
+        //
+        // Anchored to midnight rather than `UtcNow.AddDays(2)` so the value has no sub-microsecond ticks:
+        // Postgres `timestamptz` stores microseconds, and a DateTimeOffset carrying finer ticks would come
+        // back slightly different and fail the equality assertion intermittently.
+        var expires = new DateTimeOffset(DateTime.UtcNow.Date.AddDays(2), TimeSpan.Zero)
+            .ToOffset(TimeSpan.FromHours(5));
+
+        // The whole point of the test. Without this, a future edit that made `expires` UTC would leave the
+        // test passing while no longer covering anything.
+        Assert.NotEqual(TimeSpan.Zero, expires.Offset);
 
         ApiTokenCreatedDto created;
         await using (var db = fx.CreateDbContext())
