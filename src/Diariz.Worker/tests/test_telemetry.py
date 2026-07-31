@@ -81,3 +81,91 @@ def test_scrub_redacts_voiceprints_but_keeps_speaker_labels():
     speaker = cleaned["extra"]["Speakers"][0]
     assert speaker["Speaker"] == "SPEAKER_00"
     assert speaker["Embedding"] == telemetry.REDACTED
+
+
+import sys
+from unittest.mock import MagicMock
+
+import pytest
+
+
+def test_init_returns_false_and_does_nothing_when_dsn_is_empty(monkeypatch):
+    monkeypatch.setenv("SENTRY_DSN", "")
+    # If init tried to use the SDK with no DSN this would raise, proving the guard ran first.
+    monkeypatch.setitem(sys.modules, "sentry_sdk", None)
+
+    assert telemetry.init() is False
+
+
+def test_init_returns_false_when_dsn_is_only_whitespace(monkeypatch):
+    monkeypatch.setenv("SENTRY_DSN", "   ")
+    monkeypatch.setitem(sys.modules, "sentry_sdk", None)
+
+    assert telemetry.init() is False
+
+
+def test_init_configures_the_sdk_with_pii_off_and_the_scrubber(monkeypatch):
+    fake_sdk = MagicMock()
+    monkeypatch.setitem(sys.modules, "sentry_sdk", fake_sdk)
+    monkeypatch.setenv("SENTRY_DSN", "https://key@errors.example/1")
+    monkeypatch.setenv("SENTRY_ENVIRONMENT", "development")
+    monkeypatch.setenv("SENTRY_TRACES_SAMPLE_RATE", "0.5")
+    monkeypatch.setattr(telemetry, "release", lambda: "0.174.2")
+
+    assert telemetry.init() is True
+
+    kwargs = fake_sdk.init.call_args.kwargs
+    assert kwargs["dsn"] == "https://key@errors.example/1"
+    assert kwargs["send_default_pii"] is False
+    assert kwargs["before_send"] is telemetry._before_send
+    assert kwargs["before_send_transaction"] is telemetry._before_send
+    assert kwargs["traces_sample_rate"] == 0.5
+    assert kwargs["environment"] == "development"
+    assert kwargs["release"] == "0.174.2"
+
+
+def test_before_send_scrubs_the_event():
+    event = {"extra": {"text": "content", "transcription_id": "tid-1"}}
+
+    cleaned = telemetry._before_send(event, None)
+
+    assert cleaned["extra"]["text"] == telemetry.REDACTED
+    assert cleaned["extra"]["transcription_id"] == "tid-1"
+
+
+def test_release_reads_the_version_the_api_reports(monkeypatch):
+    class FakeResponse:
+        def json(self):
+            return {"status": "ok", "version": "0.174.2"}
+
+    monkeypatch.setattr(telemetry.requests, "get", lambda url, timeout: FakeResponse())
+
+    assert telemetry.release() == "0.174.2"
+
+
+def test_release_returns_none_when_the_api_is_unreachable(monkeypatch):
+    def boom(url, timeout):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(telemetry.requests, "get", boom)
+
+    assert telemetry.release() is None
+
+
+def test_span_and_transaction_are_no_ops_when_reporting_is_off(monkeypatch):
+    monkeypatch.setattr(telemetry, "_enabled", False)
+
+    with telemetry.transaction("job"):
+        with telemetry.span("op.stage", "stage"):
+            pass  # must not raise, and must not need sentry_sdk
+
+
+def test_span_delegates_to_the_sdk_when_enabled(monkeypatch):
+    fake_sdk = MagicMock()
+    monkeypatch.setitem(sys.modules, "sentry_sdk", fake_sdk)
+    monkeypatch.setattr(telemetry, "_enabled", True)
+
+    with telemetry.span("op.asr", "ASR"):
+        pass
+
+    fake_sdk.start_span.assert_called_once_with(op="op.asr", name="ASR")
