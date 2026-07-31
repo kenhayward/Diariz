@@ -35,6 +35,10 @@ public class OpenApiCurationTests
             if (type.IsAbstract || !typeof(ControllerBase).IsAssignableFrom(type)) continue;
             var route = type.GetCustomAttribute<RouteAttribute>()?.Template;
             if (!OpenApiCuration.ShouldInclude(route)) continue; // only the published surface
+            // A controller can opt out of ApiExplorer entirely (e.g. an internal bootstrap endpoint the
+            // real OpenAPI generator never sees) - honor that the same way the real document does, or this
+            // enumeration disagrees with what actually gets published.
+            if (type.GetCustomAttribute<ApiExplorerSettingsAttribute>()?.IgnoreApi == true) continue;
             yield return [type.Name[..^"Controller".Length]];
         }
     }
