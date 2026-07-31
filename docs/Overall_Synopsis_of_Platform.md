@@ -1862,6 +1862,32 @@ want it runs the platform exactly as before with zero extra containers.
     key/URL scrub. This is narrower than the API's `SentryScrubber`, which also nulls the request body and
     drops cookies outright - the browser SDK does not capture either by default, so there is nothing there to
     strip.
+  - **URL stripping is a rule over every string, never a list of key names.** Three of the SDK's **default**
+    integrations put credential-bearing URLs under key names this app does not choose, so `beforeSend`/
+    `beforeBreadcrumb` apply the strip to whole bags rather than to named fields:
+    - `breadcrumbsIntegration`'s history handler emits `{ category: "navigation", data: { from, to } }`,
+      where each value is `parseUrl(...).relative` - **path plus query plus hash**. Neither key is named
+      `url` and neither is deny-listed, so an earlier `data.url`-only rule passed
+      `/setup?token=<account-activation credential>`, the OAuth authorize query, and
+      `/login?returnTo=<encoded authorize URL>` through untouched. Every string value in a breadcrumb's
+      `data` is now stripped.
+    - `httpContextIntegration` copies the browser's `Referer` header onto `event.request.headers` - the
+      **full previous URL**, which is the same credential whenever the user has just come from `/setup` or
+      `/connect/authorize`. Every string header value is stripped, on error events and transactions alike.
+    - Free text quotes URLs too, so `exception.values[].value` and `event.message` get the same
+      word-by-word `scrubUrlsIn` treatment the breadcrumb message and span descriptions already had.
+  - **Sessions are off by removing the integration, not by an option.** GlitchTip does not support session
+    envelopes. `autoSessionTracking: false` does **not** exist in `@sentry/react` 10.69.0 (zero occurrences
+    anywhere in the installed `@sentry/*` packages), so passing it did nothing and the SPA sent a session on
+    load and on every route change. `browserSessionIntegration` is a **default** integration and
+    `getIntegrationsToSetup` **merges** a supplied array with the defaults, so the only way to drop it is the
+    **function** form: `integrations: (defaults) => [...defaults.filter(i => i.name !== "BrowserSession"),
+    browserTracingIntegration()]`. The option object is typed `Pick<BrowserOptions, ...>` against the SDK's
+    own type precisely so the next non-existent option is a compile error rather than a silent no-op.
+  - **Telemetry never delays first paint by more than `CONFIG_TIMEOUT_MS` (2 s).** `main.tsx` gates the first
+    render on the `GET /api/config` read, so `initTelemetry` bounds it with an `AbortController` **and** a
+    race: an API that accepts the connection and then hangs costs 2 s, not the proxy's timeout (60 s on
+    nginx), after which the app renders with telemetry off.
 
 - **Browser tracing joins the same trace as the API request it triggered - and depends on an outer-proxy
   header passthrough that is easy to miss.** `initTelemetry` also enables `@sentry/react`'s
@@ -1900,7 +1926,8 @@ want it runs the platform exactly as before with zero extra containers.
   browser ever fetches them. `apps/web/Dockerfile`'s build stage then deletes any `.map` file that survives
   into `/usr/share/nginx/html` (`RUN find ... -name '*.map' -delete`) as defence in depth - without that, the
   files would stay fetchable by guessing the filename even though nothing links to them. Before that deletion,
-  a build stage step optionally uploads the maps to GlitchTip via `npx @glitchtip/cli sourcemaps upload`,
+  a build stage step optionally runs `npx @glitchtip/cli sourcemaps inject ./dist` and then
+  `npx @glitchtip/cli sourcemaps upload ./dist`,
   gated on four build inputs all being present: `GLITCHTIP_URL`/`GLITCHTIP_ORG`/`GLITCHTIP_PROJECT` (build
   ARGs) and a `glitchtip_token` **BuildKit secret** (never a build ARG - an ARG is recorded in the image
   history and readable by anyone who can pull the image). Missing any of the four just skips the upload with
@@ -1911,7 +1938,19 @@ want it runs the platform exactly as before with zero extra containers.
   Dockerfile re-derives the same fallback (`APP_VERSION` build ARG, else this package's `package.json`
   version) so the two agree whether or not the ARG is passed, since a mismatch means GlitchTip cannot attach
   the uploaded maps to incoming browser events. `--org`/`--project` must name the **same browser project** as
-  `SENTRY_BROWSER_DSN` above. Because the SPA is built inside `apps/web/Dockerfile` on the deploying server
+  `SENTRY_BROWSER_DSN` above. **The `inject` step is what makes the upload mean anything:** because
+  `sourcemap: "hidden"` strips the `//# sourceMappingURL=` comment, an uploaded map has nothing tying it back
+  to the minified frame it explains, and GlitchTip silently leaves the trace minified. `inject` writes a
+  matching **debug ID** into each bundle and its map (`//# debugId=...` plus a `_sentryDebugIds` global, which
+  `@sentry/core`'s `prepareEvent` turns into the event's `debug_meta.images`), which is the link the upload
+  registers - so GlitchTip's documented flow is inject-then-upload. It rewrites `./dist` in place and contacts
+  no server, but stays inside the same credential gate: with no upload to pair them with, injected debug IDs
+  are dead weight in the shipped bundles. **`GLITCHTIP_URL` must be reachable from inside the build
+  container**, so it has to be the public domain: with the default `GLITCHTIP_BIND=127.0.0.1`, a
+  `http://127.0.0.1:8000` value reaches the *host's* loopback, not the builder's, and the upload warns
+  "connection refused" while the build still succeeds - an easy failure to miss. A compose service name
+  (`http://glitchtip:8000`) does not work either, since the build runs before and outside the compose network.
+  Because the SPA is built inside `apps/web/Dockerfile` on the deploying server
   rather than in GitHub CI, this upload step has to live there too - and it is wired straight into
   `deploy/docker-compose.yml`'s `web` service so the normal `docker compose up --build` picks it up with no
   extra flags: `GLITCHTIP_URL`/`GLITCHTIP_ORG`/`GLITCHTIP_PROJECT`/`APP_VERSION` are service `build.args`

@@ -16,8 +16,19 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-# Upload source maps to GlitchTip so production stack traces stay readable; the runtime stage below
-# deletes them regardless. Gated on the auth token + URL + org + project: a build without all four just
+# Inject debug IDs, then upload source maps to GlitchTip so production stack traces stay readable; the
+# runtime stage below deletes the maps regardless.
+#
+# The `inject` step is load-bearing, not decorative. vite is configured with `sourcemap: "hidden"`,
+# which strips the `//# sourceMappingURL=` comment from every bundle - so an uploaded map has NOTHING
+# tying it back to the minified frame it explains, and GlitchTip silently leaves the trace minified.
+# `sourcemaps inject` writes a debug ID into each bundle AND its map, which is the link the upload then
+# registers; GlitchTip's documented flow is inject-then-upload for exactly this reason. It rewrites
+# files in ./dist in place, so it must run before the upload and before the runtime stage copies dist.
+# It contacts no server (no --url/--auth-token needed), but it is kept inside the credential gate all
+# the same: with no upload to pair them with, injected debug IDs are dead weight in the shipped bundles.
+#
+# Gated on the auth token + URL + org + project: a build without all four just
 # skips this, so a developer build and a CI build both still succeed. The token is a BuildKit secret,
 # never a build ARG - an ARG is recorded in the image history and readable by anyone who can pull the
 # image. CLI verified via `npx @glitchtip/cli --help` (published as @glitchtip/cli, binary
@@ -34,6 +45,8 @@ ARG GLITCHTIP_PROJECT=""
 RUN --mount=type=secret,id=glitchtip_token \
     if [ -s /run/secrets/glitchtip_token ] && [ -n "$GLITCHTIP_URL" ] && [ -n "$GLITCHTIP_ORG" ] && [ -n "$GLITCHTIP_PROJECT" ]; then \
       RELEASE="${APP_VERSION:-$(node -p "require('./package.json').version")}"; \
+      npx --yes @glitchtip/cli sourcemaps inject ./dist \
+      || echo "Warning: GlitchTip debug-ID injection failed; uploaded maps may not resolve."; \
       npx --yes @glitchtip/cli sourcemaps upload ./dist \
         --url "$GLITCHTIP_URL" \
         --auth-token "$(cat /run/secrets/glitchtip_token)" \
