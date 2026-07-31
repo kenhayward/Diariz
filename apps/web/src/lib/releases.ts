@@ -78,6 +78,23 @@ export const RELEASES: Release[] = [
     ],
   },
   {
+    version: "0.174.14",
+    date: "2026-08-01",
+    pr: 409,
+    headline: "The web build no longer prints error text on successful builds",
+    summary:
+      "Every successful build of the web app printed eight lines of error and refusal messages at " +
+      "whoever was watching. They were never real - the build tool echoes the whole script it is " +
+      "about to run, so the failure messages appeared word for word whether the step passed or " +
+      "failed. A build log that cries wolf every time trains you to skim past the one that matters, " +
+      "so the logic moved into a script file and those words now appear only when something has " +
+      "actually gone wrong. No change to what the build does.",
+    changed: [
+      "Successful builds of the web app no longer print error and refusal messages that did not " +
+        "apply.",
+    ],
+  },
+  {
     version: "0.174.13",
     date: "2026-07-31",
     pr: 407,
