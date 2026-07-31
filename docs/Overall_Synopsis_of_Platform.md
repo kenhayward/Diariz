@@ -1912,8 +1912,15 @@ want it runs the platform exactly as before with zero extra containers.
   version) so the two agree whether or not the ARG is passed, since a mismatch means GlitchTip cannot attach
   the uploaded maps to incoming browser events. `--org`/`--project` must name the **same browser project** as
   `SENTRY_BROWSER_DSN` above. Because the SPA is built inside `apps/web/Dockerfile` on the deploying server
-  rather than in GitHub CI, this upload step has to live there too - see `deploy/.env.example` for the build
-  command (`docker compose build --secret ... --build-arg ...`).
+  rather than in GitHub CI, this upload step has to live there too - and it is wired straight into
+  `deploy/docker-compose.yml`'s `web` service so the normal `docker compose up --build` picks it up with no
+  extra flags: `GLITCHTIP_URL`/`GLITCHTIP_ORG`/`GLITCHTIP_PROJECT`/`APP_VERSION` are service `build.args`
+  (each `${VAR:-}`, so unset stays blank) and the token is a service `build.secrets` entry backed by a
+  top-level `secrets: glitchtip_token: { environment: GLITCHTIP_TOKEN }` - Compose reads `GLITCHTIP_TOKEN`
+  straight out of `deploy/.env` and mounts it as a BuildKit secret, never a build ARG. That `environment:`
+  form always mounts the secret file, empty when the env var is unset, which is why the Dockerfile's gate
+  tests `-s` (non-empty) rather than `-f` (exists) - a bare `-f` would misread an empty file as "token
+  provided" under this wiring. See `deploy/.env.example` for the variables.
 
 ## Platform backup & restore
 

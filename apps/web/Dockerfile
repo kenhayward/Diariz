@@ -24,11 +24,15 @@ RUN npm run build
 # glitchtip-cli) - unlike Sentry's CLI, GlitchTip's requires an --org and --project slug in addition to
 # --url/--auth-token/--release. A failed upload (unreachable server, bad credentials) warns rather than
 # failing the build - the web image must still ship even if GlitchTip is unavailable at build time.
+# The presence check below is `-s` (non-empty), not `-f` (exists): a bare `docker build --secret`
+# leaves the file absent when omitted, but deploy/docker-compose.yml's `environment:`-sourced secret
+# always mounts the file and leaves it EMPTY when GLITCHTIP_TOKEN is unset in .env - `-f` alone would
+# wrongly treat that empty file as "token provided" under `docker compose up --build`.
 ARG GLITCHTIP_URL=""
 ARG GLITCHTIP_ORG=""
 ARG GLITCHTIP_PROJECT=""
 RUN --mount=type=secret,id=glitchtip_token \
-    if [ -f /run/secrets/glitchtip_token ] && [ -n "$GLITCHTIP_URL" ] && [ -n "$GLITCHTIP_ORG" ] && [ -n "$GLITCHTIP_PROJECT" ]; then \
+    if [ -s /run/secrets/glitchtip_token ] && [ -n "$GLITCHTIP_URL" ] && [ -n "$GLITCHTIP_ORG" ] && [ -n "$GLITCHTIP_PROJECT" ]; then \
       RELEASE="${APP_VERSION:-$(node -p "require('./package.json').version")}"; \
       npx --yes @glitchtip/cli sourcemaps upload ./dist \
         --url "$GLITCHTIP_URL" \
