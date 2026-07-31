@@ -1,112 +1,79 @@
-# Handoff: GlitchTip deployment, in progress
+# Handoff: GlitchTip deployment
 
-**Transient. Delete this file once the deployment is finished** - it is session state, not a reference. The durable material lives in `docs/GlitchTip_Deployment.md`.
+**Transient. Delete this file once prod is done** - it is session state, not a reference. The durable material lives in `docs/GlitchTip_Deployment.md`, which is now accurate and was rewritten from what actually worked rather than from upstream docs.
 
-Updated 2026-07-31 on the dev box, at repo version **0.174.9**.
-
----
-
-## The login blocker is resolved
-
-**Cause: the database was never migrated.** Not a registration-policy problem, which is where the previous session spent its time.
-
-The image's entrypoint (`bin/start.sh`) only runs `./manage.py migrate` when the Heroku `DYNO` environment variable is set. Under Compose it never is, so the plain `web` role started against a completely empty database - `showmigrations` showed **zero** applied.
-
-The symptom was indirect enough to send the last session down the wrong path entirely. The login page is a **static SPA**, so it rendered perfectly. The register link was missing because the settings call behind it was 500ing on `relation "socialaccount_socialapp" does not exist`. That looked exactly like a permissions setting, and every hypothesis about `ENABLE_USER_REGISTRATION` was chasing it.
-
-**Fix:** `GLITCHTIP_EMBED_WORKER: "true"` in the overlay. That flips `SERVER_ROLE` to `all_in_one`, which runs `migrate` + `maintain_partitions` + `createcachetable` on every boot and embeds the task worker in the web process.
-
-Two things that were also broken and would have surfaced later, separately:
-
-- **No task worker at all.** The `web` role runs none. Alert emails, uptime checks and cleanup would silently never have fired.
-- **No event partitions.** Issue events live in partitioned tables; `maintain_partitions` creates them. Ingest would have failed later, looking like an unrelated bug.
-
-### Both lockdown flags were innocent, and are back to `false`
-
-Verified in the 6.2 source, not inferred:
-
-- `apps/users/utils.py` - `ENABLE_USER_REGISTRATION or not User.objects.exists()`
-- `apps/organizations_ext/utils.py` - `ENABLE_ORGANIZATION_CREATION or not Organization.objects.aexists()`, and `api.py:92` exempts superusers permanently
-- The Angular frontend applies the same rule: `enableOrgCreation || user?.isSuperuser || orgCount === 0`
-
-So the previous session's flagged risk - *"a `createsuperuser` account may land with no organization, and org creation is disabled"* - **is false**. The first org is always creatable. `createsuperuser` is not needed at all.
-
-Confirmed live: with `ENABLE_USER_REGISTRATION=false` in the container's environment, `/api/settings/` returns `"enableUserRegistration": true`, because there are zero users.
+Updated 2026-07-31 at repo version **0.174.11**, `main` clean, PRs #401-#404 all merged.
 
 ---
 
-## Where the deployment has got to
+## State: dev is deployed and working
+
+Every blocker is cleared. What remains is verification, then the prod recreate.
 
 | Step | State |
 | --- | --- |
-| Secrets generated, `.env` populated | done |
-| MinIO bucket + scoped key provisioned | done |
-| Proxy configured (Nginx Proxy Manager, remote) | done |
-| Container up, **migrations applied**, worker embedded | done |
-| First user | created - `ken@stocks-hayward.com`, id 1, active, email unverified |
-| **Organisation** | **not yet - sign in and create it, see below** |
-| SMTP | **broken, fixed in the repo but `.env` still needs re-pasting** |
-| Three projects (`diariz-worker`, `diariz-api`, `diariz-web`) | not started |
-| Pass 2: DSNs into `.env`, restart app services | not started |
-| Pass 3: source-map credentials | not started |
-| Verification checklist | not started |
+| Secrets, MinIO bucket + scoped key, proxy | done |
+| Container up, **migrations applied**, task worker embedded | done |
+| SMTP | **working** - proven by a real SMTP login, not just config |
+| First account (`ken@stocks-hayward.com`) + org `diariz` | done |
+| Team `diariz`, three projects with DSNs | done |
+| DSNs in `.env`, app services recreated and reporting | done |
+| Both proxy hosts in NPM | done |
+| **Verification checklist** | **in progress - this is the task** |
+| **Prod recreate** | not started |
 
-### The registration 500, and why it does not need re-registering
+Proven live on dev, so do not re-test these:
 
-Signing up returned a 500 and afterwards the page said registration was unavailable. The account **was** created; the request then died sending the verification email:
-
-```
-smtplib.SMTPNotSupportedError: SMTP AUTH extension not supported by server.
-```
-
-With a user now in the table, the first-run registration window closed behind a half-finished signup.
-
-**Cause:** `GLITCHTIP_EMAIL_URL` used a plain `smtp://` scheme. django-environ only sets `EMAIL_USE_TLS` for `smtps`/`smtp+tls` and `EMAIL_USE_SSL` for `smtp+ssl`, so the connection was clear text - and Gmail only advertises AUTH after STARTTLS. `deploy/glitchtip-secrets/new-secrets.ps1` hardcoded `smtp://`, so **no URL it ever generated could authenticate anywhere**. Fixed in the repo; the generated `.env` value still has to be replaced by hand.
-
-**No need to register again.** `ACCOUNT_EMAIL_VERIFICATION` is `optional`, and the account is active with a usable password:
-
-1. Sign in at the GlitchTip URL with the email and password you just chose.
-2. It goes to **Create a New Organization** ("This is the first step to get started with GlitchTip"). Name it.
-3. Carry on at **1f** in `docs/GlitchTip_Deployment.md` for the three projects, then pass 2 for the DSNs.
-
-Fix the mail separately - nothing above is blocked on it, but invitations and password resets are:
-
-```
-GLITCHTIP_EMAIL_URL=smtp+tls://ken%40stocks-hayward.com:<app-password>@smtp.gmail.com:587
-```
-
-then `docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d glitchtip`. Verification checklist item 3 covers proving it.
+- A real envelope through NPM returns 200 and becomes an issue (browser ingest path works end to end).
+- The API reports transactions over the in-network DSN - 23 transaction groups, correctly parameterised as `GET /api/recordings/{id:guid}`.
+- A 10 MB POST returns 403 (auth), not 413 (size), so the proxy body limit is already adequate for source maps.
 
 ---
 
-## Still not verified by anyone, and only reachable from this box
+## Two things that cost two sessions - do not rediscover
 
-1. **Does a captured event contain anything it should not?** Open one and read the whole payload: no transcript text, no `access_token`, no voiceprint vector, no request body. This is the gate that matters most - eight leaks were found by inspection, and a ninth would be found the same way.
-2. **Does GlitchTip resolve a stack trace against the uploaded source maps?** The upload wiring is proven end to end; the server side is not.
-3. **Does the proxy preserve `sentry-trace` and `baggage`?** This **fails silently** - the only symptom is browser and API spans arriving as two unlinked traces instead of one.
+**Migrations do not run by themselves.** The image entrypoint only runs `./manage.py migrate` when the Heroku `DYNO` variable is set, which Compose never sets. The symptom is not "migrations did not run": it is a login page that renders perfectly with **no register link**, because the settings API behind it 500s on a missing table. Two sessions were spent adjusting registration flags. Fixed by `GLITCHTIP_EMBED_WORKER: "true"` (#401), which also embeds the task worker and creates the event partitions - both separately broken.
 
-One more, noticed while fixing the above and **not** addressed: the container logs `ALLOWED_HOSTS is the wildcard default. Restrict to known hostnames via the ALLOWED_HOSTS env var`. It is on a public subdomain, so that is worth closing before this counts as finished. Left alone deliberately - it is a separate change from the migration fix.
+**`EMAIL_URL` needs a TLS scheme.** `new-secrets.ps1` hardcoded `smtp://`, so no URL it ever generated could authenticate anywhere. It surfaced as a 500 on the *first registration*, which created the user and then failed sending its verification mail - stranding the account and closing the first-run registration window behind it. Fixed in #402 (`smtp+tls`, or `smtp+ssl` on 465).
+
+The pattern in both: a symptom that pointed at a *policy* (a missing link, a permission) when the thing underneath was simply broken. Check the layer below before adjusting the layer above.
 
 ---
 
-## Gotchas already paid for - do not rediscover
+## Decisions taken, so they are not reopened
+
+- **Recording GUIDs in browser transaction names are accepted.** `beforeSendTransaction` does not scrub `event.transaction`, so names arrive as `/recordings/<guid>` rather than `/recordings/:id`. Reviewed and accepted: the GUIDs are anonymous. The consequence is cardinality - a distinct Performance entry per recording instead of one aggregate. If that view gets noisy later, the fix is route parameterisation via the React Router tracing integration, not another scrubber rule.
+- **`GLITCHTIP_BIND` stays `0.0.0.0`.** Deliberate: a fixed IP in `.env` is invisible to whoever runs the network and rots when the host is re-addressed, so the restriction belongs at the network layer. The runbook now presents both options as a real choice rather than implying the pinned IP is correct.
+
+---
+
+## Outstanding
+
+**The verification checklist** in `docs/GlitchTip_Deployment.md`. None of it has been run. Notes that will save time:
+
+- **Check 9 is the one that matters** - open a captured event and read the *whole* payload: no transcript text, no `access_token`, no voiceprint vector, no request body. Eight leak paths were found by exactly this method during the build; a ninth would be found the same way. Read the raw JSON, not the UI's tidy sections:
+  `https://errors.dev.diariz.stocks-hayward.com/api/0/issues/<id>/events/latest/` (works in a logged-in browser tab).
+- **There are no error events yet**, only transactions - and transactions live under Performance, not Issues, so the Issues list looks empty. To produce a real payload with request context, throw one from the app's devtools console:
+  `setTimeout(() => { throw new Error("scrubber check"); });`
+- **Check 8 (trace propagation) cannot be verified from the database.** DuckDB is enabled, so spans go to Parquet and no Postgres table carries a `trace_id`. It has to be a UI comparison of two spans' trace ids.
+- A synthetic test issue titled "NPM proxy reachability test - safe to delete" is still in `diariz-web`.
+
+**Then the prod recreate.** Two things must differ from dev: fresh secrets (`NewGlitchTipSecrets.cmd` runs once per server - a shared `SECRET_KEY` would let a signed value from dev replay against prod) and `SENTRY_ENVIRONMENT=production`. Everything else follows the runbook, which now includes the team step, both proxy hosts, and the `ALLOWED_HOSTS` trap.
+
+**`GLITCHTIP_ALLOWED_HOSTS`** is available but unset, so the wildcard warning still logs on every boot. If you set it, it **must** include `glitchtip` alongside the public hostname - the API and worker post in-network as `Host: glitchtip`, and Django drops any host not listed, which stops server-side reporting silently while the browser keeps working.
+
+---
+
+## Environment notes for this box
 
 | Thing | Detail |
 | --- | --- |
-| Migrations | Do NOT assume the container migrates itself. Check `showmigrations`, and see the note above |
+| **Node is not installed** | The web vitest suite cannot run here. CI covers it; say so in the PR |
+| **Git identity was unset** | Set repo-local to `Ken Hayward <kenhayward@hotmail.com>`, matching the bulk of history |
+| Host LAN address | `192.168.1.49` |
+| The `minio` container | Busybox: no `grep`, `sed` or `which`. Text processing on the host |
+| The `glitchtip` container | Full Python image - it *does* have grep, and `./manage.py shell -c` is the fastest way to ask the database a direct question |
+| Piping to `grep` | Everything after a `\|` runs on the **host**, so it fails in PowerShell. Filter inside the container instead |
 | GlitchTip image tags | No `v` prefix from 6.0.4 onward. `6.2` is right, `v6.2` does not exist |
-| The `minio` container | Minimal busybox: **no `grep`, `sed` or `which`**. Text processing must happen on the host |
-| The `glitchtip` container | A full Python image - it *does* have `grep`, and `./manage.py shell -c` is the fastest way to ask the database a direct question |
-| `docker compose ps --services` | Emits **LF-only** line endings even on Windows, so `findstr /x` never matches. Use `docker compose ps -q <svc>` |
-| `.sh` files | `.gitattributes` forces LF. On a fresh Windows clone check `git ls-files --eol` shows `w/lf` |
-| The six required env vars | Guarded with `${VAR:?}`. Note this makes `docker compose down` need them present too |
-| Hardcoded dates in tests | One expired and broke CI on every branch. Anything compared against `UtcNow` must be relative |
-| **Node is not installed on this box** | The web vitest suite cannot run here. Rely on CI, and say so in the PR |
-
----
-
-## Working style that has been productive
-
-Verify against the actual system rather than documentation or memory. Every error across these sessions came from assuming a convention held - the image tag, `grep` in the MinIO container, `findstr` line endings, and this time an entrypoint that looked like it migrated and only does so on Heroku.
-
-The lesson from this round specifically: when a symptom points at a *policy* (a missing link, a permission), check that the thing underneath is even working before adjusting the policy. Two sessions of flag-flipping were spent on a 500 that one `curl` of the settings endpoint would have exposed immediately.
+| `docker compose ps --services` | LF-only line endings even on Windows, so `findstr /x` never matches. Use `docker compose ps -q <svc>` |
+| The six required env vars | Guarded with `${VAR:?}`, so `docker compose down` needs them present too |
