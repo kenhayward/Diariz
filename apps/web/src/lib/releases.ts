@@ -59,6 +59,27 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.174.11",
+    date: "2026-07-31",
+    pr: 403,
+    headline: "Optional error tracker: proxy and setup guidance from a real deployment",
+    summary:
+      "Setting the optional error tracker up on a real server turned up three things the guide did " +
+      "not say: the app's own proxy entry needs checking too or browser and server timings never " +
+      "join up, a team has to exist before projects can be created, and locking the tracker to its " +
+      "public address the obvious way silently stops the server half from reporting. The guide now " +
+      "covers all three, and the setting for that last one is available with a warning attached. " +
+      "Only affects self-hosters running that optional overlay.",
+    added: [
+      "An optional setting to restrict the error tracker to known hostnames, documented with the " +
+        "internal name it must also include.",
+    ],
+    changed: [
+      "The deployment guide now covers the app's own proxy entry, the team needed before projects, " +
+        "and why binding to all interfaces is riskier than it looks.",
+    ],
+  },
+  {
     version: "0.174.10",
     date: "2026-07-31",
     pr: 402,

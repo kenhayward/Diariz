@@ -183,6 +183,10 @@ GLITCHTIP_COLD_STORAGE_BUCKET=glitchtip
 
 ### 1d. Set up the proxy
 
+**There are two proxy hosts to think about, not one.** The obvious one is GlitchTip's own hostname, below. The one people miss is the **app's existing proxy host**, because browser telemetry is emitted on the app's origin - covered after it.
+
+#### The GlitchTip host
+
 **Nginx Proxy Manager** - Proxy Hosts, Add Proxy Host:
 
 | Tab | Field | Value |
@@ -213,6 +217,34 @@ proxy_send_timeout 300s;
 NPM's generated config already sets `Host` and `X-Forwarded-Proto`, so you should not need to add them. If login fails with a CSRF error anyway, that is the first thing to check.
 
 **Raw nginx instead?** Use the server block in `docs/superpowers/plans/2026-07-31-observability-phase1-worker-api.md`, Task 1 Step 4. Note the `map $http_upgrade $connection_upgrade` directive it includes must sit at `http` level, outside `server`, or nginx will not start.
+
+#### The app's own host - do not skip this
+
+Your app already has a proxy host (`dev.diariz.example.com` or similar). It needs checking too, and it is easy to miss because nothing about it looks observability-related:
+
+| Field | Value | Why |
+| --- | --- | --- |
+| Block Common Exploits | **off** | The browser SDK sends `sentry-trace` and `baggage` on XHRs to `/api`. If they are stripped, the browser span and the API span arrive as **two unlinked traces** - no error, nothing in a log, just permanently disconnected halves. This is verification check 8 |
+| Websockets Support | **on** | Unrelated to GlitchTip, but it is the same form: SignalR needs it, and without it the app silently degrades to long-polling |
+
+Nothing about the **DSNs** requires a proxy change. The two server-side DSNs point at `glitchtip:8000` inside the Docker network and never reach your proxy at all; the browser DSN uses the GlitchTip host you just configured.
+
+#### Restricting `ALLOWED_HOSTS`, and the trap in it
+
+GlitchTip logs `ALLOWED_HOSTS is the wildcard default` on every start, and on a publicly reachable subdomain that is worth closing. **Do not set it to just your public hostname.** The API and worker post to `http://glitchtip:8000`, so their requests carry `Host: glitchtip`, and Django rejects a host that is not listed - which would kill server-side reporting silently while the browser kept working:
+
+```
+errors.dev.diariz.example.com  -> allowed
+glitchtip                      -> REJECTED
+```
+
+Include the internal service name alongside the public hostname:
+
+```bash
+GLITCHTIP_ALLOWED_HOSTS=errors.dev.diariz.example.com,glitchtip
+```
+
+Leave it unset to keep the permissive default.
 
 ### 1e. Check `.env` is complete, then start
 
@@ -269,6 +301,8 @@ So, in the UI:
 1. Visit the site and follow **Register** from the login page. GlitchTip identifies users by email address.
 2. It then takes you straight to **Create a New Organization**, captioned "This is the first step to get started with GlitchTip". Name it.
 3. Both doors are now shut behind you. Everyone after this arrives by invitation from the UI, which is what the SMTP settings are for.
+
+**You need a team before you can create a project.** Creating the organisation does not create one, and projects attach to a team (the create endpoint is `teams/{org}/{team}/projects/`), so this is a real step rather than an implied one. Make a team first - naming it after the org is fine.
 
 Then create **three** projects:
 
