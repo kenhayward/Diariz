@@ -52,16 +52,31 @@ This matters more than anything else in this document, because it decides three 
 
 That is the assumption below: the proxy cannot join the app's Docker network, and cannot be moved.
 
-**GlitchTip must listen on an interface the proxy can route to.** The overlay defaults to `GLITCHTIP_BIND=127.0.0.1`, which is correct only for a proxy running directly on the same host. Set it to the host's private-network address:
+**GlitchTip must listen on an interface the proxy can route to.** The overlay defaults to `GLITCHTIP_BIND=127.0.0.1`, which is correct only for a proxy running directly on the same host. There are two defensible ways to widen it, and the right one depends on who owns the network boundary.
+
+> **First, the thing that makes this decision matter at all: Docker's published ports bypass the host firewall.** Docker writes its own DNAT rules, so a `ports:` entry is reachable regardless of what `ufw` or Windows Firewall say. The same warning is on the `postgres` service in `docker-compose.yml`. Whichever option you pick below, do not assume a host firewall rule is protecting this port - it is not.
+
+**Option A: pin the interface.** Set the host's private-network address, so the listener exists on exactly one interface:
 
 ```bash
 GLITCHTIP_BIND=10.0.5.20      # this host's address on the network the proxy reaches
 GLITCHTIP_PORT=8000
 ```
 
-Prefer a specific address over `0.0.0.0`: it limits the listener to one interface instead of every interface the host has.
+Narrowest surface, and it needs no cooperation from anyone else. The cost is a fixed IP living in `.env`: it is invisible to whoever runs the network, and it silently breaks if the host is re-addressed, moved, or rebuilt on a different subnet.
 
-> **Docker's published ports bypass the host firewall.** Docker writes its own DNAT rules, so a `ports:` entry is reachable regardless of what `ufw` or Windows Firewall say. The same warning is already on the `postgres` service in `docker-compose.yml`. If the network between the proxy and this host is not trusted, restrict access to the proxy's address at the network layer, or put the two on a private link.
+**Option B: bind broadly, restrict at the network.** Leave `GLITCHTIP_BIND=0.0.0.0` and control reachability where network controls belong - a firewall rule or ACL permitting only the proxy's address:
+
+```bash
+GLITCHTIP_BIND=0.0.0.0
+GLITCHTIP_PORT=8000
+```
+
+This is usually the better fit in a managed environment. The restriction is then visible and auditable by the people responsible for it, rather than hidden in an application config file that no network admin will ever read, and the host can be re-addressed without anyone editing `.env`.
+
+**Choosing.** Option A if you own the box and nobody else manages the network. Option B if there is a network admin, a documented firewall, or hosts that get re-addressed. What you should not do is choose B and then not actually apply the network-layer restriction: bound to `0.0.0.0` with nothing in front, every device on the network can reach the instance directly, bypassing your proxy and any rate limiting or access rules on it.
+
+The practical exposure if you do leave it open on a trusted LAN is smaller than it looks - `SESSION_COOKIE_SECURE` and `CSRF_COOKIE_SECURE` are both on, so nobody can log in over plain HTTP on that port, and the ingest key is public by design anyway. The real argument is defence in depth: it puts a full Django app's pre-authentication surface in front of every device on the network, with no chokepoint, on the day a CVE lands.
 
 **Then keep the server-side traffic off the proxy entirely.** The API and worker containers sit on the same Docker network as GlitchTip, so they can post events straight to it and never touch your distant proxy at all. That removes a whole class of failure: server-side error reporting keeps working when the proxy, its certificate, or the link is having a bad day.
 
