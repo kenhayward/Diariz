@@ -62,7 +62,23 @@ export function scrubUrlsIn(text: string): string {
 // Named imports (rather than `import * as Sentry`) so a bundler can tree-shake the integrations this
 // app never enables (session replay, user feedback, tracing) - referencing the whole namespace object
 // as a value (e.g. as a default parameter) defeats that, and pulls in ~150 kB gzipped of unused code.
-import { init as sentryInit, captureException as sentryCaptureException, type ErrorEvent, type Breadcrumb } from "@sentry/react";
+import {
+  init as sentryInit,
+  captureException as sentryCaptureException,
+  browserTracingIntegration,
+  type ErrorEvent,
+  type Breadcrumb,
+} from "@sentry/react";
+
+// @sentry/react does not publicly export a `TransactionEvent` type - only @sentry/core does, and that
+// package is a transitive dependency here, not a direct one, so importing from it would be fragile.
+// This captures only the fields beforeSendTransaction touches; scrub() below is generic and preserves
+// every other field untouched regardless of what this type declares.
+interface TransactionEventLike {
+  request?: { url?: string; [key: string]: unknown };
+  spans?: Array<{ description?: string; [key: string]: unknown }>;
+  [key: string]: unknown;
+}
 
 /** Recursively redact sensitive values. Pure: returns a new structure, never mutates the input. */
 function scrub<T>(value: T): T {
@@ -109,6 +125,22 @@ export function beforeBreadcrumb(crumb: Breadcrumb): Breadcrumb | null {
   return cleaned;
 }
 
+/**
+ * Transaction hook. Separate from beforeSend because in this SDK (@sentry/react 10.69.0, verified
+ * against @sentry/core's client.js `processBeforeSend`) beforeSend is only invoked for error events
+ * (`isErrorEvent(event) && beforeSend`) - transaction events go through beforeSendTransaction instead.
+ * The .NET API shipped a JWT leak on exactly that gap, found only in a whole-branch review.
+ * Transactions fire on every navigation and request, so this is the higher-volume path of the two.
+ */
+export function beforeSendTransaction(event: TransactionEventLike): TransactionEventLike | null {
+  const cleaned = scrub(event);
+  if (cleaned.request?.url) cleaned.request.url = stripQueryString(cleaned.request.url);
+  for (const span of cleaned.spans ?? []) {
+    if (typeof span.description === "string") span.description = scrubUrlsIn(span.description);
+  }
+  return cleaned;
+}
+
 /** Injected so tests can assert the options without loading the real SDK. */
 interface SentryLike {
   init: (options: Record<string, unknown>) => void;
@@ -131,7 +163,11 @@ let enabled = false;
 export async function initTelemetry(sdk: SentryLike = { init: sentryInit }): Promise<boolean> {
   try {
     const res = await fetch("/api/config");
-    const cfg = (await res.json()) as { sentryDsn?: string; sentryEnvironment?: string };
+    const cfg = (await res.json()) as {
+      sentryDsn?: string;
+      sentryEnvironment?: string;
+      sentryTracesSampleRate?: number;
+    };
     const dsn = (cfg.sentryDsn ?? "").trim();
     if (!dsn) return false;
 
@@ -143,8 +179,11 @@ export async function initTelemetry(sdk: SentryLike = { init: sentryInit }): Pro
       sendDefaultPii: false,
       // GlitchTip does not support sessions.
       autoSessionTracking: false,
+      integrations: [browserTracingIntegration()],
+      tracesSampleRate: cfg.sentryTracesSampleRate ?? 1,
       beforeSend,
       beforeBreadcrumb,
+      beforeSendTransaction,
     });
     enabled = true;
     return true;
