@@ -59,6 +59,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.174.7",
+    date: "2026-07-31",
+    pr: 398,
+    headline: "Fixed the error-tracker image tag in the optional overlay",
+    summary:
+      "The optional error-tracking overlay referred to a container image tag that does not exist, so " +
+      "anyone setting it up hit a pull failure after configuring everything else. This only affects " +
+      "self-hosters who chose to run that overlay; nothing in the app itself changes.",
+    fixed: [
+      "The optional GlitchTip overlay referred to image tag v6.2, which does not exist. GlitchTip " +
+        "dropped the v prefix after 6.0.3, so the tag is 6.2.",
+    ],
+  },
+  {
     version: "0.174.6",
     date: "2026-07-31",
     pr: 395,

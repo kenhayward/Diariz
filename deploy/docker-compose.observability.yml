@@ -33,7 +33,15 @@ services:
       retries: 10
 
   glitchtip:
-    image: glitchtip/glitchtip:v6.2
+    # NO `v` PREFIX. GlitchTip dropped it partway through the 6.0 line: `v6`, `v6.0` and `v6.0.3`
+    # exist, `6.0.3` exists as both, and from 6.0.4 onwards only the bare form is published. So
+    # `v6.2` looks plausible, is what the release announcement reads like, and does not exist -
+    # the pull fails with "manifest unknown" long after you have set everything else up.
+    #
+    # Pinned to the minor line rather than a patch, matching postgres:16-alpine and redis:7-alpine
+    # above: `docker compose pull` then picks up 6.2.x security fixes without pulling in new
+    # features unannounced.
+    image: glitchtip/glitchtip:6.2
     restart: unless-stopped
     depends_on:
       glitchtip-postgres: { condition: service_healthy }
