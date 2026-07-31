@@ -384,6 +384,19 @@ or from `GET /api/0/organizations/` in a logged-in tab. Getting it wrong gives a
 
 **The token is passed as a BuildKit secret, never a build ARG.** A build ARG is recorded in the image history and readable by anyone who can pull the image. The compose file already wires this correctly - you only need to set `GLITCHTIP_TOKEN` in `.env`.
 
+**A passing build does not prove the maps landed.** The upload and the assembly are two separate steps, and only the first is synchronous: the server accepts the files, returns "pending", and assembles them in a background task afterwards. The build has already exited by then, so it can only ever tell you the upload succeeded. If traces are still minified after a green build, check the server rather than the build log:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.observability.yml exec glitchtip ./manage.py shell -c "
+from apps.files.models import File
+from apps.sourcecode.models import DebugSymbolBundle
+print('files=%d bundles=%d' % (File.objects.count(), DebugSymbolBundle.objects.count()))"
+```
+
+Both zero after an upload means assembly failed - the reason is in `docker compose logs glitchtip`, searching for `assemble_artifacts`.
+
+**Why the build uses Sentry's CLI and not GlitchTip's.** GlitchTip speaks the Sentry protocol, and `@glitchtip/cli` 1.0.0 - the only version ever published - does not work for this. It uploads each file on its own and then calls `releases/{version}/assemble/` once per file, but that endpoint expects a **single zip** containing every artifact plus a `manifest.json`. The server tries to unzip a raw `.js` and fails with `BadZipFile` every time, while the CLI exits 0 because the *upload* part worked. `--release` is mandatory and is what selects that path, so there is no flag that avoids it. Measured on 6.2.3: `@glitchtip/cli` left 185 blobs, 0 files and 0 bundles; `sentry-cli` on the same server, same credentials, produced an artifact bundle that assembled. The version is pinned deliberately - an unpinned CLI against a pinned server breaks one day with nothing in the diff to explain it.
+
 Then rebuild the web image:
 
 ```bash
