@@ -26,7 +26,7 @@ speechbrain==1.1.0
 # the base image's Python is bumped — a Dependabot bump to 3.11.x will break the Docker build.
 matplotlib==3.10.9
 redis==8.0.1
-boto3==1.43.40
+boto3==1.43.58
 requests==2.34.2
 
 # Optional error + performance reporting (GlitchTip / Sentry-compatible). Imported lazily and only
