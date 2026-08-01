@@ -693,7 +693,7 @@
           "Microsoft.AspNetCore.Authentication.JwtBearer": "[10.*, )",
           "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "[10.*, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.9, )",
-          "Microsoft.OpenApi": "[2.7.5, )",
+          "Microsoft.OpenApi": "[2.7.5, 3.0.0)",
           "MimeKit": "[4.17.0, )",
           "ModelContextProtocol.AspNetCore": "[1.4.0, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.*, )",
