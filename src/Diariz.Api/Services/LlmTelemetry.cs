@@ -47,6 +47,41 @@ public static class LlmUsageParser
             : null;
 }
 
+/// <summary>Folds a bucketed token count into a span's description.
+///
+/// WHY THE DESCRIPTION, of all places: GlitchTip persists no span-level data. Its parquet schema is
+/// <c>(organization_id, project_id, transaction_name, span_id, transaction_id, op, description, duration,
+/// timestamp)</c> and nothing else, so anything set via <c>SetExtra</c> is transmitted by the SDK and
+/// discarded on ingest. The description is the only free-text field that survives.
+///
+/// WHY BUCKETED: the span breakdown does <c>GROUP BY op, description</c>. Exact per-call counts would make
+/// every span its own group - forty one-off rows instead of "chat/completions, 1.8s avg over 40 calls" -
+/// destroying the aggregate view these numbers exist to inform. Six buckets keep grouping meaningful while
+/// still showing which calls are large.</summary>
+public static class LlmSpanDescription
+{
+    public static string WithUsage(string? description, LlmUsage usage)
+    {
+        var suffix = Bucket(usage.TotalTokens);
+        if (suffix is null) return description ?? "";
+        if (string.IsNullOrEmpty(description)) return suffix;
+        // Idempotent: a description that already carries a bucket is left alone, so a retry cannot stack
+        // suffixes onto the same span.
+        return description.EndsWith(suffix, StringComparison.Ordinal) ? description : $"{description} {suffix}";
+    }
+
+    private static string? Bucket(int? total) => total switch
+    {
+        null => null,
+        < 500 => "(<500 tokens)",
+        < 1_000 => "(~500 tokens)",
+        < 5_000 => "(~1k tokens)",
+        < 10_000 => "(~5k tokens)",
+        < 50_000 => "(~10k tokens)",
+        _ => "(50k+ tokens)",
+    };
+}
+
 /// <summary>One in-flight LLM call. Disposing finishes it.</summary>
 public interface ILlmSpan : IDisposable
 {
@@ -160,9 +195,15 @@ public sealed class SentryLlmTrace : ILlmTrace
         // them out of telemetry is the entire point of SentryScrubber.
         public void SetUsage(LlmUsage usage)
         {
+            // The extras are kept even though GlitchTip drops every span-level attribute on ingest: they are
+            // the correct, structured home for this, and a deployment pointed at real Sentry (or a future
+            // GlitchTip that stores span data) gets exact counts for free. The description below is what
+            // actually survives today.
             if (usage.PromptTokens is { } p) _span.SetExtra("gen_ai.usage.input_tokens", p);
             if (usage.CompletionTokens is { } c) _span.SetExtra("gen_ai.usage.output_tokens", c);
             if (usage.TotalTokens is { } t) _span.SetExtra("gen_ai.usage.total_tokens", t);
+
+            _span.Description = LlmSpanDescription.WithUsage(_span.Description, usage);
         }
 
         public void Dispose() => _span.Finish();
