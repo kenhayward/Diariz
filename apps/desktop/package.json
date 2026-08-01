@@ -14,12 +14,12 @@
     "publish": "electron-builder --config electron-builder.config.js --publish always"
   },
   "dependencies": {
-    "electron-store": "^8.2.0",
+    "electron-store": "^11.0.2",
     "electron-updater": "^6.3.9"
   },
   "devDependencies": {
     "cross-env": "^10.1.0",
-    "electron": "^43.0.0",
+    "electron": "^43.2.0",
     "electron-builder": "^26.15.3"
   }
 }
