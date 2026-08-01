@@ -189,3 +189,69 @@ public class LlmTelemetryHandlerTests
             throw new HttpRequestException("connection refused");
     }
 }
+
+/// <summary>
+/// Token counts ride in the span DESCRIPTION because GlitchTip persists no span-level data: its parquet
+/// schema is (organization_id, project_id, transaction_name, span_id, transaction_id, op, description,
+/// duration, timestamp) and nothing else, so SetExtra values are transmitted and discarded on ingest.
+///
+/// They are BUCKETED because the span breakdown does `GROUP BY op, description`. Exact per-call counts would
+/// make every span its own group - forty one-off rows instead of "chat/completions, 1.8s avg over 40 calls" -
+/// which would wreck the view the counts are meant to inform.
+/// </summary>
+public class LlmSpanDescriptionTests
+{
+    private const string Base = "POST https://llm.test/v1/chat/completions";
+
+    [Theory]
+    [InlineData(120, "(<500 tokens)")]
+    [InlineData(499, "(<500 tokens)")]
+    [InlineData(500, "(~500 tokens)")]
+    [InlineData(999, "(~500 tokens)")]
+    [InlineData(1000, "(~1k tokens)")]
+    [InlineData(4999, "(~1k tokens)")]
+    [InlineData(5000, "(~5k tokens)")]
+    [InlineData(10000, "(~10k tokens)")]
+    [InlineData(49999, "(~10k tokens)")]
+    [InlineData(50000, "(50k+ tokens)")]
+    [InlineData(1250000, "(50k+ tokens)")]
+    public void BucketsTheTotal(int total, string expected)
+    {
+        var actual = LlmSpanDescription.WithUsage(Base, new LlmUsage(null, null, total));
+        Assert.Equal($"{Base} {expected}", actual);
+    }
+
+    [Fact]
+    public void UsesOnlySixDistinctSuffixes_SoGroupingStaysMeaningful()
+    {
+        // The whole point of bucketing. If this ever grows, the span breakdown starts fragmenting.
+        var suffixes = Enumerable.Range(0, 2000)
+            .Select(i => i * 97)
+            .Select(t => LlmSpanDescription.WithUsage(Base, new LlmUsage(null, null, t)))
+            .Distinct()
+            .ToList();
+
+        Assert.Equal(6, suffixes.Count);
+    }
+
+    [Fact]
+    public void LeavesTheDescriptionAloneWhenThereIsNoTotal()
+    {
+        Assert.Equal(Base, LlmSpanDescription.WithUsage(Base, new LlmUsage(null, null, null)));
+    }
+
+    [Fact]
+    public void IsIdempotent_SoARetriedCallDoesNotStackSuffixes()
+    {
+        var once = LlmSpanDescription.WithUsage(Base, new LlmUsage(10, 20, 30));
+        var twice = LlmSpanDescription.WithUsage(once, new LlmUsage(10, 20, 30));
+
+        Assert.Equal(once, twice);
+    }
+
+    [Fact]
+    public void HandlesANullDescription()
+    {
+        Assert.Equal("(<500 tokens)", LlmSpanDescription.WithUsage(null, new LlmUsage(1, 2, 3)));
+    }
+}

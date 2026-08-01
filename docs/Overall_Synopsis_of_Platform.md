@@ -1796,6 +1796,14 @@ want it runs the platform exactly as before with zero extra containers.
   `gen_ai.request` span carrying scheme/host/path (never the query string), the HTTP status, and the
   `usage` token counts parsed out of the response by `LlmUsageParser`. **Only sizes and durations - never a
   prompt or a completion**, which are meeting content.
+  - **Token counts ride in the span description, bucketed.** GlitchTip persists no span-level attributes: its
+    parquet schema is `(organization_id, project_id, transaction_name, span_id, transaction_id, op,
+    description, duration, timestamp)` and nothing else, so anything set via `SetExtra` is transmitted by the
+    SDK and dropped on ingest. The description is the only free-text field that survives, so
+    `LlmSpanDescription` appends one of six size bands (`(<500 tokens)` ... `(50k+ tokens)`). The bucketing is
+    not cosmetic: the breakdown query is `GROUP BY op, description`, so exact per-call counts would give every
+    call its own group and destroy the averages the view exists for. The structured `SetExtra` values are kept
+    anyway, so a deployment pointed at real Sentry gets exact counts.
   - **Streaming responses are exempt from the body read.** `usage` needs a buffered JSON body, and buffering an
     SSE stream would hold every token until the model finished, so `text/event-stream` responses are timed but
     not parsed.

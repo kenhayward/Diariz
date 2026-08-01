@@ -59,6 +59,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.175.1",
+    date: "2026-08-01",
+    pr: 411,
+    headline: "AI token counts now actually show up",
+    summary:
+      "The previous release said it recorded how many tokens each AI call used. It did send them, but the " +
+      "error tracker stores no extra detail against a timing entry, so they were discarded on arrival and " +
+      "never appeared. The count now rides in the entry's own label, rounded to a size band rather than an " +
+      "exact figure - an exact number per call would give every call its own row and destroy the averages " +
+      "that make the view useful. Only affects self-hosters running the optional error tracker.",
+    fixed: [
+      "Token counts for AI calls were recorded but never stored, so they never appeared anywhere.",
+    ],
+  },
+  {
     version: "0.175.0",
     date: "2026-08-01",
     pr: 410,
