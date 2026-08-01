@@ -26,7 +26,7 @@ jobs:
     continue-on-error: true # report-only: never fail the check
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
       # Unit + integration together give the real figure: much of the API is covered by the
@@ -53,7 +53,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload .NET coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dotnet-coverage
           path: cov-report
@@ -65,7 +65,7 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
@@ -105,7 +105,7 @@ jobs:
           '
       - name: Upload web coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: web-coverage
           path: apps/web/coverage
@@ -117,7 +117,7 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
       - name: Install test deps
@@ -141,7 +141,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload worker coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: worker-coverage
           path: src/Diariz.Worker/cov-html
@@ -153,7 +153,7 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
