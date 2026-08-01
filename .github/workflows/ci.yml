@@ -65,6 +65,28 @@ jobs:
         working-directory: apps/web
         run: npm test
 
+  desktop:
+    name: Desktop (node --test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Install
+        working-directory: apps/desktop
+        run: npm ci
+      # A GATING run of the desktop unit tests. coverage.yml also runs them, but that job is
+      # `continue-on-error: true` and ends in `|| true`, so it can never fail a PR - it exists to
+      # report coverage, not to gate. That gap let a dependency bump to an ESM-only electron-store
+      # reach a green PR while src/electronStore.test.js was failing inside the log, which is exactly
+      # the breakage that test was written to catch. Tests that cannot fail a build are decoration.
+      - name: Test
+        working-directory: apps/desktop
+        run: node --test "src/**/*.test.js"
+
   locale-gate:
     name: Locale single-language gate
     runs-on: ubuntu-latest
