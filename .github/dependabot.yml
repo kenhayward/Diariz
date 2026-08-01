@@ -14,6 +14,7 @@ updates:
     groups:
       web-deps:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   # Electron desktop shell.
   - package-ecosystem: "npm"
@@ -23,6 +24,12 @@ updates:
     groups:
       desktop-deps:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # ESM-only from v9; apps/desktop/src/main.js is CommonJS and does `require("electron-store")`,
+      # which then yields a module namespace rather than the constructor. src/electronStore.test.js
+      # asserts both halves of this. Unpin only alongside converting the main process to ESM.
+      - dependency-name: "electron-store"
 
   # .NET API + Domain. Grouped so a framework bump (e.g. the ASP.NET/EF 9 -> 10 alignment) arrives as one
   # coordinated PR instead of individual bumps that can't build on their own.
@@ -33,6 +40,7 @@ updates:
     groups:
       nuget-deps:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   # Python transcription worker. The GPU/compat stack is deliberately pinned (see CLAUDE.md) — let
   # Dependabot watch for security advisories but do NOT open version-bump PRs for those packages.
@@ -43,11 +51,16 @@ updates:
     groups:
       worker-deps:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
     ignore:
       - dependency-name: "whisperx"
       - dependency-name: "transformers"
       - dependency-name: "huggingface_hub"
       - dependency-name: "ctranslate2"
+      # 3.11+ requires Python >= 3.11, and the worker base image (nvidia/cuda ...-ubuntu22.04) ships
+      # 3.10, so there is no installable wheel - the GPU image simply stops building. requirements.txt
+      # predicted this exact Dependabot PR; the prediction was right and the ignore list was missing.
+      - dependency-name: "matplotlib"
 
   # The GitHub Actions used by the CI/desktop-release/CodeQL workflows.
   - package-ecosystem: "github-actions"
@@ -57,3 +70,4 @@ updates:
     groups:
       actions-deps:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
