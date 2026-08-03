@@ -78,6 +78,7 @@ import type {
   UpdateWebhookBody,
   CreatePlatformWebhookBody,
   WorkflowSignal,
+  FeedbackDto,
   CreateWorkflowSignalBody,
   UpdateWorkflowSignalBody,
 } from "./types";
@@ -1508,6 +1509,17 @@ export const api = {
       description, route, release: __APP_VERSION__, trailJson,
     });
     return data;
+  },
+
+  /// Platform Administrator only. Newest first (the server already orders it; this is what `GET /api/feedback`
+  /// returns raw - no client-side reshaping needed).
+  async listFeedback(): Promise<FeedbackDto[]> {
+    const { data } = await http.get<FeedbackDto[]>("/api/feedback");
+    return data;
+  },
+
+  async deleteFeedback(id: string): Promise<void> {
+    await http.delete(`/api/feedback/${id}`);
   },
 };
 

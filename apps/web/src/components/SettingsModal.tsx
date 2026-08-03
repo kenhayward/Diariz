@@ -7,8 +7,9 @@ import { useAuth } from "../auth";
 import { bytesToGb, gbToBytes } from "../lib/format";
 import { webhookEvents } from "../lib/webhookEvents";
 import MaintenancePanel from "./MaintenancePanel";
+import FeedbackPanel from "./FeedbackPanel";
 
-type Tab = "ai" | "quotas" | "maintenance" | "integration";
+type Tab = "ai" | "quotas" | "maintenance" | "feedback" | "integration";
 
 /// Platform settings modal - Platform Administrator only (the account menu hides it otherwise). Holds the
 /// platform-wide AI generation policy (minutes mode + the global LLM timeout), storage quotas + audio
@@ -145,6 +146,9 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
             <TabButton active={tab === "maintenance"} onClick={() => setTab("maintenance")}>
               {t("maintenanceTab")}
             </TabButton>
+            <TabButton active={tab === "feedback"} onClick={() => setTab("feedback")}>
+              {t("feedbackTab")}
+            </TabButton>
             <TabButton active={tab === "integration"} onClick={() => setTab("integration")}>
               {t("integrationTab")}
             </TabButton>
@@ -266,6 +270,8 @@ export default function SettingsModal({ onClose }: { onClose: () => void }) {
             </div>
           ) : tab === "maintenance" ? (
             <MaintenancePanel />
+          ) : tab === "feedback" ? (
+            <FeedbackPanel />
           ) : (
             /* Integration: platform-wide toggles for external access. API access is off by default. */
             <div className="space-y-3">
