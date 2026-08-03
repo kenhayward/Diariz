@@ -1067,3 +1067,18 @@ export interface UpdateWorkflowSignalBody {
   description: string | null;
   isActive: boolean;
 }
+
+// ---- Feedback ----
+/// A user-submitted "something looks or behaves wrong" report, as returned to a Platform Administrator.
+/// `trailJson` is the client-scrubbed action trail (see `lib/trail`) serialized to JSON - stored verbatim
+/// from the client, so it must be parsed defensively rather than trusted.
+export interface FeedbackDto {
+  id: string;
+  userId: string;
+  userEmail: string | null;
+  createdAt: string;
+  description: string;
+  route: string;
+  release: string;
+  trailJson: string;
+}

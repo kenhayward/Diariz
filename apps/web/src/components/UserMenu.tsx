@@ -15,6 +15,7 @@ import ManageUsersModal from "./ManageUsersModal";
 import ManageFormulasModal from "./ManageFormulasModal";
 import PeopleModal from "./PeopleModal";
 import AboutModal from "./AboutModal";
+import FeedbackModal from "./FeedbackModal";
 
 // One menu row inside the account popover. Rows are padded, rounded and highlight on hover; the footer
 // "Sign out" row is red-tinted. Kept as a real <button role="menuitem"> so the accessible name / gating
@@ -77,6 +78,7 @@ export default function UserMenu() {
   const [formulasOpen, setFormulasOpen] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   // Run a menu action: close the popover, then open the chosen modal / start the tour.
   const run = (fn: () => void) => () => {
@@ -209,6 +211,7 @@ export default function UserMenu() {
               onSelect={run(() => window.open("/help", "_blank", "noopener"))}
             />
             <MenuRow label={t("about")} onSelect={run(() => setAboutOpen(true))} />
+            <MenuRow label={t("provideFeedback")} onSelect={run(() => setFeedbackOpen(true))} />
           </div>
 
           {/* Footer: Sign out. */}
@@ -224,6 +227,7 @@ export default function UserMenu() {
       {formulasOpen && <ManageFormulasModal onClose={() => setFormulasOpen(false)} />}
       {peopleOpen && <PeopleModal onClose={() => setPeopleOpen(false)} />}
       {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
+      {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} />}
     </div>
   );
 }

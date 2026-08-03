@@ -40,6 +40,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **n8n** | A published community node (\`n8n-nodes-diariz\`): a trigger that registers its own automation and verifies every signed delivery, plus an action node covering the whole REST API - with dropdowns listing your real recordings and formulas, files in and out, and a Run Formula step that waits for the document to finish. |
 | **Multi-user & groups** | User groups grant platform permissions (manage rooms / users / platform), with an approval lifecycle, per-user isolation, and Light/Dark/Auto themes. |
 | **Admin controls** | Storage quotas, optional audio auto-deletion, a global AI request timeout, separate platform toggles for API access, Claude/MCP, and Automations (webhooks), and whole-platform backup & restore. |
+| **Provide Feedback** | Any signed-in user can describe something that looks or behaves wrong from the account menu; a scrubbed technical trail of recent app activity is attached automatically. Readable and deletable only by a Platform Administrator, in a Feedback tab in Settings, and can raise a \`feedback.submitted\` automation event - the submitter's words reach it only via an API opt-in, with no Settings checkbox yet. |
 | **Help & documentation** | A browsable help section at \`/help\` with a grouped article tree and instant search, plus contextual help throughout the app: a small \`?\` next to a feature opens a short explanation with a link straight to the full article. An **Advanced and admin** section covers configuring formulas, meeting types, Workflow Signals and webhooks, users and permissions, connecting Claude over MCP, building n8n and Zapier workflows, and the REST API. A **CRM integration** section covers wiring Diariz to any CRM through n8n or Zapier, with a worked EspoCRM example. |
 
 The interface is localized (English, Spanish, French, German), and languages are community-extensible via simple JSON files.
@@ -58,6 +59,23 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.176.0",
+    date: "2026-08-03",
+    pr: 437,
+    headline: "Tell us when something looks wrong",
+    summary:
+      "Some problems never raise an error - a button that should be disabled, a value that looks wrong. " +
+      "There is now a Provide Feedback option in your account menu. Describe what you saw and it is sent " +
+      "with a short technical trail of what the app just did, which is usually what makes it diagnosable. " +
+      "Feedback is readable only by a platform administrator, and can raise an automation so it reaches " +
+      "the right place.",
+    added: [
+      "Provide Feedback in the account menu, with an automatic technical trail.",
+      "A Feedback tab in platform settings for reading and deleting submissions.",
+      "A feedback.submitted webhook event for automations. The submitter's words are only included when a subscription opts in.",
+    ],
+  },
   {
     version: "0.175.1",
     date: "2026-08-01",

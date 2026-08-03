@@ -95,6 +95,8 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddWebhookAttendeeContacts` | `Webhooks.IncludeAttendeeContacts` (boolean NOT NULL DEFAULT false) - opt-in, per subscription, to include attendees' email addresses and phone numbers in outbound payloads. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddPersonDirectory` | Turns `SpeakerProfiles` into the people directory (CLR type `Person`). `Embedding`, `UserId` and `RoomId` become **nullable** (`DROP NOT NULL`), so a person can exist with no voiceprint; adds `Title`, `CompanyName`, `Email`, `Phone`, `IsInternal`, `VoiceprintOptOut`, `LinkedUserId`; adds an `(Email)` index and a **filtered unique** `(LinkedUserId) WHERE NOT NULL`; `COMMENT ON COLUMN` documents the `UserId`/`LinkedUserId` split. **Backfills** one person per Active user (`PersonForUserBackfill`; Requested/Invited accounts get theirs at CompleteSetup). The tables and columns are **not** renamed - only the CLR types are - so this is additive plus three `DROP NOT NULL`s: forward-restore-safe, **no `MaintenanceController.CurrentFormat` bump** |
 | `AddWebhookDeliveryLastAttemptAt` | `WebhookDeliveries.LastAttemptAt` (timestamptz null) - records when the worker last contacted the target, so the delivery worker can enforce a per-subscription rolling-minute rate cap (`WebhookOptions.MaxPerSubscriptionPerMinute`, default 120) that paces bursts to a single fan-out automation. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddFeedback` | `Feedback` (a user's "something looks or behaves wrong" report; `UserId` FK → `AspNetUsers`, **cascade** on user delete; `Description`/`Route`/`Release`/`TrailJson` text, not null; `ScreenshotBlobKey` text null - reserved for a deferred screenshot phase, always null today; index `(UserId)`) - readable and deletable only by a Platform Administrator, including a submitter's own. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddIncludeFeedbackText` | `Webhooks.IncludeFeedbackText` (boolean NOT NULL DEFAULT false) - opt-in, per **Platform** subscription, to include the submitter's own words in a `feedback.submitted` payload. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
 
@@ -138,6 +140,9 @@ ApplicationUser
  └─1:n─ FormulaResult (SetNull)                    CreatedByUserId (nullable; doc survives author deletion)
  └─1:n─ SectionFormulaResult (SetNull)             CreatedByUserId (nullable)
  └─1:n─ FormulaSubscription (cascade)              UserId (a subscriber's links die with the account)
+ └─1:n─ Webhooks (cascade)                         OwnerUserId (a subscription's owner)
+ │       └─1:n─ WebhookDeliveries (cascade)        SubscriptionId
+ └─1:n─ Feedback (cascade)                         UserId (readable/deletable only by a Platform Administrator)
 ```
 
 ### Tables in detail
@@ -766,6 +771,7 @@ see `WorkflowSignals` below).
 | `SignalFilter` | varchar(1024) null | comma-separated `WorkflowSignals.Key` values this subscription routes on. Personal subscriptions may use it to narrow (empty = no narrowing, matches any signal on a subscribed event); a **Platform** subscription requires a non-empty filter - empty deliberately matches nothing, both at create/update time (`PlatformWebhooksController.Validate`) and at publish time (`WebhookPublisher`/`WebhookSignals.Intersects`), so a half-configured platform automation can't silently fire on everything |
 | `IsActive` | bool | default true; flipped false by auto-disable or by the user |
 | `IncludeAttendeeContacts` | bool | default **false**; opt-in to include attendees' email addresses and phone numbers in the payload. An automation posts to an arbitrary URL, so this is per-subscription rather than global |
+| `IncludeFeedbackText` | bool | default **false**; opt-in, **Platform subscriptions only**, to include the submitter's own words in a `feedback.submitted` payload. Same reasoning as `IncludeAttendeeContacts` - the payload otherwise carries only ids and context, and an automation that needs the words fetches them through the API |
 | `ConsecutiveFailures` | int | consecutive failed deliveries; reset to 0 on any success |
 | `DisabledReason` | text null | set when auto-disabled, so the UI can explain why |
 | `LastDeliveryAt` | timestamptz null | |
@@ -822,6 +828,30 @@ to each match (a Personal subscriber on the same event never receives the output
 |---|---|---|
 | `FormulaId` | uuid | PK part 1. FK → `Formulas`, **cascade** |
 | `WorkflowSignalId` | uuid | PK part 2. FK → `WorkflowSignals`, **cascade**; index `IX_FormulaWorkflowSignals_WorkflowSignalId` |
+
+#### `Feedback`
+A user's "something looks or behaves wrong" report, captured with the client-side technical trail leading up
+to it (`apps/web/src/lib/trail.ts` - recent API calls and route changes, scrubbed browser-side before it is
+ever sent). Distinct from the optional GlitchTip error tracker: nothing threw, so the exception path never
+saw it, and it works even on a deployment with no error tracker configured. Submitted by any signed-in user
+via `POST /api/feedback`; reading (`GET /api/feedback`) and deleting (`DELETE /api/feedback/{id}`) are
+`ManagePlatform`-gated - a Platform Administrator only, deliberately including a user's own submissions,
+since a per-user view would imply a support conversation this feature does not have.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `UserId` | uuid FK → AspNetUsers | who submitted it; **cascade** on user delete - user-authored content, disappears with the account like everything else they own |
+| `CreatedAt` | timestamptz | |
+| `Description` | text | the user's own words; free text, so it may quote meeting content - which is why it lives here, under the same retention, backup and deletion rules as the rest of their data. Trimmed server-side, rejected if empty, truncated to `FeedbackController.MaxDescription` (4000 chars) if very long |
+| `Route` | text | the SPA route at submission |
+| `Release` | text | the app version the browser was running |
+| `TrailJson` | text | the client trail, already scrubbed browser-side, stored verbatim as a JSON array |
+| `ScreenshotBlobKey` | text null | reserved for a deferred screenshot phase (needs an Electron shell change, and so a desktop release). Always **null** today - added now so that phase needs no further migration |
+
+Indexes: `(UserId)`. Submission also raises a `feedback.submitted` webhook event (Platform subscriptions only -
+see `Webhooks.IncludeFeedbackText` above) carrying `{ id, route, release, hasScreenshot: false }`, plus
+`description` only for a subscription that has opted in.
 
 #### `UserGroups`
 
