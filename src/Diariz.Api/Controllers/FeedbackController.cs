@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Diariz.Api.Contracts;
 using Diariz.Api.Services;
+using Diariz.Api.Webhooks;
 using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -57,6 +58,18 @@ public class FeedbackController : ControllerBase
         };
         _db.Feedback.Add(row);
         await _db.SaveChangesAsync(ct);
+
+        // Best-effort, and after the save: the submission is stored whether or not any automation is
+        // listening. The thin body carries no words; only a subscription that has opted in gets those.
+        await _webhooks.PublishAsync(
+            WebhookEventTypes.FeedbackSubmitted, row.UserId,
+            data: new { id = row.Id, route = row.Route, release = row.Release, hasScreenshot = false },
+            dataWithFeedbackText: new
+            {
+                id = row.Id, route = row.Route, release = row.Release, hasScreenshot = false,
+                description = row.Description,
+            },
+            ct: ct);
 
         return Ok(new { id = row.Id });
     }

@@ -159,4 +159,53 @@ public class WebhookPublisherTests
         var d = await db.WebhookDeliveries.SingleAsync();
         Assert.DoesNotContain("output", d.PayloadJson); // personal never embeds output
     }
+
+    /// <summary>A personal subscription receives events about its OWNER's own data. Feedback is readable only
+    /// by a Platform Administrator, so a personal subscription on this type would leak other users' words -
+    /// it must never even appear as a choice in the personal subscribe list.</summary>
+    [Fact]
+    public void FeedbackSubmitted_IsNotPersonallySubscribable()
+    {
+        Assert.DoesNotContain(WebhookEventTypes.FeedbackSubmitted, WebhookEventTypes.Subscribable);
+    }
+
+    /// <summary>The feedback-text gate, mirroring the contacts gate above: the thin body (ids/route/release)
+    /// goes to every matching subscription, but the submitter's free-text description only goes to one that
+    /// has deliberately ticked <see cref="WebhookSubscription.IncludeFeedbackText"/>.</summary>
+    [Fact]
+    public async Task Publish_OmitsFeedbackText_WhenTheSubscriptionHasNotOptedIn()
+    {
+        var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var sub = Sub(owner, WebhookEventTypes.FeedbackSubmitted);
+        sub.IncludeFeedbackText = false;
+        db.Webhooks.Add(sub);
+        await db.SaveChangesAsync();
+
+        await new WebhookPublisher(db, NullLogger<WebhookPublisher>.Instance).PublishAsync(
+            WebhookEventTypes.FeedbackSubmitted, owner,
+            data: new { id = Guid.NewGuid(), hasScreenshot = false },
+            dataWithFeedbackText: new { id = Guid.NewGuid(), description = "SECRET_FEEDBACK_TEXT" });
+
+        var body = (await db.WebhookDeliveries.SingleAsync()).PayloadJson;
+        Assert.DoesNotContain("SECRET_FEEDBACK_TEXT", body);
+    }
+
+    [Fact]
+    public async Task Publish_IncludesFeedbackText_WhenTheSubscriptionHasOptedIn()
+    {
+        var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        var sub = Sub(owner, WebhookEventTypes.FeedbackSubmitted);
+        sub.IncludeFeedbackText = true;
+        db.Webhooks.Add(sub);
+        await db.SaveChangesAsync();
+
+        await new WebhookPublisher(db, NullLogger<WebhookPublisher>.Instance).PublishAsync(
+            WebhookEventTypes.FeedbackSubmitted, owner,
+            data: new { id = Guid.NewGuid(), hasScreenshot = false },
+            dataWithFeedbackText: new { id = Guid.NewGuid(), description = "SECRET_FEEDBACK_TEXT" });
+
+        Assert.Contains("SECRET_FEEDBACK_TEXT", (await db.WebhookDeliveries.SingleAsync()).PayloadJson);
+    }
 }

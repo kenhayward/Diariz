@@ -13,6 +13,13 @@ public static class WebhookEventTypes
     public const string RecordingTagsReady = "recording.tags_ready";
     public const string FormulaResultCompleted = "formula_result.completed";
     public const string FormulaResultFailed = "formula_result.failed";
+
+    /// <summary>A user submitted feedback. PLATFORM SUBSCRIPTIONS ONLY - deliberately absent from
+    /// <see cref="Subscribable"/>, which is the personal list. A personal subscription receives events
+    /// about its owner's own data; feedback is readable only by a Platform Administrator, so a personal
+    /// subscription on this type would deliver another user's words to them.</summary>
+    public const string FeedbackSubmitted = "feedback.submitted";
+
     public const string Ping = "webhook.ping"; // test-only, never subscribable
 
     /// <summary>The types a user may subscribe to (excludes the internal ping).</summary>

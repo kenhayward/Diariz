@@ -16,10 +16,16 @@ public interface IWebhookPublisher
     /// phone numbers. A subscription only receives it when its owner has ticked
     /// <see cref="WebhookSubscription.IncludeAttendeeContacts"/> - without that, an automation pointed at any
     /// URL would fan the directory's contact details out to it. Built lazily, so the ordinary case where
-    /// nobody has opted in costs nothing.</para></summary>
+    /// nobody has opted in costs nothing.</para>
+    ///
+    /// <para><paramref name="dataWithFeedbackText"/> is the same body but carrying the submitter's free-text
+    /// description, for <c>feedback.submitted</c>. A subscription only receives it when its owner has ticked
+    /// <see cref="WebhookSubscription.IncludeFeedbackText"/> - the same reasoning as the contacts gate: an
+    /// automation points at an arbitrary URL, and feedback text may quote meeting content. Built lazily, so
+    /// the ordinary case where nobody has opted in costs nothing.</para></summary>
     Task PublishAsync(string eventType, Guid ownerUserId, object data,
         IReadOnlyList<string>? signals = null, object? platformData = null, object? dataWithContacts = null,
-        CancellationToken ct = default);
+        object? dataWithFeedbackText = null, CancellationToken ct = default);
 }
 
 public sealed class WebhookPublisher : IWebhookPublisher
@@ -31,7 +37,7 @@ public sealed class WebhookPublisher : IWebhookPublisher
 
     public async Task PublishAsync(string eventType, Guid ownerUserId, object data,
         IReadOnlyList<string>? signals = null, object? platformData = null, object? dataWithContacts = null,
-        CancellationToken ct = default)
+        object? dataWithFeedbackText = null, CancellationToken ct = default)
     {
         try
         {
@@ -58,8 +64,12 @@ public sealed class WebhookPublisher : IWebhookPublisher
 
             // Only serialized when something actually asked for contacts - the default is nobody.
             string? contactsBody = null;
+            // Only serialized when something actually asked for the feedback text - the default is nobody.
+            string? feedbackBody = null;
             string BodyFor(WebhookSubscription s, string standard)
             {
+                if (s.IncludeFeedbackText && dataWithFeedbackText is not null)
+                    return feedbackBody ??= WebhookPayload.Build(eventId, eventType, now, dataWithFeedbackText);
                 if (!s.IncludeAttendeeContacts || dataWithContacts is null) return standard;
                 return contactsBody ??= WebhookPayload.Build(eventId, eventType, now, dataWithContacts);
             }

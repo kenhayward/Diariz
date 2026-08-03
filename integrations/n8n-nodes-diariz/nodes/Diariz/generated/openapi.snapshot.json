@@ -4482,6 +4482,9 @@
           "includeAttendeeContacts": {
             "type": "boolean"
           },
+          "includeFeedbackText": {
+            "type": "boolean"
+          },
           "isActive": {
             "type": "boolean"
           },
@@ -4527,7 +4530,8 @@
           "createdAt",
           "scope",
           "signalFilter",
-          "includeAttendeeContacts"
+          "includeAttendeeContacts",
+          "includeFeedbackText"
         ],
         "type": "object"
       },

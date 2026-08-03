@@ -205,7 +205,7 @@ public class FormulaWebhookEmitTests
     {
         public Task PublishAsync(string eventType, Guid ownerUserId, object data,
             IReadOnlyList<string>? signals = null, object? platformData = null, object? dataWithContacts = null,
-            CancellationToken ct = default) =>
+            object? dataWithFeedbackText = null, CancellationToken ct = default) =>
             throw new InvalidOperationException("webhook publish exploded");
     }
 

@@ -316,7 +316,7 @@ public sealed class FakeWebhookPublisher : IWebhookPublisher
 
     public Task PublishAsync(string eventType, Guid ownerUserId, object data,
         IReadOnlyList<string>? signals = null, object? platformData = null, object? dataWithContacts = null,
-        CancellationToken ct = default)
+        object? dataWithFeedbackText = null, CancellationToken ct = default)
     {
         Published.Add((eventType, ownerUserId, data));
         return Task.CompletedTask;
@@ -781,7 +781,7 @@ public sealed class CapturingWebhookPublisher : IWebhookPublisher
 
     public Task PublishAsync(string eventType, Guid ownerUserId, object data,
         IReadOnlyList<string>? signals = null, object? platformData = null, object? dataWithContacts = null,
-        CancellationToken ct = default)
+        object? dataWithFeedbackText = null, CancellationToken ct = default)
     {
         Published.Add((eventType, ownerUserId, data, signals ?? Array.Empty<string>(), platformData, dataWithContacts));
         return Task.CompletedTask;

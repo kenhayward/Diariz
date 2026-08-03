@@ -643,7 +643,7 @@ public record UpdateFormulaResultRequest(string Text);
 public record WebhookSubscriptionDto(
     Guid Id, string Name, string Url, string[] EventTypes, bool IsActive, int ConsecutiveFailures,
     string? DisabledReason, DateTimeOffset? LastDeliveryAt, string? LastStatus, DateTimeOffset CreatedAt,
-    string Scope, string[] SignalFilter, bool IncludeAttendeeContacts);
+    string Scope, string[] SignalFilter, bool IncludeAttendeeContacts, bool IncludeFeedbackText);
 
 /// <summary>Returned only from <c>Create</c> - the plaintext signing <see cref="Secret"/> is shown once and
 /// never persisted or returned again.</summary>
@@ -657,10 +657,12 @@ public record UpdateWebhookRequest(
 
 /// <summary>Creates an admin-owned, signal-routed Platform webhook subscription (Phase 3). Requires a
 /// non-empty <see cref="SignalFilter"/> - a Platform subscription with no signal fires on nothing.</summary>
-public record CreatePlatformWebhookRequest(string? Name, string Url, string[] EventTypes, string[] SignalFilter);
+public record CreatePlatformWebhookRequest(
+    string? Name, string Url, string[] EventTypes, string[] SignalFilter, bool? IncludeFeedbackText = null);
 
 public record UpdatePlatformWebhookRequest(
-    string? Name, string Url, string[] EventTypes, string[] SignalFilter, bool IsActive);
+    string? Name, string Url, string[] EventTypes, string[] SignalFilter, bool IsActive,
+    bool? IncludeFeedbackText = null);
 
 /// <summary>One delivery attempt (or pending/queued item) for a subscription, for the deliveries log.
 /// <c>Status</c> is a <c>WebhookDeliveryStatus</c> name (Pending/Succeeded/Failed/...).</summary>

@@ -1810,6 +1810,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<bool>("IncludeAttendeeContacts")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IncludeFeedbackText")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
