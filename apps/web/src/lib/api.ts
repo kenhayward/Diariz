@@ -1,4 +1,5 @@
 import axios from "axios";
+import { record } from "./trail";
 
 // A per-request opt-out of the global 401→/login redirect (used by the silent token refresh).
 declare module "axios" {
@@ -113,9 +114,27 @@ export function handleAuthError(error: unknown): void {
   if (window.location.pathname !== "/login") window.location.assign("/login");
 }
 
+/// Feeds the feedback trail. Recording must never change what the caller sees: the success path still
+/// returns the response untouched, and the error path still rejects. For "this control was in the wrong
+/// state", the response status and path are usually what actually diagnoses it - which is why this seam
+/// is worth more to a report than a click listener would be.
 http.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    record({
+      kind: "api",
+      label: `${(response.config.method ?? "get").toUpperCase()} ${response.config.url ?? ""}`,
+      detail: { status: response.status },
+    });
+    return response;
+  },
   (error) => {
+    if (axios.isAxiosError(error) && error.config) {
+      record({
+        kind: "api",
+        label: `${(error.config.method ?? "get").toUpperCase()} ${error.config.url ?? ""}`,
+        detail: { status: error.response?.status ?? 0 },
+      });
+    }
     handleAuthError(error);
     return Promise.reject(error);
   },

@@ -16,7 +16,7 @@ public static class SentryScrubber
     // ---- Cross-runtime deny-list ----------------------------------------------------------------
     // KEEP IN SYNC WITH:
     //   - src/Diariz.Worker/telemetry.py (_DENY_EXACT / _DENY_SUBSTRING)
-    //   - apps/web/src/lib/telemetry.ts (DENY_EXACT / DENY_SUBSTRING)
+    //   - apps/web/src/lib/scrub.ts (DENY_EXACT / DENY_SUBSTRING)
     // The worker, the API and the browser SPA report to the same GlitchTip instance and must redact
     // the same names. These lists HAVE silently diverged before: "embedding"/"embeddings" (the ECAPA
     // voiceprint vectors) were added to Python only - even though the API is the runtime that
@@ -25,7 +25,7 @@ public static class SentryScrubber
     // What the guard-rail is, honestly: each runtime has a test that pins this shared set
     // (SentryScrubberTests.IsSensitiveKey_CoversEveryNameInTheCrossRuntimeDenyList here,
     // test_the_shared_cross_runtime_deny_list_is_covered in tests/test_telemetry.py there, and
-    // telemetry.test.ts's isSensitiveKey suite in the browser). That catches a REMOVAL from any one
+    // scrub.test.ts's isSensitiveKey suite in the browser). That catches a REMOVAL from any one
     // copy. It cannot catch an ADDITION made to only one copy - three tests in three languages have
     // no shared source of truth - so adding a name here means adding it to the other two, and to
     // their tests.
@@ -121,7 +121,7 @@ public static class SentryScrubber
     /// and span descriptions come only from <c>IHttpClientFactory</c> instrumentation, which resolves
     /// <c>BaseAddress</c> + a relative URI into an absolute one before any handler sees it. A relative
     /// path is never seen here - unlike the browser SPA's copy of this function
-    /// (<c>apps/web/src/lib/telemetry.ts</c>), which does need to handle one.</summary>
+    /// (<c>apps/web/src/lib/scrub.ts</c>), which does need to handle one.</summary>
     private static string StripQueryString(string value) =>
         Uri.TryCreate(value, UriKind.Absolute, out var url) && !string.IsNullOrEmpty(url.Query)
             ? url.GetLeftPart(UriPartial.Path)

@@ -1,8 +1,9 @@
 import { useEffect, lazy, Suspense } from "react";
-import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./auth";
 import { useLanguage } from "./language";
+import { record } from "./lib/trail";
 import Login from "./pages/Login";
 import GoogleCallback from "./pages/GoogleCallback";
 import OAuthConsent from "./pages/OAuthConsent";
@@ -43,6 +44,13 @@ export default function App() {
     qc.invalidateQueries({ queryKey: ["user-profile"] });
     window.history.replaceState(null, "", window.location.pathname);
   }, [googleParam, qc]);
+
+  // Feed the feedback trail on every route change. Only pathname - never search, which is where a
+  // token would be (e.g. the Google callback's one-shot query param).
+  const location = useLocation();
+  useEffect(() => {
+    record({ kind: "nav", label: location.pathname });
+  }, [location.pathname]);
 
   return (
     <Routes>
