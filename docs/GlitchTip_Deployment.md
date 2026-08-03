@@ -265,19 +265,42 @@ Leave it unset to keep the permissive default.
 
 **Do this first.** It takes a second and it is the difference between a clear message and reading a Python traceback.
 
-Start with the whole picture. This prints each variable's length and nothing else, so it is safe to paste anywhere:
+Start with the whole picture. This prints each variable's length and nothing else - never a value - so it is safe to paste into a ticket or a chat.
+
+Linux/macOS:
 
 ```bash
 cd deploy
 awk -F= '/^GLITCHTIP_/{printf "%s length=%d\n", $1, length($2)}' .env
 ```
 
+Windows PowerShell - the `awk` line above does **not** work here even with awk installed, because PowerShell rewrites the single-quoted argument before awk ever sees it (`syntax error` at the `printf`):
+
+```powershell
+cd deploy
+Get-Content .env | Where-Object { $_ -match '^GLITCHTIP_' } | ForEach-Object { $kv = $_ -split '=', 2; "{0} length={1}" -f $kv[0], $kv[1].Length }
+```
+
 Any of the six required variables showing `length=0` - or missing from the list entirely - is a problem. A blank value is just as broken as an absent one, and is the easy mistake if you copied `.env.example` and filled it in as you went.
 
-Then let compose confirm:
+Then let compose confirm. The point is to discard stdout and see only stderr, so the redirect differs by shell:
+
+Linux/macOS:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.observability.yml config >/dev/null
+```
+
+Windows PowerShell - `/dev/null` does not exist, use `$null`:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.observability.yml config > $null
+```
+
+Windows cmd - `nul`, with one L:
+
+```
+docker compose -f docker-compose.yml -f docker-compose.observability.yml config > nul
 ```
 
 Silence means you are good. A missing or blank **required** value stops the command outright, naming the variable and the script that produces it. Note it reports only the **first** problem it hits, which is why the length check above is worth running first - otherwise you fix one, re-run, and meet the next.
@@ -288,16 +311,31 @@ Then start it:
 docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d glitchtip-postgres glitchtip
 ```
 
+**Find the container name now** - the rest of this document needs it, and the two forms are not interchangeable:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.observability.yml ps
+```
+
+`glitchtip` is the **service** name. Compose derives the **container** name from it as `<project>-<service>-<n>`, so on a standard install it is `diariz-glitchtip-1`. Which one you use depends on the command:
+
+| Form | Takes | Needs |
+| --- | --- | --- |
+| `docker compose logs / exec glitchtip` | service name | to be run from `deploy/` with **both** `-f` flags |
+| `docker logs / exec diariz-glitchtip-1` | container name | nothing - works from any directory |
+
+Where a command below pipes its output, it uses `docker exec` with the container name and runs the whole pipeline **inside** the container via `sh -c`. That is deliberate: everything after a `|` runs in your host shell, and PowerShell has no `grep`.
+
 Watch the first start. It runs migrations, builds the event partitions, and creates the cache table - a minute or so of output ending in `Listening at: http://0.0.0.0:8000`:
 
 ```bash
-docker compose logs -f glitchtip
+docker logs -f diariz-glitchtip-1
 ```
 
 Confirm the database is actually populated before going further. This is worth the ten seconds:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.observability.yml exec glitchtip ./manage.py showmigrations | grep -c "\[X\]"
+docker exec diariz-glitchtip-1 sh -c './manage.py showmigrations | grep -c "\[X\]"'
 ```
 
 A number in the hundreds is right. **Zero means migrations did not run** - see the first Troubleshooting row, because the symptom you would otherwise meet is a login page with no way to sign up, which looks like a permissions problem and is not.
@@ -363,7 +401,7 @@ Only once the source-map release has been deployed. Without these four values th
 GLITCHTIP_URL=https://errors.dev.diariz.example.com
 GLITCHTIP_ORG=<org SLUG - lowercase, from the address bar>
 GLITCHTIP_PROJECT=<the diariz-web project slug>
-GLITCHTIP_TOKEN=<auth token from GlitchTip: profile -> auth tokens>
+GLITCHTIP_TOKEN=<auth token - see the scope note below>
 ```
 
 Four things to get right:
@@ -376,6 +414,10 @@ https://errors.dev.diariz.example.com/{org-slug}/{project-slug}/
 
 or from `GET /api/0/organizations/` in a logged-in tab. Getting it wrong gives a 404 from the upload endpoint, not a helpful message.
 
+**The token needs exactly one scope: `project:releases`.** Create it under **Profile -> Auth Tokens**. The chunk-upload endpoint accepts any of `project:write`, `project:admin` or `project:releases` (`apps/files/api.py`: `@has_permission([...])`), so `project:releases` is the narrowest that works - it exists for precisely this. Do not tick them all: the token is mounted into an image build, and a broader one buys nothing.
+
+The token also inherits its **user's** access - the endpoint checks organisation membership separately - so the account that creates it must be a member of the org that owns the project.
+
 **`GLITCHTIP_PROJECT` must be the web project.** Maps uploaded to the worker or API project will never be applied to a browser stack trace.
 
 **`GLITCHTIP_URL` must be reachable from inside the build container.** That container has neither your host's loopback nor the compose network. The public domain always works. If your proxy is distant and you would rather not push ~90 files out and back, the host's private address (`http://10.0.5.20:8000`) works too and skips the proxy's body-size limit entirely.
@@ -384,17 +426,6 @@ or from `GET /api/0/organizations/` in a logged-in tab. Getting it wrong gives a
 
 **The token is passed as a BuildKit secret, never a build ARG.** A build ARG is recorded in the image history and readable by anyone who can pull the image. The compose file already wires this correctly - you only need to set `GLITCHTIP_TOKEN` in `.env`.
 
-**A passing build does not prove the maps landed.** The upload and the assembly are two separate steps, and only the first is synchronous: the server accepts the files, returns "pending", and assembles them in a background task afterwards. The build has already exited by then, so it can only ever tell you the upload succeeded. If traces are still minified after a green build, check the server rather than the build log:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.observability.yml exec glitchtip ./manage.py shell -c "
-from apps.files.models import File
-from apps.sourcecode.models import DebugSymbolBundle
-print('files=%d bundles=%d' % (File.objects.count(), DebugSymbolBundle.objects.count()))"
-```
-
-Both zero after an upload means assembly failed - the reason is in `docker compose logs glitchtip`, searching for `assemble_artifacts`.
-
 **Why the build uses Sentry's CLI and not GlitchTip's.** GlitchTip speaks the Sentry protocol, and `@glitchtip/cli` 1.0.0 - the only version ever published - does not work for this. It uploads each file on its own and then calls `releases/{version}/assemble/` once per file, but that endpoint expects a **single zip** containing every artifact plus a `manifest.json`. The server tries to unzip a raw `.js` and fails with `BadZipFile` every time, while the CLI exits 0 because the *upload* part worked. `--release` is mandatory and is what selects that path, so there is no flag that avoids it. Measured on 6.2.3: `@glitchtip/cli` left 185 blobs, 0 files and 0 bundles; `sentry-cli` on the same server, same credentials, produced an artifact bundle that assembled. The version is pinned deliberately - an unpinned CLI against a pinned server breaks one day with nothing in the diff to explain it.
 
 Then rebuild the web image:
@@ -402,6 +433,19 @@ Then rebuild the web image:
 ```bash
 docker compose up --build -d web
 ```
+
+Watch for `Source maps uploaded for release <version>.` A failure now stops the build and says why.
+
+**Then confirm on the server, because a passing build does not prove the maps landed.** Upload and assembly are two separate steps and only the first is synchronous: the server accepts the files, returns "pending", and assembles them in a background task afterwards. The build has exited long before that, so it can only ever tell you the upload succeeded.
+
+```bash
+docker exec diariz-glitchtip-1 ./manage.py shell -c "
+from apps.files.models import File
+from apps.sourcecode.models import DebugSymbolBundle
+print('files=%d bundles=%d' % (File.objects.count(), DebugSymbolBundle.objects.count()))"
+```
+
+Non-zero on both means it worked. **Both zero after an upload means assembly failed** - the reason is in `docker logs diariz-glitchtip-1`, searching for `assemble_artifacts`.
 
 ---
 
