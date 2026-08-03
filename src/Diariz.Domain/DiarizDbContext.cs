@@ -50,6 +50,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
     public DbSet<WorkflowSignal> WorkflowSignals => Set<WorkflowSignal>();
     public DbSet<FormulaWorkflowSignal> FormulaWorkflowSignals => Set<FormulaWorkflowSignal>();
+    public DbSet<Feedback> Feedback => Set<Feedback>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -704,6 +705,15 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.HasKey(x => new { x.FormulaId, x.WorkflowSignalId });
             e.HasOne(x => x.Formula).WithMany().HasForeignKey(x => x.FormulaId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.WorkflowSignal).WithMany().HasForeignKey(x => x.WorkflowSignalId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // A user's "Provide Feedback" report + client-side trail. User-authored content, so it is
+        // cascade-deleted with the user like everything else they own. Provider-agnostic (plain
+        // columns), so it stays outside the Npgsql guard and loads under the in-memory test provider too.
+        builder.Entity<Feedback>(e =>
+        {
+            e.HasOne(f => f.User).WithMany().HasForeignKey(f => f.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }
