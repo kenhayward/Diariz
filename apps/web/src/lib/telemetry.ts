@@ -1,11 +1,11 @@
-import { REDACTED, isSensitiveKey, stripQueryString, scrubUrlsIn, scrubDeep } from "./scrub";
+import { REDACTED, isSensitiveKey, stripQueryString, scrubUrlsIn, scrubDeep, isWalkable, CIRCULAR, MAX_DEPTH } from "./scrub";
 
 // Local alias: the rest of this file calls the walker `scrub`.
 const scrub = scrubDeep;
 
 // Re-exported so any existing importer of this file still resolves; the definitions themselves now
 // live in ./scrub - see the SYNC OBLIGATION header there.
-export { REDACTED, isSensitiveKey, stripQueryString, scrubUrlsIn };
+export { REDACTED, isSensitiveKey, stripQueryString, scrubUrlsIn, CIRCULAR };
 
 // Named imports (rather than `import * as Sentry`) so a bundler can tree-shake the integrations this
 // app never enables (session replay, user feedback, tracing) - referencing the whole namespace object
@@ -34,24 +34,6 @@ interface TransactionEventLike {
   spans?: Array<{ description?: string; data?: Record<string, unknown> | null; [key: string]: unknown }>;
   contexts?: { trace?: { data?: Record<string, unknown> | null; [key: string]: unknown }; [key: string]: unknown };
   [key: string]: unknown;
-}
-
-export const CIRCULAR = "[circular]";
-
-/**
- * Depth ceiling for both recursive walks below.
- *
- * The `seen` set already makes cycles impossible, so this is purely a stack-overflow backstop for a
- * pathologically deep (but acyclic) structure - these walks run inside error hooks, where a
- * `RangeError` would drop the event and, on the breadcrumb path, throw from inside the SDK's own
- * handler. 20 is far past anything real: the SDK's own `normalizeDepth` default is 3, so it flattens
- * everything below that itself before an event is serialised.
- */
-const MAX_DEPTH = 20;
-
-/** True for a value a recursive walk should descend into (object or array, but not null). */
-function isWalkable(value: unknown): value is object {
-  return !!value && typeof value === "object";
 }
 
 /**

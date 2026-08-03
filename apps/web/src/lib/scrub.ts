@@ -64,25 +64,23 @@ export function scrubUrlsIn(text: string): string {
 }
 
 /** True for a value a recursive walk should descend into (object or array, but not null). */
-function isWalkable(value: unknown): value is object {
+export function isWalkable(value: unknown): value is object {
   return !!value && typeof value === "object";
 }
 
-// Local copies of telemetry.ts's CIRCULAR/MAX_DEPTH: scrubAttributes (which stays in telemetry.ts,
-// since it is not part of this module's "Produces" list) needs its own, and this file imports
-// nothing - see the header comment above - so sharing telemetry.ts's copies is not an option.
-const CIRCULAR = "[circular]";
+export const CIRCULAR = "[circular]";
 
 /**
- * Depth ceiling for the recursive walk below.
+ * Depth ceiling for both recursive walks that use it (this module's `scrubDeep`, and
+ * `scrubAttributes` in telemetry.ts, which imports this constant rather than keeping its own copy).
  *
  * The `seen` set already makes cycles impossible, so this is purely a stack-overflow backstop for a
- * pathologically deep (but acyclic) structure - this walk runs inside error hooks, where a
+ * pathologically deep (but acyclic) structure - these walks run inside error hooks, where a
  * `RangeError` would drop the event and, on the breadcrumb path, throw from inside the SDK's own
  * handler. 20 is far past anything real: the SDK's own `normalizeDepth` default is 3, so it flattens
  * everything below that itself before an event is serialised.
  */
-const MAX_DEPTH = 20;
+export const MAX_DEPTH = 20;
 
 /**
  * Recursively redact sensitive values by field name. Pure: returns a new structure, never mutates the
