@@ -28,7 +28,7 @@
     "marked": "^18.0.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-i18next": "^15.7.4",
+    "react-i18next": "^17.0.11",
     "react-router-dom": "^7.1.1",
     "tiptap-markdown": "^0.9.0"
   },
