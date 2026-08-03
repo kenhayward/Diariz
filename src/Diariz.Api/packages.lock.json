@@ -192,9 +192,9 @@
       },
       "System.IO.Packaging": {
         "type": "Direct",
-        "requested": "[9.0.9, )",
-        "resolved": "9.0.9",
-        "contentHash": "fAnbCbB3D1h2jaoArUkD1EvrjvHOOarXmr9A49/lZyvGcXCMqwJVe7wiuNKEeKSb1vlkfO5RaC8gBSBAvMXCsQ=="
+        "requested": "[10.0.10, )",
+        "resolved": "10.0.10",
+        "contentHash": "SZT8XZ8Tktdnhaq5eWOJWN0VBczFZ7l6K5C5ykbaQFXZ0Uv8UBJwQcYUM1NVk5pKAmPlHnancMh33jF6IKnUrg=="
       },
       "UglyToad.PdfPig": {
         "type": "Direct",
