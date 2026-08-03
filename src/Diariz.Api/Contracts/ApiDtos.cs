@@ -675,3 +675,10 @@ public record WorkflowSignalDto(Guid Id, string Key, string Label, string? Descr
 public record CreateWorkflowSignalRequest(string Key, string Label, string? Description);
 
 public record UpdateWorkflowSignalRequest(string Label, string? Description, bool IsActive);
+
+// ---- Feedback (a user's "something looks/behaves wrong" report) ----
+
+public record CreateFeedbackRequest(string Description, string Route, string Release, string TrailJson);
+
+public record FeedbackDto(Guid Id, Guid UserId, string? UserEmail, DateTimeOffset CreatedAt,
+    string Description, string Route, string Release, string TrailJson);

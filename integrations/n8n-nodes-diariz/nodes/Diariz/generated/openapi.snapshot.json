@@ -710,6 +710,29 @@
         ],
         "type": "object"
       },
+      "CreateFeedbackRequest": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "release": {
+            "type": "string"
+          },
+          "route": {
+            "type": "string"
+          },
+          "trailJson": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "route",
+          "release",
+          "trailJson"
+        ],
+        "type": "object"
+      },
       "CreateFormulaRequest": {
         "properties": {
           "content": {
@@ -5940,6 +5963,40 @@
         "summary": "Transcribe a spoken chat question",
         "tags": [
           "Chat"
+        ]
+      }
+    },
+    "/api/feedback": {
+      "post": {
+        "description": "Stores a bug or UX report against the calling user, together with the SPA route and app release it was filed from and a client-captured trail (already scrubbed browser-side) for reproduction context.\n\nThe description is trimmed and rejected if empty, and truncated to a bounded length if very long. Reading and deleting submitted feedback is a Platform Administrator surface, not exposed here.",
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFeedbackRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFeedbackRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFeedbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Submit feedback about the app",
+        "tags": [
+          "Feedback"
         ]
       }
     },
@@ -12903,6 +12960,10 @@
     {
       "description": "Multi-turn chat over your transcripts: stream answers over selected recordings and save, load, or delete conversations.",
       "name": "Chat"
+    },
+    {
+      "description": "Submit a bug or UX report about the app, captured with the SPA route, app release, and a scrubbed client trail.",
+      "name": "Feedback"
     },
     {
       "description": "The Markdown documents a formula produced for a recording - list, read, edit, delete, email, and download.",

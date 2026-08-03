@@ -482,6 +482,24 @@ const GENERATED: GeneratedResource[] = [
     ]
   },
   {
+    "tag": "Feedback",
+    "displayName": "Feedback",
+    "value": "feedback",
+    "operations": [
+      {
+        "value": "submitFeedbackAboutTheApp",
+        "displayName": "Submit feedback about the app",
+        "description": "Stores a bug or UX report against the calling user, together with the SPA route and app release it was filed from and a client-captured trail (already scrubbed browser-side) for reproduction context.",
+        "method": "POST",
+        "path": "/api/feedback",
+        "pathParams": [],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      }
+    ]
+  },
+  {
     "tag": "Formulas",
     "displayName": "Formula",
     "value": "formulas",

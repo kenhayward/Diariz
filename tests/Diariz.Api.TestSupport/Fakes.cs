@@ -308,6 +308,21 @@ public sealed class FakeEmailSender : IEmailSender
     }
 }
 
+/// <summary>No-op <see cref="IWebhookPublisher"/> — records every call so a test can assert what would have
+/// fired, without touching Redis or a real subscription table.</summary>
+public sealed class FakeWebhookPublisher : IWebhookPublisher
+{
+    public List<(string EventType, Guid OwnerUserId, object Data)> Published { get; } = new();
+
+    public Task PublishAsync(string eventType, Guid ownerUserId, object data,
+        IReadOnlyList<string>? signals = null, object? platformData = null, object? dataWithContacts = null,
+        CancellationToken ct = default)
+    {
+        Published.Add((eventType, ownerUserId, data));
+        return Task.CompletedTask;
+    }
+}
+
 /// <summary>Stub <see cref="ISpeakerIdentifier"/> — returns a canned match (or none) and records the
 /// embeddings it was asked about, so the callback's auto-identification can be unit-tested without pgvector.</summary>
 public sealed class FakeSpeakerIdentifier : ISpeakerIdentifier
