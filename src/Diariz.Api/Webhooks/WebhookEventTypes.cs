@@ -36,6 +36,21 @@ public static class WebhookEventTypes
     /// subscription on <see cref="FeedbackSubmitted"/> would deliver another user's words to them.</summary>
     public static readonly IReadOnlyList<string> PlatformSubscribable = Subscribable.Append(FeedbackSubmitted).ToArray();
 
+    /// <summary>Whether a PLATFORM subscription must match one of the event's Workflow Signals to receive
+    /// <paramref name="type"/>. True for everything except the types listed below, and deliberately so: a
+    /// platform subscription is broad-reach (it fires across all users), and signals are what scope it -
+    /// <c>PlatformWebhooksController</c> will not even create one without a signal.
+    ///
+    /// <para>Some event types have no signals concept at all, though: nothing in the product attaches a signal
+    /// to <see cref="FeedbackSubmitted"/>, so the gate can never open for it and the type would be
+    /// subscribable but permanently undeliverable. Those types are exempted HERE, by type - never by relaxing
+    /// the gate in <see cref="Services.WebhookPublisher"/> to let an empty filter through, which would widen
+    /// every existing signal-routed type to platform subscriptions that do not receive it today.</para>
+    ///
+    /// <para>So: adding a new platform-only event type that carries no signals means adding it here, or it
+    /// will silently deliver to nobody.</para></summary>
+    public static bool IsSignalRouted(string type) => type != FeedbackSubmitted;
+
     public static string[] Split(string? csv) =>
         string.IsNullOrWhiteSpace(csv)
             ? Array.Empty<string>()

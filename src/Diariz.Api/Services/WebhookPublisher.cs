@@ -51,9 +51,14 @@ public sealed class WebhookPublisher : IWebhookPublisher
             var personal = all.Where(s => s.Scope == WebhookScope.Personal
                 && WebhookEventTypes.Matches(s.EventTypes, eventType)
                 && (WebhookSignals.IsEmpty(s.SignalFilter) || WebhookSignals.Intersects(s.SignalFilter, sig))).ToList();
+            // Platform subs are signal-routed: Intersects is false for an empty filter AND for an event
+            // carrying no signals, so a broad-reach platform sub only fires on events it was scoped to.
+            // WebhookEventTypes.IsSignalRouted names the exceptions - types that carry no signals at all, for
+            // which the gate could never open (see the comment there before changing either side).
+            var signalGated = WebhookEventTypes.IsSignalRouted(eventType);
             var platform = all.Where(s => s.Scope == WebhookScope.Platform
                 && WebhookEventTypes.Matches(s.EventTypes, eventType)
-                && WebhookSignals.Intersects(s.SignalFilter, sig)).ToList();   // empty filter -> Intersects false -> no match
+                && (!signalGated || WebhookSignals.Intersects(s.SignalFilter, sig))).ToList();
 
             if (personal.Count == 0 && platform.Count == 0) return;
 

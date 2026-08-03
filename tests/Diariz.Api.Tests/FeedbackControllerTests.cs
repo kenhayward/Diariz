@@ -73,6 +73,38 @@ public class FeedbackControllerTests
         Assert.Equal(FeedbackController.MaxDescription, (await db.Feedback.SingleAsync()).Description.Length);
     }
 
+    /// <summary>The trail lands verbatim in an unbounded text column, and the submitter cannot delete their
+    /// own rows - only an admin can. Without a cap, any signed-in user could park Kestrel's whole default
+    /// body (~30 MB) per submission, repeatedly. Rejected rather than truncated: half a JSON array is not
+    /// JSON, so a silent trim would store something no reader could parse.</summary>
+    [Fact]
+    public async Task Create_RejectsAnOverlongTrail()
+    {
+        var db = TestDb.Create();
+        var userId = SeedUser(db);
+
+        var result = await Build(db, userId).Create(new CreateFeedbackRequest(
+            "x", "/", "0.176.0", new string('x', FeedbackController.MaxTrailJson + 1)));
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Empty(db.Feedback);
+    }
+
+    /// <summary>The cap is generous by design - a 30-entry trail is a few kilobytes - so a trail right at
+    /// the limit must still be accepted whole. Guards against the cap being tightened to something a real
+    /// submission could hit.</summary>
+    [Fact]
+    public async Task Create_StoresATrailUpToTheCap()
+    {
+        var db = TestDb.Create();
+        var userId = SeedUser(db);
+        var trail = new string('x', FeedbackController.MaxTrailJson);
+
+        await Build(db, userId).Create(new CreateFeedbackRequest("x", "/", "0.176.0", trail));
+
+        Assert.Equal(trail, (await db.Feedback.SingleAsync()).TrailJson);
+    }
+
     [Fact]
     public async Task List_ReturnsNewestFirst_WithSubmitterEmail()
     {

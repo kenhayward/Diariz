@@ -5984,7 +5984,7 @@
         ]
       },
       "post": {
-        "description": "Stores a bug or UX report against the calling user, together with the SPA route and app release it was filed from and a client-captured trail (already scrubbed browser-side) for reproduction context.\n\nThe description is trimmed and rejected if empty, and truncated to a bounded length if very long. Reading and deleting submitted feedback is a Platform Administrator surface, not exposed here.",
+        "description": "Stores a bug or UX report against the calling user, together with the SPA route and app release it was filed from and a client-captured trail (already scrubbed browser-side) for reproduction context.\n\nThe description is trimmed and rejected if empty, and truncated to a bounded length if very long. Reading and deleting submitted feedback is a Platform Administrator surface, not exposed here.\n\nThe trail is capped too, and an oversized one is rejected rather than trimmed - a truncated trail is not valid JSON.",
         "requestBody": {
           "content": {
             "application/*+json": {

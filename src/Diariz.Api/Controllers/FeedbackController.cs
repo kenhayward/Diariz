@@ -22,6 +22,13 @@ public class FeedbackController : ControllerBase
     /// entire transcript does not become a row nobody can read or delete comfortably.</summary>
     public const int MaxDescription = 4000;
 
+    /// <summary>Cap on the stored trail. The client trail is a 30-entry ring buffer, so a real one is a few
+    /// kilobytes - 64 KiB is roughly an order of magnitude of headroom and will never reject a genuine
+    /// submission. It exists because the trail is stored verbatim in an unbounded <c>text</c> column and the
+    /// submitter cannot delete their own rows (only a Platform Administrator can): without a cap, a signed-in
+    /// user could park Kestrel's whole default body (~30 MB) per submission, repeatedly.</summary>
+    public const int MaxTrailJson = 64 * 1024;
+
     private readonly DiarizDbContext _db;
     private readonly IWebhookPublisher _webhooks;
 
@@ -39,12 +46,20 @@ public class FeedbackController : ControllerBase
         "Stores a bug or UX report against the calling user, together with the SPA route and app release it " +
         "was filed from and a client-captured trail (already scrubbed browser-side) for reproduction context.\n\n" +
         "The description is trimmed and rejected if empty, and truncated to a bounded length if very long. " +
-        "Reading and deleting submitted feedback is a Platform Administrator surface, not exposed here.")]
+        "Reading and deleting submitted feedback is a Platform Administrator surface, not exposed here.\n\n" +
+        "The trail is capped too, and an oversized one is rejected rather than trimmed - a truncated trail " +
+        "is not valid JSON.")]
+    [RequestSizeLimit(1024 * 1024)] // 1 MiB - a feedback body is kilobytes; this bounds it well under Kestrel's ~30 MB default.
     public async Task<IActionResult> Create(CreateFeedbackRequest req, CancellationToken ct = default)
     {
         var description = (req.Description ?? "").Trim();
         if (description.Length == 0) return BadRequest("Please describe the problem.");
         if (description.Length > MaxDescription) description = description[..MaxDescription];
+
+        // Rejected, not truncated like the description: half a JSON array is not JSON, so trimming would
+        // store a trail no reader could parse.
+        if ((req.TrailJson?.Length ?? 0) > MaxTrailJson)
+            return BadRequest("That report carries too much diagnostic detail. Please try again.");
 
         var row = new Feedback
         {

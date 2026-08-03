@@ -1053,6 +1053,12 @@ into it with no URL or per-user setup at all.
   intersects the firing signals — `WebhookSignals.Intersects` on an empty filter always returns `false`, which
   is what enforces the footgun guard above. Matching subscriptions of either scope get one `WebhookDelivery`
   row each, same delivery/retry/auto-disable machinery as Phase 2.
+  **One exception, keyed on the event type:** `WebhookEventTypes.IsSignalRouted` returns `false` for
+  `feedback.submitted`, and the platform branch skips the signal gate for it. Nothing in the product attaches
+  a signal to a feedback submission, so the gate could never open and the type would be subscribable but
+  permanently undeliverable. The exemption is deliberately per-type rather than a relaxation of the gate
+  (e.g. letting an empty filter match), which would widen every existing signal-routed type. A new
+  platform-only event type carrying no signals must be added there too, or it silently delivers to nobody.
 - **Inline output only on platform signal-routed deliveries.** `FormulaRunProcessor` builds two payload
   bodies for a completion/failure event — a thin `data` body (ids, status, links; what every Phase 2 personal
   subscriber has always received) and a richer `platformData` body that additionally carries the rendered
