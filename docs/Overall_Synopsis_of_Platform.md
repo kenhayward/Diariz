@@ -866,7 +866,9 @@ toggle is off.
 - **Event catalog (`WebhookEventTypes`), nine subscribable types:** `recording.created`, `recording.transcribed`,
   `recording.transcription_failed`, `recording.summarized`, `recording.minutes_ready`,
   `recording.action_items_ready`, `recording.tags_ready`, `formula_result.completed`, `formula_result.failed` —
-  plus an internal `webhook.ping` used only by the manual "Send test event" button (never subscribable). The keys
+  plus a tenth, **Platform-only** type, `feedback.submitted` (see the Feedback section below), and an internal
+  `webhook.ping` used only by the manual "Send test event" button (neither subscribable by a Personal
+  subscription). The keys
   are **append-only**: they are stored as a comma-separated string in `WebhookSubscription.EventTypes`, so a
   rename would orphan every existing subscription. Events are emitted at the recording-create site and the
   worker-callback success/failure sites (`RecordingsController`, `WorkerCallbackController`), at the formula-run
@@ -956,6 +958,46 @@ toggle is off.
   per-platform-subscription delivery rate cap (the delivery worker's batch-and-backoff throughput bound
   already covers this; a per-subscription token bucket is a hardening follow-up now that platform subs fan
   out across users), and detaching a platform subscription from the single admin who owns it (see below).
+
+## Feedback (Provide Feedback)
+
+Any signed-in user can report "something looks or behaves wrong" from the account menu, even when nothing
+threw an exception. `POST /api/feedback` (`FeedbackController`, JWT-authed, no permission gate) stores a
+`Feedback` row: the description, the SPA route and app release at submission, and a client-captured trail.
+Reading (`GET /api/feedback`) and deleting (`DELETE /api/feedback/{id}`) are `ManagePlatform`-gated — a
+Platform Administrator surface only, deliberately including a user's own submissions (a per-user view would
+imply a support conversation this feature does not have) — surfaced as a Feedback tab in Settings
+(`FeedbackPanel.tsx`), which lists newest-first and can expand a row to show its parsed trail.
+
+- **The client trail is independent of the optional error-tracking stack.** `apps/web/src/lib/trail.ts` keeps
+  an in-memory ring buffer (`TRAIL_CAPACITY = 30`) of recent `{ at, kind: "api" | "nav" | "mark", label, detail? }`
+  entries, fed from the app's own seams — the axios interceptors and the router — rather than from the
+  GlitchTip/Sentry SDK's `beforeBreadcrumb` hook. That hook only fires once the SDK has initialised, and
+  Provide Feedback has to work on a deployment with no DSN configured at all (see Observability above, which
+  is entirely optional). Entries are **scrubbed on the way in**, not on the way out: `record()` runs every
+  label through `scrubUrlsIn` (stripping query strings, which is where the SignalR access token lands — a
+  browser cannot set a header on a WS handshake, so `@microsoft/signalr` puts the JWT in
+  `?access_token=`) and every `detail` value through the shared `lib/scrub.ts` rules used by the LLM
+  telemetry work, redacting a key that looks sensitive outright. The buffer therefore never holds a value
+  that would be unsafe to send, closing off the disclosure path that scrubbing-on-the-way-out left open in
+  the telemetry feature. `FeedbackModal.tsx` snapshots the trail and posts it as `TrailJson` alongside the
+  description and `window.location.pathname`.
+- **The outbound event, `feedback.submitted`, is Platform-subscription only.** It is deliberately absent
+  from `WebhookEventTypes.Subscribable` (the Personal list) and only present in `PlatformSubscribable`: a
+  Personal subscription receives events about its own owner's data, and feedback is readable only by a
+  Platform Administrator, so a Personal subscription on this type would deliver another user's words to
+  them. `FeedbackController.Create` publishes it best-effort, after the row is saved, via the same
+  thin-vs-full split `IncludeAttendeeContacts` uses: the default body carries `{ id, route, release,
+  hasScreenshot: false }`; a Platform subscription with `IncludeFeedbackText = true` (default false) also
+  receives `description` — the submitter's own free-text words. Without that opt-in, an automation that
+  needs the words fetches them through the API instead. As of this release the web admin UI (Settings →
+  Integration → Platform Automations) does not expose a checkbox for `IncludeFeedbackText`; it is settable
+  today through `POST`/`PUT /api/admin/webhooks`.
+- **Screenshots are deliberately deferred.** `Feedback.ScreenshotBlobKey` (text, nullable) exists in the
+  schema and the webhook payload already carries `hasScreenshot: false`, so that phase needs no further
+  migration or payload-shape change — but the column is always null today. Capturing a screenshot needs an
+  Electron shell change (same capture surface as meeting screenshots) and so a desktop release, which this
+  release does not ship.
 
 ## n8n community node (`integrations/n8n-nodes-diariz`)
 

@@ -430,6 +430,17 @@ one. Both report progress while they run: the panel shows the archive being buil
 many files are in so far, and elapsed time) before the download begins, and during a restore it distinguishes
 uploading the archive from the server applying it. Restore is destructive (replaces all data) and accepts a
 backup from this app version or an older, forward-migratable one.
+- **Provide Feedback.** Any signed-in user can open **Provide Feedback** from the account menu and describe
+something that looks or behaves wrong, even when nothing raised an error. A short technical trail of recent
+app activity (API calls and route changes, scrubbed of anything sensitive before it ever leaves the browser)
+is attached automatically, so a maintainer has reproduction context without a screenshot. The dialog is
+draggable, so it can be moved out of the way of whatever it is reporting on. Submissions are readable and
+deletable only by a **Platform Administrator**, in a **Feedback** tab in Settings - not even the submitter can
+read their own back. A platform-scoped `feedback.submitted` webhook event lets an automation react (route it
+to a ticket system, for instance); the submitter's own words are included only when that platform subscription
+is explicitly configured to include them (`IncludeFeedbackText`, off by default), so a webhook pointed at an
+arbitrary URL does not fan free text out by default. Screenshots are not part of this release - they need a
+desktop-shell change and are a deferred follow-up.
 - **Help and documentation.** A browsable help section at **`/help`**: a fixed header, a resizable
 left-hand tree of articles grouped into Getting started / Working with recordings / Asking questions /
 Settings and sharing, and the selected article rendered on the right. A **search box** above the tree
