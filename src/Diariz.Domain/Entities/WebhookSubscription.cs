@@ -34,6 +34,13 @@ public class WebhookSubscription
     /// companies and the internal/external marker are always sent; only the contact details are gated.</summary>
     public bool IncludeAttendeeContacts { get; set; }
 
+    /// <summary>Send the user's own words in a <c>feedback.submitted</c> payload. <b>Off by default, and
+    /// deliberately opt-in per subscription</b> - the same reasoning as
+    /// <see cref="IncludeAttendeeContacts"/>: an automation points at an arbitrary URL, and feedback is
+    /// free text that may quote meeting content. Without this the payload carries only ids and context,
+    /// and an automation that needs the words fetches them through the API.</summary>
+    public bool IncludeFeedbackText { get; set; }
+
     /// <summary>Consecutive failed deliveries; reset to 0 on any success. Auto-disable at the threshold.</summary>
     public int ConsecutiveFailures { get; set; }
 

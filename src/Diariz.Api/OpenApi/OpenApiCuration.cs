@@ -49,6 +49,7 @@ public static class OpenApiCuration
         ["CalendarEventNotes"] = "Pre-meeting note lines attached to a calendar event, before any recording exists; adopted onto the recording once one is linked.",
         ["CalendarFeeds"] = "Your external iCalendar (.ics) feed subscriptions - list, add, update, and remove. Feed URLs are validated (https only) before they are stored.",
         ["Chat"] = "Multi-turn chat over your transcripts: stream answers over selected recordings and save, load, or delete conversations.",
+        ["Feedback"] = "Submit a bug or UX report about the app, captured with the SPA route, app release, and a scrubbed client trail.",
         ["FormulaResults"] = "The Markdown documents a formula produced for a recording - list, read, edit, delete, email, and download.",
         ["Formulas"] = "Manage Formulas (a saved prompt plus context) and run one over a recording to generate a document.",
         ["Groups"] = "Administer user groups and their platform permissions. The built-in Platform Administrators group is protected from lockout.",

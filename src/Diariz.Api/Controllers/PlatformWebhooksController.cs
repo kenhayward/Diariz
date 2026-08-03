@@ -60,6 +60,7 @@ public class PlatformWebhooksController : ControllerBase
             Name = string.IsNullOrWhiteSpace(req.Name) ? "Automation" : req.Name.Trim(),
             Url = req.Url.Trim(), SecretEncrypted = _protector.Protect(secret)!, EventTypes = WebhookEventTypes.Join(events),
             SignalFilter = WebhookSignals.Join(signals),
+            IncludeFeedbackText = req.IncludeFeedbackText ?? false,
         };
         _db.Webhooks.Add(row);
         await _db.SaveChangesAsync();
@@ -82,6 +83,8 @@ public class PlatformWebhooksController : ControllerBase
         row.SignalFilter = WebhookSignals.Join(signals);
         if (req.IsActive && !row.IsActive) { row.ConsecutiveFailures = 0; row.DisabledReason = null; }
         row.IsActive = req.IsActive;
+        // Omitted means "leave it alone", so an older client cannot silently turn feedback text off.
+        if (req.IncludeFeedbackText is { } feedbackText) row.IncludeFeedbackText = feedbackText;
         await _db.SaveChangesAsync();
         return ToDto(row);
     }
@@ -104,7 +107,7 @@ public class PlatformWebhooksController : ControllerBase
         signals = (signalFilter ?? Array.Empty<string>()).Distinct(StringComparer.Ordinal).ToArray();
         if (string.IsNullOrWhiteSpace(url)) { reason = "A destination URL is required."; return reason; }
         if (events.Length == 0) { reason = "Choose at least one event."; return reason; }
-        if (events.Any(t => !WebhookEventTypes.Subscribable.Contains(t)))
+        if (events.Any(t => !WebhookEventTypes.PlatformSubscribable.Contains(t)))
         { reason = "Unknown event type."; return reason; }
         if (signals.Length == 0)
         { reason = "Choose at least one signal - a platform automation with no signal never fires."; return reason; }
@@ -115,7 +118,7 @@ public class PlatformWebhooksController : ControllerBase
         s.Id, s.Name, s.Url, WebhookEventTypes.Split(s.EventTypes), s.IsActive, s.ConsecutiveFailures,
         s.DisabledReason, s.LastDeliveryAt, s.LastStatus, s.CreatedAt,
         Scope: "Platform", SignalFilter: WebhookSignals.Split(s.SignalFilter),
-        IncludeAttendeeContacts: s.IncludeAttendeeContacts);
+        IncludeAttendeeContacts: s.IncludeAttendeeContacts, IncludeFeedbackText: s.IncludeFeedbackText);
 
     private static string Base64Url(byte[] bytes) =>
         Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');

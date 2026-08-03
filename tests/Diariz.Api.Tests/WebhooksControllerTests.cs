@@ -75,6 +75,21 @@ public class WebhooksControllerTests
         Assert.Empty(await db.Webhooks.ToListAsync());
     }
 
+    /// <summary>Feedback is readable only by a Platform Administrator, so a PERSONAL subscription on
+    /// <c>feedback.submitted</c> would deliver other users' words to its owner. The publisher does not
+    /// re-check scope per type, so this refusal at creation is the whole of the guarantee - it is the
+    /// reason the type lives in <c>PlatformSubscribable</c> and not <c>Subscribable</c>.</summary>
+    [Fact]
+    public async Task Create_rejects_feedback_submitted_on_a_personal_subscription()
+    {
+        var db = Enabled(); var userId = Guid.NewGuid();
+        var c = Controller(db, userId, urlOk: true);
+        var res = await c.Create(new CreateWebhookRequest(
+            "z", "https://x/y", new[] { WebhookEventTypes.FeedbackSubmitted }));
+        Assert.IsType<BadRequestObjectResult>(res.Result);
+        Assert.Empty(await db.Webhooks.ToListAsync());
+    }
+
     [Fact]
     public async Task Create_rejects_ssrf_url()
     {
