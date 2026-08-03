@@ -688,8 +688,8 @@
       },
       "System.IO.Packaging": {
         "type": "Transitive",
-        "resolved": "9.0.9",
-        "contentHash": "fAnbCbB3D1h2jaoArUkD1EvrjvHOOarXmr9A49/lZyvGcXCMqwJVe7wiuNKEeKSb1vlkfO5RaC8gBSBAvMXCsQ=="
+        "resolved": "10.0.10",
+        "contentHash": "SZT8XZ8Tktdnhaq5eWOJWN0VBczFZ7l6K5C5ykbaQFXZ0Uv8UBJwQcYUM1NVk5pKAmPlHnancMh33jF6IKnUrg=="
       },
       "System.Management": {
         "type": "Transitive",
@@ -809,14 +809,14 @@
           "Pgvector.EntityFrameworkCore": "[0.3.0, )",
           "Sentry.AspNetCore": "[6.8.0, )",
           "StackExchange.Redis": "[3.0.0, )",
-          "System.IO.Packaging": "[9.0.9, )",
+          "System.IO.Packaging": "[10.0.10, )",
           "UglyToad.PdfPig": "[1.7.0-custom-5, )"
         }
       },
       "diariz.api.testsupport": {
         "type": "Project",
         "dependencies": {
-          "Diariz.Api": "[0.175.1, )"
+          "Diariz.Api": "[0.176.1, )"
         }
       },
       "diariz.domain": {
