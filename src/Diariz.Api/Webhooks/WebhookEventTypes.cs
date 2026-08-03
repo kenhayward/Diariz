@@ -30,6 +30,12 @@ public static class WebhookEventTypes
         FormulaResultCompleted, FormulaResultFailed,
     };
 
+    /// <summary>The types a PLATFORM subscription may choose: everything personal subscriptions may have,
+    /// plus the platform-only types. Kept separate from <see cref="Subscribable"/> because that list gates
+    /// PERSONAL subscriptions, which deliver events about their owner's own data - and a personal
+    /// subscription on <see cref="FeedbackSubmitted"/> would deliver another user's words to them.</summary>
+    public static readonly IReadOnlyList<string> PlatformSubscribable = Subscribable.Append(FeedbackSubmitted).ToArray();
+
     public static string[] Split(string? csv) =>
         string.IsNullOrWhiteSpace(csv)
             ? Array.Empty<string>()

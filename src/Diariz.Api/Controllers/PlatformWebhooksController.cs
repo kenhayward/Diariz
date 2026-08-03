@@ -107,7 +107,7 @@ public class PlatformWebhooksController : ControllerBase
         signals = (signalFilter ?? Array.Empty<string>()).Distinct(StringComparer.Ordinal).ToArray();
         if (string.IsNullOrWhiteSpace(url)) { reason = "A destination URL is required."; return reason; }
         if (events.Length == 0) { reason = "Choose at least one event."; return reason; }
-        if (events.Any(t => !WebhookEventTypes.Subscribable.Contains(t)))
+        if (events.Any(t => !WebhookEventTypes.PlatformSubscribable.Contains(t)))
         { reason = "Unknown event type."; return reason; }
         if (signals.Length == 0)
         { reason = "Choose at least one signal - a platform automation with no signal never fires."; return reason; }

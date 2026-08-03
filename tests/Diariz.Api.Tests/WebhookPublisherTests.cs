@@ -162,11 +162,31 @@ public class WebhookPublisherTests
 
     /// <summary>A personal subscription receives events about its OWNER's own data. Feedback is readable only
     /// by a Platform Administrator, so a personal subscription on this type would leak other users' words -
-    /// it must never even appear as a choice in the personal subscribe list.</summary>
+    /// it must never even appear as a choice in the personal subscribe list. Half of a pair with
+    /// <see cref="FeedbackSubmitted_IsPlatformSubscribable"/> below: the type must be selectable by exactly
+    /// one of the two lists, never both and never neither.</summary>
     [Fact]
     public void FeedbackSubmitted_IsNotPersonallySubscribable()
     {
         Assert.DoesNotContain(WebhookEventTypes.FeedbackSubmitted, WebhookEventTypes.Subscribable);
+    }
+
+    /// <summary>The other half of the pair: a PLATFORM subscription must be able to choose
+    /// <c>feedback.submitted</c>, or the event is published into a void - no subscription of either kind could
+    /// ever be created for it, and <see cref="WebhookSubscription.IncludeFeedbackText"/> would be unreachable.</summary>
+    [Fact]
+    public void FeedbackSubmitted_IsPlatformSubscribable()
+    {
+        Assert.Contains(WebhookEventTypes.FeedbackSubmitted, WebhookEventTypes.PlatformSubscribable);
+    }
+
+    /// <summary>The platform list must be a superset of the personal one, or a type a personal subscription
+    /// may choose could become unavailable to a platform subscription by accident.</summary>
+    [Fact]
+    public void PlatformSubscribable_IsNeverNarrowerThanSubscribable()
+    {
+        foreach (var type in WebhookEventTypes.Subscribable)
+            Assert.Contains(type, WebhookEventTypes.PlatformSubscribable);
     }
 
     /// <summary>The feedback-text gate, mirroring the contacts gate above: the thin body (ids/route/release)
