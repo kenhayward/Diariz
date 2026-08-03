@@ -1500,6 +1500,15 @@ export const api = {
     });
     triggerBlobDownload(res.data as Blob, filenameFromHeaders(res.headers, "formula-result.md"));
   },
+
+  /// Submit a user-reported problem, alongside the scrubbed trail and the app version - the release is
+  /// added here (rather than by the caller) so every submission is tagged with the build that produced it.
+  async submitFeedback(description: string, route: string, trailJson: string): Promise<{ id: string }> {
+    const { data } = await http.post<{ id: string }>("/api/feedback", {
+      description, route, release: __APP_VERSION__, trailJson,
+    });
+    return data;
+  },
 };
 
 function filenameFromHeaders(headers: unknown, fallback: string): string {
