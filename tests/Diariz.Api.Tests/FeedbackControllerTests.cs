@@ -72,4 +72,44 @@ public class FeedbackControllerTests
 
         Assert.Equal(FeedbackController.MaxDescription, (await db.Feedback.SingleAsync()).Description.Length);
     }
+
+    [Fact]
+    public async Task List_ReturnsNewestFirst_WithSubmitterEmail()
+    {
+        var db = TestDb.Create();
+        var userId = SeedUser(db);
+        db.Feedback.AddRange(
+            new Feedback { UserId = userId, Description = "older", CreatedAt = DateTimeOffset.UtcNow.AddHours(-1) },
+            new Feedback { UserId = userId, Description = "newer", CreatedAt = DateTimeOffset.UtcNow });
+        await db.SaveChangesAsync();
+
+        var result = await Build(db, userId).List();
+
+        var items = Assert.IsType<List<FeedbackDto>>(Assert.IsType<OkObjectResult>(result).Value);
+        Assert.Equal(new[] { "newer", "older" }, items.Select(i => i.Description));
+        Assert.Equal("u@e.com", items[0].UserEmail);
+    }
+
+    [Fact]
+    public async Task Delete_RemovesTheRow()
+    {
+        var db = TestDb.Create();
+        var userId = SeedUser(db);
+        var row = new Feedback { UserId = userId, Description = "x" };
+        db.Feedback.Add(row);
+        await db.SaveChangesAsync();
+
+        await Build(db, userId).Delete(row.Id);
+
+        Assert.Empty(db.Feedback);
+    }
+
+    [Fact]
+    public async Task Delete_ReturnsNotFound_ForAnUnknownId()
+    {
+        var db = TestDb.Create();
+        var userId = SeedUser(db);
+
+        Assert.IsType<NotFoundResult>(await Build(db, userId).Delete(Guid.NewGuid()));
+    }
 }

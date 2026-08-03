@@ -5,6 +5,7 @@ using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Diariz.Api.Controllers;
 
@@ -58,5 +59,37 @@ public class FeedbackController : ControllerBase
         await _db.SaveChangesAsync(ct);
 
         return Ok(new { id = row.Id });
+    }
+
+    /// <summary>Platform Administrator only - deliberately, including a user's own submissions. A
+    /// per-user view would imply a support conversation this feature does not have, and would need its
+    /// own ownership rules for no benefit.</summary>
+    [HttpGet]
+    [Authorize(Policy = "ManagePlatform")]
+    [EndpointSummary("List all submitted feedback")]
+    [EndpointDescription(
+        "Platform Administrator only, deliberately including a user's own submissions - there is no per-user " +
+        "feedback surface. Returns newest first.")]
+    public async Task<IActionResult> List(CancellationToken ct = default)
+    {
+        var items = await _db.Feedback
+            .OrderByDescending(f => f.CreatedAt)
+            .Select(f => new FeedbackDto(f.Id, f.UserId, f.User!.Email, f.CreatedAt,
+                f.Description, f.Route, f.Release, f.TrailJson))
+            .ToListAsync(ct);
+        return Ok(items);
+    }
+
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "ManagePlatform")]
+    [EndpointSummary("Delete a submitted feedback report")]
+    [EndpointDescription("Platform Administrator only.")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken ct = default)
+    {
+        var row = await _db.Feedback.FirstOrDefaultAsync(f => f.Id == id, ct);
+        if (row is null) return NotFound();
+        _db.Feedback.Remove(row);
+        await _db.SaveChangesAsync(ct);
+        return NoContent();
     }
 }

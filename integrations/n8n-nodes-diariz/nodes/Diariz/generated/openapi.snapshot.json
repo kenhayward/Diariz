@@ -5967,6 +5967,18 @@
       }
     },
     "/api/feedback": {
+      "get": {
+        "description": "Platform Administrator only, deliberately including a user's own submissions - there is no per-user feedback surface. Returns newest first.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "List all submitted feedback",
+        "tags": [
+          "Feedback"
+        ]
+      },
       "post": {
         "description": "Stores a bug or UX report against the calling user, together with the SPA route and app release it was filed from and a client-captured trail (already scrubbed browser-side) for reproduction context.\n\nThe description is trimmed and rejected if empty, and truncated to a bounded length if very long. Reading and deleting submitted feedback is a Platform Administrator surface, not exposed here.",
         "requestBody": {
@@ -5995,6 +6007,31 @@
           }
         },
         "summary": "Submit feedback about the app",
+        "tags": [
+          "Feedback"
+        ]
+      }
+    },
+    "/api/feedback/{id}": {
+      "delete": {
+        "description": "Platform Administrator only.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Delete a submitted feedback report",
         "tags": [
           "Feedback"
         ]

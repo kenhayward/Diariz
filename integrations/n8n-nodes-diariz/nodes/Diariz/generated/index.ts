@@ -487,6 +487,30 @@ const GENERATED: GeneratedResource[] = [
     "value": "feedback",
     "operations": [
       {
+        "value": "deleteASubmittedFeedbackReport",
+        "displayName": "Delete a submitted feedback report",
+        "description": "Platform Administrator only.",
+        "method": "DELETE",
+        "path": "/api/feedback/{id}",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      },
+      {
+        "value": "listAllSubmittedFeedback",
+        "displayName": "List all submitted feedback",
+        "description": "Platform Administrator only, deliberately including a user's own submissions - there is no per-user feedback surface. Returns newest first.",
+        "method": "GET",
+        "path": "/api/feedback",
+        "pathParams": [],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      },
+      {
         "value": "submitFeedbackAboutTheApp",
         "displayName": "Submit feedback about the app",
         "description": "Stores a bug or UX report against the calling user, together with the SPA route and app release it was filed from and a client-captured trail (already scrubbed browser-side) for reproduction context.",
