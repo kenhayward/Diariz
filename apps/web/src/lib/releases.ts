@@ -60,6 +60,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.176.1",
+    date: "2026-08-03",
+    pr: 440,
+    headline: "Build housekeeping",
+    summary:
+      "No change to the app. A recent run of dependency updates left the .NET test projects' lock files " +
+      "describing older package versions than the projects actually use, so anyone building locally got a " +
+      "modified working tree the moment they restored. The lock files now match the projects again.",
+    fixed: [
+      "Refreshed the .NET packages.lock.json files, which had drifted from the project files after a dependency update.",
+    ],
+  },
+  {
     version: "0.176.0",
     date: "2026-08-03",
     pr: 437,
