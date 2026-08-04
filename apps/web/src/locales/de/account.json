@@ -294,5 +294,9 @@
   "automationTokenName": "Automatisierungstoken",
   "automationEmpty": "Noch keine Automatisierungen.",
   "automationDeliveries": "Letzte Zustellungen",
-  "automationNoDeliveries": "Noch keine Zustellungen."
+  "automationNoDeliveries": "Noch keine Zustellungen.",
+  "evtFeedbackSubmitted": "Jemand sendet Feedback",
+  "platformAutomationIncludeFeedbackText": "Den geschriebenen Text mitsenden",
+  "platformAutomationIncludeFeedbackTextHint": "Die Beschreibung ist Freitext und kann Besprechungsinhalte zitieren, daher wird sie nur auf Wunsch gesendet. Ohne diese Option erhaelt die Automatisierung weiterhin den Absender, die Seite und die Version.",
+  "platformAutomationFeedbackTextOn": "Feedback-Text enthalten"
 }

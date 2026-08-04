@@ -5,7 +5,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import type { MinutesGenerationMode, WebhookCreated, WorkflowSignal } from "../lib/types";
 import { useAuth } from "../auth";
 import { bytesToGb, gbToBytes } from "../lib/format";
-import { webhookEvents } from "../lib/webhookEvents";
+import { platformWebhookEvents, SIGNAL_EXEMPT_EVENT_KEYS } from "../lib/webhookEvents";
 import MaintenancePanel from "./MaintenancePanel";
 import FeedbackPanel from "./FeedbackPanel";
 
@@ -488,7 +488,10 @@ function WorkflowSignalsSection() {
 /// Automations, these route by Workflow Signal across every user rather than belonging to one person. Reuses
 /// the personal Automations create-form shape (name + destination URL + event checkboxes) plus a Workflow
 /// Signal multi-select sourced from the signals section's own query; the server rejects an empty signal
-/// filter (a platform automation with no signal never fires), so the create is blocked client-side to match.
+/// filter (a platform automation with no signal never fires), so the create is blocked client-side to match -
+/// EXCEPT when every chosen event is signal-exempt (Feedback Received carries no signal and fires whatever
+/// the filter says), which the server allows and this form must not block. The platform picker also offers
+/// the platform-only event types, which no personal automation may have.
 /// The signing secret is shown exactly once, right after creation, using the same amber show-once pattern as
 /// the personal Automations section. Only rendered when webhooks are enabled.
 function PlatformAutomationsSection() {
@@ -497,12 +500,13 @@ function PlatformAutomationsSection() {
   const { data: subs = [] } = useQuery({ queryKey: ["platform-webhooks"], queryFn: api.listPlatformWebhooks });
   const { data: signals = [] } = useQuery({ queryKey: ["workflow-signals-all"], queryFn: api.listAllWorkflowSignals });
 
-  const EVENTS = webhookEvents(t);
+  const EVENTS = platformWebhookEvents(t);
 
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [selectedEvents, setSelectedEvents] = useState<Record<string, boolean>>({});
   const [selectedSignals, setSelectedSignals] = useState<Record<string, boolean>>({});
+  const [includeFeedbackText, setIncludeFeedbackText] = useState(false);
   const [created, setCreated] = useState<WebhookCreated | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -510,6 +514,10 @@ function PlatformAutomationsSection() {
   const signalFilter = signals.filter((s) => selectedSignals[s.id]).map((s) => s.key);
   const signalLabel = (key: string) => signals.find((s) => s.key === key)?.label ?? key;
   const eventLabel = (key: string) => EVENTS.find((e) => e.key === key)?.label ?? key;
+  // The feedback-text opt-in only means anything to a feedback delivery, so it is only offered once that
+  // event is chosen - and its value is only sent then, so it cannot be left set from an earlier edit.
+  const wantsFeedback = eventTypes.includes("feedback.submitted");
+  const needsSignal = eventTypes.some((key) => !SIGNAL_EXEMPT_EVENT_KEYS.includes(key));
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["platform-webhooks"] });
 
@@ -517,13 +525,20 @@ function PlatformAutomationsSection() {
 
   const create = useMutation({
     mutationFn: () =>
-      api.createPlatformWebhook({ name: name.trim() || t("automationDefaultName"), url, eventTypes, signalFilter }),
+      api.createPlatformWebhook({
+        name: name.trim() || t("automationDefaultName"),
+        url,
+        eventTypes,
+        signalFilter,
+        includeFeedbackText: wantsFeedback ? includeFeedbackText : false,
+      }),
     onSuccess: (result) => {
       setCreated(result);
       setName("");
       setUrl("");
       setSelectedEvents({});
       setSelectedSignals({});
+      setIncludeFeedbackText(false);
       setError(null);
       void invalidate();
     },
@@ -539,7 +554,7 @@ function PlatformAutomationsSection() {
   function onCreate() {
     setError(null);
     if (!url.trim() || eventTypes.length === 0) return;
-    if (signalFilter.length === 0) {
+    if (needsSignal && signalFilter.length === 0) {
       setError(t("platformAutomationNeedsSignal"));
       return;
     }
@@ -592,6 +607,13 @@ function PlatformAutomationsSection() {
                     {signalLabel(key)}
                   </span>
                 ))}
+                {/* Visible on the card, not just in the create form: this one governs whether personal words
+                    leave the platform, and there is no edit form to open and check it in. */}
+                {s.includeFeedbackText && (
+                  <span className="rounded-full border border-amber-300 px-2 py-0.5 text-[11px] text-amber-700 dark:border-amber-700/60 dark:text-amber-300">
+                    {t("platformAutomationFeedbackTextOn")}
+                  </span>
+                )}
               </div>
             </div>
           ))}
@@ -646,6 +668,28 @@ function PlatformAutomationsSection() {
             ))}
           </div>
         </div>
+
+        {wantsFeedback && (
+          <div className="rounded border border-amber-300 bg-amber-50 p-2 dark:border-amber-700/60 dark:bg-amber-900/20">
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                aria-label={t("platformAutomationIncludeFeedbackText")}
+                checked={includeFeedbackText}
+                onChange={(e) => setIncludeFeedbackText(e.target.checked)}
+              />
+              <span>
+                <span className="text-gray-800 dark:text-gray-100">
+                  {t("platformAutomationIncludeFeedbackText")}
+                </span>
+                <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
+                  {t("platformAutomationIncludeFeedbackTextHint")}
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
 
         <div>
           <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">

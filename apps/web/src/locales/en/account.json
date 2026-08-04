@@ -294,5 +294,9 @@
   "automationTokenName": "Automation token",
   "automationEmpty": "No automations yet.",
   "automationDeliveries": "Recent deliveries",
-  "automationNoDeliveries": "No deliveries yet."
+  "automationNoDeliveries": "No deliveries yet.",
+  "evtFeedbackSubmitted": "Someone sends feedback",
+  "platformAutomationIncludeFeedbackText": "Include what the person wrote",
+  "platformAutomationIncludeFeedbackTextHint": "The description is free text and may quote meeting content, so it is only sent when you ask for it. With this off the automation still gets who sent it, the page they were on and the release.",
+  "platformAutomationFeedbackTextOn": "Feedback text included"
 }

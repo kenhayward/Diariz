@@ -1009,6 +1009,9 @@ export interface WebhookSubscription {
   signalFilter: string[];
   /// Personal (owned by a user) or Platform (admin-managed, `/api/admin/webhooks`).
   scope: "Personal" | "Platform";
+  /// Platform only: whether a `feedback.submitted` delivery carries the submitter's own words. Off unless
+  /// asked for - the description is free text and may quote meeting content.
+  includeFeedbackText: boolean;
 }
 /// The response to creating a webhook: the plaintext signing secret, shown to the user exactly once.
 export interface WebhookCreated {
@@ -1046,6 +1049,9 @@ export interface CreatePlatformWebhookBody {
   url: string;
   eventTypes: string[];
   signalFilter: string[];
+  /// Include the submitter's words in a `feedback.submitted` delivery. Omitted reads as false on the
+  /// server, so an older client cannot silently turn it on.
+  includeFeedbackText?: boolean;
 }
 
 // ---- Workflow signals ----
