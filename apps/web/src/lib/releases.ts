@@ -40,7 +40,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **n8n** | A published community node (\`n8n-nodes-diariz\`): a trigger that registers its own automation and verifies every signed delivery, with a Platform scope for administrators that adds events across every user including Feedback Received, plus an action node covering the whole REST API - with dropdowns listing your real recordings and formulas, files in and out, and a Run Formula step that waits for the document to finish. |
 | **Multi-user & groups** | User groups grant platform permissions (manage rooms / users / platform), with an approval lifecycle, per-user isolation, and Light/Dark/Auto themes. |
 | **Admin controls** | Storage quotas, optional audio auto-deletion, a global AI request timeout, separate platform toggles for API access, Claude/MCP, and Automations (webhooks), and whole-platform backup & restore. |
-| **Provide Feedback** | Any signed-in user can describe something that looks or behaves wrong from the account menu; a scrubbed technical trail of recent app activity is attached automatically. Readable and deletable only by a Platform Administrator, in a Feedback tab in Settings, and can raise a \`feedback.submitted\` automation event - the submitter's words reach it only via an API opt-in, with no Settings checkbox yet. |
+| **Provide Feedback** | Any signed-in user can describe something that looks or behaves wrong from the account menu; a scrubbed technical trail of recent app activity is attached automatically. Readable and deletable only by a Platform Administrator, in a Feedback tab in Settings, and can raise a \`feedback.submitted\` automation event - the submitter's words reach it only when that automation ticks Include What The Person Wrote. |
 | **Help & documentation** | A browsable help section at \`/help\` with a grouped article tree and instant search, plus contextual help throughout the app: a small \`?\` next to a feature opens a short explanation with a link straight to the full article. An **Advanced and admin** section covers configuring formulas, meeting types, Workflow Signals and webhooks, users and permissions, connecting Claude over MCP, building n8n and Zapier workflows, and the REST API. A **CRM integration** section covers wiring Diariz to any CRM through n8n or Zapier, with a worked EspoCRM example. |
 
 The interface is localized (English, Spanish, French, German), and languages are community-extensible via simple JSON files.
@@ -59,6 +59,26 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.178.0",
+    date: "2026-08-04",
+    pr: 445,
+    headline: "Feedback automations, without going near the API",
+    summary:
+      "A platform automation could already be told to forward what someone wrote in their feedback, but " +
+      "only by calling the API directly - the Platform Automations screen offered neither the Feedback " +
+      "Received event nor the option. Both are there now. Tick Feedback Received and a single checkbox " +
+      "appears for including the person's own words, off by default, and an automation carrying it is " +
+      "marked as such in the list.",
+    added: [
+      "Feedback Received in the Platform Automations event list. It stays out of personal automations, where it is not allowed.",
+      "An Include What The Person Wrote checkbox, shown once Feedback Received is chosen and off by default.",
+      "A Feedback text included badge on any automation that carries the words, so the setting is visible without an edit form.",
+    ],
+    fixed: [
+      "The Platform Automations form no longer insists on a Workflow Signal for an automation that listens only for Feedback Received. That event carries no signal, and the server had already stopped requiring one.",
+    ],
+  },
   {
     version: "0.177.0",
     date: "2026-08-04",

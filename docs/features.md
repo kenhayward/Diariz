@@ -444,11 +444,12 @@ deletable only by a **Platform Administrator**, in a **Feedback** tab in Setting
 read their own back. A platform-scoped `feedback.submitted` webhook event lets an automation react (route it
 to a ticket system, for instance); the submitter's own words are included only when that platform subscription
 is explicitly configured to include them (`IncludeFeedbackText`, off by default), so a webhook pointed at an
-arbitrary URL does not fan free text out by default. **As of this release there is no Settings checkbox for
-that opt-in** - unlike the attendee-contacts opt-in on a personal automation, `IncludeFeedbackText` is only
-reachable by calling `POST`/`PUT /api/admin/webhooks` directly; a Platform Administrator wanting the text in
-their automation's payload needs to set it through the API, not the Platform Automations screen. Screenshots
-are not part of this release - they need a desktop-shell change and are a deferred follow-up.
+arbitrary URL does not fan free text out by default. The opt-in is a checkbox on the Platform Automations
+screen (Settings -> Integration), shown only once Feedback Received is among the chosen events, and an
+automation carrying it is badged as such in the list - there is no edit form, so the card is the only place
+the setting is visible after creation. Feedback Received is offered to **platform** automations only; the
+personal picker does not list it, and the server refuses it on a personal subscription. Screenshots are not
+part of this release - they need a desktop-shell change and are a deferred follow-up.
 - **Help and documentation.** A browsable help section at **`/help`**: a fixed header, a resizable
 left-hand tree of articles grouped into Getting started / Working with recordings / Asking questions /
 Settings and sharing, and the selected article rendered on the right. A **search box** above the tree

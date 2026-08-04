@@ -294,5 +294,9 @@
   "automationTokenName": "Token de automatización",
   "automationEmpty": "Aún no hay automatizaciones.",
   "automationDeliveries": "Entregas recientes",
-  "automationNoDeliveries": "Aún no hay entregas."
+  "automationNoDeliveries": "Aún no hay entregas.",
+  "evtFeedbackSubmitted": "Alguien envia comentarios",
+  "platformAutomationIncludeFeedbackText": "Incluir lo que escribio la persona",
+  "platformAutomationIncludeFeedbackTextHint": "La descripcion es texto libre y puede citar el contenido de una reunion, por lo que solo se envia si lo pides. Sin esta opcion, la automatizacion sigue recibiendo quien lo envio, la pagina en la que estaba y la version.",
+  "platformAutomationFeedbackTextOn": "Texto del comentario incluido"
 }

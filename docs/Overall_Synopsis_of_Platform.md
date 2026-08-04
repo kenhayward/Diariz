@@ -990,9 +990,14 @@ imply a support conversation this feature does not have) — surfaced as a Feedb
   thin-vs-full split `IncludeAttendeeContacts` uses: the default body carries `{ id, route, release,
   hasScreenshot: false }`; a Platform subscription with `IncludeFeedbackText = true` (default false) also
   receives `description` — the submitter's own free-text words. Without that opt-in, an automation that
-  needs the words fetches them through the API instead. As of this release the web admin UI (Settings →
-  Integration → Platform Automations) does not expose a checkbox for `IncludeFeedbackText`; it is settable
-  today through `POST`/`PUT /api/admin/webhooks`.
+  needs the words fetches them through the API instead. The web admin UI (Settings → Integration → Platform
+  Automations) exposes it as a checkbox from 0.178.0, revealed only once `feedback.submitted` is among the
+  selected events and sent as `false` whenever it is not - so a value set and then abandoned cannot ride
+  along on an unrelated automation. The same screen's event picker is the only one in the app that offers
+  `feedback.submitted`: `platformWebhookEvents()` in `apps/web/src/lib/webhookEvents.ts` appends
+  `PLATFORM_ONLY_EVENT_KEYS` to the shared personal list, which is left untouched. Its client-side
+  "choose at least one signal" guard is skipped when every selected type is in `SIGNAL_EXEMPT_EVENT_KEYS`,
+  mirroring `PlatformWebhooksController.Validate` - otherwise the form would refuse what the server allows.
 - **Screenshots are deliberately deferred.** `Feedback.ScreenshotBlobKey` (text, nullable) exists in the
   schema and the webhook payload already carries `hasScreenshot: false`, so that phase needs no further
   migration or payload-shape change — but the column is always null today. Capturing a screenshot needs an

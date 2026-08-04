@@ -294,5 +294,9 @@
   "automationTokenName": "Jeton d’automatisation",
   "automationEmpty": "Aucune automatisation pour le moment.",
   "automationDeliveries": "Livraisons récentes",
-  "automationNoDeliveries": "Aucune livraison pour le moment."
+  "automationNoDeliveries": "Aucune livraison pour le moment.",
+  "evtFeedbackSubmitted": "Quelqu'un envoie un commentaire",
+  "platformAutomationIncludeFeedbackText": "Inclure ce que la personne a ecrit",
+  "platformAutomationIncludeFeedbackTextHint": "La description est un texte libre et peut citer le contenu d'une reunion ; elle n'est donc envoyee que si vous le demandez. Sans cette option, l'automatisation recoit quand meme l'auteur, la page consultee et la version.",
+  "platformAutomationFeedbackTextOn": "Texte du commentaire inclus"
 }

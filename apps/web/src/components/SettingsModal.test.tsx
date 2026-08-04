@@ -27,6 +27,7 @@ vi.mock("../lib/api", () => ({
 }));
 
 import { api } from "../lib/api";
+import { WEBHOOK_EVENT_KEYS } from "../lib/webhookEvents";
 import SettingsModal from "./SettingsModal";
 
 const platformDefaults = {
@@ -343,6 +344,122 @@ describe("SettingsModal", () => {
 
     expect(await screen.findByText(/choose at least one signal/i)).toBeTruthy();
     expect(api.createPlatformWebhook).not.toHaveBeenCalled();
+  });
+
+  // ---- Feedback Received, and the words opt-in ------------------------------------------------------
+  // feedback.submitted is PLATFORM-only: the server refuses it on a personal subscription, because a
+  // personal automation delivers events about its owner's own data and feedback is readable solely by a
+  // Platform Administrator. The picker here is the only one in the app that may offer it.
+
+  it("offers Feedback Received to a platform automation but never to a personal one", async () => {
+    (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({ ...platformDefaults, webhooksEnabled: true });
+    renderModal();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /integration/i }));
+    await screen.findByText(/platform automations/i);
+
+    expect(screen.getByLabelText(/someone sends feedback/i)).toBeTruthy();
+    // The shared personal list must not have grown it.
+    expect(WEBHOOK_EVENT_KEYS).not.toContain("feedback.submitted");
+  });
+
+  it("only offers the words opt-in once Feedback Received is chosen, and defaults it off", async () => {
+    (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({ ...platformDefaults, webhooksEnabled: true });
+    renderModal();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /integration/i }));
+    await screen.findByText(/platform automations/i);
+
+    // Meaningless against any other event, so it is not shown.
+    expect(screen.queryByLabelText(/include what the person wrote/i)).toBeNull();
+
+    fireEvent.click(screen.getByLabelText(/someone sends feedback/i));
+    const optIn = screen.getByLabelText(/include what the person wrote/i) as HTMLInputElement;
+    expect(optIn.checked).toBe(false);
+  });
+
+  it("creates a feedback automation with no signal, and sends the words opt-in", async () => {
+    // Feedback carries no signal and fires whatever the filter says, so the server accepts an empty
+    // filter for it - this form must not block what the server allows.
+    (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({ ...platformDefaults, webhooksEnabled: true });
+    renderModal();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /integration/i }));
+    await screen.findByText(/platform automations/i);
+
+    fireEvent.change(screen.getByLabelText(/destination url/i), { target: { value: "https://example.com/hook" } });
+    fireEvent.click(screen.getByLabelText(/someone sends feedback/i));
+    fireEvent.click(screen.getByLabelText(/include what the person wrote/i));
+    fireEvent.click(screen.getByRole("button", { name: /create platform automation/i }));
+
+    await waitFor(() =>
+      expect(api.createPlatformWebhook).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventTypes: ["feedback.submitted"],
+          signalFilter: [],
+          includeFeedbackText: true,
+        }),
+      ),
+    );
+  });
+
+  it("still demands a signal when a signal-routed event rides along with feedback", async () => {
+    (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({ ...platformDefaults, webhooksEnabled: true });
+    renderModal();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /integration/i }));
+    await screen.findByText(/platform automations/i);
+
+    fireEvent.change(screen.getByLabelText(/destination url/i), { target: { value: "https://example.com/hook" } });
+    fireEvent.click(screen.getByLabelText(/someone sends feedback/i));
+    fireEvent.click(screen.getByLabelText(/a recording is created/i));
+    fireEvent.click(screen.getByRole("button", { name: /create platform automation/i }));
+
+    expect(await screen.findByText(/choose at least one signal/i)).toBeTruthy();
+    expect(api.createPlatformWebhook).not.toHaveBeenCalled();
+  });
+
+  it("does not send the words opt-in when Feedback Received is deselected again", async () => {
+    // Otherwise a value set and then abandoned would ride along invisibly on an unrelated automation.
+    (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({ ...platformDefaults, webhooksEnabled: true });
+    (api.listAllWorkflowSignals as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "s1", key: "action_item_created", label: "Action item created", description: null, isActive: true },
+    ]);
+    renderModal();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /integration/i }));
+    await screen.findByText(/platform automations/i);
+
+    fireEvent.change(screen.getByLabelText(/destination url/i), { target: { value: "https://example.com/hook" } });
+    fireEvent.click(screen.getByLabelText(/someone sends feedback/i));
+    fireEvent.click(screen.getByLabelText(/include what the person wrote/i));
+    fireEvent.click(screen.getByLabelText(/someone sends feedback/i)); // changed my mind
+    fireEvent.click(screen.getByLabelText(/a recording is created/i));
+    fireEvent.click(screen.getByLabelText(/^action item created$/i));
+    fireEvent.click(screen.getByRole("button", { name: /create platform automation/i }));
+
+    await waitFor(() =>
+      expect(api.createPlatformWebhook).toHaveBeenCalledWith(
+        expect.objectContaining({ eventTypes: ["recording.created"], includeFeedbackText: false }),
+      ),
+    );
+  });
+
+  it("shows on the card that an automation carries the feedback text", async () => {
+    // There is no edit form to open, so the card is the only place this is visible.
+    (api.getPlatformSettings as ReturnType<typeof vi.fn>).mockResolvedValue({ ...platformDefaults, webhooksEnabled: true });
+    (api.listPlatformWebhooks as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: "pw1", name: "Triage", url: "https://example.com/triage", eventTypes: ["feedback.submitted"],
+        isActive: true, consecutiveFailures: 0, disabledReason: null, lastDeliveryAt: null, lastStatus: null,
+        createdAt: "2026-01-01T00:00:00Z", signalFilter: [], scope: "Platform",
+        includeAttendeeContacts: false, includeFeedbackText: true,
+      },
+    ]);
+    renderModal();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /integration/i }));
+    expect(await screen.findByText(/feedback text included/i)).toBeTruthy();
   });
 
   it("deletes a platform automation", async () => {

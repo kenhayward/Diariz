@@ -108,6 +108,23 @@ says. An automation listening only for Feedback Received therefore needs no sign
 it. Add any other event alongside it and a signal is required again, because that other event is routed
 the normal way.
 
+**Feedback Received** is offered to platform automations only. It is not in the personal Automations list,
+and Diariz refuses it there: a personal automation belongs to one person, and feedback is readable only by
+a Platform Administrator, so a personal one would hand its owner someone else's words.
+
+### Sending the feedback text
+
+Tick **Feedback Received** and one more option appears: **Include what the person wrote**.
+
+Leave it off and the automation still gets the useful part - who sent it, the page they were on and the
+release, which is usually enough to route it or raise a ticket. Turn it on and the description itself is
+sent to the destination URL. It is off by default because the description is free text and may quote
+meeting content, and a webhook can point anywhere.
+
+An automation carrying the text is marked **Feedback text included** in the list. There is no edit form
+for a platform automation, so that badge is the only way to see the setting afterwards - to change it,
+delete the automation and create it again.
+
 Platform automations have no test button and no delivery log - those are personal-automation features.
 
 ### Step 3: attach the signal to a formula (any author)
