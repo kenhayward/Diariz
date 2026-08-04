@@ -37,7 +37,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
 | **API access** | Generate a personal API token (when enabled), read-only or read-write, with an optional expiry date, to call the REST API as yourself, with a built-in API reference documenting every endpoint - what it does, who may call it, and what it changes. |
 | **Automations (webhooks)** | When enabled, register outbound webhooks from Preferences that fire when a recording is created, finishes or fails transcription, a summary / meeting minutes / action items / tags become ready (each carrying its output), or a formula finishes or fails. Every recording event also carries an **attendees** list - who spoke, the person they are, their title, company, and internal or external - with email addresses and phone numbers included only when that automation opts in. Signed deliveries with automatic retries (rate-limited per automation and 429-aware), a test-event button, auto-pause after repeated failures, and a Pause / Resume button that stops deliveries reversibly (deleting an automation discards its signing secret; pausing keeps it). Admins can also define named Workflow Signals and wire a platform automation to one, so a formula author just picks "When this finishes, trigger: ..." in the formula editor - no URL or per-user setup - and the formula's output is delivered inline to everyone routed through that signal. |
-| **n8n** | A published community node (\`n8n-nodes-diariz\`): a trigger that registers its own automation and verifies every signed delivery, plus an action node covering the whole REST API - with dropdowns listing your real recordings and formulas, files in and out, and a Run Formula step that waits for the document to finish. |
+| **n8n** | A published community node (\`n8n-nodes-diariz\`): a trigger that registers its own automation and verifies every signed delivery, with a Platform scope for administrators that adds events across every user including Feedback Received, plus an action node covering the whole REST API - with dropdowns listing your real recordings and formulas, files in and out, and a Run Formula step that waits for the document to finish. |
 | **Multi-user & groups** | User groups grant platform permissions (manage rooms / users / platform), with an approval lifecycle, per-user isolation, and Light/Dark/Auto themes. |
 | **Admin controls** | Storage quotas, optional audio auto-deletion, a global AI request timeout, separate platform toggles for API access, Claude/MCP, and Automations (webhooks), and whole-platform backup & restore. |
 | **Provide Feedback** | Any signed-in user can describe something that looks or behaves wrong from the account menu; a scrubbed technical trail of recent app activity is attached automatically. Readable and deletable only by a Platform Administrator, in a Feedback tab in Settings, and can raise a \`feedback.submitted\` automation event - the submitter's words reach it only via an API opt-in, with no Settings checkbox yet. |
@@ -59,6 +59,28 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.177.0",
+    date: "2026-08-04",
+    pr: 444,
+    headline: "Feedback can now start an n8n workflow",
+    summary:
+      "Feedback submitted through Provide Feedback already raised an event for automations, but the n8n " +
+      "node had no way to listen for it - that event is readable only by a platform administrator, and the " +
+      "node only ever created personal automations. The Diariz Trigger now has a Scope setting. Left as " +
+      "Personal it behaves exactly as before; set to Platform it listens across every user and offers " +
+      "Feedback Received, so feedback can be routed to a channel or raised as a ticket automatically. " +
+      "Also fixed: a platform automation listening only for feedback no longer has to be given a Workflow " +
+      "Signal it does not use.",
+    added: [
+      "A Scope setting on the n8n Diariz Trigger: Personal (the default, unchanged) or Platform for administrators.",
+      "Feedback Received as an n8n trigger event, with an Include Feedback Text option that is off by default.",
+      "A Workflow Signal picker on the n8n trigger, listing the signals defined in Diariz.",
+    ],
+    fixed: [
+      "A platform automation made up only of Feedback Received can now be created without a Workflow Signal. Feedback carries no signal, so requiring one meant inventing a meaningless signal to subscribe at all.",
+    ],
+  },
   {
     version: "0.176.2",
     date: "2026-08-03",

@@ -129,7 +129,12 @@ Community Nodes (self-hosted n8n only). It ships two nodes. The **Diariz Trigger
 workflow creates the matching Automation in Diariz through the REST API and stores the signing secret Diariz
 returns once, deactivating deletes it again, and every delivery is verified against that secret using the
 Standard Webhooks HMAC scheme - an unsigned or tampered request is answered `401` and starts no execution. It
-covers all nine events. The **Diariz** action node exposes every published REST operation (179 across 31
+covers all nine personal events, and a **Scope** setting switches it to **Platform (Administrator)**, where it
+registers through the admin webhook endpoint instead: events across every user, routed by a Workflow Signal
+picker, plus the platform-only **Feedback Received** event that fires when someone submits feedback through
+Provide Feedback. Feedback is readable only by a Platform Administrator, so it is never offered on a personal
+subscription; an **Include Feedback Text** option, off by default, adds what the person actually wrote. Scope
+defaults to Personal, so an existing workflow is unchanged. The **Diariz** action node exposes every published REST operation (179 across 31
 resources), generated from the platform's own OpenAPI document so its operation names and help text are the same
 copy as the in-app API reference, plus a **Custom API Call** on every resource for anything added later. On top of
 the generated surface, high-value operations are given real n8n ergonomics: **dropdowns** listing your actual

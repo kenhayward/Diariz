@@ -60,6 +60,34 @@ Add a **Diariz Trigger** node and tick the events you want.
 You do **not** create an automation in Diariz by hand. Activating the workflow registers one
 automatically, pointing at n8n's own webhook URL, and deactivating it removes the registration again.
 
+### Listening across everyone (administrators)
+
+**Scope** on the trigger is **Personal** unless you change it, which is the list above: events about your
+own recordings, on any account.
+
+Set it to **Platform (Administrator)** and the workflow listens across every user instead. Your Diariz
+account must be a Platform Administrator, or the workflow fails to activate. Platform automations are
+routed by **Workflow Signal**, so pick the signals this workflow should receive - see the automations and
+signals article for what those are.
+
+Platform scope adds one event that personal scope never offers:
+
+| Event | Fires when |
+|---|---|
+| **Feedback Received** | Someone submitted feedback through **Provide Feedback** |
+
+Feedback is readable only by a Platform Administrator, which is why it is not available to a personal
+automation - a personal one would hand you another person's words. The event tells you who sent it, the
+page they were on and the release, which is usually enough to route it or raise a ticket.
+
+**Include Feedback Text** adds what the person actually wrote. It is off unless you turn it on, because
+the description is free text and may quote meeting content.
+
+Feedback Received needs no signal, since it carries none. Every other platform event does.
+
+Changing Scope **rebuilds** the automation - personal and platform automations are separate things in
+Diariz - so the old one is removed and a new one registered. Nothing is left behind.
+
 **Simplify** (on by default) returns just the event data instead of the full envelope with its id, type
 and timestamp.
 

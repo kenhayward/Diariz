@@ -100,8 +100,13 @@ Directly below, under **Platform automations**:
 3. Under **Which signals should route to it?**, tick the signals.
 4. Click **Create platform automation**.
 
-**An automation with no signal ticked never fires.** The form refuses to create one, because a platform
+**An automation with no signal ticked never fires**, so the form refuses to create one - a platform
 automation with no signal filter is silently dead rather than obviously broken.
+
+One event is different. **Feedback Received** carries no signal at all, so it fires whatever the filter
+says. An automation listening only for Feedback Received therefore needs no signal, and the form accepts
+it. Add any other event alongside it and a signal is required again, because that other event is routed
+the normal way.
 
 Platform automations have no test button and no delivery log - those are personal-automation features.
 

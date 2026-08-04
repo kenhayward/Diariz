@@ -1,8 +1,13 @@
 import type { INodePropertyOptions } from "n8n-workflow";
 
-/// Mirrors WebhookEventTypes.Subscribable in src/Diariz.Api/Webhooks/WebhookEventTypes.cs. Event keys are
+/// Mirrors WebhookEventTypes.Subscribable in src/Diariz.Api/Webhooks/WebhookEventTypes.cs - the events a
+/// PERSONAL subscription may have, which are the ones about the credential owner's own data. Event keys are
 /// append-only on the server, so this list only ever grows. The internal webhook.ping type is deliberately
 /// absent: it is never subscribable, only sent by the "Send test event" action.
+///
+/// Platform-only events live in PLATFORM_ONLY_EVENT_OPTIONS below - keep the two lists apart, because
+/// offering a platform event in Personal scope produces a node that fails with a 400 the moment the
+/// workflow is activated.
 export const EVENT_OPTIONS: INodePropertyOptions[] = [
   {
     name: "Recording Created",
@@ -50,3 +55,29 @@ export const EVENT_OPTIONS: INodePropertyOptions[] = [
     description: "A formula run failed",
   },
 ];
+
+/// Mirrors the platform-only additions in WebhookEventTypes.PlatformSubscribable. These fire across ALL
+/// users rather than only the credential owner's own data, so Diariz accepts them only on a PLATFORM
+/// subscription (POST /api/admin/webhooks), which requires a Platform Administrator. A personal
+/// subscription on feedback.submitted would hand one user another user's words, which is why the server
+/// keeps the two lists separate and why this node does too.
+export const PLATFORM_ONLY_EVENT_OPTIONS: INodePropertyOptions[] = [
+  {
+    name: "Feedback Received",
+    value: "feedback.submitted",
+    description:
+      "Someone submitted feedback through Provide Feedback. Carries who sent it, the page they were on and the release, so it can be routed or raised as a ticket. Their words are only included when Include Feedback Text is turned on.",
+  },
+];
+
+/// Everything a PLATFORM subscription may choose: the personal set plus the platform-only additions,
+/// matching WebhookEventTypes.PlatformSubscribable on the server.
+export const PLATFORM_EVENT_OPTIONS: INodePropertyOptions[] = [
+  ...EVENT_OPTIONS,
+  ...PLATFORM_ONLY_EVENT_OPTIONS,
+];
+
+/// The event keys the publisher delivers regardless of a platform subscription's signal filter
+/// (WebhookEventTypes.IsSignalRouted returns false for these). Every other platform event needs at least
+/// one signal, and Diariz rejects the subscription without one.
+export const SIGNAL_EXEMPT_EVENTS: string[] = ["feedback.submitted"];

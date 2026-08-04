@@ -656,7 +656,10 @@ public record UpdateWebhookRequest(
     string? Name, string Url, string[] EventTypes, bool IsActive, bool? IncludeAttendeeContacts = null);
 
 /// <summary>Creates an admin-owned, signal-routed Platform webhook subscription (Phase 3). Requires a
-/// non-empty <see cref="SignalFilter"/> - a Platform subscription with no signal fires on nothing.</summary>
+/// non-empty <see cref="SignalFilter"/> whenever any chosen event type is signal-routed - such a
+/// subscription with no signal fires on nothing. Event types exempted from that gate
+/// (<c>WebhookEventTypes.IsSignalRouted</c> - currently <c>feedback.submitted</c>) fire whatever the filter
+/// says, so a subscription made only of those may leave it empty.</summary>
 public record CreatePlatformWebhookRequest(
     string? Name, string Url, string[] EventTypes, string[] SignalFilter, bool? IncludeFeedbackText = null);
 

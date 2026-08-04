@@ -109,7 +109,11 @@ public class PlatformWebhooksController : ControllerBase
         if (events.Length == 0) { reason = "Choose at least one event."; return reason; }
         if (events.Any(t => !WebhookEventTypes.PlatformSubscribable.Contains(t)))
         { reason = "Unknown event type."; return reason; }
-        if (signals.Length == 0)
+        // Only the signal-ROUTED types need one. A platform subscription is broad-reach and signals are what
+        // scope it, so the requirement stands for everything the publisher gates on signals - but a type
+        // exempted from that gate (WebhookEventTypes.IsSignalRouted) fires whatever the filter says, and
+        // demanding a signal for it would force the admin to invent a meaningless one to subscribe at all.
+        if (signals.Length == 0 && events.Any(WebhookEventTypes.IsSignalRouted))
         { reason = "Choose at least one signal - a platform automation with no signal never fires."; return reason; }
         reason = null; return null;
     }

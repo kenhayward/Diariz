@@ -1101,6 +1101,19 @@ into it with no URL or per-user setup at all.
   permanently undeliverable. The exemption is deliberately per-type rather than a relaxation of the gate
   (e.g. letting an empty filter match), which would widen every existing signal-routed type. A new
   platform-only event type carrying no signals must be added there too, or it silently delivers to nobody.
+  **`PlatformWebhooksController.Validate` mirrors that exemption at creation time** (0.177.0): it demands a
+  non-empty `SignalFilter` only when at least one chosen event type is signal-routed, so a subscription made
+  purely of exempt types (today, `feedback.submitted`) may leave the filter empty. Before that, the two rules
+  disagreed - the publisher delivered feedback regardless of the filter while the controller refused to
+  create the subscription without one, so an admin had to invent a meaningless signal to subscribe at all.
+- **The n8n community node reaches platform scope (0.177.0).** `DiarizTrigger` gained a **Scope** parameter:
+  `personal` (the default, and the only behaviour before this) registers through `/api/user/webhooks` as it
+  always did; `platform` registers through `/api/admin/webhooks`, exposes the platform event list including
+  `feedback.submitted`, a Workflow Signal picker backed by `GET /api/workflow-signals`, and the
+  `IncludeFeedbackText` opt-in. The node records the scope it created under in its static data and deletes
+  from **that** endpoint rather than the currently selected one - after a scope change the subscription still
+  lives where it was made, so deleting from the new endpoint would 404 and strand it delivering forever.
+  `IncludeAttendeeContacts` stays Personal-only because `CreatePlatformWebhookRequest` does not accept it.
 - **Inline output only on platform signal-routed deliveries.** `FormulaRunProcessor` builds two payload
   bodies for a completion/failure event — a thin `data` body (ids, status, links; what every Phase 2 personal
   subscriber has always received) and a richer `platformData` body that additionally carries the rendered

@@ -53,6 +53,14 @@ off on the server, so you find out now rather than at the first execution.
 
 ## Diariz Trigger
 
+**Scope** decides whose events you listen to. It is **Personal** unless you change it, so an existing
+workflow behaves exactly as it did before.
+
+| Scope | What it listens to | Who can use it |
+|---|---|---|
+| Personal | Events about your own recordings | Any Diariz account |
+| Platform (Administrator) | Events across every user, routed by Workflow Signal, plus platform-only events such as Feedback Received | A Platform Administrator |
+
 Pick one or more events:
 
 | Event | Fires when |
@@ -67,8 +75,39 @@ Pick one or more events:
 | Formula Result Completed | A formula finished and produced a document |
 | Formula Result Failed | A formula run failed |
 
+In **Platform** scope one more event is available:
+
+| Event | Fires when |
+|---|---|
+| Feedback Received | Someone submitted feedback through **Provide Feedback** in Diariz |
+
 **Simplify** (on by default) returns just the event's data. Turn it off to get the full envelope with the
 event ID, type and timestamp.
+
+### Platform scope
+
+A platform subscription fires across **every** user, so Diariz scopes it with **Workflow Signals**: choose
+the signals this workflow routes on, and it receives only events carrying one of them. That is why the
+**Signal Filter** is required, with one exception - **Feedback Received** carries no signal and always
+fires, so a workflow listening only for feedback needs no signal at all.
+
+**Feedback Received** is the reason the scope exists. Feedback is readable only by a Platform Administrator
+in Diariz, so it is never available on a personal subscription; a personal one would hand one user another
+user's words. The event carries who sent it, the page they were on and the release - enough to route it,
+raise a ticket or post it to a channel.
+
+**Include Feedback Text** adds what the person actually wrote. It is **off** by default and deliberately so:
+the description is free text and may quote meeting content, so it only leaves Diariz when you ask for it.
+
+Two things to know before you switch an existing trigger to Platform scope:
+
+- The credential must belong to a **Platform Administrator**. A normal account gets a 403 when the workflow
+  is activated.
+- Changing Scope **rebuilds** the subscription, because personal and platform subscriptions are different
+  objects at different endpoints. The node deletes the old one from where it was created, so nothing is
+  left behind.
+
+**Include Attendee Contacts** is Personal-scope only - the platform endpoint does not accept it.
 
 ### How it works
 
@@ -120,7 +159,8 @@ automatically than run a formula of your own.
 
 Requires Node.js 20.15 or newer, matching n8n's own requirement. Tested against Diariz 0.159 and later; the
 AI-output trigger events (Summary Ready, Meeting Minutes Ready, Action Items Ready, Tags Ready) need 0.159 or
-newer, and everything else works with 0.153 and newer.
+newer, and everything else works with 0.153 and newer. **Platform scope and the Feedback Received event need
+Diariz 0.177.0 or newer** - on an older server the subscription is rejected when the workflow is activated.
 
 ## Development
 

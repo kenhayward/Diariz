@@ -38,3 +38,19 @@ export async function getSpeakerProfiles(this: ILoadOptionsFunctions): Promise<I
 export async function getMeetingTypes(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
   return options(this, "/api/meeting-types", (r) => (r.title as string) || (r.name as string));
 }
+
+/// The active Workflow Signals, for a platform subscription's signal filter. Deliberately NOT built on
+/// options() above: a subscription's SignalFilter stores the signal's KEY, not its id, and the publisher
+/// compares keys - so an id here would produce a filter that matches nothing and a webhook that never fires.
+/// Open to any signed-in user, so the picker works before the credential is known to be an administrator.
+export async function getWorkflowSignals(this: ILoadOptionsFunctions): Promise<INodePropertyOptions[]> {
+  const rows = (await diarizApiRequest.call(this, "GET", "/api/workflow-signals")) as IDataObject[];
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((r) => ({
+      name: (r.label as string) || (r.key as string),
+      value: String(r.key),
+      description: (r.description as string) || undefined,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
