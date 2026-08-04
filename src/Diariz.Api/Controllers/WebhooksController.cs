@@ -192,7 +192,7 @@ public class WebhooksController : ControllerBase
         s.Id, s.Name, s.Url, WebhookEventTypes.Split(s.EventTypes), s.IsActive, s.ConsecutiveFailures,
         s.DisabledReason, s.LastDeliveryAt, s.LastStatus, s.CreatedAt,
         Scope: "Personal", SignalFilter: WebhookSignals.Split(s.SignalFilter),
-        IncludeAttendeeContacts: s.IncludeAttendeeContacts);
+        IncludeAttendeeContacts: s.IncludeAttendeeContacts, IncludeFeedbackText: s.IncludeFeedbackText);
 
     private static string Base64Url(byte[] bytes) =>
         Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');

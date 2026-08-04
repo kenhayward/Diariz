@@ -1,4 +1,5 @@
 import axios from "axios";
+import { record } from "./trail";
 
 // A per-request opt-out of the global 401→/login redirect (used by the silent token refresh).
 declare module "axios" {
@@ -77,6 +78,7 @@ import type {
   UpdateWebhookBody,
   CreatePlatformWebhookBody,
   WorkflowSignal,
+  FeedbackDto,
   CreateWorkflowSignalBody,
   UpdateWorkflowSignalBody,
 } from "./types";
@@ -113,9 +115,27 @@ export function handleAuthError(error: unknown): void {
   if (window.location.pathname !== "/login") window.location.assign("/login");
 }
 
+/// Feeds the feedback trail. Recording must never change what the caller sees: the success path still
+/// returns the response untouched, and the error path still rejects. For "this control was in the wrong
+/// state", the response status and path are usually what actually diagnoses it - which is why this seam
+/// is worth more to a report than a click listener would be.
 http.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    record({
+      kind: "api",
+      label: `${(response.config.method ?? "get").toUpperCase()} ${response.config.url ?? ""}`,
+      detail: { status: response.status },
+    });
+    return response;
+  },
   (error) => {
+    if (axios.isAxiosError(error) && error.config) {
+      record({
+        kind: "api",
+        label: `${(error.config.method ?? "get").toUpperCase()} ${error.config.url ?? ""}`,
+        detail: { status: error.response?.status ?? 0 },
+      });
+    }
     handleAuthError(error);
     return Promise.reject(error);
   },
@@ -1480,6 +1500,26 @@ export const api = {
       responseType: "blob",
     });
     triggerBlobDownload(res.data as Blob, filenameFromHeaders(res.headers, "formula-result.md"));
+  },
+
+  /// Submit a user-reported problem, alongside the scrubbed trail and the app version - the release is
+  /// added here (rather than by the caller) so every submission is tagged with the build that produced it.
+  async submitFeedback(description: string, route: string, trailJson: string): Promise<{ id: string }> {
+    const { data } = await http.post<{ id: string }>("/api/feedback", {
+      description, route, release: __APP_VERSION__, trailJson,
+    });
+    return data;
+  },
+
+  /// Platform Administrator only. Newest first (the server already orders it; this is what `GET /api/feedback`
+  /// returns raw - no client-side reshaping needed).
+  async listFeedback(): Promise<FeedbackDto[]> {
+    const { data } = await http.get<FeedbackDto[]>("/api/feedback");
+    return data;
+  },
+
+  async deleteFeedback(id: string): Promise<void> {
+    await http.delete(`/api/feedback/${id}`);
   },
 };
 

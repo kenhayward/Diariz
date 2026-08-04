@@ -18,7 +18,7 @@ namespace Diariz.Domain.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.9")
+                .HasAnnotation("ProductVersion", "10.0.10")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "vector");
@@ -239,6 +239,44 @@ namespace Diariz.Domain.Migrations
                     b.HasIndex("UserId", "UpdatedAt");
 
                     b.ToTable("ChatSessions");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.Feedback", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Release")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Route")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ScreenshotBlobKey")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TrailJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("Feedback");
                 });
 
             modelBuilder.Entity("Diariz.Domain.Entities.Formula", b =>
@@ -1772,6 +1810,9 @@ namespace Diariz.Domain.Migrations
                     b.Property<bool>("IncludeAttendeeContacts")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IncludeFeedbackText")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
@@ -2209,6 +2250,17 @@ namespace Diariz.Domain.Migrations
                 {
                     b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
                         .WithMany("ChatSessions")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Diariz.Domain.Entities.Feedback", b =>
+                {
+                    b.HasOne("Diariz.Domain.Entities.ApplicationUser", "User")
+                        .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
