@@ -6,6 +6,7 @@ using Sentry.Protocol.Envelopes;
 
 namespace Diariz.Api.Tests;
 
+[Collection(SentryHubCollection.Name)]
 public class SentryScrubberTests
 {
     [Theory]
@@ -335,7 +336,7 @@ public class SentryScrubberTests
             await SentrySdk.FlushAsync(TimeSpan.FromSeconds(30));
         }
 
-        var payload = await transport.TransactionPayloadAsync();
+        var payload = await transport.TransactionPayloadAsync("POST /api/recordings");
         Assert.NotNull(payload);
         Assert.DoesNotContain("A_LIVE_JWT", payload);
         Assert.DoesNotContain("A_SESSION_COOKIE", payload);
@@ -348,6 +349,38 @@ public class SentryScrubberTests
         Assert.Contains("POST https://hooks.example/x", payload);
     }
 
+    // The transport is attached to the PROCESS-WIDE SentrySdk hub, so it captures every transaction
+    // sampled anywhere in the assembly while the SDK is initialised - not only the one the test
+    // started. Returning "the first transaction envelope" therefore returned whichever transaction
+    // happened to finish first, which is why this suite was intermittently red. Ask for the
+    // transaction by name instead. See SentryHubCollection for the other half of the fix.
+    [Fact]
+    public async Task TransactionPayload_PicksTheNamedTransaction_NotWhicheverArrivedFirst()
+    {
+        var transport = new CapturingTransport();
+
+        using (SentrySdk.Init(o =>
+        {
+            o.Dsn = "https://key@localhost/1";
+            o.Transport = transport;
+            o.TracesSampleRate = 1.0;
+            o.AutoSessionTracking = false;
+            o.SetBeforeSendTransaction(SentryScrubber.ScrubTransaction);
+        }))
+        {
+            // Stands in for a transaction another test class starts on the shared hub - "summarize"
+            // is exactly what JobTelemetry.TraceAsync emits.
+            SentrySdk.StartTransaction("summarize", "queue.task").Finish();
+            SentrySdk.StartTransaction("POST /api/recordings", "http.server").Finish();
+
+            await SentrySdk.FlushAsync(TimeSpan.FromSeconds(30));
+        }
+
+        var payload = await transport.TransactionPayloadAsync("POST /api/recordings");
+        Assert.NotNull(payload);
+        Assert.Contains("POST /api/recordings", payload);
+    }
+
     private sealed class CapturingTransport : ITransport
     {
         private readonly List<Envelope> _sent = [];
@@ -358,7 +391,9 @@ public class SentryScrubberTests
             return Task.CompletedTask;
         }
 
-        public async Task<string?> TransactionPayloadAsync()
+        /// <summary>The serialized envelope carrying the transaction called <paramref name="transactionName"/>,
+        /// or null when no captured envelope holds it.</summary>
+        public async Task<string?> TransactionPayloadAsync(string transactionName)
         {
             Envelope[] envelopes;
             lock (_sent) envelopes = [.. _sent];
@@ -367,7 +402,7 @@ public class SentryScrubberTests
                 using var buffer = new MemoryStream();
                 await envelope.SerializeAsync(buffer, null!);
                 var text = Encoding.UTF8.GetString(buffer.ToArray());
-                if (text.Contains("\"type\":\"transaction\"")) return text;
+                if (text.Contains("\"type\":\"transaction\"") && text.Contains(transactionName)) return text;
             }
             return null;
         }

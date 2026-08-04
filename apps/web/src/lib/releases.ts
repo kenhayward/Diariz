@@ -60,6 +60,19 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.176.2",
+    date: "2026-08-03",
+    pr: 441,
+    headline: "Build housekeeping",
+    summary:
+      "No change to the app. One of the API's own tests failed at random roughly one run in four, because " +
+      "two test classes were sharing a single process-wide error-reporting hub while running at the same " +
+      "time. They no longer overlap, so a red build now means something is genuinely wrong.",
+    fixed: [
+      "Removed a race between two test classes that made the API test suite fail intermittently.",
+    ],
+  },
+  {
     version: "0.176.1",
     date: "2026-08-03",
     pr: 440,

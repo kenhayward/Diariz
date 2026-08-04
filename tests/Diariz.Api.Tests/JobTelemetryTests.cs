@@ -8,6 +8,7 @@ namespace Diariz.Api.Tests;
 /// that matters regardless of whether telemetry is configured: the job still runs, and failures still
 /// propagate exactly as before.
 /// </summary>
+[Collection(SentryHubCollection.Name)]
 public class JobTelemetryTests
 {
     [Fact]
