@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { IDataObject, IHookFunctions } from "n8n-workflow";
-import { EVENT_OPTIONS } from "../nodes/Diariz/events";
+import { EVENT_OPTIONS, PLATFORM_EVENT_OPTIONS } from "../nodes/Diariz/events";
 import { DiarizTrigger } from "../nodes/Diariz/DiarizTrigger.node";
 
 /// A minimal IHookFunctions good enough to drive the registration lifecycle. It records every HTTP call so a
@@ -155,4 +155,148 @@ test("leaves a matching subscription alone", async () => {
   });
 
   assert.equal(await t.webhookMethods.default.checkExists.call(ctx), true);
+});
+
+// ---- Platform scope ----------------------------------------------------------------------------------
+// A platform subscription is a different object at a different endpoint, not a personal one with a flag:
+// /api/admin/webhooks requires a Platform Administrator and is the only scope that may carry
+// feedback.submitted. Getting the endpoint wrong is silent - the call simply 400s on activation.
+
+test("keeps platform-only events out of the personal event list", () => {
+  // Offering this in Personal scope would produce a node that always fails to activate, and the server
+  // refuses it for a reason: a personal subscription would deliver another user's words to its owner.
+  assert.ok(!EVENT_OPTIONS.some((o) => o.value === "feedback.submitted"));
+  assert.ok(PLATFORM_EVENT_OPTIONS.some((o) => o.value === "feedback.submitted"));
+  // The platform list is a superset, so an admin never loses an event by choosing Platform.
+  for (const o of EVENT_OPTIONS) {
+    assert.ok(PLATFORM_EVENT_OPTIONS.some((p) => p.value === o.value), `platform list missing ${o.value}`);
+  }
+});
+
+test("registers a platform subscription at the admin endpoint, with its signals and text opt-in", async () => {
+  const ctx = hookContext({
+    params: {
+      scope: "platform",
+      platformEvents: ["feedback.submitted"],
+      signalFilter: ["triage"],
+      includeFeedbackText: true,
+    },
+  });
+  await new DiarizTrigger().webhookMethods.default.create.call(ctx);
+
+  const post = ctx.calls.find((c) => c.method === "POST")!;
+  assert.equal(post.path, "/api/admin/webhooks");
+  assert.deepEqual(post.body!.eventTypes, ["feedback.submitted"]);
+  assert.deepEqual(post.body!.signalFilter, ["triage"]);
+  assert.equal(post.body!.includeFeedbackText, true);
+  // Not accepted by the platform create endpoint - sending it would be noise.
+  assert.ok(!("includeAttendeeContacts" in post.body!));
+  // Recorded so delete() and checkExists() know which endpoint owns this subscription.
+  assert.equal(ctx.staticData.scope, "platform");
+});
+
+test("reads the platform event list, not the personal one", async () => {
+  const ctx = hookContext({
+    params: {
+      scope: "platform",
+      events: ["recording.summarized"], // the personal field, which must be ignored here
+      platformEvents: ["feedback.submitted"],
+      signalFilter: [],
+    },
+  });
+  await new DiarizTrigger().webhookMethods.default.create.call(ctx);
+
+  const post = ctx.calls.find((c) => c.method === "POST")!;
+  assert.deepEqual(post.body!.eventTypes, ["feedback.submitted"]);
+});
+
+test("allows a feedback-only platform subscription with no signals", async () => {
+  // feedback.submitted is exempt from the publisher's signal gate, so requiring one would force the admin
+  // to invent a meaningless signal. Mirrors PlatformWebhooksController.Validate.
+  const ctx = hookContext({
+    params: { scope: "platform", platformEvents: ["feedback.submitted"], signalFilter: [] },
+  });
+  await new DiarizTrigger().webhookMethods.default.create.call(ctx);
+  assert.ok(ctx.calls.some((c) => c.method === "POST" && c.path === "/api/admin/webhooks"));
+});
+
+test("refuses a signal-routed platform event with no signals, naming the cause", async () => {
+  const ctx = hookContext({
+    params: {
+      scope: "platform",
+      platformEvents: ["feedback.submitted", "recording.summarized"],
+      signalFilter: [],
+    },
+  });
+  await assert.rejects(
+    () => new DiarizTrigger().webhookMethods.default.create.call(ctx),
+    /Workflow Signal/,
+  );
+  // Nothing was created, so there is no orphan to clean up.
+  assert.ok(!ctx.calls.some((c) => c.method === "POST"));
+});
+
+test("deletes from the endpoint the subscription was CREATED at, not the one now selected", async () => {
+  // After a scope change the subscription still lives where it was made. Deleting from the new endpoint
+  // would 404 and leave it delivering forever.
+  const ctx = hookContext({
+    params: { scope: "personal" },
+    staticData: { subscriptionId: "sub-1", secret: "shh", scope: "platform" },
+  });
+  await new DiarizTrigger().webhookMethods.default.delete.call(ctx);
+
+  assert.deepEqual(
+    ctx.calls.map((c) => `${c.method} ${c.path}`),
+    ["DELETE /api/admin/webhooks/sub-1"],
+  );
+  assert.equal(ctx.staticData.scope, undefined);
+});
+
+test("rebuilds when the scope changed, without trusting the old endpoint", async () => {
+  const ctx = hookContext({
+    params: { scope: "platform", platformEvents: ["feedback.submitted"] },
+    staticData: { subscriptionId: "sub-1", secret: "shh", scope: "personal" },
+    existing: [{ id: "sub-1", url: "https://n8n.example.com/webhook/abc" }],
+  });
+  const exists = await new DiarizTrigger().webhookMethods.default.checkExists.call(ctx);
+
+  assert.equal(exists, false);
+  // Decided from recorded state alone - listing the new endpoint proves nothing about the old subscription.
+  assert.equal(ctx.calls.length, 0);
+});
+
+test("re-registers when the feedback-text choice no longer matches the subscription", async () => {
+  const ctx = hookContext({
+    params: { scope: "platform", platformEvents: ["feedback.submitted"], includeFeedbackText: true },
+    staticData: { subscriptionId: "sub-1", secret: "shh", scope: "platform" },
+    existing: [
+      { id: "sub-1", url: "https://n8n.example.com/webhook/abc", includeFeedbackText: false },
+    ],
+  });
+  assert.equal(await new DiarizTrigger().webhookMethods.default.checkExists.call(ctx), false);
+  assert.equal(ctx.calls[0].path, "/api/admin/webhooks");
+});
+
+test("leaves a matching platform subscription alone", async () => {
+  const ctx = hookContext({
+    params: { scope: "platform", platformEvents: ["feedback.submitted"], includeFeedbackText: true },
+    staticData: { subscriptionId: "sub-1", secret: "shh", scope: "platform" },
+    existing: [
+      { id: "sub-1", url: "https://n8n.example.com/webhook/abc", includeFeedbackText: true },
+    ],
+  });
+  assert.equal(await new DiarizTrigger().webhookMethods.default.checkExists.call(ctx), true);
+});
+
+test("offers a scope parameter that defaults to personal", () => {
+  // The default matters for compatibility: a node saved before 0.177.0 has no scope stored, so it must
+  // fall back to exactly what it did before.
+  const scope = new DiarizTrigger().description.properties.find((p) => p.name === "scope");
+  assert.ok(scope);
+  assert.equal(scope!.default, "personal");
+});
+
+test("uses plain hyphens in the platform event copy too", () => {
+  const text = JSON.stringify(PLATFORM_EVENT_OPTIONS);
+  assert.ok(!/[–—]/.test(text), "found an en or em dash in user-facing copy");
 });

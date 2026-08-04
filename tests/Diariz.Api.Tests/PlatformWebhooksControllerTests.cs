@@ -74,6 +74,36 @@ public class PlatformWebhooksControllerTests
         Assert.Empty(await db.Webhooks.ToListAsync());
     }
 
+    // feedback.submitted is exempt from the signal gate in WebhookPublisher (IsSignalRouted), so it fires
+    // whatever the filter says. Demanding a signal to create it would therefore force the admin to invent a
+    // meaningless one - and the rejection message ("a platform automation with no signal never fires") is
+    // simply untrue for this type. The requirement applies only when a signal-routed type is selected.
+    [Fact]
+    public async Task Create_allows_an_empty_signal_filter_for_a_type_that_ignores_signals()
+    {
+        var db = Enabled(); var adminId = Guid.NewGuid();
+        var c = Controller(db, adminId, urlOk: true);
+        var res = await c.Create(new CreatePlatformWebhookRequest(
+            "z", "https://x/y", new[] { "feedback.submitted" }, Array.Empty<string>()));
+
+        Assert.IsType<WebhookCreatedDto>(res.Value);
+        var row = await db.Webhooks.SingleAsync();
+        Assert.Equal("feedback.submitted", row.EventTypes);
+        Assert.Equal("", row.SignalFilter);
+    }
+
+    [Fact]
+    public async Task Create_still_demands_a_signal_when_a_signal_routed_type_rides_along()
+    {
+        var db = Enabled(); var adminId = Guid.NewGuid();
+        var c = Controller(db, adminId, urlOk: true);
+        var res = await c.Create(new CreatePlatformWebhookRequest(
+            "z", "https://x/y", new[] { "feedback.submitted", "recording.transcribed" }, Array.Empty<string>()));
+
+        Assert.IsType<BadRequestObjectResult>(res.Result);
+        Assert.Empty(await db.Webhooks.ToListAsync());
+    }
+
     [Fact]
     public async Task Create_returns_secret_once_and_persists_platform_scope_and_signal_filter()
     {
