@@ -405,7 +405,6 @@
   "clear": "Clear",
   "ungrouped": "Ungrouped",
   "drillBack": "Back",
-  "drillAllSections": "All sections",
   "drillOpenSectionPage": "Open section page ›",
   "drillDirectlyIn": "Directly in {{name}}",
   "drillOpenFolder": "Open {{name}}",

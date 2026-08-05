@@ -325,9 +325,11 @@ original words (so you can always flip back), and exports/email/chat use them.
   with drag-and-drop
 ordering and cross-group moves; select a whole level at once to build chat context. The list **drills in
 one folder at a time** rather than showing every folder expanded: a folder row shows its colour, the count
-of everything inside, and takes you in; a breadcrumb walks you back out (browser back pops a level too),
-and **Open section page** opens the folder's own page - browsing deeper and opening the page are separate
-targets. Recordings with no folder simply sit at the top level. Browse them as a **list or a calendar**
+of everything inside, and takes you in; the header above the list is a **breadcrumb showing the whole path**,
+collapsing the middle when it does not fit, with every part clickable and a trailing menu for the full
+ancestor chain plus **Open section page** - browsing deeper and opening the page stay separate targets, and
+crumbs accept a dropped recording to move it up. Folder pages carry the same path. Recordings with no folder
+simply sit at the top level. Browse them as a **list or a calendar**
 (days with recordings are highlighted; click one to see that day's recordings).
 - **Rooms.** Every account has a private **Personal Room** (your existing space). Holders of the
 **manage-rooms** permission can also create **Shared Rooms** - workspaces you invite **users and groups** into,

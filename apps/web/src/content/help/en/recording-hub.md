@@ -24,6 +24,15 @@ opening anything.
 Notes, Files, and Formulas can be added or run straight from their tile. Clicking any tile drills into
 that section with a breadcrumb back to the hub, and Diariz remembers which section you were last in.
 
+## Organizing into folders
+
+Recordings live in folders nested up to 8 levels deep. The list shows one folder at a time: open one to
+go deeper, and the header above the list becomes a breadcrumb for the whole path back to the top, not
+just the folder you just left. Click any part of that path to jump straight to that level. When the path
+is too long to fit, the middle collapses behind an ellipsis, but a menu at the end still lists every
+folder in the chain, including **Open section page** for that folder's own page. You can also drag a
+recording onto any part of the path to move it up.
+
 ## The meeting card
 
 If the recording is linked to a calendar meeting, a card below the tiles shows its time, location,

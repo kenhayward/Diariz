@@ -405,7 +405,6 @@
   "clear": "Effacer",
   "ungrouped": "Sans section",
   "drillBack": "Retour",
-  "drillAllSections": "Toutes les sections",
   "drillOpenSectionPage": "Ouvrir la page de la section ›",
   "drillDirectlyIn": "Directement dans {{name}}",
   "drillOpenFolder": "Ouvrir {{name}}",

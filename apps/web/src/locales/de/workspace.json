@@ -405,7 +405,6 @@
   "clear": "Leeren",
   "ungrouped": "Ohne Abschnitt",
   "drillBack": "Zurück",
-  "drillAllSections": "Alle Abschnitte",
   "drillOpenSectionPage": "Abschnittsseite öffnen ›",
   "drillDirectlyIn": "Direkt in {{name}}",
   "drillOpenFolder": "{{name}} öffnen",
