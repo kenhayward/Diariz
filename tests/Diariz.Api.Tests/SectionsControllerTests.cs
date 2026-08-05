@@ -234,7 +234,26 @@ public class SectionsControllerTests
 
         var result = await Build(db, userId).Create(new CreateSectionRequest("TooDeep", parentId));
 
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal($"Folders can only be nested {SectionTree.MaxDepth} levels deep.", badRequest.Value);
+    }
+
+    [Fact]
+    public async Task Create_AtMaxDepth_ReturnsOk()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+
+        // Build a chain MaxDepth-1 deep (levels 1..7), then add one more under the deepest - landing exactly
+        // at level 8, the cap itself. This is the accept edge that the reject test above does not exercise.
+        Guid? parentId = null;
+        for (var i = 0; i < SectionTree.MaxDepth - 1; i++)
+            parentId = (await SeedSection(db, userId, $"L{i}", parentId)).Id;
+
+        var result = await Build(db, userId).Create(new CreateSectionRequest("AtTheCap", parentId));
+
+        var dto = Assert.IsType<SectionDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(parentId, dto.ParentId);
     }
 
     [Fact]
@@ -343,6 +362,25 @@ public class SectionsControllerTests
 
         Assert.IsType<BadRequestObjectResult>(result);
         Assert.Null((await db.Sections.FindAsync(branch.Id))!.ParentId); // unchanged
+    }
+
+    [Fact]
+    public async Task Reorder_ToMaxDepth_ReturnsNoContent()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+
+        // A target chain MaxDepth-1 deep, and a separate single leaf (height 1). 7 + 1 = 8, exactly the cap -
+        // the accept edge the reject test above does not exercise.
+        Guid? targetId = null;
+        for (var i = 0; i < SectionTree.MaxDepth - 1; i++)
+            targetId = (await SeedSection(db, userId, $"L{i}", targetId)).Id;
+        var leaf = await SeedSection(db, userId, "Leaf");
+
+        var result = await Build(db, userId).Reorder(new ReorderSectionsRequest(targetId, [leaf.Id]));
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Equal(targetId, (await db.Sections.FindAsync(leaf.Id))!.ParentId);
     }
 
     [Fact]
