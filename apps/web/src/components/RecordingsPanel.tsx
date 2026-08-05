@@ -222,8 +222,8 @@ export default function RecordingsPanel() {
     qc.invalidateQueries({ queryKey: ["recordings"] });
   }
 
-  /// Section drag-and-drop. The server may reject a move that would nest more than one level deep
-  /// (e.g. a section with sub-sections dropped under another) — surface that in the banner.
+  /// Section drag-and-drop. The server may reject a move whose target is the section itself or one of
+  /// its own descendants, or whose branch would not fit within the depth cap - surface that in the banner.
   async function runSection(fn: () => Promise<unknown>) {
     setOpError(null);
     try {
@@ -676,9 +676,9 @@ function ListToolbar({
   const [busy, setBusy] = useState(false);
 
   // Creating a folder while browsing inside one should land it where you are looking, so the button's
-  // parent, label and placeholder all follow the drill. `blocked` is the two-level cap (see
-  // `sectionCreateTarget`): the button stays visible but disabled, saying why, rather than quietly
-  // creating the folder at some other level.
+  // parent, label and placeholder all follow the drill. `blocked` means the drill is at the depth cap, or
+  // the folder id is no longer in the tree (see `sectionCreateTarget`): the button stays visible but
+  // disabled, saying why, rather than quietly creating the folder at some other level.
   const target = sectionCreateTarget(sections, drillSectionId);
   const parentId = target.kind === "child" ? target.parent.id : null;
   const createLabel =
