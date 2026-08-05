@@ -114,17 +114,7 @@ public class SearchController : ControllerBase
     {
         var root = await _db.Sections.FirstOrDefaultAsync(s => s.Id == rootId, ct);
         if (root is null || !visibleRooms.Contains(root.RoomId)) return [];
-
-        // Walk down level by level. The domain caps folders at two levels, but nothing here assumes that.
-        var all = await _db.Sections.Where(s => s.RoomId == root.RoomId).Select(s => new { s.Id, s.ParentId }).ToListAsync(ct);
-        var ids = new List<Guid> { rootId };
-        for (var frontier = new List<Guid> { rootId }; frontier.Count > 0;)
-        {
-            var next = all.Where(s => s.ParentId != null && frontier.Contains(s.ParentId.Value)).Select(s => s.Id).ToList();
-            ids.AddRange(next);
-            frontier = next;
-        }
-        return ids;
+        return await SectionTree.SubtreeIdsAsync(_db, root.RoomId, rootId, ct);
     }
 
     /// <summary>Folders whose name matches, in rooms the caller can see. Plain EF (not the raw-SQL engine) so it

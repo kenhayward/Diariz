@@ -43,15 +43,10 @@ public class SectionFormulaResultsController : ControllerBase
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    /// <summary>The section id plus its child section ids (within the same room) - the placements that count as
-    /// "included" in this folder (mirrors <c>SectionPageController.IncludedSectionIdsAsync</c>).</summary>
-    private async Task<List<Guid>> IncludedSectionIdsAsync(Guid sectionId, Guid roomId, CancellationToken ct)
-    {
-        var ids = await _db.Sections
-            .Where(s => s.RoomId == roomId && s.ParentId == sectionId).Select(s => s.Id).ToListAsync(ct);
-        ids.Add(sectionId);
-        return ids;
-    }
+    /// <summary>The section id plus **every** section id beneath it (within the same room) - the placements that
+    /// count as "included" in this folder (mirrors <c>SectionPageController.IncludedSectionIdsAsync</c>).</summary>
+    private Task<List<Guid>> IncludedSectionIdsAsync(Guid sectionId, Guid roomId, CancellationToken ct) =>
+        SectionTree.SubtreeIdsAsync(_db, roomId, sectionId, ct);
 
     /// <summary>Kicks off an async formula run over a FOLDER (map-reduce across its included meetings): gate
     /// folder membership (404), validate formula run-access + LLM config (via

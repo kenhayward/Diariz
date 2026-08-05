@@ -40,15 +40,10 @@ public class SectionPageController : ControllerBase
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-    /// <summary>The section id plus its child section ids (within the same room) - the set a recording's
+    /// <summary>The section id plus **every** section id beneath it (within the same room) - the set a recording's
     /// placement <c>SectionId</c> must be in to count as "included" in this folder.</summary>
-    private async Task<List<Guid>> IncludedSectionIdsAsync(Guid sectionId, Guid roomId)
-    {
-        var ids = await _db.Sections
-            .Where(s => s.RoomId == roomId && s.ParentId == sectionId).Select(s => s.Id).ToListAsync();
-        ids.Add(sectionId);
-        return ids;
-    }
+    private Task<List<Guid>> IncludedSectionIdsAsync(Guid sectionId, Guid roomId) =>
+        SectionTree.SubtreeIdsAsync(_db, roomId, sectionId, default);
 
     /// <summary>Maps the shared <see cref="RoomAccessError"/> from <see cref="IRoomScope.ManageableSectionAsync"/>
     /// to this controller's status codes: 404 for a non-member/missing section (room existence stays private),

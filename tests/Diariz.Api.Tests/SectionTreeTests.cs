@@ -1,4 +1,6 @@
 using Diariz.Api.Services;
+using Diariz.Api.Tests.Infrastructure;
+using Diariz.Domain.Entities;
 
 namespace Diariz.Api.Tests;
 
@@ -60,5 +62,26 @@ public class SectionTreeTests
         Assert.Equal(2, ids.Count);
         Assert.Contains(a, ids);
         Assert.Contains(b, ids);
+    }
+
+    [Fact]
+    public async Task SubtreeIdsAsync_ReadsOneRoomsFolders_AndReachesGrandchildren()
+    {
+        using var db = TestDb.Create();
+        var roomId = Guid.NewGuid();
+        var otherRoomId = Guid.NewGuid();
+        var customers = new Section { Id = Guid.NewGuid(), RoomId = roomId, Name = "Customers" };
+        var acme = new Section { Id = Guid.NewGuid(), RoomId = roomId, Name = "Acme", ParentId = customers.Id };
+        var falcon = new Section { Id = Guid.NewGuid(), RoomId = roomId, Name = "Falcon", ParentId = acme.Id };
+        // Same shape in a different room - must not leak in.
+        var decoy = new Section { Id = Guid.NewGuid(), RoomId = otherRoomId, Name = "Decoy", ParentId = customers.Id };
+        db.Sections.AddRange(customers, acme, falcon, decoy);
+        await db.SaveChangesAsync();
+
+        var ids = await SectionTree.SubtreeIdsAsync(db, roomId, customers.Id, default);
+
+        Assert.Equal(3, ids.Count);
+        Assert.Contains(falcon.Id, ids);
+        Assert.DoesNotContain(decoy.Id, ids);
     }
 }

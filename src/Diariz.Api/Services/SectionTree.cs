@@ -1,3 +1,6 @@
+using Diariz.Domain;
+using Microsoft.EntityFrameworkCore;
+
 namespace Diariz.Api.Services;
 
 /// <summary>The parent link of one folder, flattened for the pure tree functions below. Deliberately not the
@@ -34,4 +37,17 @@ public static class SectionTree
 
         return ids;
     }
+
+    /// <summary>Every folder link in one room. A room's folder list is small (tens of rows) and already the unit
+    /// the nav loads, so pulling it whole and walking it in memory is cheaper than a round trip per level.</summary>
+    public static Task<List<SectionLink>> LinksAsync(DiarizDbContext db, Guid roomId, CancellationToken ct) =>
+        db.Sections.Where(s => s.RoomId == roomId)
+            .Select(s => new SectionLink(s.Id, s.ParentId))
+            .ToListAsync(ct);
+
+    /// <summary>The folder plus every folder beneath it, within one room - the set a recording's placement
+    /// <c>SectionId</c> must be in to count as "included" in that folder.</summary>
+    public static async Task<List<Guid>> SubtreeIdsAsync(
+        DiarizDbContext db, Guid roomId, Guid rootId, CancellationToken ct) =>
+        Subtree(await LinksAsync(db, roomId, ct), rootId);
 }
