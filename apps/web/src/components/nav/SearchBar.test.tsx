@@ -177,6 +177,42 @@ describe("SearchBar", () => {
     expect(onDrill).toHaveBeenCalledWith("customers");
   });
 
+  // At two levels deep the folder's own name was enough to tell rows apart; nested trees can return several
+  // identically-named folders sitting under different customers, so the ancestor path is what disambiguates.
+  it("shows a folder hit's ancestor path so identically-named folders are distinguishable", async () => {
+    (api.search as ReturnType<typeof vi.fn>).mockResolvedValue({
+      query: "phase 2", scope: "folder", recordings: [],
+      folders: [
+        {
+          id: "p1", name: "Phase 2", parentId: "falcon", roomId: "r1", roomName: "Personal",
+          breadcrumb: ["Customers", "Acme Corp", "Project Falcon"], recordingCount: 3,
+        },
+      ],
+    });
+    renderBar({});
+    type("Phase 2");
+
+    expect(await screen.findByText("Phase 2")).toBeTruthy();
+    // The collapse keeps the root and the nearest ancestor (the folder's direct parent), dropping the
+    // middle one - never the most distant ancestor alone.
+    expect(screen.getByText("Customers / ... / Project Falcon")).toBeTruthy();
+  });
+
+  it("renders no path line for a top-level folder hit", async () => {
+    (api.search as ReturnType<typeof vi.fn>).mockResolvedValue({
+      query: "falcon", scope: "folder", recordings: [],
+      folders: [
+        { id: "falcon", name: "Falcon", parentId: null, roomId: "r1", roomName: "Personal", breadcrumb: [], recordingCount: 5 },
+      ],
+    });
+    renderBar({});
+    type("falcon");
+
+    const folderName = await screen.findByText("Falcon");
+    // Just the name - no sibling breadcrumb span, and no stray separator, when there are no ancestors.
+    expect(folderName.parentElement?.children.length).toBe(1);
+  });
+
   it("says so when nothing matched", async () => {
     renderBar();
     type("nothing here");
