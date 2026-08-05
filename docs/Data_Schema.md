@@ -618,8 +618,9 @@ User-defined group recordings are filed under.
 | `CreatedAt` | timestamptz | |
 
 Index: `(UserId, Name)`, `(ParentId)`. Sections nest up to **8 levels deep** (`SectionTree.MaxDepth`, enforced
-in `SectionsController`: create checks the parent's depth, reparent checks the target's depth plus the moved
-branch's height, and rejects a move into the folder's own descendant). Deleting a section **Cascade**-deletes
+in `SectionsController`: create checks the parent's depth; reparent rejects a folder becoming its own parent,
+rejects a move into the folder's own descendant, and checks the target's depth plus the moved branch's height).
+Deleting a section **Cascade**-deletes
 its whole subtree - Postgres cascades the self-referencing FK recursively - and **SetNull**s the recordings of
 every folder in it (ungroups, not deletes). No migration was needed for the deeper tree: the self-referencing
 `ParentId` already supported it, so older backups remain restorable.
