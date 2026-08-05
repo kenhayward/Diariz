@@ -58,7 +58,10 @@ public static class SectionTree
     }
 
     /// <summary>How many levels the subtree rooted here spans, counting the root as 1. Moving a folder moves its
-    /// whole branch, so this is what a reparent has to add to the target's depth.</summary>
+    /// whole branch, so this is what a reparent has to add to the target's depth. Note: returns 1 for an unknown
+    /// <paramref name="rootId"/> (unlike <see cref="Depth"/>, which returns 0); an unknown id still occupies one
+    /// level as far as a caller composing <c>Depth(target) + Height(moved)</c> is concerned. This is safe because
+    /// callers validate existence upstream (<c>SectionsController.Reorder</c> 404s on ids not in the room).</summary>
     public static int Height(IReadOnlyCollection<SectionLink> sections, Guid rootId)
     {
         var subtree = Subtree(sections, rootId).ToHashSet();

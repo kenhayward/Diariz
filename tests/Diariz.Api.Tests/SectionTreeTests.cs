@@ -126,4 +126,14 @@ public class SectionTreeTests
     {
         Assert.Equal(8, SectionTree.MaxDepth);
     }
+
+    [Fact]
+    public void Height_OfAnUnknownRoot_IsOne()
+    {
+        // Deliberately NOT 0, unlike Depth: an unknown id still occupies one level as far as a caller
+        // composing Depth(target) + Height(moved) is concerned. Callers guard existence upstream
+        // (SectionsController.Reorder 404s on ids that are not in the room), so this is a safe floor
+        // rather than a value any real move relies on.
+        Assert.Equal(1, SectionTree.Height(Tree(), Guid.NewGuid()));
+    }
 }
