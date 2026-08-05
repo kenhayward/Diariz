@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SelectionProvider } from "../lib/selection";
 import type { RecordingSummary } from "../lib/types";
@@ -80,6 +80,28 @@ function renderList(entry = "/") {
     <QueryClientProvider client={qc}>
       <SelectionProvider>
         <MemoryRouter initialEntries={[entry]}>
+          <RecordingsPanel />
+        </MemoryRouter>
+      </SelectionProvider>
+    </QueryClientProvider>,
+  );
+}
+
+// Captures the router's location so a test can assert where a `navigate()` call landed, mirroring the
+// `PathSpy` pattern in RecordingDetail.test.tsx.
+function LocationSpy({ onChange }: { onChange: (loc: { pathname: string; search: string }) => void }) {
+  const loc = useLocation();
+  onChange({ pathname: loc.pathname, search: loc.search });
+  return null;
+}
+
+function renderListWithLocationSpy(entry: string, onChange: (loc: { pathname: string; search: string }) => void) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <SelectionProvider>
+        <MemoryRouter initialEntries={[entry]}>
+          <LocationSpy onChange={onChange} />
           <RecordingsPanel />
         </MemoryRouter>
       </SelectionProvider>
@@ -219,12 +241,15 @@ describe("RecordingsPanel", () => {
       expect(screen.queryByText("Account review")).toBeNull();
     });
 
-    // The two targets the design insists stay distinct: the row browses, the link opens the page. The
-    // link keeps `?in=` so opening the page leaves you where you were browsing.
-    it("opens the folder page from the breadcrumb link, not by drilling", async () => {
-      renderList("/?in=customers");
-      const link = await screen.findByRole("link", { name: /open section page/i });
-      expect(link.getAttribute("href")).toBe("/sections/customers?in=customers");
+    // The two targets the design insists stay distinct: the row browses, the menu item opens the page. It
+    // keeps `?in=` so opening the page leaves you where you were browsing.
+    it("opens the folder page from the breadcrumb menu, not by drilling", async () => {
+      let location = { pathname: "", search: "" };
+      renderListWithLocationSpy("/?in=customers", (loc) => (location = loc));
+      fireEvent.click(await screen.findByLabelText(/show full folder path/i));
+      fireEvent.click(screen.getByRole("menuitem", { name: /open section page/i }));
+      expect(location.pathname).toBe("/sections/customers");
+      expect(location.search).toBe("?in=customers");
     });
 
     it("pops a level from the breadcrumb back button", async () => {
@@ -261,7 +286,7 @@ describe("RecordingsPanel", () => {
 
       expect(await screen.findByText("A search hit")).toBeTruthy();
       expect(screen.queryByText("Account review")).toBeNull(); // list body taken over
-      expect(screen.getByRole("link", { name: /open section page/i })).toBeTruthy(); // breadcrumb survives
+      expect(screen.getByLabelText(/show full folder path/i)).toBeTruthy(); // breadcrumb survives
 
       fireEvent.click(screen.getByRole("button", { name: /clear search/i }));
       expect(await screen.findByText("Account review")).toBeTruthy(); // exactly where we were

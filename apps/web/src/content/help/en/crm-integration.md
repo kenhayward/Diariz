@@ -72,7 +72,7 @@ is exactly what folders are for, and a folder has its own AI summary and minutes
 in it, at any depth beneath it. That
 gives you an account-level view of every conversation you have ever had with a customer, which is
 usually the thing people actually wanted. An automation can create folders and file recordings into
-them, so your CRM can decide where a meeting belongs. See [Recordings and folders](/help/recording-hub).
+them, so your CRM can decide where a meeting belongs. See [Organizing recordings into folders](/help/organizing-folders).
 
 **Meeting types are the meeting-kind dimension.** Discovery call, quarterly review, renewal. The type
 also steers how the minutes are written, so setting it from the CRM improves the output rather than just

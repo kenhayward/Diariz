@@ -382,6 +382,7 @@ export default function RecordingsPanel() {
               sectionId={drill.sectionId}
               basePath={basePath}
               onDrill={drill.drillTo}
+              onRecordingDrop={(sectionId, recordingId) => drop(sectionId, [], recordingId, null)}
             />
             {/* The results replace the list body outright rather than hiding it: nothing below is reachable
                 or readable during a search, and clearing rebuilds it from the URL anyway. */}

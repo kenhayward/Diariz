@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi } from "vitest";
 import DrillBreadcrumb from "./DrillBreadcrumb";
 import type { SectionDto } from "../../lib/types";
@@ -18,6 +19,14 @@ function renderCrumb(sectionId: string | null, onDrill = vi.fn()) {
   return onDrill;
 }
 
+// Captures the router's location so a test can assert where `navigate()` landed, mirroring the
+// `PathSpy` pattern used in RecordingDetail.test.tsx.
+function LocationSpy({ onChange }: { onChange: (loc: { pathname: string; search: string }) => void }) {
+  const loc = useLocation();
+  onChange({ pathname: loc.pathname, search: loc.search });
+  return null;
+}
+
 describe("DrillBreadcrumb", () => {
   // At the room's top level there is nowhere to go back to and no folder page to open.
   it("renders nothing at the root", () => {
@@ -29,16 +38,54 @@ describe("DrillBreadcrumb", () => {
     expect(container.innerHTML).toBe("");
   });
 
-  it("shows the current folder over its parent label", () => {
+  it("shows the current folder along with its parent", () => {
     renderCrumb("ambu");
     expect(screen.getByText("Ambu")).toBeTruthy();
     expect(screen.getByText("Customers")).toBeTruthy();
   });
 
-  it("labels the parent of a top-level folder as all sections", () => {
+  // The old design had a dedicated "All sections" label for a top-level folder's parent slot; the
+  // collapsing path has no such slot - a top-level folder is just a chain of one, and where "back"
+  // leads is covered by the dedicated back-button tests below.
+  it("shows a single crumb for a top-level folder", () => {
     renderCrumb("customers");
     expect(screen.getByText("Customers")).toBeTruthy();
-    expect(screen.getByText(/all sections/i)).toBeTruthy();
+    expect(screen.queryByText(/all sections/i)).toBeNull();
+  });
+
+  it("shows the whole ancestor path, not just the parent", () => {
+    const deepSections = [
+      { id: "customers", name: "Customers", parentId: null, position: 0 },
+      { id: "acme", name: "Acme Corp", parentId: "customers", position: 0 },
+      { id: "falcon", name: "Project Falcon", parentId: "acme", position: 0 },
+    ] as SectionDto[];
+
+    render(
+      <MemoryRouter>
+        <DrillBreadcrumb sections={deepSections} sectionId="falcon" basePath="" onDrill={() => {}} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Customers")).toBeTruthy();
+    expect(screen.getByText("Project Falcon")).toBeTruthy();
+  });
+
+  it("drills to an ancestor when its crumb is clicked", async () => {
+    const onDrill = vi.fn();
+    const deepSections = [
+      { id: "customers", name: "Customers", parentId: null, position: 0 },
+      { id: "acme", name: "Acme Corp", parentId: "customers", position: 0 },
+    ] as SectionDto[];
+
+    render(
+      <MemoryRouter>
+        <DrillBreadcrumb sections={deepSections} sectionId="acme" basePath="" onDrill={onDrill} />
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(screen.getByText("Customers"));
+
+    expect(onDrill).toHaveBeenCalledWith("customers");
   });
 
   it("back pops to the parent", () => {
@@ -53,32 +100,56 @@ describe("DrillBreadcrumb", () => {
     expect(onDrill).toHaveBeenCalledWith(null);
   });
 
-  // The design's two distinct targets: the row body browses deeper, this link opens the page.
-  it("links Open section page to the folder's page, not a drill", () => {
-    const onDrill = renderCrumb("ambu");
-    const link = screen.getByRole("link", { name: /open section page/i });
-    expect(link.getAttribute("href")).toContain("/sections/ambu");
+  // The design's two distinct targets: a crumb browses deeper, this menu item opens the page. It now
+  // lives inside the FolderPath menu rather than as its own link.
+  it("opens the folder's page from the menu, not a drill", async () => {
+    const onDrill = vi.fn();
+    let location = { pathname: "", search: "" };
+    render(
+      <MemoryRouter initialEntries={["/?in=ambu"]}>
+        <LocationSpy onChange={(loc) => (location = loc)} />
+        <DrillBreadcrumb sections={sections} sectionId="ambu" basePath="" onDrill={onDrill} />
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(screen.getByLabelText("Show full folder path"));
+    await userEvent.click(screen.getByRole("menuitem", { name: /open section page/i }));
+
+    expect(location.pathname).toBe("/sections/ambu");
     expect(onDrill).not.toHaveBeenCalled();
   });
 
   // Opening the page must not throw away where you were browsing: the drill lives in ?in=, and a bare
-  // `to="/sections/:id"` drops the query, popping the panel back to the root behind the page you opened.
-  it("keeps the drill position when opening the folder page", () => {
-    renderCrumb("ambu");
-    expect(screen.getByRole("link", { name: /open section page/i }).getAttribute("href")).toBe(
-      "/sections/ambu?in=ambu",
+  // navigate to "/sections/:id" drops the query, popping the panel back to the root behind the page you
+  // opened.
+  it("keeps the drill position when opening the folder page", async () => {
+    let location = { pathname: "", search: "" };
+    render(
+      <MemoryRouter initialEntries={["/?in=ambu"]}>
+        <LocationSpy onChange={(loc) => (location = loc)} />
+        <DrillBreadcrumb sections={sections} sectionId="ambu" basePath="" onDrill={vi.fn()} />
+      </MemoryRouter>,
     );
+
+    await userEvent.click(screen.getByLabelText("Show full folder path"));
+    await userEvent.click(screen.getByRole("menuitem", { name: /open section page/i }));
+
+    expect(location.pathname + location.search).toBe("/sections/ambu?in=ambu");
   });
 
-  it("keeps the room prefix on the section page link in a shared room", () => {
+  it("keeps the room prefix on the section page link in a shared room", async () => {
+    let location = { pathname: "", search: "" };
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={["/?in=ambu"]}>
+        <LocationSpy onChange={(loc) => (location = loc)} />
         <DrillBreadcrumb sections={sections} sectionId="ambu" basePath="/rooms/r1" onDrill={vi.fn()} />
       </MemoryRouter>,
     );
-    expect(screen.getByRole("link", { name: /open section page/i }).getAttribute("href")).toBe(
-      "/rooms/r1/sections/ambu",
-    );
+
+    await userEvent.click(screen.getByLabelText("Show full folder path"));
+    await userEvent.click(screen.getByRole("menuitem", { name: /open section page/i }));
+
+    expect(location.pathname).toBe("/rooms/r1/sections/ambu");
   });
 
   // Drilled into a folder that was deleted underneath us: don't crash, offer a way back out.

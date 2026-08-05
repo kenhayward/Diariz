@@ -46,12 +46,22 @@ describe("orderedSections", () => {
     expect(out.map((o) => o.section.id)).toEqual(["top", "mid1", "mid1-leaf", "mid2"]);
   });
 
-  it("does not hang on a parentId cycle, and excludes the cyclic branch", () => {
-    const sections = [section("x", "X", "y"), section("y", "Y", "x")];
+  it("does not hang on a parentId cycle reachable through the tree (duplicate id exercising the guard)", () => {
+    // Create a scenario where "a" can be reached twice: once as a root, and again as a child of itself through "b".
+    // This exercises the seen guard by creating a path: a -> b -> a (cycle).
+    const sections = [
+      section("a", "A"), // root
+      section("b", "B", "a"), // child of a
+      section("a", "A", "b"), // another "a" as child of b - duplicate id creates reachable cycle
+    ];
 
     const out = orderedSections(sections);
 
+    // Should not hang; the second "a" should be skipped by the seen guard.
+    // Without the guard, this would spin infinitely. With the guard, we get a/b and then b's child (the duplicate a) is skipped.
     expect(out.length).toBeLessThanOrEqual(sections.length);
+    // The output should have 2 entries: the root "a" and "b", but not the duplicate "a" again
+    expect(out.map((o) => o.section.id)).toEqual(["a", "b"]);
   });
 
   it("keeps the { section, label } shape for existing consumers", () => {

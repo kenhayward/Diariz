@@ -8,6 +8,7 @@ import { useDrillSearch } from "../../lib/drillRoute";
 import { sectionColor } from "../../lib/sectionColors";
 import { formatDuration } from "../../lib/format";
 import { highlight, snippetWindow } from "../../lib/highlight";
+import { collapsePath } from "../../lib/folderPath";
 import { facetsOf, applyFilters, groupBySection, UNGROUPED_GROUP, type SearchFilterState } from "../../lib/searchResults";
 import SearchFilters from "./SearchFilters";
 import { SearchIcon, FolderIcon, ChevronRightIcon, GlobeIcon } from "../icons";
@@ -184,7 +185,23 @@ export default function SearchBar({
               className="flex w-full items-center gap-1.5 border-b px-2 py-1.5 text-left text-[var(--sc-light)] hover:bg-gray-50 dark:border-gray-800 dark:text-[var(--sc-dark)] dark:hover:bg-gray-800/60"
             >
               <FolderIcon size={14} />
-              <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold">{f.name}</span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="min-w-0 truncate text-[12.5px] font-semibold">{f.name}</span>
+                {/* Where it lives. Without this, deep trees produce several identical-looking rows under
+                    different customers. Plain text (not FolderPath) - the row itself is already the click
+                    target, so no menu is needed, and FolderPath's own trailing button would nest inside this
+                    row's outer <button>, which is invalid HTML. */}
+                {f.breadcrumb.length > 0 && (
+                  <span className="min-w-0 truncate text-[10px] text-gray-400 dark:text-gray-500">
+                    {collapsePath(
+                      f.breadcrumb.map((name, i) => ({ id: `${f.id}-${i}`, name })),
+                      2,
+                    )
+                      .map((s) => (s === "ellipsis" ? "..." : s.name))
+                      .join(" / ")}
+                  </span>
+                )}
+              </span>
               <span className="shrink-0 text-[11px] tabular-nums text-gray-400">{f.recordingCount}</span>
               <span className="shrink-0 text-gray-400">
                 <ChevronRightIcon size={14} />
