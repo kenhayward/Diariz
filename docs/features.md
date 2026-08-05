@@ -328,9 +328,17 @@ one folder at a time** rather than showing every folder expanded: a folder row s
 of everything inside, and takes you in; the header above the list is a **breadcrumb showing the whole path**,
 collapsing the middle when it does not fit, with every part clickable and a trailing menu for the full
 ancestor chain plus **Open section page** - browsing deeper and opening the page stay separate targets, and
-crumbs accept a dropped recording to move it up. Folder pages carry the same path. Recordings with no folder
+crumbs accept a dropped recording to move it up (appending it, the same as dropping onto a folder row).
+Folder pages carry the same path. Recordings with no folder
 simply sit at the top level. Browse them as a **list or a calendar**
-(days with recordings are highlighted; click one to see that day's recordings).
+(days with recordings are highlighted; click one to see that day's recordings). You can also **cut and
+paste** to move several things at once: select recordings and click **Cut** in the toolbar, or **Cut** a
+single folder from its own menu, then drill into wherever you want them and click **Paste**. A bar under
+the toolbar names the destination and carries the Paste and Cancel buttons; cut rows grey out with a dashed
+outline and stay put until you paste, so nothing moves until you say so. Paste stays visible but disabled,
+with the reason shown, when the move is not allowed yet: pasting back where you cut from, into a shared room
+(personal rooms only for now), past the 8-level depth cap, or into a folder's own descendant. Pasted items
+land at the bottom of the destination, keeping the order you cut them in.
 - **Rooms.** Every account has a private **Personal Room** (your existing space). Holders of the
 **manage-rooms** permission can also create **Shared Rooms** - workspaces you invite **users and groups** into,
 each member carrying their own **permission grid** (add recordings, manage contents, remove others' recordings,

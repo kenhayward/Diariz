@@ -23,3 +23,22 @@ into it; the path at the top of the list shows where you are, anchored to the ro
 
 Browser back pops you up one level at a time. Your place in the folder list is kept while you navigate
 elsewhere in the app, but a fresh visit starts back at the room root.
+
+## Cutting and pasting between folders
+
+To move several recordings, or a whole folder, in one step:
+
+1. Click **Select recordings** in the toolbar, tick the ones you want to move, then click **Cut**. To
+   move a single folder instead, open its own menu and choose **Cut** there - folders move one at a
+   time.
+2. A bar appears under the toolbar naming what you cut, with a **Paste into** button for wherever you
+   are currently looking, and a **Cancel** button.
+3. Drill into the folder you want things moved into, then click **Paste into** that folder.
+
+Cut rows grey out with a dashed outline and stay exactly where they are - nothing moves on the server
+until you paste. Cancel drops the cut without moving anything.
+
+Paste stays visible but disables itself, with the reason shown next to it, when the move is not allowed:
+pasting back into the folder you cut from, into a shared room (only your personal room supports this so
+far), deep enough to exceed the 8-level cap, or into a folder's own descendant. Once allowed, pasted
+items land at the bottom of the destination, keeping the order you cut them in.
