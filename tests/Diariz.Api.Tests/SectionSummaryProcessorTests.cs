@@ -54,6 +54,51 @@ public class SectionSummaryProcessorTests
             SummarizationPrompt.DefaultTemplate, FolderSummaryPrompt.DefaultTemplate,
             new SectionSummaryJob(section.Id), 24_000, NullLogger.Instance);
 
+    /// <summary>Three-level folder chain (Customers > Acme > Falcon) in the user's real personal room, with a
+    /// summarisable recording filed two levels down under Falcon. Proves <c>IncludedRecordingsAsync</c> walks
+    /// the whole subtree, not just direct children - the bug fixed by scoping the folder walk through
+    /// <see cref="SectionTree.SubtreeIdsAsync"/> by <c>RoomId</c> instead of a one-level <c>UserId</c>/<c>ParentId</c>
+    /// query. Unlike <see cref="SeedSection"/>, these sections get a real <c>RoomId</c> (the user's personal
+    /// room, matching what <see cref="RoomScope.PlaceInMainRoomAsync"/> places the recording into) so the
+    /// room-scoped walk has something meaningful to match against.</summary>
+    [Fact]
+    public async Task Reaches_a_recording_filed_two_levels_below_the_folder()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.Users.Add(new ApplicationUser { Id = userId, UserName = $"{userId}@x.test", Email = $"{userId}@x.test" });
+        await db.SaveChangesAsync();
+        var roomId = await new RoomScope(db).PersonalRoomIdAsync(userId);
+
+        var customers = new Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "Customers" };
+        var acme = new Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "Acme", ParentId = customers.Id };
+        var falcon = new Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "Falcon", ParentId = acme.Id };
+        db.Sections.AddRange(customers, acme, falcon);
+        await db.SaveChangesAsync();
+
+        var rec = new Recording { Id = Guid.NewGuid(), UserId = userId, Name = "Kickoff", BlobKey = "k" };
+        var tr = new Transcription { Id = Guid.NewGuid(), RecordingId = rec.Id, Model = "whisperx", Version = 1 };
+        db.Recordings.Add(rec);
+        db.Transcriptions.Add(tr);
+        db.Segments.Add(new Segment
+        {
+            Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00",
+            StartMs = 0, EndMs = 1000, Original = "Hi", Ordinal = 0,
+        });
+        await db.SaveChangesAsync();
+        await new RoomScope(db).PlaceInMainRoomAsync(rec.Id, userId, falcon.Id); // two levels below Customers
+
+        var perRec = new FakeSummarizationClient { Result = new SummaryResult("Grandchild summary.", null) };
+        var combiner = new FakeMeetingMinutesClient();
+
+        await Run(db, perRec, combiner, new FakeSummarizationSettingsResolver(), new FakeHubContext(), customers);
+
+        // The grandchild's recording was reached and summarized - before the fix this is 0 (only the direct
+        // child "Acme" was visible to the old UserId/ParentId query, so Falcon's recording was invisible).
+        Assert.Equal(1, perRec.Calls);
+        Assert.Contains("Grandchild summary.", combiner.LastMessages![1].Content);
+    }
+
     [Fact]
     public async Task Combines_summaries_across_section_and_children_and_notifies()
     {
