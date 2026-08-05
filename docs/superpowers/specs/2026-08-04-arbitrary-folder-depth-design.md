@@ -225,6 +225,12 @@ in one call.
 
 ### 5.8 The pickers
 
+> **Corrected during execution (2026-08-05).** This section originally said the pickers "degrade gracefully"
+> and could wait. That was wrong, and Phase 2's whole-branch review caught it: `orderedSections` does not
+> get verbose at depth, it **silently omits** anything below depth 2. Shipping the cap lift without this
+> would have created folders that could not then be selected in either picker. The **reachability** fix was
+> pulled forward into Phase 2; only the drill-down **redesign** below remains deferred.
+
 Two components render the folder list flat as `Parent > Child` via `sectionTree.orderedSections`. At depth
 5 both become long dropdowns of long strings:
 
