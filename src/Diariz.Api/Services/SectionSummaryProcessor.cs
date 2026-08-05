@@ -79,14 +79,16 @@ public static class SectionSummaryProcessor
     internal static async Task<List<RecordingRef>> IncludedRecordingsAsync(DiarizDbContext db, Section section)
     {
         var allIds = await SectionTree.SubtreeIdsAsync(db, section.RoomId, section.Id, default);
-        // The folder a recording sits in is now a property of its placement in the owner's personal room. Scope
-        // by joining through that room (no RoomScope here - this is a static helper). `SectionId.HasValue &&`
-        // guards the `.Value` so ungrouped placements don't throw under the in-memory provider.
+        // Placements are scoped to the folder's OWN room, matching every other roll-up site. This used to join
+        // through the section owner's personal room, which made a shared-room folder roll up nothing at all:
+        // `allIds` holds section ids from the folder's room, so against personal-room placements the two sets
+        // were drawn from different rooms and never intersected. For a personal-room folder the two forms
+        // select the same rows, since section.RoomId IS that personal room. `SectionId.HasValue &&` guards the
+        // `.Value` so ungrouped placements don't throw under the in-memory provider.
         return await (
             from p in db.RoomRecordings
-            join rm in db.Rooms on p.RoomId equals rm.Id
             join r in db.Recordings on p.RecordingId equals r.Id
-            where rm.OwnerUserId == section.UserId && rm.Kind == RoomKind.Personal
+            where p.RoomId == section.RoomId
                   && p.SectionId.HasValue && allIds.Contains(p.SectionId.Value)
             orderby r.CreatedAt
             select new RecordingRef(r.Id, r.Name, r.Title)).ToListAsync();

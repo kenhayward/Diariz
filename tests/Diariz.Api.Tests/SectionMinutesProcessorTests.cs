@@ -13,6 +13,9 @@ namespace Diariz.Api.Tests;
 /// then reshape all the minutes through the folder's chosen meeting-type template onto the section.</summary>
 public class SectionMinutesProcessorTests
 {
+    /// <summary>A folder in the user's real personal room - the same room <see cref="SeedRecording"/> files
+    /// recordings into. The <c>RoomId</c> is load-bearing: placements are resolved by the folder's own room, so
+    /// a section left at the default <c>Guid.Empty</c> would match no placement at all.</summary>
     private static async Task<Section> SeedSection(DiarizDbContext db, Guid userId, Guid? parentId = null,
         Guid? meetingTypeId = null)
     {
@@ -21,7 +24,8 @@ public class SectionMinutesProcessorTests
             db.Users.Add(new ApplicationUser { Id = userId, UserName = $"{userId}@x.test", Email = $"{userId}@x.test" });
             await db.SaveChangesAsync();
         }
-        var s = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Folder", ParentId = parentId };
+        var roomId = await new RoomScope(db).PersonalRoomIdAsync(userId);
+        var s = new Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "Folder", ParentId = parentId };
         db.Sections.Add(s);
         if (meetingTypeId is not null)
             db.SectionMinutes.Add(new SectionMinutes { Id = Guid.NewGuid(), SectionId = s.Id, MeetingTypeId = meetingTypeId });
@@ -55,6 +59,46 @@ public class SectionMinutesProcessorTests
         FakeSummarizationSettingsResolver resolver, FakeHubContext hub, Section section) =>
         SectionMinutesProcessor.ProcessAsync(db, gen, combiner, resolver, hub,
             FolderMinutesPrompt.DefaultTemplate, new SectionMinutesJob(section.Id), 16_000, 32_000, NullLogger.Instance);
+
+    /// <summary>Folder minutes share <c>SectionSummaryProcessor.IncludedRecordingsAsync</c> with folder
+    /// summaries, so they had the same bug: a folder in a SHARED room rolled up nothing, because placements
+    /// were resolved through the section owner's personal room rather than the folder's own. Proven here rather
+    /// than assumed from the summary side.</summary>
+    [Fact]
+    public async Task Reaches_recordings_in_a_shared_room_folder()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.Users.Add(new ApplicationUser { Id = userId, UserName = $"{userId}@x.test", Email = $"{userId}@x.test" });
+        await db.SaveChangesAsync();
+        var sharedRoomId = await new RoomScope(db).CreateSharedRoomAsync("Engineering", null, null, null);
+
+        var folder = new Section { Id = Guid.NewGuid(), UserId = userId, RoomId = sharedRoomId, Name = "Acme" };
+        db.Sections.Add(folder);
+        await db.SaveChangesAsync();
+
+        var rec = new Recording { Id = Guid.NewGuid(), UserId = userId, Name = "Kickoff", BlobKey = "k" };
+        var tr = new Transcription { Id = Guid.NewGuid(), RecordingId = rec.Id, Model = "whisperx", Version = 1 };
+        db.Recordings.Add(rec);
+        db.Transcriptions.Add(tr);
+        db.MeetingMinutes.Add(new MinutesEntity
+        {
+            Id = Guid.NewGuid(), TranscriptionId = tr.Id, Model = "m", Text = "# Kickoff\nShared minutes.",
+        });
+        await db.SaveChangesAsync();
+        db.RoomRecordings.Add(new RoomRecording { RoomId = sharedRoomId, RecordingId = rec.Id, SectionId = folder.Id });
+        await db.SaveChangesAsync();
+
+        var combiner = new FakeMeetingMinutesClient { Result = "# Folder minutes" };
+
+        await Run(db, new FakeMeetingTypeMinutesGenerator(), combiner, new FakeSummarizationSettingsResolver(),
+            new FakeHubContext(), folder);
+
+        var minutes = await db.SectionMinutes.SingleAsync(x => x.SectionId == folder.Id);
+        Assert.Equal("# Folder minutes", minutes.Text);
+        Assert.Equal(SectionGenerationStatus.Ready, minutes.Status);
+        Assert.Contains("Shared minutes.", combiner.LastMessages![1].Content);
+    }
 
     [Fact]
     public async Task Combines_minutes_across_section_and_children()
