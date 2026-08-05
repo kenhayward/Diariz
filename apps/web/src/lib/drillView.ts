@@ -80,6 +80,38 @@ export function depthOf(sections: SectionDto[], sectionId: string | null): numbe
   return depth;
 }
 
+/// How many levels the subtree rooted at a folder spans, counting the folder itself as 1 - the branch-move
+/// counterpart to `depthOf`. Mirrors `SectionTree.Height` on the API: a leaf is 1, and an id no longer in
+/// `sections` is also 1 (it occupies one level regardless, matching how a caller composes
+/// `depthOf(target) + heightOf(moved) <= MAX_FOLDER_DEPTH`; existence is validated upstream). Guards against
+/// a `parentId` cycle, which nothing in the schema prevents.
+export function heightOf(sections: SectionDto[], sectionId: string): number {
+  const byId = new Map(sections.map((s) => [s.id, s]));
+  if (!byId.has(sectionId)) return 1;
+
+  // Collect the whole subtree level by level - the same cycle-safe walk as childrenOf's recursive find, just
+  // iterative so a cycle among descendants can't loop it forever.
+  const seen = new Set<string>([sectionId]);
+  let frontier = [sectionId];
+  while (frontier.length > 0) {
+    const next: string[] = [];
+    for (const s of sections) {
+      if (s.parentId === null || seen.has(s.id) || !frontier.includes(s.parentId)) continue;
+      seen.add(s.id);
+      next.push(s.id);
+    }
+    frontier = next;
+  }
+
+  const rootDepth = depthOf(sections, sectionId);
+  let deepest = rootDepth;
+  for (const id of seen) {
+    const d = depthOf(sections, id);
+    if (d > deepest) deepest = d;
+  }
+  return deepest - rootDepth + 1;
+}
+
 /// Where a new folder created from the toolbar should go, given where you are browsing. `blocked` covers
 /// both ends of the same problem: the drill is at the depth cap (`SectionsController.Create` would 400) or
 /// inside an id that is no longer in the tree (deleted from another tab - the level renders empty, and
