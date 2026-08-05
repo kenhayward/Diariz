@@ -422,6 +422,25 @@ describe("RecordingsPanel", () => {
       expect(cut).toEqual({ kind: "folders", ids: ["ambu"], sourceSectionId: "customers", sourceRoomId: null });
     });
 
+    // Selection state is global while the drill position is local to a level: ticking rows at the root then
+    // drilling elsewhere used to leave the stale selection in place, so Cut recorded a source that did not
+    // match what was actually ticked (the rows themselves are just not rendered at the new level). Drilling
+    // must drop the selection, the same way selectTab already does on a tab switch - proven here by the Cut
+    // button going back to disabled (nothing selected) rather than staying enabled with a stale source.
+    it("clears the selection when drilling to a different level", async () => {
+      renderList();
+      await screen.findByText("Loose one"); // a root-level recording
+      fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
+      fireEvent.click(screen.getByRole("checkbox", { name: /loose one/i }));
+      expect(screen.getByRole("button", { name: /^cut$/i })).not.toHaveProperty("disabled", true);
+
+      fireEvent.click(await screen.findByRole("button", { name: /open customers/i }));
+      await screen.findByText("Account review"); // now one level into Customers
+
+      const cutButton = screen.getByRole("button", { name: /^cut$/i }) as HTMLButtonElement;
+      expect(cutButton.disabled).toBe(true); // the stale root-level selection is gone
+    });
+
     // Cut items are greyed with a dashed outline, not removed - nothing has happened yet, and removing the
     // row would read as "the move already happened" even if the user cancels or navigates away before
     // pasting. An `outline`, not a `border`: this row sits inside a `divide-y` list, whose own divider rule

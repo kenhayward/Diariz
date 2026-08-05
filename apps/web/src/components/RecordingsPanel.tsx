@@ -120,6 +120,19 @@ export default function RecordingsPanel() {
   // top level, since the loose recordings there belong to the room rather than to any folder.
   const currentLevelName =
     breadcrumbOf(sections, drill.sectionId).slice(-1)[0]?.name ?? currentRoom?.name ?? "";
+  // Selection is global (shared with the chat panel), but the drill-in list shows only one level at a
+  // time - drilling doesn't unmount the rows a prior selection was made against, it just stops rendering
+  // them. Left alone, a selection made at one level survives into another where the ticked ids do not
+  // even appear, so a later Cut would record the new drill level as the source for recordings that live
+  // somewhere else entirely (see pasteTarget.ts's same-folder / cross-room checks, which then reason from
+  // the wrong source). `selectTab` already clears the selection for the same reason on a tab switch; this
+  // is the drill-position equivalent.
+  useEffect(() => {
+    selection.clear();
+    // Reacts only to the drill position changing, not to `selection` itself - `clear` is called for
+    // whatever the current render's selection is, so it does not need to be a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drill.sectionId]);
   // A live search takes the list body over. It is only ever component state: the drill stays in the URL, so
   // clearing the query drops straight back to where the user was browsing, with nothing to restore.
   const [searchQuery, setSearchQuery] = useState("");
