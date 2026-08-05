@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { RoomPermission } from "../lib/types";
 import type { RoomListItem, SectionDetail as SectionDetailT, SectionFormulaResult } from "../lib/types";
@@ -86,12 +86,24 @@ const result = (over: Partial<SectionFormulaResult> = {}): SectionFormulaResult 
   ...over,
 });
 
-function renderPage(section: SectionDetailT = base) {
+// Captures the router's location so a test can assert where navigate() landed, mirroring the
+// pattern used in DrillBreadcrumb.test.tsx.
+function LocationSpy({ onChange }: { onChange: (loc: { pathname: string; search: string }) => void }) {
+  const loc = useLocation();
+  onChange({ pathname: loc.pathname, search: loc.search });
+  return null;
+}
+
+function renderPage(
+  section: SectionDetailT = base,
+  opts: { initialEntries?: string[]; onLocation?: (loc: { pathname: string; search: string }) => void } = {},
+) {
   (api.getSection as ReturnType<typeof vi.fn>).mockResolvedValue(section);
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={["/sections/sec-1"]}>
+      <MemoryRouter initialEntries={opts.initialEntries ?? ["/sections/sec-1"]}>
+        {opts.onLocation && <LocationSpy onChange={opts.onLocation} />}
         <Routes>
           <Route path="/sections/:id" element={<SectionDetail />} />
         </Routes>
@@ -302,6 +314,7 @@ describe("SectionDetail breadcrumb", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    roomsState.rooms = [];
   });
 
   it("shows the folder's ancestor path", async () => {
@@ -329,6 +342,64 @@ describe("SectionDetail breadcrumb", () => {
 
     // A path consisting only of the folder itself says nothing, so nothing is rendered.
     expect(screen.queryByLabelText("Show full folder path")).toBeNull();
+  });
+
+  // The nav's drill position lives in `?in=<id>`; a bare navigate() drops it, popping the left nav back
+  // to the room root behind the page you just opened (useDrillSearch exists precisely to prevent this -
+  // see lib/drillRoute.ts). Regression coverage for that bug.
+  it("keeps the drill position when a crumb is clicked", async () => {
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "customers", name: "Customers", parentId: null, position: 0 },
+      { id: "acme", name: "Acme Corp", parentId: "customers", position: 0 },
+      { id: "sec-1", name: "Project Falcon", parentId: "acme", position: 0 },
+    ]);
+    let location = { pathname: "", search: "" };
+
+    renderPage(
+      { ...base, roomId: "room-1" },
+      { initialEntries: ["/sections/sec-1?in=sec-1"], onLocation: (loc) => (location = loc) },
+    );
+    await loaded();
+
+    fireEvent.click(await screen.findByText("Customers"));
+
+    expect(location.pathname).toBe("/sections/customers");
+    expect(location.search).toBe("?in=sec-1");
+  });
+
+  // Issue #295: a folder page must navigate within its OWN room, not the caller's personal room, even
+  // when reached via the room-less legacy /sections/:id URL. The code is right by construction here (it
+  // reuses roomBasePath, derived from the folder's own room via section.roomId) but this is the first
+  // navigation on this page to depend on that, so it needs its own guard.
+  it("keeps the room prefix when a crumb is clicked in a shared room", async () => {
+    roomsState.rooms = [
+      {
+        id: "shared-1",
+        name: "Eng",
+        kind: 1,
+        icon: null,
+        color: null,
+        isPersonal: false,
+        permissions: RoomPermission.ManageContents,
+        sectionCount: 0,
+        recordingCount: 0,
+      },
+    ];
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "customers", name: "Customers", parentId: null, position: 0 },
+      { id: "sec-1", name: "Acme Corp", parentId: "customers", position: 0 },
+    ]);
+    let location = { pathname: "", search: "" };
+
+    renderPage(
+      { ...base, roomId: "shared-1" },
+      { initialEntries: ["/sections/sec-1"], onLocation: (loc) => (location = loc) },
+    );
+    await loaded();
+
+    fireEvent.click(await screen.findByText("Customers"));
+
+    expect(location.pathname).toBe("/rooms/shared-1/sections/customers");
   });
 });
 

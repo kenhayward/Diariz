@@ -10,6 +10,7 @@ import { useRoom } from "../lib/rooms";
 import { RoomPermission } from "../lib/types";
 import { renderMarkdown } from "../lib/markdown";
 import { breadcrumbOf } from "../lib/drillView";
+import { useDrillSearch } from "../lib/drillRoute";
 import FolderPath from "../components/nav/FolderPath";
 import DetailTabs, { type DetailTab } from "../components/DetailTabs";
 import ToolbarButton, { iconProps } from "../components/ToolbarButton";
@@ -40,6 +41,7 @@ const TAB_KEY = "diariz.sectionTab";
 export default function SectionDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const drillSearch = useDrillSearch();
   const { t, i18n } = useTranslation(["workspace", "common", "recordings"]);
   const qc = useQueryClient();
   // Rows aggregated on this page span many recordings, possibly owned by other room members - each row's
@@ -385,7 +387,11 @@ export default function SectionDetail() {
           <FolderPath
             crumbs={ancestors.map((s) => ({ id: s.id, name: s.name }))}
             maxVisible={4}
-            onSelect={(sectionId) => navigate(`${roomBasePath}/sections/${sectionId}`)}
+            onSelect={(sectionId) =>
+              navigate({ pathname: `${roomBasePath}/sections/${sectionId}`, search: drillSearch })
+            }
+            label={t("workspace:folderPathLabelCurrent")}
+            menuLabel={t("workspace:folderPathMenuCurrent")}
           />
         </div>
       )}
