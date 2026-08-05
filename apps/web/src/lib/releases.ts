@@ -61,14 +61,14 @@ export interface Release {
 export const RELEASES: Release[] = [
   {
     version: "0.178.1",
-    date: "2026-08-04",
+    date: "2026-08-05",
     pr: 446,
     headline: "Folder roll-ups follow the whole folder tree",
     summary:
       "Everything a folder rolls up - its summary, minutes, formula runs, chat context, and the actions, notes and attachments on its page - now follows the folder tree all the way down rather than stopping one level in. With folders limited to two levels those were the same thing, so nothing changes for you today; this is the groundwork for deeper folders. Folder summaries in a shared room also now follow that room's folders rather than your personal ones.",
     fixed: [
       "A folder's page, summary, minutes, formula runs and chat context now include recordings filed in folders further down, not only in its immediate sub-folders.",
-      "Folder summaries in a shared room now resolve that room's folder tree instead of your personal one.",
+      "Folder summaries now resolve their folder tree the same way every other folder roll-up does, keeping them consistent as folders get deeper.",
     ],
   },
   {
