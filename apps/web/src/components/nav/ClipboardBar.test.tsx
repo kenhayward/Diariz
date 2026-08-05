@@ -189,6 +189,22 @@ describe("ClipboardBar", () => {
     expect(screen.getByText("Can't paste a folder into itself.")).toBeTruthy();
   });
 
+  // pasteTarget returns "empty" on `!cut || cut.ids.length === 0` - two separate conditions. This
+  // component's own guard only closes the first (a null cut). A non-null cut with an empty ids array -
+  // which cannot happen through the app's own Cut affordances today, but is only prevented by a guard
+  // outside this component (RecordingsPanel disables its Cut button on an empty selection) - must still
+  // reach a real, disabled, explained Paste control rather than a blank branch.
+  it("disables Paste and shows the reason when the cut carries no ids", () => {
+    renderBar({
+      seed: (c) => c.cutRecordings([], "customers", null),
+      destSectionId: "falcon",
+      destRoomId: null,
+    });
+    const button = screen.getByRole("button", { name: "Paste into Project Falcon" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(screen.getByText("Nothing to paste.")).toBeTruthy();
+  });
+
   it("associates the blocked reason with the Paste control for assistive tech", () => {
     renderBar({
       seed: (c) => c.cutRecordings(["r1"], "customers", null),

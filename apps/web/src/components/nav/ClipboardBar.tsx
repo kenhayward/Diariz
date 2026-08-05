@@ -85,8 +85,14 @@ const BLOCKED_MESSAGE_KEYS: Record<PasteBlockedReason, string> = {
   "shared-room": "clipboardBarBlockedSharedRoom",
   "too-deep": "clipboardBarBlockedTooDeep",
   "into-itself": "clipboardBarBlockedIntoItself",
-  // Unreachable in practice: the bar renders nothing when the clipboard is empty, and that is the only
-  // way `pasteTarget` returns this reason. Mapped anyway so the switch stays total and a future relaxation
-  // of the empty-clipboard guard doesn't ship a blank reason.
+  // `pasteTarget` returns this reason on `!cut || cut.ids.length === 0` - two separate conditions. This
+  // component's own guard above (`if (!cut) return null`) only closes the first one: a non-null cut with
+  // an empty `ids` array still reaches this map and renders a disabled Paste control with this message.
+  // That currently can't happen only because every caller of `cutRecordings`/`cutFolder` guards against
+  // an empty selection before calling it (e.g. `RecordingsPanel.tsx`'s cut button is disabled when
+  // nothing is selected) - an invariant that lives outside this component and outside `pasteTarget`, not
+  // something this file enforces. Mapped (and covered by a render test below) so a future caller that
+  // skips that guard, or a `cutFolder` against a since-deleted id, still shows a real message instead of
+  // a blank branch.
   empty: "clipboardBarBlockedEmpty",
 };
