@@ -38,6 +38,42 @@ public static class SectionTree
         return ids;
     }
 
+    /// <summary>How deep folders may nest. Top-level is depth 1, so 8 means eight levels of folder. A guardrail,
+    /// not a design constraint: it bounds the breadcrumb and the folder pickers, and turns a cycle that somehow
+    /// evaded the descendant check into a rejected request rather than a hung one.</summary>
+    public const int MaxDepth = 8;
+
+    /// <summary>The folder's level, counting top-level as 1. Zero for an id that is not in the list. The visited
+    /// set bounds a <c>ParentId</c> cycle, which the schema does not prevent.</summary>
+    public static int Depth(IReadOnlyCollection<SectionLink> sections, Guid id)
+    {
+        var byId = sections.ToDictionary(s => s.Id);
+        if (!byId.TryGetValue(id, out var current)) return 0;
+
+        var depth = 1;
+        var seen = new HashSet<Guid> { id };
+        while (current.ParentId is Guid parentId && seen.Add(parentId) && byId.TryGetValue(parentId, out current))
+            depth++;
+        return depth;
+    }
+
+    /// <summary>How many levels the subtree rooted here spans, counting the root as 1. Moving a folder moves its
+    /// whole branch, so this is what a reparent has to add to the target's depth.</summary>
+    public static int Height(IReadOnlyCollection<SectionLink> sections, Guid rootId)
+    {
+        var subtree = Subtree(sections, rootId).ToHashSet();
+        var rootDepth = Depth(sections, rootId);
+        if (rootDepth == 0) return 1; // unknown root: it is its own single level
+
+        var deepest = rootDepth;
+        foreach (var id in subtree)
+        {
+            var d = Depth(sections, id);
+            if (d > deepest) deepest = d;
+        }
+        return deepest - rootDepth + 1;
+    }
+
     /// <summary>Every folder link in one room. A room's folder list is small (tens of rows) and already the unit
     /// the nav loads, so pulling it whole and walking it in memory is cheaper than a round trip per level.</summary>
     public static Task<List<SectionLink>> LinksAsync(DiarizDbContext db, Guid roomId, CancellationToken ct) =>
