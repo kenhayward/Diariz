@@ -465,9 +465,8 @@ public class ChatController : ControllerBase
             .FirstOrDefaultAsync(s => s.Id == sectionId && s.RoomId == roomId, ct);
         if (section is null) return null;
 
-        var childIds = await _db.Sections
-            .Where(s => s.RoomId == roomId && s.ParentId == sectionId).Select(s => s.Id).ToListAsync(ct);
-        var allIds = childIds.Append(sectionId).ToList();
+        // The folder and everything beneath it - a parent's chat context spans its whole branch.
+        var allIds = await SectionTree.SubtreeIdsAsync(_db, roomId, sectionId, ct);
 
         var recIds = await _db.RoomRecordings
             .Where(p => p.RoomId == roomId && p.SectionId.HasValue && allIds.Contains(p.SectionId.Value))

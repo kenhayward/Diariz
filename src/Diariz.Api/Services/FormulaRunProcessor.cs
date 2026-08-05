@@ -264,7 +264,7 @@ public static class FormulaRunProcessor
     /// included transcript (map), then run the SAME prompt over the concatenated per-meeting outputs (reduce) to
     /// produce one folder result. The per-meeting map outputs are ephemeral (never persisted) - only the caller's
     /// SectionFormulaResult row is flipped. The included set is resolved room-aware (the section's room + its
-    /// placements), one level of nesting deep, ordered by CreatedAt - mirroring the SectionPage controller. Empty
+    /// placements), spanning the whole subtree, ordered by CreatedAt - mirroring the SectionPage controller. Empty
     /// meetings (no context) are skipped so they neither consume a map call nor pollute the reduce. A single
     /// meeting returns its map output directly (no reduce call); zero meetings throw so the run is marked Failed.</summary>
     internal static async Task<string> RunOverSectionAsync(
@@ -276,11 +276,8 @@ public static class FormulaRunProcessor
             throw new InvalidOperationException("The folder was removed before the run completed.");
 
         var roomId = section.RoomId;
-        // The section id plus its child section ids (within the same room) - the placements that count as included.
-        var includedSectionIds = await db.Sections
-            .Where(s => s.RoomId == roomId && s.ParentId == sectionId)
-            .Select(s => s.Id).ToListAsync(ct);
-        includedSectionIds.Add(sectionId);
+        // The section plus every section beneath it (same room) - the placements that count as included.
+        var includedSectionIds = await SectionTree.SubtreeIdsAsync(db, roomId, sectionId, ct);
 
         // Top-level query (not a filtered Include) so Npgsql and the in-memory provider agree on ordering.
         var recordings = await (

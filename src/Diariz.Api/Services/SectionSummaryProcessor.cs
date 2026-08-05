@@ -72,14 +72,13 @@ public static class SectionSummaryProcessor
         }
     }
 
-    /// <summary>The recordings filed directly under the section or under any of its child sections
-    /// (ownership-scoped). Explicit query (not a filtered Include) so Npgsql and the in-memory provider agree.</summary>
+    /// <summary>The recordings filed under the section or anywhere beneath it. The folder walk is scoped by
+    /// <c>RoomId</c>, matching the other four roll-up sites - it used to be scoped by <c>UserId</c>, which is
+    /// indistinguishable in a personal room at two levels and wrong for a shared room over a deeper tree.
+    /// Explicit query (not a filtered Include) so Npgsql and the in-memory provider agree.</summary>
     internal static async Task<List<RecordingRef>> IncludedRecordingsAsync(DiarizDbContext db, Section section)
     {
-        var allIds = await db.Sections
-            .Where(s => s.UserId == section.UserId && s.ParentId == section.Id)
-            .Select(s => s.Id).ToListAsync();
-        allIds.Add(section.Id);
+        var allIds = await SectionTree.SubtreeIdsAsync(db, section.RoomId, section.Id, default);
         // The folder a recording sits in is now a property of its placement in the owner's personal room. Scope
         // by joining through that room (no RoomScope here - this is a static helper). `SectionId.HasValue &&`
         // guards the `.Value` so ungrouped placements don't throw under the in-memory provider.

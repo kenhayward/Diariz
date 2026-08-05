@@ -621,8 +621,9 @@ default timeout for its header phase and relies on client-disconnect for cancell
 
   **Folder (section) formulas.** The same formulas also run over a **folder and its sub-sections** to produce a
   **`SectionFormulaResult`** (mirrors `FormulaResult`, section-scoped). The run is a **map-reduce**:
-  `FormulaRunProcessor.RunOverSectionAsync` resolves the folder's recording set **room-aware, one level deep**
-  (the section + its direct sub-sections, via `RoomRecordings` placement scoped to `section.RoomId` - the same
+  `FormulaRunProcessor.RunOverSectionAsync` resolves the folder's recording set **room-aware, across the whole
+  subtree** (the section + every folder beneath it, via `SectionTree.SubtreeIdsAsync` and the `RoomRecordings`
+  placement scoped to `section.RoomId` - the same
   resolution the folder read pages use), runs the formula on each included transcript's context (the "map",
   reusing `RunOverRecordingAsync`; empty meetings skipped, and the per-meeting outputs are ephemeral - never
   persisted), then composes the **same** template over the concatenated `## {meeting}` outputs (the
