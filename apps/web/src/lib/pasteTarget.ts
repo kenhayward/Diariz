@@ -12,7 +12,7 @@ import { breadcrumbOf, depthOf, heightOf, MAX_FOLDER_DEPTH } from "./drillView";
 import type { MoveClipboardCut } from "./moveClipboard";
 import type { SectionDto } from "./types";
 
-export type PasteBlockedReason = "same-folder" | "shared-room" | "too-deep" | "into-itself" | "empty";
+export type PasteBlockedReason = "same-folder" | "shared-room" | "cross-room" | "too-deep" | "into-itself" | "empty";
 
 export type PasteTargetResult = { kind: "ok" } | { kind: "blocked"; reason: PasteBlockedReason };
 
@@ -33,6 +33,19 @@ export function pasteTarget(args: PasteTargetArgs): PasteTargetResult {
   const { cut, sections, destSectionId, destRoomId } = args;
 
   if (!cut || cut.ids.length === 0) return { kind: "blocked", reason: "empty" };
+
+  // The clipboard survives a room switch by design, so a cut made in a shared room can reach a paste
+  // attempt back in the *personal* room - the one destination the shared-room blanket rule below does not
+  // touch, since that rule only fires while browsing a shared room (destRoomId !== null). Left unchecked,
+  // such a paste silently resolves server-side to the personal room: a no-op for someone else's recordings
+  // that the client still reads as success and clears the clipboard for, or a real move to the wrong room
+  // for your own. `destRoomId` and `cut.sourceRoomId` both use null for "the personal room", so two nulls
+  // here mean the same room and must fall through as allowed.
+  //
+  // Deliberately narrow: only fires when destRoomId is null. When destRoomId is a shared room, the blanket
+  // shared-room rule below already blocks the paste outright (regardless of source), and that broader,
+  // more explanatory reason should keep winning there - same precedence philosophy as same-folder below.
+  if (destRoomId === null && cut.sourceRoomId !== null) return { kind: "blocked", reason: "cross-room" };
 
   // Blanket rule, independent of source: browsing any shared room disables paste outright. Checked before
   // same-folder deliberately - shared-room is a property of *where you are* (the whole destination is

@@ -404,6 +404,7 @@
   "clipboardBarPasteInto": "Einfügen in {{name}}",
   "clipboardBarBlockedSameFolder": "Dies ist bereits der aktuelle Ort.",
   "clipboardBarBlockedSharedRoom": "Einfügen in einen gemeinsamen Raum ist nicht möglich.",
+  "clipboardBarBlockedCrossRoom": "Dies wurde aus einem anderen Raum ausgeschnitten.",
   "clipboardBarBlockedTooDeep": "Dies würde Ordner zu tief verschachteln.",
   "clipboardBarBlockedIntoItself": "Ein Ordner kann nicht in sich selbst eingefügt werden.",
   "clipboardBarBlockedEmpty": "Nichts zum Einfügen.",

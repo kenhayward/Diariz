@@ -149,6 +149,17 @@ describe("ClipboardBar", () => {
     expect(screen.getByText("Can't paste into a shared room.")).toBeTruthy();
   });
 
+  it("disables Paste and shows the reason for a cut from a shared room pasted into the personal room", () => {
+    renderBar({
+      seed: (c) => c.cutRecordings(["r1"], "customers", "eng-room"),
+      destSectionId: "falcon",
+      destRoomId: null,
+    });
+    const button = screen.getByRole("button", { name: "Paste into Project Falcon" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(screen.getByText("This was cut from a different room.")).toBeTruthy();
+  });
+
   it("disables Paste and shows the reason when a folder move goes too deep", () => {
     const deepSections: SectionDto[] = [
       { id: "d0", name: "D0", parentId: null, position: 0 },

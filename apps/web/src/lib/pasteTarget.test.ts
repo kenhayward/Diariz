@@ -157,4 +157,59 @@ describe("pasteTarget", () => {
     const cut = folderCut("customers", null);
     expect(pasteTarget({ cut, sections, destSectionId: "d5", destRoomId: null })).toEqual({ kind: "ok" });
   });
+
+  // The clipboard survives a room switch by design, so a cut made in a shared room can reach a paste
+  // attempt back in the *personal* room - the one destination the shared-room blanket rule below does not
+  // touch, since that rule only fires while browsing a shared room (destRoomId !== null). Without this
+  // check the paste silently resolves server-side to the personal room: a no-op for someone else's
+  // recordings that the client still reads as success and clears the clipboard for, or a real move to the
+  // wrong room for your own.
+  describe("cross-room", () => {
+    it("blocks with 'cross-room' when a cut from a shared room is pasted into the personal room", () => {
+      const cut = recordingsCut("customers", "room-2");
+      expect(pasteTarget({ cut, sections, destSectionId: "ambu", destRoomId: null })).toEqual({
+        kind: "blocked",
+        reason: "cross-room",
+      });
+    });
+
+    it("blocks with 'cross-room' for a folder cut from a shared room pasted into the personal room", () => {
+      const cut = folderCut("podcasts", null, "room-2");
+      expect(pasteTarget({ cut, sections, destSectionId: "customers", destRoomId: null })).toEqual({
+        kind: "blocked",
+        reason: "cross-room",
+      });
+    });
+
+    // Two nulls mean the same room (personal to personal) and must stay allowed.
+    it("allows a personal-room cut pasted into the personal room (both sides null)", () => {
+      const cut = recordingsCut("customers", null);
+      expect(pasteTarget({ cut, sections, destSectionId: "ambu", destRoomId: null })).toEqual({ kind: "ok" });
+    });
+
+    // The other direction: pasting a personal-room cut while browsing a shared room. Deliberate choice -
+    // the broader, blanket 'shared-room' reason still wins here, the same "broader reason wins" precedence
+    // already used for same-folder above - destRoomId !== null already makes the whole destination
+    // off-limits regardless of where the cut came from, so 'cross-room' is reserved for the one gap the
+    // blanket rule does not cover: a null (personal) destination.
+    it("blocks with 'shared-room', not 'cross-room', when a personal cut is pasted into a shared room", () => {
+      const cut = recordingsCut("customers", null);
+      expect(pasteTarget({ cut, sections, destSectionId: "ambu", destRoomId: "room-2" })).toEqual({
+        kind: "blocked",
+        reason: "shared-room",
+      });
+    });
+
+    // Regression: pasting back into the very shared room a cut came from is still blocked today (cut/paste
+    // is not wired up for shared rooms yet - see releases.ts) - and must still be blocked for the
+    // pre-existing 'shared-room' reason, not newly allowed and not relabeled 'cross-room' just because the
+    // source and destination room ids happen to match.
+    it("blocks with 'shared-room' when a shared-room cut is pasted back into that same shared room", () => {
+      const cut = recordingsCut("customers", "room-2");
+      expect(pasteTarget({ cut, sections, destSectionId: "ambu", destRoomId: "room-2" })).toEqual({
+        kind: "blocked",
+        reason: "shared-room",
+      });
+    });
+  });
 });

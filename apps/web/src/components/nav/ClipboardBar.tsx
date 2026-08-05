@@ -85,6 +85,7 @@ export default function ClipboardBar({
 const BLOCKED_MESSAGE_KEYS: Record<PasteBlockedReason, string> = {
   "same-folder": "clipboardBarBlockedSameFolder",
   "shared-room": "clipboardBarBlockedSharedRoom",
+  "cross-room": "clipboardBarBlockedCrossRoom",
   "too-deep": "clipboardBarBlockedTooDeep",
   "into-itself": "clipboardBarBlockedIntoItself",
   // `pasteTarget` returns this reason on `!cut || cut.ids.length === 0` - two separate conditions. This

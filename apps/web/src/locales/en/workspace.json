@@ -404,6 +404,7 @@
   "clipboardBarPasteInto": "Paste into {{name}}",
   "clipboardBarBlockedSameFolder": "This is already the current location.",
   "clipboardBarBlockedSharedRoom": "Can't paste into a shared room.",
+  "clipboardBarBlockedCrossRoom": "This was cut from a different room.",
   "clipboardBarBlockedTooDeep": "This would nest folders too deep.",
   "clipboardBarBlockedIntoItself": "Can't paste a folder into itself.",
   "clipboardBarBlockedEmpty": "Nothing to paste.",

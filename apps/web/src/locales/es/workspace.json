@@ -404,6 +404,7 @@
   "clipboardBarPasteInto": "Pegar en {{name}}",
   "clipboardBarBlockedSameFolder": "Esta ya es la ubicación actual.",
   "clipboardBarBlockedSharedRoom": "No se puede pegar en una sala compartida.",
+  "clipboardBarBlockedCrossRoom": "Esto se cortó desde otra sala.",
   "clipboardBarBlockedTooDeep": "Esto anidaría las carpetas demasiado profundo.",
   "clipboardBarBlockedIntoItself": "No se puede pegar una carpeta dentro de sí misma.",
   "clipboardBarBlockedEmpty": "No hay nada que pegar.",

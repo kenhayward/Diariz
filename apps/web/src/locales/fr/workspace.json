@@ -404,6 +404,7 @@
   "clipboardBarPasteInto": "Coller dans {{name}}",
   "clipboardBarBlockedSameFolder": "C'est déjà l'emplacement actuel.",
   "clipboardBarBlockedSharedRoom": "Impossible de coller dans une salle partagée.",
+  "clipboardBarBlockedCrossRoom": "Ceci a été coupé depuis une autre salle.",
   "clipboardBarBlockedTooDeep": "Cela imbriquerait les dossiers trop profondément.",
   "clipboardBarBlockedIntoItself": "Impossible de coller un dossier dans lui-même.",
   "clipboardBarBlockedEmpty": "Rien à coller.",
