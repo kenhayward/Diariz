@@ -47,8 +47,8 @@ public class SectionsController : ControllerBase
     [EndpointSummary("List folders")]
     [EndpointDescription(
         "The folder tree of one room, flat and in display order. Defaults to your personal room; pass `roomId` " +
-        "for a shared room you belong to. Build the tree from `parentId` - null means top level, and nesting " +
-        "only ever goes **one level deep**, so a folder with a parent can never have children of its own.\n\n" +
+        "for a shared room you belong to. Build the tree from `parentId` - null means top level, and folders " +
+        "nest up to **8 levels** deep.\n\n" +
         "Each room has its own independent folders. A non-member gets 404 rather than learning the room exists.")]
     public async Task<ActionResult<IReadOnlyList<SectionDto>>> List([FromQuery] Guid? roomId = null)
     {
@@ -71,7 +71,7 @@ public class SectionsController : ControllerBase
         "folder with the same name already exists under the same parent, that one is returned instead of a " +
         "duplicate being created - so re-running an import does not litter the tree. Compare the returned id " +
         "with what you expected if that matters to you.\n\n" +
-        "Nesting is capped at one level, so a parent that is itself a sub-folder is rejected with 400. Needs " +
+        "Folders nest up to **8 levels** deep (top level counts as 1); going deeper is rejected with 400. Needs " +
         "`ManageContents` in the room; you always hold it in your own personal room.")]
     public async Task<ActionResult<SectionDto>> Create(CreateSectionRequest req, CancellationToken ct = default)
     {
@@ -81,12 +81,14 @@ public class SectionsController : ControllerBase
         var (roomId, error) = await AuthorizeManage(req.RoomId, ct);
         if (error is not null) return error;
 
-        // A sub-section's parent must be in the caller's room and must itself be top-level (two-level cap).
+        // The parent must be in the caller's room, and adding a level beneath it must stay within MaxDepth.
         if (req.ParentId is { } parentId)
         {
             var parent = await _db.Sections.FirstOrDefaultAsync(s => s.Id == parentId && s.RoomId == roomId);
             if (parent is null) return NotFound();
-            if (parent.ParentId is not null) return BadRequest("Sections can only be nested one level deep.");
+            var links = await SectionTree.LinksAsync(_db, roomId, ct);
+            if (SectionTree.Depth(links, parentId) >= SectionTree.MaxDepth)
+                return BadRequest($"Folders can only be nested {SectionTree.MaxDepth} levels deep.");
         }
 
         // Reuse an existing same-named section under the same parent rather than creating a duplicate.

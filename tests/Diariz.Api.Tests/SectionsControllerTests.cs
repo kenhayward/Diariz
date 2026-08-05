@@ -208,14 +208,31 @@ public class SectionsControllerTests
     }
 
     [Fact]
-    public async Task Create_UnderASubSection_RejectsThirdLevel()
+    public async Task Create_UnderASubSection_NowNestsAThirdLevel()
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var parent = await SeedSection(db, userId, "Customers");
         var child = await SeedSection(db, userId, "Acme", parentId: parent.Id);
 
-        var result = await Build(db, userId).Create(new CreateSectionRequest("Project X", child.Id));
+        var result = await Build(db, userId).Create(new CreateSectionRequest("Project Falcon", child.Id));
+
+        var dto = Assert.IsType<SectionDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(child.Id, dto.ParentId);
+    }
+
+    [Fact]
+    public async Task Create_BeyondMaxDepth_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+
+        // Build a chain exactly MaxDepth deep, then try to add one more under the deepest.
+        Guid? parentId = null;
+        for (var i = 0; i < SectionTree.MaxDepth; i++)
+            parentId = (await SeedSection(db, userId, $"L{i}", parentId)).Id;
+
+        var result = await Build(db, userId).Create(new CreateSectionRequest("TooDeep", parentId));
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
