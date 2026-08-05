@@ -1,17 +1,18 @@
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { breadcrumbOf } from "../../lib/drillView";
 import { useDrillSearch } from "../../lib/drillRoute";
 import { sectionColor } from "../../lib/sectionColors";
 import { ArrowLeftIcon, FolderIcon } from "../icons";
+import FolderPath from "./FolderPath";
 import type { SectionDto } from "../../lib/types";
 
-/// The drill-in list's header row: a back button, the current folder over the parent you'd pop to, and a
-/// link to the folder's own page.
+/// The drill-in list's header row: a back button, the folder path, and a menu carrying the full ancestor
+/// chain plus a link to the folder's own page.
 ///
-/// Those last two are deliberately **distinct targets** and must stay that way: a folder row's body
-/// browses deeper (`onDrill`), while "Open section page" navigates the middle panel to the folder itself.
-/// Collapsing them would make it impossible to reach a folder's page once you'd drilled into it.
+/// Clicking a crumb and "Open section page" are deliberately **distinct targets** and must stay that way: a
+/// crumb browses to that level (`onDrill`), while "Open section page" navigates the middle panel to the
+/// folder itself. Collapsing them would make it impossible to reach a folder's page once you had drilled in.
 ///
 /// Renders nothing at the room's top level - there is nowhere to go back to, and no page to open.
 export default function DrillBreadcrumb({
@@ -19,13 +20,17 @@ export default function DrillBreadcrumb({
   sectionId,
   basePath,
   onDrill,
+  onRecordingDrop,
 }: {
   sections: SectionDto[];
   sectionId: string | null;
   basePath: string;
   onDrill: (sectionId: string | null) => void;
+  /// A recording dragged onto an ancestor crumb - moves it up without engaging a modal.
+  onRecordingDrop?: (sectionId: string, recordingId: string) => void;
 }) {
   const { t } = useTranslation("workspace");
+  const navigate = useNavigate();
   const drillSearch = useDrillSearch();
   if (sectionId === null) return null;
 
@@ -37,44 +42,43 @@ export default function DrillBreadcrumb({
   const color = sectionColor(sectionId);
 
   return (
-    <div className="flex items-start gap-2 border-b px-2 py-2 dark:border-gray-800">
+    <div className="flex items-center gap-1.5 border-b px-2 py-2 dark:border-gray-800">
       <button
         type="button"
         aria-label={t("drillBack")}
         onClick={() => onDrill(parent?.id ?? null)}
-        className="mt-0.5 shrink-0 rounded border p-1 text-gray-500 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800"
+        className="shrink-0 rounded border p-1 text-gray-500 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800"
       >
         <ArrowLeftIcon size={14} />
       </button>
 
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[11px] leading-tight text-gray-500 dark:text-gray-400">
-          {parent ? parent.name : t("drillAllSections")}
-        </p>
-        <p className="flex min-w-0 items-center gap-1 text-[13.5px] font-semibold leading-tight text-gray-900 dark:text-gray-100">
-          {/* Only the glyph is section-coloured here; the name stays foreground text, since at 13.5px
-              semibold the palette colour on white fails contrast. */}
-          <span
-            style={{ "--sc-light": color.light, "--sc-dark": color.dark } as React.CSSProperties}
-            className="shrink-0 text-[var(--sc-light)] dark:text-[var(--sc-dark)]"
-          >
-            <FolderIcon size={14} />
-          </span>
-          <span className="truncate">{current?.name ?? ""}</span>
-        </p>
-      </div>
+      <span
+        style={{ "--sc-light": color.light, "--sc-dark": color.dark } as React.CSSProperties}
+        className="shrink-0 text-[var(--sc-light)] dark:text-[var(--sc-dark)]"
+      >
+        <FolderIcon size={14} />
+      </span>
 
-      {current && (
-        // Carry the drill across: a bare path would drop `?in=`, popping the list back to the root
-        // behind the very page you just opened. Opening a folder's page and browsing it are independent
-        // - that is the whole point of keeping them as separate targets.
-        <Link
-          to={{ pathname: `${basePath}/sections/${current.id}`, search: drillSearch }}
-          className="mt-0.5 shrink-0 text-[11px] text-blue-600 hover:underline dark:text-blue-400"
-        >
-          {t("drillOpenSectionPage")}
-        </Link>
-      )}
+      {/* Clicking a crumb DRILLS to that level; "Open section page" (in the menu) navigates the middle
+          panel. Those stay distinct targets - collapsing them would make a folder's page unreachable once
+          you had drilled into it. The page link carries `?in=` so opening it does not pop the list home. */}
+      <FolderPath
+        crumbs={chain.map((s) => ({ id: s.id, name: s.name }))}
+        maxVisible={2}
+        onSelect={(id) => onDrill(id)}
+        onCrumbDrop={onRecordingDrop}
+        extraItems={
+          current
+            ? [
+                {
+                  label: t("drillOpenSectionPage"),
+                  onClick: () =>
+                    navigate({ pathname: `${basePath}/sections/${current.id}`, search: drillSearch }),
+                },
+              ]
+            : []
+        }
+      />
     </div>
   );
 }
