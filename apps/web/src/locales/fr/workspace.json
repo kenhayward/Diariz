@@ -410,6 +410,7 @@
   "drillDirectlyIn": "Directement dans {{name}}",
   "drillOpenFolder": "Ouvrir {{name}}",
   "drillEmpty": "Ce dossier est vide.",
+  "folderPathLabel": "Chemin du dossier",
   "folderPathMenu": "Afficher le chemin complet du dossier",
   "folderPathCollapsed": "Dossiers masqués",
   "selectAllIn": "Tout sélectionner dans {{section}}",

@@ -410,6 +410,7 @@
   "drillDirectlyIn": "Direkt in {{name}}",
   "drillOpenFolder": "{{name}} öffnen",
   "drillEmpty": "Dieser Ordner ist leer.",
+  "folderPathLabel": "Ordnerpfad",
   "folderPathMenu": "Vollständigen Ordnerpfad anzeigen",
   "folderPathCollapsed": "Ausgeblendete Ordner",
   "selectAllIn": "Alle in {{section}} auswählen",

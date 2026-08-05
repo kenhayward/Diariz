@@ -54,7 +54,10 @@ export default function FolderPath({
 
   return (
     <div ref={wrapRef} className="relative flex min-w-0 flex-1 items-center gap-0.5">
-      <nav className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden">
+      <nav
+        aria-label={t("folderPathLabel")}
+        className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden"
+      >
         {segments.map((seg, i) => (
           <span key={seg === "ellipsis" ? `gap-${i}` : seg.id} className="flex min-w-0 items-center gap-0.5">
             {i > 0 && (

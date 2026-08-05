@@ -410,6 +410,7 @@
   "drillDirectlyIn": "Directamente en {{name}}",
   "drillOpenFolder": "Abrir {{name}}",
   "drillEmpty": "Esta carpeta está vacía.",
+  "folderPathLabel": "Ruta de la carpeta",
   "folderPathMenu": "Mostrar ruta completa de la carpeta",
   "folderPathCollapsed": "Carpetas ocultas",
   "selectAllIn": "Seleccionar todo en {{section}}",
