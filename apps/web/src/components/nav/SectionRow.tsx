@@ -106,11 +106,16 @@ export default function SectionRow({
 
   return (
     <div
+      // `outline` (not `border`) for the cut indicator, deliberately: this row already carries its own
+      // `border-b dark:border-gray-800`, and a second `border`/`dark:border-*` utility for the cut colour
+      // would fight that one for the same CSS property with the winner decided by stylesheet generation
+      // order, not by anything here. `outline` is a separate property, so the dashed ring never competes
+      // with the row's own border.
       className={`flex items-center gap-1 border-b py-1.5 pl-2 pr-1 dark:border-gray-800 ${
         active
           ? "bg-blue-50 dark:bg-blue-900/30"
           : "hover:bg-gray-50 dark:hover:bg-gray-800/60"
-      } ${cut ? "opacity-50 rounded border border-dashed border-gray-400 dark:border-gray-600" : ""}`}
+      } ${cut ? "opacity-50 rounded outline outline-dashed outline-1 outline-gray-400 dark:outline-gray-600" : ""}`}
       draggable={!renaming}
       onDragStart={(e) => {
         e.dataTransfer.setData(SECTION_MIME, id);
@@ -137,6 +142,9 @@ export default function SectionRow({
         <SectionRenameForm initial={name} onSave={save} onCancel={() => setRenaming(false)} />
       ) : (
         <>
+          {/* Colour/opacity alone would leave a screen-reader user unable to tell which folder is cut - the
+              clipboard bar's count says something is cut, never which. */}
+          {cut && <span className="sr-only">{t("cutPendingPasteAria")}</span>}
           {/* The section's colour differs per theme, so it rides in as CSS custom properties and the
               dark: variant picks the arm. One text node, not a light/dark pair — duplicating the name in
               the DOM would have a screen reader read every folder twice. The glyph inherits currentColor. */}

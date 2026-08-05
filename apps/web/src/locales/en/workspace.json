@@ -407,6 +407,7 @@
   "clipboardBarBlockedTooDeep": "This would nest folders too deep.",
   "clipboardBarBlockedIntoItself": "Can't paste a folder into itself.",
   "clipboardBarBlockedEmpty": "Nothing to paste.",
+  "cutPendingPasteAria": "Cut, pending paste",
   "uploadQueued": "Queued",
   "uploadUploading": "Uploading…",
   "uploadDone": "✓ Done",

@@ -15,8 +15,10 @@ import type { SectionDto } from "../../lib/types";
 /// component owns the mapping from `pasteTarget`'s reason codes to translated messages; `pasteTarget`
 /// itself stays free of prose so it can be tested exhaustively without a translation catalogue.
 ///
-/// Does not perform the paste and is not mounted anywhere yet - it only calls `onPaste`, leaving the
-/// actual move (and where this bar lives in the panel) to a later task.
+/// Does not perform the paste itself - it only calls `onPaste`. Mounted in `RecordingsPanel.tsx`, right
+/// after `DrillBreadcrumb`, whose `pasteClipboard()` is the actual move: the bulk recordings endpoint or
+/// `reorderSections` depending on the clipboard's kind (see that function for the ordering rule and the
+/// keep-the-clipboard-on-failure behaviour).
 export default function ClipboardBar({
   sections,
   destSectionId,

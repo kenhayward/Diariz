@@ -407,6 +407,7 @@
   "clipboardBarBlockedTooDeep": "Cela imbriquerait les dossiers trop profondément.",
   "clipboardBarBlockedIntoItself": "Impossible de coller un dossier dans lui-même.",
   "clipboardBarBlockedEmpty": "Rien à coller.",
+  "cutPendingPasteAria": "Coupé, collage en attente",
   "uploadQueued": "En file",
   "uploadUploading": "Importation…",
   "uploadDone": "✓ Terminé",

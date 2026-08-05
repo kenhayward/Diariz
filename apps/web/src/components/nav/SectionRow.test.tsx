@@ -94,18 +94,33 @@ describe("SectionRow", () => {
   });
 
   // Cut is a pending state, not a removal - the row stays, greyed with a dashed outline, so cancelling or
-  // navigating away leaves no ambiguity about whether the move actually happened.
+  // navigating away leaves no ambiguity about whether the move actually happened. An `outline`, not a
+  // `border`: this row already carries its own `border-b dark:border-gray-800`, and a second border-colour
+  // utility would fight that one for the same CSS property with the winner decided by stylesheet
+  // generation order rather than anything visible here.
   it("greys out the row with a dashed outline when it is the clipboard's cut folder", () => {
     renderRow("customers", noop, { cut: true });
     const row = screen.getByText("Ambu").closest("div")!;
     expect(row.className).toContain("opacity-50");
-    expect(row.className).toContain("border-dashed");
+    expect(row.className).toContain("outline-dashed");
   });
 
   it("does not grey out the row when it has not been cut", () => {
     renderRow("customers", noop);
     const row = screen.getByText("Ambu").closest("div")!;
     expect(row.className).not.toContain("opacity-50");
-    expect(row.className).not.toContain("border-dashed");
+    expect(row.className).not.toContain("outline-dashed");
+  });
+
+  // Colour/opacity alone would leave a screen-reader user unable to tell WHICH folder is cut - the
+  // clipboard bar's own count only says something is cut, never which row.
+  it("carries a non-visual cue for a cut folder, for screen readers", () => {
+    renderRow("customers", noop, { cut: true });
+    expect(screen.getByText("Cut, pending paste")).toBeTruthy();
+  });
+
+  it("carries no cut cue when the folder has not been cut", () => {
+    renderRow("customers", noop);
+    expect(screen.queryByText("Cut, pending paste")).toBeNull();
   });
 });

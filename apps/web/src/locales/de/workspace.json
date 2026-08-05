@@ -407,6 +407,7 @@
   "clipboardBarBlockedTooDeep": "Dies würde Ordner zu tief verschachteln.",
   "clipboardBarBlockedIntoItself": "Ein Ordner kann nicht in sich selbst eingefügt werden.",
   "clipboardBarBlockedEmpty": "Nichts zum Einfügen.",
+  "cutPendingPasteAria": "Ausgeschnitten, Einfügen ausstehend",
   "uploadQueued": "In Warteschlange",
   "uploadUploading": "Wird hochgeladen…",
   "uploadDone": "✓ Fertig",

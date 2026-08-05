@@ -407,6 +407,7 @@
   "clipboardBarBlockedTooDeep": "Esto anidaría las carpetas demasiado profundo.",
   "clipboardBarBlockedIntoItself": "No se puede pegar una carpeta dentro de sí misma.",
   "clipboardBarBlockedEmpty": "No hay nada que pegar.",
+  "cutPendingPasteAria": "Cortado, pendiente de pegar",
   "uploadQueued": "En cola",
   "uploadUploading": "Subiendo…",
   "uploadDone": "✓ Listo",

@@ -423,7 +423,10 @@ describe("RecordingsPanel", () => {
     });
 
     // Cut items are greyed with a dashed outline, not removed - nothing has happened yet, and removing the
-    // row would read as "the move already happened" even if the user cancels or navigates away before pasting.
+    // row would read as "the move already happened" even if the user cancels or navigates away before
+    // pasting. An `outline`, not a `border`: this row sits inside a `divide-y` list, whose own divider rule
+    // targets `border-*` on every child - a border-based cut colour would be at the mercy of that rule
+    // rather than reliably visible.
     it("greys out a cut recording's row with a dashed outline, without removing it", async () => {
       renderListWithClipboardSpy("/?in=customers", () => {});
       await screen.findByText("Account review");
@@ -436,7 +439,21 @@ describe("RecordingsPanel", () => {
 
       const after = screen.getByText("Account review").closest("li")!; // still rendered - not removed
       expect(after.className).toContain("opacity-50");
-      expect(after.className).toContain("border-dashed");
+      expect(after.className).toContain("outline-dashed");
+    });
+
+    // Colour/opacity alone would leave a screen-reader user unable to tell WHICH row is cut - the clipboard
+    // bar's own count only says something is cut, never which.
+    it("carries a non-visual cue for a cut recording, for screen readers", async () => {
+      renderListWithClipboardSpy("/?in=customers", () => {});
+      await screen.findByText("Account review");
+      expect(screen.queryByText("Cut, pending paste")).toBeNull();
+
+      fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
+      fireEvent.click(screen.getByRole("checkbox", { name: /account review/i }));
+      fireEvent.click(screen.getByRole("button", { name: /^cut$/i }));
+
+      expect(screen.getByText("Cut, pending paste")).toBeTruthy();
     });
 
     it("greys out a cut folder's row with a dashed outline, without removing it", async () => {
@@ -450,7 +467,7 @@ describe("RecordingsPanel", () => {
 
       const after = screen.getByText("Ambu").closest("div")!; // still rendered - not removed
       expect(after.className).toContain("opacity-50");
-      expect(after.className).toContain("border-dashed");
+      expect(after.className).toContain("outline-dashed");
     });
 
     it("pastes cut recordings via the bulk move endpoint, into the drilled-into destination, then clears the clipboard", async () => {
@@ -468,6 +485,49 @@ describe("RecordingsPanel", () => {
 
       await waitFor(() => expect(api.moveRecordingsBulk).toHaveBeenCalledWith(["root-r"], "customers", undefined));
       expect(cut).toBeNull(); // the clipboard is cleared once the paste succeeds
+    });
+
+    // A paste of several recordings must be one bulk request, not one per id - the whole point of the new
+    // endpoint (see Task 1) is to avoid N round trips with partial-failure states. A test that only cuts one
+    // id can't tell a single bulk call apart from a per-id loop; this one cuts two.
+    it("pastes multiple cut recordings in one bulk call, not one request per recording", async () => {
+      (api.moveRecordingsBulk as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+      (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { ...rec, id: "a", name: "First", sectionId: null, sectionName: null },
+        { ...rec, id: "b", name: "Second", sectionId: null, sectionName: null },
+      ]);
+      renderListWithClipboardSpy("/", () => {});
+      await screen.findByText("First");
+      fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
+      fireEvent.click(screen.getByRole("checkbox", { name: /select first/i }));
+      fireEvent.click(screen.getByRole("checkbox", { name: /select second/i }));
+      fireEvent.click(screen.getByRole("button", { name: /^cut$/i }));
+
+      fireEvent.click(screen.getByRole("button", { name: /open customers/i }));
+      fireEvent.click(await screen.findByRole("button", { name: /paste into customers/i }));
+
+      await waitFor(() => expect(api.moveRecordingsBulk).toHaveBeenCalledTimes(1));
+      expect(api.moveRecordingsBulk).toHaveBeenCalledWith(["a", "b"], "customers", undefined);
+    });
+
+    // The product decision is "preserving relative order" - which has to mean the order the rows are
+    // SHOWN in, not the order they happen to be ticked in. Tick "Second" before "First" here; the clipboard
+    // must still list them in display order, or a paste after an out-of-order selection would silently
+    // reverse (part of) the list.
+    it("keeps the source list's display order on the clipboard even when rows are ticked out of order", async () => {
+      (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { ...rec, id: "a", name: "First", sectionId: null, sectionName: null },
+        { ...rec, id: "b", name: "Second", sectionId: null, sectionName: null },
+      ]);
+      let cut: MoveClipboardCut | null = null;
+      renderListWithClipboardSpy("/", (c) => (cut = c));
+      await screen.findByText("First");
+      fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
+      fireEvent.click(screen.getByRole("checkbox", { name: /select second/i })); // ticked first
+      fireEvent.click(screen.getByRole("checkbox", { name: /select first/i })); // ticked second
+      fireEvent.click(screen.getByRole("button", { name: /^cut$/i }));
+
+      expect(cut).toEqual({ kind: "recordings", ids: ["a", "b"], sourceSectionId: null, sourceRoomId: null });
     });
 
     it("pastes a cut folder via reorderSections, appended after the target's existing children", async () => {
@@ -511,6 +571,31 @@ describe("RecordingsPanel", () => {
 
       expect(await screen.findByText(/paste boom/i)).toBeTruthy();
       expect(cut).toEqual({ kind: "recordings", ids: ["root-r"], sourceSectionId: null, sourceRoomId: null }); // not cleared
+    });
+
+    // The clipboard bar stays visible while searching (it survives navigation, same as the breadcrumb), so
+    // a paste can fail while the list body is showing search results instead of the drilled-in list. The
+    // error banner used to live inside the `{!searching}` block with that list, so a failed paste during a
+    // search produced a click that visibly did nothing - the banner must be exactly as persistent as the
+    // control that can produce it.
+    it("shows the paste error even while a search query is active", async () => {
+      (api.moveRecordingsBulk as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("paste boom"));
+      renderListWithClipboardSpy("/", () => {});
+      await screen.findByText("Loose one");
+      fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
+      fireEvent.click(screen.getByRole("checkbox", { name: /loose one/i }));
+      fireEvent.click(screen.getByRole("button", { name: /^cut$/i }));
+      fireEvent.click(screen.getByRole("button", { name: /open customers/i }));
+      await screen.findByText("Account review"); // the item directly in Customers, at this drill level
+
+      fireEvent.change(screen.getByRole("searchbox"), { target: { value: "budget" } });
+      // Confirms the list body really did switch to search results (the drilled-in list, and its own
+      // content, is gone) - otherwise this test would pass for the wrong reason.
+      await waitFor(() => expect(screen.queryByText("Account review")).toBeNull());
+
+      fireEvent.click(await screen.findByRole("button", { name: /paste into customers/i }));
+
+      expect(await screen.findByText(/paste boom/i)).toBeTruthy();
     });
 
     // The crumb-drop fix: dropping onto an ancestor crumb used to pass an empty id list, which landed the

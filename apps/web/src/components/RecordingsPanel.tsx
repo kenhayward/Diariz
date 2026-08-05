@@ -265,6 +265,10 @@ export default function RecordingsPanel() {
       if (cut.kind === "recordings") {
         await api.moveRecordingsBulk(cut.ids, drill.sectionId, aggRoomId);
       } else {
+        // cut.ids[0]: cutFolder always stores exactly one id - folders are cut one at a time, there is no
+        // folder multi-select (see moveClipboard.tsx). pasteTarget still loops over cut.ids for the
+        // "folders" kind, so the two sides would disagree the moment a future multi-select folder cut
+        // exists; if that ever changes, this line needs to become a loop too.
         const payload = appendSectionUnder(sections, cut.ids[0], drill.sectionId);
         await api.reorderSections(payload.parentId, payload.orderedIds, aggRoomId);
       }
@@ -431,6 +435,11 @@ export default function RecordingsPanel() {
               destRoomId={aggRoomId ?? null}
               onPaste={pasteClipboard}
             />
+            {/* Hoisted above the search guard, same as the bar above it: a paste (from this bar) can fail
+                while the list body is showing search results, and the error must be exactly as reachable
+                as the control that produced it - a click that silently does nothing is worse than an
+                error the user has to scroll past. */}
+            {opError && <p className="px-3 py-1 text-xs text-red-600 dark:text-red-400">{opError}</p>}
             {/* The results replace the list body outright rather than hiding it: nothing below is reachable
                 or readable during a search, and clearing rebuilds it from the URL anyway. */}
             {!searching && (
@@ -461,7 +470,6 @@ export default function RecordingsPanel() {
               {recordings.length === 0 && !dragging && (
                 <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("noRecordings")}</p>
               )}
-              {opError && <p className="px-3 py-1 text-xs text-red-600 dark:text-red-400">{opError}</p>}
 
               {level.sections.map((node) => (
                 <SectionRow
@@ -796,9 +804,17 @@ function ListToolbar({
   // Stages the selection on the move clipboard - nothing touches the server here. The source recorded is
   // this drill level (not the selected recordings' own sectionId, which would be the same thing at this
   // level anyway) so a later paste onto the same folder can be detected and disabled.
+  //
+  // selectedIds is in TICK order (checkbox toggles append), not display order - ticking the third row then
+  // the first would otherwise cut them third-then-first. The product decision is that a paste "preserves
+  // relative order", which has to mean the order the rows are shown in, not the order they were clicked -
+  // so re-sort into `recordings`' own order (the API already returns it in display/position order, the
+  // same order the rows render in) before it ever reaches the clipboard.
   function cutSelected() {
     if (selectedIds.length === 0) return;
-    cutRecordings(selectedIds, drillSectionId, roomId ?? null);
+    const displayIndex = new Map(recordings.map((r, i) => [r.id, i]));
+    const ordered = [...selectedIds].sort((a, b) => (displayIndex.get(a) ?? 0) - (displayIndex.get(b) ?? 0));
+    cutRecordings(ordered, drillSectionId, roomId ?? null);
   }
 
   return (
@@ -1205,7 +1221,12 @@ export function RecordingRow({
     // disabled while renaming so text can be selected in the input. The inner NavLink keeps draggable=false
     // so grabbing the name still drags the row, not the link.
     <li
-      className={`py-0.5 pr-3 ${indentClass} ${cut ? "opacity-50 rounded border border-dashed border-gray-400 dark:border-gray-600" : ""}`}
+      // `outline` (not `border`) for the cut indicator: this row sits inside a `divide-y` list, whose
+      // divider rule targets `border-*` on every child via a compound selector that would outrank (or,
+      // for the dark-mode colour, race on stylesheet order against) a plain border class here regardless
+      // of class-attribute order. `outline` is a separate CSS property the divider never touches, so the
+      // dashed ring is guaranteed visible rather than winning by luck.
+      className={`py-0.5 pr-3 ${indentClass} ${cut ? "opacity-50 rounded outline outline-dashed outline-1 outline-gray-400 dark:outline-gray-600" : ""}`}
       draggable={!renaming}
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", r.id);
@@ -1219,6 +1240,9 @@ export function RecordingRow({
         onDropBefore(e.dataTransfer.getData("text/plain"));
       }}
     >
+      {/* Colour/opacity alone would leave a screen-reader user unable to tell which rows are cut - the
+          bar's count says something is cut, never which. */}
+      {cut && <span className="sr-only">{t("workspace:cutPendingPasteAria")}</span>}
       <div className="flex items-center justify-between gap-1">
         {selectMode && (
           <input
