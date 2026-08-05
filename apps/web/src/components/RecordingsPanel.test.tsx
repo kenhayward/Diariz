@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -37,6 +37,7 @@ vi.mock("../lib/api", () => ({
     mergeRecordings: vi.fn(),
     renameRecording: vi.fn(),
     moveRecording: vi.fn(),
+    moveRecordingsBulk: vi.fn(),
     renameSection: vi.fn(),
     deleteSection: vi.fn(),
     reorderSections: vi.fn(),
@@ -419,6 +420,111 @@ describe("RecordingsPanel", () => {
       fireEvent.click(screen.getByRole("button", { name: /section actions/i }));
       fireEvent.click(screen.getByRole("menuitem", { name: /^cut$/i }));
       expect(cut).toEqual({ kind: "folders", ids: ["ambu"], sourceSectionId: "customers", sourceRoomId: null });
+    });
+
+    // Cut items are greyed with a dashed outline, not removed - nothing has happened yet, and removing the
+    // row would read as "the move already happened" even if the user cancels or navigates away before pasting.
+    it("greys out a cut recording's row with a dashed outline, without removing it", async () => {
+      renderListWithClipboardSpy("/?in=customers", () => {});
+      await screen.findByText("Account review");
+      const before = screen.getByText("Account review").closest("li")!;
+      expect(before.className).not.toContain("opacity-50");
+
+      fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
+      fireEvent.click(screen.getByRole("checkbox", { name: /account review/i }));
+      fireEvent.click(screen.getByRole("button", { name: /^cut$/i }));
+
+      const after = screen.getByText("Account review").closest("li")!; // still rendered - not removed
+      expect(after.className).toContain("opacity-50");
+      expect(after.className).toContain("border-dashed");
+    });
+
+    it("greys out a cut folder's row with a dashed outline, without removing it", async () => {
+      renderListWithClipboardSpy("/?in=customers", () => {});
+      await screen.findByText("Ambu");
+      const before = screen.getByText("Ambu").closest("div")!;
+      expect(before.className).not.toContain("opacity-50");
+
+      fireEvent.click(screen.getByRole("button", { name: /section actions/i }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /^cut$/i }));
+
+      const after = screen.getByText("Ambu").closest("div")!; // still rendered - not removed
+      expect(after.className).toContain("opacity-50");
+      expect(after.className).toContain("border-dashed");
+    });
+
+    it("pastes cut recordings via the bulk move endpoint, into the drilled-into destination, then clears the clipboard", async () => {
+      (api.moveRecordingsBulk as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+      let cut: MoveClipboardCut | null = null;
+      renderListWithClipboardSpy("/", (c) => (cut = c));
+      await screen.findByText("Loose one");
+      fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
+      fireEvent.click(screen.getByRole("checkbox", { name: /loose one/i }));
+      fireEvent.click(screen.getByRole("button", { name: /^cut$/i }));
+      expect(cut).toEqual({ kind: "recordings", ids: ["root-r"], sourceSectionId: null, sourceRoomId: null });
+
+      fireEvent.click(screen.getByRole("button", { name: /open customers/i })); // drill into the destination
+      fireEvent.click(await screen.findByRole("button", { name: /paste into customers/i }));
+
+      await waitFor(() => expect(api.moveRecordingsBulk).toHaveBeenCalledWith(["root-r"], "customers", undefined));
+      expect(cut).toBeNull(); // the clipboard is cleared once the paste succeeds
+    });
+
+    it("pastes a cut folder via reorderSections, appended after the target's existing children", async () => {
+      (api.reorderSections as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+      (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { id: "customers", name: "Customers", parentId: null, position: 0 },
+        { id: "loose", name: "Loose", parentId: null, position: 1 },
+        { id: "existing-child", name: "Existing Child", parentId: "loose", position: 0 },
+      ]);
+      (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+      let cut: MoveClipboardCut | null = null;
+      renderListWithClipboardSpy("/", (c) => (cut = c));
+      await screen.findByText("Customers");
+
+      const customersRow = screen.getByText("Customers").closest("div")!;
+      fireEvent.click(within(customersRow).getByRole("button", { name: /section actions/i }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /^cut$/i }));
+      expect(cut).toEqual({ kind: "folders", ids: ["customers"], sourceSectionId: null, sourceRoomId: null });
+
+      fireEvent.click(screen.getByRole("button", { name: /open loose/i })); // drill into the destination
+      await screen.findByText("Existing Child");
+      fireEvent.click(await screen.findByRole("button", { name: /paste into loose/i }));
+
+      await waitFor(() =>
+        expect(api.reorderSections).toHaveBeenCalledWith("loose", ["existing-child", "customers"], undefined),
+      );
+      expect(cut).toBeNull();
+    });
+
+    it("keeps the clipboard and surfaces the error when a paste fails", async () => {
+      (api.moveRecordingsBulk as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("paste boom"));
+      let cut: MoveClipboardCut | null = null;
+      renderListWithClipboardSpy("/", (c) => (cut = c));
+      await screen.findByText("Loose one");
+      fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
+      fireEvent.click(screen.getByRole("checkbox", { name: /loose one/i }));
+      fireEvent.click(screen.getByRole("button", { name: /^cut$/i }));
+
+      fireEvent.click(screen.getByRole("button", { name: /open customers/i }));
+      fireEvent.click(await screen.findByRole("button", { name: /paste into customers/i }));
+
+      expect(await screen.findByText(/paste boom/i)).toBeTruthy();
+      expect(cut).toEqual({ kind: "recordings", ids: ["root-r"], sourceSectionId: null, sourceRoomId: null }); // not cleared
+    });
+
+    // The crumb-drop fix: dropping onto an ancestor crumb used to pass an empty id list, which landed the
+    // recording at position 0 (the top) - dropping the same recording onto a folder row instead appends it.
+    // One gesture must not have two behaviours.
+    it("appends a recording dropped on a breadcrumb crumb, after what is already there", async () => {
+      renderList("/?in=ambu");
+      await screen.findByText("Deep in ambu");
+      const crumb = screen.getByRole("button", { name: /^customers$/i });
+      fireEvent.drop(crumb, { dataTransfer: { getData: () => "ambu-r" } });
+
+      await waitFor(() =>
+        expect(api.reorderRecordings).toHaveBeenCalledWith("customers", ["cust-r", "ambu-r"], undefined),
+      );
     });
   });
 

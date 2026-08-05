@@ -25,6 +25,7 @@ export default function SectionRow({
   count,
   canNest,
   parentSectionId,
+  cut = false,
   onDrill,
   onSectionDropBefore,
   onSectionDropNest,
@@ -41,6 +42,9 @@ export default function SectionRow({
   /// folder's own id): a folder cut from itself would make `pasteTarget`'s same-folder check meaningless,
   /// since a folder is never its own paste destination anyway.
   parentSectionId: string | null;
+  /// This folder is the move clipboard's current cut - greyed out with a dashed outline rather than hidden,
+  /// since nothing has actually moved yet (see RecordingsPanel's paste flow).
+  cut?: boolean;
   onDrill: () => void;
   onSectionDropBefore: (draggedSectionId: string) => void;
   onSectionDropNest: (draggedSectionId: string) => void;
@@ -106,7 +110,7 @@ export default function SectionRow({
         active
           ? "bg-blue-50 dark:bg-blue-900/30"
           : "hover:bg-gray-50 dark:hover:bg-gray-800/60"
-      }`}
+      } ${cut ? "opacity-50 rounded border border-dashed border-gray-400 dark:border-gray-600" : ""}`}
       draggable={!renaming}
       onDragStart={(e) => {
         e.dataTransfer.setData(SECTION_MIME, id);

@@ -28,7 +28,11 @@ function ClipboardSpy({ onChange }: { onChange: (cut: MoveClipboardCut | null) =
   return null;
 }
 
-function renderRow(parentSectionId: string | null, onCut: (cut: MoveClipboardCut | null) => void) {
+function renderRow(
+  parentSectionId: string | null,
+  onCut: (cut: MoveClipboardCut | null) => void,
+  opts: { cut?: boolean } = {},
+) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
@@ -41,6 +45,7 @@ function renderRow(parentSectionId: string | null, onCut: (cut: MoveClipboardCut
             count={3}
             canNest
             parentSectionId={parentSectionId}
+            cut={opts.cut}
             onDrill={noop}
             onSectionDropBefore={noop}
             onSectionDropNest={noop}
@@ -86,5 +91,21 @@ describe("SectionRow", () => {
     openKebab();
     fireEvent.click(screen.getByRole("menuitem", { name: /^cut$/i }));
     expect(cut).toEqual({ kind: "folders", ids: ["ambu"], sourceSectionId: "customers", sourceRoomId: "eng-room" });
+  });
+
+  // Cut is a pending state, not a removal - the row stays, greyed with a dashed outline, so cancelling or
+  // navigating away leaves no ambiguity about whether the move actually happened.
+  it("greys out the row with a dashed outline when it is the clipboard's cut folder", () => {
+    renderRow("customers", noop, { cut: true });
+    const row = screen.getByText("Ambu").closest("div")!;
+    expect(row.className).toContain("opacity-50");
+    expect(row.className).toContain("border-dashed");
+  });
+
+  it("does not grey out the row when it has not been cut", () => {
+    renderRow("customers", noop);
+    const row = screen.getByText("Ambu").closest("div")!;
+    expect(row.className).not.toContain("opacity-50");
+    expect(row.className).not.toContain("border-dashed");
   });
 });

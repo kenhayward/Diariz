@@ -24,6 +24,7 @@ import { childrenOf, breadcrumbOf, recordingCountOf, sectionCreateTarget, depthO
 import { useDrillSectionId, useDrillSearch } from "../lib/drillRoute";
 import { SECTION_MIME } from "../lib/dragTypes";
 import DrillBreadcrumb from "./nav/DrillBreadcrumb";
+import ClipboardBar from "./nav/ClipboardBar";
 import SectionRow from "./nav/SectionRow";
 import SearchBar from "./nav/SearchBar";
 import MonthCalendar from "./MonthCalendar";
@@ -108,6 +109,9 @@ export default function RecordingsPanel() {
 
   const tree = useMemo(() => buildRecordingTree(recordings, sections), [recordings, sections]);
   const selection = useSelection();
+  // The move clipboard: cut items grey out here rather than disappear (nothing has moved yet), and pasting
+  // reads the current drill level as the destination.
+  const { cut, clear: clearClipboard } = useMoveClipboard();
   const basePath = useRoomBasePath();
   // Where the drill-in list is: `?in=<sectionId>`, or the room's top level. Held in the URL so browser
   // back pops a level and the position survives a reload — see `useDrillSectionId`.
@@ -248,6 +252,30 @@ export default function RecordingsPanel() {
     runSection(() => api.reorderSections(payload.parentId, payload.orderedIds, aggRoomId));
   }
 
+  /// Perform the move clipboard's pending paste into the current drill level. Recordings go through the
+  /// bulk move endpoint in one call; a folder goes through the same reorderSections call the drag-and-drop
+  /// "nest" gesture already uses (appendSectionUnder), so both land at the bottom of the target, after
+  /// whatever is already there, preserving its existing relative order. A failed paste leaves the clipboard
+  /// intact and surfaces the error the same way the other section operations do - losing the cut to a
+  /// network blip would be worse than the error itself.
+  async function pasteClipboard() {
+    if (!cut) return;
+    setOpError(null);
+    try {
+      if (cut.kind === "recordings") {
+        await api.moveRecordingsBulk(cut.ids, drill.sectionId, aggRoomId);
+      } else {
+        const payload = appendSectionUnder(sections, cut.ids[0], drill.sectionId);
+        await api.reorderSections(payload.parentId, payload.orderedIds, aggRoomId);
+      }
+      clearClipboard();
+      qc.invalidateQueries({ queryKey: ["recordings"] });
+      qc.invalidateQueries({ queryKey: ["sections"] });
+    } catch (e) {
+      setOpError(apiErrorMessage(e));
+    }
+  }
+
   // Drag audio files anywhere onto the panel to upload them (distinct from the reorder DnD, which uses
   // the "text/plain" payload — file drags carry "Files"). A depth counter keeps the highlight stable as
   // the cursor moves over child rows.
@@ -300,6 +328,11 @@ export default function RecordingsPanel() {
     );
   };
 
+  // Which ids are the clipboard's current cut, by kind — greyed out in the rows below rather than removed
+  // (nothing has moved until the paste succeeds).
+  const cutRecordingIds = cut?.kind === "recordings" ? cut.ids : [];
+  const cutFolderIds = cut?.kind === "folders" ? cut.ids : [];
+
   const rowList = (sectionId: string | null, items: RecordingSummary[], indentClass = "pl-3") => {
     const ids = items.map((i) => i.id);
     return (
@@ -313,6 +346,7 @@ export default function RecordingsPanel() {
             selected={selection.selectedIds.includes(r.id)}
             onToggleSelect={() => selection.toggle(r.id)}
             onDropBefore={(draggedId) => drop(sectionId, ids, draggedId, r.id)}
+            cut={cutRecordingIds.includes(r.id)}
           />
         ))}
       </ul>
@@ -383,7 +417,19 @@ export default function RecordingsPanel() {
               sectionId={drill.sectionId}
               basePath={basePath}
               onDrill={drill.drillTo}
-              onRecordingDrop={(sectionId, recordingId) => drop(sectionId, [], recordingId, null)}
+              onRecordingDrop={(sectionId, recordingId) =>
+                // Append after what's already there, same as dropping onto a folder row - an empty id list
+                // here would land the recording at position 0 (the top), giving one gesture two behaviours.
+                drop(sectionId, childrenOf(tree, sectionId).items.map((i) => i.id), recordingId, null)
+              }
+            />
+            {/* Persistent, like the breadcrumb: the clipboard survives navigation, so this stays visible and
+                shows where a paste would land even while the user is searching. */}
+            <ClipboardBar
+              sections={sections}
+              destSectionId={drill.sectionId}
+              destRoomId={aggRoomId ?? null}
+              onPaste={pasteClipboard}
             />
             {/* The results replace the list body outright rather than hiding it: nothing below is reachable
                 or readable during a search, and clearing rebuilds it from the URL anyway. */}
@@ -425,6 +471,7 @@ export default function RecordingsPanel() {
                   count={recordingCountOf(tree, node.id)}
                   canNest={childrenCanNest}
                   parentSectionId={drill.sectionId}
+                  cut={cutFolderIds.includes(node.id)}
                   onDrill={() => drill.drillTo(node.id)}
                   onSectionDropBefore={(draggedId) => dropSectionBefore(node.id, draggedId)}
                   onSectionDropNest={(draggedId) => nestSection(node.id, draggedId)}
@@ -1069,6 +1116,7 @@ export function RecordingRow({
   onDropBefore,
   showDate = false,
   onNavigate,
+  cut = false,
 }: {
   r: RecordingSummary;
   /// Left-padding class that indents the row under its section heading (e.g. "pl-6" / "pl-10").
@@ -1082,6 +1130,9 @@ export function RecordingRow({
   showDate?: boolean;
   /// Called when the row's name link is clicked - lets the expanded modal close itself as it navigates.
   onNavigate?: () => void;
+  /// This recording is the move clipboard's current cut - greyed out with a dashed outline rather than
+  /// hidden, since nothing has actually moved yet (see RecordingsPanel's paste flow).
+  cut?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();
@@ -1154,7 +1205,7 @@ export function RecordingRow({
     // disabled while renaming so text can be selected in the input. The inner NavLink keeps draggable=false
     // so grabbing the name still drags the row, not the link.
     <li
-      className={`py-0.5 pr-3 ${indentClass}`}
+      className={`py-0.5 pr-3 ${indentClass} ${cut ? "opacity-50 rounded border border-dashed border-gray-400 dark:border-gray-600" : ""}`}
       draggable={!renaming}
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", r.id);
