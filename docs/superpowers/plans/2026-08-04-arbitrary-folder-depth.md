@@ -498,7 +498,10 @@ public class SectionSubtreeIntegrationTests(ContainersFixture fx)
         {
             var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = "u@x.test" };
             var room = new Room { Id = Guid.NewGuid(), Name = $"P {Guid.NewGuid():N}", Kind = RoomKind.Personal, OwnerUserId = user.Id };
-            var other = new Room { Id = Guid.NewGuid(), Name = $"O {Guid.NewGuid():N}", Kind = RoomKind.Personal, OwnerUserId = user.Id };
+            // The decoy MUST be Shared with no owner. Postgres enforces one personal room per user via a
+            // filtered unique index on Room.OwnerUserId (DiarizDbContext.cs:129), which the in-memory provider
+            // never sees - two personal rooms for one user dies at seeding with 23505 before the test can run.
+            var other = new Room { Id = Guid.NewGuid(), Name = $"O {Guid.NewGuid():N}", Kind = RoomKind.Shared };
             var customers = new Section { Id = Guid.NewGuid(), UserId = user.Id, RoomId = room.Id, Name = "Customers" };
             var acme = new Section { Id = Guid.NewGuid(), UserId = user.Id, RoomId = room.Id, Name = "Acme", ParentId = customers.Id };
             var falcon = new Section { Id = Guid.NewGuid(), UserId = user.Id, RoomId = room.Id, Name = "Falcon", ParentId = acme.Id };
