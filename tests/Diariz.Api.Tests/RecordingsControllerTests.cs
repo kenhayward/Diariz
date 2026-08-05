@@ -784,6 +784,120 @@ public class RecordingsControllerTests
         return await scope.SectionIdAsync(await scope.PersonalRoomIdAsync(userId), recordingId);
     }
 
+    // ---- Bulk move (the cut/paste endpoint) ----
+
+    /// <summary>The placement positions of the given recordings, in the owner's personal room.</summary>
+    private static async Task<List<int>> PositionsOf(DiarizDbContext db, Guid userId, params Guid[] recordingIds)
+    {
+        var roomId = await new RoomScope(db).PersonalRoomIdAsync(userId);
+        var byId = await db.RoomRecordings
+            .Where(p => p.RoomId == roomId && recordingIds.Contains(p.RecordingId))
+            .ToDictionaryAsync(p => p.RecordingId, p => p.Position);
+        return recordingIds.Select(id => byId[id]).ToList();
+    }
+
+    [Fact]
+    public async Task MoveManyToSection_MovesEveryListedRecording_InOneCall()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var roomId = await new RoomScope(db).PersonalRoomIdAsync(userId);
+        var section = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "Work" };
+        db.Sections.Add(section);
+        await db.SaveChangesAsync();
+        var a = await SeedRecording(db, userId, versions: 1);
+        var b = await SeedRecording(db, userId, versions: 1);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.MoveManyToSection(new MoveRecordingsRequest([a.Id, b.Id], section.Id));
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Equal(section.Id, await FolderOf(db, userId, a.Id));
+        Assert.Equal(section.Id, await FolderOf(db, userId, b.Id));
+    }
+
+    [Fact]
+    public async Task MoveManyToSection_AppendsAfterWhatIsAlreadyThere_InTheOrderGiven()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var roomId = await new RoomScope(db).PersonalRoomIdAsync(userId);
+        var section = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "Work" };
+        db.Sections.Add(section);
+        await db.SaveChangesAsync();
+
+        // Two recordings already sitting in the folder, at positions 0 and 1.
+        var sitting = await SeedRecording(db, userId, versions: 1);
+        var sitting2 = await SeedRecording(db, userId, versions: 1);
+        var controller = Build(db, userId, new FakeJobQueue());
+        await controller.Reorder(new ReorderRecordingsRequest(section.Id, [sitting.Id, sitting2.Id]));
+
+        // Two more pasted in, deliberately listed in an order that is not their creation order.
+        var x = await SeedRecording(db, userId, versions: 1);
+        var y = await SeedRecording(db, userId, versions: 1);
+        await controller.MoveManyToSection(new MoveRecordingsRequest([y.Id, x.Id], section.Id));
+
+        var positions = await PositionsOf(db, userId, sitting.Id, sitting2.Id, y.Id, x.Id);
+        // The pasted pair land after both sitting recordings, and y before x because that is how they were listed.
+        Assert.True(positions[2] > positions[1], $"y ({positions[2]}) should sit after sitting2 ({positions[1]})");
+        Assert.True(positions[3] > positions[2], $"x ({positions[3]}) should sit after y ({positions[2]})");
+    }
+
+    [Fact]
+    public async Task MoveManyToSection_NullSection_Ungroups()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var roomId = await new RoomScope(db).PersonalRoomIdAsync(userId);
+        var section = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "Work" };
+        db.Sections.Add(section);
+        await db.SaveChangesAsync();
+        var rec = await SeedRecording(db, userId, versions: 1);
+        var controller = Build(db, userId, new FakeJobQueue());
+        await controller.MoveManyToSection(new MoveRecordingsRequest([rec.Id], section.Id));
+
+        await controller.MoveManyToSection(new MoveRecordingsRequest([rec.Id], null));
+
+        Assert.Null(await FolderOf(db, userId, rec.Id));
+    }
+
+    [Fact]
+    public async Task MoveManyToSection_SkipsIdsTheCallerDoesNotOwn_RatherThanFailingTheWholeCall()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var stranger = Guid.NewGuid();
+        await SeedUser(db, userId);
+        await SeedUser(db, stranger);
+        var roomId = await new RoomScope(db).PersonalRoomIdAsync(userId);
+        var section = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "Work" };
+        db.Sections.Add(section);
+        await db.SaveChangesAsync();
+        var mine = await SeedRecording(db, userId, versions: 1);
+        var theirs = await SeedRecording(db, stranger, versions: 1);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.MoveManyToSection(new MoveRecordingsRequest([mine.Id, theirs.Id], section.Id));
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Equal(section.Id, await FolderOf(db, userId, mine.Id));
+        Assert.Null(await FolderOf(db, stranger, theirs.Id)); // untouched, and no error
+    }
+
+    [Fact]
+    public async Task MoveManyToSection_EmptyList_IsANoOp()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        Assert.IsType<NoContentResult>(await controller.MoveManyToSection(new MoveRecordingsRequest([], null)));
+    }
+
     [Fact]
     public async Task MoveToSection_SetsSectionId_OnOwnedRecordingAndSection()
     {

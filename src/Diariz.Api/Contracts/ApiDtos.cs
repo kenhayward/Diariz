@@ -69,6 +69,11 @@ public record SectionDto(Guid Id, string Name, Guid? ParentId, int Position);
 public record CreateSectionRequest(string Name, Guid? ParentId = null, Guid? RoomId = null);
 public record RenameSectionRequest(string Name);
 public record MoveRecordingRequest(Guid? SectionId, Guid? RoomId = null);
+/// <summary>Move several recordings into one folder in a single call (the paste half of cut/paste). Unlike
+/// <see cref="ReorderRecordingsRequest"/>, which sets an explicit 0..n-1 order, this APPENDS: the listed
+/// recordings land after whatever is already in the target folder, keeping the order they are listed in.
+/// <c>SectionId</c> null = ungroup. <c>RoomId</c> null = the caller's personal room.</summary>
+public record MoveRecordingsRequest(IReadOnlyList<Guid> Ids, Guid? SectionId, Guid? RoomId = null);
 /// <summary>Reorder/move: set each listed recording's section and position (0..n-1) within a room in one call.
 /// <c>RoomId</c> null = the caller's personal room.</summary>
 public record ReorderRecordingsRequest(Guid? SectionId, IReadOnlyList<Guid> OrderedIds, Guid? RoomId = null);

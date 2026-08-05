@@ -1377,6 +1377,17 @@ const GENERATED: GeneratedResource[] = [
         "returnsArray": false
       },
       {
+        "value": "fileSeveralRecordingsInAFolder",
+        "displayName": "File several recordings in a folder",
+        "description": "Moves every listed recording into one folder in a single call, or ungroups them all with a null sectionId. They are appended: they land after whatever is already in the folder, in the order you list them. Use PUT /api/recordings/reorder instead when you want to set an explicit order.",
+        "method": "POST",
+        "path": "/api/recordings/section",
+        "pathParams": [],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      },
+      {
         "value": "generateASummary",
         "displayName": "Generate a summary",
         "description": "Queues an LLM summary of the current transcription and returns 202 immediately; poll the recording for the result. While it runs the recording's status is Summarizing. Calling again during that window is a no-op rather than queuing a second job.",
