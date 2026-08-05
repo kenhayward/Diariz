@@ -34,7 +34,12 @@ export function pasteTarget(args: PasteTargetArgs): PasteTargetResult {
 
   if (!cut || cut.ids.length === 0) return { kind: "blocked", reason: "empty" };
 
-  // Blanket rule, independent of source: browsing any shared room disables paste outright.
+  // Blanket rule, independent of source: browsing any shared room disables paste outright. Checked before
+  // same-folder deliberately - shared-room is a property of *where you are* (the whole destination is
+  // off-limits), while same-folder is a property of *what you picked* (this particular spot is a no-op).
+  // The broader, more explanatory reason should win: telling someone their paste is a no-op when the real
+  // problem is that they can't paste here at all would be misleading. No server rule to appeal to here, this
+  // is purely a client UX call (see pasteTarget.test.ts for the overlap case).
   if (destRoomId !== null) return { kind: "blocked", reason: "shared-room" };
 
   if (destSectionId === cut.sourceSectionId) return { kind: "blocked", reason: "same-folder" };

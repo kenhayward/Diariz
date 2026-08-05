@@ -59,6 +59,17 @@ describe("pasteTarget", () => {
     });
   });
 
+  // Precedence: when both conditions hold at once, shared-room must win over same-folder - a same-folder
+  // paste at the same drill level would be legal if the room were not shared, so the shared-room block is
+  // the operative reason. Pins the order documented in pasteTarget.ts against a silent flip.
+  it("blocks with 'shared-room' rather than 'same-folder' when both conditions hold", () => {
+    const cut = recordingsCut("customers");
+    expect(pasteTarget({ cut, sections, destSectionId: "customers", destRoomId: "room-2" })).toEqual({
+      kind: "blocked",
+      reason: "shared-room",
+    });
+  });
+
   it("blocks with 'same-folder' when the destination is where the recordings were cut from", () => {
     const cut = recordingsCut("customers");
     expect(pasteTarget({ cut, sections, destSectionId: "customers", destRoomId: null })).toEqual({
@@ -101,6 +112,16 @@ describe("pasteTarget", () => {
   it("blocks with 'into-itself' when pasting a folder into its own descendant", () => {
     const cut = folderCut("customers", null);
     expect(pasteTarget({ cut, sections, destSectionId: "ambu", destRoomId: null })).toEqual({
+      kind: "blocked",
+      reason: "into-itself",
+    });
+  });
+
+  // A grandchild-or-deeper case, not just a direct child: proves the check walks the whole ancestor chain
+  // rather than only comparing the destination's immediate parentId (which would wrongly allow this).
+  it("blocks with 'into-itself' when the destination is several levels beneath the moved folder", () => {
+    const cut = folderCut("d0", null);
+    expect(pasteTarget({ cut, sections, destSectionId: "d3", destRoomId: null })).toEqual({
       kind: "blocked",
       reason: "into-itself",
     });
