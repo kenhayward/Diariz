@@ -94,8 +94,8 @@ const BLOCKED_MESSAGE_KEYS: Record<PasteBlockedReason, string> = {
   // That currently can't happen only because every caller of `cutRecordings`/`cutFolder` guards against
   // an empty selection before calling it (e.g. `RecordingsPanel.tsx`'s cut button is disabled when
   // nothing is selected) - an invariant that lives outside this component and outside `pasteTarget`, not
-  // something this file enforces. Mapped (and covered by a render test below) so a future caller that
-  // skips that guard, or a `cutFolder` against a since-deleted id, still shows a real message instead of
-  // a blank branch.
+  // something this file enforces. `cutFolder` always stores exactly one id, so it can never produce this
+  // branch - only an empty `cutRecordings` call could. Mapped (and covered by a render test below) so a
+  // future caller that skips that guard still shows a real message instead of a blank branch.
   empty: "clipboardBarBlockedEmpty",
 };
