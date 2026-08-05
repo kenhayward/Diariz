@@ -60,6 +60,17 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.180.1",
+    date: "2026-08-05",
+    pr: 449,
+    headline: "Folder summaries work in shared rooms",
+    summary:
+      "A folder in a shared room produced an empty summary and empty minutes no matter how many meetings it held, while the same folder's page showed a full count beside it. The roll-up was looking for those meetings in your own private library instead of the shared room, so it never found any. It now reads the room the folder actually lives in. Folders in your personal library are unaffected. If you generated a folder summary in a shared room before and got nothing back, generate it again.",
+    fixed: [
+      "Folder summaries and consolidated minutes in a shared room now include that room's meetings, instead of always coming back empty.",
+    ],
+  },
+  {
     version: "0.180.0",
     date: "2026-08-05",
     pr: 448,

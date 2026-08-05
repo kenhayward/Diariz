@@ -360,8 +360,9 @@ default timeout for its header phase and relies on client-disconnect for cancell
   **Tags tab** renders as a flat weighted cloud (log-scaled font sizes, single-select filter, an expanded
   80% modal sharing the same selection state).
 - **Folder (section) pages (async roll-ups).** A **folder page** (`GET /api/sections/{id}` +
-  `SectionPageController`, web route `/sections/:id`) aggregates everything across a section **and its child
-  sections**: stats, an LLM **folder summary**, consolidated **folder minutes**, and the actions/notes/
+  `SectionPageController`, web route `/sections/:id`) aggregates everything across a section **and every folder
+  beneath it** (`SectionTree.SubtreeIdsAsync`), resolving placements by the folder's **own room**: stats, an LLM
+  **folder summary**, consolidated **folder minutes**, and the actions/notes/
   attachments (read aggregations that carry each item's source-recording name; edit/delete reuse the
   per-item controllers). The two roll-ups generate asynchronously on **their own Redis streams** -
   **`section-summary-jobs`** (group `section-summarizers`, `SectionSummaryWorker`) and
