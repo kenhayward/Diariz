@@ -321,7 +321,8 @@ it came from. The per-transcript table gains the same Done checkbox + Completed 
 - **Translate** a transcript into your chosen language with that same LLM — the whole recording (segments,
 summary, and actions) or a single segment. Translations are stored as **revisions** over the model's
 original words (so you can always flip back), and exports/email/chat use them.
-- **Organise** recordings into **sections and sub-sections** (one level of nesting) with drag-and-drop
+- **Organise** recordings into **folders nested up to 8 levels deep** (Customers > Acme Corp > Project Falcon)
+  with drag-and-drop
 ordering and cross-group moves; select a whole level at once to build chat context. The list **drills in
 one folder at a time** rather than showing every folder expanded: a folder row shows its colour, the count
 of everything inside, and takes you in; a breadcrumb walks you back out (browser back pops a level too),
