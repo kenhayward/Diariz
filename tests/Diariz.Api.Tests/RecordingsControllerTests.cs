@@ -864,8 +864,15 @@ public class RecordingsControllerTests
         Assert.Null(await FolderOf(db, userId, rec.Id));
     }
 
+    /// <summary>A paste moves what it can rather than being lost wholesale because one id is not in this room -
+    /// a recording deleted or unshared in another tab should not cost the user the whole paste.
+    ///
+    /// <para>Note what gates this: the recording is skipped because it is not PLACED in the caller's room, not
+    /// because of who owns it. `MoveManyToSection` deliberately carries no ownership filter, matching its
+    /// single-item sibling `MoveToSection` - a shared room is meant to hold several people's recordings, so a
+    /// member with ManageContents must be able to file a colleague's.</para></summary>
     [Fact]
-    public async Task MoveManyToSection_SkipsIdsTheCallerDoesNotOwn_RatherThanFailingTheWholeCall()
+    public async Task MoveManyToSection_SkipsIdsNotPlacedInTheRoom_RatherThanFailingTheWholeCall()
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
@@ -877,14 +884,71 @@ public class RecordingsControllerTests
         db.Sections.Add(section);
         await db.SaveChangesAsync();
         var mine = await SeedRecording(db, userId, versions: 1);
-        var theirs = await SeedRecording(db, stranger, versions: 1);
+        var elsewhere = await SeedRecording(db, stranger, versions: 1); // placed in the stranger's own room
         var controller = Build(db, userId, new FakeJobQueue());
 
-        var result = await controller.MoveManyToSection(new MoveRecordingsRequest([mine.Id, theirs.Id], section.Id));
+        var result = await controller.MoveManyToSection(new MoveRecordingsRequest([mine.Id, elsewhere.Id], section.Id));
 
         Assert.IsType<NoContentResult>(result);
         Assert.Equal(section.Id, await FolderOf(db, userId, mine.Id));
-        Assert.Null(await FolderOf(db, stranger, theirs.Id)); // untouched, and no error
+        Assert.Null(await FolderOf(db, stranger, elsewhere.Id)); // untouched, and no error
+    }
+
+    /// <summary>Authorization is the ROOM's, not the recording's. A member with ManageContents can already move
+    /// a colleague's recording one at a time through <c>MoveToSection</c>, so the bulk form must not be
+    /// narrower - an ownership filter here would silently drop exactly the recordings a shared room exists to
+    /// hold. This is the test that fails if someone reintroduces one.</summary>
+    [Fact]
+    public async Task MoveManyToSection_MovesARecordingOwnedBySomeoneElse_WhenItIsPlacedInTheRoom()
+    {
+        using var db = TestDb.Create();
+        var me = Guid.NewGuid();
+        var owner = Guid.NewGuid();
+        await SeedUser(db, me);
+        await SeedUser(db, owner);
+        var scope = new RoomScope(db);
+        var sharedRoomId = await scope.CreateSharedRoomAsync("Eng", null, null, null);
+        await scope.SetMemberAsync(sharedRoomId, RoomPrincipalType.User, me, RoomPermission.ManageContents);
+        var section = new Diariz.Domain.Entities.Section
+        {
+            Id = Guid.NewGuid(), UserId = owner, RoomId = sharedRoomId, Name = "Customers",
+        };
+        db.Sections.Add(section);
+        var theirs = await SeedRecording(db, owner, versions: 1);
+        await db.SaveChangesAsync();
+        db.RoomRecordings.Add(new Diariz.Domain.Entities.RoomRecording
+        {
+            RoomId = sharedRoomId, RecordingId = theirs.Id, SectionId = null,
+        });
+        await db.SaveChangesAsync();
+        var controller = Build(db, me, new FakeJobQueue());
+
+        var result = await controller.MoveManyToSection(
+            new MoveRecordingsRequest([theirs.Id], section.Id, sharedRoomId));
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Equal(section.Id, await scope.SectionIdAsync(sharedRoomId, theirs.Id));
+    }
+
+    [Fact]
+    public async Task MoveManyToSection_DuplicateIds_AreMovedOnce()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var roomId = await new RoomScope(db).PersonalRoomIdAsync(userId);
+        var section = new Diariz.Domain.Entities.Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "Work" };
+        db.Sections.Add(section);
+        await db.SaveChangesAsync();
+        var a = await SeedRecording(db, userId, versions: 1);
+        var b = await SeedRecording(db, userId, versions: 1);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.MoveManyToSection(new MoveRecordingsRequest([a.Id, a.Id, b.Id], section.Id));
+
+        // The repeat does not consume a position, so the two land adjacent in the order first seen.
+        var positions = await PositionsOf(db, userId, a.Id, b.Id);
+        Assert.Equal(positions[0] + 1, positions[1]);
     }
 
     [Fact]
