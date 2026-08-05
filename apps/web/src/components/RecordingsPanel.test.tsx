@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SelectionProvider } from "../lib/selection";
+import { MoveClipboardProvider, useMoveClipboard, type MoveClipboardCut } from "../lib/moveClipboard";
 import type { RecordingSummary } from "../lib/types";
 
 vi.mock("../lib/signalr", () => ({
@@ -105,6 +106,30 @@ function renderListWithLocationSpy(entry: string, onChange: (loc: { pathname: st
           <RecordingsPanel />
         </MemoryRouter>
       </SelectionProvider>
+    </QueryClientProvider>,
+  );
+}
+
+// Captures the move clipboard's current cut so a test can assert what a Cut action put on it, mirroring
+// the `LocationSpy` pattern above.
+function ClipboardSpy({ onChange }: { onChange: (cut: MoveClipboardCut | null) => void }) {
+  const { cut } = useMoveClipboard();
+  onChange(cut);
+  return null;
+}
+
+function renderListWithClipboardSpy(entry: string, onChange: (cut: MoveClipboardCut | null) => void) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <MoveClipboardProvider>
+        <SelectionProvider>
+          <MemoryRouter initialEntries={[entry]}>
+            <ClipboardSpy onChange={onChange} />
+            <RecordingsPanel />
+          </MemoryRouter>
+        </SelectionProvider>
+      </MoveClipboardProvider>
     </QueryClientProvider>,
   );
 }
@@ -369,6 +394,18 @@ describe("RecordingsPanel", () => {
       renderList();
       expect(await screen.findByText(/no recordings yet/i)).toBeTruthy();
     });
+
+    // The source recorded on a recordings cut must be the drill level the cut happened at, not the root -
+    // a later paste check relies on this to detect a same-folder paste.
+    it("cuts recordings with the current drill level as the clipboard source", async () => {
+      let cut: MoveClipboardCut | null = null;
+      renderListWithClipboardSpy("/?in=customers", (c) => (cut = c));
+      await screen.findByText("Account review");
+      fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
+      fireEvent.click(screen.getByRole("checkbox", { name: /account review/i }));
+      fireEvent.click(screen.getByRole("button", { name: /^cut$/i }));
+      expect(cut).toEqual({ kind: "recordings", ids: ["cust-r"], sourceSectionId: "customers", sourceRoomId: null });
+    });
   });
 
   it("shows the name on the row and moves source · date into the hover title", async () => {
@@ -438,6 +475,39 @@ describe("RecordingsPanel", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /weekly standup/i }));   // select the row
     fireEvent.click(screen.getByRole("button", { name: "Delete audio" }));        // toolbar bulk action
     await waitFor(() => expect(api.deleteAudioBulk).toHaveBeenCalledWith(["rec-1"]));
+  });
+
+  // The toolbar Cut button: same disabled discipline as mergeSelected/deleteSelectedAudio - present only in
+  // select mode, disabled until something is checked.
+  it("disables the toolbar Cut button until a recording is selected", async () => {
+    renderList();
+    await screen.findByText("Weekly Standup");
+    fireEvent.click(screen.getByRole("button", { name: /select recordings/i })); // enter select mode
+    const cutBtn = () => screen.getByRole("button", { name: /^cut$/i }) as HTMLButtonElement;
+    expect(cutBtn().disabled).toBe(true);
+    fireEvent.click(screen.getByRole("checkbox", { name: /weekly standup/i }));
+    expect(cutBtn().disabled).toBe(false);
+  });
+
+  it("puts the selected recordings on the clipboard, with the room's top level as the source", async () => {
+    let cut: MoveClipboardCut | null = null;
+    renderListWithClipboardSpy("/", (c) => (cut = c));
+    await screen.findByText("Weekly Standup");
+    fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /weekly standup/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^cut$/i }));
+    expect(cut).toEqual({ kind: "recordings", ids: ["rec-1"], sourceSectionId: null, sourceRoomId: null });
+  });
+
+  it("records the shared room as the clipboard's source room when browsing one", async () => {
+    roomStub.currentRoom = { id: "eng-room", isPersonal: false };
+    let cut: MoveClipboardCut | null = null;
+    renderListWithClipboardSpy("/", (c) => (cut = c));
+    await screen.findByText("Weekly Standup");
+    fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /weekly standup/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^cut$/i }));
+    expect(cut).toEqual({ kind: "recordings", ids: ["rec-1"], sourceSectionId: null, sourceRoomId: "eng-room" });
   });
 
   // Was "groups recordings under section headings with Ungrouped last". The drill-in list has no headings

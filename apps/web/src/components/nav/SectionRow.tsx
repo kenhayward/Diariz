@@ -8,6 +8,7 @@ import { sectionColor } from "../../lib/sectionColors";
 import { SECTION_MIME } from "../../lib/dragTypes";
 import { ChevronRightIcon, FolderIcon } from "../icons";
 import KebabMenu from "../KebabMenu";
+import { useMoveClipboard } from "../../lib/moveClipboard";
 
 /// A folder row in the drill-in list: coloured folder glyph, name, the count of everything underneath,
 /// and a chevron saying "there is more this way".
@@ -23,6 +24,7 @@ export default function SectionRow({
   name,
   count,
   canNest,
+  parentSectionId,
   onDrill,
   onSectionDropBefore,
   onSectionDropNest,
@@ -35,6 +37,10 @@ export default function SectionRow({
   /// Whether this folder may take sub-folders (false once it sits at the depth cap), which decides both the
   /// "New sub-section" action and what a dropped folder does here.
   canNest: boolean;
+  /// This row's own parent - null at the top level. Recorded as the clipboard's source on Cut (not this
+  /// folder's own id): a folder cut from itself would make `pasteTarget`'s same-folder check meaningless,
+  /// since a folder is never its own paste destination anyway.
+  parentSectionId: string | null;
   onDrill: () => void;
   onSectionDropBefore: (draggedSectionId: string) => void;
   onSectionDropNest: (draggedSectionId: string) => void;
@@ -44,6 +50,7 @@ export default function SectionRow({
   const qc = useQueryClient();
   const basePath = useRoomBasePath();
   const sharedRoomId = useSharedRoomId();
+  const { cutFolder } = useMoveClipboard();
   const [renaming, setRenaming] = useState(false);
   // Highlighted while its own page is open in the middle panel - you can be reading a folder's page and
   // browsing elsewhere, so this is not the same thing as the drill position.
@@ -66,6 +73,9 @@ export default function SectionRow({
 
   const actions = [
     { label: t("recordings:rename"), onClick: () => setRenaming(true) },
+    // The clipboard's convention: null source room is the personal room, matching useSharedRoomId's
+    // undefined-for-personal with `?? null`.
+    { label: t("cut"), onClick: () => cutFolder(id, parentSectionId, sharedRoomId ?? null) },
     ...(canNest
       ? [
           {

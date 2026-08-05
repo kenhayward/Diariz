@@ -13,6 +13,7 @@ import { recordingMenu } from "./recordingMenu";
 import { isProcessing, statusLabel } from "../lib/recordingStatus";
 import { copyRichLink, transcriptUrl } from "../lib/clipboard";
 import { useSelection } from "../lib/selection";
+import { useMoveClipboard } from "../lib/moveClipboard";
 import { useRoom, useRoomBasePath, useSharedRoomId } from "../lib/rooms";
 import { useActiveRecordingId } from "../lib/activeRoute";
 import { formatDuration } from "../lib/format";
@@ -423,6 +424,7 @@ export default function RecordingsPanel() {
                   name={node.name}
                   count={recordingCountOf(tree, node.id)}
                   canNest={childrenCanNest}
+                  parentSectionId={drill.sectionId}
                   onDrill={() => drill.drillTo(node.id)}
                   onSectionDropBefore={(draggedId) => dropSectionBefore(node.id, draggedId)}
                   onSectionDropNest={(draggedId) => nestSection(node.id, draggedId)}
@@ -672,6 +674,7 @@ function ListToolbar({
   const { t } = useTranslation("workspace");
   const qc = useQueryClient();
   const { selectMode, setSelectMode, selectedIds, clear } = useSelection();
+  const { cutRecordings } = useMoveClipboard();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -743,6 +746,14 @@ function ListToolbar({
     }
   }
 
+  // Stages the selection on the move clipboard - nothing touches the server here. The source recorded is
+  // this drill level (not the selected recordings' own sectionId, which would be the same thing at this
+  // level anyway) so a later paste onto the same folder can be detected and disabled.
+  function cutSelected() {
+    if (selectedIds.length === 0) return;
+    cutRecordings(selectedIds, drillSectionId, roomId ?? null);
+  }
+
   return (
     <div className="flex h-9 items-center justify-between gap-2 border-b px-3 dark:border-gray-700">
       {open ? (
@@ -802,6 +813,14 @@ function ListToolbar({
               icon={<TrashIcon />}
             />
           )}
+          {selectMode && (
+            <ToolbarButton
+              label={t("cut")}
+              onClick={cutSelected}
+              disabled={!listMode || selectedIds.length === 0}
+              icon={<CutIcon />}
+            />
+          )}
           <ToolbarButton
             label={t("refresh")}
             onClick={() => {
@@ -849,6 +868,15 @@ const MergeIcon = () => (
   <svg {...iconProps}>
     <path d="M6 3v6a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3" />
     <line x1="12" y1="15" x2="12" y2="21" />
+  </svg>
+);
+const CutIcon = () => (
+  <svg {...iconProps}>
+    <circle cx="6" cy="6" r="3" />
+    <circle cx="6" cy="18" r="3" />
+    <line x1="20" y1="4" x2="8.12" y2="15.88" />
+    <line x1="14.47" y1="14.48" x2="20" y2="20" />
+    <line x1="8.12" y1="8.12" x2="12" y2="12" />
   </svg>
 );
 
