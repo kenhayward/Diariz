@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth";
@@ -9,6 +9,8 @@ import { folderUrl, copyRichLink } from "../lib/clipboard";
 import { useRoom } from "../lib/rooms";
 import { RoomPermission } from "../lib/types";
 import { renderMarkdown } from "../lib/markdown";
+import { breadcrumbOf } from "../lib/drillView";
+import FolderPath from "../components/nav/FolderPath";
 import DetailTabs, { type DetailTab } from "../components/DetailTabs";
 import ToolbarButton, { iconProps } from "../components/ToolbarButton";
 import KebabMenu from "../components/KebabMenu";
@@ -37,6 +39,7 @@ const TAB_KEY = "diariz.sectionTab";
 
 export default function SectionDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { t, i18n } = useTranslation(["workspace", "common", "recordings"]);
   const qc = useQueryClient();
   // Rows aggregated on this page span many recordings, possibly owned by other room members - each row's
@@ -80,6 +83,14 @@ export default function SectionDetail() {
   const { data: notes } = useQuery({ queryKey: ["section-notes", id], queryFn: () => api.listSectionNotes(id!), enabled: !!id });
   const { data: attachments } = useQuery({ queryKey: ["section-attachments", id], queryFn: () => api.listSectionAttachments(id!), enabled: !!id });
   const { data: folderAttachments } = useQuery({ queryKey: ["folder-attachments", id], queryFn: () => api.listFolderAttachments(id!), enabled: !!id });
+  // The folder's OWN room, so a shared-room folder resolves its ancestors from that room rather than the
+  // caller's personal one (the same trap FolderRecordingList hit in issue #295).
+  const { data: siblingSections = [] } = useQuery({
+    queryKey: ["sections", section?.roomId ?? null],
+    queryFn: () => api.listSections(section?.roomId),
+    enabled: !!section?.roomId,
+  });
+  const ancestors = id ? breadcrumbOf(siblingSections, id) : [];
   // Generated formula results (the Formulas tab). Runs are async, so poll while any result is still
   // generating (the run adds a Generating row immediately; the poll fills in the Ready/Failed outcome).
   const { data: formulaResults = [] } = useQuery({
@@ -369,6 +380,15 @@ export default function SectionDetail() {
 
   return (
     <div className="relative space-y-2.5">
+      {ancestors.length > 1 && (
+        <div className="mb-1 flex items-center">
+          <FolderPath
+            crumbs={ancestors.map((s) => ({ id: s.id, name: s.name }))}
+            maxVisible={4}
+            onSelect={(sectionId) => navigate(`${roomBasePath}/sections/${sectionId}`)}
+          />
+        </div>
+      )}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           {renaming ? (

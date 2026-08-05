@@ -298,6 +298,40 @@ describe("SectionDetail copy-link room prefix", () => {
   });
 });
 
+describe("SectionDetail breadcrumb", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it("shows the folder's ancestor path", async () => {
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "customers", name: "Customers", parentId: null, position: 0 },
+      { id: "acme", name: "Acme Corp", parentId: "customers", position: 0 },
+      { id: "sec-1", name: "Project Falcon", parentId: "acme", position: 0 },
+    ]);
+
+    // roomId must be set - the ancestors query is `enabled` on it.
+    renderPage({ ...base, roomId: "room-1" });
+    await loaded();
+
+    expect(await screen.findByText("Customers")).toBeTruthy();
+    expect(screen.getByText("Acme Corp")).toBeTruthy();
+  });
+
+  it("shows no path for a top-level folder", async () => {
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "sec-1", name: "Customers", parentId: null, position: 0 },
+    ]);
+
+    renderPage({ ...base, roomId: "room-1" });
+    await loaded();
+
+    // A path consisting only of the folder itself says nothing, so nothing is rendered.
+    expect(screen.queryByLabelText("Show full folder path")).toBeNull();
+  });
+});
+
 describe("SectionDetail folder-attachment room gating", () => {
   beforeEach(() => {
     vi.clearAllMocks();
