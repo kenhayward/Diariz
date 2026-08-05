@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildRecordingTree } from "./recordingTree";
-import { childrenOf, breadcrumbOf, recordingCountOf, sectionCreateTarget } from "./drillView";
+import { childrenOf, breadcrumbOf, recordingCountOf, sectionCreateTarget, depthOf, MAX_FOLDER_DEPTH } from "./drillView";
 import type { RecordingSummary, SectionDto } from "./types";
 
 const section = (id: string, name: string, parentId: string | null = null, position = 0): SectionDto =>
@@ -9,12 +9,17 @@ const section = (id: string, name: string, parentId: string | null = null, posit
 const recording = (id: string, sectionId: string | null): RecordingSummary =>
   ({ id, title: `rec-${id}`, name: null, sectionId, sectionName: null }) as unknown as RecordingSummary;
 
-// Customers ▸ Ambu, plus a loose recording at the root.
+// Customers > Ambu, plus a loose recording at the root.
 const sections = [
   section("customers", "Customers"),
   section("ambu", "Ambu", "customers"),
   section("podcasts", "Podcasts", null, 1),
 ];
+
+// A chain exactly MAX_FOLDER_DEPTH deep, for the cap cases.
+const deepChain: SectionDto[] = Array.from({ length: MAX_FOLDER_DEPTH }, (_, i) =>
+  section(`d${i}`, `L${i}`, i === 0 ? null : `d${i - 1}`),
+);
 const recordings = [
   recording("r-root", null),
   recording("r-cust", "customers"),
@@ -78,6 +83,18 @@ describe("breadcrumbOf", () => {
   });
 });
 
+describe("depthOf", () => {
+  it("counts the root as 0 and a top-level folder as 1", () => {
+    expect(depthOf(sections, null)).toBe(0);
+    expect(depthOf(sections, "customers")).toBe(1);
+    expect(depthOf(sections, "ambu")).toBe(2);
+  });
+
+  it("is 0 for an unknown id", () => {
+    expect(depthOf(sections, "gone")).toBe(0);
+  });
+});
+
 describe("sectionCreateTarget", () => {
   it("at the root: a new top-level section", () => {
     expect(sectionCreateTarget(sections, null)).toEqual({ kind: "root" });
@@ -90,9 +107,17 @@ describe("sectionCreateTarget", () => {
     });
   });
 
-  // The domain caps nesting at one level, so there is no legal parent from inside a sub-section.
-  it("inside a sub-section: blocked, there is nowhere legal to put it", () => {
-    expect(sectionCreateTarget(sections, "ambu")).toEqual({ kind: "blocked" });
+  // The cap is now 8 levels, not 1, so a sub-section is an ordinary parent.
+  it("inside a sub-section: a sub-section of that", () => {
+    expect(sectionCreateTarget(sections, "ambu")).toEqual({
+      kind: "child",
+      parent: sections[1],
+    });
+  });
+
+  it("at the maximum depth: blocked", () => {
+    const deepest = deepChain[MAX_FOLDER_DEPTH - 1];
+    expect(sectionCreateTarget(deepChain, deepest.id)).toEqual({ kind: "blocked" });
   });
 
   // Drilled into a folder deleted from another tab: creating under a ghost parent would only 404.

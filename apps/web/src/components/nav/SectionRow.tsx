@@ -32,8 +32,8 @@ export default function SectionRow({
   name: string;
   /// Everything underneath, including sub-folders' recordings - the row promises what you'll find inside.
   count: number;
-  /// Whether this folder may take sub-folders (the domain caps the hierarchy at two levels), which decides
-  /// both the "New sub-section" action and what a dropped folder does here.
+  /// Whether this folder may take sub-folders (false once it sits at the depth cap), which decides both the
+  /// "New sub-section" action and what a dropped folder does here.
   canNest: boolean;
   onDrill: () => void;
   onSectionDropBefore: (draggedSectionId: string) => void;

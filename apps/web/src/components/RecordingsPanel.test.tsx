@@ -312,11 +312,28 @@ describe("RecordingsPanel", () => {
       await waitFor(() => expect(api.createSection).toHaveBeenCalledWith("Acme", "customers", undefined));
     });
 
-    // Nesting is capped at one level, so from inside a sub-section there is no legal parent - say so
-    // rather than silently creating the folder somewhere else.
-    it("disables the folder button inside a sub-section, explaining the nesting cap", async () => {
+    // The cap is 8 levels deep, not 1, so a sub-section two levels in still has plenty of legal room -
+    // the folder button stays enabled and keeps offering "New sub-section".
+    it("keeps the folder button enabled inside a sub-section, well short of the depth cap", async () => {
       renderList("/?in=ambu");
-      const btn = (await screen.findByRole("button", { name: /nested one level deep/i })) as HTMLButtonElement;
+      const btn = (await screen.findByRole("button", { name: /^new sub-section$/i })) as HTMLButtonElement;
+      expect(btn.disabled).toBe(false);
+    });
+
+    // At the actual depth cap there is no legal parent - say so rather than silently creating the folder
+    // somewhere else.
+    it("disables the folder button once the drill reaches the depth cap", async () => {
+      const deepChain = Array.from({ length: 8 }, (_, i) => ({
+        id: `d${i}`,
+        name: `L${i}`,
+        parentId: i === 0 ? null : `d${i - 1}`,
+        position: 0,
+      }));
+      (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue(deepChain);
+      (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+      renderList("/?in=d7"); // the 8th and deepest folder in the chain
+
+      const btn = (await screen.findByRole("button", { name: /nested 8 levels deep/i })) as HTMLButtonElement;
       expect(btn.disabled).toBe(true);
       expect(screen.queryByRole("button", { name: /^new sub-section$/i })).toBeNull();
     });
@@ -614,7 +631,7 @@ describe("RecordingsPanel", () => {
     expect(await screen.findByText("Acme call")).toBeTruthy();
   });
 
-  it("offers a New sub-section action on a top-level folder only", async () => {
+  it("offers a New sub-section action on a folder short of the depth cap", async () => {
     (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
       { id: "cust", name: "Customers", parentId: null, position: 0 },
       { id: "acme", name: "Acme", parentId: "cust", position: 0 },
@@ -628,9 +645,27 @@ describe("RecordingsPanel", () => {
     expect(screen.getByRole("menuitem", { name: /new sub-section/i })).toBeTruthy();
     unmount();
 
-    // ...but a sub-folder's does not, since the hierarchy is capped at two levels.
+    // ...and so does a sub-folder's, since the cap is 8 levels deep, not 1.
     renderList("/?in=cust");
     await screen.findByRole("button", { name: /open acme/i });
+    fireEvent.click(screen.getByRole("button", { name: /section actions/i }));
+    expect(screen.getByRole("menuitem", { name: /new sub-section/i })).toBeTruthy();
+  });
+
+  // A folder row itself (not just the toolbar button) stops offering New sub-section once it sits at the
+  // depth cap - childrenCanNest, not sectionCreateTarget, is what gates the row's kebab menu.
+  it("omits New sub-section from a folder row's menu once that row sits at the depth cap", async () => {
+    const deepChain = Array.from({ length: 8 }, (_, i) => ({
+      id: `d${i}`,
+      name: `L${i}`,
+      parentId: i === 0 ? null : `d${i - 1}`,
+      position: 0,
+    }));
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue(deepChain);
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    renderList("/?in=d6"); // browsing the 7th level: its row, d7 (the 8th and deepest), is at the cap
+    await screen.findByRole("button", { name: /open l7/i });
     fireEvent.click(screen.getByRole("button", { name: /section actions/i }));
     expect(screen.queryByRole("menuitem", { name: /new sub-section/i })).toBeNull();
   });
