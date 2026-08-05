@@ -19,7 +19,7 @@ import { formatDuration } from "../lib/format";
 import { computeReorder } from "../lib/reorder";
 import { useDragAutoScroll } from "../lib/dragAutoScroll";
 import { buildRecordingTree, reorderBeforeSection, appendSectionUnder, type SectionNode } from "../lib/recordingTree";
-import { childrenOf, breadcrumbOf, recordingCountOf, sectionCreateTarget } from "../lib/drillView";
+import { childrenOf, breadcrumbOf, recordingCountOf, sectionCreateTarget, depthOf, MAX_FOLDER_DEPTH } from "../lib/drillView";
 import { useDrillSectionId, useDrillSearch } from "../lib/drillRoute";
 import { SECTION_MIME } from "../lib/dragTypes";
 import DrillBreadcrumb from "./nav/DrillBreadcrumb";
@@ -222,8 +222,8 @@ export default function RecordingsPanel() {
     qc.invalidateQueries({ queryKey: ["recordings"] });
   }
 
-  /// Section drag-and-drop. The server may reject a move that would nest more than one level deep
-  /// (e.g. a section with sub-sections dropped under another) — surface that in the banner.
+  /// Section drag-and-drop. The server may reject a move whose target is the section itself or one of
+  /// its own descendants, or whose branch would not fit within the depth cap - surface that in the banner.
   async function runSection(fn: () => Promise<unknown>) {
     setOpError(null);
     try {
@@ -323,8 +323,9 @@ export default function RecordingsPanel() {
   // is why "Ungrouped" is no longer a special case, it is just the root's own items.
   const level = childrenOf(tree, drill.sectionId);
   const levelIds = level.items.map((i) => i.id);
-  // Only top-level folders may take sub-folders (the domain caps the hierarchy at two levels).
-  const childrenCanNest = drill.sectionId === null;
+  // A folder row on this level may take sub-folders as long as one more level still fits. The rows are one
+  // level below the drill position, so their own depth is the drill's depth + 1.
+  const childrenCanNest = depthOf(sections, drill.sectionId) + 1 < MAX_FOLDER_DEPTH;
 
   return (
     // Flex column so the toolbar stays pinned at the top while only the list below it scrolls (mirrors
@@ -394,7 +395,9 @@ export default function RecordingsPanel() {
               onDrop={(e) => {
                 const draggedSection = e.dataTransfer.getData(SECTION_MIME);
                 if (draggedSection) {
-                  if (childrenCanNest) nestSection(null, draggedSection); // root: promote to top level
+                  // The level's background reparents to the level itself - at the root that is a promotion to
+                  // top level, which is always legal regardless of how deep this level's children may go.
+                  nestSection(drill.sectionId, draggedSection);
                   return;
                 }
                 const dragged = e.dataTransfer.getData("text/plain");
@@ -673,9 +676,9 @@ function ListToolbar({
   const [busy, setBusy] = useState(false);
 
   // Creating a folder while browsing inside one should land it where you are looking, so the button's
-  // parent, label and placeholder all follow the drill. `blocked` is the two-level cap (see
-  // `sectionCreateTarget`): the button stays visible but disabled, saying why, rather than quietly
-  // creating the folder at some other level.
+  // parent, label and placeholder all follow the drill. `blocked` means the drill is at the depth cap, or
+  // the folder id is no longer in the tree (see `sectionCreateTarget`): the button stays visible but
+  // disabled, saying why, rather than quietly creating the folder at some other level.
   const target = sectionCreateTarget(sections, drillSectionId);
   const parentId = target.kind === "child" ? target.parent.id : null;
   const createLabel =

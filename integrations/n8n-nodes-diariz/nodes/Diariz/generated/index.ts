@@ -2085,7 +2085,7 @@ const GENERATED: GeneratedResource[] = [
       {
         "value": "listFolders",
         "displayName": "List folders",
-        "description": "The folder tree of one room, flat and in display order. Defaults to your personal room; pass roomId for a shared room you belong to. Build the tree from parentId - null means top level, and nesting only ever goes one level deep, so a folder with a parent can never have children of its own.",
+        "description": "The folder tree of one room, flat and in display order. Defaults to your personal room; pass roomId for a shared room you belong to. Build the tree from parentId - null means top level, and folders nest up to 8 levels deep.",
         "method": "GET",
         "path": "/api/sections",
         "pathParams": [],

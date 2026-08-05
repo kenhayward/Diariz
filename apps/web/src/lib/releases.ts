@@ -32,7 +32,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Translate** | Translate a whole transcript or a single segment, stored as revisions you can flip back. |
 | **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) to a recording or directly to a folder, edit Markdown attachments in place, save a chat conversation as an attachment with /attach, and optionally feed them to chat. |
 | **Rooms** | A private Personal Room per account plus shareable Rooms: invite users and groups with per-member permissions. Each Shared Room has its **own folder structure** (sections/sub-sections, drag-and-drop, per-room order) and its own List/Calendar/Actions/Tags scoped to it; record or upload files straight into a room (your Personal Room keeps the original), and search + chat over every room you belong to. A member who can read a shared recording sees its notes and screenshots too - only the owner can add, edit, or delete them. Your Google Calendar and its linking stay personal. The switcher shows each room's folder and meeting counts (shared ones labelled), ticks the one you are in, and remembers where you were. Manage rooms from the switcher. |
-| **Organise & merge** | Sections and sub-sections with drag-and-drop; the meetings list drills in one folder at a time (coloured folder rows with counts, a breadcrumb back out, browser back pops a level) so it stays readable however many recordings you have, with **Open section page** as a separate target from browsing deeper; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
+| **Organise & merge** | Folders nested up to 8 levels deep with drag-and-drop; the meetings list drills in one folder at a time (coloured folder rows with counts, a breadcrumb back out, browser back pops a level) so it stays readable however many recordings you have, with **Open section page** as a separate target from browsing deeper; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
 | **API access** | Generate a personal API token (when enabled), read-only or read-write, with an optional expiry date, to call the REST API as yourself, with a built-in API reference documenting every endpoint - what it does, who may call it, and what it changes. |
@@ -59,6 +59,22 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.179.0",
+    date: "2026-08-05",
+    pr: 447,
+    headline: "Folders nest up to 8 levels deep",
+    summary:
+      "Folders used to stop at two levels, which was not enough once a library grew - you could have Customers and a customer name, but nowhere to put the project. Folders now nest up to 8 levels, so Customers > Acme Corp > Project Falcon works, and you can drag a folder and its whole contents to a new home anywhere in the tree.",
+    added: [
+      "Folders nest up to 8 levels deep, in the left nav and through the API.",
+      "Moving a folder carries its sub-folders with it.",
+      "Folders at any depth are now selectable both when moving a recording and when choosing where a new recording is filed.",
+    ],
+    changed: [
+      "A folder's roll-ups - summary, minutes, formula runs, chat, actions, notes and attachments - cover every level beneath it.",
+    ],
+  },
   {
     version: "0.178.1",
     date: "2026-08-05",

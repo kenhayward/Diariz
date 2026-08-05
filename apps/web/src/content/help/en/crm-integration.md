@@ -67,8 +67,9 @@ Two further points:
 
 You may not need to add anything to Diariz to make this work, because two things already do the job.
 
-**Folders are the customer dimension.** They nest two deep, so `Customers` then `Acme Corp` is exactly
-what folders are for, and a folder has its own AI summary and minutes across every recording in it. That
+**Folders are the customer dimension.** They nest up to 8 levels deep, so `Customers` then `Acme Corp`
+is exactly what folders are for, and a folder has its own AI summary and minutes across every recording
+in it, at any depth beneath it. That
 gives you an account-level view of every conversation you have ever had with a customer, which is
 usually the thing people actually wanted. An automation can create folders and file recordings into
 them, so your CRM can decide where a meeting belongs. See [Recordings and folders](/help/recording-hub).

@@ -34,7 +34,8 @@ export default function FolderRecordingList({ sectionId }: { sectionId: string }
 
   if (!node) return null;
 
-  const total = node.items.length + node.children.reduce((n, c) => n + c.items.length, 0);
+  const groups = subtreeGroups(node);
+  const total = node.items.length + groups.reduce((n, g) => n + g.items.length, 0);
   if (total === 0)
     return <p className="px-4 pb-4 text-sm text-gray-500 dark:text-gray-400">{t("folderNoRecordings")}</p>;
 
@@ -43,18 +44,16 @@ export default function FolderRecordingList({ sectionId }: { sectionId: string }
       <ul className="divide-y dark:divide-gray-800">
         {node.items.map((r) => <RecordingRow key={r.id} r={r} lang={i18n.language} basePath={basePath} />)}
       </ul>
-      {node.children.map((child) =>
-        child.items.length === 0 ? null : (
-          <div key={child.id} className="mt-3">
-            <div className="mb-1 text-xs font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
-              {child.name} <span className="font-normal text-indigo-400">({child.items.length})</span>
-            </div>
-            <ul className="divide-y dark:divide-gray-800">
-              {child.items.map((r) => <RecordingRow key={r.id} r={r} lang={i18n.language} basePath={basePath} />)}
-            </ul>
+      {groups.map((group) => (
+        <div key={group.id} className="mt-3">
+          <div className="mb-1 text-xs font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+            {group.label} <span className="font-normal text-indigo-400">({group.items.length})</span>
           </div>
-        ),
-      )}
+          <ul className="divide-y dark:divide-gray-800">
+            {group.items.map((r) => <RecordingRow key={r.id} r={r} lang={i18n.language} basePath={basePath} />)}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }
@@ -76,7 +75,34 @@ function RecordingRow({ r, lang, basePath }: { r: RecordingSummary; lang: string
   );
 }
 
-/// Depth-first search for the section node with the given id (two-level tree, so children have no children).
+/// One sub-folder's worth of recordings, labelled with its path relative to the folder being viewed - a
+/// group two levels down reads as "Acme › Falcon", not a bare "Falcon", so it is clear where it sits.
+interface RecordingGroup {
+  id: string;
+  label: string;
+  items: RecordingSummary[];
+}
+
+/// Every descendant of `node` that has its own directly-filed recordings, in display order - not just direct
+/// children. The folder page's summary/minutes/actions already span the whole subtree (`useFolderSummary`,
+/// `useFolderMinutes`), so the listing has to as well, or a recording filed two-plus levels down would be
+/// summarised but never shown (and if all of a folder's recordings live that deep, the empty state would
+/// render directly beneath an AI summary of them). Empty groups are skipped, as before.
+function subtreeGroups(node: SectionNode): RecordingGroup[] {
+  const out: RecordingGroup[] = [];
+  const walk = (n: SectionNode, path: string) => {
+    for (const child of n.children) {
+      const label = path ? `${path} › ${child.name}` : child.name;
+      if (child.items.length > 0) out.push({ id: child.id, label, items: child.items });
+      walk(child, label);
+    }
+  };
+  walk(node, "");
+  return out;
+}
+
+/// Depth-first search for the section node with the given id. Folders now nest up to `MAX_FOLDER_DEPTH`
+/// levels, so this recurses through every level, not just one.
 function findNode(nodes: SectionNode[], id: string): SectionNode | null {
   for (const n of nodes) {
     if (n.id === id) return n;

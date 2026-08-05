@@ -84,4 +84,56 @@ public class SectionTreeTests
         Assert.Contains(falcon.Id, ids);
         Assert.DoesNotContain(decoy.Id, ids);
     }
+
+    [Fact]
+    public void Depth_CountsTopLevelAsOne()
+    {
+        Assert.Equal(1, SectionTree.Depth(Tree(), Customers));
+        Assert.Equal(2, SectionTree.Depth(Tree(), Acme));
+        Assert.Equal(3, SectionTree.Depth(Tree(), Falcon));
+    }
+
+    [Fact]
+    public void Depth_OfAnUnknownId_IsZero()
+    {
+        Assert.Equal(0, SectionTree.Depth(Tree(), Guid.NewGuid()));
+    }
+
+    [Fact]
+    public void Depth_WithACycle_Terminates()
+    {
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        SectionLink[] cyclic = [new(a, b), new(b, a)];
+        Assert.True(SectionTree.Depth(cyclic, a) > 0); // the assertion that matters is that it returns at all
+    }
+
+    [Fact]
+    public void Height_OfALeaf_IsOne()
+    {
+        Assert.Equal(1, SectionTree.Height(Tree(), Falcon));
+    }
+
+    [Fact]
+    public void Height_CountsTheDeepestBranchIncludingTheRoot()
+    {
+        Assert.Equal(3, SectionTree.Height(Tree(), Customers)); // Customers > Acme > Falcon
+        Assert.Equal(2, SectionTree.Height(Tree(), Acme));
+    }
+
+    [Fact]
+    public void MaxDepth_IsEight()
+    {
+        Assert.Equal(8, SectionTree.MaxDepth);
+    }
+
+    [Fact]
+    public void Height_OfAnUnknownRoot_IsOne()
+    {
+        // Deliberately NOT 0, unlike Depth: an unknown id still occupies one level as far as a caller
+        // composing Depth(target) + Height(moved) is concerned. Callers guard existence upstream
+        // (SectionsController.Reorder 404s on ids that are not in the room), so this is a safe floor
+        // rather than a value any real move relies on.
+        Assert.Equal(1, SectionTree.Height(Tree(), Guid.NewGuid()));
+    }
 }

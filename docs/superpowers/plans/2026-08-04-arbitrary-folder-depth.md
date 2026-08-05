@@ -2531,4 +2531,13 @@ EOF
 Phases 4 and 5 of the spec are deliberately out of scope and need their own plans once this is in use:
 
 - **Phase 4:** the cut/paste clipboard for recordings and folders, and the bulk move endpoint (`POST /api/recordings/section`). Until it lands, moving something across branches is still only possible one level at a time by dragging - the deep tree is buildable but awkward to reorganise.
-- **Phase 5:** rebuilding `MoveToSectionModal` and `RecordingsSection`'s flat `Parent > Child` pickers as drill-down pickers, and recursing `FolderRecordingList`'s grouping. These degrade gracefully rather than breaking, but they get worse the deeper a tree goes.
+- **Phase 5:** rebuilding `MoveToSectionModal` and `RecordingsSection`'s flat `Parent > Child` pickers as
+  **drill-down** pickers, so a deep tree is pleasant to navigate rather than a long list of long path strings.
+
+  > **Corrected during execution (2026-08-05).** This bullet originally also deferred *recursing*
+  > `orderedSections` and `FolderRecordingList`, on the claim that both "degrade gracefully rather than
+  > breaking". That claim was false and Phase 2's whole-branch review caught it. `orderedSections` silently
+  > omitted every folder below depth 2, so the pickers could not select the folders the same release let you
+  > create; and `FolderRecordingList` would render its "no recordings" empty state directly beneath an AI
+  > summary of recordings filed deeper down. Both were fixed in Phase 2. What remains here is only the
+  > drill-down redesign, which genuinely is a comfort improvement rather than a correctness one.

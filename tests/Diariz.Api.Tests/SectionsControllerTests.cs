@@ -208,16 +208,52 @@ public class SectionsControllerTests
     }
 
     [Fact]
-    public async Task Create_UnderASubSection_RejectsThirdLevel()
+    public async Task Create_UnderASubSection_NowNestsAThirdLevel()
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var parent = await SeedSection(db, userId, "Customers");
         var child = await SeedSection(db, userId, "Acme", parentId: parent.Id);
 
-        var result = await Build(db, userId).Create(new CreateSectionRequest("Project X", child.Id));
+        var result = await Build(db, userId).Create(new CreateSectionRequest("Project Falcon", child.Id));
 
-        Assert.IsType<BadRequestObjectResult>(result.Result);
+        var dto = Assert.IsType<SectionDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(child.Id, dto.ParentId);
+    }
+
+    [Fact]
+    public async Task Create_BeyondMaxDepth_ReturnsBadRequest()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+
+        // Build a chain exactly MaxDepth deep, then try to add one more under the deepest.
+        Guid? parentId = null;
+        for (var i = 0; i < SectionTree.MaxDepth; i++)
+            parentId = (await SeedSection(db, userId, $"L{i}", parentId)).Id;
+
+        var result = await Build(db, userId).Create(new CreateSectionRequest("TooDeep", parentId));
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal($"Folders can only be nested {SectionTree.MaxDepth} levels deep.", badRequest.Value);
+    }
+
+    [Fact]
+    public async Task Create_AtMaxDepth_ReturnsOk()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+
+        // Build a chain MaxDepth-1 deep (levels 1..7), then add one more under the deepest - landing exactly
+        // at level 8, the cap itself. This is the accept edge that the reject test above does not exercise.
+        Guid? parentId = null;
+        for (var i = 0; i < SectionTree.MaxDepth - 1; i++)
+            parentId = (await SeedSection(db, userId, $"L{i}", parentId)).Id;
+
+        var result = await Build(db, userId).Create(new CreateSectionRequest("AtTheCap", parentId));
+
+        var dto = Assert.IsType<SectionDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(parentId, dto.ParentId);
     }
 
     [Fact]
@@ -262,7 +298,7 @@ public class SectionsControllerTests
     }
 
     [Fact]
-    public async Task Reorder_UnderASubSection_RejectsThirdLevel()
+    public async Task Reorder_UnderASubSection_NowNestsAThirdLevel()
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
@@ -270,23 +306,81 @@ public class SectionsControllerTests
         var child = await SeedSection(db, userId, "Acme", parentId: parent.Id);
         var loose = await SeedSection(db, userId, "Loose");
 
-        Assert.IsType<BadRequestObjectResult>(
-            await Build(db, userId).Reorder(new ReorderSectionsRequest(child.Id, [loose.Id])));
+        var result = await Build(db, userId).Reorder(new ReorderSectionsRequest(child.Id, [loose.Id]));
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Equal(child.Id, (await db.Sections.FindAsync(loose.Id))!.ParentId);
     }
 
     [Fact]
-    public async Task Reorder_MovingAParentWithChildren_UnderAnother_IsRejected()
+    public async Task Reorder_MovingAParentWithChildren_NowCarriesItsBranch()
     {
         using var db = TestDb.Create();
         var userId = Guid.NewGuid();
         var top = await SeedSection(db, userId, "Top");
         var hasChild = await SeedSection(db, userId, "HasChild");
         var grandchild = await SeedSection(db, userId, "Kid", parentId: hasChild.Id);
-        _ = grandchild;
 
-        // Moving HasChild under Top would make Kid a third level → rejected.
-        Assert.IsType<BadRequestObjectResult>(
-            await Build(db, userId).Reorder(new ReorderSectionsRequest(top.Id, [hasChild.Id])));
+        var result = await Build(db, userId).Reorder(new ReorderSectionsRequest(top.Id, [hasChild.Id]));
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Equal(top.Id, (await db.Sections.FindAsync(hasChild.Id))!.ParentId);
+        // The branch travels with it - Kid is untouched and is now three levels down.
+        Assert.Equal(hasChild.Id, (await db.Sections.FindAsync(grandchild.Id))!.ParentId);
+    }
+
+    [Fact]
+    public async Task Reorder_IntoItsOwnDescendant_IsRejected()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var parent = await SeedSection(db, userId, "Customers");
+        var child = await SeedSection(db, userId, "Acme", parentId: parent.Id);
+
+        // Moving Customers under its own child would orphan the whole branch from the tree.
+        var result = await Build(db, userId).Reorder(new ReorderSectionsRequest(child.Id, [parent.Id]));
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Null((await db.Sections.FindAsync(parent.Id))!.ParentId); // unchanged
+    }
+
+    [Fact]
+    public async Task Reorder_WhenTheBranchWouldNotFit_IsRejected()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+
+        // A target chain MaxDepth-1 deep, and a separate 2-level branch. 7 + 2 > 8, so the move is refused
+        // even though the target itself is a legal place for a leaf.
+        Guid? targetId = null;
+        for (var i = 0; i < SectionTree.MaxDepth - 1; i++)
+            targetId = (await SeedSection(db, userId, $"L{i}", targetId)).Id;
+        var branch = await SeedSection(db, userId, "Branch");
+        await SeedSection(db, userId, "BranchKid", parentId: branch.Id);
+
+        var result = await Build(db, userId).Reorder(new ReorderSectionsRequest(targetId, [branch.Id]));
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        Assert.Null((await db.Sections.FindAsync(branch.Id))!.ParentId); // unchanged
+    }
+
+    [Fact]
+    public async Task Reorder_ToMaxDepth_ReturnsNoContent()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+
+        // A target chain MaxDepth-1 deep, and a separate single leaf (height 1). 7 + 1 = 8, exactly the cap -
+        // the accept edge the reject test above does not exercise.
+        Guid? targetId = null;
+        for (var i = 0; i < SectionTree.MaxDepth - 1; i++)
+            targetId = (await SeedSection(db, userId, $"L{i}", targetId)).Id;
+        var leaf = await SeedSection(db, userId, "Leaf");
+
+        var result = await Build(db, userId).Reorder(new ReorderSectionsRequest(targetId, [leaf.Id]));
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Equal(targetId, (await db.Sections.FindAsync(leaf.Id))!.ParentId);
     }
 
     [Fact]

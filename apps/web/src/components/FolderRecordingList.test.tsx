@@ -93,3 +93,42 @@ describe("FolderRecordingList room scoping (issue #295)", () => {
     expect(link.getAttribute("href")).toBe("/recordings/r1");
   });
 });
+
+describe("FolderRecordingList subtree coverage (deep folders)", () => {
+  // Customers > Acme > Falcon, with a recording filed two levels down. The folder page's summary/minutes
+  // already cover the whole subtree, so the listing (and its count) must too, or the page would summarise a
+  // recording it never lists.
+  const customers = { id: "sec-cust", name: "Customers", parentId: null, position: 0 };
+  const acme = { id: "sec-acme", name: "Acme", parentId: "sec-cust", position: 0 };
+  const falcon = { id: "sec-falcon", name: "Falcon", parentId: "sec-acme", position: 0 };
+  const deepRec = {
+    id: "r-deep", title: "Roadmap review", name: null, source: "Microphone", durationMs: 500,
+    status: "Transcribed", createdAt: "2026-01-02T00:00:00Z", sectionId: "sec-falcon", sectionName: "Falcon",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    roomState.currentRoom = { id: "p1", isPersonal: true };
+    mock(api.listRecordings).mockImplementation((roomId?: string) =>
+      Promise.resolve(roomId === "p1" ? [deepRec] : []),
+    );
+    mock(api.listSections).mockImplementation((roomId?: string) =>
+      Promise.resolve(roomId === "p1" ? [customers, acme, falcon] : []),
+    );
+  });
+
+  it("lists a recording filed two levels below the viewed folder", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <FolderRecordingList sectionId="sec-cust" />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText("Roadmap review")).toBeTruthy());
+    // Grouped under its path relative to the viewed folder, not a bare "Falcon".
+    expect(screen.getByText(/Acme.*Falcon/)).toBeTruthy();
+  });
+});

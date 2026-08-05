@@ -10738,7 +10738,7 @@
     },
     "/api/sections": {
       "get": {
-        "description": "The folder tree of one room, flat and in display order. Defaults to your personal room; pass `roomId` for a shared room you belong to. Build the tree from `parentId` - null means top level, and nesting only ever goes **one level deep**, so a folder with a parent can never have children of its own.\n\nEach room has its own independent folders. A non-member gets 404 rather than learning the room exists.",
+        "description": "The folder tree of one room, flat and in display order. Defaults to your personal room; pass `roomId` for a shared room you belong to. Build the tree from `parentId` - null means top level, and folders nest up to **8 levels** deep.\n\nEach room has its own independent folders. A non-member gets 404 rather than learning the room exists.",
         "parameters": [
           {
             "in": "query",
@@ -10786,7 +10786,7 @@
         ]
       },
       "post": {
-        "description": "Adds a folder to a room, or a sub-folder when you pass `parentId`. **Idempotent by name**: if a folder with the same name already exists under the same parent, that one is returned instead of a duplicate being created - so re-running an import does not litter the tree. Compare the returned id with what you expected if that matters to you.\n\nNesting is capped at one level, so a parent that is itself a sub-folder is rejected with 400. Needs `ManageContents` in the room; you always hold it in your own personal room.",
+        "description": "Adds a folder to a room, or a sub-folder when you pass `parentId`. **Idempotent by name**: if a folder with the same name already exists under the same parent, that one is returned instead of a duplicate being created - so re-running an import does not litter the tree. Compare the returned id with what you expected if that matters to you.\n\nFolders nest up to **8 levels** deep (top level counts as 1); going deeper is rejected with 400. Needs `ManageContents` in the room; you always hold it in your own personal room.",
         "requestBody": {
           "content": {
             "application/*+json": {
@@ -10837,7 +10837,7 @@
     },
     "/api/sections/reorder": {
       "put": {
-        "description": "Sets the parent and 0-based position of each listed folder in one call, covering both resequencing among siblings and moving folders under a new parent. Pass a null `parentId` to move them to the top level.\n\nThe one-level nesting cap is enforced here too, and in two ways: the target parent may not itself be a sub-folder, and a folder that **has** sub-folders may not become one (both 400). A folder cannot be its own parent. Every listed id must exist in the room, otherwise the whole call 404s and nothing moves. Needs `ManageContents`.",
+        "description": "Sets the parent and 0-based position of each listed folder in one call, covering both resequencing among siblings and moving folders under a new parent. Pass a null `parentId` to move them to the top level.\n\nA folder moves with its whole branch, so two rules apply (both 400): the target may not be the folder itself or anything beneath it, and the target's depth plus the moved branch's height may not exceed **8** levels - so a legal target can still be too deep for a tall branch. Every listed id must exist in the room, otherwise the whole call 404s and nothing moves. Needs `ManageContents`.",
         "requestBody": {
           "content": {
             "application/*+json": {

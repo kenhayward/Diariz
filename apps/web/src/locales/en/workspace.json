@@ -414,7 +414,7 @@
   "confirmDeleteSection": "Delete section \"{{name}}\"? Its recordings move to Ungrouped.",
   "sectionActions": "Section actions",
   "sectionNameAria": "Section name",
-  "newSectionNestCapped": "Sections can only be nested one level deep",
+  "newSectionNestCapped": "Folders can only be nested 8 levels deep",
   "newSubSection": "New sub-section",
   "newSubSectionPlaceholder": "New sub-section in {{parent}}",
   "selectRecordingAria": "Select {{name}}",

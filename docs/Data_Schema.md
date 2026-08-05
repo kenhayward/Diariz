@@ -613,13 +613,17 @@ User-defined group recordings are filed under.
 | `Id` | uuid PK | |
 | `UserId` | uuid FK → AspNetUsers | cascade |
 | `Name` | varchar(128) | |
-| `ParentId` | uuid FK → Sections null | null = top-level; non-null = a sub-section (one level only). **Cascade** on parent delete |
+| `ParentId` | uuid FK → Sections null | null = top-level; non-null = a sub-section, nesting up to 8 levels. **Cascade** on parent delete |
 | `Position` | int | manual sort order among siblings (drag-to-reorder; replaces alphabetical) |
 | `CreatedAt` | timestamptz | |
 
-Index: `(UserId, Name)`, `(ParentId)`. Sections nest **one level deep** (a sub-section can't be a parent;
-enforced in `SectionsController`). Deleting a section **Cascade**-deletes its sub-sections and **SetNull**s
-the recordings of itself and those sub-sections (ungroups, not deletes).
+Index: `(UserId, Name)`, `(ParentId)`. Sections nest up to **8 levels deep** (`SectionTree.MaxDepth`, enforced
+in `SectionsController`: create checks the parent's depth; reparent rejects a folder becoming its own parent,
+rejects a move into the folder's own descendant, and checks the target's depth plus the moved branch's height).
+Deleting a section **Cascade**-deletes
+its whole subtree - Postgres cascades the self-referencing FK recursively - and **SetNull**s the recordings of
+every folder in it (ungroups, not deletes). No migration was needed for the deeper tree: the self-referencing
+`ParentId` already supported it, so older backups remain restorable.
 
 #### `SectionSummaries` / `SectionMinutes`
 The folder-level LLM roll-ups shown on the section (folder) page - a summary combining the included

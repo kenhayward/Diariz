@@ -2150,7 +2150,7 @@ the build if the committed output has drifted.
 
 - **M1 — done:** capture → transcribe (WhisperX + pyannote) → view speaker-labelled segments.
 - **M2 — done:** multi-user auth + RBAC, LLM summaries, action extraction, transcript export/email,
-  re-transcribe with model choice, sections (**two-level nesting**: `Section.ParentId`, drag-to-reorder),
+  re-transcribe with model choice, sections (**nested folders up to 8 levels deep**: `Section.ParentId`, drag-to-reorder),
   speaker identification, delete-audio (keep transcript, free quota), **supporting-document attachments**
   (files or URLs on a recording — `Attachments` table + `AttachmentsController` — or **directly on a folder** —
   `SectionAttachments` + `SectionAttachmentsController`; files in MinIO under `{userId}/attachments/…` /

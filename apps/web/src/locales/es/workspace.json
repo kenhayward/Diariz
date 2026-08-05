@@ -414,7 +414,7 @@
   "confirmDeleteSection": "¿Eliminar la sección \"{{name}}\"? Sus grabaciones pasarán a Sin agrupar.",
   "sectionActions": "Acciones de la sección",
   "sectionNameAria": "Nombre de la sección",
-  "newSectionNestCapped": "Las secciones solo pueden anidarse un nivel",
+  "newSectionNestCapped": "Las secciones solo pueden anidarse hasta 8 niveles de profundidad",
   "newSubSection": "Nueva subsección",
   "newSubSectionPlaceholder": "Nueva subsección en {{parent}}",
   "selectRecordingAria": "Seleccionar {{name}}",

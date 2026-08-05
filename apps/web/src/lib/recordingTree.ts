@@ -1,9 +1,8 @@
 import type { RecordingSummary, SectionDto } from "./types";
 import { computeReorder } from "./reorder";
 
-/// A section node in the two-level recordings tree. Top-level sections may have `children`
-/// (sub-sections); sub-sections never do (the hierarchy is capped at two levels). `items` are the
-/// recordings filed directly under this section — recordings may live at either level.
+/// A section node in the recordings tree, which nests to any depth (the API caps it at 8 levels).
+/// `items` are the recordings filed directly under this section - recordings may live at any level.
 export interface SectionNode {
   id: string;
   name: string;
@@ -12,7 +11,7 @@ export interface SectionNode {
 }
 
 export interface RecordingTree {
-  /// Top-level sections in display order; each may carry direct recordings and sub-sections.
+  /// Top-level sections in display order; each may carry direct recordings and sub-sections, to any depth.
   sections: SectionNode[];
   /// Recordings with no section.
   ungrouped: RecordingSummary[];
@@ -22,9 +21,9 @@ function bySiblingOrder(a: SectionDto, b: SectionDto): number {
   return (a.position ?? 0) - (b.position ?? 0) || a.name.localeCompare(b.name);
 }
 
-/// Build the two-level tree the recordings panel renders. Recordings are filed under their
-/// `sectionId` (top-level or sub-section); unknown section ids (e.g. the sections list hasn't loaded
-/// yet) fall back to a synthetic top-level section using the recording's own `sectionName`.
+/// Build the recordings tree. Recordings are filed under their `sectionId` at whatever depth that
+/// section sits; unknown section ids (e.g. the sections list hasn't loaded yet) fall back to a
+/// synthetic top-level section using the recording's own `sectionName`.
 export function buildRecordingTree(recordings: RecordingSummary[], sections: SectionDto[]): RecordingTree {
   const known = new Map(sections.map((s) => [s.id, s]));
   const recsBySection = new Map<string, RecordingSummary[]>();
@@ -39,27 +38,33 @@ export function buildRecordingTree(recordings: RecordingSummary[], sections: Sec
     recsBySection.set(r.sectionId, arr);
   }
 
-  // Treat a null/undefined parent as top-level (defensive against partially-populated section data).
-  const tops = sections.filter((s) => !s.parentId).sort(bySiblingOrder);
-  const subsByParent = new Map<string, SectionDto[]>();
+  // Index children by parent once, so the recursive build is a lookup per node rather than a scan.
+  // Treat a null/undefined parent - or one we don't know - as top-level (defensive against partial data).
+  const childrenOfParent = new Map<string, SectionDto[]>();
+  const tops: SectionDto[] = [];
   for (const s of sections) {
     if (s.parentId && known.has(s.parentId)) {
-      const arr = subsByParent.get(s.parentId) ?? [];
+      const arr = childrenOfParent.get(s.parentId) ?? [];
       arr.push(s);
-      subsByParent.set(s.parentId, arr);
+      childrenOfParent.set(s.parentId, arr);
+    } else if (!s.parentId) {
+      tops.push(s);
     }
   }
+  tops.sort(bySiblingOrder);
 
-  const node = (s: SectionDto, children: SectionNode[] = []): SectionNode => ({
-    id: s.id,
-    name: s.name,
-    items: recsBySection.get(s.id) ?? [],
-    children,
-  });
+  // `seen` bounds a parentId cycle, which the schema does not prevent - without it this never returns.
+  const seen = new Set<string>();
+  const build = (s: SectionDto): SectionNode => {
+    seen.add(s.id);
+    const children = (childrenOfParent.get(s.id) ?? [])
+      .filter((c) => !seen.has(c.id))
+      .sort(bySiblingOrder)
+      .map(build);
+    return { id: s.id, name: s.name, items: recsBySection.get(s.id) ?? [], children };
+  };
 
-  const sectionNodes = tops.map((top) =>
-    node(top, (subsByParent.get(top.id) ?? []).sort(bySiblingOrder).map((sub) => node(sub))),
-  );
+  const sectionNodes = tops.map(build);
 
   // Recordings pointing at a section we don't know yet → synthetic top-level groups (load-order safety).
   for (const [sectionId, items] of recsBySection) {

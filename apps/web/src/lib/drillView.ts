@@ -3,8 +3,8 @@
 /// load-order safety net for unknown section ids); this module only answers the three questions the
 /// drill-in UI asks: what is at this level, how did I get here, and how much is under each row.
 ///
-/// Everything here walks `parentId` generically. The domain caps sections at two levels (enforced in
-/// `SectionsController`), but nothing below assumes that — lifting the cap should not touch the nav.
+/// Everything here walks `parentId` generically, so it works at any depth. The API caps folders at
+/// `MAX_FOLDER_DEPTH` levels; only `sectionCreateTarget` below knows that.
 
 import type { RecordingTree, SectionNode } from "./recordingTree";
 import type { RecordingSummary, SectionDto } from "./types";
@@ -55,24 +55,50 @@ export function breadcrumbOf(sections: SectionDto[], sectionId: string | null): 
   return chain.reverse();
 }
 
+/// How deep folders may nest, mirroring `SectionTree.MaxDepth` on the API. Top level is 1, so this is the
+/// number of folder levels. Kept in sync by hand: the two constants are in different languages, and the
+/// server is the one that enforces it - this copy only decides what the UI offers.
+export const MAX_FOLDER_DEPTH = 8;
+
+/// The level a folder sits at: 0 for the room root, 1 for a top-level folder. Zero for an unknown id.
+/// Guards against a `parentId` cycle, which nothing in the schema prevents.
+export function depthOf(sections: SectionDto[], sectionId: string | null): number {
+  if (sectionId === null) return 0;
+  const byId = new Map(sections.map((s) => [s.id, s]));
+  let current = byId.get(sectionId);
+  if (!current) return 0;
+
+  let depth = 1;
+  const seen = new Set<string>([sectionId]);
+  while (current.parentId && !seen.has(current.parentId)) {
+    seen.add(current.parentId);
+    const parent = byId.get(current.parentId);
+    if (!parent) break;
+    current = parent;
+    depth++;
+  }
+  return depth;
+}
+
 /// Where a new folder created from the toolbar should go, given where you are browsing. `blocked` covers
-/// both ends of the same problem: the drill is inside a sub-section (the domain caps nesting at one level,
-/// so `SectionsController.Create` would 400) or inside an id that is no longer in the tree (deleted from
-/// another tab - the level renders empty, and creating under a ghost parent would only 404).
+/// both ends of the same problem: the drill is at the depth cap (`SectionsController.Create` would 400) or
+/// inside an id that is no longer in the tree (deleted from another tab - the level renders empty, and
+/// creating under a ghost parent would only 404).
 export type SectionCreateTarget =
   | { kind: "root" }
   | { kind: "child"; parent: SectionDto }
   | { kind: "blocked" };
 
-/// Unlike the rest of this module, this one **does** encode the two-level cap - it has to, because it
-/// decides what the API will accept. Lifting the cap turns the `blocked` branch into another `child`.
+/// Unlike the rest of this module, this one **does** encode the depth cap - it has to, because it decides
+/// what the API will accept.
 export function sectionCreateTarget(
   sections: SectionDto[],
   sectionId: string | null,
 ): SectionCreateTarget {
   if (sectionId === null) return { kind: "root" };
   const parent = sections.find((s) => s.id === sectionId);
-  if (!parent || parent.parentId !== null) return { kind: "blocked" };
+  if (!parent) return { kind: "blocked" };
+  if (depthOf(sections, sectionId) >= MAX_FOLDER_DEPTH) return { kind: "blocked" };
   return { kind: "child", parent };
 }
 
