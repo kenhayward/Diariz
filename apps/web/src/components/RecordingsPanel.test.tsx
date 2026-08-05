@@ -406,6 +406,20 @@ describe("RecordingsPanel", () => {
       fireEvent.click(screen.getByRole("button", { name: /^cut$/i }));
       expect(cut).toEqual({ kind: "recordings", ids: ["cust-r"], sourceSectionId: "customers", sourceRoomId: null });
     });
+
+    // Goes through the real tree rather than feeding SectionRow a hand-built prop: drills into "customers"
+    // so its child "ambu" renders as a SectionRow, cuts it from there, and checks the source is the
+    // drilled-into parent ("customers") rather than the cut folder's own id ("ambu"). Those two ids must
+    // differ in this fixture, or the assertion could pass even if RecordingsPanel wired the wrong one - this
+    // is exactly what would catch a call site accidentally passing node.id instead of drill.sectionId.
+    it("cuts a folder using the drilled-into level as its source, not the folder's own id", async () => {
+      let cut: MoveClipboardCut | null = null;
+      renderListWithClipboardSpy("/?in=customers", (c) => (cut = c));
+      await screen.findByText("Ambu"); // the child folder row, rendered as a SectionRow at this level
+      fireEvent.click(screen.getByRole("button", { name: /section actions/i }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /^cut$/i }));
+      expect(cut).toEqual({ kind: "folders", ids: ["ambu"], sourceSectionId: "customers", sourceRoomId: null });
+    });
   });
 
   it("shows the name on the row and moves source · date into the hover title", async () => {
