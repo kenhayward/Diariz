@@ -410,6 +410,8 @@
   "drillDirectlyIn": "Directement dans {{name}}",
   "drillOpenFolder": "Ouvrir {{name}}",
   "drillEmpty": "Ce dossier est vide.",
+  "folderPathMenu": "Afficher le chemin complet du dossier",
+  "folderPathCollapsed": "Dossiers masqués",
   "selectAllIn": "Tout sélectionner dans {{section}}",
   "confirmDeleteSection": "Supprimer la section « {{name}} » ? Ses enregistrements passeront dans Sans section.",
   "sectionActions": "Actions de la section",

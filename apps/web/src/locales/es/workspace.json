@@ -410,6 +410,8 @@
   "drillDirectlyIn": "Directamente en {{name}}",
   "drillOpenFolder": "Abrir {{name}}",
   "drillEmpty": "Esta carpeta está vacía.",
+  "folderPathMenu": "Mostrar ruta completa de la carpeta",
+  "folderPathCollapsed": "Carpetas ocultas",
   "selectAllIn": "Seleccionar todo en {{section}}",
   "confirmDeleteSection": "¿Eliminar la sección \"{{name}}\"? Sus grabaciones pasarán a Sin agrupar.",
   "sectionActions": "Acciones de la sección",

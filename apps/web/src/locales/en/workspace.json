@@ -410,6 +410,8 @@
   "drillDirectlyIn": "Directly in {{name}}",
   "drillOpenFolder": "Open {{name}}",
   "drillEmpty": "This folder is empty.",
+  "folderPathMenu": "Show full folder path",
+  "folderPathCollapsed": "Hidden folders",
   "selectAllIn": "Select all in {{section}}",
   "confirmDeleteSection": "Delete section \"{{name}}\"? Its recordings move to Ungrouped.",
   "sectionActions": "Section actions",
