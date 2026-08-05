@@ -9,7 +9,7 @@ order: 15
 
 Folders nest up to 8 levels deep, so you can go as narrow as Customers, then a customer name, then a
 project underneath it. A recording can be filed into a folder at any of those levels from its
-**Move to folder** action, not just the bottom one.
+**Move to section** action, not just the bottom one.
 
 ## Moving between folders
 
