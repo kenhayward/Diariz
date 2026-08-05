@@ -63,12 +63,13 @@ export const RELEASES: Release[] = [
     version: "0.179.0",
     date: "2026-08-05",
     pr: 447,
-    headline: "Folders nest as deep as you need",
+    headline: "Folders nest up to 8 levels deep",
     summary:
       "Folders used to stop at two levels, which was not enough once a library grew - you could have Customers and a customer name, but nowhere to put the project. Folders now nest up to 8 levels, so Customers > Acme Corp > Project Falcon works, and you can drag a folder and its whole contents to a new home anywhere in the tree.",
     added: [
       "Folders nest up to 8 levels deep, in the left nav and through the API.",
       "Moving a folder carries its sub-folders with it.",
+      "Folders at any depth are now selectable both when moving a recording and when choosing where a new recording is filed.",
     ],
     changed: [
       "A folder's roll-ups - summary, minutes, formula runs, chat, actions, notes and attachments - cover every level beneath it.",

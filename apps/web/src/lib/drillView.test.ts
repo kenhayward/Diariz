@@ -66,8 +66,9 @@ describe("breadcrumbOf", () => {
     expect(breadcrumbOf(sections, "customers").map((s) => s.name)).toEqual(["Customers"]);
   });
 
-  // Written generically against parentId, so lifting the domain's two-level cap needs no nav change.
-  it("handles depth beyond two levels", () => {
+  // Written generically against parentId, so it needed no change when the domain's cap was lifted from
+  // two levels to eight.
+  it("handles depth beyond the old two-level cap", () => {
     const deep = [...sections, section("eu", "EU", "ambu"), section("nordic", "Nordic", "eu")];
     expect(breadcrumbOf(deep, "nordic").map((s) => s.name)).toEqual(["Customers", "Ambu", "EU", "Nordic"]);
   });

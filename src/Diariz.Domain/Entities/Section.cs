@@ -15,9 +15,11 @@ public class Section
 
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>Optional parent section, for one level of nesting (e.g. "Customers" › "Acme Corp").
-    /// Null = a top-level section. The hierarchy is capped at two levels: a section that has a
-    /// <see cref="ParentId"/> can't itself be a parent (enforced in the controller).</summary>
+    /// <summary>Optional parent section, for nesting (e.g. "Customers" › "Acme Corp" › "Project Falcon").
+    /// Null = a top-level section. The hierarchy is capped at 8 levels deep (top level counts as 1):
+    /// creating a section checks its parent's depth, and reparenting rejects a self-parent, a move into the
+    /// section's own descendant, or one whose branch would not fit under the cap (all enforced in
+    /// <c>SectionsController</c> via <c>SectionTree</c>).</summary>
     public Guid? ParentId { get; set; }
     public Section? Parent { get; set; }
     public ICollection<Section> Children { get; set; } = new List<Section>();
