@@ -12,6 +12,9 @@ namespace Diariz.Api.Tests;
 /// regenerate only the ones missing an individual summary, combine into one folder summary on the section.</summary>
 public class SectionSummaryProcessorTests
 {
+    /// <summary>A folder in the user's real personal room - the same room <see cref="SeedRecording"/> files
+    /// recordings into. The <c>RoomId</c> is load-bearing: placements are resolved by the folder's own room, so
+    /// a section left at the default <c>Guid.Empty</c> would match no placement at all.</summary>
     private static async Task<Section> SeedSection(DiarizDbContext db, Guid userId, Guid? parentId = null)
     {
         if (await db.Users.FindAsync(userId) is null)
@@ -19,7 +22,8 @@ public class SectionSummaryProcessorTests
             db.Users.Add(new ApplicationUser { Id = userId, UserName = $"{userId}@x.test", Email = $"{userId}@x.test" });
             await db.SaveChangesAsync();
         }
-        var s = new Section { Id = Guid.NewGuid(), UserId = userId, Name = "Folder", ParentId = parentId };
+        var roomId = await new RoomScope(db).PersonalRoomIdAsync(userId);
+        var s = new Section { Id = Guid.NewGuid(), UserId = userId, RoomId = roomId, Name = "Folder", ParentId = parentId };
         db.Sections.Add(s);
         await db.SaveChangesAsync();
         return s;
@@ -97,6 +101,48 @@ public class SectionSummaryProcessorTests
         // child "Acme" was visible to the old UserId/ParentId query, so Falcon's recording was invisible).
         Assert.Equal(1, perRec.Calls);
         Assert.Contains("Grandchild summary.", combiner.LastMessages![1].Content);
+    }
+
+    /// <summary>A folder in a SHARED room rolls up the recordings placed in that room. Before the fix this
+    /// returned nothing at all, whatever the folder held: the folder walk produced section ids from the shared
+    /// room while the placement join only ever looked in the section owner's PERSONAL room, so the two sets were
+    /// drawn from different rooms and could never intersect. The folder page meanwhile showed a non-zero count
+    /// for the same folder, because it scopes placements by <c>p.RoomId == roomId</c>.</summary>
+    [Fact]
+    public async Task Reaches_recordings_in_a_shared_room_folder()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.Users.Add(new ApplicationUser { Id = userId, UserName = $"{userId}@x.test", Email = $"{userId}@x.test" });
+        await db.SaveChangesAsync();
+        var scope = new RoomScope(db);
+        var sharedRoomId = await scope.CreateSharedRoomAsync("Engineering", null, null, null);
+
+        var folder = new Section { Id = Guid.NewGuid(), UserId = userId, RoomId = sharedRoomId, Name = "Acme" };
+        db.Sections.Add(folder);
+        await db.SaveChangesAsync();
+
+        var rec = new Recording { Id = Guid.NewGuid(), UserId = userId, Name = "Kickoff", BlobKey = "k" };
+        var tr = new Transcription { Id = Guid.NewGuid(), RecordingId = rec.Id, Model = "whisperx", Version = 1 };
+        db.Recordings.Add(rec);
+        db.Transcriptions.Add(tr);
+        db.Segments.Add(new Segment
+        {
+            Id = Guid.NewGuid(), TranscriptionId = tr.Id, SpeakerLabel = "SPEAKER_00",
+            StartMs = 0, EndMs = 1000, Original = "Hi", Ordinal = 0,
+        });
+        // Placed in the SHARED room, filed under the shared folder - which is where a shared folder's
+        // recordings actually live.
+        db.RoomRecordings.Add(new RoomRecording { RoomId = sharedRoomId, RecordingId = rec.Id, SectionId = folder.Id });
+        await db.SaveChangesAsync();
+
+        var perRec = new FakeSummarizationClient { Result = new SummaryResult("Shared room summary.", null) };
+        var combiner = new FakeMeetingMinutesClient();
+
+        await Run(db, perRec, combiner, new FakeSummarizationSettingsResolver(), new FakeHubContext(), folder);
+
+        Assert.Equal(1, perRec.Calls);
+        Assert.Contains("Shared room summary.", combiner.LastMessages![1].Content);
     }
 
     [Fact]

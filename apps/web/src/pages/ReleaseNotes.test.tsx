@@ -13,7 +13,14 @@ describe("ReleaseNotes", () => {
 
     const newest = RELEASES[0];
     // The list shows every release version + headline; the detail also shows the newest's headline.
-    for (const r of RELEASES) expect(screen.getAllByText(`v${r.version}`).length).toBeGreaterThan(0);
+    //
+    // Collect the rendered versions in ONE DOM traversal, then check membership. This used to call
+    // getAllByText once per release, and since each of those walks the whole tree - a tree that itself
+    // grows by one entry per release - the cost was quadratic in the number of releases shipped. It had
+    // reached ~5s locally and was intermittently blowing CI's 20s per-test timeout, which would only have
+    // got worse with every release. Same guarantee, linear cost.
+    const rendered = new Set(screen.getAllByText(/^v\d+\.\d+\.\d+$/).map((el) => el.textContent));
+    for (const r of RELEASES) expect(rendered).toContain(`v${r.version}`);
     expect(screen.getAllByText(newest.headline).length).toBeGreaterThan(0);
   });
 
