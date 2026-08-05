@@ -411,6 +411,8 @@
   "drillEmpty": "This folder is empty.",
   "folderPathLabel": "Folder path",
   "folderPathMenu": "Show full folder path",
+  "folderPathLabelCurrent": "This folder's path",
+  "folderPathMenuCurrent": "Show full path for this folder",
   "folderPathCollapsed": "Hidden folders",
   "selectAllIn": "Select all in {{section}}",
   "confirmDeleteSection": "Delete section \"{{name}}\"? Its recordings move to Ungrouped.",

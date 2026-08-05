@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import FolderPath from "./FolderPath";
 import type { PathCrumb } from "../../lib/folderPath";
 
@@ -34,6 +35,19 @@ describe("FolderPath", () => {
     expect(onSelect).toHaveBeenCalledWith("acme");
   });
 
+  it("renders the current (last) crumb as static text with aria-current, not a button", () => {
+    const onSelect = vi.fn();
+    render(<FolderPath crumbs={crumbs} maxVisible={4} onSelect={onSelect} />);
+
+    // Not a clickable control - a history entry that pops nothing on Back would be a broken affordance.
+    expect(screen.queryByRole("button", { name: "Phase 2" })).toBeNull();
+    const current = screen.getByText("Phase 2");
+    expect(current.getAttribute("aria-current")).toBe("page");
+
+    // The other crumbs stay real buttons.
+    expect(screen.getByRole("button", { name: "Acme Corp" })).toBeTruthy();
+  });
+
   it("lists every ancestor in the menu, including ones collapsed out of the path", async () => {
     const onSelect = vi.fn();
     render(<FolderPath crumbs={crumbs} maxVisible={2} onSelect={onSelect} />);
@@ -53,5 +67,41 @@ describe("FolderPath", () => {
     await userEvent.click(screen.getByRole("menuitem", { name: "Open section page" }));
 
     expect(onClick).toHaveBeenCalled();
+  });
+
+  it("calls onCrumbDrop with the crumb id and the dropped recording id", () => {
+    const onCrumbDrop = vi.fn();
+    render(<FolderPath crumbs={crumbs} maxVisible={4} onSelect={vi.fn()} onCrumbDrop={onCrumbDrop} />);
+
+    // "Acme Corp" is a non-terminal crumb - a recording dragged onto it should move up to that level.
+    fireEvent.drop(screen.getByText("Acme Corp"), { dataTransfer: { getData: () => "rec-1" } });
+
+    expect(onCrumbDrop).toHaveBeenCalledWith("acme", "rec-1");
+  });
+
+  it("uses label/menuLabel to override the default accessible names", () => {
+    render(<FolderPath crumbs={crumbs} label="This folder's path" menuLabel="Show full path for this folder" />);
+
+    expect(screen.getByRole("navigation", { name: "This folder's path" })).toBeTruthy();
+    expect(screen.getByLabelText("Show full path for this folder")).toBeTruthy();
+    // The generic defaults must not also be present - two instances on one screen must not collide.
+    expect(screen.queryByRole("navigation", { name: "Folder path" })).toBeNull();
+  });
+
+  it("renders an extra item carrying `to` as a link rather than a button", async () => {
+    render(
+      <MemoryRouter>
+        <FolderPath
+          crumbs={crumbs}
+          extraItems={[{ label: "Open section page", to: { pathname: "/sections/acme", search: "?in=acme" } }]}
+        />
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(screen.getByLabelText("Show full folder path"));
+    const link = screen.getByRole("menuitem", { name: "Open section page" });
+
+    expect(link.tagName).toBe("A");
+    expect(link.getAttribute("href")).toBe("/sections/acme?in=acme");
   });
 });

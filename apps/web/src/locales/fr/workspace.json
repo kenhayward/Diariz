@@ -411,6 +411,8 @@
   "drillEmpty": "Ce dossier est vide.",
   "folderPathLabel": "Chemin du dossier",
   "folderPathMenu": "Afficher le chemin complet du dossier",
+  "folderPathLabelCurrent": "Chemin de ce dossier",
+  "folderPathMenuCurrent": "Afficher le chemin complet de ce dossier",
   "folderPathCollapsed": "Dossiers masqués",
   "selectAllIn": "Tout sélectionner dans {{section}}",
   "confirmDeleteSection": "Supprimer la section « {{name}} » ? Ses enregistrements passeront dans Sans section.",

@@ -1,4 +1,3 @@
-import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { breadcrumbOf } from "../../lib/drillView";
 import { useDrillSearch } from "../../lib/drillRoute";
@@ -30,7 +29,6 @@ export default function DrillBreadcrumb({
   onRecordingDrop?: (sectionId: string, recordingId: string) => void;
 }) {
   const { t } = useTranslation("workspace");
-  const navigate = useNavigate();
   const drillSearch = useDrillSearch();
   if (sectionId === null) return null;
 
@@ -72,8 +70,7 @@ export default function DrillBreadcrumb({
             ? [
                 {
                   label: t("drillOpenSectionPage"),
-                  onClick: () =>
-                    navigate({ pathname: `${basePath}/sections/${current.id}`, search: drillSearch }),
+                  to: { pathname: `${basePath}/sections/${current.id}`, search: drillSearch },
                 },
               ]
             : []
