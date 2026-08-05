@@ -14,13 +14,12 @@ project underneath it. A recording can be filed into a folder at any of those le
 ## Moving between folders
 
 The list shows one folder at a time rather than everything expanded at once. Opening a folder drills
-into it; the path at the top of the list shows every folder between the room root and where you are
-now.
+into it; the path at the top of the list shows where you are, anchored to the room root.
 
-- Click any part of that path to jump straight to that level.
+- Click any part of that path, other than the folder you are already in, to jump straight to that level.
 - When the path is too long to fit, the middle collapses behind an ellipsis, but the menu at the end
   still lists the whole hierarchy, including **Open section page** for that folder's own page.
 - Drag a recording onto any part of the path to move it up to that folder in one step.
 
-Browser back pops you up one level at a time, and Diariz remembers where you were browsing when you
-come back.
+Browser back pops you up one level at a time. Your place in the folder list is kept while you navigate
+elsewhere in the app, but a fresh visit starts back at the room root.
