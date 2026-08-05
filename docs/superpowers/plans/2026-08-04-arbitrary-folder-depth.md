@@ -407,11 +407,22 @@ The fifth call site is the odd one: it scopes the **section** lookup by `UserId`
 - Consumes: `SectionTree.SubtreeIdsAsync` from Task 2.
 - Produces: no signature change. `IncludedRecordingsAsync(DiarizDbContext db, Section section) -> Task<List<RecordingRef>>` keeps its shape and its `internal` visibility.
 
-> **Why this task has no unit test of its own.** `IncludedRecordingsAsync` is `internal`, and this repository has **no `InternalsVisibleTo`** anywhere - every existing test reaches these static helpers through a public controller instead. Do **not** add `InternalsVisibleTo` or widen the method to `public` to get a test in: that would introduce a repo-wide convention inside a small refactor, which is not this task's call to make.
+> **Corrected during execution (2026-08-05).** This task originally claimed no unit test was possible - `IncludedRecordingsAsync` is `internal`, and the repo has **no `InternalsVisibleTo`** - and pushed the proof into an integration test. That integration test was bogus: it composed `SectionTree.SubtreeIdsAsync` directly, so it could never exercise `SectionSummaryProcessor` and could never go red. The Task 3 implementer caught it and stopped.
 >
-> After this change the method is a delegation to `SectionTree.SubtreeIdsAsync` (unit-tested in Tasks 1-2) plus the existing placement join, which is unchanged. The genuinely new behaviour - that the walk is room-scoped and reaches a grandchild - is proved end-to-end in **Task 4, Step 2**, which is written before this task's implementation. Do that step first if you want the red-then-green cycle.
+> The constraint stands - do **not** add `InternalsVisibleTo`, and do **not** widen `IncludedRecordingsAsync` to `public`. But the right public seam already exists: **`SectionSummaryProcessor.ProcessAsync` is public**, and the class doc states it is static precisely so it can be "unit-tested with fake clients + an in-memory DbContext". Every fake needed is already in `tests/Diariz.Api.TestSupport/Fakes.cs`.
 
-- [ ] **Step 1: Write the implementation**
+- [ ] **Step 1: Write the failing test**
+
+Create `tests/Diariz.Api.Tests/SectionSummaryProcessorTests.cs`, driving `SectionSummaryProcessor.ProcessAsync` with `FakeSummarizationClient`, `FakeMeetingMinutesClient`, `FakeSummarizationSettingsResolver` and `FakeHubContext`. `tests/Diariz.Api.Tests/RecordingAiWebhookEmitTests.cs:53` shows the calling convention for the sibling `SummarizationProcessor.ProcessAsync`; `FormulaRunProcessorTests.SeedRecordingWithTranscript` shows how to seed a recording with a transcription and segments.
+
+Seed a personal `Room` owned by the user (the placement join requires `Kind == RoomKind.Personal` and `OwnerUserId == section.UserId`), a three-level chain `Customers > Acme > Falcon`, and one recording with a transcription placed in `Falcon`. Assert the run reached that recording - what `FakeSummarizationClient` was asked to summarise is the cleanest signal. Assert on observable output, never on internals.
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `dotnet test tests/Diariz.Api.Tests --filter "FullyQualifiedName~SectionSummaryProcessorTests"`
+Expected: FAIL - the current `UserId`-scoped direct-children query cannot see a recording two levels down. If it passes before the fix, the test is not exercising the change: stop and fix the test.
+
+- [ ] **Step 3: Write the implementation**
 
 Replace lines `75-82` of `src/Diariz.Api/Services/SectionSummaryProcessor.cs`:
 
@@ -440,15 +451,15 @@ with:
 
 Leave the placement join below it (`rm.OwnerUserId == section.UserId && rm.Kind == RoomKind.Personal`) **unchanged**. Widening that to the section's own room is a separate behaviour change and is out of scope here.
 
-- [ ] **Step 2: Run the tests to verify nothing regressed**
+- [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `dotnet test tests/Diariz.Api.Tests`
-Expected: PASS, no new failures.
+Expected: PASS - the new test goes green, and no pre-existing test regresses.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add src/Diariz.Api/Services/SectionSummaryProcessor.cs
+git add src/Diariz.Api/Services/SectionSummaryProcessor.cs tests/Diariz.Api.Tests/SectionSummaryProcessorTests.cs
 git commit -m "fix: folder summaries walk the subtree by room, matching the other roll-ups"
 ```
 
@@ -542,53 +553,14 @@ public class SectionSubtreeIntegrationTests(ContainersFixture fx)
 }
 ```
 
-- [ ] **Step 2: Add the folder-summary proof (write this BEFORE Task 3's implementation)**
+> **Corrected during execution (2026-08-05).** This task originally carried a third test, `FolderSummary_IncludedSet_ReachesAGrandchildAndIsRoomScoped`, described as Task 3's red-first proof. It was bogus - it composed `SectionTree.SubtreeIdsAsync` directly rather than driving `SectionSummaryProcessor`, so it asserted only that Task 1's code works and could never go red for Task 3. It has been removed; Task 3 now carries a real unit test through the public `ProcessAsync` seam. Add `using Diariz.Api.Services;` and `using Microsoft.EntityFrameworkCore;` if the two remaining tests need them.
 
-This is the red-first test for Task 3, which cannot have a unit test of its own (see the note there). Append to the same class:
-
-```csharp
-    [Fact]
-    public async Task FolderSummary_IncludedSet_ReachesAGrandchildAndIsRoomScoped()
-    {
-        Guid userId, customersId, recId;
-        await using (var db = fx.CreateDbContext())
-        {
-            var user = new ApplicationUser { Id = Guid.NewGuid(), UserName = $"{Guid.NewGuid()}@x.test", Email = "u@x.test" };
-            var room = new Room { Id = Guid.NewGuid(), Name = $"P {Guid.NewGuid():N}", Kind = RoomKind.Personal, OwnerUserId = user.Id };
-            var customers = new Section { Id = Guid.NewGuid(), UserId = user.Id, RoomId = room.Id, Name = "Customers" };
-            var acme = new Section { Id = Guid.NewGuid(), UserId = user.Id, RoomId = room.Id, Name = "Acme", ParentId = customers.Id };
-            var falcon = new Section { Id = Guid.NewGuid(), UserId = user.Id, RoomId = room.Id, Name = "Falcon", ParentId = acme.Id };
-            var rec = new Recording { Id = Guid.NewGuid(), UserId = user.Id, BlobKey = "k", Title = "Kickoff" };
-            db.AddRange(user, room, customers, acme, falcon, rec);
-            await db.SaveChangesAsync();
-            await new RoomScope(db).PlaceInMainRoomAsync(rec.Id, user.Id, falcon.Id); // two levels below Customers
-            (userId, customersId, recId) = (user.Id, customers.Id, rec.Id);
-        }
-
-        await using var verify = fx.CreateDbContext();
-        var section = await verify.Sections.FindAsync(customersId) ?? throw new InvalidOperationException();
-
-        // The set the folder summary maps over: the subtree ids, then the placements filed in any of them.
-        // Mirrors SectionSummaryProcessor.IncludedRecordingsAsync without reaching into an internal member.
-        var includedSectionIds = await SectionTree.SubtreeIdsAsync(verify, section.RoomId, section.Id, default);
-        var includedRecordingIds = await verify.RoomRecordings
-            .Where(p => p.SectionId.HasValue && includedSectionIds.Contains(p.SectionId.Value))
-            .Select(p => p.RecordingId)
-            .ToListAsync();
-
-        Assert.Contains(recId, includedRecordingIds); // fails before Task 3: the grandchild is invisible
-        _ = userId;
-    }
-```
-
-Add `using Diariz.Api.Services;` and `using Microsoft.EntityFrameworkCore;` to the file's usings if not already present.
-
-- [ ] **Step 3: Run the tests**
+- [ ] **Step 2: Run the tests**
 
 Run: `dotnet test tests/Diariz.Api.IntegrationTests --filter "FullyQualifiedName~SectionSubtreeIntegrationTests"`
-Expected: PASS, 3 tests. **Docker must be running.** Tasks 1-2 already implemented `SubtreeIdsAsync`, so the first two tests pass on arrival - this task is the real-Postgres proof, not a red-first cycle. The third is the red-first test for Task 3 if you ran it before that task's implementation.
+Expected: PASS, 2 tests. **Docker must be running.** Tasks 1-2 already implemented `SubtreeIdsAsync`, so both pass on arrival - this task is the real-Postgres proof of behaviour the in-memory provider cannot faithfully model (the recursive self-FK cascade especially), not a red-first cycle.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
 git add tests/Diariz.Api.IntegrationTests/SectionSubtreeIntegrationTests.cs
