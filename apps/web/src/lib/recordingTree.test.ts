@@ -50,6 +50,33 @@ describe("buildRecordingTree", () => {
     expect(tree.sections[0].name).toBe("Pending");
     expect(tree.sections[0].items.map((r) => r.id)).toEqual(["r"]);
   });
+
+  it("nests to three levels and deeper", () => {
+    const sections = [
+      sec("customers", "Customers"),
+      sec("acme", "Acme", "customers"),
+      sec("falcon", "Falcon", "acme"),
+    ];
+    const recordings = [rec("r-deep", "falcon")];
+
+    const tree = buildRecordingTree(recordings, sections);
+
+    const customers = tree.sections.find((s) => s.id === "customers")!;
+    const acme = customers.children[0];
+    expect(acme.id).toBe("acme");
+    expect(acme.children[0].id).toBe("falcon");
+    expect(acme.children[0].items.map((r) => r.id)).toEqual(["r-deep"]);
+  });
+
+  it("survives a parentId cycle instead of hanging", () => {
+    // Nothing in the schema prevents one; a naive recursion would never return.
+    const sections = [sec("a", "A", "b"), sec("b", "B", "a")];
+
+    const tree = buildRecordingTree([], sections);
+
+    // Neither is top-level, so nothing is rendered - the assertion that matters is that we got here at all.
+    expect(tree.sections).toEqual([]);
+  });
 });
 
 describe("reorderBeforeSection", () => {
