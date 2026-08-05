@@ -104,18 +104,18 @@ public class SectionsController : ControllerBase
     }
 
     /// <summary>Drag-and-drop for sections: set the parent and 0-based position of each listed section in
-    /// one call (reorder among siblings and/or reparent). Rejects moves that would nest more than one level
-    /// deep — either targeting a parent that itself has a parent, or moving a section that has children.</summary>
+    /// one call (reorder among siblings and/or reparent). Rejects a move into the folder's own descendant (a
+    /// cycle) and one whose branch would not fit within <see cref="SectionTree.MaxDepth"/>.</summary>
     [HttpPut("reorder")]
     [EndpointSummary("Reorder or reparent folders")]
     [EndpointDescription(
         "Sets the parent and 0-based position of each listed folder in one call, covering both resequencing " +
         "among siblings and moving folders under a new parent. Pass a null `parentId` to move them to the top " +
         "level.\n\n" +
-        "The one-level nesting cap is enforced here too, and in two ways: the target parent may not itself be " +
-        "a sub-folder, and a folder that **has** sub-folders may not become one (both 400). A folder cannot be " +
-        "its own parent. Every listed id must exist in the room, otherwise the whole call 404s and nothing " +
-        "moves. Needs `ManageContents`.")]
+        "A folder moves with its whole branch, so two rules apply (both 400): the target may not be the folder " +
+        "itself or anything beneath it, and the target's depth plus the moved branch's height may not exceed " +
+        "**8** levels - so a legal target can still be too deep for a tall branch. Every listed id must exist " +
+        "in the room, otherwise the whole call 404s and nothing moves. Needs `ManageContents`.")]
     public async Task<IActionResult> Reorder(ReorderSectionsRequest req, CancellationToken ct = default)
     {
         var ids = (req.OrderedIds ?? []).ToList();
@@ -129,18 +129,28 @@ public class SectionsController : ControllerBase
             if (ids.Contains(parentId)) return BadRequest("A section cannot be its own parent.");
             var parent = await _db.Sections.FirstOrDefaultAsync(s => s.Id == parentId && s.RoomId == roomId);
             if (parent is null) return NotFound();
-            if (parent.ParentId is not null) return BadRequest("Sections can only be nested one level deep.");
         }
 
         var sections = await _db.Sections.Where(s => ids.Contains(s.Id) && s.RoomId == roomId).ToListAsync();
         if (sections.Count != ids.Count) return NotFound();
 
-        // Moving a section under a parent is only allowed if that section has no children of its own.
-        if (req.ParentId is not null)
+        // Two rules replace the old two-level cap, and they are not the same rule.
+        if (req.ParentId is { } target)
         {
-            var haveChildren = await _db.Sections.AnyAsync(
-                s => s.RoomId == roomId && s.ParentId != null && ids.Contains(s.ParentId.Value));
-            if (haveChildren) return BadRequest("A section with sub-sections can't become a sub-section.");
+            var links = await SectionTree.LinksAsync(_db, roomId, ct);
+
+            // 1. Cycles. The cap used to make these impossible; nothing else does. Moving a folder into its own
+            //    descendant would detach the whole branch from the tree - unreachable except through search.
+            foreach (var id in ids)
+                if (SectionTree.Subtree(links, id).Contains(target))
+                    return BadRequest("A folder can't be moved inside itself.");
+
+            // 2. Depth. A move carries the folder's whole branch, so the target's depth plus the branch's height
+            //    is what must fit - a legal target can still be too deep for a tall branch.
+            var targetDepth = SectionTree.Depth(links, target);
+            foreach (var id in ids)
+                if (targetDepth + SectionTree.Height(links, id) > SectionTree.MaxDepth)
+                    return BadRequest($"That folder is too deep to hold this one (max {SectionTree.MaxDepth} levels).");
         }
 
         var byId = sections.ToDictionary(s => s.Id);

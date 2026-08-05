@@ -10837,7 +10837,7 @@
     },
     "/api/sections/reorder": {
       "put": {
-        "description": "Sets the parent and 0-based position of each listed folder in one call, covering both resequencing among siblings and moving folders under a new parent. Pass a null `parentId` to move them to the top level.\n\nThe one-level nesting cap is enforced here too, and in two ways: the target parent may not itself be a sub-folder, and a folder that **has** sub-folders may not become one (both 400). A folder cannot be its own parent. Every listed id must exist in the room, otherwise the whole call 404s and nothing moves. Needs `ManageContents`.",
+        "description": "Sets the parent and 0-based position of each listed folder in one call, covering both resequencing among siblings and moving folders under a new parent. Pass a null `parentId` to move them to the top level.\n\nA folder moves with its whole branch, so two rules apply (both 400): the target may not be the folder itself or anything beneath it, and the target's depth plus the moved branch's height may not exceed **8** levels - so a legal target can still be too deep for a tall branch. Every listed id must exist in the room, otherwise the whole call 404s and nothing moves. Needs `ManageContents`.",
         "requestBody": {
           "content": {
             "application/*+json": {
