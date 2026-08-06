@@ -350,7 +350,7 @@ confirm. The room lives in the URL (`/rooms/:roomId`), so switching keeps a clea
 **remembers the room you were last in**, returning you to it when you come back (the URL still wins whenever it
 names one) - and **browses that room**: picking a Shared Room shows the recordings
 shared into it. A Shared Room has its **own folder structure**: members with **manage-contents** can create
-sections and sub-sections in it, file recordings into them (via the recording's Move-to-folder action or by
+folders in it, nested up to 8 levels, file recordings into them (via the recording's Move to section action or by
 **drag-and-drop**), and **drag to reorder** recordings within a section - each room keeps its own order, separate
 from your Personal Room. **Your Google Calendar stays personal**: a Shared Room's Calendar tab shows only its
 recordings (no personal-event overlay), and a recording opened inside a Shared Room hides its linked meeting and
