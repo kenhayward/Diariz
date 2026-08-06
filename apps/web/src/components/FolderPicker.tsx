@@ -195,6 +195,13 @@ function ChooseRow({ label, selected, onChoose }: { label: string; selected: boo
 /// The second, explicit target on a drill-level row - deliberately separate from the row body above, which
 /// drills. Icon-only by design (the row body already shows the name), so its accessible name carries the
 /// folder's name on its own; `aria-current` conveys the selected state to assistive tech, not colour alone.
+///
+/// This is the row's *primary* action (choosing a folder is the point of the picker), and the gesture that
+/// used to live on the row body before drilling took it over - so its resting state carries a real border
+/// and hover background rather than reading as a faint decorative tick. The resting text colour
+/// (`text-gray-500` / `dark:text-gray-400`) clears WCAG 2.1 SC 1.4.11's 3:1 minimum for a graphical control
+/// with room to spare (~4.8:1 on white, ~7:1 on `dark:bg-gray-900`) - the previous `text-gray-300` /
+/// `dark:text-gray-600` sat at roughly 1.5:1 / 2.4:1.
 function SelectButton({ name, selected, onChoose }: { name: string; selected: boolean; onChoose: () => void }) {
   const { t } = useTranslation("workspace");
   return (
@@ -203,10 +210,10 @@ function SelectButton({ name, selected, onChoose }: { name: string; selected: bo
       onClick={onChoose}
       aria-current={selected ? "true" : undefined}
       aria-label={t("folderPickerSelectAria", { name })}
-      className={`shrink-0 rounded px-2 py-1.5 text-sm ${
+      className={`shrink-0 rounded border px-2 py-1.5 text-sm ${
         selected
-          ? "text-blue-700 dark:text-blue-400"
-          : "text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400"
+          ? "border-blue-200 text-blue-700 dark:border-blue-900 dark:text-blue-400"
+          : "border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
       }`}
     >
       <span aria-hidden>✓</span>
