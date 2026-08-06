@@ -60,6 +60,18 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.183.0",
+    date: "2026-08-06",
+    pr: 455,
+    headline: "Create-and-move follows the folder picker",
+    summary:
+      "The 'Move to section' modal's create-and-move form always put a new folder at the top level, even while its picker showed you drilled several levels into another folder - so typing a name while sitting inside Customers > Acme Corp silently created a top-level folder instead of one inside Acme Corp. The form now creates wherever the picker is drilled into, and says so in its placeholder (\"New sub-section in Acme Corp\") the same way the left nav's own new-folder button already does. At the 8-level folder depth cap the form disables itself with the same message the nav uses, rather than sending a request the server would reject.",
+    fixed: [
+      "Move to section's create-and-move form now creates the new folder under wherever the folder picker is drilled into, instead of always at the top level.",
+      "The create-and-move form disables itself at the 8-level folder depth cap and shows the folder it will create into, matching the left nav's new-folder button.",
+    ],
+  },
+  {
     version: "0.182.0",
     date: "2026-08-06",
     pr: 453,
