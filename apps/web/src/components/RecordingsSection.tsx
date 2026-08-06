@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../lib/api";
 import type { RecordingPlacementMode } from "../lib/types";
-import { orderedSections } from "../lib/sectionTree";
+import FolderPicker from "./FolderPicker";
 
 /// Recordings tab: where a new recording lands in the user's Personal room (Ungrouped / the selected folder /
 /// a fixed folder). Self-contained; its Save PUTs only the placement fields (tri-state), leaving the other
@@ -86,22 +86,20 @@ export default function RecordingsSection() {
         </label>
       </fieldset>
       {placementMode === "SpecificFolder" && (
-        <label className="block text-sm">
-          <span className="mb-1 block text-gray-600 dark:text-gray-300">{t("placementFolder")}</span>
-          <select
-            aria-label={t("placementFolder")}
-            value={placementSectionId ?? ""}
-            onChange={(e) => setPlacementSectionId(e.target.value || null)}
-            className="w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          >
-            <option value="">{t("placementUngroupedOption")}</option>
-            {orderedSections(sections).map(({ section, label }) => (
-              <option key={section.id} value={section.id}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="block text-sm">
+          <span id="placement-folder-label" className="mb-1 block text-gray-600 dark:text-gray-300">
+            {t("placementFolder")}
+          </span>
+          {/* `FolderPicker` is a multi-control widget (filter box, drill list, per-row select targets), not
+              a single form field, so it can't carry the visible label the way the native <select> it
+              replaces did via a plain `aria-label`. `role="group"` + `aria-labelledby` keeps the same
+              visible "Folder" text as the programmatic name (assistive tech announces it entering the
+              group), while the picker's own inner controls keep their own more specific labels
+              ("Filter folders", "Select {name}") - see FolderPicker.tsx for why those exist. */}
+          <div role="group" aria-labelledby="placement-folder-label">
+            <FolderPicker sections={sections} selectedId={placementSectionId} onSelect={setPlacementSectionId} />
+          </div>
+        </div>
       )}
 
       <div className="flex items-center gap-3 border-t pt-3 dark:border-gray-700">
