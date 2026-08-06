@@ -11,6 +11,13 @@ Folders nest up to 8 levels deep, so you can go as narrow as Customers, then a c
 project underneath it. A recording can be filed into a folder at any of those levels from its
 **Move to section** action, not just the bottom one.
 
+**Move to section** opens a picker rather than a plain list: type a folder's name into the filter box
+to jump straight to it from anywhere in the tree, with its full path shown so you can tell two
+same-named folders apart, or leave the filter empty to browse one level at a time the same way the
+folder list does. **Ungrouped** is offered as a choice at every level, so you never have to back out to
+the top to pick it. The same picker is used for choosing where a new recording is filed, in
+**Settings -> Recordings**.
+
 ## Moving between folders
 
 The list shows one folder at a time rather than everything expanded at once. Opening a folder drills

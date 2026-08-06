@@ -60,6 +60,18 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.182.0",
+    date: "2026-08-06",
+    pr: 453,
+    headline: "A folder picker you can type into",
+    summary:
+      "Choosing a folder used to mean scrolling a flat list of every folder as a full Parent > Child > Grandchild string - workable at two levels, unwieldy now that folders nest up to 8. Both places you pick a folder - a recording's Move to section action, and the chooser for where new recordings land in Settings - now share one picker: type a folder's name to jump straight to it from anywhere in the tree, with its path shown so two same-named folders are easy to tell apart, or leave the filter empty to browse one level at a time like the folder list already does. Ungrouped is offered as a choice at every level, so you never have to back out to the top to pick it. The Settings version was a plain dropdown before; it is now the same keyboard-operable picker, still fully reachable by keyboard. Every folder was already reachable through the old list - this just makes picking one from a deep tree faster and easier to read.",
+    changed: [
+      "Move to section and the new-recording folder chooser in Settings both use a new picker: type to filter across the whole folder tree, or drill one level at a time when the filter is empty.",
+      "The Settings folder chooser is no longer a native dropdown - it is a keyboard-operable picker with the same folder-at-a-time browsing as Move to section.",
+    ],
+  },
+  {
     version: "0.181.0",
     date: "2026-08-05",
     pr: 452,
