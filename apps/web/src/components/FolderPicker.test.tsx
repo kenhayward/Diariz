@@ -194,4 +194,20 @@ describe("FolderPicker", () => {
     expect(screen.getByText("Acme Corp")).toBeTruthy();
     expect(screen.queryByText("Personal")).toBeNull();
   });
+
+  it("keeps the Back button reachable when the drilled folder disappears from the tree (deleted, or dropped by a refetch)", async () => {
+    const { rerender } = render(<FolderPicker sections={sections} selectedId={null} onSelect={vi.fn()} />);
+    await userEvent.click(screen.getByLabelText("Open Customers"));
+    expect(screen.getByText("Acme Corp")).toBeTruthy();
+
+    // The whole "Customers" branch drops out from under us while still drilled into it.
+    const withoutCustomersBranch = sections.filter(
+      (s) => !["customers", "acme", "falcon", "phase2"].includes(s.id),
+    );
+    rerender(<FolderPicker sections={withoutCustomersBranch} selectedId={null} onSelect={vi.fn()} />);
+
+    expect(screen.getByText("This folder is empty.")).toBeTruthy();
+    // Not stranded - Back is still there even though the breadcrumb has nothing to show.
+    expect(screen.getByLabelText("Back")).toBeTruthy();
+  });
 });

@@ -79,7 +79,9 @@ export default function FolderPicker({
   }, [allOrdered, filtering, query]);
 
   const children = filtering ? [] : directChildren(sections, drillId);
-  // Empty at the root (nowhere to go back to) and while filtering (drilling is not shown in that mode).
+  // Empty while filtering (drilling is not shown in that mode) or for a `drillId` no longer in `sections`
+  // (deleted, or dropped by a refetch, while we were inside it) - `chain.length` alone can't distinguish
+  // that from "at the root", which is why the Back button below gates on `drillId`, not on this.
   const chain = filtering || drillId === null ? [] : breadcrumbOf(sections, drillId);
 
   const rootLabel = t("ungrouped");
@@ -116,7 +118,10 @@ export default function FolderPicker({
         className="mb-2 w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
       />
 
-      {!filtering && chain.length > 0 && (
+      {/* Gated on `drillId`, not `chain.length` - a `drillId` whose folder is no longer in `sections`
+          (deleted, or dropped by a refetch, while we were inside it) yields an empty `chain`, but Back must
+          still be reachable or typing in the filter becomes the only way out. */}
+      {!filtering && drillId !== null && (
         <div className="mb-1 flex items-center gap-1.5 border-b pb-1.5 dark:border-gray-800">
           <button
             type="button"
@@ -127,7 +132,8 @@ export default function FolderPicker({
             <ArrowLeftIcon size={12} />
           </button>
           {/* A crumb click also drills (same rule as the row body below) - the header offers no second,
-              differently-behaved way to move around. */}
+              differently-behaved way to move around. Renders nothing itself when `chain` is empty (the
+              ghost-parent case above) - the Back button alone still gets you out. */}
           <FolderPath
             crumbs={chain.map((s) => ({ id: s.id, name: s.name }))}
             maxVisible={2}
