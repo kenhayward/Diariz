@@ -18,7 +18,7 @@ import { useMoveClipboard } from "../lib/moveClipboard";
 import { useRoom, useRoomBasePath, useSharedRoomId } from "../lib/rooms";
 import { useActiveRecordingId } from "../lib/activeRoute";
 import { formatDuration } from "../lib/format";
-import { computeReorder } from "../lib/reorder";
+import { computeReorder, inDisplayOrder, draggedRecordingIds } from "../lib/reorder";
 import { useDragAutoScroll } from "../lib/dragAutoScroll";
 import { buildRecordingTree, reorderBeforeSection, appendSectionUnder, type SectionNode } from "../lib/recordingTree";
 import { childrenOf, breadcrumbOf, recordingCountOf, sectionCreateTarget, depthOf, MAX_FOLDER_DEPTH } from "../lib/drillView";
@@ -235,11 +235,16 @@ export default function RecordingsPanel() {
       return { year: d.getFullYear(), month: d.getMonth() };
     });
   }
-  /// Apply a drag-and-drop: set the dragged recording's group + order within the current room, then refresh.
+  /// Apply a drag-and-drop: set the dragged recordings' group + order within the current room, then refresh.
   /// Order and folders are per-room, so this needs manage-contents (the personal-room owner always has it).
+  ///
+  /// Every recording drop funnels through here - onto a folder row, onto a breadcrumb crumb, onto the level
+  /// background, or between two rows - which is why the multi-select rule lives here and nowhere else:
+  /// dragging one of several ticked rows moves the whole set, in the order the rows are shown.
   async function drop(sectionId: string | null, groupIds: string[], draggedId: string, beforeId: string | null) {
     if (!draggedId || !canManageContents) return;
-    await api.reorderRecordings(sectionId, computeReorder(groupIds, draggedId, beforeId), aggRoomId);
+    const ids = draggedRecordingIds(draggedId, selection.selectedIds, recordings.map((r) => r.id));
+    await api.reorderRecordings(sectionId, computeReorder(groupIds, ids, beforeId), aggRoomId);
     qc.invalidateQueries({ queryKey: ["recordings"] });
   }
 
@@ -828,9 +833,7 @@ function ListToolbar({
   // same order the rows render in) before it ever reaches the clipboard.
   function cutSelected() {
     if (selectedIds.length === 0) return;
-    const displayIndex = new Map(recordings.map((r, i) => [r.id, i]));
-    const ordered = [...selectedIds].sort((a, b) => (displayIndex.get(a) ?? 0) - (displayIndex.get(b) ?? 0));
-    cutRecordings(ordered, drillSectionId, roomId ?? null);
+    cutRecordings(inDisplayOrder(selectedIds, recordings.map((r) => r.id)), drillSectionId, roomId ?? null);
   }
 
   return (

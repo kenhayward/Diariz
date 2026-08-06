@@ -32,7 +32,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Translate** | Translate a whole transcript or a single segment, stored as revisions you can flip back. |
 | **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) to a recording or directly to a folder, edit Markdown attachments in place, save a chat conversation as an attachment with /attach, and optionally feed them to chat. |
 | **Rooms** | A private Personal Room per account plus shareable Rooms: invite users and groups with per-member permissions. Each Shared Room has its **own folder structure** (sections/sub-sections, drag-and-drop, per-room order) and its own List/Calendar/Actions/Tags scoped to it; record or upload files straight into a room (your Personal Room keeps the original), and search + chat over every room you belong to. A member who can read a shared recording sees its notes and screenshots too - only the owner can add, edit, or delete them. Your Google Calendar and its linking stay personal. The switcher shows each room's folder and meeting counts (shared ones labelled), ticks the one you are in, and remembers where you were. Manage rooms from the switcher. |
-| **Organise & merge** | Folders nested up to 8 levels deep with drag-and-drop; the meetings list drills in one folder at a time (coloured folder rows with counts, a breadcrumb showing the full path with every part clickable, browser back pops a level) so it stays readable however many recordings you have, with **Open section page** in the breadcrumb's menu as a separate target from browsing deeper; an open recording shows its folder path as clickable chips under its name, each taking the list straight to that folder; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); cut one or more recordings, or a folder, and paste them into another folder in one move (landing at the bottom, in the order you cut them), with the Paste control showing why it's disabled when a move isn't allowed yet; browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
+| **Organise & merge** | Folders nested up to 8 levels deep with drag-and-drop (dragging one of several ticked rows moves the whole selection); the meetings list drills in one folder at a time (coloured folder rows with counts, a breadcrumb showing the full path with every part clickable, browser back pops a level) so it stays readable however many recordings you have, with **Open section page** in the breadcrumb's menu as a separate target from browsing deeper; an open recording shows its folder path as clickable chips under its name, each taking the list straight to that folder; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); cut one or more recordings, or a folder, and paste them into another folder in one move (landing at the bottom, in the order you cut them), with the Paste control showing why it's disabled when a move isn't allowed yet; browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
 | **API access** | Generate a personal API token (when enabled), read-only or read-write, with an optional expiry date, to call the REST API as yourself, with a built-in API reference documenting every endpoint - what it does, who may call it, and what it changes. |
@@ -59,6 +59,21 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.185.0",
+    date: "2026-08-06",
+    pr: 457,
+    headline: "Dragging a ticked row now moves everything you ticked",
+    summary:
+      "Multi-select and drag-and-drop disagreed: you could tick five recordings, drag one of them into a folder, and only the row under the cursor would move - the other four stayed where they were, with nothing to say so. A drag that starts on a ticked row now carries the whole selection, in the order the rows are shown rather than the order you ticked them, matching what Cut and Paste already did. Dragging a row that is not ticked still moves just that row, so an unrelated drag cannot sweep up a selection somewhere off screen. Alongside that, the folder path on a recording now leads with a folder icon (tinted to match that folder's colour in the list, so it reads as folders rather than tags) and sits directly under the recording's name instead of below the date line. The meetings list also gives back some vertical space around the search box and the folder path.",
+    added: [
+      "Dragging one of several ticked recordings moves the whole selection, keeping the order the rows are shown in.",
+    ],
+    changed: [
+      "A recording's folder path now leads with a folder icon and sits directly under the name, above the source and date line.",
+      "Tightened the spacing around the meetings list's search box and folder path, reclaiming vertical space for the list itself.",
+    ],
+  },
   {
     version: "0.184.0",
     date: "2026-08-06",

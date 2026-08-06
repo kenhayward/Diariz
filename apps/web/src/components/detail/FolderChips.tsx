@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { collapsePath, type PathCrumb } from "../../lib/folderPath";
-import { ChevronRightIcon } from "../icons";
+import { sectionColor } from "../../lib/sectionColors";
+import { ChevronRightIcon, FolderIcon } from "../icons";
 
 /// Where a recording is filed, as a row of navigable chips under its name on the detail page.
 ///
@@ -35,9 +36,24 @@ export default function FolderChips({
 }) {
   const { t } = useTranslation("workspace");
   const segments = collapsePath(crumbs, maxVisible);
+  // Tinted by the folder the recording is actually in, matching the colour the panel gives that folder's
+  // row and breadcrumb - so the same folder looks the same in both places. Neutral at the room's top level,
+  // where there is no folder to take a colour from.
+  const deepest = crumbs[crumbs.length - 1];
+  const color = deepest ? sectionColor(deepest.id) : null;
 
+  // -mt-1 counteracts the hero's space-y-2.5 so the path sits tight under the name as part of the title
+  // block, rather than floating between the name and the subtitle. The subtitle carries the same pull.
   return (
-    <nav aria-label={t("folderChipsLabel")} className="-mt-0.5 flex flex-wrap items-center gap-1">
+    <nav aria-label={t("folderChipsLabel")} className="-mt-1 flex flex-wrap items-center gap-1">
+      {/* Says "these are folders" at a glance - without it the row reads as a set of generic tags. */}
+      <span
+        style={color ? ({ "--sc-light": color.light, "--sc-dark": color.dark } as React.CSSProperties) : undefined}
+        className={`shrink-0 ${color ? "text-[var(--sc-light)] dark:text-[var(--sc-dark)]" : "text-gray-400 dark:text-gray-500"}`}
+        aria-hidden
+      >
+        <FolderIcon size={14} />
+      </span>
       <Chip label={roomName} onClick={() => onSelect(null)} />
       {segments.map((seg, i) => (
         <span key={seg === "ellipsis" ? `gap-${i}` : seg.id} className="flex min-w-0 items-center gap-1">

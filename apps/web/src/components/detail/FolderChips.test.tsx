@@ -17,6 +17,20 @@ describe("FolderChips", () => {
     expect(chips).toEqual(["Personal", "Customers", "Acme Corp", "Project Falcon"]);
   });
 
+  /// Without it the row reads as generic tags. The icon is the same one the recordings panel puts before
+  /// its breadcrumb, so the two views say "these are folders" the same way.
+  it("leads with a folder icon, before the first chip", () => {
+    const { container } = render(<FolderChips roomName="Personal" crumbs={CRUMBS} onSelect={vi.fn()} />);
+
+    const nav = container.querySelector("nav")!;
+    const icon = nav.querySelector("svg")!;
+    const firstChip = nav.querySelector("button")!;
+
+    expect(icon).not.toBeNull();
+    // DOCUMENT_POSITION_FOLLOWING: the first chip comes after the icon.
+    expect(icon.compareDocumentPosition(firstChip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("reports the folder id when a folder chip is clicked", async () => {
     const onSelect = vi.fn();
     render(<FolderChips roomName="Personal" crumbs={CRUMBS} onSelect={onSelect} />);

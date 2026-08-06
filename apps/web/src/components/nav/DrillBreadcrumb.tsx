@@ -40,7 +40,7 @@ export default function DrillBreadcrumb({
   const color = sectionColor(sectionId);
 
   return (
-    <div className="flex items-center gap-1.5 border-b px-2 py-2 dark:border-gray-800">
+    <div className="flex items-center gap-1.5 border-b px-2 py-1 dark:border-gray-800">
       <button
         type="button"
         aria-label={t("drillBack")}
