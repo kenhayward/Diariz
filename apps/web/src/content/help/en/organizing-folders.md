@@ -32,6 +32,9 @@ into it; the path at the top of the list shows where you are, anchored to the ro
 - When the path is too long to fit, the middle collapses behind an ellipsis, but the menu at the end
   still lists the whole hierarchy, including **Open section page** for that folder's own page.
 - Drag a recording onto any part of the path to move it up to that folder in one step.
+- If you have ticked several recordings, dragging any one of them moves the whole set - they land in the
+  order the rows are shown, not the order you ticked them. Dragging a recording you have not ticked moves
+  only that one, so an unrelated drag never sweeps up a selection you left elsewhere.
 
 Browser back pops you up one level at a time. Your place in the folder list is kept while you navigate
 elsewhere in the app, but a fresh visit starts back at the room root.

@@ -1278,6 +1278,19 @@ describe("RecordingDetail folder chips", () => {
     );
   });
 
+  /// The chips belong to the name, not to the metadata line - they answer "where is this?", which reads as
+  /// part of the title block. Under the source/date/duration subtitle they looked like another piece of
+  /// metadata.
+  it("sits directly under the name, above the source and date line", async () => {
+    const { container } = renderInRoom(inRoom("acme"));
+
+    const chips = await screen.findByRole("navigation", { name: /folder/i });
+    const subtitle = [...container.querySelectorAll("p")].find((p) => /Microphone/.test(p.textContent ?? ""))!;
+
+    expect(subtitle).toBeTruthy();
+    expect(chips.compareDocumentPosition(subtitle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("shows only the room chip for a recording at the room's top level", async () => {
     renderInRoom(inRoom(null));
 

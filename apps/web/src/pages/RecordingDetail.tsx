@@ -1617,16 +1617,10 @@ export default function RecordingDetail() {
           onDownload={() => setDownloading(true)}
         />
       )}
-      <p className="-mt-1 text-xs text-gray-500 dark:text-gray-400">
-        {rec.source === "System" ? t("workspace:sourceSystem") : rec.source === "Upload" ? t("workspace:sourceUpload") : t("workspace:sourceMicrophone")} ·{" "}
-        {formatDate(rec.createdAt, i18n.language)}
-        {rec.durationMs > 0 ? ` · ${formatDuration(rec.durationMs)}` : ""} · {rec.status}
-        {rec.sizeBytes > 0 ? ` · ${formatBytes(rec.sizeBytes)}` : ""}
-        {rec.current?.processingMs ? ` · ${t("workspace:processedIn", { time: formatDuration(rec.current.processingMs) })}` : ""}
-      </p>
-
-      {/* Where this sits in the room you're viewing. Rendered only when the recording is actually placed in
-          that room: without a placement there is no path, and a bare room chip would claim it sits at that
+      {/* Where this sits in the room you're viewing. Directly under the name and ABOVE the source/date
+          line: the path answers "where is this?", which belongs to the title block - under the subtitle it
+          read as one more piece of metadata. Rendered only when the recording is actually placed in that
+          room: without a placement there is no path, and a bare room chip would claim it sits at that
           room's top level when it isn't filed there at all. */}
       {folderPlacement && (
         <FolderChips
@@ -1635,6 +1629,15 @@ export default function RecordingDetail() {
           onSelect={openFolderInList}
         />
       )}
+
+      <p className="-mt-1 text-xs text-gray-500 dark:text-gray-400">
+        {rec.source === "System" ? t("workspace:sourceSystem") : rec.source === "Upload" ? t("workspace:sourceUpload") : t("workspace:sourceMicrophone")} ·{" "}
+        {formatDate(rec.createdAt, i18n.language)}
+        {rec.durationMs > 0 ? ` · ${formatDuration(rec.durationMs)}` : ""} · {rec.status}
+        {rec.sizeBytes > 0 ? ` · ${formatBytes(rec.sizeBytes)}` : ""}
+        {rec.current?.processingMs ? ` · ${t("workspace:processedIn", { time: formatDuration(rec.current.processingMs) })}` : ""}
+      </p>
+
 
       {actionError && (
         <p className="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{actionError}</p>

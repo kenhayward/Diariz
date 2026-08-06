@@ -93,7 +93,7 @@ export default function SearchBar({
     // Only claims the panel's spare height once results are showing; idle, it is just the pinned field and
     // the drill-in list below keeps the room.
     <div className={`flex min-h-0 flex-col ${active ? "flex-1" : "shrink-0"}`}>
-      <div className="shrink-0 border-b px-2 py-2 dark:border-gray-800">
+      <div className="shrink-0 border-b px-2 py-1.5 dark:border-gray-800">
         <div className="flex items-center gap-1.5 rounded-lg border bg-gray-50 px-2 py-1 focus-within:ring-2 focus-within:ring-blue-500 dark:border-gray-700 dark:bg-gray-800">
           <span className="shrink-0 text-gray-400">
             <SearchIcon size={14} />

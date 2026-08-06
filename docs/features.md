@@ -323,7 +323,9 @@ summary, and actions) or a single segment. Translations are stored as **revision
 original words (so you can always flip back), and exports/email/chat use them.
 - **Organise** recordings into **folders nested up to 8 levels deep** (Customers > Acme Corp > Project Falcon)
   with drag-and-drop
-ordering and cross-group moves; select a whole level at once to build chat context. The list **drills in
+ordering and cross-group moves; select a whole level at once to build chat context. Dragging a recording that
+is part of a **multi-selection moves the whole selection**, in the order the rows are shown rather than the
+order you ticked them; dragging an unticked row moves only that row. The list **drills in
 one folder at a time** rather than showing every folder expanded: a folder row shows its colour, the count
 of everything inside, and takes you in; the header above the list is a **breadcrumb showing the whole path**,
 collapsing the middle when it does not fit, with every part clickable and a trailing menu for the full

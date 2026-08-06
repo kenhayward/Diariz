@@ -1212,6 +1212,57 @@ describe("RecordingsPanel", () => {
     await waitFor(() => expect(api.reorderRecordings).toHaveBeenCalledWith(null, ["b", "a"], undefined));
   });
 
+  /// Multi-select and drag-and-drop used to disagree: ticking three rows and dragging one of them moved
+  /// only the row under the cursor, silently leaving the other two behind. A drag that starts on a ticked
+  /// row now carries the whole selection.
+  it("drags the whole selection when the dragged row is part of it", async () => {
+    (api.reorderRecordings as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...rec, id: "a", name: "First" },
+      { ...rec, id: "b", name: "Second" },
+      { ...rec, id: "c", name: "Third" },
+    ]);
+    renderList();
+
+    await screen.findByText("First");
+    fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
+    // Ticked in reverse display order on purpose: the move must use display order, not tick order.
+    fireEvent.click(screen.getByRole("checkbox", { name: /third/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /second/i }));
+
+    // Drag "c" (ticked) onto "a": both ticked rows land before it, in display order.
+    fireEvent.drop((await screen.findByText("First")).closest("li")!, {
+      dataTransfer: { getData: () => "c" },
+    });
+
+    await waitFor(() =>
+      expect(api.reorderRecordings).toHaveBeenCalledWith(null, ["b", "c", "a"], undefined),
+    );
+  });
+
+  it("drags only the row under the cursor when it is not part of the selection", async () => {
+    (api.reorderRecordings as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...rec, id: "a", name: "First" },
+      { ...rec, id: "b", name: "Second" },
+      { ...rec, id: "c", name: "Third" },
+    ]);
+    renderList();
+
+    await screen.findByText("First");
+    fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /second/i }));
+
+    // "c" is not ticked, so the ticked "b" must be left where it is.
+    fireEvent.drop((await screen.findByText("First")).closest("li")!, {
+      dataTransfer: { getData: () => "c" },
+    });
+
+    await waitFor(() =>
+      expect(api.reorderRecordings).toHaveBeenCalledWith(null, ["c", "a", "b"], undefined),
+    );
+  });
+
   it("reorders within a shared room's group, scoped to that room", async () => {
     roomStub.currentRoom = { id: "eng-room", isPersonal: false };
     roomStub.canManageContents = true;
