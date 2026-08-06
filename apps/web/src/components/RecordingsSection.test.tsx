@@ -76,7 +76,10 @@ describe("RecordingsSection", () => {
     ]);
     renderSection();
     fireEvent.click(await screen.findByRole("radio", { name: /specific folder/i }));
-    fireEvent.click(await screen.findByLabelText("Select Ungrouped"));
+    // Move the value off its initial `null` first, so a root row whose `onChoose` never fired at all could
+    // not accidentally pass this test by leaving the untouched initial value in place.
+    fireEvent.click(await screen.findByLabelText("Select Projects"));
+    fireEvent.click(screen.getByLabelText("Select Ungrouped"));
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(() =>
@@ -109,7 +112,7 @@ describe("RecordingsSection", () => {
     expect(screen.getByLabelText("Select Ungrouped").getAttribute("aria-current")).toBeNull();
   });
 
-  it("is keyboard operable: tab reaches the picker's filter box, and a focused row responds to Enter", async () => {
+  it("is keyboard operable: Tab alone reaches a folder row, and Enter chooses it", async () => {
     (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
       { id: "sec-1", name: "Projects", parentId: null, position: 0 },
     ]);
@@ -117,10 +120,17 @@ describe("RecordingsSection", () => {
     renderSection();
     await user.click(await screen.findByRole("radio", { name: /specific folder/i }));
 
-    await user.tab(); // filter input, without clicking into it first
+    // Real Tab presses only, no `.focus()` shortcut - proves the whole chain (radio group -> picker filter
+    // box -> picker rows) is reachable by keyboard alone, not just that the target element is focusable.
+    await user.tab(); // filter input
     expect(document.activeElement).toBe(screen.getByLabelText("Filter folders"));
+    await user.tab(); // the root "Ungrouped" row (no back/breadcrumb control at the top drill level)
+    expect(document.activeElement).toBe(screen.getByLabelText("Select Ungrouped"));
+    await user.tab(); // "Projects" row body (drills, does not choose)
+    expect(document.activeElement).toBe(screen.getByLabelText("Open Projects"));
+    await user.tab(); // "Projects" row's separate select control
+    expect(document.activeElement).toBe(screen.getByLabelText("Select Projects"));
 
-    screen.getByLabelText("Select Projects").focus();
     await user.keyboard("{Enter}");
     await user.click(screen.getByRole("button", { name: /^save$/i }));
 

@@ -172,7 +172,6 @@
   "placementSelected": "Den aktuell ausgewählten Ordner verwenden",
   "placementSpecific": "Einen bestimmten Ordner verwenden",
   "placementFolder": "Ordner",
-  "placementUngroupedOption": "Nicht gruppiert",
   "storageQuotas": "Speicherkontingente",
   "aiIntro": "Dein eigener OpenAI-kompatibler Endpunkt, für Zusammenfassungen und Chat. Lass die Felder leer, um den Serverwert zu verwenden.",
   "summaryEndpoint": "Modell-Endpunkt",

@@ -172,7 +172,6 @@
   "placementSelected": "Use the currently selected folder",
   "placementSpecific": "Use a specific folder",
   "placementFolder": "Folder",
-  "placementUngroupedOption": "Ungrouped",
   "storageQuotas": "Storage Quotas",
   "aiIntro": "Your own OpenAI-compatible endpoint, used for both summaries and chat. Leave fields blank to use the server default.",
   "summaryEndpoint": "Model endpoint",
