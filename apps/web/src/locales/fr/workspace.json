@@ -433,6 +433,7 @@
   "folderPathMenu": "Afficher le chemin complet du dossier",
   "folderPathLabelCurrent": "Chemin de ce dossier",
   "folderPathMenuCurrent": "Afficher le chemin complet de ce dossier",
+  "folderChipsLabel": "Dossier de cet enregistrement",
   "folderPathCollapsed": "Dossiers masqués",
   "selectAllIn": "Tout sélectionner dans {{section}}",
   "confirmDeleteSection": "Supprimer la section « {{name}} » ? Ses enregistrements passeront dans Sans section.",

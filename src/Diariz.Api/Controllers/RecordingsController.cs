@@ -189,7 +189,7 @@ public class RecordingsController : ControllerBase
         var access = await _rooms.ReadAccessForRecordingAsync(UserId, id);
         if (!access.CanRead) return NotFound();
         var visibleRooms = access.VisibleRooms
-            .Select(p => new RecordingRoomDto(p.RoomId, p.Name, p.Icon, p.Color, p.IsMainRoom))
+            .Select(p => new RecordingRoomDto(p.RoomId, p.Name, p.Icon, p.Color, p.IsMainRoom, p.SectionId))
             .ToList();
 
         var recordedByName = await _db.Users

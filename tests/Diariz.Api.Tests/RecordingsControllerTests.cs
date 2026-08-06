@@ -254,6 +254,63 @@ public class RecordingsControllerTests
         Assert.Contains(detail.Rooms, r => !r.IsMain && r.Name == "Engineering");
     }
 
+    /// <summary>Each room entry carries the folder the recording sits in *within that room*. A recording
+    /// shared into several rooms is filed independently in each, so the detail page's folder chips can only
+    /// be drawn from a per-room value - one shared SectionId would point the chips at a folder that does not
+    /// exist in the room being viewed. Ungrouped in a room reads null there regardless of the other rooms.</summary>
+    [Fact]
+    public async Task Get_ReturnsThePerRoomFolderEachPlacementSitsIn()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        await SeedUser(db, owner);
+        var rec = await SeedRecording(db, owner, versions: 1);
+        var scope = new RoomScope(db);
+
+        // Filed in "Customers" at home, in "Q3 Reviews" in the shared room, so the two placements disagree.
+        var homeSection = Guid.NewGuid();
+        var sharedSection = Guid.NewGuid();
+        var sharedId = await scope.CreateSharedRoomAsync("Engineering", null, null, null);
+        await scope.PlaceInMainRoomAsync(rec.Id, owner, homeSection);
+        var homeRoomId = await scope.PersonalRoomIdAsync(owner);
+        db.Sections.Add(new Section { Id = homeSection, UserId = owner, RoomId = homeRoomId, Name = "Customers" });
+        db.Sections.Add(new Section { Id = sharedSection, UserId = owner, RoomId = sharedId, Name = "Q3 Reviews" });
+        await db.SaveChangesAsync();
+        await scope.ShareIntoRoomAsync(rec.Id, sharedId, owner, sharedSection);
+        await scope.SetMemberAsync(sharedId, RoomPrincipalType.User, owner, RoomPermission.CreateRecording);
+
+        var detail = (await Build(db, owner, new FakeJobQueue()).Get(rec.Id)).Value!;
+
+        Assert.Equal(homeSection, detail.Rooms!.Single(r => r.IsMain).SectionId);
+        Assert.Equal(sharedSection, detail.Rooms!.Single(r => r.Name == "Engineering").SectionId);
+    }
+
+    /// <summary>The ungrouped case: a placement with no folder reports null rather than inheriting another
+    /// room's folder.</summary>
+    [Fact]
+    public async Task Get_ReturnsNullFolder_ForAnUngroupedPlacement()
+    {
+        using var db = TestDb.Create();
+        var owner = Guid.NewGuid();
+        await SeedUser(db, owner);
+        var rec = await SeedRecording(db, owner, versions: 1);
+        var scope = new RoomScope(db);
+
+        var homeSection = Guid.NewGuid();
+        var sharedId = await scope.CreateSharedRoomAsync("Engineering", null, null, null);
+        await scope.PlaceInMainRoomAsync(rec.Id, owner, homeSection);
+        var homeRoomId = await scope.PersonalRoomIdAsync(owner);
+        db.Sections.Add(new Section { Id = homeSection, UserId = owner, RoomId = homeRoomId, Name = "Customers" });
+        await db.SaveChangesAsync();
+        await scope.ShareIntoRoomAsync(rec.Id, sharedId, owner, sectionId: null); // ungrouped in the shared room
+        await scope.SetMemberAsync(sharedId, RoomPrincipalType.User, owner, RoomPermission.CreateRecording);
+
+        var detail = (await Build(db, owner, new FakeJobQueue()).Get(rec.Id)).Value!;
+
+        Assert.Null(detail.Rooms!.Single(r => r.Name == "Engineering").SectionId);
+        Assert.Equal(homeSection, detail.Rooms!.Single(r => r.IsMain).SectionId);
+    }
+
     /// <summary>Phase 5: the recorder shares their recording from their personal room (ShareOut is implicit
     /// there) into a shared room they can record in.</summary>
     [Fact]

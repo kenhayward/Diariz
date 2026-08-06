@@ -36,6 +36,19 @@ into it; the path at the top of the list shows where you are, anchored to the ro
 Browser back pops you up one level at a time. Your place in the folder list is kept while you navigate
 elsewhere in the app, but a fresh visit starts back at the room root.
 
+### Finding where an open recording lives
+
+An open recording shows its folder path as a row of chips under its name, starting with the room. Click
+any chip to take the list straight to that folder - the recording stays open, and only the list moves. A
+recording filed at the top level shows just the room chip, which is also the quickest way back to the top
+of the list from anywhere.
+
+If you are on the Calendar, Actions or Tags tab when you click a chip, the panel switches back to the list
+first, since that is where the folder you asked for is shown.
+
+A recording shared into more than one room is filed independently in each, so the chips always describe the
+room you are currently viewing.
+
 ## Cutting and pasting between folders
 
 To move several recordings, or a whole folder, in one step:

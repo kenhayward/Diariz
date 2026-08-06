@@ -396,6 +396,10 @@ export interface RecordingRoom {
   icon: string | null;
   color: string | null;
   isMain: boolean;
+  /// The folder this recording sits in **within this room** (null = the room's top level). Per-room because
+  /// a recording shared into several rooms is filed independently in each - the detail page's folder chips
+  /// read the entry for the room being viewed, never a single "the recording's folder".
+  sectionId: string | null;
 }
 
 export interface AuthResponse {

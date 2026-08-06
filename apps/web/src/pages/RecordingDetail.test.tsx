@@ -95,6 +95,7 @@ vi.mock("../lib/api", () => ({
     deleteFormulaResult: vi.fn(),
     emailFormulaResult: vi.fn(),
     downloadFormulaResult: vi.fn(),
+    listSections: vi.fn().mockResolvedValue([]),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }));
@@ -1217,5 +1218,117 @@ describe("RecordingDetail", () => {
 
     await waitFor(() => expect(api.updatePerson).toHaveBeenCalled());
     await waitFor(() => expect(api.getRecording).toHaveBeenCalledTimes(2));
+  });
+});
+
+/// The folder chips under the recording's name: where it is filed in the room you are viewing, and a way
+/// into that folder in the left list.
+describe("RecordingDetail folder chips", () => {
+  const SECTIONS = [
+    { id: "cust", name: "Customers", parentId: null, position: 0 },
+    { id: "acme", name: "Acme Corp", parentId: "cust", position: 0 },
+  ];
+
+  /// Renders with a location probe so a test can see what clicking a chip did to `?in=`.
+  function renderInRoom(rec: RecordingDetailType) {
+    (api.getRecording as ReturnType<typeof vi.fn>).mockResolvedValue(rec);
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue(SECTIONS);
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let search = "";
+    function SearchSpy() {
+      search = useLocation().search;
+      return null;
+    }
+    const view = render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={["/recordings/rec-123"]}>
+          <SearchSpy />
+          <Routes>
+            <Route path="/recordings/:id" element={<RecordingDetail />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    return { ...view, currentSearch: () => search };
+  }
+
+  function inRoom(sectionId: string | null, roomId = "room-1"): RecordingDetailType {
+    return {
+      ...base,
+      rooms: [{ id: roomId, name: "Personal", icon: null, color: null, isMain: true, sectionId }],
+    } as unknown as RecordingDetailType;
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    roomState.currentRoom = { id: "room-1", name: "Personal", isPersonal: true };
+  });
+
+  it("shows the room and the folder chain the recording is filed in", async () => {
+    const { currentSearch } = renderInRoom(inRoom("acme"));
+    void currentSearch;
+
+    const chips = await screen.findByRole("navigation", { name: /folder/i });
+    await waitFor(() =>
+      expect(within(chips).getAllByRole("button").map((b) => b.textContent)).toEqual([
+        "Personal",
+        "Customers",
+        "Acme Corp",
+      ]),
+    );
+  });
+
+  it("shows only the room chip for a recording at the room's top level", async () => {
+    renderInRoom(inRoom(null));
+
+    const chips = await screen.findByRole("navigation", { name: /folder/i });
+    await waitFor(() =>
+      expect(within(chips).getAllByRole("button").map((b) => b.textContent)).toEqual(["Personal"]),
+    );
+  });
+
+  /// The point of the row: clicking a chip drills the left list to that folder. The drill position is a URL
+  /// param, so the recording stays open and only the list moves.
+  it("drills the list to a folder when its chip is clicked", async () => {
+    const { currentSearch } = renderInRoom(inRoom("acme"));
+
+    const chips = await screen.findByRole("navigation", { name: /folder/i });
+    await waitFor(() => within(chips).getByRole("button", { name: "Customers" }));
+    fireEvent.click(within(chips).getByRole("button", { name: "Customers" }));
+
+    await waitFor(() => expect(currentSearch()).toBe("?in=cust"));
+  });
+
+  it("drills to the room's top level when the room chip is clicked", async () => {
+    const { currentSearch } = renderInRoom(inRoom("acme"));
+
+    const chips = await screen.findByRole("navigation", { name: /folder/i });
+    await waitFor(() => within(chips).getByRole("button", { name: "Personal" }));
+    fireEvent.click(within(chips).getByRole("button", { name: "Personal" }));
+
+    // No `in` param at all - the top level is the absence of a drill, not a sentinel value.
+    await waitFor(() => expect(currentSearch()).toBe(""));
+  });
+
+  /// A chip is useless if the panel is showing Calendar/Actions/Tags: the list it drills is off screen. The
+  /// tab lives in a shared store precisely so this page can pull it back.
+  it("pulls the panel back to the list tab", async () => {
+    localStorage.setItem("diariz.recordings.tab", "actions");
+    renderInRoom(inRoom("acme"));
+
+    const chips = await screen.findByRole("navigation", { name: /folder/i });
+    await waitFor(() => within(chips).getByRole("button", { name: "Acme Corp" }));
+    fireEvent.click(within(chips).getByRole("button", { name: "Acme Corp" }));
+
+    await waitFor(() => expect(localStorage.getItem("diariz.recordings.tab")).toBe("list"));
+  });
+
+  /// A recording you can see but which is not placed in the room on screen has no path here - a bare room
+  /// chip would assert it sits at that room's top level, which is a different (and false) claim.
+  it("renders no chips when the recording is not placed in the room being viewed", async () => {
+    renderInRoom(inRoom("acme", "some-other-room"));
+
+    await screen.findByText(/Mic 6\/26\/2026/);
+    expect(screen.queryByRole("navigation", { name: /folder/i })).toBeNull();
   });
 });

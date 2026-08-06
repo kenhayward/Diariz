@@ -16,9 +16,12 @@ public class RoomForbiddenException(RoomPermission required)
 public record RoomListEntry(
     Guid Id, string Name, RoomKind Kind, string? Icon, string? Color, bool IsPersonal, RoomPermission Permissions);
 
-/// <summary>A room a recording is placed in (its main room, plus any it is shared into).</summary>
+/// <summary>A room a recording is placed in (its main room, plus any it is shared into), including the folder
+/// it sits in <em>within that room</em>. The folder is a property of the placement, not of the recording: the
+/// same recording is filed independently in every room it is shared into, so a single "the recording's folder"
+/// would be meaningless.</summary>
 public record RecordingRoomPlacement(
-    Guid RoomId, string Name, RoomKind Kind, string? Icon, string? Color, bool IsMainRoom);
+    Guid RoomId, string Name, RoomKind Kind, string? Icon, string? Color, bool IsMainRoom, Guid? SectionId);
 
 /// <summary>The result of the single "can read" walk over a recording's placements: whether
 /// <paramref name="CanRead"/>, plus the placements that made it true (or, for an owner, that are simply visible
@@ -427,7 +430,7 @@ public class RoomScope(DiarizDbContext db) : IRoomScope
             from p in db.RoomRecordings
             where p.RecordingId == recordingId
             join r in db.Rooms on p.RoomId equals r.Id
-            select new RecordingRoomPlacement(r.Id, r.Name, r.Kind, r.Icon, r.Color, p.IsMainRoom)
+            select new RecordingRoomPlacement(r.Id, r.Name, r.Kind, r.Icon, r.Color, p.IsMainRoom, p.SectionId)
         ).ToListAsync(ct);
 
         return placements

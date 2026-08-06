@@ -245,7 +245,10 @@ public record RecordingDetailDto(
 
 /// <summary>A room a recording sits in, for the detail Overview. <paramref name="IsMain"/> marks the recorder's
 /// personal (home) room - the only room a recording can be deleted from.</summary>
-public record RecordingRoomDto(Guid Id, string Name, string? Icon, string? Color, bool IsMain);
+/// <summary>A room the recording is placed in, plus the folder it sits in <em>within that room</em>
+/// (null = the room's top level). Per-room because the same recording is filed independently in each room
+/// it is shared into - the detail page's folder chips read the entry for the room being viewed.</summary>
+public record RecordingRoomDto(Guid Id, string Name, string? Icon, string? Color, bool IsMain, Guid? SectionId);
 
 /// <summary>Toggle a recording's protection from audio deletion (auto and manual).</summary>
 public record SetAudioProtectionRequest(bool Protected);
