@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, type ReactNode } from "r
 import { useQuery } from "@tanstack/react-query";
 import { useMatch, useNavigate, useLocation } from "react-router-dom";
 import { api } from "./api";
+import { useDrillSectionId } from "./drillRoute";
 import { rememberRoom, landingRoomPath } from "./roomPersistence";
 import type { RoomListItem } from "./types";
 
@@ -15,9 +16,12 @@ interface RoomState {
   permissions: number;
   can: (perm: number) => boolean;
   /// The folder the user is currently viewing (a /sections/:id page), or null when not on a folder page.
+  /// This is the folder open in the **middle panel**, which is NOT where the recordings list is browsing -
+  /// see `recordingSectionId` for the folder a new recording belongs to.
   selectedSectionId: string | null;
   /// Where a new recording should be filed, resolving the user's placement preference against the folder they
-  /// are viewing: Ungrouped -> null, SpecificFolder -> the configured folder, SelectedFolder -> selectedSectionId.
+  /// are working in: Ungrouped -> null, SpecificFolder -> the configured folder, SelectedFolder -> the folder
+  /// the recordings list is drilled into (`?in=`), falling back to an open folder page when it is at the root.
   /// The Recorder snapshots this when Record is pressed.
   recordingSectionId: string | null;
   isLoading: boolean;
@@ -40,14 +44,22 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const { data: rooms = [], isLoading } = useQuery({ queryKey: ["rooms"], queryFn: api.listRooms });
   const { data: settings } = useQuery({ queryKey: ["user-settings"], queryFn: api.getUserSettings });
 
-  // Resolve the placement preference. Defaults to "the folder you're viewing" until settings load.
+  // Where the recordings list is browsing. This - not `selectedSectionId` - is the folder a user means by
+  // "the folder I'm in": clicking a folder row drills the list (`?in=`) and deliberately does NOT open
+  // /sections/:id (see drillRoute.ts), so resolving SelectedFolder from the route match alone filed every
+  // take into Ungrouped unless the user had also opened the folder's own page from the breadcrumb menu.
+  const drilledSectionId = useDrillSectionId().sectionId;
+
+  // Resolve the placement preference. Defaults to "the folder you're viewing" until settings load. The open
+  // folder page is the fallback for SelectedFolder, so a deep link straight to /sections/:id (which leaves
+  // the list at the room root) still counts as being in that folder.
   const placementMode = settings?.placementMode ?? "SelectedFolder";
   const recordingSectionId =
     placementMode === "Ungrouped"
       ? null
       : placementMode === "SpecificFolder"
         ? settings?.placementSectionId ?? null
-        : selectedSectionId;
+        : drilledSectionId ?? selectedSectionId;
 
   // Prefer the room named in the URL; else the personal room; else whatever came first.
   const currentRoom = useMemo(() => {

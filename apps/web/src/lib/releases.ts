@@ -60,6 +60,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.185.1",
+    date: "2026-08-06",
+    pr: 459,
+    headline: "\"Use the currently selected folder\" now follows the folder you are browsing",
+    summary:
+      "Settings -> Recordings lets you choose where a new recording is filed, and the middle option - use " +
+      "the currently selected folder - was reading the wrong thing. It only counted a folder whose own page " +
+      "you had opened from the folder path menu, not the folder the meetings list was showing, so drilling " +
+      "into a folder and hitting Record still filed the take into Ungrouped. It now follows the list, which " +
+      "is the folder you are actually working in; an open folder page still counts when the list is at the " +
+      "top level, so a link straight to a folder's page behaves as before.",
+    fixed: [
+      "New recordings are filed into the folder the meetings list is drilled into when the placement preference is \"Use the currently selected folder\" - previously they all landed in Ungrouped.",
+    ],
+  },
+  {
     version: "0.185.0",
     date: "2026-08-06",
     pr: 457,
