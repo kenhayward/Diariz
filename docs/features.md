@@ -19,7 +19,9 @@ loopback / **macOS - beta** ScreenCaptureKit); the checkbox is hidden where the 
 if system audio isn't shared the take falls back to microphone-only. The desktop app can also **start/stop
 recording from its tray / menu-bar menu** (in the background, with notifications), including a **Record Both**
 item. Or **upload existing audio files** to transcribe (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A) — via the
-Upload button or by **dragging several onto the recordings list**, with per-file status.
+Upload button or by **dragging several onto the recordings list**, with per-file status. Dropped files land
+in **the folder the list is showing** - where you dropped them beats the placement preference, which decides
+for the Upload button (and for a new recording) instead.
 - **Transcribe + diarize** server-side with WhisperX (large-v3, word-level timestamps) and pyannote 3.1,
 producing speaker-labelled, timestamped segments you can rename, edit, and play back (per segment, per speaker,
 or the whole recording). A **Speakers** panel lists each speaker with their segment count and **total talk time**,
