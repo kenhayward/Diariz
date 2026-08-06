@@ -179,4 +179,19 @@ describe("FolderPicker", () => {
       expect(screen.getByLabelText("Select Phase 2").getAttribute("aria-current")).toBe("true");
     });
   });
+
+  it("clears the filter on Escape, returning to the drill position underneath it", async () => {
+    renderPicker();
+    await userEvent.click(screen.getByLabelText("Open Customers"));
+
+    const filterBox = screen.getByLabelText("Filter folders") as HTMLInputElement;
+    await userEvent.type(filterBox, "Phase");
+    expect(screen.getByText("Customers › Acme Corp › Project Falcon › Phase 2")).toBeTruthy();
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(filterBox.value).toBe("");
+    expect(screen.getByText("Acme Corp")).toBeTruthy();
+    expect(screen.queryByText("Personal")).toBeNull();
+  });
 });

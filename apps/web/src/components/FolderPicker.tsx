@@ -41,6 +41,14 @@ function directChildren(sections: SectionDto[], parentId: string | null): Sectio
 /// prop, a plain "Selected: {{path}}" line is shown above the list whenever the selection is not otherwise
 /// visible - lower risk for a comfort feature, at the cost of an extra line rather than an extra state
 /// dependency.
+///
+/// **Keyboard cost, accepted deliberately.** A `<select>` is one tab stop with arrow-key navigation; this
+/// picker is `1 + 1 + 2N` stops (filter box, root row, then a row body and a select button per visible
+/// folder) - with 20 top-level folders that is dozens of Tab presses to reach Save. That trade was made on
+/// purpose, not overlooked: the filter box is the intended keyboard path for a long list (type instead of
+/// tabbing past every row), and roving `tabindex` + arrow-key handling was considered and deliberately not
+/// built - more machinery than a comfort feature justifies. Escape while the filter box is focused and
+/// non-empty clears it, the one piece of that ergonomics cheap enough to be worth adding.
 export default function FolderPicker({
   sections,
   selectedId,
@@ -85,6 +93,14 @@ export default function FolderPicker({
     : children.some((c) => c.id === selectedId);
   const showSelectedNotice = selectedEntry !== undefined && !selectedVisible;
 
+  function onFilterKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    // Only when there is something to clear, so an Escape on an already-empty filter box still bubbles to
+    // close an enclosing modal instead of being silently swallowed here.
+    if (e.key !== "Escape" || !filter) return;
+    e.stopPropagation();
+    setFilter("");
+  }
+
   return (
     <div>
       {/* `aria-label` alone names this field - it wins over any associated <label> in the accessible-name
@@ -94,6 +110,7 @@ export default function FolderPicker({
         type="text"
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
+        onKeyDown={onFilterKeyDown}
         placeholder={t("folderPickerFilterPlaceholder")}
         aria-label={t("folderPickerFilterPlaceholder")}
         className="mb-2 w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
