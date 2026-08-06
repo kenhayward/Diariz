@@ -1171,6 +1171,70 @@ public class RecordingsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Bulk form of <see cref="MoveToSection"/>, for pasting a cut selection in one request. Unlike
+    /// <see cref="Reorder"/>, which imposes an explicit 0..n-1 order, this <b>appends</b>: the listed recordings
+    /// land after whatever already sits in the target folder, keeping the order they were listed in.
+    ///
+    /// <para><c>Position</c> is per-ROOM, not per-folder (the list is ordered by it and grouped into folders in
+    /// memory), so appending means taking the highest position among the placements already in the target folder
+    /// and counting up from there - not the highest in the room, which would leave gaps and push the folder's
+    /// contents around.</para>
+    ///
+    /// <para>Ids not placed in the room are skipped rather than failing the call - a paste should move what it
+    /// can rather than being lost wholesale because one recording was deleted in another tab.</para></summary>
+    [HttpPost("section")]
+    [EndpointSummary("File several recordings in a folder")]
+    [EndpointDescription(
+        "Moves every listed recording into one folder in a single call, or ungroups them all with a null " +
+        "`sectionId`. They are **appended**: they land after whatever is already in the folder, in the order " +
+        "you list them. Use `PUT /api/recordings/reorder` instead when you want to set an explicit order.\n\n" +
+        "Ids that are not placed in the room are skipped rather than failing the whole call. Requires " +
+        "`ManageContents` in that room; you always hold it in your own personal room, which is the default " +
+        "when `roomId` is omitted.")]
+    public async Task<IActionResult> MoveManyToSection(MoveRecordingsRequest req)
+    {
+        var ids = (req.Ids ?? []).Distinct().ToList();
+        if (ids.Count == 0) return NoContent();
+
+        var roomId = req.RoomId ?? await _rooms.PersonalRoomIdAsync(UserId);
+        if (!await _rooms.IsMemberAsync(UserId, roomId)) return NotFound();
+        if (!(await _rooms.PermissionsAsync(UserId, roomId)).HasFlag(RoomPermission.ManageContents)) return Forbid();
+
+        if (req.SectionId is { } sectionId
+            && !await _db.Sections.AnyAsync(s => s.Id == sectionId && s.RoomId == roomId))
+            return NotFound(); // can't paste into a folder that isn't in this room
+
+        // Placements in this room, and nothing else. Authorization is the room's, NOT the recording's: this
+        // deliberately matches MoveToSection, which gates on membership + ManageContents and never looks at
+        // Recording.UserId. Adding an ownership filter here would make a bulk paste narrower than moving the
+        // same recordings one at a time - a shared room is explicitly meant to hold several people's
+        // recordings, so a member with ManageContents must be able to file a colleague's.
+        var placements = await _db.RoomRecordings
+            .Where(p => p.RoomId == roomId && ids.Contains(p.RecordingId))
+            .ToDictionaryAsync(p => p.RecordingId);
+        if (placements.Count == 0) return NoContent();
+
+        // Where the folder currently ends. The recordings being moved are excluded from that maximum so that
+        // re-pasting a folder's own contents into it is idempotent rather than inflating their positions each
+        // time. It does not affect relative order - moved items land after every non-moved occupant either way.
+        var moving = placements.Keys.ToHashSet();
+        var occupied = await _db.RoomRecordings
+            .Where(p => p.RoomId == roomId && p.SectionId == req.SectionId && !moving.Contains(p.RecordingId))
+            .Select(p => p.Position)
+            .ToListAsync();
+        var next = occupied.Count == 0 ? 0 : occupied.Max() + 1;
+
+        // Walk the caller's order, not the dictionary's, so the listed order is what survives.
+        foreach (var id in ids)
+        {
+            if (!placements.TryGetValue(id, out var placement)) continue;
+            placement.SectionId = req.SectionId;
+            placement.Position = next++;
+        }
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
     /// <summary>Share a recording from one room into another (a non-main placement). Needs <c>ShareOut</c> in the
     /// source room and <c>CreateRecording</c> in the target; the link lands ungrouped for now.</summary>
     [HttpPost("{id:guid}/share")]

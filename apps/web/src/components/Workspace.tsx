@@ -6,6 +6,7 @@ import RecordingsPanel from "./RecordingsPanel";
 import ChatPanel from "./ChatPanel";
 import RoomSwitcher from "./RoomSwitcher";
 import { SelectionProvider } from "../lib/selection";
+import { MoveClipboardProvider } from "../lib/moveClipboard";
 import { useRoom } from "../lib/rooms";
 import { useResizableWidth } from "../lib/useResizableWidth";
 
@@ -63,6 +64,9 @@ export default function Workspace() {
   }
 
   return (
+    // The move clipboard sits alongside selection: both are session-scoped state the recordings panel and
+    // its nav rows read from, mounted once here so a drill elsewhere in the tree doesn't lose the cut.
+    <MoveClipboardProvider>
     <SelectionProvider>
     <div className="flex min-h-0 flex-1">
       {leftOpen ? (
@@ -128,6 +132,7 @@ export default function Workspace() {
       {!rightOpen && <CollapsedRail label={t("panelChat")} onExpand={() => setRightOpen(true)} chevron="◀" tour="chat" />}
     </div>
     </SelectionProvider>
+    </MoveClipboardProvider>
   );
 }
 

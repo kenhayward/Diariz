@@ -1863,6 +1863,36 @@
         ],
         "type": "object"
       },
+      "MoveRecordingsRequest": {
+        "properties": {
+          "ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "roomId": {
+            "format": "uuid",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sectionId": {
+            "format": "uuid",
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "ids",
+          "sectionId"
+        ],
+        "type": "object"
+      },
       "PermissionsDto": {
         "properties": {
           "manageFormulas": {
@@ -7572,6 +7602,40 @@
           }
         },
         "summary": "Reorder recordings in a room",
+        "tags": [
+          "Recordings"
+        ]
+      }
+    },
+    "/api/recordings/section": {
+      "post": {
+        "description": "Moves every listed recording into one folder in a single call, or ungroups them all with a null `sectionId`. They are **appended**: they land after whatever is already in the folder, in the order you list them. Use `PUT /api/recordings/reorder` instead when you want to set an explicit order.\n\nIds that are not placed in the room are skipped rather than failing the whole call. Requires `ManageContents` in that room; you always hold it in your own personal room, which is the default when `roomId` is omitted.",
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveRecordingsRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveRecordingsRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveRecordingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "File several recordings in a folder",
         "tags": [
           "Recordings"
         ]

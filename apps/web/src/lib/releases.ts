@@ -32,7 +32,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Translate** | Translate a whole transcript or a single segment, stored as revisions you can flip back. |
 | **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) to a recording or directly to a folder, edit Markdown attachments in place, save a chat conversation as an attachment with /attach, and optionally feed them to chat. |
 | **Rooms** | A private Personal Room per account plus shareable Rooms: invite users and groups with per-member permissions. Each Shared Room has its **own folder structure** (sections/sub-sections, drag-and-drop, per-room order) and its own List/Calendar/Actions/Tags scoped to it; record or upload files straight into a room (your Personal Room keeps the original), and search + chat over every room you belong to. A member who can read a shared recording sees its notes and screenshots too - only the owner can add, edit, or delete them. Your Google Calendar and its linking stay personal. The switcher shows each room's folder and meeting counts (shared ones labelled), ticks the one you are in, and remembers where you were. Manage rooms from the switcher. |
-| **Organise & merge** | Folders nested up to 8 levels deep with drag-and-drop; the meetings list drills in one folder at a time (coloured folder rows with counts, a breadcrumb showing the full path with every part clickable, browser back pops a level) so it stays readable however many recordings you have, with **Open section page** in the breadcrumb's menu as a separate target from browsing deeper; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
+| **Organise & merge** | Folders nested up to 8 levels deep with drag-and-drop; the meetings list drills in one folder at a time (coloured folder rows with counts, a breadcrumb showing the full path with every part clickable, browser back pops a level) so it stays readable however many recordings you have, with **Open section page** in the breadcrumb's menu as a separate target from browsing deeper; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); cut one or more recordings, or a folder, and paste them into another folder in one move (landing at the bottom, in the order you cut them), with the Paste control showing why it's disabled when a move isn't allowed yet; browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
 | **API access** | Generate a personal API token (when enabled), read-only or read-write, with an optional expiry date, to call the REST API as yourself, with a built-in API reference documenting every endpoint - what it does, who may call it, and what it changes. |
@@ -59,6 +59,20 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.181.0",
+    date: "2026-08-05",
+    pr: 452,
+    headline: "Cut and paste recordings and folders",
+    summary:
+      "Moving things into a folder used to mean dragging them one at a time. Now you can select several recordings (or grab a single folder from its menu), hit Cut, drill into wherever you want them, and hit Paste - they land at the bottom of that folder in the order you cut them. Cut items grey out right where they are and nothing moves until you paste, so it's safe to look around first; a bar under the toolbar keeps the destination in view and lets you cancel any time. If a paste isn't allowed yet - pasting back where you cut from, past the 8-level folder depth limit, or into a folder's own subfolder - the Paste button stays visible but disabled and explains why, rather than just vanishing. Dragging a recording onto the breadcrumb path now also appends to that folder instead of jumping to the top. Shared rooms aren't wired up for paste yet - cut and paste works in your personal room for now.",
+    added: [
+      "Cut and paste to move one or more recordings, or a single folder, between folders - a persistent bar shows the destination with Paste and Cancel, and disables Paste with an explanation when the move isn't allowed.",
+    ],
+    changed: [
+      "Dropping a recording onto the breadcrumb path now appends it to that folder, matching a drop onto a folder row, instead of landing at the top.",
+    ],
+  },
   {
     version: "0.180.1",
     date: "2026-08-05",

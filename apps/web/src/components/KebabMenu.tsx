@@ -5,6 +5,9 @@ export interface KebabAction {
   onClick: () => void;
   danger?: boolean;
   disabled?: boolean;
+  /// Why this item is unavailable. Shown as the item's tooltip - a disabled action that does not say why
+  /// reads as a broken menu rather than a rule, and the label alone rarely carries the reason.
+  title?: string;
 }
 
 /// A "⋮" button that opens a popover of actions. Closes on outside-click or Escape.
@@ -64,6 +67,7 @@ export default function KebabMenu({
               type="button"
               role="menuitem"
               disabled={a.disabled}
+              title={a.title}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();

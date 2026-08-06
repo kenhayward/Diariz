@@ -1,6 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { buildRecordingTree } from "./recordingTree";
-import { childrenOf, breadcrumbOf, recordingCountOf, sectionCreateTarget, depthOf, MAX_FOLDER_DEPTH } from "./drillView";
+import {
+  childrenOf,
+  breadcrumbOf,
+  recordingCountOf,
+  sectionCreateTarget,
+  depthOf,
+  heightOf,
+  MAX_FOLDER_DEPTH,
+} from "./drillView";
 import type { RecordingSummary, SectionDto } from "./types";
 
 const section = (id: string, name: string, parentId: string | null = null, position = 0): SectionDto =>
@@ -93,6 +101,34 @@ describe("depthOf", () => {
 
   it("is 0 for an unknown id", () => {
     expect(depthOf(sections, "gone")).toBe(0);
+  });
+});
+
+describe("heightOf", () => {
+  it("is 1 for a leaf", () => {
+    expect(heightOf(sections, "ambu")).toBe(1);
+    expect(heightOf(sections, "podcasts")).toBe(1);
+  });
+
+  it("counts the tallest branch beneath, root included", () => {
+    expect(heightOf(sections, "customers")).toBe(2);
+  });
+
+  it("spans a chain exactly MAX_FOLDER_DEPTH deep", () => {
+    expect(heightOf(deepChain, deepChain[0].id)).toBe(MAX_FOLDER_DEPTH);
+    expect(heightOf(deepChain, deepChain[MAX_FOLDER_DEPTH - 1].id)).toBe(1);
+  });
+
+  // Mirrors SectionTree.Height on the API: an id no longer in the list still occupies one level as far as
+  // a caller composing depth(target) + height(moved) is concerned.
+  it("is 1 for an unknown id", () => {
+    expect(heightOf(sections, "gone")).toBe(1);
+  });
+
+  // A cycle would hang the walk; parentId is not DB-enforced against one.
+  it("terminates on a parent cycle", () => {
+    const cyclic = [section("x", "X", "y"), section("y", "Y", "x")];
+    expect(() => heightOf(cyclic, "x")).not.toThrow();
   });
 });
 

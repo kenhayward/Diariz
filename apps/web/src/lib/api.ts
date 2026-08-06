@@ -930,6 +930,13 @@ export const api = {
     await http.put("/api/recordings/reorder", { sectionId, orderedIds, roomId: roomId ?? null });
   },
 
+  /// File several recordings into one folder (or ungroup them all with a null sectionId) in a single call -
+  /// the paste side of the move clipboard. Unlike reorderRecordings, this appends: the listed recordings land
+  /// after whatever is already in the target, in the order given.
+  async moveRecordingsBulk(ids: string[], sectionId: string | null, roomId?: string | null): Promise<void> {
+    await http.post("/api/recordings/section", { ids, sectionId, roomId: roomId ?? null });
+  },
+
   async renameRecording(id: string, name: string | null): Promise<void> {
     await http.put(`/api/recordings/${id}/name`, { name });
   },

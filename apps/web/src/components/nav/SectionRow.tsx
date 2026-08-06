@@ -8,6 +8,7 @@ import { sectionColor } from "../../lib/sectionColors";
 import { SECTION_MIME } from "../../lib/dragTypes";
 import { ChevronRightIcon, FolderIcon } from "../icons";
 import KebabMenu from "../KebabMenu";
+import { useMoveClipboard } from "../../lib/moveClipboard";
 
 /// A folder row in the drill-in list: coloured folder glyph, name, the count of everything underneath,
 /// and a chevron saying "there is more this way".
@@ -23,6 +24,8 @@ export default function SectionRow({
   name,
   count,
   canNest,
+  parentSectionId,
+  cut = false,
   onDrill,
   onSectionDropBefore,
   onSectionDropNest,
@@ -35,6 +38,13 @@ export default function SectionRow({
   /// Whether this folder may take sub-folders (false once it sits at the depth cap), which decides both the
   /// "New sub-section" action and what a dropped folder does here.
   canNest: boolean;
+  /// This row's own parent - null at the top level. Recorded as the clipboard's source on Cut (not this
+  /// folder's own id): a folder cut from itself would make `pasteTarget`'s same-folder check meaningless,
+  /// since a folder is never its own paste destination anyway.
+  parentSectionId: string | null;
+  /// This folder is the move clipboard's current cut - greyed out with a dashed outline rather than hidden,
+  /// since nothing has actually moved yet (see RecordingsPanel's paste flow).
+  cut?: boolean;
   onDrill: () => void;
   onSectionDropBefore: (draggedSectionId: string) => void;
   onSectionDropNest: (draggedSectionId: string) => void;
@@ -44,6 +54,7 @@ export default function SectionRow({
   const qc = useQueryClient();
   const basePath = useRoomBasePath();
   const sharedRoomId = useSharedRoomId();
+  const { cutFolder } = useMoveClipboard();
   const [renaming, setRenaming] = useState(false);
   // Highlighted while its own page is open in the middle panel - you can be reading a folder's page and
   // browsing elsewhere, so this is not the same thing as the drill position.
@@ -66,6 +77,19 @@ export default function SectionRow({
 
   const actions = [
     { label: t("recordings:rename"), onClick: () => setRenaming(true) },
+    // The clipboard's convention: null source room is the personal room, matching useSharedRoomId's
+    // undefined-for-personal with `?? null`.
+    // Disabled in a shared room, and the reason is shown rather than left to be discovered. Pasting INTO a
+    // shared room is blocked, and so is pasting a shared-room cut anywhere else - so a cut staged here would
+    // have nowhere at all to go. Offering it would be a trap: the user stages a move and then finds every
+    // destination refused. `pasteTarget`'s cross-room rule stays as the backstop for when shared-room paste
+    // does ship, at which point this gate is what should be relaxed first.
+    {
+      label: t("cut"),
+      disabled: sharedRoomId != null,
+      title: sharedRoomId != null ? t("cutSharedRoomBlocked") : undefined,
+      onClick: () => cutFolder(id, parentSectionId, sharedRoomId ?? null),
+    },
     ...(canNest
       ? [
           {
@@ -92,11 +116,16 @@ export default function SectionRow({
 
   return (
     <div
+      // `outline` (not `border`) for the cut indicator, deliberately: this row already carries its own
+      // `border-b dark:border-gray-800`, and a second `border`/`dark:border-*` utility for the cut colour
+      // would fight that one for the same CSS property with the winner decided by stylesheet generation
+      // order, not by anything here. `outline` is a separate property, so the dashed ring never competes
+      // with the row's own border.
       className={`flex items-center gap-1 border-b py-1.5 pl-2 pr-1 dark:border-gray-800 ${
         active
           ? "bg-blue-50 dark:bg-blue-900/30"
           : "hover:bg-gray-50 dark:hover:bg-gray-800/60"
-      }`}
+      } ${cut ? "opacity-50 rounded outline outline-dashed outline-1 outline-gray-400 dark:outline-gray-600" : ""}`}
       draggable={!renaming}
       onDragStart={(e) => {
         e.dataTransfer.setData(SECTION_MIME, id);
@@ -123,6 +152,9 @@ export default function SectionRow({
         <SectionRenameForm initial={name} onSave={save} onCancel={() => setRenaming(false)} />
       ) : (
         <>
+          {/* Colour/opacity alone would leave a screen-reader user unable to tell which folder is cut - the
+              clipboard bar's count says something is cut, never which. */}
+          {cut && <span className="sr-only">{t("cutPendingPasteAria")}</span>}
           {/* The section's colour differs per theme, so it rides in as CSS custom properties and the
               dark: variant picks the arm. One text node, not a light/dark pair — duplicating the name in
               the DOM would have a screen reader read every folder twice. The glyph inherits currentColor. */}

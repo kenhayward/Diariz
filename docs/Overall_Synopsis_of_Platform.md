@@ -1258,7 +1258,18 @@ into it with no URL or per-user setup at all.
     a folder ungroups the placement). `RoomScope.RecordingsIn(roomId)` is the base queryable every room-scoped
     recording query starts from — the equivalent of the old `.Where(r => r.UserId == UserId)`, one level up —
     and `RecordingsController`, `SectionPageController`, `ChatController` and `SectionSummaryProcessor` all read
-    the folder through it.
+    the folder through it. Filing one recording is `PUT /api/recordings/{id}/section`; **`POST
+    /api/recordings/section`** (`RecordingsController.MoveManyToSection`) is the bulk form, moving every listed
+    id into one folder (or ungrouping them all with a null `sectionId`) in a single call — it backs the web's
+    cut/paste flow, which lets a user cut several selected recordings, or a single folder, and paste them into
+    wherever they have drilled into. Both endpoints are gated the same way: room membership (404 for a
+    non-member) plus `ManageContents` in that room (the personal-room owner always holds it) — authorization is
+    the **room's**, not the recording's `UserId`, so a member with the permission can file a colleague's
+    recording. Unlike `PUT /api/recordings/reorder`, which imposes an explicit `0..n-1` order, the bulk endpoint
+    **appends**: it reads the highest `Position` already occupying the target folder (excluding the ids being
+    moved, so re-pasting a folder's own contents into itself is idempotent) and lays the listed ids after it in
+    the order given. Ids no longer placed in the room are skipped rather than failing the whole call, so a stale
+    clipboard entry (something deleted in another tab) doesn't lose the rest of the paste.
   - **Folders carry a room (2c).** `Section.RoomId` is set on create and backfilled to each folder's owner's
     personal room; `SectionsController` scopes by it, and `RoomScope.SetSectionAsync` refuses to file a
     recording under a folder from another room. `Section.UserId` is **kept** as owner identity (the SignalR

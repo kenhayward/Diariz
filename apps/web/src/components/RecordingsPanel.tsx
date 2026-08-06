@@ -13,6 +13,7 @@ import { recordingMenu } from "./recordingMenu";
 import { isProcessing, statusLabel } from "../lib/recordingStatus";
 import { copyRichLink, transcriptUrl } from "../lib/clipboard";
 import { useSelection } from "../lib/selection";
+import { useMoveClipboard } from "../lib/moveClipboard";
 import { useRoom, useRoomBasePath, useSharedRoomId } from "../lib/rooms";
 import { useActiveRecordingId } from "../lib/activeRoute";
 import { formatDuration } from "../lib/format";
@@ -23,6 +24,7 @@ import { childrenOf, breadcrumbOf, recordingCountOf, sectionCreateTarget, depthO
 import { useDrillSectionId, useDrillSearch } from "../lib/drillRoute";
 import { SECTION_MIME } from "../lib/dragTypes";
 import DrillBreadcrumb from "./nav/DrillBreadcrumb";
+import ClipboardBar from "./nav/ClipboardBar";
 import SectionRow from "./nav/SectionRow";
 import SearchBar from "./nav/SearchBar";
 import MonthCalendar from "./MonthCalendar";
@@ -107,6 +109,9 @@ export default function RecordingsPanel() {
 
   const tree = useMemo(() => buildRecordingTree(recordings, sections), [recordings, sections]);
   const selection = useSelection();
+  // The move clipboard: cut items grey out here rather than disappear (nothing has moved yet), and pasting
+  // reads the current drill level as the destination.
+  const { cut, clear: clearClipboard } = useMoveClipboard();
   const basePath = useRoomBasePath();
   // Where the drill-in list is: `?in=<sectionId>`, or the room's top level. Held in the URL so browser
   // back pops a level and the position survives a reload — see `useDrillSectionId`.
@@ -115,6 +120,19 @@ export default function RecordingsPanel() {
   // top level, since the loose recordings there belong to the room rather than to any folder.
   const currentLevelName =
     breadcrumbOf(sections, drill.sectionId).slice(-1)[0]?.name ?? currentRoom?.name ?? "";
+  // Selection is global (shared with the chat panel), but the drill-in list shows only one level at a
+  // time - drilling doesn't unmount the rows a prior selection was made against, it just stops rendering
+  // them. Left alone, a selection made at one level survives into another where the ticked ids do not
+  // even appear, so a later Cut would record the new drill level as the source for recordings that live
+  // somewhere else entirely (see pasteTarget.ts's same-folder / cross-room checks, which then reason from
+  // the wrong source). `selectTab` already clears the selection for the same reason on a tab switch; this
+  // is the drill-position equivalent.
+  useEffect(() => {
+    selection.clear();
+    // Reacts only to the drill position changing, not to `selection` itself - `clear` is called for
+    // whatever the current render's selection is, so it does not need to be a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drill.sectionId]);
   // A live search takes the list body over. It is only ever component state: the drill stays in the URL, so
   // clearing the query drops straight back to where the user was browsing, with nothing to restore.
   const [searchQuery, setSearchQuery] = useState("");
@@ -247,6 +265,34 @@ export default function RecordingsPanel() {
     runSection(() => api.reorderSections(payload.parentId, payload.orderedIds, aggRoomId));
   }
 
+  /// Perform the move clipboard's pending paste into the current drill level. Recordings go through the
+  /// bulk move endpoint in one call; a folder goes through the same reorderSections call the drag-and-drop
+  /// "nest" gesture already uses (appendSectionUnder), so both land at the bottom of the target, after
+  /// whatever is already there, preserving its existing relative order. A failed paste leaves the clipboard
+  /// intact and surfaces the error the same way the other section operations do - losing the cut to a
+  /// network blip would be worse than the error itself.
+  async function pasteClipboard() {
+    if (!cut) return;
+    setOpError(null);
+    try {
+      if (cut.kind === "recordings") {
+        await api.moveRecordingsBulk(cut.ids, drill.sectionId, aggRoomId);
+      } else {
+        // cut.ids[0]: cutFolder always stores exactly one id - folders are cut one at a time, there is no
+        // folder multi-select (see moveClipboard.tsx). pasteTarget still loops over cut.ids for the
+        // "folders" kind, so the two sides would disagree the moment a future multi-select folder cut
+        // exists; if that ever changes, this line needs to become a loop too.
+        const payload = appendSectionUnder(sections, cut.ids[0], drill.sectionId);
+        await api.reorderSections(payload.parentId, payload.orderedIds, aggRoomId);
+      }
+      clearClipboard();
+      qc.invalidateQueries({ queryKey: ["recordings"] });
+      qc.invalidateQueries({ queryKey: ["sections"] });
+    } catch (e) {
+      setOpError(apiErrorMessage(e));
+    }
+  }
+
   // Drag audio files anywhere onto the panel to upload them (distinct from the reorder DnD, which uses
   // the "text/plain" payload — file drags carry "Files"). A depth counter keeps the highlight stable as
   // the cursor moves over child rows.
@@ -299,6 +345,11 @@ export default function RecordingsPanel() {
     );
   };
 
+  // Which ids are the clipboard's current cut, by kind — greyed out in the rows below rather than removed
+  // (nothing has moved until the paste succeeds).
+  const cutRecordingIds = cut?.kind === "recordings" ? cut.ids : [];
+  const cutFolderIds = cut?.kind === "folders" ? cut.ids : [];
+
   const rowList = (sectionId: string | null, items: RecordingSummary[], indentClass = "pl-3") => {
     const ids = items.map((i) => i.id);
     return (
@@ -312,6 +363,7 @@ export default function RecordingsPanel() {
             selected={selection.selectedIds.includes(r.id)}
             onToggleSelect={() => selection.toggle(r.id)}
             onDropBefore={(draggedId) => drop(sectionId, ids, draggedId, r.id)}
+            cut={cutRecordingIds.includes(r.id)}
           />
         ))}
       </ul>
@@ -382,8 +434,25 @@ export default function RecordingsPanel() {
               sectionId={drill.sectionId}
               basePath={basePath}
               onDrill={drill.drillTo}
-              onRecordingDrop={(sectionId, recordingId) => drop(sectionId, [], recordingId, null)}
+              onRecordingDrop={(sectionId, recordingId) =>
+                // Append after what's already there, same as dropping onto a folder row - an empty id list
+                // here would land the recording at position 0 (the top), giving one gesture two behaviours.
+                drop(sectionId, childrenOf(tree, sectionId).items.map((i) => i.id), recordingId, null)
+              }
             />
+            {/* Persistent, like the breadcrumb: the clipboard survives navigation, so this stays visible and
+                shows where a paste would land even while the user is searching. */}
+            <ClipboardBar
+              sections={sections}
+              destSectionId={drill.sectionId}
+              destRoomId={aggRoomId ?? null}
+              onPaste={pasteClipboard}
+            />
+            {/* Hoisted above the search guard, same as the bar above it: a paste (from this bar) can fail
+                while the list body is showing search results, and the error must be exactly as reachable
+                as the control that produced it - a click that silently does nothing is worse than an
+                error the user has to scroll past. */}
+            {opError && <p className="px-3 py-1 text-xs text-red-600 dark:text-red-400">{opError}</p>}
             {/* The results replace the list body outright rather than hiding it: nothing below is reachable
                 or readable during a search, and clearing rebuilds it from the URL anyway. */}
             {!searching && (
@@ -414,7 +483,6 @@ export default function RecordingsPanel() {
               {recordings.length === 0 && !dragging && (
                 <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("noRecordings")}</p>
               )}
-              {opError && <p className="px-3 py-1 text-xs text-red-600 dark:text-red-400">{opError}</p>}
 
               {level.sections.map((node) => (
                 <SectionRow
@@ -423,6 +491,8 @@ export default function RecordingsPanel() {
                   name={node.name}
                   count={recordingCountOf(tree, node.id)}
                   canNest={childrenCanNest}
+                  parentSectionId={drill.sectionId}
+                  cut={cutFolderIds.includes(node.id)}
                   onDrill={() => drill.drillTo(node.id)}
                   onSectionDropBefore={(draggedId) => dropSectionBefore(node.id, draggedId)}
                   onSectionDropNest={(draggedId) => nestSection(node.id, draggedId)}
@@ -672,6 +742,7 @@ function ListToolbar({
   const { t } = useTranslation("workspace");
   const qc = useQueryClient();
   const { selectMode, setSelectMode, selectedIds, clear } = useSelection();
+  const { cutRecordings } = useMoveClipboard();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -743,6 +814,22 @@ function ListToolbar({
     }
   }
 
+  // Stages the selection on the move clipboard - nothing touches the server here. The source recorded is
+  // this drill level (not the selected recordings' own sectionId, which would be the same thing at this
+  // level anyway) so a later paste onto the same folder can be detected and disabled.
+  //
+  // selectedIds is in TICK order (checkbox toggles append), not display order - ticking the third row then
+  // the first would otherwise cut them third-then-first. The product decision is that a paste "preserves
+  // relative order", which has to mean the order the rows are shown in, not the order they were clicked -
+  // so re-sort into `recordings`' own order (the API already returns it in display/position order, the
+  // same order the rows render in) before it ever reaches the clipboard.
+  function cutSelected() {
+    if (selectedIds.length === 0) return;
+    const displayIndex = new Map(recordings.map((r, i) => [r.id, i]));
+    const ordered = [...selectedIds].sort((a, b) => (displayIndex.get(a) ?? 0) - (displayIndex.get(b) ?? 0));
+    cutRecordings(ordered, drillSectionId, roomId ?? null);
+  }
+
   return (
     <div className="flex h-9 items-center justify-between gap-2 border-b px-3 dark:border-gray-700">
       {open ? (
@@ -802,6 +889,21 @@ function ListToolbar({
               icon={<TrashIcon />}
             />
           )}
+          {selectMode && (
+            // Disabled in a shared room, with the reason stated. Pasting INTO a shared room is blocked, and
+            // so is pasting a shared-room cut anywhere else - so a cut staged here would have nowhere at all
+            // to go, and offering it would be a trap. The title rides on the wrapper, not the button:
+            // ToolbarButton drops pointer events when disabled, so a title on the button itself would never
+            // surface (same reason the New section button wraps its own).
+            <span title={roomId != null ? t("cutSharedRoomBlocked") : undefined}>
+              <ToolbarButton
+                label={t("cut")}
+                onClick={cutSelected}
+                disabled={!listMode || selectedIds.length === 0 || roomId != null}
+                icon={<CutIcon />}
+              />
+            </span>
+          )}
           <ToolbarButton
             label={t("refresh")}
             onClick={() => {
@@ -849,6 +951,15 @@ const MergeIcon = () => (
   <svg {...iconProps}>
     <path d="M6 3v6a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3" />
     <line x1="12" y1="15" x2="12" y2="21" />
+  </svg>
+);
+const CutIcon = () => (
+  <svg {...iconProps}>
+    <circle cx="6" cy="6" r="3" />
+    <circle cx="6" cy="18" r="3" />
+    <line x1="20" y1="4" x2="8.12" y2="15.88" />
+    <line x1="14.47" y1="14.48" x2="20" y2="20" />
+    <line x1="8.12" y1="8.12" x2="12" y2="12" />
   </svg>
 );
 
@@ -1041,6 +1152,7 @@ export function RecordingRow({
   onDropBefore,
   showDate = false,
   onNavigate,
+  cut = false,
 }: {
   r: RecordingSummary;
   /// Left-padding class that indents the row under its section heading (e.g. "pl-6" / "pl-10").
@@ -1054,6 +1166,9 @@ export function RecordingRow({
   showDate?: boolean;
   /// Called when the row's name link is clicked - lets the expanded modal close itself as it navigates.
   onNavigate?: () => void;
+  /// This recording is the move clipboard's current cut - greyed out with a dashed outline rather than
+  /// hidden, since nothing has actually moved yet (see RecordingsPanel's paste flow).
+  cut?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();
@@ -1126,7 +1241,12 @@ export function RecordingRow({
     // disabled while renaming so text can be selected in the input. The inner NavLink keeps draggable=false
     // so grabbing the name still drags the row, not the link.
     <li
-      className={`py-0.5 pr-3 ${indentClass}`}
+      // `outline` (not `border`) for the cut indicator: this row sits inside a `divide-y` list, whose
+      // divider rule targets `border-*` on every child via a compound selector that would outrank (or,
+      // for the dark-mode colour, race on stylesheet order against) a plain border class here regardless
+      // of class-attribute order. `outline` is a separate CSS property the divider never touches, so the
+      // dashed ring is guaranteed visible rather than winning by luck.
+      className={`py-0.5 pr-3 ${indentClass} ${cut ? "opacity-50 rounded outline outline-dashed outline-1 outline-gray-400 dark:outline-gray-600" : ""}`}
       draggable={!renaming}
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", r.id);
@@ -1140,6 +1260,9 @@ export function RecordingRow({
         onDropBefore(e.dataTransfer.getData("text/plain"));
       }}
     >
+      {/* Colour/opacity alone would leave a screen-reader user unable to tell which rows are cut - the
+          bar's count says something is cut, never which. */}
+      {cut && <span className="sr-only">{t("workspace:cutPendingPasteAria")}</span>}
       <div className="flex items-center justify-between gap-1">
         {selectMode && (
           <input
