@@ -16,7 +16,11 @@ to jump straight to it from anywhere in the tree, with its full path shown so yo
 same-named folders apart, or leave the filter empty to browse one level at a time the same way the
 folder list does. **Ungrouped** is offered as a choice at every level, so you never have to back out to
 the top to pick it. The same picker is used for choosing where a new recording is filed, in
-**Settings -> Recordings**.
+**Settings -> Recordings**. If you choose **Use the currently selected folder** there, a new recording
+goes into whichever folder the list is showing at the moment you start it, so opening a folder and
+recording files the take there; at the top level it goes to Ungrouped. Uploaded files follow the same
+setting, taken when the upload starts, so a whole batch lands together even if you browse elsewhere while
+it runs.
 
 While browsing a level, clicking a folder's name opens it so you can look inside - it does not choose
 it. Choosing that folder is a separate checkmark button next to its name (its label for assistive

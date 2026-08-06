@@ -101,6 +101,37 @@ describe("RoomProvider", () => {
     expect(screen.getByTestId("rec-section").textContent).toBe("sec-9");
   });
 
+  it("resolves recordingSectionId to the folder the list is drilled into in SelectedFolder mode", async () => {
+    // The folder a user is "in" is the drill position (`?in=`), not the folder page - browsing the panel
+    // never opens /sections/:id. Reading only the route match filed every take into Ungrouped.
+    (api.listRooms as Mock).mockResolvedValue([personal]);
+    (api.getUserSettings as Mock).mockResolvedValue({ placementMode: "SelectedFolder", placementSectionId: null });
+    renderHarness("/?in=sec-drill");
+
+    await screen.findByText("Ada Lovelace");
+    expect(screen.getByTestId("rec-section").textContent).toBe("sec-drill");
+  });
+
+  it("prefers the drilled-into folder over a folder page open in the middle panel", async () => {
+    // You can read one folder's page while browsing somewhere else entirely. The list is what the user is
+    // filing into, so the drill wins.
+    (api.listRooms as Mock).mockResolvedValue([personal]);
+    (api.getUserSettings as Mock).mockResolvedValue({ placementMode: "SelectedFolder", placementSectionId: null });
+    renderHarness("/sections/sec-9?in=sec-drill");
+
+    await screen.findByText("Ada Lovelace");
+    expect(screen.getByTestId("rec-section").textContent).toBe("sec-drill");
+  });
+
+  it("resolves recordingSectionId to null in Ungrouped mode, even when drilled into a folder", async () => {
+    (api.listRooms as Mock).mockResolvedValue([personal]);
+    (api.getUserSettings as Mock).mockResolvedValue({ placementMode: "Ungrouped", placementSectionId: "sec-x" });
+    renderHarness("/?in=sec-drill");
+
+    await screen.findByText("Ada Lovelace");
+    expect(screen.getByTestId("rec-section").textContent).toBe("null");
+  });
+
   it("resolves recordingSectionId to null in Ungrouped mode, even on a folder page", async () => {
     (api.listRooms as Mock).mockResolvedValue([personal]);
     (api.getUserSettings as Mock).mockResolvedValue({ placementMode: "Ungrouped", placementSectionId: "sec-x" });
