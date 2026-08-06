@@ -11,7 +11,8 @@ import ToolbarButton, { iconProps } from "./ToolbarButton";
 import MoveToSectionModal from "./MoveToSectionModal";
 import DownloadTranscriptModal from "./DownloadTranscriptModal";
 import { recordingMenu } from "./recordingMenu";
-import { isProcessing, statusLabel } from "../lib/recordingStatus";
+import { hasTranscript, isProcessing, showStatusBadge, statusBadgeClass, statusLabel } from "../lib/recordingStatus";
+import { sourceLabel } from "../lib/recordingSource";
 import { copyRichLink, transcriptUrl } from "../lib/clipboard";
 import { useSelection } from "../lib/selection";
 import { useMoveClipboard } from "../lib/moveClipboard";
@@ -23,7 +24,7 @@ import { useDragAutoScroll } from "../lib/dragAutoScroll";
 import { buildRecordingTree, reorderBeforeSection, appendSectionUnder, type SectionNode } from "../lib/recordingTree";
 import { childrenOf, breadcrumbOf, recordingCountOf, sectionCreateTarget, depthOf, MAX_FOLDER_DEPTH } from "../lib/drillView";
 import { useDrillSectionId, useDrillSearch } from "../lib/drillRoute";
-import { SECTION_MIME } from "../lib/dragTypes";
+import { SECTION_MIME, dragHasFiles } from "../lib/dragTypes";
 import DrillBreadcrumb from "./nav/DrillBreadcrumb";
 import ClipboardBar from "./nav/ClipboardBar";
 import SectionRow from "./nav/SectionRow";
@@ -39,40 +40,10 @@ import EditActionModal from "./EditActionModal";
 import TagCloud from "./TagCloud";
 import TagCloudModal from "./TagCloudModal";
 import type { UploadItem } from "../lib/uploadQueue";
-import type { ActionListItem, CalendarEvent, RecordingStatus, RecordingSource, RecordingSummary, SectionDto } from "../lib/types";
+import type { ActionListItem, CalendarEvent, RecordingSummary, SectionDto } from "../lib/types";
 import { RoomPermission } from "../lib/types";
 
-const dragHasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer.types ?? []).includes("Files");
-
-const statusColor: Record<RecordingStatus, string> = {
-  Uploaded: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
-  Queued: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  Transcribing: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  Transcribed: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-  Summarizing: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  Summarized: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-  Merging: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  Failed: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
-};
-
 const TAG_LIMIT_KEY = "diariz.recordings.tagLimit";
-
-function sourceLabel(s: RecordingSource, t: TFunction): string {
-  if (s === "System") return t("workspace:sourceSystem");
-  if (s === "Combined") return t("workspace:sourceCombined");
-  if (s === "Upload") return t("workspace:sourceUpload");
-  return t("workspace:sourceMicrophone");
-}
-
-export function hasTranscript(status: RecordingStatus): boolean {
-  return status === "Transcribed" || status === "Summarizing" || status === "Summarized";
-}
-
-/// Show the status pill only while the pipeline is moving. The settled success states
-/// (Transcribed/Summarized) repeat on every row and truncate the name, so they're hidden.
-export function showStatusBadge(status: RecordingStatus): boolean {
-  return status !== "Transcribed" && status !== "Summarized";
-}
 
 /// The recordings list for the left panel, grouped into user sections (Ungrouped last).
 /// Selecting a row routes to /recordings/:id (middle panel).
@@ -1321,7 +1292,7 @@ export function RecordingRow({
           </NavLink>
         )}
         {showStatusBadge(r.status) && (
-          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${statusColor[r.status]}`}>
+          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${statusBadgeClass(r.status)}`}>
             {statusLabel(r.status)}
           </span>
         )}

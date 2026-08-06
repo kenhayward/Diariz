@@ -60,6 +60,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.186.1",
+    date: "2026-08-06",
+    pr: 461,
+    headline: "Groundwork: the meetings list starts shedding weight",
+    summary:
+      "Nothing changes on screen. The meetings panel is the most-edited file in the app - 62 changes in six " +
+      "weeks - and it has grown to the point where every feature, however small, has to be threaded through " +
+      "1,300 lines. This is the first of a series of internal changes that break it into pieces, so future " +
+      "work on folders, drag-and-drop and the tabs is quicker to make and safer to review. This one moves the " +
+      "small shared rules - which statuses count as having a transcript, which show a status pill and in what " +
+      "colour, how a recording's source is named, and how a file drag is told apart from a reorder - out of " +
+      "the panel and into the library modules where the rest of that kind of logic already lives, each with " +
+      "its own tests.",
+    changed: [
+      "Internal only: status, source and drag-type helpers moved out of the meetings panel into lib/recordingStatus, lib/recordingSource and lib/dragTypes, with 14 new unit tests. No user-visible change.",
+    ],
+  },
+  {
     version: "0.186.0",
     date: "2026-08-06",
     pr: 460,
