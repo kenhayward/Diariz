@@ -53,15 +53,28 @@ export default function FolderPicker({
   sections,
   selectedId,
   onSelect,
+  onDrillChange,
 }: {
   sections: SectionDto[];
   /// `null` selects the root; both consumers show that choice as "Ungrouped".
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  /// Reports the drill position as the caller navigates, so a caller with its own notion of "where a new
+  /// thing goes" (MoveToSectionModal's create-and-move form) can follow it. The picker still owns the
+  /// state itself - this is a report, not a control: nothing here reads a position back in, and there is
+  /// no way to set it from outside.
+  onDrillChange?: (sectionId: string | null) => void;
 }) {
   const { t } = useTranslation("workspace");
   const [filter, setFilter] = useState("");
   const [drillId, setDrillId] = useState<string | null>(null);
+
+  // Every navigation - opening a folder, Back, or a breadcrumb crumb - goes through here so onDrillChange
+  // never drifts out of sync with the picker's own state.
+  function drillTo(id: string | null) {
+    setDrillId(id);
+    onDrillChange?.(id);
+  }
 
   const query = filter.trim().toLowerCase();
   const filtering = query.length > 0;
@@ -126,7 +139,7 @@ export default function FolderPicker({
           <button
             type="button"
             aria-label={t("drillBack")}
-            onClick={() => setDrillId(chain.length > 1 ? chain[chain.length - 2].id : null)}
+            onClick={() => drillTo(chain.length > 1 ? chain[chain.length - 2].id : null)}
             className="shrink-0 rounded border p-1 text-gray-500 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800"
           >
             <ArrowLeftIcon size={12} />
@@ -142,7 +155,7 @@ export default function FolderPicker({
           <FolderPath
             crumbs={chain.map((s) => ({ id: s.id, name: s.name }))}
             maxVisible={2}
-            onSelect={(id) => setDrillId(id)}
+            onSelect={drillTo}
             label={t("folderPickerPathLabel")}
             menuLabel={t("folderPickerPathMenu")}
           />
@@ -178,7 +191,7 @@ export default function FolderPicker({
                 <li key={s.id} className="flex items-center gap-1">
                   <button
                     type="button"
-                    onClick={() => setDrillId(s.id)}
+                    onClick={() => drillTo(s.id)}
                     aria-label={t("drillOpenFolder", { name: s.name })}
                     className="flex min-w-0 flex-1 items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800"
                   >

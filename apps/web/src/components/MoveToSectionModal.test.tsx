@@ -83,6 +83,73 @@ describe("MoveToSectionModal", () => {
     await waitFor(() => expect(api.moveRecording).toHaveBeenCalledWith("rec-1", "sec-new", undefined));
   });
 
+  describe("create-and-move follows the folder picker's drill position", () => {
+    beforeEach(() => {
+      // A real, non-null id to drill into - the point is to prove the created folder's parent follows the
+      // drill rather than always being null (the old behaviour, which a null-id fixture could not
+      // distinguish from the new one).
+      (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { id: "sec-1", name: "Work", parentId: null, position: 0 },
+        { id: "sec-1a", name: "Acme Corp", parentId: "sec-1", position: 0 },
+      ]);
+    });
+
+    it("creates the folder under the drilled folder, not at the top level", async () => {
+      renderModal(null);
+      fireEvent.click(await screen.findByLabelText("Open Work"));
+
+      fireEvent.change(screen.getByLabelText(/new sub-section in work/i), { target: { value: "Falcon" } });
+      fireEvent.click(screen.getByRole("button", { name: /create.*move/i }));
+
+      await waitFor(() => expect(api.createSection).toHaveBeenCalledWith("Falcon", "sec-1", undefined));
+      await waitFor(() => expect(api.moveRecording).toHaveBeenCalledWith("rec-1", "sec-new", undefined));
+    });
+
+    it("still creates at the top level (null parent) when not drilled into anything", async () => {
+      renderModal(null);
+      await screen.findByLabelText("Filter folders");
+      fireEvent.change(screen.getByLabelText(/new section name/i), { target: { value: "Ideas" } });
+      fireEvent.click(screen.getByRole("button", { name: /create.*move/i }));
+
+      await waitFor(() => expect(api.createSection).toHaveBeenCalledWith("Ideas", null, undefined));
+    });
+
+    it("shows where the folder will be created, and updates the placeholder as the drill changes", async () => {
+      renderModal(null);
+      expect(await screen.findByLabelText("Open Work")).toBeTruthy(); // waits for the fetched sections
+      expect(screen.getByLabelText("New section name")).toBeTruthy();
+
+      fireEvent.click(screen.getByLabelText("Open Work"));
+      expect(await screen.findByLabelText("New sub-section in Work")).toBeTruthy();
+    });
+
+    it("disables the create form at the folder depth cap, with the existing nest-capped message, and makes no request", async () => {
+      // A chain exactly 8 levels deep - drilling into the 8th (deepest) folder sits right at the cap
+      // sectionCreateTarget enforces (MAX_FOLDER_DEPTH = 8).
+      const deepChain = Array.from({ length: 8 }, (_, i) => ({
+        id: `d${i + 1}`,
+        name: `Level ${i + 1}`,
+        parentId: i === 0 ? null : `d${i}`,
+        position: 0,
+      }));
+      (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue(deepChain);
+
+      renderModal(null);
+      for (let i = 1; i <= 8; i++) {
+        fireEvent.click(await screen.findByLabelText(`Open Level ${i}`));
+      }
+
+      const input = await screen.findByLabelText("Folders can only be nested 8 levels deep");
+      expect((input as HTMLInputElement).disabled).toBe(true);
+      const button = screen.getByRole("button", { name: /create.*move/i });
+      expect((button as HTMLButtonElement).disabled).toBe(true);
+
+      fireEvent.change(input, { target: { value: "Too deep" } });
+      fireEvent.click(button);
+      expect(api.createSection).not.toHaveBeenCalled();
+    });
+  });
+
   it("shows an error and keeps the picker open when the move fails", async () => {
     (api.moveRecording as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("boom"));
     const onClose = vi.fn();

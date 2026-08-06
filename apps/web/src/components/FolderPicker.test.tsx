@@ -216,4 +216,39 @@ describe("FolderPicker", () => {
     await userEvent.click(screen.getByLabelText("Open Customers"));
     expect(screen.getByRole("navigation", { name: "Folder picker path" })).toBeTruthy();
   });
+
+  describe("reporting the drill position (onDrillChange)", () => {
+    it("reports a folder's id when drilling into it", async () => {
+      const onDrillChange = vi.fn();
+      render(<FolderPicker sections={sections} selectedId={null} onSelect={vi.fn()} onDrillChange={onDrillChange} />);
+      await userEvent.click(screen.getByLabelText("Open Customers"));
+      expect(onDrillChange).toHaveBeenCalledWith("customers");
+    });
+
+    it("reports null when the Back button returns to the root", async () => {
+      const onDrillChange = vi.fn();
+      render(<FolderPicker sections={sections} selectedId={null} onSelect={vi.fn()} onDrillChange={onDrillChange} />);
+      await userEvent.click(screen.getByLabelText("Open Customers"));
+      await userEvent.click(screen.getByLabelText("Back"));
+      expect(onDrillChange).toHaveBeenLastCalledWith(null);
+    });
+
+    it("reports the position when navigating via the breadcrumb", async () => {
+      const onDrillChange = vi.fn();
+      render(<FolderPicker sections={sections} selectedId={null} onSelect={vi.fn()} onDrillChange={onDrillChange} />);
+      await userEvent.click(screen.getByLabelText("Open Customers"));
+      await userEvent.click(screen.getByLabelText("Open Acme Corp"));
+      await userEvent.click(screen.getByLabelText("Open Project Falcon"));
+      // "Customers" is the collapsed breadcrumb's visible root crumb at this depth (maxVisible=2), and is
+      // not shown elsewhere at this drill level, so this is the breadcrumb's own click site, not the list.
+      await userEvent.click(screen.getByText("Customers"));
+      expect(onDrillChange).toHaveBeenLastCalledWith("customers");
+    });
+
+    it("does not require onDrillChange to be passed - the picker still drills fine without it", async () => {
+      render(<FolderPicker sections={sections} selectedId={null} onSelect={vi.fn()} />);
+      await userEvent.click(screen.getByLabelText("Open Customers"));
+      expect(screen.getByText("Acme Corp")).toBeTruthy();
+    });
+  });
 });
