@@ -33,6 +33,14 @@ function directChildren(sections: SectionDto[], parentId: string | null): Sectio
 /// position underneath it, unchanged - filtering never resets, and is never remembered by, where you were
 /// browsing. The drill position lives in this component's state, not the URL, unlike the nav's `?in=` -
 /// this is a transient picker, not a place to deep-link into.
+///
+/// **The persisted selection always stays visible**, even when its own row is not part of the current view
+/// (a filtered-out match, or a folder several drills below where the picker mounts) - the same guarantee
+/// the `<select>` gave for free by always displaying its value. Rather than seeding the drill position from
+/// `selectedId`'s parent (`breadcrumbOf`), which would couple this component's browsing state to a second
+/// prop, a plain "Selected: {{path}}" line is shown above the list whenever the selection is not otherwise
+/// visible - lower risk for a comfort feature, at the cost of an extra line rather than an extra state
+/// dependency.
 export default function FolderPicker({
   sections,
   selectedId,
@@ -50,18 +58,32 @@ export default function FolderPicker({
   const query = filter.trim().toLowerCase();
   const filtering = query.length > 0;
 
-  // Searches the whole tree via `orderedSections`, never just the current drill level - that is the
-  // entire point of typing instead of drilling.
+  // The whole tree, flattened with each folder's full-path label - shared by the filter (which searches
+  // it) and the "persisted selection" notice below (which needs the selected folder's path even when it
+  // is nowhere in the current view).
+  const allOrdered = useMemo(() => orderedSections(sections), [sections]);
+
+  // Searches the whole tree, never just the current drill level - that is the entire point of typing
+  // instead of drilling.
   const matches = useMemo(() => {
     if (!filtering) return [];
-    return orderedSections(sections).filter(({ section }) => section.name.toLowerCase().includes(query));
-  }, [sections, filtering, query]);
+    return allOrdered.filter(({ section }) => section.name.toLowerCase().includes(query));
+  }, [allOrdered, filtering, query]);
 
   const children = filtering ? [] : directChildren(sections, drillId);
   // Empty at the root (nowhere to go back to) and while filtering (drilling is not shown in that mode).
   const chain = filtering || drillId === null ? [] : breadcrumbOf(sections, drillId);
 
   const rootLabel = t("ungrouped");
+
+  // The root ("Ungrouped") row is always rendered and correctly marked regardless of drill position, so it
+  // never needs this notice. Anything else only needs it when its own row isn't part of what's on screen
+  // right now - a filtered-out match, or a folder that isn't a direct child of the current drill position.
+  const selectedEntry = selectedId !== null ? allOrdered.find((o) => o.section.id === selectedId) : undefined;
+  const selectedVisible = filtering
+    ? matches.some((m) => m.section.id === selectedId)
+    : children.some((c) => c.id === selectedId);
+  const showSelectedNotice = selectedEntry !== undefined && !selectedVisible;
 
   return (
     <div>
@@ -95,6 +117,12 @@ export default function FolderPicker({
             onSelect={(id) => setDrillId(id)}
           />
         </div>
+      )}
+
+      {showSelectedNotice && selectedEntry && (
+        <p className="mb-1 truncate px-1 text-xs text-gray-500 dark:text-gray-400">
+          {t("folderPickerCurrentSelection", { path: selectedEntry.label })}
+        </p>
       )}
 
       <ul role="list" aria-label={t("folderPickerListLabel")} className="max-h-64 overflow-y-auto">

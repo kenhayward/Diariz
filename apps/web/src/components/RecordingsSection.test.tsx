@@ -112,6 +112,24 @@ describe("RecordingsSection", () => {
     expect(screen.getByLabelText("Select Ungrouped").getAttribute("aria-current")).toBeNull();
   });
 
+  it("shows the previously saved folder's full path when it is nested too deep to appear at the picker's root (regression: a <select> always shows its value)", async () => {
+    (api.getUserSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...settings, placementMode: "SpecificFolder", placementSectionId: "phase2",
+    });
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "customers", name: "Customers", parentId: null, position: 0 },
+      { id: "acme", name: "Acme Corp", parentId: "customers", position: 0 },
+      { id: "falcon", name: "Project Falcon", parentId: "acme", position: 0 },
+      { id: "phase2", name: "Phase 2", parentId: "falcon", position: 0 },
+    ]);
+    renderSection();
+    fireEvent.click(await screen.findByRole("radio", { name: /specific folder/i }));
+
+    // Opening Settings lands on the root drill position, four levels above the saved folder - its row is
+    // not rendered there at all, so the old bug showed nothing marked as current.
+    expect(screen.getByText("Selected: Customers › Acme Corp › Project Falcon › Phase 2")).toBeTruthy();
+  });
+
   it("is keyboard operable: Tab alone reaches a folder row, and Enter chooses it", async () => {
     (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
       { id: "sec-1", name: "Projects", parentId: null, position: 0 },

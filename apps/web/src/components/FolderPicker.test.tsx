@@ -148,4 +148,35 @@ describe("FolderPicker", () => {
     await userEvent.keyboard("{Enter}");
     expect(onSelect).toHaveBeenCalledWith(null);
   });
+
+  describe("persisted selection stays visible (regression: a <select> always shows its value)", () => {
+    it("shows the persisted selection's full path when its row is not part of the current view", () => {
+      // "Phase 2" lives four levels down (Customers > Acme Corp > Project Falcon > Phase 2). At the root
+      // drill position its row is not rendered at all, so nothing would otherwise indicate it is chosen.
+      renderPicker({ selectedId: "phase2" });
+      expect(screen.getByText("Selected: Customers › Acme Corp › Project Falcon › Phase 2")).toBeTruthy();
+    });
+
+    it("does not show the notice when the selected folder's row is already visible", () => {
+      renderPicker({ selectedId: "customers" });
+      expect(screen.queryByText(/^Selected: /)).toBeNull();
+    });
+
+    it("does not show the notice for the root selection - the Ungrouped row is always shown and marked", () => {
+      renderPicker({ selectedId: null });
+      expect(screen.queryByText(/^Selected: /)).toBeNull();
+    });
+
+    it("stops showing the notice once you drill down to where the selection becomes visible", async () => {
+      renderPicker({ selectedId: "phase2" });
+      expect(screen.getByText(/^Selected: /)).toBeTruthy();
+
+      await userEvent.click(screen.getByLabelText("Open Customers"));
+      await userEvent.click(screen.getByLabelText("Open Acme Corp"));
+      await userEvent.click(screen.getByLabelText("Open Project Falcon"));
+
+      expect(screen.queryByText(/^Selected: /)).toBeNull();
+      expect(screen.getByLabelText("Select Phase 2").getAttribute("aria-current")).toBe("true");
+    });
+  });
 });

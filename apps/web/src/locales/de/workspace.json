@@ -426,6 +426,7 @@
   "folderPickerListLabel": "Ordner",
   "folderPickerNoMatches": "Keine Ordner entsprechen deiner Suche.",
   "folderPickerSelectAria": "{{name}} auswählen",
+  "folderPickerCurrentSelection": "Ausgewählt: {{path}}",
   "folderPathLabel": "Ordnerpfad",
   "folderPathMenu": "Vollständigen Ordnerpfad anzeigen",
   "folderPathLabelCurrent": "Pfad dieses Ordners",

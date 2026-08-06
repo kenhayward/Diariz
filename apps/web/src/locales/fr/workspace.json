@@ -426,6 +426,7 @@
   "folderPickerListLabel": "Dossiers",
   "folderPickerNoMatches": "Aucun dossier ne correspond à votre recherche.",
   "folderPickerSelectAria": "Sélectionner {{name}}",
+  "folderPickerCurrentSelection": "Sélectionné : {{path}}",
   "folderPathLabel": "Chemin du dossier",
   "folderPathMenu": "Afficher le chemin complet du dossier",
   "folderPathLabelCurrent": "Chemin de ce dossier",
