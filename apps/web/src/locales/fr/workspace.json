@@ -398,6 +398,7 @@
   "doneSelecting": "Terminé",
   "selectRecordings": "Sélectionner des enregistrements",
   "cut": "Couper",
+  "cutSharedRoomBlocked": "Couper ne fonctionne que dans votre salle personnelle pour le moment.",
   "clipboardBarRecordings_one": "{{count}} enregistrement prêt à être déplacé",
   "clipboardBarRecordings_other": "{{count}} enregistrements prêts à être déplacés",
   "clipboardBarFolder": "1 dossier prêt à être déplacé",

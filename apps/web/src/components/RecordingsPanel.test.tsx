@@ -713,6 +713,22 @@ describe("RecordingsPanel", () => {
     expect(cutBtn().disabled).toBe(false);
   });
 
+  // Pasting into a shared room is disabled, and so is pasting a shared-room cut anywhere else - so a cut
+  // made in a shared room would have nowhere at all to go. Rather than let a user stage one and then find
+  // every destination refused, Cut is disabled at source, with the same reason shown.
+  it("disables the toolbar Cut button in a shared room, even with a selection", async () => {
+    roomStub.currentRoom = { id: "eng-room", isPersonal: false };
+    renderList();
+    await screen.findByText("Weekly Standup");
+    fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /weekly standup/i }));
+
+    const cutBtn = screen.getByRole("button", { name: /^cut$/i }) as HTMLButtonElement;
+    expect(cutBtn.disabled).toBe(true);
+    // The reason is stated rather than left to be guessed at.
+    expect(screen.getByTitle(/personal room/i)).toBeTruthy();
+  });
+
   it("puts the selected recordings on the clipboard, with the room's top level as the source", async () => {
     let cut: MoveClipboardCut | null = null;
     renderListWithClipboardSpy("/", (c) => (cut = c));
@@ -723,7 +739,11 @@ describe("RecordingsPanel", () => {
     expect(cut).toEqual({ kind: "recordings", ids: ["rec-1"], sourceSectionId: null, sourceRoomId: null });
   });
 
-  it("records the shared room as the clipboard's source room when browsing one", async () => {
+  // Cut is gated in a shared room (see the disabled-button test above), so nothing can reach the clipboard
+  // from one. The clipboard still CARRIES sourceRoomId, and `pasteTarget` still refuses a cross-room paste -
+  // that pair is the backstop for when shared-room paste ships and this gate is relaxed. Asserting the
+  // clipboard stays empty is what pins the gate end to end, rather than only at the button.
+  it("cannot put anything on the clipboard from a shared room", async () => {
     roomStub.currentRoom = { id: "eng-room", isPersonal: false };
     let cut: MoveClipboardCut | null = null;
     renderListWithClipboardSpy("/", (c) => (cut = c));
@@ -731,7 +751,7 @@ describe("RecordingsPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
     fireEvent.click(screen.getByRole("checkbox", { name: /weekly standup/i }));
     fireEvent.click(screen.getByRole("button", { name: /^cut$/i }));
-    expect(cut).toEqual({ kind: "recordings", ids: ["rec-1"], sourceSectionId: null, sourceRoomId: "eng-room" });
+    expect(cut).toBeNull();
   });
 
   // Was "groups recordings under section headings with Ungrouped last". The drill-in list has no headings

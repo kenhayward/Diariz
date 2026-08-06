@@ -890,12 +890,19 @@ function ListToolbar({
             />
           )}
           {selectMode && (
-            <ToolbarButton
-              label={t("cut")}
-              onClick={cutSelected}
-              disabled={!listMode || selectedIds.length === 0}
-              icon={<CutIcon />}
-            />
+            // Disabled in a shared room, with the reason stated. Pasting INTO a shared room is blocked, and
+            // so is pasting a shared-room cut anywhere else - so a cut staged here would have nowhere at all
+            // to go, and offering it would be a trap. The title rides on the wrapper, not the button:
+            // ToolbarButton drops pointer events when disabled, so a title on the button itself would never
+            // surface (same reason the New section button wraps its own).
+            <span title={roomId != null ? t("cutSharedRoomBlocked") : undefined}>
+              <ToolbarButton
+                label={t("cut")}
+                onClick={cutSelected}
+                disabled={!listMode || selectedIds.length === 0 || roomId != null}
+                icon={<CutIcon />}
+              />
+            </span>
           )}
           <ToolbarButton
             label={t("refresh")}

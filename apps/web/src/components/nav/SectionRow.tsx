@@ -79,7 +79,17 @@ export default function SectionRow({
     { label: t("recordings:rename"), onClick: () => setRenaming(true) },
     // The clipboard's convention: null source room is the personal room, matching useSharedRoomId's
     // undefined-for-personal with `?? null`.
-    { label: t("cut"), onClick: () => cutFolder(id, parentSectionId, sharedRoomId ?? null) },
+    // Disabled in a shared room, and the reason is shown rather than left to be discovered. Pasting INTO a
+    // shared room is blocked, and so is pasting a shared-room cut anywhere else - so a cut staged here would
+    // have nowhere at all to go. Offering it would be a trap: the user stages a move and then finds every
+    // destination refused. `pasteTarget`'s cross-room rule stays as the backstop for when shared-room paste
+    // does ship, at which point this gate is what should be relaxed first.
+    {
+      label: t("cut"),
+      disabled: sharedRoomId != null,
+      title: sharedRoomId != null ? t("cutSharedRoomBlocked") : undefined,
+      onClick: () => cutFolder(id, parentSectionId, sharedRoomId ?? null),
+    },
     ...(canNest
       ? [
           {

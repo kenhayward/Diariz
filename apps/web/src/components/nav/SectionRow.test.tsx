@@ -84,13 +84,20 @@ describe("SectionRow", () => {
     expect(cut).toEqual({ kind: "folders", ids: ["ambu"], sourceSectionId: null, sourceRoomId: null });
   });
 
-  it("records the shared room as the source when browsing one", () => {
+  // Pasting into a shared room is disabled, and so is pasting a shared-room cut anywhere else - so a cut
+  // made in a shared room would have nowhere at all to go. Rather than let someone stage one and then find
+  // every destination refused, Cut is disabled at source with the same reason shown.
+  it("disables Cut in a shared room, with the reason on the item", () => {
     roomStub.sharedRoomId = "eng-room";
     let cut: MoveClipboardCut | null = null;
     renderRow("customers", (c) => (cut = c));
     openKebab();
-    fireEvent.click(screen.getByRole("menuitem", { name: /^cut$/i }));
-    expect(cut).toEqual({ kind: "folders", ids: ["ambu"], sourceSectionId: "customers", sourceRoomId: "eng-room" });
+
+    const item = screen.getByRole("menuitem", { name: /^cut$/i }) as HTMLButtonElement;
+    expect(item.disabled).toBe(true);
+    expect(item.title).toMatch(/personal room/i);
+    fireEvent.click(item);
+    expect(cut).toBeNull(); // and clicking it does nothing
   });
 
   // Cut is a pending state, not a removal - the row stays, greyed with a dashed outline, so cancelling or

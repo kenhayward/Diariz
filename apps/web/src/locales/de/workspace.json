@@ -398,6 +398,7 @@
   "doneSelecting": "Fertig",
   "selectRecordings": "Aufnahmen auswählen",
   "cut": "Ausschneiden",
+  "cutSharedRoomBlocked": "Ausschneiden funktioniert vorerst nur in Ihrem persönlichen Raum.",
   "clipboardBarRecordings_one": "{{count}} Aufnahme bereit zum Verschieben",
   "clipboardBarRecordings_other": "{{count}} Aufnahmen bereit zum Verschieben",
   "clipboardBarFolder": "1 Ordner bereit zum Verschieben",

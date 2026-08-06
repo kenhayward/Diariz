@@ -398,6 +398,7 @@
   "doneSelecting": "Done selecting",
   "selectRecordings": "Select recordings",
   "cut": "Cut",
+  "cutSharedRoomBlocked": "Cutting works in your personal room for now.",
   "clipboardBarRecordings_one": "{{count}} recording ready to move",
   "clipboardBarRecordings_other": "{{count}} recordings ready to move",
   "clipboardBarFolder": "1 folder ready to move",

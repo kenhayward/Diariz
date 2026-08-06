@@ -398,6 +398,7 @@
   "doneSelecting": "Listo",
   "selectRecordings": "Seleccionar grabaciones",
   "cut": "Cortar",
+  "cutSharedRoomBlocked": "Cortar solo funciona en tu sala personal por ahora.",
   "clipboardBarRecordings_one": "{{count}} grabación lista para mover",
   "clipboardBarRecordings_other": "{{count}} grabaciones listas para mover",
   "clipboardBarFolder": "1 carpeta lista para mover",
