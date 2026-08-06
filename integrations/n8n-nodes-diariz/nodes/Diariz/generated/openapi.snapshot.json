@@ -2332,6 +2332,13 @@
           },
           "name": {
             "type": "string"
+          },
+          "sectionId": {
+            "format": "uuid",
+            "type": [
+              "null",
+              "string"
+            ]
           }
         },
         "required": [
@@ -2339,7 +2346,8 @@
           "name",
           "icon",
           "color",
-          "isMain"
+          "isMain",
+          "sectionId"
         ],
         "type": "object"
       },

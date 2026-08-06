@@ -329,8 +329,12 @@ of everything inside, and takes you in; the header above the list is a **breadcr
 collapsing the middle when it does not fit, with every part clickable and a trailing menu for the full
 ancestor chain plus **Open section page** - browsing deeper and opening the page stay separate targets, and
 crumbs accept a dropped recording to move it up (appending it, the same as dropping onto a folder row).
-Folder pages carry the same path. Recordings with no folder
-simply sit at the top level. Browse them as a **list or a calendar**
+Folder pages carry the same path. An **open recording shows where it is filed** as a row of chips under its
+name - the room, then each folder down to the one it sits in - and clicking any chip takes the list straight
+to that folder without closing the recording (from the Calendar, Actions or Tags tab it switches back to the
+list first). A deep path collapses in the middle the same way, and a recording shared into several rooms
+shows its folder in the room you are currently viewing, since it is filed independently in each. Recordings
+with no folder simply sit at the top level, and show just the room chip. Browse them as a **list or a calendar**
 (days with recordings are highlighted; click one to see that day's recordings). You can also **cut and
 paste** to move several things at once: select recordings and click **Cut** in the toolbar, or **Cut** a
 single folder from its own menu, then drill into wherever you want them and click **Paste**. A bar under

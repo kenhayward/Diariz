@@ -433,6 +433,7 @@
   "folderPathMenu": "Show full folder path",
   "folderPathLabelCurrent": "This folder's path",
   "folderPathMenuCurrent": "Show full path for this folder",
+  "folderChipsLabel": "Folder this recording is in",
   "folderPathCollapsed": "Hidden folders",
   "selectAllIn": "Select all in {{section}}",
   "confirmDeleteSection": "Delete section \"{{name}}\"? Its recordings move to Ungrouped.",

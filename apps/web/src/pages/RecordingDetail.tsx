@@ -25,6 +25,10 @@ import { DETAIL_SECTION_KEY, initialSection, type SectionKey } from "../lib/deta
 import MoveToSectionModal from "../components/MoveToSectionModal";
 import ShareToRoomModal from "../components/ShareToRoomModal";
 import { useRoom } from "../lib/rooms";
+import { useDrillSectionId } from "../lib/drillRoute";
+import { breadcrumbOf } from "../lib/drillView";
+import { setPanelTab } from "../lib/panelTab";
+import FolderChips from "../components/detail/FolderChips";
 import DownloadTranscriptModal from "../components/DownloadTranscriptModal";
 import PeopleModal from "../components/PeopleModal";
 import EditPersonModal from "../components/EditPersonModal";
@@ -165,6 +169,18 @@ export default function RecordingDetail() {
   // stays a top-level hook.)
   const { currentRoom } = useRoom();
   const inSharedRoom = Boolean(currentRoom && !currentRoom.isPersonal);
+
+  // Where this recording is filed, for the chip row under its name. The folder is a property of the
+  // *placement*, not of the recording, so it is read from the entry for the room being viewed - a recording
+  // shared into several rooms is filed independently in each, and a single "the recording's folder" would
+  // point the chips at a folder that doesn't exist in the room on screen. Same query key as the panel's, so
+  // this shares one cached fetch rather than issuing a second. (Above the early return - top-level hooks.)
+  const drill = useDrillSectionId();
+  const { data: roomSections = [] } = useQuery({
+    queryKey: ["sections", currentRoom?.id],
+    queryFn: () => api.listSections(currentRoom?.id),
+    enabled: Boolean(currentRoom),
+  });
 
   // If the user has connected Google Calendar, find the meeting this recording overlaps (the suggestion
   // that seeds the auto-saved link and the "Suggested meeting" prompt). Personal room only.
@@ -1042,6 +1058,22 @@ export default function RecordingDetail() {
 
   if (!rec) return <p className="text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>;
 
+  // The chip row's data. `folderPlacement` is this recording's entry for the room on screen (absent when it
+  // isn't placed there); its `sectionId` resolves to an ancestor chain via the same walk the nav uses.
+  const folderPlacement = rec.rooms?.find((r) => r.id === currentRoom?.id);
+  const folderCrumbs = breadcrumbOf(roomSections, folderPlacement?.sectionId ?? null).map((s) => ({
+    id: s.id,
+    name: s.name,
+  }));
+  /// Show a folder in the left list. The drill position is a URL param, so this leaves the recording open
+  /// and just moves the list underneath it - but the list has to be the thing on screen for that to mean
+  /// anything, hence the tab pull: a chip clicked while the panel is on Calendar/Actions/Tags would
+  /// otherwise change a view the user cannot see.
+  const openFolderInList = (sectionId: string | null) => {
+    setPanelTab("list");
+    drill.drillTo(sectionId);
+  };
+
   // Only the recording's owner may add/edit/delete its notes and screenshots - a room co-viewer reads the
   // same woven-in transcript but the mutating routes are owner-only (404 for anyone else).
   const isOwner = myId != null && rec.recordedByUserId === myId;
@@ -1592,6 +1624,17 @@ export default function RecordingDetail() {
         {rec.sizeBytes > 0 ? ` · ${formatBytes(rec.sizeBytes)}` : ""}
         {rec.current?.processingMs ? ` · ${t("workspace:processedIn", { time: formatDuration(rec.current.processingMs) })}` : ""}
       </p>
+
+      {/* Where this sits in the room you're viewing. Rendered only when the recording is actually placed in
+          that room: without a placement there is no path, and a bare room chip would claim it sits at that
+          room's top level when it isn't filed there at all. */}
+      {folderPlacement && (
+        <FolderChips
+          roomName={currentRoom?.name ?? ""}
+          crumbs={folderCrumbs}
+          onSelect={openFolderInList}
+        />
+      )}
 
       {actionError && (
         <p className="rounded bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">{actionError}</p>

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
+import { usePanelTab, setPanelTab, type PanelTab } from "../lib/panelTab";
 import { createHub } from "../lib/signalr";
 import KebabMenu from "./KebabMenu";
 import ToolbarButton, { iconProps } from "./ToolbarButton";
@@ -54,9 +55,7 @@ const statusColor: Record<RecordingStatus, string> = {
   Failed: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
 };
 
-const TAB_KEY = "diariz.recordings.tab";
 const TAG_LIMIT_KEY = "diariz.recordings.tagLimit";
-type PanelTab = "list" | "calendar" | "actions" | "tags";
 
 function sourceLabel(s: RecordingSource, t: TFunction): string {
   if (s === "System") return t("workspace:sourceSystem");
@@ -140,18 +139,22 @@ export default function RecordingsPanel() {
   const [opError, setOpError] = useState<string | null>(null);
 
   // List vs Calendar tab (persisted). The calendar shows the month, focused on today, and lists the
-  // selected day's recordings below it.
-  const [tab, setTab] = useState<PanelTab>(() => {
-    const v = localStorage.getItem(TAB_KEY);
-    return v === "calendar" || v === "actions" || v === "tags" ? v : "list";
-  });
-  function selectTab(next: PanelTab) {
-    localStorage.setItem(TAB_KEY, next);
-    // Selection is per-domain (recordings vs actions) — never carry it across a tab switch.
+  // selected day's recordings below it. Held in a shared store rather than local state because the tab
+  // strip is no longer the only thing that moves it: a folder chip on a recording's detail page pulls the
+  // panel back to the list, and that page is a sibling of this one - see lib/panelTab.
+  const tab = usePanelTab();
+  const selectTab = setPanelTab;
+  // Selection is per-domain (recordings vs actions) - never carry it across a tab switch. An effect, not a
+  // line in selectTab, because the tab can now change from outside this component and an actions selection
+  // surviving into the list would offer recording operations against action ids. Comparing against a ref
+  // means this cannot fire on mount and wipe a selection the chat panel is holding.
+  const prevTab = useRef(tab);
+  useEffect(() => {
+    if (prevTab.current === tab) return;
+    prevTab.current = tab;
     selection.clear();
     selection.setSelectMode(false);
-    setTab(next);
-  }
+  }, [tab, selection]);
   // Actions + Tags are scoped to the room being viewed: the personal library (roomId omitted) or a shared
   // room's shared recordings. `aggRoomId` is undefined for the personal room so those endpoints keep their
   // owner-scoped path.
