@@ -239,6 +239,17 @@ Two components render the folder list flat as `Parent > Child` via `sectionTree.
 - `RecordingsSection.tsx:98` - the placement chooser for uploads and new recordings. It cannot simply be
   dropped; it gets the same treatment.
 
+> **Decided 2026-08-06.** The picker is **type-to-filter plus drill-to-browse**, not one or the other. An empty
+> filter shows one level at a time, mirroring the nav; typing matches across the whole tree and shows each
+> hit with its path. Fastest when you know the name, still works when you do not, and both modes render the
+> same list.
+>
+> Two constraints found while scoping it. `RecordingsSection` uses a native `<select>`, and a native
+> `<option>` cannot hold interactive UI - so that consumer needs a real component swap rather than a
+> different list. And a picker row has to distinguish **choose this folder** from **go into this folder**;
+> the nav already solved that (the row body drills, a separate target opens the page), so the picker follows
+> the same split rather than inventing a second convention.
+
 `orderedSections` itself becomes recursive, returning depth alongside each entry so the picker can indent
 rather than concatenate ever-longer path strings.
 
