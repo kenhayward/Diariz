@@ -65,17 +65,17 @@ export default function FolderPicker({
 
   return (
     <div>
-      <label className="block">
-        <span className="sr-only">{t("folderPickerFilterPlaceholder")}</span>
-        <input
-          type="text"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder={t("folderPickerFilterPlaceholder")}
-          aria-label={t("folderPickerFilterPlaceholder")}
-          className="mb-2 w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-        />
-      </label>
+      {/* `aria-label` alone names this field - it wins over any associated <label> in the accessible-name
+          computation, so a wrapping sr-only label here would be dead weight, not a second line of
+          defence. */}
+      <input
+        type="text"
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        placeholder={t("folderPickerFilterPlaceholder")}
+        aria-label={t("folderPickerFilterPlaceholder")}
+        className="mb-2 w-full rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+      />
 
       {!filtering && chain.length > 0 && (
         <div className="mb-1 flex items-center gap-1.5 border-b pb-1.5 dark:border-gray-800">

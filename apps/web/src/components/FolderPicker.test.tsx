@@ -12,13 +12,17 @@ const section = (id: string, name: string, parentId: string | null = null): Sect
 });
 
 // Two top-level folders, one with a deep chain underneath it, so a filter test can prove it searches the
-// whole tree rather than only the current drill level.
+// whole tree rather than only the current drill level. "Personal" also has its own descendant
+// ("Old Notes") so a test can drill into "Customers" and filter for something that exists only under the
+// *sibling* branch - the case a subtree-scoped (rather than level-scoped) filter bug would still pass.
 const sections: SectionDto[] = [
   section("customers", "Customers"),
   section("acme", "Acme Corp", "customers"),
   section("falcon", "Project Falcon", "acme"),
   section("phase2", "Phase 2", "falcon"),
   section("personal", "Personal"),
+  section("archive", "Archive", "personal"),
+  section("oldnotes", "Old Notes", "archive"),
 ];
 
 function renderPicker(opts: { selectedId?: string | null; onSelect?: (id: string | null) => void } = {}) {
@@ -52,6 +56,19 @@ describe("FolderPicker", () => {
 
     expect(screen.getByText("Customers › Acme Corp › Project Falcon › Phase 2")).toBeTruthy();
     // The intervening levels are not shown as separate rows in filter mode, only the match with its path.
+    expect(screen.queryByText("Acme Corp")).toBeNull();
+  });
+
+  it("filtering finds a match under a sibling branch of the drilled-into folder, not just its own subtree", async () => {
+    renderPicker();
+    // Drilled into "Customers" - "Old Notes" lives under "Personal", a completely different top-level
+    // branch. A filter scoped to the drilled folder's own subtree (rather than the whole tree) would
+    // still miss this, unlike the level-scoped bug the other filter test rules out.
+    await userEvent.click(screen.getByLabelText("Open Customers"));
+
+    await userEvent.type(screen.getByLabelText("Filter folders"), "Old Notes");
+
+    expect(screen.getByText("Personal › Archive › Old Notes")).toBeTruthy();
     expect(screen.queryByText("Acme Corp")).toBeNull();
   });
 
