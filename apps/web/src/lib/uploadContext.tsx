@@ -26,21 +26,25 @@ const UploadContext = createContext<UploadContextValue>({
 /// Shares one upload queue across the top bar's Upload button and the recordings panel's drop zone.
 export function UploadProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
-  const { currentRoom } = useRoom();
+  const { currentRoom, recordingSectionId } = useRoom();
   const [items, setItems] = useState<UploadItem[]>([]);
   const [busy, setBusy] = useState(false);
 
   const uploadFiles = useCallback(
     (files: File[]) => {
       if (files.length === 0) return;
-      // Snapshot the room at drop time: uploading while in a shared room shares the file into it (like
-      // recording does); a personal-room upload is a plain personal recording.
-      const roomId = currentRoom && !currentRoom.isPersonal ? currentRoom.id : null;
+      // Snapshot the room and folder at drop time - a batch runs one file at a time and the user can browse
+      // away mid-upload, so every file in it is filed where the batch started, not where the panel ends up.
+      // Uploading while in a shared room shares the file into it (like recording does) and leaves the main
+      // placement ungrouped; a personal-room upload follows the placement preference.
+      const intoSharedRoom = !!currentRoom && !currentRoom.isPersonal;
+      const roomId = intoSharedRoom ? currentRoom.id : null;
+      const sectionId = intoSharedRoom ? null : recordingSectionId;
       setBusy(true);
       void runUploadBatch(files, {
         upload: async (file) => {
           try {
-            await api.uploadFile(file, titleFromFilename(file.name), roomId);
+            await api.uploadFile(file, titleFromFilename(file.name), roomId, sectionId);
           } catch (e) {
             throw new Error(apiErrorMessage(e, "Upload failed."));
           }
@@ -49,7 +53,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
         onSuccess: () => qc.invalidateQueries({ queryKey: ["recordings"] }),
       }).finally(() => setBusy(false));
     },
-    [qc, currentRoom],
+    [qc, currentRoom, recordingSectionId],
   );
 
   const clearFinished = useCallback(

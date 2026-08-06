@@ -359,7 +359,12 @@ export const api = {
 
   /// Upload an existing audio file for transcription (the "Upload" button). The worker backfills the
   /// duration, so we send 0; the server validates the file's actual bytes + size.
-  async uploadFile(file: File, title: string, roomId: string | null = null): Promise<RecordingSummary> {
+  async uploadFile(
+    file: File,
+    title: string,
+    roomId: string | null = null,
+    sectionId: string | null = null,
+  ): Promise<RecordingSummary> {
     const form = new FormData();
     form.append("audio", file, file.name);
     form.append("title", title);
@@ -368,6 +373,9 @@ export const api = {
     // When uploading while viewing a shared room, also share the recording into it (the main placement stays
     // in the uploader's personal room); omitted for a plain personal upload.
     if (roomId) form.append("roomId", roomId);
+    // A folder in the uploader's personal room, from the placement preference (validated server-side, which
+    // also ignores it for a shared-room upload); omitted = ungrouped.
+    if (sectionId) form.append("sectionId", sectionId);
     const { data } = await http.post<RecordingSummary>("/api/recordings", form);
     return data;
   },

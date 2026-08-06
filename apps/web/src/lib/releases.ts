@@ -70,9 +70,11 @@ export const RELEASES: Release[] = [
       "you had opened from the folder path menu, not the folder the meetings list was showing, so drilling " +
       "into a folder and hitting Record still filed the take into Ungrouped. It now follows the list, which " +
       "is the folder you are actually working in; an open folder page still counts when the list is at the " +
-      "top level, so a link straight to a folder's page behaves as before.",
+      "top level, so a link straight to a folder's page behaves as before. Uploaded files now follow that " +
+      "preference too - they ignored it entirely and always landed in Ungrouped, however you had set it.",
     fixed: [
       "New recordings are filed into the folder the meetings list is drilled into when the placement preference is \"Use the currently selected folder\" - previously they all landed in Ungrouped.",
+      "Uploaded files (the Upload button and dragging files onto the list) now honour the recording placement preference instead of always landing in Ungrouped. The folder is taken when the upload starts, so a batch lands together.",
     ],
   },
   {
