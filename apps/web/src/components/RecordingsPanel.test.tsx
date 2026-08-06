@@ -22,6 +22,13 @@ vi.mock("../lib/rooms", () => ({
     roomStub.currentRoom && !roomStub.currentRoom.isPersonal ? roomStub.currentRoom.id : undefined,
 }));
 
+// The panel's file drop zone: capture what it hands the shared upload queue (the real provider would
+// upload). Reset per test by `vi.clearAllMocks()`.
+const uploadFilesMock = vi.fn();
+vi.mock("../lib/uploadContext", () => ({
+  useUpload: () => ({ items: [], busy: false, uploadFiles: uploadFilesMock, clearFinished: vi.fn() }),
+}));
+
 vi.mock("../lib/api", () => ({
   api: {
     listRecordings: vi.fn(),
@@ -770,6 +777,43 @@ describe("RecordingsPanel", () => {
     const work = await screen.findByRole("button", { name: /open work/i });
     const loose = screen.getByText("Loose one");
     expect(work.compareDocumentPosition(loose) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  // --- File drops: where you dropped decides the folder, not the placement preference ---
+
+  /// Fire a file drop on the panel frame (which owns the drop zone). `types` must carry "Files" or the
+  /// panel treats it as a reorder drag and leaves it to the row handlers.
+  function dropFiles(container: HTMLElement) {
+    const file = new File(["x"], "clip.webm", { type: "audio/webm" });
+    fireEvent.drop(container.firstChild as HTMLElement, {
+      dataTransfer: { types: ["Files"], files: [file] },
+    });
+  }
+
+  it("files a dropped audio file into the folder the list is drilled into", async () => {
+    (api.listSections as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: "sec-1", name: "Work", parentId: null, position: 0 },
+    ]);
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...rec, id: "a", name: "Inside Work", sectionId: "sec-1", sectionName: "Work" },
+    ]);
+    const { container } = renderList("/?in=sec-1");
+    await screen.findByText("Inside Work"); // drilled in: the folder's own items are showing
+
+    dropFiles(container);
+
+    expect(uploadFilesMock).toHaveBeenCalledTimes(1);
+    expect(uploadFilesMock.mock.calls[0][1]).toEqual({ sectionId: "sec-1" });
+  });
+
+  it("files a drop at the top level as ungrouped", async () => {
+    const { container } = renderList("/");
+    await screen.findByText("Weekly Standup");
+
+    dropFiles(container);
+
+    expect(uploadFilesMock).toHaveBeenCalledTimes(1);
+    expect(uploadFilesMock.mock.calls[0][1]).toEqual({ sectionId: null });
   });
 
   it("creates a section from the New section control", async () => {

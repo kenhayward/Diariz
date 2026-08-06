@@ -14,7 +14,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 
 | Feature | Description |
 | --- | --- |
-| **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume), system audio, or both mixed together on one device - system audio works in Chromium browsers ("Share audio") and seamlessly in the desktop app; schedule a recording to auto-stop at a set time or after 15/30/60 minutes; or upload files (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A). |
+| **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume), system audio, or both mixed together on one device - system audio works in Chromium browsers ("Share audio") and seamlessly in the desktop app; schedule a recording to auto-stop at a set time or after 15/30/60 minutes; or upload files (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A) - dropped onto the list they land in the folder you dropped them on, and everything else follows your placement preference. |
 | **Transcribe & diarize** | Server-side WhisperX (word-level timestamps) with pyannote speaker diarization; speaker-labelled, editable, playable segments you can re-transcribe any time. |
 | **Recording hub** | Every meeting opens on a hub: a summary card (meeting type, key facts, the summary inline) over tiles for transcript, actions, speakers, notes, files, and formulas - each showing its count and a preview, with new-note / add-file / run-formula available in place. The transcript embeds a conversation-flow player showing who spoke when, which doubles as the scrubber. |
 | **People and speaker identification** | One shared directory of the people in your meetings, where a voiceprint is optional - someone can be listed with no biometric held, or opt out, which erases theirs. Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). Assign a speaker from the Speakers tab or straight from the label on any transcript row, as you read or listen. A **People** directory opens over whatever you are reading; it lists everyone one to a line, searchable by name, email or company; a person carries a job title, company, email, phone and an internal/external marker, and likely duplicates are pointed out for you to merge. The Speakers tab shows an identified speaker's title and company inline, with a contact card (email and phone as links) above their segments and a pencil to edit that person in place. Browsing the directory needs the Manage people permission; opting yourself out, and searching to name a speaker, never do. |
@@ -59,6 +59,21 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.186.0",
+    date: "2026-08-06",
+    pr: 460,
+    headline: "Dropped files land in the folder you dropped them on",
+    summary:
+      "Dragging audio files onto the meetings list now files them into the folder the list is showing, " +
+      "whatever your placement preference in Settings -> Recordings says. Dropping files into a folder is " +
+      "already telling us where they belong, so it should not be overruled by a setting that exists to " +
+      "answer the case where you have not said. Drop them at the top level to leave them ungrouped. The " +
+      "Upload button has no drop target, so it keeps following the preference, as does a new recording.",
+    changed: [
+      "Files dragged onto the meetings list are filed into the folder you drop them on, overriding the recording placement preference. The Upload button and new recordings still follow the preference.",
+    ],
+  },
   {
     version: "0.185.1",
     date: "2026-08-06",

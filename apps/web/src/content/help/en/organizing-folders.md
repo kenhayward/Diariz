@@ -18,9 +18,13 @@ folder list does. **Ungrouped** is offered as a choice at every level, so you ne
 the top to pick it. The same picker is used for choosing where a new recording is filed, in
 **Settings -> Recordings**. If you choose **Use the currently selected folder** there, a new recording
 goes into whichever folder the list is showing at the moment you start it, so opening a folder and
-recording files the take there; at the top level it goes to Ungrouped. Uploaded files follow the same
-setting, taken when the upload starts, so a whole batch lands together even if you browse elsewhere while
-it runs.
+recording files the take there; at the top level it goes to Ungrouped. Files picked with the **Upload**
+button follow the same setting, taken when the upload starts, so a whole batch lands together even if you
+browse elsewhere while it runs.
+
+Dragging files onto the list is different: they go into the folder the list is showing when you drop them,
+whatever the setting says, since dropping them there is already telling us where they belong. Drop them at
+the top level to leave them ungrouped.
 
 While browsing a level, clicking a folder's name opens it so you can look inside - it does not choose
 it. Choosing that folder is a separate checkmark button next to its name (its label for assistive

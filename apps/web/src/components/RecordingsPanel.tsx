@@ -329,7 +329,9 @@ export default function RecordingsPanel() {
     e.preventDefault();
     setDragging(false);
     dragDepth.current = 0;
-    upload.uploadFiles(Array.from(e.dataTransfer.files));
+    // Where you dropped is where they go: the level the list is showing wins over the placement preference,
+    // which only decides for an upload that named no destination (the Upload button).
+    upload.uploadFiles(Array.from(e.dataTransfer.files), { sectionId: drill.sectionId });
   }
 
   if (isLoading) return <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>;

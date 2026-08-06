@@ -10,7 +10,12 @@ interface UploadContextValue {
   /// True while a batch is in flight (any file queued or uploading).
   busy: boolean;
   /// Upload a batch of files; per-file status surfaces in `items`.
-  uploadFiles: (files: File[]) => void;
+  ///
+  /// `target` is where the user *put* the files - the folder the list was showing when they dropped them.
+  /// Passing it (even as `{ sectionId: null }`, meaning the room root) overrides the placement preference:
+  /// a drop is an instruction about this batch, while the preference only answers "where do things go when
+  /// I haven't said". The Upload button has no drop target and so omits it.
+  uploadFiles: (files: File[], target?: { sectionId: string | null }) => void;
   /// Drop the done/failed rows from the status list (keeps any still in flight).
   clearFinished: () => void;
 }
@@ -31,15 +36,17 @@ export function UploadProvider({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState(false);
 
   const uploadFiles = useCallback(
-    (files: File[]) => {
+    (files: File[], target?: { sectionId: string | null }) => {
       if (files.length === 0) return;
       // Snapshot the room and folder at drop time - a batch runs one file at a time and the user can browse
       // away mid-upload, so every file in it is filed where the batch started, not where the panel ends up.
       // Uploading while in a shared room shares the file into it (like recording does) and leaves the main
-      // placement ungrouped; a personal-room upload follows the placement preference.
+      // placement ungrouped; otherwise the drop target wins, falling back to the placement preference when
+      // there was no drop (the Upload button). Note `target ? ... :` rather than `??`: the target's own
+      // `null` means the room root and must not fall through to the preference.
       const intoSharedRoom = !!currentRoom && !currentRoom.isPersonal;
       const roomId = intoSharedRoom ? currentRoom.id : null;
-      const sectionId = intoSharedRoom ? null : recordingSectionId;
+      const sectionId = intoSharedRoom ? null : target ? target.sectionId : recordingSectionId;
       setBusy(true);
       void runUploadBatch(files, {
         upload: async (file) => {

@@ -15,19 +15,23 @@ vi.mock("./api", () => ({
 import { api } from "./api";
 import { UploadProvider, useUpload } from "./uploadContext";
 
-function Harness() {
+/// `target` is the explicit drop target passed through to uploadFiles - `undefined` means the caller gave
+/// none (the Upload button), so the placement preference decides.
+function Harness({ target }: { target?: { sectionId: string | null } }) {
   const { uploadFiles } = useUpload();
   return (
-    <button onClick={() => uploadFiles([new File(["x"], "clip.webm", { type: "audio/webm" })])}>go</button>
+    <button onClick={() => uploadFiles([new File(["x"], "clip.webm", { type: "audio/webm" })], target)}>
+      go
+    </button>
   );
 }
 
-function renderHarness() {
+function renderHarness(target?: { sectionId: string | null }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
       <UploadProvider>
-        <Harness />
+        <Harness target={target} />
       </UploadProvider>
     </QueryClientProvider>,
   );
@@ -48,6 +52,35 @@ describe("UploadProvider room placement", () => {
     fireEvent.click(screen.getByText("go"));
     await waitFor(() => expect(api.uploadFile).toHaveBeenCalled());
     expect((api.uploadFile as Mock).mock.calls[0][3]).toBe("sec-7"); // the sectionId argument
+  });
+
+  it("lets an explicit drop target beat the placement preference", async () => {
+    // Dropping files onto the list is an instruction about where they go, so it outranks the preference.
+    roomStub.recordingSectionId = "sec-pref";
+    renderHarness({ sectionId: "sec-dropped-on" });
+    fireEvent.click(screen.getByText("go"));
+    await waitFor(() => expect(api.uploadFile).toHaveBeenCalled());
+    expect((api.uploadFile as Mock).mock.calls[0][3]).toBe("sec-dropped-on");
+  });
+
+  it("treats a drop at the top level as Ungrouped, even when the preference names a folder", async () => {
+    // The override has to survive being null - otherwise `?? preference` would quietly refile a drop onto
+    // the room root into whatever SpecificFolder points at, which is the opposite of what was asked.
+    roomStub.recordingSectionId = "sec-pref";
+    renderHarness({ sectionId: null });
+    fireEvent.click(screen.getByText("go"));
+    await waitFor(() => expect(api.uploadFile).toHaveBeenCalled());
+    expect((api.uploadFile as Mock).mock.calls[0][3]).toBeNull();
+  });
+
+  it("sends no folder for a drop into a shared room, whatever the drop target", async () => {
+    // A shared-room upload shares into that room with an ungrouped personal placement, so a folder id from
+    // either source must not ride along.
+    roomStub.currentRoom = { id: "eng-room", isPersonal: false };
+    renderHarness({ sectionId: "sec-dropped-on" });
+    fireEvent.click(screen.getByText("go"));
+    await waitFor(() => expect(api.uploadFile).toHaveBeenCalled());
+    expect((api.uploadFile as Mock).mock.calls[0][3]).toBeNull();
   });
 
   it("sends no folder for an upload into a shared room", async () => {
