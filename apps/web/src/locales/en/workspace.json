@@ -427,6 +427,8 @@
   "folderPickerNoMatches": "No folders match your search.",
   "folderPickerSelectAria": "Select {{name}}",
   "folderPickerCurrentSelection": "Selected: {{path}}",
+  "folderPickerPathLabel": "Folder picker path",
+  "folderPickerPathMenu": "Show full folder picker path",
   "folderPathLabel": "Folder path",
   "folderPathMenu": "Show full folder path",
   "folderPathLabelCurrent": "This folder's path",

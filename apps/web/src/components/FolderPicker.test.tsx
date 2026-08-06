@@ -210,4 +210,10 @@ describe("FolderPicker", () => {
     // Not stranded - Back is still there even though the breadcrumb has nothing to show.
     expect(screen.getByLabelText("Back")).toBeTruthy();
   });
+
+  it("labels its own breadcrumb landmark distinctly from the nav's own 'Folder path' landmark", async () => {
+    renderPicker();
+    await userEvent.click(screen.getByLabelText("Open Customers"));
+    expect(screen.getByRole("navigation", { name: "Folder picker path" })).toBeTruthy();
+  });
 });

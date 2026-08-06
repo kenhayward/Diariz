@@ -427,6 +427,8 @@
   "folderPickerNoMatches": "Ninguna carpeta coincide con tu búsqueda.",
   "folderPickerSelectAria": "Seleccionar {{name}}",
   "folderPickerCurrentSelection": "Seleccionado: {{path}}",
+  "folderPickerPathLabel": "Ruta del selector de carpetas",
+  "folderPickerPathMenu": "Mostrar ruta completa del selector de carpetas",
   "folderPathLabel": "Ruta de la carpeta",
   "folderPathMenu": "Mostrar ruta completa de la carpeta",
   "folderPathLabelCurrent": "Ruta de esta carpeta",

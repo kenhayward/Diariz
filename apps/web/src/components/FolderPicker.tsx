@@ -133,11 +133,18 @@ export default function FolderPicker({
           </button>
           {/* A crumb click also drills (same rule as the row body below) - the header offers no second,
               differently-behaved way to move around. Renders nothing itself when `chain` is empty (the
-              ghost-parent case above) - the Back button alone still gets you out. */}
+              ghost-parent case above) - the Back button alone still gets you out.
+
+              `label`/`menuLabel` overrides are required here, not optional polish: this picker can be open
+              over a page whose own nav already renders a "Folder path" landmark (DrillBreadcrumb), and
+              FolderPath's own doc comment exists specifically to stop two identically-named landmarks from
+              coexisting. */}
           <FolderPath
             crumbs={chain.map((s) => ({ id: s.id, name: s.name }))}
             maxVisible={2}
             onSelect={(id) => setDrillId(id)}
+            label={t("folderPickerPathLabel")}
+            menuLabel={t("folderPickerPathMenu")}
           />
         </div>
       )}

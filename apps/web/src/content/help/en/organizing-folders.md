@@ -18,6 +18,11 @@ folder list does. **Ungrouped** is offered as a choice at every level, so you ne
 the top to pick it. The same picker is used for choosing where a new recording is filed, in
 **Settings -> Recordings**.
 
+While browsing a level, clicking a folder's name opens it so you can look inside - it does not choose
+it. Choosing that folder is a separate checkmark button next to its name (its label for assistive
+technology is "Select", followed by the folder's name). A row you reached by typing into the filter
+box has nothing to open, so clicking it chooses it right away.
+
 ## Moving between folders
 
 The list shows one folder at a time rather than everything expanded at once. Opening a folder drills
