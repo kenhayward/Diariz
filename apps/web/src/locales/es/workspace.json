@@ -619,5 +619,7 @@
   "yourRooms": "Tus salas",
   "editPersonAction": "Editar a {{name}}",
   "speakerNoContactDetails": "No hay datos de contacto.",
-  "speakerAddContactDetails": "Anadir datos"
+  "speakerAddContactDetails": "Anadir datos",
+  "calSyncOutlook": "Sincronizar Outlook",
+  "calSyncingOutlook": "Sincronizando Outlook..."
 }

@@ -1142,7 +1142,9 @@ describe("RecordingsPanel", () => {
     // List-only toolbar actions are disabled in Calendar; Refresh stays usable.
     expect((screen.getByRole("button", { name: /new section/i }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: /select recordings/i }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: /refresh/i }) as HTMLButtonElement).disabled).toBe(false);
+    // Exact, not /refresh/i: the tab's own "Refresh events" link now renders here too (it used to be hidden
+    // behind a Google connection), and a loose match would find both.
+    expect((screen.getByRole("button", { name: "Refresh" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   // Storage can be disabled outright (Safari private browsing, a locked-down profile) and throw on access,

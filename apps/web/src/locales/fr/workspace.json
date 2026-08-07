@@ -619,5 +619,7 @@
   "yourRooms": "Vos salles",
   "editPersonAction": "Modifier {{name}}",
   "speakerNoContactDetails": "Aucune coordonnee enregistree.",
-  "speakerAddContactDetails": "Ajouter des coordonnees"
+  "speakerAddContactDetails": "Ajouter des coordonnees",
+  "calSyncOutlook": "Synchroniser Outlook",
+  "calSyncingOutlook": "Synchronisation d'Outlook..."
 }

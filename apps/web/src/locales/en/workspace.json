@@ -619,5 +619,7 @@
   "yourRooms": "Your rooms",
   "editPersonAction": "Edit {{name}}",
   "speakerNoContactDetails": "No contact details recorded.",
-  "speakerAddContactDetails": "Add details"
+  "speakerAddContactDetails": "Add details",
+  "calSyncOutlook": "Sync Outlook",
+  "calSyncingOutlook": "Syncing Outlook..."
 }

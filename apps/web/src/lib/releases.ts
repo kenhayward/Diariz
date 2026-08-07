@@ -60,6 +60,31 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.192.0",
+    date: "2026-08-07",
+    pr: 480,
+    headline: "The Calendar tab works without Google",
+    summary:
+      "If you had no Google account connected, the Calendar tab showed your recordings and nothing else - no " +
+      "meetings, even though you plainly had a calendar. That applied to anyone whose calendar came from a " +
+      "subscribed feed, and would have applied to everyone using the new Outlook sync too.\n\n" +
+      "It was left over from when Google was the only calendar Diariz could read. The tab now shows your " +
+      "meetings whatever they came from.\n\n" +
+      "There is also a Sync Outlook link on the Calendar tab itself, next to Refresh, for when you notice a " +
+      "meeting missing and would rather not go to Preferences to fetch it. It appears only in the Windows " +
+      "desktop app, with Outlook sync switched on.\n\n" +
+      "And there is a new help article covering Outlook sync: what is stored and where, what is skipped, what " +
+      "the various failures mean, and exactly what gets deleted when you disconnect a machine or turn the " +
+      "whole thing off.",
+    added: [
+      "A Sync Outlook link on the Calendar tab, in the Windows desktop app when Outlook sync is on.",
+      "A help article on syncing your desktop Outlook calendar.",
+    ],
+    fixed: [
+      "The Calendar tab showed no meetings unless a Google account was connected, leaving anyone using only subscribed feeds - or Outlook sync - with an empty calendar.",
+    ],
+  },
+  {
     version: "0.191.0",
     date: "2026-08-07",
     pr: 479,
