@@ -116,6 +116,54 @@ describe("TagsTab", () => {
     }
   });
 
+  // Ported down from the panel suite. The modal renders from inside this tab now (it used to sit in the
+  // panel's modal slot), and the tag it picks has to drive the list behind it - they share one piece of
+  // state, which is the whole reason the modal lives here rather than beside the panel's other modals.
+  it("expands the cloud into a modal whose selection drives the list behind it", async () => {
+    renderTab();
+    await screen.findByRole("button", { name: "Budget Planning" });
+
+    fireEvent.click(screen.getByRole("button", { name: /expand tag cloud/i }));
+    const dialog = await screen.findByRole("dialog", { name: /tag cloud/i });
+
+    const inModal = Array.from(dialog.querySelectorAll("button")).find((b) => b.textContent === "Cloud Infra")!;
+    fireEvent.click(inModal);
+    fireEvent.keyDown(document, { key: "Escape" }); // close without navigating
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    // Cloud Infra is only on "c": the list behind the modal mirrors what was picked inside it.
+    expect(screen.queryByText("Budget call")).toBeNull();
+    expect(screen.getByText("Cloud call")).toBeTruthy();
+  });
+
+  // Ported down from the panel suite. The Tags list has room for a second line the dense List tab does not
+  // (`showDate`), so the year proves a real date is rendered rather than just the duration.
+  it("shows the transcript date on each row", async () => {
+    renderTab();
+    await screen.findByRole("button", { name: "Budget Planning" });
+    expect(screen.getAllByText(/2026/).length).toBeGreaterThan(0);
+  });
+
+  // Ported down from the panel suite. Its own case rather than leaning on the storage-failure one below,
+  // which also moves the slider - trimming is normal behaviour and should not be covered only while
+  // localStorage happens to be broken.
+  it("trims the cloud to the most-used tags as the count slider moves", async () => {
+    renderTab();
+    await screen.findByRole("button", { name: "Cloud Infra" });
+
+    fireEvent.change(screen.getByRole("slider"), { target: { value: "1" } });
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Cloud Infra" })).toBeNull());
+    expect(screen.getByRole("button", { name: "Budget Planning" })).toBeTruthy(); // highest count kept
+  });
+
+  // Ported down from the panel suite.
+  it("shows the empty state when nothing is tagged", async () => {
+    (api.listTags as Mock).mockResolvedValue([]);
+    renderTab();
+    expect(await screen.findByText(/no tagged meetings yet/i)).toBeTruthy();
+  });
+
   it("keeps the count slider working when localStorage cannot be written", async () => {
     renderTab();
     await screen.findByRole("button", { name: "Budget Planning" });

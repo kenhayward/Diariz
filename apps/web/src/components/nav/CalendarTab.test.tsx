@@ -99,4 +99,53 @@ describe("CalendarTab", () => {
     await screen.findByText("Today call");
     expect(api.getCalendarEvents).not.toHaveBeenCalled();
   });
+
+  /// Render at an explicit room scope, for the pair of overlay tests below.
+  function renderAtScope(isPersonalRoom: boolean) {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={qc}>
+        <SelectionProvider>
+          <MemoryRouter initialEntries={["/"]}>
+            <CalendarTab recordings={[rec]} isPersonalRoom={isPersonalRoom} />
+          </MemoryRouter>
+        </SelectionProvider>
+      </QueryClientProvider>,
+    );
+  }
+
+  const connected = () => {
+    (api.getProfile as Mock).mockResolvedValue({ googleCalendar: true });
+    (api.getCalendarEvents as Mock).mockResolvedValue([
+      { id: "e1", summary: "Standup", start: today.toISOString(), end: today.toISOString() },
+    ]);
+  };
+
+  // This pair has to be read together. On its own, "a shared room does not fetch" is a test that cannot
+  // fail: the fetch is gated behind the profile query resolving, so asserting not-called too early passes
+  // whatever the gate says (the panel-suite case this was ported from had exactly that hole - dropping
+  // `&& isPersonalRoom` from the query left it green). The personal-room case below establishes that the
+  // fetch does happen, and how long it takes to happen, so the shared-room case can wait past that point
+  // before asserting it did not.
+  it("fetches Google events in a personal room once Calendar is connected", async () => {
+    connected();
+    renderAtScope(true);
+    await waitFor(() => expect(api.getCalendarEvents).toHaveBeenCalled());
+    expect(await screen.findByRole("button", { name: /refresh events/i })).toBeTruthy();
+  });
+
+  it("shows no Google overlay in a shared room, even with Calendar connected", async () => {
+    connected();
+    renderAtScope(false);
+
+    expect(await screen.findByText("Today call")).toBeTruthy(); // the room's own recording still shows
+    // Wait past the point the personal-room case proves the fetch fires: the profile has resolved and the
+    // events query has had its chance. Only then is "not called" a claim about the gate.
+    await waitFor(() => expect(api.getProfile).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByRole("button", { name: /refresh events/i })).toBeNull());
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(api.getCalendarEvents).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /refresh events/i })).toBeNull();
+  });
 });
