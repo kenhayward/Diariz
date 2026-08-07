@@ -62,7 +62,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.187.0",
     date: "2026-08-07",
-    pr: 473,
+    pr: 475,
     headline: "Meetings are matched to the time you recorded, not the time you uploaded",
     summary:
       "Diariz suggests the calendar meeting a recording belongs to by comparing the two timespans - but it " +
