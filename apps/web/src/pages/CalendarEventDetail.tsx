@@ -8,6 +8,8 @@ import CalendarEventDetails from "../components/CalendarEventDetails";
 import LinkRecordingModal from "../components/LinkRecordingModal";
 import NotesSection from "../components/NotesSection";
 import { useRoomBasePath } from "../lib/rooms";
+import { meetingJoinUrl } from "../lib/meetingJoin";
+import { requestRecording } from "../lib/recordRequest";
 
 /// The centre panel for a Google Calendar meeting that has no recording (reached by clicking an event in
 /// the Calendar tab). Shows a single Overview tab with the meeting's details, a "Link a recording" action,
@@ -32,6 +34,20 @@ export default function CalendarEventDetail() {
     enabled: Boolean(eventId),
     retry: false,
   });
+
+  // The link that actually joins - not htmlLink, which for a Google event is the Google Calendar page.
+  const joinUrl = meetingJoinUrl(event);
+
+  /// Open the meeting and start recording it in one go.
+  ///
+  /// The window is opened first and synchronously inside the click handler: browsers only allow a popup that
+  /// is a direct result of a user gesture, so awaiting anything before it would get it blocked. Recording is
+  /// requested after, with whatever audio source the user has already selected.
+  function joinAndRecord() {
+    if (!joinUrl) return;
+    window.open(joinUrl, "_blank", "noopener,noreferrer");
+    requestRecording();
+  }
 
   // Pre-meeting notes anchored to this event (no recording-clock stamps; no jump target yet).
   const calId = event?.calendarId ?? "primary";
@@ -84,13 +100,27 @@ export default function CalendarEventDetail() {
         <h1 className="min-w-0 truncate text-lg font-semibold text-gray-900 dark:text-gray-100">
           {event.summary || t("calUntitledEvent")}
         </h1>
-        <button
-          type="button"
-          onClick={() => setPickOpen(true)}
-          className="shrink-0 rounded border px-2 py-1 text-xs hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-        >
-          {t("calLinkRecordingAction")}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Joining and recording are one action: you are about to be in the meeting, and the reason you
+              opened this page is to capture it. Disabled rather than hidden when the invite carries no join
+              link, so the control does not appear and disappear between meetings. */}
+          <button
+            type="button"
+            onClick={joinAndRecord}
+            disabled={!joinUrl}
+            title={joinUrl ? undefined : t("calNoMeetingLink")}
+            className="rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500"
+          >
+            {t("calJoinMeeting")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setPickOpen(true)}
+            className="rounded border px-2 py-1 text-xs hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+          >
+            {t("calLinkRecordingAction")}
+          </button>
+        </div>
       </div>
 
       <DetailTabs tabs={tabs} active="overview" onSelect={() => {}} />

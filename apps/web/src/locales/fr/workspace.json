@@ -621,5 +621,7 @@
   "speakerNoContactDetails": "Aucune coordonnee enregistree.",
   "speakerAddContactDetails": "Ajouter des coordonnees",
   "calSyncOutlook": "Synchroniser Outlook",
-  "calSyncingOutlook": "Synchronisation d'Outlook..."
+  "calSyncingOutlook": "Synchronisation d'Outlook...",
+  "calJoinMeeting": "Rejoindre la reunion",
+  "calNoMeetingLink": "Cette invitation ne contient aucun lien de reunion."
 }

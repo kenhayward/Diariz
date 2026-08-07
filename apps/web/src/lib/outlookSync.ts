@@ -5,6 +5,10 @@
 
 import type { OutlookEventInput } from "./types";
 
+/// Scheme the server stamps on a mirrored Outlook event's calendarId. Exported because the join-link
+/// rule turns on it: for Outlook, htmlLink IS the join URL, which is not true of any other source.
+export const OUTLOOK_CALENDAR_PREFIX = "outlook:";
+
 /// One harvested window, handed over for upload. `complete` is false when the shell's enumeration threw
 /// partway: the server upserts what arrived but refuses to treat the gaps as deletions.
 export interface OutlookPushPayload {

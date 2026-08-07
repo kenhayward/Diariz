@@ -70,7 +70,18 @@ function normalizeAppointment(raw, options = {}) {
   const wantBody = includeBody && !isPrivate;
 
   return {
-    uid: raw.uid,
+    // A recurring occurrence is keyed by its uid AND its start.
+    //
+    // Outlook was expected to stamp the occurrence date into GlobalAppointmentID, giving each instance its
+    // own id. Against a real calendar it does not: 87 occurrences came back sharing 24 ids - one per series.
+    // Unqualified, the server (which keys a row on source + uid) would collapse every occurrence of a weekly
+    // meeting into a single row, and they would overwrite each other on every sync.
+    //
+    // Qualifying here rather than leaving it to dedupeUids matters for stability: dedupe keeps the FIRST
+    // sighting bare and qualifies the rest, so the id of any given occurrence would depend on where the
+    // window happened to start - and would change as the window rolled, orphaning its recording link and
+    // pre-meeting notes. Deriving it from the occurrence's own start is order-independent and stable.
+    uid: raw.isRecurring === true ? `${raw.uid}#${raw.start}` : raw.uid,
     subject: raw.subject ?? null,
     start: raw.start,
     end: raw.end,
