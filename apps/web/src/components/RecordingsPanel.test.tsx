@@ -2,7 +2,8 @@ import { render, screen, fireEvent, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { SelectionProvider } from "../lib/selection";
+import { useState } from "react";
+import { SelectionProvider, useSelection } from "../lib/selection";
 import { MoveClipboardProvider, useMoveClipboard, type MoveClipboardCut } from "../lib/moveClipboard";
 import type { RecordingSummary } from "../lib/types";
 
@@ -140,6 +141,38 @@ function renderListWithClipboardSpy(entry: string, onChange: (cut: MoveClipboard
       </MoveClipboardProvider>
     </QueryClientProvider>,
   );
+}
+
+/// Renders the panel behind a toggle, inside a SelectionProvider that stays mounted either way - the shape
+/// Workspace.tsx has, where collapsing the left sidebar unmounts the panel while the provider and the chat
+/// panel live on. `sel` reports the selection from outside the panel, so a test can see what survived.
+function renderCollapsible() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const seen = { selectedIds: [] as string[] };
+  function SelectionSpy() {
+    seen.selectedIds = useSelection().selectedIds;
+    return null;
+  }
+  function Collapsible() {
+    const [open, setOpen] = useState(true);
+    return (
+      <>
+        <button onClick={() => setOpen((o) => !o)}>toggle-panel</button>
+        <SelectionSpy />
+        {open && <RecordingsPanel />}
+      </>
+    );
+  }
+  render(
+    <QueryClientProvider client={qc}>
+      <SelectionProvider>
+        <MemoryRouter initialEntries={["/"]}>
+          <Collapsible />
+        </MemoryRouter>
+      </SelectionProvider>
+    </QueryClientProvider>,
+  );
+  return seen;
 }
 
 /// Open a recording row's kebab. Its aria-label is "Actions" (KebabMenu's default) which now also matches
@@ -706,6 +739,25 @@ describe("RecordingsPanel", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /weekly standup/i }));   // select the row
     fireEvent.click(screen.getByRole("button", { name: "Delete audio" }));        // toolbar bulk action
     await waitFor(() => expect(api.deleteAudioBulk).toHaveBeenCalledWith(["rec-1"]));
+  });
+
+  // The selection is global: the chat panel reads it as its "Selected transcripts" context. Collapsing the
+  // left sidebar unmounts this panel (Workspace.tsx) but not the provider, so a remount must not wipe what
+  // the user picked. The tab effect already guards its mount with a ref; the drill effect did not, so
+  // collapse-and-reopen silently emptied the chat panel's context.
+  it("keeps the selection when the panel is unmounted and remounted (sidebar collapse)", async () => {
+    const seen = renderCollapsible();
+    await screen.findByText("Weekly Standup");
+    fireEvent.click(screen.getByRole("button", { name: /select recordings/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /weekly standup/i }));
+    expect(seen.selectedIds).toEqual(["rec-1"]);
+
+    fireEvent.click(screen.getByText("toggle-panel")); // collapse: the panel unmounts
+    expect(seen.selectedIds).toEqual(["rec-1"]); // the provider still holds it
+    fireEvent.click(screen.getByText("toggle-panel")); // re-expand: the panel mounts again
+    await screen.findByText("Weekly Standup");
+
+    expect(seen.selectedIds).toEqual(["rec-1"]);
   });
 
   // The toolbar Cut button: same disabled discipline as mergeSelected/deleteSelectedAudio - present only in

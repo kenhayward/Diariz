@@ -60,6 +60,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.186.2",
+    date: "2026-08-06",
+    pr: 462,
+    headline: "Collapsing the meetings list no longer forgets what you had ticked",
+    summary:
+      "If you ticked some meetings and then collapsed the left-hand list - to give the transcript or the " +
+      "chat more room - your selection was quietly thrown away when you opened the list again. The chat " +
+      "panel, which uses that selection as its \"Selected transcripts\" context, was left with nothing, and " +
+      "the only clue was that the answer no longer covered the meetings you picked. Collapsing the panel now " +
+      "leaves the selection alone; it is still cleared when you actually move to a different folder or tab, " +
+      "which is what it is for.",
+    fixed: [
+      "A selection of meetings survives collapsing and re-opening the left panel - previously it was silently emptied, taking the chat panel's selected-transcripts context with it.",
+    ],
+  },
+  {
     version: "0.186.1",
     date: "2026-08-06",
     pr: 461,

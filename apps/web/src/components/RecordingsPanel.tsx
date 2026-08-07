@@ -97,7 +97,15 @@ export default function RecordingsPanel() {
   // somewhere else entirely (see pasteTarget.ts's same-folder / cross-room checks, which then reason from
   // the wrong source). `selectTab` already clears the selection for the same reason on a tab switch; this
   // is the drill-position equivalent.
+  //
+  // Compared against a ref for the same reason the tab effect below is: this must not fire on **mount**.
+  // Collapsing the left sidebar unmounts this panel while `SelectionProvider` and the chat panel stay up
+  // (Workspace.tsx), so an unguarded clear here emptied the chat panel's "Selected transcripts" context
+  // every time the sidebar was reopened - a selection wiped by a gesture that never touched the list.
+  const prevDrill = useRef(drill.sectionId);
   useEffect(() => {
+    if (prevDrill.current === drill.sectionId) return;
+    prevDrill.current = drill.sectionId;
     selection.clear();
     // Reacts only to the drill position changing, not to `selection` itself - `clear` is called for
     // whatever the current render's selection is, so it does not need to be a dependency.
