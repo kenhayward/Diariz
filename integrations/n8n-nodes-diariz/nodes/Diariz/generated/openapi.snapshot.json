@@ -2167,6 +2167,13 @@
               "string"
             ]
           },
+          "endedAt": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "error": {
             "type": [
               "null",
@@ -2265,6 +2272,13 @@
               "$ref": "#/components/schemas/SpeakerInfoDto"
             },
             "type": "array"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "status": {
             "$ref": "#/components/schemas/RecordingStatus"
@@ -2467,6 +2481,13 @@
               "string"
             ]
           },
+          "endedAt": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "hasActions": {
             "type": "boolean"
           },
@@ -2505,6 +2526,13 @@
           },
           "source": {
             "$ref": "#/components/schemas/RecordingSource"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
           },
           "status": {
             "$ref": "#/components/schemas/RecordingStatus"
@@ -7390,7 +7418,7 @@
         ]
       },
       "post": {
-        "description": "Multipart form upload that stores the audio and immediately queues transcription; the response comes back before any transcribing has happened, with status `Uploaded`. Poll the recording or subscribe to the `recording.transcribed` webhook for the result.\n\n`source=Upload` (a file the user picked, rather than a browser recording) is additionally checked: the format is sniffed from the actual bytes rather than trusted from the extension or MIME type (415 if unsupported), and the file is capped by the platform's upload limit (413). Every source counts against your storage quota (413 when it would be exceeded).\n\nThe recording is always filed in your personal room. Passing `roomId` for a shared room also shares it there and needs `CreateRecording` in that room; `sectionId` files it in a folder of your personal room.",
+        "description": "Multipart form upload that stores the audio and immediately queues transcription; the response comes back before any transcribing has happened, with status `Uploaded`. Poll the recording or subscribe to the `recording.transcribed` webhook for the result.\n\n`source=Upload` (a file the user picked, rather than a browser recording) is additionally checked: the format is sniffed from the actual bytes rather than trusted from the extension or MIME type (415 if unsupported), and the file is capped by the platform's upload limit (413). Every source counts against your storage quota (413 when it would be exceeded).\n\nSend `startedAt` and `endedAt` (the wall clock the capture began and stopped) whenever you know them. They are what meeting matching spans from - without them it falls back to the upload time, which for a recorded take is roughly when it *stopped*, so the span lands a full recording-length late and the meeting never overlaps. `endedAt` matters separately from `durationMs`, which is captured-audio length and excludes any paused time. Both are optional, and an implausible value (far future, over a year old, or an end before the start) is ignored rather than failing the upload.\n\nThe recording is always filed in your personal room. Passing `roomId` for a shared room also shares it there and needs `CreateRecording` in that room; `sectionId` files it in a folder of your personal room.",
         "requestBody": {
           "content": {
             "application/x-www-form-urlencoded": {
@@ -7473,6 +7501,24 @@
                     "properties": {
                       "roomId": {
                         "format": "uuid",
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "startedAt": {
+                        "format": "date-time",
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "properties": {
+                      "endedAt": {
+                        "format": "date-time",
                         "type": "string"
                       }
                     },

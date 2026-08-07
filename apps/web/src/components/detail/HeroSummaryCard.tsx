@@ -118,8 +118,11 @@ export default function HeroSummaryCard({
 
       {/* Row 2: the high-level facts, as a wrapping chip row. */}
       <div className="mt-3.5 flex flex-wrap items-center gap-2">
+        {/* When the meeting happened, which is startedAt - createdAt is upload time, so a late-night take
+            would show tomorrow's date at the wrong time. Falls back for uploads and older recordings. */}
         <DetailChip icon={<CalendarIcon />} tone="cyan">
-          {formatLongDate(rec.createdAt, i18n.language)} · {formatTimeHm(rec.createdAt)}
+          {formatLongDate(rec.startedAt ?? rec.createdAt, i18n.language)} ·{" "}
+          {formatTimeHm(rec.startedAt ?? rec.createdAt)}
         </DetailChip>
 
         <DetailChip icon={<ClockIcon />}>{formatDurationApprox(rec.durationMs)}</DetailChip>

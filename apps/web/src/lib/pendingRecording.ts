@@ -14,7 +14,14 @@ export interface PendingRecording {
   title: string;
   durationMs: number;
   source: RecordingSource;
+  /// When the stash was written, i.e. when recording stopped. Labels the recovery banner.
   createdAt: number;
+  /// Wall clock the capture began and stopped, carried so a recovered upload still reports the real meeting
+  /// time. Without these a recording recovered on the next visit would be stamped with *that* moment, silently
+  /// losing the calendar match it was stashed to protect. Optional: stashes written before this field existed
+  /// deserialise without them.
+  startedAt?: number;
+  endedAt?: number;
 }
 
 const DB_NAME = "diariz";

@@ -60,6 +60,41 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.187.0",
+    date: "2026-08-07",
+    pr: 475,
+    headline: "Meetings are matched to the time you recorded, not the time you uploaded",
+    summary:
+      "Diariz suggests the calendar meeting a recording belongs to by comparing the two timespans - but it " +
+      "had no idea when a recording actually started. It only knew when the upload arrived, which for a " +
+      "recorded meeting is roughly when you pressed Stop. So a one-hour meeting recorded from 9 to 10 was " +
+      "compared against 10 to 11, which does not overlap the meeting at all, and no match was ever found. " +
+      "The longer the meeting, the further out it was.\n\n" +
+      "Recordings now carry the wall-clock time they started and stopped, and matching uses those. The stop " +
+      "time is tracked separately from the recorded length because pausing does not count towards the " +
+      "length - so a meeting you paused halfway through is still measured across its real span. Existing " +
+      "recordings have had a start time estimated from their upload time and length, so your library " +
+      "matches better too, and merging several recordings now spans from the earliest to the latest.\n\n" +
+      "Two related things were wrong for the same reason. A meeting recorded across midnight appeared on " +
+      "the following day in the Calendar tab - in a different cell from the very meeting it was linked to - " +
+      "and now sits on the day it started. And action items with deadlines like \"by next Friday\" were " +
+      "worked out from the upload date, which for a late-night or recovered recording could be the wrong " +
+      "day entirely.",
+    added: [
+      "Recordings store the wall-clock time capture started and stopped, sent by the recorder and available on the API.",
+    ],
+    changed: [
+      "The Calendar tab places and orders a recording by when it started rather than when it was uploaded, so a meeting recorded across midnight lands on the correct day.",
+      "The date shown on a recording is now when it was recorded; the calendar picker opens on that day too.",
+      "Merging recordings orders the parts by when they were captured rather than uploaded, and the result spans from the earliest start to the latest end.",
+      "A recording recovered after a failed upload keeps its original time instead of being stamped with the moment it was recovered.",
+    ],
+    fixed: [
+      "Calendar meetings are suggested correctly. Previously the recording's timespan was measured from the upload, so it was late by the full length of the recording and typically overlapped nothing.",
+      "Deadlines like \"by next Friday\" in extracted action items are resolved against the meeting's own date rather than the upload date.",
+    ],
+  },
+  {
     version: "0.186.13",
     date: "2026-08-07",
     pr: 474,

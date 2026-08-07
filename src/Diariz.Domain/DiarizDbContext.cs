@@ -154,6 +154,9 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
         builder.Entity<Recording>(e =>
         {
             e.HasIndex(r => new { r.UserId, r.CreatedAt });
+            // Calendar matching and the Calendar tab's day grouping span from StartedAt, so give them an index
+            // rather than making them scan the CreatedAt one and re-sort.
+            e.HasIndex(r => new { r.UserId, r.StartedAt });
             e.Ignore(r => r.HasAudio); // computed from AudioDeletedAt, not stored
             e.Ignore(r => r.IsAudioProtected); // computed from AudioProtectedAt, not stored
             e.Property(r => r.Title).HasMaxLength(512);

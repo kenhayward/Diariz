@@ -134,11 +134,32 @@ describe("Recorder recovery", () => {
     fireEvent.click(uploadBtn);
 
     await waitFor(() =>
-      expect(api.upload).toHaveBeenCalledWith(pending.blob, pending.title, pending.durationMs, "Microphone"),
+      // A stash written before the wall-clock fields existed still uploads; the times are simply absent.
+      expect(api.upload).toHaveBeenCalledWith(
+        pending.blob, pending.title, pending.durationMs, "Microphone", null, null,
+        { startedAt: undefined, endedAt: undefined },
+      ),
     );
     await waitFor(() => expect(clearPendingRecording).toHaveBeenCalledWith("u1"));
     expect(onUploaded).toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("button", { name: /upload now/i })).toBeNull());
+  });
+
+  it("replays the stashed wall clock rather than stamping the recovery moment", async () => {
+    // A recording recovered on a later visit still happened when it happened. Uploading it with "now" would
+    // silently lose the meeting match that stashing it was meant to protect.
+    const stashed = { ...pending, startedAt: 1_760_000_000_000, endedAt: 1_760_003_600_000 };
+    (loadPendingRecording as Mock).mockResolvedValue(stashed);
+    (api.upload as Mock).mockResolvedValue({});
+
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /upload now/i }));
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+    expect((api.upload as Mock).mock.calls[0][6]).toEqual({
+      startedAt: 1_760_000_000_000,
+      endedAt: 1_760_003_600_000,
+    });
   });
 
   it("attaches screenshots stashed during a failed take once the audio recovers", async () => {
@@ -419,6 +440,61 @@ describe("Recorder source selection", () => {
     await waitFor(() => expect(api.upload).toHaveBeenCalled());
     expect((api.upload as Mock).mock.calls[0][3]).toBe("Microphone");
     expect(getCombinedStream).not.toHaveBeenCalled();
+  });
+
+  it("reports the wall clock it started and stopped, not just the recorded duration", async () => {
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.upload as Mock).mockResolvedValue({ id: "r1" });
+    render(<Recorder onUploaded={() => {}} />);
+
+    const before = Date.now();
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+    const times = (api.upload as Mock).mock.calls[0][6] as { startedAt: number; endedAt: number };
+    expect(times.startedAt).toBeGreaterThanOrEqual(before);
+    expect(times.endedAt).toBeGreaterThanOrEqual(times.startedAt);
+  });
+
+  it("keeps the original start across a pause, which Timing itself discards", async () => {
+    // timing.pause() folds runningSince into accumulatedMs and nulls it, so the start instant is gone from
+    // Timing by the time upload() runs. Written to fail if startedAt is ever derived from timingRef.
+    //
+    // Drives a virtual clock by stubbing Date.now (what the recorder actually reads) rather than installing
+    // fake timers, which would freeze Testing Library's own polling and hang the test.
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.upload as Mock).mockResolvedValue({ id: "r1" });
+    const t0 = 1_760_000_000_000;
+    let clock = t0;
+    const now = vi.spyOn(Date, "now").mockImplementation(() => clock);
+    try {
+      render(<Recorder onUploaded={() => {}} />);
+
+      fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+      await screen.findByRole("button", { name: /^stop$/i });
+
+      // Record 1 min, pause 20 min, record 1 more, then stop: 2 min of audio across a 22 min wall clock.
+      clock = t0 + 60_000;
+      fireEvent.click(screen.getByRole("button", { name: /^pause$/i }));
+      clock = t0 + 21 * 60_000;
+      fireEvent.click(screen.getByRole("button", { name: /^resume$/i }));
+      clock = t0 + 22 * 60_000;
+      fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+      await waitFor(() => expect(api.upload).toHaveBeenCalled());
+      const call = (api.upload as Mock).mock.calls[0];
+      const times = call[6] as { startedAt: number; endedAt: number };
+      // The start is when Record was pressed, not when the last segment resumed.
+      expect(times.startedAt).toBe(t0);
+      // The span is the full 22 minutes, while durationMs stays the 2 minutes actually captured - which is
+      // exactly why endedAt has to travel separately from durationMs.
+      expect(times.endedAt - times.startedAt).toBe(22 * 60_000);
+      expect(call[2]).toBe(2 * 60_000);
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it("files the recording into the folder resolved at Record time", async () => {
