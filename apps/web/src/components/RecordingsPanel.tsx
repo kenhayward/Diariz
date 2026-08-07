@@ -4,16 +4,16 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
-import { usePanelTab, setPanelTab, type PanelTab } from "../lib/panelTab";
+import { usePanelTab, setPanelTab } from "../lib/panelTab";
 import { createHub } from "../lib/signalr";
-import ToolbarButton, { iconProps } from "./ToolbarButton";
+import { iconProps } from "./ToolbarButton";
 import { useSelection } from "../lib/selection";
 import { useMoveClipboard } from "../lib/moveClipboard";
 import { useRoom, useRoomBasePath } from "../lib/rooms";
-import { computeReorder, inDisplayOrder, draggedRecordingIds } from "../lib/reorder";
+import { computeReorder, draggedRecordingIds } from "../lib/reorder";
 import { useDragAutoScroll } from "../lib/dragAutoScroll";
-import { buildRecordingTree, reorderBeforeSection, appendSectionUnder, type SectionNode } from "../lib/recordingTree";
-import { childrenOf, breadcrumbOf, recordingCountOf, sectionCreateTarget, depthOf, MAX_FOLDER_DEPTH } from "../lib/drillView";
+import { buildRecordingTree, reorderBeforeSection, appendSectionUnder } from "../lib/recordingTree";
+import { childrenOf, breadcrumbOf, recordingCountOf, depthOf, MAX_FOLDER_DEPTH } from "../lib/drillView";
 import { useDrillSectionId } from "../lib/drillRoute";
 import { SECTION_MIME, dragHasFiles } from "../lib/dragTypes";
 import DrillBreadcrumb from "./nav/DrillBreadcrumb";
@@ -22,6 +22,10 @@ import SectionRow from "./nav/SectionRow";
 import SearchBar from "./nav/SearchBar";
 import { RecordingRow } from "./nav/RecordingRow";
 import { TagCountSlider } from "./nav/TagCountSlider";
+import TabStrip from "./nav/TabStrip";
+import ListToolbar from "./nav/ListToolbar";
+import UploadStatusList from "./nav/UploadStatusList";
+import GroupSelectCheckbox from "./nav/GroupSelectCheckbox";
 import MonthCalendar from "./MonthCalendar";
 import { recordingDayKeys, dayKey, eventDayKeys, visibleGridRange, dayItems } from "../lib/calendar";
 import { useUpload } from "../lib/uploadContext";
@@ -32,8 +36,7 @@ import ActionsTab from "./ActionsTab";
 import EditActionModal from "./EditActionModal";
 import TagCloud from "./TagCloud";
 import TagCloudModal from "./TagCloudModal";
-import type { UploadItem } from "../lib/uploadQueue";
-import type { ActionListItem, CalendarEvent, RecordingSummary, SectionDto } from "../lib/types";
+import type { ActionListItem, CalendarEvent, RecordingSummary } from "../lib/types";
 import { RoomPermission } from "../lib/types";
 
 const TAG_LIMIT_KEY = "diariz.recordings.tagLimit";
@@ -338,12 +341,14 @@ export default function RecordingsPanel() {
   if (isLoading) return <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>;
 
   // Select mode: a checkbox that selects/deselects every recording directly in this section at once.
-  const selectAllFor = (node: SectionNode) => {
-    const ids = node.items.map((i) => i.id);
+  /// The select-all checkbox for a group of rows, or nothing when there is no group to select (not in
+  /// select mode, or the level is empty). Takes the name and ids rather than a `SectionNode`: the root
+  /// level is not a node, and asking for one made the call site invent `{ id: "__root__", children: [] }`.
+  const selectAllFor = (groupName: string, ids: string[]) => {
     if (!selection.selectMode || ids.length === 0) return undefined;
     return (
       <GroupSelectCheckbox
-        groupName={node.name}
+        groupName={groupName}
         ids={ids}
         selectedIds={selection.selectedIds}
         onChange={(checkAll) => {
@@ -361,7 +366,7 @@ export default function RecordingsPanel() {
   const cutRecordingIds = cut?.kind === "recordings" ? cut.ids : [];
   const cutFolderIds = cut?.kind === "folders" ? cut.ids : [];
 
-  const rowList = (sectionId: string | null, items: RecordingSummary[], indentClass = "pl-3") => {
+  const rowList = (sectionId: string | null, items: RecordingSummary[]) => {
     const ids = items.map((i) => i.id);
     return (
       <ul className="divide-y dark:divide-gray-800">
@@ -369,7 +374,7 @@ export default function RecordingsPanel() {
           <RecordingRow
             key={r.id}
             r={r}
-            indentClass={indentClass}
+            indentClass="pl-3"
             selectMode={selection.selectMode}
             selected={selection.selectedIds.includes(r.id)}
             onToggleSelect={() => selection.toggle(r.id)}
@@ -425,8 +430,6 @@ export default function RecordingsPanel() {
       <div className="flex min-h-0 flex-1">
         <TabStrip tab={tab} onSelect={selectTab} />
         {tab === "list" ? (
-          // min-w-0 lets this flex child shrink to the panel width so long recording names truncate
-          // instead of forcing the column wider than the panel.
           // min-w-0 lets this flex child shrink to the panel width so long recording names truncate
           // instead of forcing the column wider than the panel.
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -513,7 +516,7 @@ export default function RecordingsPanel() {
 
               {level.items.length > 0 && (
                 <div className="flex items-center gap-2 px-2 pb-1 pt-2">
-                  {selectAllFor({ id: drill.sectionId ?? "__root__", name: currentLevelName, items: level.items, children: [] })}
+                  {selectAllFor(currentLevelName, levelIds)}
                   <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
                     {t("drillDirectlyIn", { name: currentLevelName })} · {level.items.length}
                   </p>
@@ -659,357 +662,6 @@ export default function RecordingsPanel() {
         />
       )}
     </div>
-  );
-}
-
-/// Vertical List / Calendar / Actions tabs, sitting to the left of the panel's scroll area (below the toolbar).
-function TabStrip({
-  tab,
-  onSelect,
-}: {
-  tab: PanelTab;
-  onSelect: (t: PanelTab) => void;
-}) {
-  const { t } = useTranslation("workspace");
-  const item = (key: PanelTab, label: string) => (
-    <button
-      type="button"
-      onClick={() => onSelect(key)}
-      aria-pressed={tab === key}
-      className={`w-full px-2 py-2 text-[11px] font-medium [writing-mode:vertical-rl] ${
-        tab === key
-          ? "bg-white text-blue-700 dark:bg-gray-900 dark:text-blue-300"
-          : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-      }`}
-    >
-      {label}
-    </button>
-  );
-  return (
-    <div className="flex w-7 shrink-0 flex-col items-stretch border-r bg-gray-50 dark:border-gray-800 dark:bg-gray-950/40">
-      {item("list", t("tabList"))}
-      {item("calendar", t("tabCalendar"))}
-      {item("actions", t("tabActions"))}
-      {item("tags", t("tabTags"))}
-    </div>
-  );
-}
-
-/// Top-of-list toolbar: create a section (group), toggle multi-select, bulk-delete audio for the
-/// selection, and refresh the list (picks up changes made on another machine/browser).
-function ListToolbar({
-  recordings,
-  listMode,
-  allowFolders,
-  sections,
-  drillSectionId,
-  roomId,
-  onError,
-}: {
-  recordings: RecordingSummary[];
-  listMode: boolean;
-  // Shown when the caller can manage the current room's contents (folders are per-room).
-  allowFolders: boolean;
-  // The room's folders and where the list is drilled to - together they decide where the folder button
-  // creates: at the top level from the root, inside the folder you are browsing from one level in.
-  sections: SectionDto[];
-  drillSectionId: string | null;
-  // The room to create sections in (a shared room, or undefined for the personal room).
-  roomId?: string | null;
-  onError: (msg: string | null) => void;
-}) {
-  const { t } = useTranslation("workspace");
-  const qc = useQueryClient();
-  const { selectMode, setSelectMode, selectedIds, clear } = useSelection();
-  const { cutRecordings } = useMoveClipboard();
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  // Creating a folder while browsing inside one should land it where you are looking, so the button's
-  // parent, label and placeholder all follow the drill. `blocked` means the drill is at the depth cap, or
-  // the folder id is no longer in the tree (see `sectionCreateTarget`): the button stays visible but
-  // disabled, saying why, rather than quietly creating the folder at some other level.
-  const target = sectionCreateTarget(sections, drillSectionId);
-  const parentId = target.kind === "child" ? target.parent.id : null;
-  const createLabel =
-    target.kind === "blocked"
-      ? t("newSectionNestCapped")
-      : target.kind === "child"
-        ? t("newSubSection")
-        : t("newSection");
-  const createPlaceholder =
-    target.kind === "child"
-      ? t("newSubSectionPlaceholder", { parent: target.parent.name })
-      : t("newSectionPlaceholder");
-
-  async function create(e: React.FormEvent) {
-    e.preventDefault();
-    const n = name.trim();
-    if (!n) return;
-    setBusy(true);
-    try {
-      await api.createSection(n, parentId, roomId);
-      qc.invalidateQueries({ queryKey: ["sections"] });
-      qc.invalidateQueries({ queryKey: ["recordings"] });
-      setName("");
-      setOpen(false);
-    } catch (e) {
-      onError(apiErrorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // Of the selected recordings, those that still have audio to delete.
-  const selectedWithAudio = recordings.filter((r) => selectedIds.includes(r.id) && r.hasAudio);
-
-  async function deleteSelectedAudio() {
-    const ids = selectedWithAudio.map((r) => r.id);
-    if (ids.length === 0) return;
-    if (!window.confirm(t("confirmDeleteAudioBulk", { count: ids.length }))) return;
-    onError(null);
-    try {
-      await api.deleteAudioBulk(ids);
-      clear();
-      qc.invalidateQueries({ queryKey: ["recordings"] });
-      qc.invalidateQueries({ queryKey: ["user-storage"] }); // freed quota → refresh the account menu
-    } catch (e) {
-      onError(apiErrorMessage(e));
-    }
-  }
-
-  async function mergeSelected() {
-    if (selectedIds.length < 2) return;
-    if (!window.confirm(t("confirmMergeRecordings", { count: selectedIds.length }))) return;
-    onError(null);
-    try {
-      await api.mergeRecordings(selectedIds);
-      clear();
-      qc.invalidateQueries({ queryKey: ["recordings"] }); // survivor flips to "Merging" until the worker finishes
-      qc.invalidateQueries({ queryKey: ["user-storage"] });
-    } catch (e) {
-      onError(apiErrorMessage(e));
-    }
-  }
-
-  // Stages the selection on the move clipboard - nothing touches the server here. The source recorded is
-  // this drill level (not the selected recordings' own sectionId, which would be the same thing at this
-  // level anyway) so a later paste onto the same folder can be detected and disabled.
-  //
-  // selectedIds is in TICK order (checkbox toggles append), not display order - ticking the third row then
-  // the first would otherwise cut them third-then-first. The product decision is that a paste "preserves
-  // relative order", which has to mean the order the rows are shown in, not the order they were clicked -
-  // so re-sort into `recordings`' own order (the API already returns it in display/position order, the
-  // same order the rows render in) before it ever reaches the clipboard.
-  function cutSelected() {
-    if (selectedIds.length === 0) return;
-    cutRecordings(inDisplayOrder(selectedIds, recordings.map((r) => r.id)), drillSectionId, roomId ?? null);
-  }
-
-  return (
-    <div className="flex h-9 items-center justify-between gap-2 border-b px-3 dark:border-gray-700">
-      {open ? (
-        <form onSubmit={create} className="flex min-w-0 flex-1 items-center gap-1">
-          <input
-            autoFocus
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
-            placeholder={createPlaceholder}
-            aria-label={createPlaceholder}
-            className="min-w-0 flex-1 rounded border px-2 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          />
-          <button
-            type="submit"
-            disabled={busy || !name.trim()}
-            className="rounded border px-2 py-0.5 text-xs hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-          >
-            {t("common:create")}
-          </button>
-        </form>
-      ) : (
-        <div className="flex items-center gap-0.5">
-          {/* New Section / Select / bulk actions apply to the List tab only; Refresh works in both. */}
-          {allowFolders && (
-            // The title lives on the wrapper, not the button: ToolbarButton disables pointer events when
-            // disabled, so a title on the button itself would never surface the reason it is greyed out.
-            <span title={createLabel}>
-              <ToolbarButton
-                label={createLabel}
-                onClick={() => setOpen(true)}
-                disabled={!listMode || target.kind === "blocked"}
-                icon={<FolderPlusIcon />}
-              />
-            </span>
-          )}
-          <ToolbarButton
-            label={selectMode ? t("doneSelecting") : t("selectRecordings")}
-            onClick={() => setSelectMode(!selectMode)}
-            active={selectMode}
-            disabled={!listMode}
-            icon={<SelectIcon />}
-          />
-          {selectMode && (
-            <ToolbarButton
-              label={t("mergeTranscripts")}
-              onClick={mergeSelected}
-              disabled={!listMode || selectedIds.length < 2}
-              icon={<MergeIcon />}
-            />
-          )}
-          {selectMode && (
-            <ToolbarButton
-              label={t("recordings:deleteAudio")}
-              onClick={deleteSelectedAudio}
-              disabled={!listMode || selectedWithAudio.length === 0}
-              icon={<TrashIcon />}
-            />
-          )}
-          {selectMode && (
-            // Disabled in a shared room, with the reason stated. Pasting INTO a shared room is blocked, and
-            // so is pasting a shared-room cut anywhere else - so a cut staged here would have nowhere at all
-            // to go, and offering it would be a trap. The title rides on the wrapper, not the button:
-            // ToolbarButton drops pointer events when disabled, so a title on the button itself would never
-            // surface (same reason the New section button wraps its own).
-            <span title={roomId != null ? t("cutSharedRoomBlocked") : undefined}>
-              <ToolbarButton
-                label={t("cut")}
-                onClick={cutSelected}
-                disabled={!listMode || selectedIds.length === 0 || roomId != null}
-                icon={<CutIcon />}
-              />
-            </span>
-          )}
-          <ToolbarButton
-            label={t("refresh")}
-            onClick={() => {
-              qc.invalidateQueries({ queryKey: ["recordings"] });
-              qc.invalidateQueries({ queryKey: ["sections"] });
-            }}
-            icon={<RefreshIcon />}
-          />
-          {selectMode && selectedIds.length > 0 && (
-            <span className="text-xs text-blue-700 dark:text-blue-300">{selectedIds.length}</span>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-const FolderPlusIcon = () => (
-  <svg {...iconProps}>
-    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-    <line x1="12" y1="11" x2="12" y2="17" />
-    <line x1="9" y1="14" x2="15" y2="14" />
-  </svg>
-);
-const SelectIcon = () => (
-  <svg {...iconProps}>
-    <path d="M9 11l3 3L22 4" />
-    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-  </svg>
-);
-const RefreshIcon = () => (
-  <svg {...iconProps}>
-    <path d="M23 4v6h-6" />
-    <path d="M1 20v-6h6" />
-    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-  </svg>
-);
-const TrashIcon = () => (
-  <svg {...iconProps}>
-    <polyline points="3 6 5 6 21 6" />
-    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-  </svg>
-);
-const MergeIcon = () => (
-  <svg {...iconProps}>
-    <path d="M6 3v6a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3" />
-    <line x1="12" y1="15" x2="12" y2="21" />
-  </svg>
-);
-const CutIcon = () => (
-  <svg {...iconProps}>
-    <circle cx="6" cy="6" r="3" />
-    <circle cx="6" cy="18" r="3" />
-    <line x1="20" y1="4" x2="8.12" y2="15.88" />
-    <line x1="14.47" y1="14.48" x2="20" y2="20" />
-    <line x1="8.12" y1="8.12" x2="12" y2="12" />
-  </svg>
-);
-
-/// Per-file status for the current upload batch (queued/uploading/done/failed). Tolerant of partial
-/// failures — a rejected file shows its reason and the rest still upload.
-function UploadStatusList({ items, onClear }: { items: UploadItem[]; onClear: () => void }) {
-  const { t } = useTranslation("workspace");
-  if (items.length === 0) return null;
-  const settled = items.every((i) => i.status === "done" || i.status === "failed");
-  const tag: Record<UploadItem["status"], string> = {
-    queued: "text-gray-400",
-    uploading: "text-amber-600 dark:text-amber-400",
-    done: "text-green-600 dark:text-green-400",
-    failed: "text-red-600 dark:text-red-400",
-  };
-  const label: Record<UploadItem["status"], string> = {
-    queued: t("uploadQueued"),
-    uploading: t("uploadUploading"),
-    done: t("uploadDone"),
-    failed: t("uploadFailed"),
-  };
-  return (
-    <div className="border-b px-3 py-2 dark:border-gray-800">
-      <div className="mb-1 flex items-center justify-between">
-        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{t("uploadsHeader")}</span>
-        {settled && (
-          <button type="button" onClick={onClear} className="text-xs text-gray-400 hover:underline">
-            {t("clear")}
-          </button>
-        )}
-      </div>
-      <ul className="space-y-0.5">
-        {items.map((i) => (
-          <li key={i.id} className="flex items-center justify-between gap-2 text-xs">
-            <span className="truncate dark:text-gray-300" title={i.name}>{i.name}</span>
-            <span className={`shrink-0 ${tag[i.status]}`} title={i.error}>{label[i.status]}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-/// The group-level select-all checkbox shown in Select mode: checked when every recording in the group is
-/// selected, indeterminate when only some are. Toggling selects/deselects the whole group at once.
-function GroupSelectCheckbox({
-  groupName,
-  ids,
-  selectedIds,
-  onChange,
-}: {
-  groupName: string;
-  ids: string[];
-  selectedIds: string[];
-  onChange: (selectAll: boolean) => void;
-}) {
-  const { t } = useTranslation("workspace");
-  const ref = useRef<HTMLInputElement>(null);
-  const selected = ids.filter((id) => selectedIds.includes(id)).length;
-  const all = ids.length > 0 && selected === ids.length;
-  const some = selected > 0 && !all;
-  useEffect(() => {
-    if (ref.current) ref.current.indeterminate = some;
-  }, [some]);
-
-  return (
-    <input
-      ref={ref}
-      type="checkbox"
-      checked={all}
-      aria-label={t("selectAllIn", { section: groupName })}
-      onChange={() => onChange(!all)}
-      className="shrink-0"
-    />
   );
 }
 
