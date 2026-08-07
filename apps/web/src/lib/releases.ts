@@ -60,6 +60,20 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.186.7",
+    date: "2026-08-07",
+    pr: 467,
+    headline: "Groundwork: the meetings toolbar and tab strip move out",
+    summary:
+      "Nothing changes on screen. The toolbar above the meetings list, the vertical tab strip, the upload " +
+      "progress list and the group tick-box are now four separate components rather than part of one very " +
+      "large file. The panel is down from 1,068 lines to 720 - a little over half what it was at the start " +
+      "of this work - and the 85 tests covering it are unchanged, which is what shows the behaviour is too.",
+    changed: [
+      "Internal only: ListToolbar, TabStrip, UploadStatusList and GroupSelectCheckbox moved into components/nav/. No user-visible change.",
+    ],
+  },
+  {
     version: "0.186.6",
     date: "2026-08-07",
     pr: 466,
