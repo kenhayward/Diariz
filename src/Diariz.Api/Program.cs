@@ -11,6 +11,7 @@ using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -43,6 +44,13 @@ builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailO
 builder.Services.Configure<AppPublicOptions>(builder.Configuration.GetSection(AppPublicOptions.Section));
 builder.Services.Configure<IdentificationOptions>(builder.Configuration.GetSection(IdentificationOptions.Section));
 builder.Services.Configure<UploadOptions>(builder.Configuration.GetSection(UploadOptions.Section));
+// The multipart form reader keeps its own body ceiling, enforced while binding the form and NOT raised by
+// an action's [RequestSizeLimit]. Its 128 MB default sat below both nginx (1024m) and the upload endpoint's
+// own 1 GiB limit, so a long recording failed with "Multipart body length limit 134217728 exceeded" before
+// the action - and therefore before the app's own size check could explain itself. Every other multipart
+// endpoint (attachments, screenshots, chat) stays bounded by its own smaller [RequestSizeLimit]; the
+// stricter of the two always wins, so lifting this one does not loosen those.
+builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = UploadOptions.MaxRequestBytes);
 builder.Services.Configure<AttachmentOptions>(builder.Configuration.GetSection(AttachmentOptions.Section));
 builder.Services.Configure<ScreenshotOptions>(builder.Configuration.GetSection(ScreenshotOptions.Section));
 builder.Services.Configure<McpOptions>(builder.Configuration.GetSection(McpOptions.Section));

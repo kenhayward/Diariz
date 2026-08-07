@@ -60,6 +60,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.186.12",
+    date: "2026-08-07",
+    pr: 472,
+    headline: "Long recordings upload again",
+    summary:
+      "Any recording or file over 128 MB - roughly two hours of audio - was refused with a technical " +
+      "message about a multipart size limit, even though the stated limit is 500 MB and the server was " +
+      "configured to accept up to 1 GB. A separate, easily missed limit inside the web framework was " +
+      "capping the request at 128 MB before the upload reached the part of the app that knows what the real " +
+      "limit is. That cap is now aligned with the rest, so a long recording uploads normally, and a file " +
+      "that genuinely is too large gets the plain \"maximum upload size is 500 MB\" message instead of a " +
+      "framework error.",
+    fixed: [
+      "Uploads and recordings between 128 MB and 500 MB no longer fail with \"Multipart body length limit 134217728 exceeded\" - the framework's separate multipart limit was below the app's own.",
+      "A file that really is over the limit now returns the readable size message rather than a form-parsing error.",
+    ],
+  },
+  {
     version: "0.186.11",
     date: "2026-08-07",
     pr: 471,

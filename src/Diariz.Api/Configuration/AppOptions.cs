@@ -290,7 +290,25 @@ public class McpOAuthOptions
 public class UploadOptions
 {
     public const string Section = "Uploads";
-    /// <summary>Max size of a single uploaded file, in bytes (in addition to the per-user storage quota).</summary>
+
+    /// <summary>The largest request body the recording-upload endpoint will accept, in bytes - the ceiling
+    /// every other upload limit sits under. Deliberately a <c>const</c>, not a setting: it has to be usable
+    /// from an attribute (<c>[RequestSizeLimit]</c> on <c>RecordingsController.Upload</c>) and from
+    /// <c>Program.cs</c>'s <c>FormOptions.MultipartBodyLengthLimit</c>, and those two must not drift.
+    ///
+    /// <para>The multipart one is the trap: <c>[RequestSizeLimit]</c> does <b>not</b> raise the form
+    /// reader's own ceiling, which defaults to 128 MB. Left alone, every upload between 128 MB and
+    /// <see cref="MaxBytes"/> failed while the form was being parsed - a 400 reading "Failed to read the
+    /// request form. Multipart body length limit 134217728 exceeded" - before the action, and so before the
+    /// friendly "maximum upload size is 500 MB" message, ever ran.</para>
+    ///
+    /// <para>Matches <c>client_max_body_size</c> in <c>apps/web/nginx.conf</c>. Raising one means raising
+    /// the other, or the proxy rejects what the app would have accepted.</para></summary>
+    public const long MaxRequestBytes = 1024L * 1024 * 1024; // 1 GiB
+
+    /// <summary>Max size of a single uploaded file, in bytes (in addition to the per-user storage quota).
+    /// Enforced by the action itself, so it is the limit that produces a readable 413; it must stay at or
+    /// below <see cref="MaxRequestBytes"/>, which the request never gets past.</summary>
     public long MaxBytes { get; set; } = 500L * 1024 * 1024; // 500 MB (~4 h of typical voice audio)
     /// <summary>Accept M4A/AAC uploads. AAC has active patents, so it can be disabled for maximum
     /// commercial caution; the royalty-free formats (WAV/MP3/FLAC/Ogg/Opus/WebM) are always accepted.</summary>

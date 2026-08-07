@@ -262,7 +262,9 @@ public class RecordingsController : ControllerBase
         "against your storage quota (413 when it would be exceeded).\n\n" +
         "The recording is always filed in your personal room. Passing `roomId` for a shared room also shares it " +
         "there and needs `CreateRecording` in that room; `sectionId` files it in a folder of your personal room.")]
-    [RequestSizeLimit(1024L * 1024 * 1024)] // 1 GiB
+    // Kestrel's per-request ceiling. NOT the only one that matters: the multipart form reader has its own,
+    // which this attribute does not touch - see UploadOptions.MaxRequestBytes and Program.cs's FormOptions.
+    [RequestSizeLimit(UploadOptions.MaxRequestBytes)]
     public async Task<ActionResult<RecordingSummaryDto>> Upload(
         [FromForm] IFormFile audio, [FromForm] string? title, [FromForm] long durationMs,
         [FromForm] RecordingSource source = RecordingSource.Microphone, [FromForm] Guid? sectionId = null,
