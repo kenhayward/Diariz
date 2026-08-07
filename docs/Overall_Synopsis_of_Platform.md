@@ -1518,10 +1518,32 @@ into it with no URL or per-user setup at all.
   **`CalendarFeedsController`** (`/api/calendar/feeds`, JWT, owner-scoped): `GET` list, `POST`/`PUT`
   (name/url/colour/enabled - the URL is validated and **test-fetched** via `ProbeAsync` before it's stored, so a
   broken/unsafe URL is rejected up front; ≤20 feeds/user), `DELETE`. Events are always fetched **live** and never
-  stored. **Ical.Net** (MIT) is a new API dependency. Recording↔meeting **linking stays Google-only** (ICS
-  events are display-only in the Calendar tab). Users manage their feeds in **Preferences → Calendar feeds**
-  (`CalendarFeedsSection`: add/rename/recolour/enable/remove, with the last-fetch error surfaced per feed); the
-  Calendar tab renders feed events **coloured but non-clickable** (a row whose `calendarId` starts `ics:`).
+  stored. **Ical.Net** (MIT) is a new API dependency. Users manage their feeds in **Preferences → Calendar feeds**
+  (`CalendarFeedsSection`: add/rename/recolour/enable/remove, with the last-fetch error surfaced per feed).
+  Feed events are **first-class since `ICalendarAggregator`**: they participate in recording↔meeting matching
+  and linking, and resolve by id for the detail view. (Both were previously Google-only, so a feeds-only user
+  got a populated Calendar tab and nothing else - see the aggregator bullet below.)
+- **`ICalendarAggregator` - one calendar, three sources:** `CalendarAggregator` composes
+  `IGoogleCalendarClient` + `IIcsCalendarClient` + `IOutlookCalendarStore` and is the **single** place they are
+  combined. Before it, the merge lived inline in `CalendarController.Events`, so only the Calendar tab ever saw
+  all of them: `RecordingsController` called the Google client directly and gated on `GoogleCalendarGranted`,
+  which meant a feeds-only user **could not have a recording matched at all**, and
+  `CalendarController.Event` asked only Google, so an `.ics` event's detail fetch **404'd**. Both are fixed by
+  construction here.
+  - `ListEventsAsync` is the old inline merge, lifted unchanged (Google null = not connected, the others still
+    contribute). `GetEventAsync` **routes by the id's scheme** - `outlook:` to the store, `ics:` resolved out of
+    a feed listing (a feed is parsed wholesale, so there is no by-id fetch), anything else to Google.
+    `HasAnySourceAsync` answers "do you have a calendar at all" **from the database** (a Google grant, an enabled
+    feed, or an enabled Outlook device) rather than probing the clients, since it only gates whether to offer a
+    match and must not cost a Google round trip plus every feed fetch.
+  - **`PickBest` moved** to a pure `CalendarMatching`. It was never Google-specific, but living on the Google
+    client meant only Google events could ever be scored by it. `CalendarEvent` carries no provider marker, so
+    every source is matched identically - and all-day entries are still skipped whatever their origin.
+  - **One failure is still surfaced rather than degraded.** `FetchAsync` returns a `CalendarFetch` carrying
+    `GoogleUnavailable` (granted, but no token - a revoked/expired refresh token). `CalendarMatch` reports
+    "reconnect Calendar in Preferences" **only when Google is the user's sole calendar**; with a feed or an
+    Outlook device also connected, those legitimately answer and an error would be wrong. Everything else
+    degrades quietly, because a revoked Google token is the one calendar failure a user can actually fix.
 - **Desktop Outlook mirror (Phase 4 feature - storage layer):** a third calendar source, and the only one that
   **inverts the fetch model**. Google and `.ics` live on the internet, so the API pulls them live at read time
   and stores nothing (an invariant `RecordingCalendarLink`'s doc comment calls out explicitly). A classic

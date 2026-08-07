@@ -45,9 +45,15 @@ public class CalendarControllerTests
             Task.FromResult((true, (string?)null));
     }
 
+    /// <summary>Builds the controller over a <b>real</b> <see cref="CalendarAggregator"/> wrapping the fakes, so
+    /// these tests still cover the actual merge rather than a fake of it - the merge moved out of the controller
+    /// but its behaviour is still this controller's contract.</summary>
     private static CalendarController Build(
-        FakeCalendarClient cal, Guid userId, FakeIcsClient? ics = null, IGoogleCalendarSelectionStore? selection = null) =>
-        new(cal, ics ?? new FakeIcsClient(), selection ?? new GoogleCalendarSelectionStore(TestDb.Create()))
+        FakeCalendarClient cal, Guid userId, FakeIcsClient? ics = null, IGoogleCalendarSelectionStore? selection = null,
+        IOutlookCalendarStore? outlook = null) =>
+        new(cal,
+            new CalendarAggregator(cal, ics ?? new FakeIcsClient(), outlook ?? new NoOutlookDevices(), TestDb.Create()),
+            selection ?? new GoogleCalendarSelectionStore(TestDb.Create()))
         {
             ControllerContext = Http.Context(userId),
         };

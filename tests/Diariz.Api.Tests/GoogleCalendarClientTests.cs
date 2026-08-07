@@ -172,53 +172,8 @@ public class GoogleCalendarClientTests
         Assert.Null(await client.GetEventAsync(Guid.NewGuid(), "gone"));
     }
 
-    // ---- PickBest ----
-
-    [Fact]
-    public void PickBest_ChoosesTheMostOverlappingEvent()
-    {
-        var events = new List<CalendarEvent>
-        {
-            new("a", "Barely", At("2026-07-02T08:00:00Z"), At("2026-07-02T09:05:00Z"), null),
-            new("b", "Main", At("2026-07-02T09:00:00Z"), At("2026-07-02T10:00:00Z"), null),
-        };
-        // Recording 09:00–10:00: 'b' overlaps a full hour, 'a' only 5 min.
-        var best = GoogleCalendarClient.PickBest(events, At("2026-07-02T09:00:00Z"), At("2026-07-02T10:00:00Z"));
-        Assert.Equal("b", best!.Id);
-    }
-
-    [Fact]
-    public void PickBest_ReturnsNull_WhenNothingOverlaps()
-    {
-        var events = new List<CalendarEvent>
-        {
-            new("x", "Earlier", At("2026-07-02T06:00:00Z"), At("2026-07-02T07:00:00Z"), null),
-        };
-        Assert.Null(GoogleCalendarClient.PickBest(events, At("2026-07-02T09:00:00Z"), At("2026-07-02T10:00:00Z")));
-    }
-
-    [Fact]
-    public void PickBest_IgnoresAllDayEvents_EvenWhenTheyOverlapMost()
-    {
-        var events = new List<CalendarEvent>
-        {
-            // An all-day event spans the whole recording, but it isn't a meeting - never match it.
-            new("holiday", "Company holiday", At("2026-07-02T00:00:00Z"), At("2026-07-03T00:00:00Z"), null, AllDay: true),
-            new("b", "Standup", At("2026-07-02T09:00:00Z"), At("2026-07-02T09:15:00Z"), null),
-        };
-        var best = GoogleCalendarClient.PickBest(events, At("2026-07-02T09:00:00Z"), At("2026-07-02T10:00:00Z"));
-        Assert.Equal("b", best!.Id);
-    }
-
-    [Fact]
-    public void PickBest_ReturnsNull_WhenOnlyAnAllDayEventOverlaps()
-    {
-        var events = new List<CalendarEvent>
-        {
-            new("holiday", "Company holiday", At("2026-07-02T00:00:00Z"), At("2026-07-03T00:00:00Z"), null, AllDay: true),
-        };
-        Assert.Null(GoogleCalendarClient.PickBest(events, At("2026-07-02T09:00:00Z"), At("2026-07-02T10:00:00Z")));
-    }
+    // PickBest and its tests moved to CalendarMatching/CalendarMatchingTests - the rule is
+    // source-agnostic, and living here meant only Google events could ever reach it.
 
     // ---- ListEventsAsync ----
 

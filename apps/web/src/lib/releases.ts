@@ -34,7 +34,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Rooms** | A private Personal Room per account plus shareable Rooms: invite users and groups with per-member permissions. Each Shared Room has its **own folder structure** (sections/sub-sections, drag-and-drop, per-room order) and its own List/Calendar/Actions/Tags scoped to it; record or upload files straight into a room (your Personal Room keeps the original), and search + chat over every room you belong to. A member who can read a shared recording sees its notes and screenshots too - only the owner can add, edit, or delete them. Your Google Calendar and its linking stay personal. The switcher shows each room's folder and meeting counts (shared ones labelled), ticks the one you are in, and remembers where you were. Manage rooms from the switcher. |
 | **Organise & merge** | Folders nested up to 8 levels deep with drag-and-drop (dragging one of several ticked rows moves the whole selection); the meetings list drills in one folder at a time (coloured folder rows with counts, a breadcrumb showing the full path with every part clickable, browser back pops a level) so it stays readable however many recordings you have, with **Open section page** in the breadcrumb's menu as a separate target from browsing deeper; an open recording shows its folder path as clickable chips under its name, each taking the list straight to that folder; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); cut one or more recordings, or a folder, and paste them into another folder in one move (landing at the bottom, in the order you cut them), with the Paste control showing why it's disabled when a move isn't allowed yet; browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
-| **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. |
+| **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds. Every calendar you connect is treated the same: meetings from any of them show on the Calendar tab, match to a recording, and open with their full invite details. |
 | **API access** | Generate a personal API token (when enabled), read-only or read-write, with an optional expiry date, to call the REST API as yourself, with a built-in API reference documenting every endpoint - what it does, who may call it, and what it changes. |
 | **Automations (webhooks)** | When enabled, register outbound webhooks from Preferences that fire when a recording is created, finishes or fails transcription, a summary / meeting minutes / action items / tags become ready (each carrying its output), or a formula finishes or fails. Every recording event also carries an **attendees** list - who spoke, the person they are, their title, company, and internal or external - with email addresses and phone numbers included only when that automation opts in. Signed deliveries with automatic retries (rate-limited per automation and 429-aware), a test-event button, auto-pause after repeated failures, and a Pause / Resume button that stops deliveries reversibly (deleting an automation discards its signing secret; pausing keeps it). Admins can also define named Workflow Signals and wire a platform automation to one, so a formula author just picks "When this finishes, trigger: ..." in the formula editor - no URL or per-user setup - and the formula's output is delivered inline to everyone routed through that signal. |
 | **n8n** | A published community node (\`n8n-nodes-diariz\`): a trigger that registers its own automation and verifies every signed delivery, with a Platform scope for administrators that adds events across every user including Feedback Received, plus an action node covering the whole REST API - with dropdowns listing your real recordings and formulas, files in and out, and a Run Formula step that waits for the document to finish. |
@@ -59,6 +59,33 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.189.0",
+    date: "2026-08-07",
+    pr: 477,
+    headline: "Subscribed calendar feeds are proper calendars now",
+    summary:
+      "If your calendar came from a subscribed iCalendar (.ics) feed rather than Google, Diariz would draw " +
+      "your meetings on the Calendar tab and then treat them as decoration. It would not suggest which meeting " +
+      "a recording came from - it asked you to connect Google first, even though you plainly had a calendar - " +
+      "and clicking one of those meetings to see who was invited found nothing.\n\n" +
+      "Both worked for Google and only Google, because the code that combined your calendars lived in the part " +
+      "of the app that draws the month view, while the part that matches recordings to meetings went straight " +
+      "to Google on its own. There is now one place that knows what calendars you have, and everything asks it. " +
+      "A meeting is a meeting whichever calendar it came from.\n\n" +
+      "One thing deliberately kept: if Google is your only calendar and its connection has expired, you are " +
+      "still told to reconnect rather than being quietly shown no meetings. If you have another calendar as " +
+      "well, that one simply answers instead.",
+    changed: [
+      "Meetings from a subscribed .ics feed are matched to recordings just like Google ones, and can be linked.",
+      "Opening a feed meeting shows its full invite details instead of failing to load.",
+      "Meeting matching now asks for any connected calendar rather than requiring Google specifically.",
+    ],
+    fixed: [
+      "A user whose calendar was entirely .ics feeds could never have a recording matched to a meeting.",
+      "A feed meeting's details returned nothing, because only Google was ever asked for an event by id.",
+    ],
+  },
   {
     version: "0.188.0",
     date: "2026-08-07",

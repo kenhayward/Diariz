@@ -14,7 +14,11 @@ public record CalendarAttendee(string? Email, string? DisplayName, string? Respo
 /// <see cref="CalendarName"/>/<see cref="Color"/> identify which of the user's calendars the event is on (the
 /// colour is that calendar's Google background hex) so the UI can show and colour events from every calendar.
 /// <see cref="AllDay"/> marks a date-only entry (holiday, birthday, "out of office" day) rather than a timed
-/// meeting - such an entry is never picked by <see cref="GoogleCalendarClient.PickBest"/>.</summary>
+/// meeting - such an entry is never picked by <see cref="CalendarMatching.PickBest"/>.
+/// <para>Despite the name, this is the shared projection for <b>every</b> calendar source - Google, subscribed
+/// <c>.ics</c> feeds, and mirrored desktop Outlook - so nothing downstream has to know where an event came
+/// from. <see cref="CalendarId"/> carries the source's scheme (<c>ics:</c>, <c>outlook:</c>, or a bare Google
+/// calendar id), which is what <see cref="ICalendarAggregator.GetEventAsync"/> routes on.</para></summary>
 public record CalendarEvent(
     string Id, string? Summary, DateTimeOffset Start, DateTimeOffset End, string? HtmlLink,
     string? Description = null, string? Location = null,
@@ -281,28 +285,8 @@ public class GoogleCalendarClient : IGoogleCalendarClient
         a.TryGetProperty("organizer", out var o) && o.ValueKind == JsonValueKind.True,
         a.TryGetProperty("self", out var se) && se.ValueKind == JsonValueKind.True);
 
-    /// <summary>The timed event that overlaps the recording's time span the most, or null when none overlap.
-    /// All-day entries are skipped outright: they blanket the whole day, so they would out-overlap every real
-    /// meeting, and a holiday/birthday/out-of-office day is not the meeting a recording came from. (They can
-    /// still be linked by hand from the picker.) Pure so it can be unit-tested without the Calendar API.</summary>
-    public static CalendarEvent? PickBest(IReadOnlyList<CalendarEvent> events, DateTimeOffset recStart, DateTimeOffset recEnd)
-    {
-        CalendarEvent? best = null;
-        var bestOverlap = TimeSpan.Zero;
-        foreach (var e in events)
-        {
-            if (e.AllDay) continue;
-            var overlapStart = recStart > e.Start ? recStart : e.Start;
-            var overlapEnd = recEnd < e.End ? recEnd : e.End;
-            var overlap = overlapEnd - overlapStart;
-            if (overlap > bestOverlap)
-            {
-                bestOverlap = overlap;
-                best = e;
-            }
-        }
-        return best;
-    }
+    // PickBest moved to CalendarMatching: it is source-agnostic, and living here meant only Google events
+    // could ever reach it.
 
     /// <summary>Read a Google start/end node. <paramref name="allDay"/> reports which shape it used, so the
     /// caller can tell a date-only entry from a timed meeting.</summary>

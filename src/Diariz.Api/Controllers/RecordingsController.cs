@@ -33,7 +33,7 @@ public class RecordingsController : ControllerBase
     private readonly IWebhookPublisher _webhooks;
     private readonly IOptions<AppPublicOptions> _appOpts;
     private readonly IExportLocalizer? _exportLocalizer;
-    private readonly IGoogleCalendarClient? _calendar;
+    private readonly ICalendarAggregator? _calendars;
     private readonly string _defaultModel;
 
     public RecordingsController(
@@ -43,7 +43,7 @@ public class RecordingsController : ControllerBase
         IOptions<UploadOptions> uploads, IRoomScope rooms, IPeopleDirectory people,
         IWebhookPublisher webhooks,
         IOptions<AppPublicOptions> appOpts, IExportLocalizer? exportLocalizer = null,
-        IGoogleCalendarClient? calendar = null)
+        ICalendarAggregator? calendars = null)
     {
         _db = db;
         _storage = storage;
@@ -58,7 +58,7 @@ public class RecordingsController : ControllerBase
         _webhooks = webhooks;
         _appOpts = appOpts;
         _exportLocalizer = exportLocalizer;
-        _calendar = calendar;
+        _calendars = calendars;
         _defaultModel = config["Transcription:DefaultModel"] ?? "whisperx-large-v3";
     }
 
@@ -245,6 +245,13 @@ public class RecordingsController : ControllerBase
             rec.MeetingTypeId, rec.AudioProtectedAt, rec.AudioDeletedAt, scheduledDeletion,
             rec.UserId, recordedByName, visibleRooms, rec.StartedAt, rec.EndedAt);
     }
+
+    /// <summary>Whether the caller has a calendar other than Google - a subscribed <c>.ics</c> feed or a
+    /// mirrored desktop Outlook device. Used to decide whether a Google outage is worth reporting or should
+    /// just degrade.</summary>
+    private async Task<bool> HasNonGoogleCalendarAsync(CancellationToken ct) =>
+        await _db.IcsCalendarSources.AnyAsync(s => s.UserId == UserId && s.Enabled, ct) ||
+        await _db.OutlookCalendarSources.AnyAsync(s => s.UserId == UserId && s.Enabled, ct);
 
     private static CalendarLinkDto? ToLinkDto(RecordingCalendarLink? link) => link is null
         ? null
@@ -758,23 +765,28 @@ public class RecordingsController : ControllerBase
         return Ok();
     }
 
-    /// <summary>Find the Google Calendar meeting this recording was most likely captured during (by time
-    /// overlap against the recording's wall-clock span). All-day entries are never matched. Requires the user
-    /// to have granted Calendar access. Returns <c>{ match: null }</c> when nothing overlaps.</summary>
+    /// <summary>Find the meeting this recording was most likely captured during (by time overlap against the
+    /// recording's wall-clock span), across <b>every</b> calendar the user has - Google, subscribed
+    /// <c>.ics</c> feeds, and mirrored desktop Outlook. All-day entries are never matched. Returns
+    /// <c>{ match: null }</c> when nothing overlaps.</summary>
     [HttpGet("{id:guid}/calendar-match")]
     [EndpointSummary("Suggest the calendar event this recording belongs to")]
     [EndpointDescription(
-        "Looks for the Google Calendar meeting the recording was most likely captured during, by overlapping " +
-        "its wall-clock span against your events. Only timed meetings are considered - an all-day entry " +
-        "(holiday, birthday, out-of-office day) is never suggested or linked automatically, though you can " +
-        "still link one by hand. This only suggests - nothing is stored until you confirm it " +
-        "with the calendar-link endpoint. Returns `{ \"match\": null }` when nothing overlaps, and requires you " +
-        "to have connected Google Calendar.")]
+        "Looks for the meeting the recording was most likely captured during, by overlapping its wall-clock " +
+        "span against your events. Considers **every calendar you have connected** - Google, subscribed " +
+        "`.ics` feeds, and any desktop Outlook calendar you have mirrored.\n\n" +
+        "Only timed meetings are considered: an all-day entry (holiday, birthday, out-of-office day) is never " +
+        "suggested or linked automatically, because it blankets the day and would out-overlap every real " +
+        "meeting - you can still link one by hand.\n\n" +
+        "This only suggests; nothing is stored until you confirm it with the calendar-link endpoint. Returns " +
+        "`{ \"match\": null }` when nothing overlaps, and 400 when you have no calendar connected at all.")]
     public async Task<IActionResult> CalendarMatch(Guid id, CancellationToken ct)
     {
-        var settings = await _db.UserSettings.FindAsync([UserId], ct);
-        if (settings?.GoogleCalendarGranted != true)
-            return BadRequest("Connect Google Calendar in Preferences to match meetings.");
+        // Any connected calendar qualifies - a Google grant, a subscribed .ics feed, or a mirrored desktop
+        // Outlook device. This used to demand Google specifically, which locked feeds-only users out of
+        // matching entirely even though their events were already showing on the Calendar tab.
+        if (!await _calendars!.HasAnySourceAsync(UserId, ct))
+            return BadRequest("Connect a calendar in Preferences to match meetings.");
 
         var rec = await _db.Recordings
             .Where(r => r.Id == id && r.UserId == UserId)
@@ -793,10 +805,16 @@ public class RecordingsController : ControllerBase
         var pad = TimeSpan.FromMinutes(30);
         var recStart = rec.StartedAt ?? rec.CreatedAt;
         var recEnd = rec.EndedAt ?? recStart.AddMilliseconds(rec.DurationMs);
-        var events = await _calendar!.ListEventsAsync(UserId, recStart - pad, recEnd + pad, ct);
-        if (events is null) return BadRequest("Your Google connection needs reauthorising — reconnect Calendar in Preferences.");
+        var fetch = await _calendars!.FetchAsync(UserId, recStart - pad, recEnd + pad, ct);
 
-        var best = GoogleCalendarClient.PickBest(events, recStart, recEnd);
+        // A revoked Google token is the one source failure worth surfacing rather than degrading: it is the
+        // only one the user can fix, and answering "no meeting found" would hide it indefinitely. Only when
+        // Google is their *sole* calendar though - with a feed or an Outlook device also connected, those
+        // legitimately carry the answer and an error would be wrong.
+        if (fetch.GoogleUnavailable && fetch.Events.Count == 0 && !await HasNonGoogleCalendarAsync(ct))
+            return BadRequest("Your Google connection needs reauthorising - reconnect Calendar in Preferences.");
+
+        var best = CalendarMatching.PickBest(fetch.Events, recStart, recEnd);
         return Ok(new
         {
             match = best is null
@@ -805,10 +823,10 @@ public class RecordingsController : ControllerBase
         });
     }
 
-    /// <summary>Persist a link from this recording to a Google Calendar event (used both to accept the
-    /// auto-suggested match and to pick one by hand, even when the times don't line up). Stores a lightweight
-    /// snapshot; the rich invite details are fetched live. <c>Manual</c> links are never overwritten by the
-    /// auto-match.</summary>
+    /// <summary>Persist a link from this recording to a calendar event from any connected source (used both to
+    /// accept the auto-suggested match and to pick one by hand, even when the times don't line up). Stores a
+    /// lightweight snapshot; the rich invite details are fetched live. <c>Manual</c> links are never
+    /// overwritten by the auto-match.</summary>
     [HttpPut("{id:guid}/calendar-link")]
     [EndpointSummary("Link a recording to a calendar event")]
     [EndpointDescription(
@@ -821,16 +839,15 @@ public class RecordingsController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(req.EventId)) return BadRequest("An event id is required.");
 
-        var settings = await _db.UserSettings.FindAsync([UserId], ct);
-        if (settings?.GoogleCalendarGranted != true)
-            return BadRequest("Connect Google Calendar in Preferences to link meetings.");
+        if (!await _calendars!.HasAnySourceAsync(UserId, ct))
+            return BadRequest("Connect a calendar in Preferences to link meetings.");
 
         var rec = await _db.Recordings
             .Include(r => r.CalendarLink)
             .FirstOrDefaultAsync(r => r.Id == id && r.UserId == UserId, ct);
         if (rec is null) return NotFound();
 
-        var ev = await _calendar!.GetEventAsync(UserId, req.EventId, ct);
+        var ev = await _calendars!.GetEventAsync(UserId, req.EventId, ct);
         if (ev is null)
             return BadRequest("That calendar event could not be found - it may have been deleted, or your Google connection needs reauthorising.");
 
