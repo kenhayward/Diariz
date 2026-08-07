@@ -48,6 +48,7 @@ public static class OpenApiCuration
         ["Calendar"] = "Read-only calendar events for the signed-in user, merging connected Google calendars and subscribed .ics feeds (the Calendar tab).",
         ["CalendarEventNotes"] = "Pre-meeting note lines attached to a calendar event, before any recording exists; adopted onto the recording once one is linked.",
         ["CalendarFeeds"] = "Your external iCalendar (.ics) feed subscriptions - list, add, update, and remove. Feed URLs are validated (https only) before they are stored.",
+        ["OutlookCalendar"] = "Mirror a classic desktop Outlook calendar into Diariz from the Windows app, and manage the machines you have connected. Unlike Google and .ics calendars, which are read live, Outlook is only reachable from your own PC - so its events are pushed here and stored, which is what lets them keep working in a browser and after the desktop app is closed.",
         ["Chat"] = "Multi-turn chat over your transcripts: stream answers over selected recordings and save, load, or delete conversations.",
         ["Feedback"] = "Submit a bug or UX report about the app, captured with the SPA route, app release, and a scrubbed client trail.",
         ["FormulaResults"] = "The Markdown documents a formula produced for a recording - list, read, edit, delete, email, and download.",

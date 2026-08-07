@@ -60,6 +60,32 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.188.0",
+    date: "2026-08-07",
+    pr: 476,
+    headline: "Groundwork: somewhere to keep a desktop Outlook calendar",
+    summary:
+      "Nothing changes on screen yet. This is the first half of syncing a classic desktop Outlook calendar " +
+      "into Diariz: the storage it lands in and the endpoint the Windows app will send it to.\n\n" +
+      "Outlook is different from the calendars Diariz already reads. A Google calendar or an .ics feed lives " +
+      "on the internet, so the server fetches it fresh every time and stores nothing. Outlook lives on your " +
+      "own PC, and only the desktop app can see it - so those meetings have to be sent up and kept, which is " +
+      "what will let them still show up in a browser, or after you have closed the desktop app.\n\n" +
+      "Because keeping a copy means the server can also delete from it, the rules for that are deliberately " +
+      "cautious. Your PC sends the whole date range and the server works out the difference; a meeting only " +
+      "disappears here once your calendar stops reporting it in a run that finished cleanly. If the read " +
+      "failed halfway, nothing is deleted. Two PCs are kept entirely separate, so they never delete each " +
+      "other's meetings.\n\n" +
+      "None of this switches on by itself: it does nothing until you opt in, which arrives with the settings " +
+      "screen in a following release.",
+    added: [
+      "Storage for a mirrored desktop Outlook calendar, kept per machine, with the date range and privacy choices held per device.",
+      "An endpoint for the Windows app to push its calendar to, and endpoints to list, rename, hide or disconnect a connected machine.",
+      "An opt-in setting for Outlook sync, off by default - nothing is stored until it is turned on.",
+      "Disconnecting a machine deletes every meeting mirrored from it.",
+    ],
+  },
+  {
     version: "0.187.0",
     date: "2026-08-07",
     pr: 475,

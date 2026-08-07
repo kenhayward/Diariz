@@ -430,6 +430,10 @@ builder.Services.AddHttpClient(IcsCalendarClient.HttpClientName)
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 builder.Services.AddScoped<IIcsCalendarClient, IcsCalendarClient>();
 
+// ---- Desktop Outlook mirror. Unlike the two above there is nothing to fetch: only the user's own PC can
+// read their local Outlook, so the desktop app pushes the window and this reads it back from our tables. ----
+builder.Services.AddScoped<IOutlookCalendarStore, OutlookCalendarStore>();
+
 // ---- MCP server (in-process Streamable-HTTP /mcp endpoint; per-user token auth) ----
 // The token services back both the management controller (JWT) and the /mcp bearer scheme.
 builder.Services.AddSingleton<IMcpTokenService, McpTokenService>();

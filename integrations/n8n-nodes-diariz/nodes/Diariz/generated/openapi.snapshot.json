@@ -1893,6 +1893,466 @@
         ],
         "type": "object"
       },
+      "OutlookAttendeeInput": {
+        "properties": {
+          "email": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "optional": {
+            "default": false,
+            "type": "boolean"
+          },
+          "response": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "OutlookDeviceDto": {
+        "properties": {
+          "deviceId": {
+            "type": "string"
+          },
+          "deviceName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "mailboxName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "timeZone": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "deviceId"
+        ],
+        "type": "object"
+      },
+      "OutlookEventInput": {
+        "properties": {
+          "allDay": {
+            "default": false,
+            "type": "boolean"
+          },
+          "attendees": {
+            "items": {
+              "$ref": "#/components/schemas/OutlookAttendeeInput"
+            },
+            "type": [
+              "null",
+              "array"
+            ]
+          },
+          "bodyText": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "busyStatus": {
+            "default": 2,
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "categories": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "end": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "endDate": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "isRecurring": {
+            "default": false,
+            "type": "boolean"
+          },
+          "lastModified": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "location": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "onlineMeetingUrl": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "organizerEmail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "organizerName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "sensitivity": {
+            "default": 0,
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "start": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "startDate": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "subject": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "uid": {
+            "type": "string"
+          },
+          "windowsTimeZoneId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "uid",
+          "subject",
+          "start",
+          "end"
+        ],
+        "type": "object"
+      },
+      "OutlookSourceDto": {
+        "properties": {
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "deviceId": {
+            "type": "string"
+          },
+          "deviceName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "eventCount": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "futureDays": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "includeBody": {
+            "type": "boolean"
+          },
+          "lastError": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lastSyncedAt": {
+            "format": "date-time",
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "mailboxName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "pastDays": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "skipPrivate": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "deviceId",
+          "deviceName",
+          "mailboxName",
+          "displayName",
+          "color",
+          "enabled",
+          "pastDays",
+          "futureDays",
+          "skipPrivate",
+          "includeBody",
+          "lastSyncedAt",
+          "lastError",
+          "eventCount"
+        ],
+        "type": "object"
+      },
+      "OutlookSourceRequest": {
+        "properties": {
+          "color": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "displayName": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "enabled": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "futureDays": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "includeBody": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
+          "lastError": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "pastDays": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ]
+          },
+          "skipPrivate": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "OutlookSyncRequest": {
+        "properties": {
+          "complete": {
+            "default": true,
+            "type": "boolean"
+          },
+          "device": {
+            "$ref": "#/components/schemas/OutlookDeviceDto"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/OutlookEventInput"
+            },
+            "type": "array"
+          },
+          "final": {
+            "default": false,
+            "type": "boolean"
+          },
+          "pageIndex": {
+            "default": 0,
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "syncId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "windowEnd": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "windowStart": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "syncId",
+          "device",
+          "windowStart",
+          "windowEnd",
+          "events"
+        ],
+        "type": "object"
+      },
+      "OutlookSyncResultDto": {
+        "properties": {
+          "created": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "deleted": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "eventCount": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "skipped": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "sourceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "syncId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "syncedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "unchanged": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "updated": {
+            "format": "int32",
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ]
+          }
+        },
+        "required": [
+          "sourceId",
+          "syncId",
+          "created",
+          "updated",
+          "unchanged",
+          "deleted",
+          "skipped",
+          "eventCount",
+          "syncedAt"
+        ],
+        "type": "object"
+      },
       "PermissionsDto": {
         "properties": {
           "manageFormulas": {
@@ -5641,6 +6101,182 @@
         "summary": "Edit a calendar feed subscription",
         "tags": [
           "CalendarFeeds"
+        ]
+      }
+    },
+    "/api/calendar/outlook/sources": {
+      "get": {
+        "description": "Every machine that has mirrored its desktop Outlook calendar here, with how many events it currently holds, when it last synced, and the last failure if there was one - so a connector broken on one PC is visible from any other, or from a plain browser.\n\nEmpty when nothing is connected; that is the normal answer, not an error.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OutlookSourceDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OutlookSourceDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OutlookSourceDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List your connected Outlook devices",
+        "tags": [
+          "OutlookCalendar"
+        ]
+      }
+    },
+    "/api/calendar/outlook/sources/{id}": {
+      "delete": {
+        "description": "Disconnects the machine and **deletes every event mirrored from it**. This is the erase control, not a pause - to keep the copy but hide it, set `enabled` to false instead.\n\nRecordings already linked to one of these meetings keep their own stored snapshot, exactly as they do when a Google event is deleted.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "summary": "Disconnect an Outlook device",
+        "tags": [
+          "OutlookCalendar"
+        ]
+      },
+      "put": {
+        "description": "Rename a device, recolour its events, hide it without disconnecting, change how far back and forward it reads, or change what it is allowed to send (private appointments, meeting bodies).\n\nEvery field is optional - omit one to leave it as it is. The date window is clamped to sane bounds rather than rejected. Turning `enabled` off keeps the stored events but excludes them everywhere; to erase them, delete the device.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutlookSourceRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutlookSourceRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutlookSourceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutlookSourceDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutlookSourceDto"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutlookSourceDto"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Update a connected Outlook device",
+        "tags": [
+          "OutlookCalendar"
+        ]
+      }
+    },
+    "/api/calendar/outlook/sync": {
+      "post": {
+        "description": "Mirrors a window of your **classic desktop Outlook** calendar into Diariz, so those meetings behave like your Google or `.ics` ones - they show on the Calendar tab, can be matched to a recording, and carry pre-meeting notes - and keep working when the desktop app is closed.\n\nSend the **whole window** and let the server reconcile: it inserts what is new, updates what changed (compared on Outlook's own last-modified time), and deletes what you no longer report. Pushing the same window twice is a no-op, so a retry is always safe.\n\nDeletion is deliberately hard to trigger by accident. It only happens on the page marked `final`, only when `complete` is true, and only for events inside `windowStart`..`windowEnd`. If your read failed partway, send `complete: false` and nothing is deleted. Cancelled appointments simply stop being reported.\n\nThe device id makes this per-machine: two PCs are two independent mirrors that never delete each other's events. Requires the Outlook sync opt-in in Preferences (403 otherwise).",
+        "requestBody": {
+          "content": {
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutlookSyncRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutlookSyncRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutlookSyncRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutlookSyncResultDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutlookSyncResultDto"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutlookSyncResultDto"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "Push a window of desktop Outlook calendar events",
+        "tags": [
+          "OutlookCalendar"
         ]
       }
     },
@@ -13151,6 +13787,10 @@
     {
       "description": "Meeting types (minutes templates): read the shared and your personal types; writes are permission-gated.",
       "name": "MeetingTypes"
+    },
+    {
+      "description": "Mirror a classic desktop Outlook calendar into Diariz from the Windows app, and manage the machines you have connected. Unlike Google and .ics calendars, which are read live, Outlook is only reachable from your own PC - so its events are pushed here and stored, which is what lets them keep working in a browser and after the desktop app is closed.",
+      "name": "OutlookCalendar"
     },
     {
       "description": "The people directory: the humans who appear in meetings, with their contact details and an optional voiceprint. Add and edit people, enrol and erase voiceprints, merge duplicates, and find likely ones. Shared platform-wide, so browsing needs the Manage people permission while searching to label a speaker does not.",

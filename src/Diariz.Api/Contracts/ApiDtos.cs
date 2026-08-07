@@ -170,6 +170,80 @@ public record IcsFeedDto(
 /// <summary>Create or update an external <c>.ics</c> feed. <paramref name="Enabled"/> defaults to on.</summary>
 public record IcsFeedRequest(string Name, string Url, string? Color = null, bool Enabled = true);
 
+// ---- Desktop Outlook calendar mirror ----
+
+/// <summary>One machine that has connected its local desktop Outlook calendar. <paramref name="LastSyncedAt"/>
+/// / <paramref name="LastError"/> / <paramref name="EventCount"/> are the health triple shown in Preferences,
+/// mirroring an <c>.ics</c> feed's.</summary>
+public record OutlookSourceDto(
+    Guid Id, string DeviceId, string? DeviceName, string? MailboxName, string DisplayName, string? Color,
+    bool Enabled, int PastDays, int FutureDays, bool SkipPrivate, bool IncludeBody,
+    DateTimeOffset? LastSyncedAt, string? LastError, int EventCount);
+
+/// <summary>Update a connected device. Every field is optional - omit one to leave it unchanged.</summary>
+public record OutlookSourceRequest(
+    string? DisplayName = null, string? Color = null, bool? Enabled = null,
+    int? PastDays = null, int? FutureDays = null, bool? SkipPrivate = null, bool? IncludeBody = null,
+    /// <summary>The last failure the desktop hit, so a connector broken on one machine is visible from any
+    /// other. Empty string clears it.</summary>
+    string? LastError = null);
+
+/// <summary>Which machine a push came from. The device id is minted once by the desktop app and is what makes
+/// the source row per-device rather than per-user.</summary>
+public record OutlookDeviceDto(string DeviceId, string? DeviceName = null, string? MailboxName = null, string? TimeZone = null);
+
+/// <summary>One attendee on a pushed appointment. <paramref name="Response"/> uses Google's vocabulary
+/// (accepted/declined/tentative/needsAction), mapped on the desktop.</summary>
+public record OutlookAttendeeInput(string? Name = null, string? Email = null, string? Response = null, bool Optional = false);
+
+/// <summary>One flattened occurrence as the desktop reports it. All-day entries carry
+/// <paramref name="StartDate"/>/<paramref name="EndDate"/> as <b>local</b> <c>yyyy-MM-dd</c> strings; timed
+/// ones carry absolute instants in <paramref name="Start"/>/<paramref name="End"/>.</summary>
+public record OutlookEventInput(
+    string Uid,
+    string? Subject,
+    DateTimeOffset Start,
+    DateTimeOffset End,
+    bool AllDay = false,
+    string? StartDate = null,
+    string? EndDate = null,
+    string? WindowsTimeZoneId = null,
+    string? Location = null,
+    string? OnlineMeetingUrl = null,
+    string? BodyText = null,
+    string? Categories = null,
+    int Sensitivity = 0,
+    int BusyStatus = 2,
+    bool IsRecurring = false,
+    string? OrganizerName = null,
+    string? OrganizerEmail = null,
+    IReadOnlyList<OutlookAttendeeInput>? Attendees = null,
+    DateTimeOffset? LastModified = null);
+
+/// <summary>One page of a sync run. The desktop sends the whole rolling window and the <b>server</b> reconciles
+/// (upsert what is present, delete what is absent), because the desktop has no trustworthy view of server state
+/// - a restore from backup, a second machine, a reinstall or a disable/re-enable would all silently stale a
+/// local mirror, and every one of those produces missing events.</summary>
+public record OutlookSyncRequest(
+    /// <summary>One id per run, repeated on every page. Rows are stamped with it, and the sweep deletes
+    /// in-window rows still carrying an older one.</summary>
+    Guid SyncId,
+    OutlookDeviceDto Device,
+    DateTimeOffset WindowStart,
+    DateTimeOffset WindowEnd,
+    IReadOnlyList<OutlookEventInput> Events,
+    /// <summary>False when the desktop's enumeration threw partway. A partial read <b>never</b> sweeps - this
+    /// is the guard against deleting a user's mirrored calendar because one COM call failed.</summary>
+    bool Complete = true,
+    int PageIndex = 0,
+    /// <summary>True on the last page only. The sweep runs then, and only when <paramref name="Complete"/>.</summary>
+    bool Final = false);
+
+/// <summary>What one pushed page changed.</summary>
+public record OutlookSyncResultDto(
+    Guid SourceId, Guid SyncId, int Created, int Updated, int Unchanged, int Deleted, int Skipped,
+    int EventCount, DateTimeOffset SyncedAt);
+
 /// <summary>Bulk delete the audio blobs of the listed recordings (keeps their transcripts/metadata).</summary>
 public record DeleteAudioRequest(IReadOnlyList<Guid> Ids);
 

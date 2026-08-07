@@ -1003,6 +1003,61 @@ const GENERATED: GeneratedResource[] = [
     ]
   },
   {
+    "tag": "OutlookCalendar",
+    "displayName": "Outlook Calendar",
+    "value": "outlookCalendar",
+    "operations": [
+      {
+        "value": "disconnectAnOutlookDevice",
+        "displayName": "Disconnect an Outlook device",
+        "description": "Disconnects the machine and deletes every event mirrored from it. This is the erase control, not a pause - to keep the copy but hide it, set enabled to false instead.",
+        "method": "DELETE",
+        "path": "/api/calendar/outlook/sources/{id}",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": false
+      },
+      {
+        "value": "listYourConnectedOutlookDevices",
+        "displayName": "List your connected Outlook devices",
+        "description": "Every machine that has mirrored its desktop Outlook calendar here, with how many events it currently holds, when it last synced, and the last failure if there was one - so a connector broken on one PC is visible from any other, or from a plain browser.",
+        "method": "GET",
+        "path": "/api/calendar/outlook/sources",
+        "pathParams": [],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": true
+      },
+      {
+        "value": "pushAWindowOfDesktopOutlookCalendarEvents",
+        "displayName": "Push a window of desktop Outlook calendar events",
+        "description": "Mirrors a window of your classic desktop Outlook calendar into Diariz, so those meetings behave like your Google or .ics ones - they show on the Calendar tab, can be matched to a recording, and carry pre-meeting notes - and keep working when the desktop app is closed.",
+        "method": "POST",
+        "path": "/api/calendar/outlook/sync",
+        "pathParams": [],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      },
+      {
+        "value": "updateAConnectedOutlookDevice",
+        "displayName": "Update a connected Outlook device",
+        "description": "Rename a device, recolour its events, hide it without disconnecting, change how far back and forward it reads, or change what it is allowed to send (private appointments, meeting bodies).",
+        "method": "PUT",
+        "path": "/api/calendar/outlook/sources/{id}",
+        "pathParams": [
+          "id"
+        ],
+        "queryParams": [],
+        "hasBody": true,
+        "returnsArray": false
+      }
+    ]
+  },
+  {
     "tag": "People",
     "displayName": "People",
     "value": "people",
