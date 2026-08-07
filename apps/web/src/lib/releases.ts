@@ -60,6 +60,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.186.8",
+    date: "2026-08-07",
+    pr: 468,
+    headline: "The Calendar tab is now its own thing",
+    summary:
+      "The Calendar tab has been separated out of the meetings panel. Two things follow from that, both " +
+      "intended. It no longer asks the server for your calendar events while you are on another tab, so " +
+      "there is less chatter in the background. And it now opens on the current month each time you come " +
+      "back to it, rather than remembering that you had browsed to March: keeping that memory meant keeping " +
+      "part of the Calendar alive inside the meetings list at all times, which is the sort of tangle this " +
+      "round of work is unpicking. Everything the tab shows, and how it behaves while you are on it, is " +
+      "unchanged.",
+    changed: [
+      "The Calendar tab opens on the current month each time you switch to it, instead of restoring the month you last browsed to.",
+      "Calendar events are only fetched while the Calendar tab is open, rather than in the background from any tab.",
+    ],
+  },
+  {
     version: "0.186.7",
     date: "2026-08-07",
     pr: 467,
