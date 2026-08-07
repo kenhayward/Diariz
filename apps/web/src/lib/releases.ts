@@ -60,6 +60,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.186.11",
+    date: "2026-08-07",
+    pr: 471,
+    headline: "Groundwork: the meetings list's tests follow the code that moved",
+    summary:
+      "Nothing changes on screen, and no application code changed at all. The tests covering the Calendar " +
+      "and Tags tabs now run against those tabs directly, rather than through the whole meetings panel, " +
+      "which is where the code they cover moved over the last few updates. One of them was found to be " +
+      "incapable of failing - it checked that a shared room does not load your personal calendar, but " +
+      "checked too early to notice if it did - and has been rewritten so it genuinely holds. This closes " +
+      "out the work of breaking up the meetings panel: 1,373 lines down to 393.",
+    changed: [
+      "Internal only: Calendar and Tags test cases moved from the panel suite to the tabs' own suites, and a shared-room calendar test that could not fail was rewritten. No application code changed.",
+    ],
+  },
+  {
     version: "0.186.10",
     date: "2026-08-07",
     pr: 470,
