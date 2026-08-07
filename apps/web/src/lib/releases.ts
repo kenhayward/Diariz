@@ -60,6 +60,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.186.9",
+    date: "2026-08-07",
+    pr: 469,
+    headline: "The Tags tab is now its own thing too",
+    summary:
+      "Same treatment as the Calendar tab last time: the Tags tab has been separated out of the meetings " +
+      "panel. It no longer asks the server for your tag list while you are on another tab, and a tag you " +
+      "picked is cleared when you leave the tab and come back, rather than still being applied when you " +
+      "return to it. That second one is close to a correction - a picked tag could already go stale on its " +
+      "own if those meetings were deleted or re-tagged. How many tags the cloud shows is still remembered " +
+      "between sessions, as before.",
+    changed: [
+      "The Tags tab starts with no tag picked each time you switch to it, instead of restoring the last one.",
+      "The tag list is only fetched while the Tags tab is open, rather than in the background from any tab.",
+    ],
+  },
+  {
     version: "0.186.8",
     date: "2026-08-07",
     pr: 468,

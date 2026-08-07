@@ -1240,12 +1240,14 @@ describe("RecordingsPanel", () => {
     expect(screen.getByRole("button", { name: "Budget Planning" })).toBeTruthy(); // highest count kept
   });
 
-  // The tag-count slider persists to localStorage, but the read sat in a useState initialiser at PANEL
-  // level - so with storage disabled (Safari private browsing, a locked-down profile) it threw during the
-  // panel's own render rather than the Tags tab's, and RouteErrorBoundary blanked the whole sidebar. You
-  // lost the meetings list over a preference for a tab you may never have opened. lib/panelTab.ts guards
-  // both directions for exactly this reason. Restored in `finally` so a failure cannot leak the spy into
-  // the rest of the file (vitest.config sets no restoreMocks).
+  // Storage can be disabled outright (Safari private browsing, a locked-down profile) and throw on access,
+  // and an unguarded read during render blanks the whole sidebar behind RouteErrorBoundary. This is now an
+  // integration guard over whatever the PANEL itself reads - `usePanelTab`'s persisted tab - after the tag
+  // preference that originally motivated it moved into TagsTab (covered there, in TagsTab.test.tsx: with
+  // the guard removed this case still passes and that one fails). Kept because the failure mode is losing
+  // the entire meetings list, and the next unguarded panel-level read would land here first.
+  // Restored in `finally` so a failure cannot leak the spy into the rest of the file (vitest.config sets
+  // no restoreMocks).
   it("still shows the meetings list when localStorage cannot be read", async () => {
     const spy = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new Error("storage disabled");

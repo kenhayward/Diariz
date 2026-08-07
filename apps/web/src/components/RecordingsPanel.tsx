@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../lib/api";
 import { usePanelTab, setPanelTab } from "../lib/panelTab";
 import { createHub } from "../lib/signalr";
-import { iconProps } from "./ToolbarButton";
 import { useSelection } from "../lib/selection";
 import { useMoveClipboard } from "../lib/moveClipboard";
 import { useRoom, useRoomBasePath } from "../lib/rooms";
@@ -19,37 +18,19 @@ import ClipboardBar from "./nav/ClipboardBar";
 import SectionRow from "./nav/SectionRow";
 import SearchBar from "./nav/SearchBar";
 import { RecordingRow } from "./nav/RecordingRow";
-import { TagCountSlider } from "./nav/TagCountSlider";
 import TabStrip from "./nav/TabStrip";
 import ListToolbar from "./nav/ListToolbar";
 import UploadStatusList from "./nav/UploadStatusList";
 import GroupSelectCheckbox from "./nav/GroupSelectCheckbox";
 import CalendarTab from "./nav/CalendarTab";
+import TagsTab from "./nav/TagsTab";
 import { useUpload } from "../lib/uploadContext";
 import { distinctActors, filterActions } from "../lib/actionsView";
-import { recordingsForTags, topTagsByCount } from "../lib/tagCloud";
 import ActionsToolbar from "./ActionsToolbar";
 import ActionsTab from "./ActionsTab";
 import EditActionModal from "./EditActionModal";
-import TagCloud from "./TagCloud";
-import TagCloudModal from "./TagCloudModal";
 import type { ActionListItem, RecordingSummary } from "../lib/types";
 import { RoomPermission } from "../lib/types";
-
-const TAG_LIMIT_KEY = "diariz.recordings.tagLimit";
-const DEFAULT_TAG_LIMIT = 40;
-
-/// How many tags the cloud shows, from the last session. Guarded like `lib/panelTab.ts`: storage can be
-/// disabled outright (private browsing, a locked-down profile) and throw on access. This is read from a
-/// `useState` initialiser in the panel, so an unguarded throw took down the **whole panel's** render - the
-/// meetings list gone, behind an error boundary, over a preference for a tab the user may never open.
-function storedTagLimit(): number {
-  try {
-    return Number(localStorage.getItem(TAG_LIMIT_KEY)) || DEFAULT_TAG_LIMIT;
-  } catch {
-    return DEFAULT_TAG_LIMIT;
-  }
-}
 
 /// The recordings list for the left panel, grouped into user sections (Ungrouped last).
 /// Selecting a row routes to /recordings/:id (middle panel).
@@ -159,37 +140,6 @@ export default function RecordingsPanel() {
     () => filterActions(allActions, { person: personFilter, hideComplete }),
     [allActions, personFilter, hideComplete],
   );
-  // Tags tab: the aggregated cloud + a single selected tag filtering the recordings list below it. The
-  // selection is shared with the expanded modal so the panel always mirrors what was picked there.
-  const { data: tags = [] } = useQuery({
-    queryKey: ["tags", aggRoomId ?? null],
-    queryFn: () => api.listTags(aggRoomId),
-    enabled: tab === "tags",
-  });
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  const [tagCloudExpanded, setTagCloudExpanded] = useState(false);
-  // Count slider: how many tags to show (the most-used first). Persisted; clamped to what's available.
-  const [tagLimit, setTagLimit] = useState<number>(storedTagLimit);
-  function setTagLimitPersisted(n: number) {
-    try {
-      localStorage.setItem(TAG_LIMIT_KEY, String(n));
-    } catch {
-      /* storage disabled: the slider still moves this session, it just won't be remembered */
-    }
-    setTagLimit(n);
-  }
-  // A refetch can drop the selected tag (recording deleted / re-tagged) — clear a stale selection so the
-  // list doesn't silently show "nothing" for a tag that no longer exists.
-  useEffect(() => {
-    if (selectedTag && tags.length > 0 && !tags.some((x) => x.tag === selectedTag)) setSelectedTag(null);
-  }, [tags, selectedTag]);
-  const shownTags = useMemo(() => topTagsByCount(tags, tagLimit), [tags, tagLimit]);
-  // The list follows the shown tags: with no tag picked it's every recording carrying a *shown* tag.
-  const tagItems = useMemo(
-    () => recordingsForTags(recordings, shownTags, selectedTag),
-    [recordings, shownTags, selectedTag],
-  );
-
   /// Apply a drag-and-drop: set the dragged recordings' group + order within the current room, then refresh.
   /// Order and folders are per-room, so this needs manage-contents (the personal-room owner always has it).
   ///
@@ -503,71 +453,10 @@ export default function RecordingsPanel() {
             <ActionsTab actions={visibleActions} persons={persons} person={personFilter} onPerson={setPersonFilter} />
           </div>
         ) : (
-          // Tags: the weighted cloud stays fixed at the top (like the calendar's month grid); only the
-          // matching-recordings list below it scrolls. min-w-0 for the same truncation reason as calendar.
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            {tags.length === 0 ? (
-              <p className="p-4 text-sm text-gray-500 dark:text-gray-400">{t("tagsEmpty")}</p>
-            ) : (
-              <>
-                {/* The cloud + its count slider stay fixed at the top; the cloud is height-capped and scrolls
-                    internally so the recordings list below is always visible however many tags there are. */}
-                <div className="shrink-0 border-b dark:border-gray-800">
-                  <div className="flex items-center gap-2 px-3 pt-2">
-                    <TagCountSlider
-                      value={Math.min(tagLimit, tags.length)}
-                      max={tags.length}
-                      onChange={setTagLimitPersisted}
-                    />
-                    <button
-                      type="button"
-                      aria-label={t("tagCloudExpand")}
-                      title={t("tagCloudExpand")}
-                      onClick={() => setTagCloudExpanded(true)}
-                      className="ml-auto shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-                    >
-                      <svg {...iconProps}>
-                        <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className="max-h-[38vh] overflow-y-auto">
-                    <TagCloud tags={shownTags} selected={selectedTag} onSelect={setSelectedTag} />
-                  </div>
-                </div>
-                <div className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
-                  {tagItems.length > 0 && (
-                    <ul className="divide-y dark:divide-gray-800">
-                      {tagItems.map((r) => (
-                        <RecordingRow
-                          key={r.id}
-                          r={r}
-                          indentClass="pl-3"
-                          selectMode={selection.selectMode}
-                          selected={selection.selectedIds.includes(r.id)}
-                          onToggleSelect={() => selection.toggle(r.id)}
-                          onDropBefore={() => {}}
-                          showDate
-                        />
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
+          <TagsTab recordings={recordings} roomId={aggRoomId} />
         )}
       </div>
       {editingAction && <EditActionModal action={editingAction} onClose={() => setEditingAction(null)} />}
-      {tagCloudExpanded && (
-        <TagCloudModal
-          tags={tags}
-          recordings={recordings}
-          selected={selectedTag}
-          onSelect={setSelectedTag}
-          onClose={() => setTagCloudExpanded(false)}
-        />
-      )}
     </div>
   );
 }
