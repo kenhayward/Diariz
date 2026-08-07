@@ -34,7 +34,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Rooms** | A private Personal Room per account plus shareable Rooms: invite users and groups with per-member permissions. Each Shared Room has its **own folder structure** (sections/sub-sections, drag-and-drop, per-room order) and its own List/Calendar/Actions/Tags scoped to it; record or upload files straight into a room (your Personal Room keeps the original), and search + chat over every room you belong to. A member who can read a shared recording sees its notes and screenshots too - only the owner can add, edit, or delete them. Your Google Calendar and its linking stay personal. The switcher shows each room's folder and meeting counts (shared ones labelled), ticks the one you are in, and remembers where you were. Manage rooms from the switcher. |
 | **Organise & merge** | Folders nested up to 8 levels deep with drag-and-drop (dragging one of several ticked rows moves the whole selection); the meetings list drills in one folder at a time (coloured folder rows with counts, a breadcrumb showing the full path with every part clickable, browser back pops a level) so it stays readable however many recordings you have, with **Open section page** in the breadcrumb's menu as a separate target from browsing deeper; an open recording shows its folder path as clickable chips under its name, each taking the list straight to that folder; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); cut one or more recordings, or a folder, and paste them into another folder in one move (landing at the bottom, in the order you cut them), with the Paste control showing why it's disabled when a move isn't allowed yet; browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
-| **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds and - from the Windows desktop app - a mirror of your classic Outlook calendar (opt-in, per machine, erasable). Every calendar you connect is treated the same: meetings from any of them show on the Calendar tab, match to a recording, and open with their full invite details. |
+| **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds and - synced by the Windows desktop app on launch, from the tray or on demand - a mirror of your classic Outlook calendar (opt-in, per machine, erasable). Every calendar you connect is treated the same: meetings from any of them show on the Calendar tab, match to a recording, and open with their full invite details. |
 | **API access** | Generate a personal API token (when enabled), read-only or read-write, with an optional expiry date, to call the REST API as yourself, with a built-in API reference documenting every endpoint - what it does, who may call it, and what it changes. |
 | **Automations (webhooks)** | When enabled, register outbound webhooks from Preferences that fire when a recording is created, finishes or fails transcription, a summary / meeting minutes / action items / tags become ready (each carrying its output), or a formula finishes or fails. Every recording event also carries an **attendees** list - who spoke, the person they are, their title, company, and internal or external - with email addresses and phone numbers included only when that automation opts in. Signed deliveries with automatic retries (rate-limited per automation and 429-aware), a test-event button, auto-pause after repeated failures, and a Pause / Resume button that stops deliveries reversibly (deleting an automation discards its signing secret; pausing keeps it). Admins can also define named Workflow Signals and wire a platform automation to one, so a formula author just picks "When this finishes, trigger: ..." in the formula editor - no URL or per-user setup - and the formula's output is delivered inline to everyone routed through that signal. |
 | **n8n** | A published community node (\`n8n-nodes-diariz\`): a trigger that registers its own automation and verifies every signed delivery, with a Platform scope for administrators that adds events across every user including Feedback Received, plus an action node covering the whole REST API - with dropdowns listing your real recordings and formulas, files in and out, and a Run Formula step that waits for the document to finish. |
@@ -59,6 +59,35 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.191.0",
+    date: "2026-08-07",
+    pr: 479,
+    headline: "The desktop app can now read your Outlook calendar",
+    summary:
+      "The last piece. Once you have turned Outlook sync on in Preferences, the Windows desktop app reads " +
+      "your classic Outlook calendar and sends it up - on launch, from the tray menu, or from the Sync now " +
+      "button. Those meetings then behave like any other: on the Calendar tab, matched to your recordings, " +
+      "carrying pre-meeting notes, and still there in a browser once you have closed the app.\n\n" +
+      "Reading happens in a small separate program bundled with the app rather than inside Diariz itself. " +
+      "That is why the installer is larger, and it is deliberate: reading a busy calendar takes a while, and " +
+      "doing it inside the app would freeze the tray, the recorder and the screenshot hotkey - possibly in " +
+      "the middle of a meeting. Kept apart, a calendar read that hangs or fails takes only itself down.\n\n" +
+      "Diariz never closes an Outlook you had open, and if Outlook is not running it will be started to read " +
+      "the calendar. If something goes wrong you get told what, specifically - Outlook not installed, Outlook " +
+      "busy, access blocked, or the one most people will meet eventually: the new Outlook, which does not let " +
+      "other apps read your calendar at all. Whatever went wrong is also recorded against that machine in " +
+      "Preferences, so you can see it from a different device or from a browser.\n\n" +
+      "This release needs the new Windows installer, not just a server update.",
+    added: [
+      "The Windows desktop app reads your classic Outlook calendar and syncs it: on launch, from the tray menu, and from the Sync now button in Preferences.",
+      "Clear, specific messages for each way it can fail, including the new Outlook, which cannot be read by other apps.",
+      "A failed sync is recorded against that machine, so you can see it from anywhere.",
+    ],
+    changed: [
+      "The Windows installer is larger, because it now carries the calendar reader.",
+    ],
+  },
   {
     version: "0.190.0",
     date: "2026-08-07",

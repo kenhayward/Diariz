@@ -445,7 +445,13 @@ failure, so a connector broken on one PC is visible from another or from any bro
 rename it, hide it without disconnecting, set how many days back and ahead it reads, skip private appointments
 (on by default), and exclude invite text. **Disconnecting a machine deletes the meetings copied from it, and
 turning the opt-in off clears every machine** — both confirm first. Managing it works from any browser; the
-syncing itself runs from the Windows desktop app.
+syncing itself runs from the Windows desktop app, which reads the calendar **on launch**, from its **tray
+menu**, or from **Sync now** in Preferences. Reading happens in a small bundled helper program rather than
+inside the app, so a slow or failing calendar read cannot freeze recording, the tray or the screenshot hotkey;
+Diariz never closes an Outlook you had open, though COM will start Outlook if it is not running. Each failure
+is named specifically — Outlook not installed, Outlook busy, access blocked, or **the new Outlook, which does
+not expose a calendar to other apps at all** — and recorded against that machine so it is visible from
+elsewhere. Requires **classic Outlook for Windows**.
 - **Global AI timeout** (Platform Administrator, Settings → Model Settings): one platform-wide per-request
 timeout in seconds (default 120) applied to every AI call - summaries, minutes, actions, tags, and embeddings.
 Raise it for slow local models; the configured value is the single authority (no hidden HTTP cap).

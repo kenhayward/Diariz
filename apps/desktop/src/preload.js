@@ -75,4 +75,40 @@ contextBridge.exposeInMainWorld("diariz", {
     ipcRenderer.on("auth:error", listener);
     return () => ipcRenderer.removeListener("auth:error", listener);
   },
+
+  // ---- Desktop Outlook calendar ----
+  // The shell reads the local calendar; the web app uploads it, because it is the side holding the user's
+  // token. Mirrors the screenshot split. See apps/web/src/lib/outlookSync.ts for the consuming interface.
+
+  /// True on Windows, where reading a local Outlook calendar is possible at all. Whether it is actually
+  /// reachable (installed, classic rather than the new Outlook) is outlookAvailable().
+  canSyncOutlook: process.platform === "win32",
+
+  /// Whether the shell can reach Outlook right now.
+  outlookAvailable: () => ipcRenderer.invoke("outlook:available"),
+
+  /// Report the connector's settings. Arriving at all also tells the shell a signed-in renderer is ready to
+  /// POST, which is what lets it run its launch sync.
+  reportOutlookReady: (cfg) => ipcRenderer.send("outlook:ready", cfg),
+
+  /// Ask for a sync now. Resolves { started, reason? } so the caller can explain a refusal.
+  syncOutlookNow: () => ipcRenderer.invoke("outlook:sync-now"),
+
+  /// Subscribe to a harvested window awaiting upload. Returns an unsubscribe function.
+  onOutlookPush: (cb) => {
+    const listener = (_event, payload) => cb(payload);
+    ipcRenderer.on("outlook:push", listener);
+    return () => ipcRenderer.removeListener("outlook:push", listener);
+  },
+
+  /// Report what the API did with a pushed window, so the tray and its notification are honest.
+  reportOutlookResult: (result) => ipcRenderer.send("outlook:result", result),
+
+  /// Subscribe to the shell's sync phase, so on-screen buttons can disable themselves while one runs.
+  /// Returns an unsubscribe function.
+  onOutlookState: (cb) => {
+    const listener = (_event, state) => cb(state);
+    ipcRenderer.on("outlook:state", listener);
+    return () => ipcRenderer.removeListener("outlook:state", listener);
+  },
 });
