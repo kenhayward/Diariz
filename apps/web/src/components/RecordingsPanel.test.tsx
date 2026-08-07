@@ -1240,6 +1240,49 @@ describe("RecordingsPanel", () => {
     expect(screen.getByRole("button", { name: "Budget Planning" })).toBeTruthy(); // highest count kept
   });
 
+  // The tag-count slider persists to localStorage, but the read sat in a useState initialiser at PANEL
+  // level - so with storage disabled (Safari private browsing, a locked-down profile) it threw during the
+  // panel's own render rather than the Tags tab's, and RouteErrorBoundary blanked the whole sidebar. You
+  // lost the meetings list over a preference for a tab you may never have opened. lib/panelTab.ts guards
+  // both directions for exactly this reason. Restored in `finally` so a failure cannot leak the spy into
+  // the rest of the file (vitest.config sets no restoreMocks).
+  it("still shows the meetings list when localStorage cannot be read", async () => {
+    const spy = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("storage disabled");
+    });
+    try {
+      renderList();
+      expect(await screen.findByText("Weekly Standup")).toBeTruthy();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("keeps the tag count slider working when localStorage cannot be written", async () => {
+    // Three tags, not two: the slider hides itself at 2 or fewer (nothing to trim).
+    (api.listTags as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { tag: "Budget Planning", count: 3, weight: 0.9, recordingIds: ["rec-1"] },
+      { tag: "Vendor Selection", count: 2, weight: 0.6, recordingIds: ["rec-1"] },
+      { tag: "Cloud Infra", count: 1, weight: 0.3, recordingIds: ["rec-1"] },
+    ]);
+    renderList();
+    await screen.findByText("Weekly Standup");
+    fireEvent.click(screen.getByRole("button", { name: "Tags", pressed: false }));
+    await screen.findByRole("button", { name: "Budget Planning" });
+
+    const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("storage disabled");
+    });
+    try {
+      // The count still moves for this session - it just will not be remembered next time.
+      fireEvent.change(screen.getByRole("slider"), { target: { value: "1" } });
+      await waitFor(() => expect(screen.queryByRole("button", { name: "Cloud Infra" })).toBeNull());
+      expect(screen.getByRole("button", { name: "Budget Planning" })).toBeTruthy();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("Tags tab shows the empty state when nothing is tagged", async () => {
     renderList();
     await screen.findByText("Weekly Standup");

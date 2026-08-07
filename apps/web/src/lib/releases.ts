@@ -60,6 +60,23 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.186.4",
+    date: "2026-08-07",
+    pr: 464,
+    headline: "The meetings list no longer disappears when the browser blocks storage",
+    summary:
+      "Some browsers refuse to let a site remember anything - private browsing in Safari, or a profile " +
+      "locked down by an administrator. Diariz remembers a handful of harmless preferences that way, " +
+      "including how many tags the Tags tab shows. Where that one was read, a refusal was not handled, so " +
+      "the entire left-hand meetings list failed to draw and was replaced by an error - you lost the list " +
+      "over a setting for a tab you may never have opened. Preferences that cannot be saved are now simply " +
+      "not saved: everything still works for the session and starts from the default next time.",
+    fixed: [
+      "The meetings list renders normally when the browser blocks local storage (private browsing, locked-down profiles), instead of failing to a blank panel.",
+      "Moving the Tags tab's count slider works when storage is blocked - the change applies for the session rather than throwing.",
+    ],
+  },
+  {
     version: "0.186.3",
     date: "2026-08-07",
     pr: 463,
