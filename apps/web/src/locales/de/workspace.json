@@ -619,5 +619,7 @@
   "yourRooms": "Deine Räume",
   "editPersonAction": "{{name}} bearbeiten",
   "speakerNoContactDetails": "Keine Kontaktdaten hinterlegt.",
-  "speakerAddContactDetails": "Daten erganzen"
+  "speakerAddContactDetails": "Daten erganzen",
+  "calSyncOutlook": "Outlook synchronisieren",
+  "calSyncingOutlook": "Outlook wird synchronisiert..."
 }

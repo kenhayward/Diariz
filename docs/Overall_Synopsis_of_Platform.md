@@ -1488,10 +1488,17 @@ into it with no URL or per-user setup at all.
   appear with no clicks); the recording Overview renders the meeting's full details (`CalendarEventDetails`, fetched
   live, falling back to the snapshot) with **Change meeting** (a browse-events modal - date-range + title filter,
   `CalendarLinkModal`) and **Unlink** actions. A manually-linked event is never overwritten by the auto-match.
-- **Calendar-tab event overlay (Phase 2 feature):** with the Calendar grant, the recordings **Calendar tab**
-  overlays the month's meetings. The web app fetches **`GET /api/calendar/events?timeMin&timeMax`**
-  (`CalendarController`, range-capped ≤62 days, reusing `IGoogleCalendarClient.ListEventsAsync`; empty list
-  when not connected) **once per viewed month** (React-Query keyed by month, short `staleTime`, Refresh link).
+- **Calendar-tab event overlay (Phase 2 feature):** the recordings **Calendar tab** (`nav/CalendarTab.tsx`)
+  overlays the month's meetings from **every** source. The web app fetches
+  **`GET /api/calendar/events?timeMin&timeMax`** (`CalendarController` → `ICalendarAggregator`, range-capped
+  ≤62 days; empty list when nothing is connected) **once per viewed month** (React-Query keyed by month, short
+  `staleTime`, Refresh link).
+  - **Gated on the personal room only** - deliberately *not* on a Google connection any more. It used to be
+    `calendarConnected && isPersonalRoom`, which gave anyone whose calendar was entirely `.ics` feeds (or, once
+    it shipped, a desktop Outlook mirror) a permanently empty Calendar tab. The endpoint already degrades to
+    `[]`, so the gate bought nothing and cost those users the feature outright.
+  - A **Sync Outlook** link sits beside Refresh, shown only when the shell can reach Outlook and the user has
+    opted in; a started sync invalidates the month so the new meetings appear without a second click.
   Pure client helpers (`eventDayKeys`/`dayItems` in `lib/calendar.ts`) colour the grid (event-only days a
   darker green, an events dot on recording days) and build a **merged, time-ordered day list** of meetings +
   recordings - **deduped**, so a linked recording and its meeting show as one row (both icons). Each event is

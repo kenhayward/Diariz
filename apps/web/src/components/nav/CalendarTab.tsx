@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -7,13 +7,20 @@ import { api } from "../../lib/api";
 import { useSelection } from "../../lib/selection";
 import { useDragAutoScroll } from "../../lib/dragAutoScroll";
 import { recordingDayKeys, dayKey, eventDayKeys, visibleGridRange, dayItems } from "../../lib/calendar";
+import {
+  canSyncOutlook as shellCanSyncOutlook,
+  onOutlookState,
+  outlookAvailable as checkOutlookAvailable,
+  syncOutlookNow,
+} from "../../lib/outlookSync";
 import { iconProps } from "../ToolbarButton";
 import MonthCalendar from "../MonthCalendar";
 import { RecordingRow } from "./RecordingRow";
 import type { CalendarEvent, RecordingSummary } from "../../lib/types";
 
-/// The panel's Calendar tab: a month grid over the selected day's merged list of recordings and (for a
-/// personal room with Google Calendar connected) unlinked calendar events.
+/// The panel's Calendar tab: a month grid over the selected day's merged list of recordings and (in a personal
+/// room) unlinked calendar events from every source the user has - Google, subscribed .ics feeds, and a
+/// mirrored desktop Outlook calendar.
 ///
 /// Owns its own state and its two queries. Because the panel mounts this only while the tab is showing,
 /// those queries do not run while you are reading the meetings list - and the month resets to today when
@@ -24,7 +31,7 @@ export default function CalendarTab({
   isPersonalRoom,
 }: {
   recordings: RecordingSummary[];
-  /// The Google overlay is personal-only: a shared room shows its own recordings and nothing else.
+  /// The event overlay is personal-only: a shared room shows its own recordings and nothing else.
   isPersonalRoom: boolean;
 }) {
   const { t, i18n } = useTranslation("workspace");
@@ -41,24 +48,53 @@ export default function CalendarTab({
   const [selectedDay, setSelectedDay] = useState<string | null>(() => dayKey(new Date()));
   const dayKeys = useMemo(() => recordingDayKeys(recordings), [recordings]);
 
-  // Google Calendar overlay: fetch the visible month's events (only when the user has connected Calendar).
-  // Keyed by month, so navigating months auto-refetches; a short staleTime avoids refetch churn on focus.
-  const { data: profile } = useQuery({ queryKey: ["user-profile"], queryFn: api.getProfile });
-  const calendarConnected = profile?.googleCalendar === true;
+  // Calendar overlay: fetch the visible month's events. Keyed by month, so navigating months auto-refetches;
+  // a short staleTime avoids refetch churn on focus.
+  const { data: settings } = useQuery({ queryKey: ["user-settings"], queryFn: api.getUserSettings });
   const { data: calendarEvents = [], isFetching: eventsFetching } = useQuery({
     queryKey: ["calendar-events", month.year, month.month],
     queryFn: () => {
       const { timeMin, timeMax } = visibleGridRange(month.year, month.month);
       return api.getCalendarEvents(timeMin, timeMax);
     },
-    // A shared room shows only its recordings on the calendar - no personal Google-event overlay.
-    enabled: calendarConnected && isPersonalRoom,
+    // A shared room shows only its recordings on the calendar - the event overlay is personal-only.
+    enabled: isPersonalRoom,
     staleTime: 5 * 60_000,
     retry: false,
   });
-  // The Google overlay is personal-only. Force events empty in a shared room (the disabled query still holds
-  // the last personal-room data in cache - the key is room-agnostic - so gate the derived value, not just the fetch).
-  const showCalendarOverlay = calendarConnected && isPersonalRoom;
+  // Personal-only. Force events empty in a shared room (the disabled query still holds the last personal-room
+  // data in cache - the key is room-agnostic - so gate the derived value, not just the fetch).
+  //
+  // Deliberately NOT gated on a Google connection any more. It used to be, which gave anyone whose calendar
+  // was entirely .ics feeds - or now a desktop Outlook mirror - a permanently empty Calendar tab. The endpoint
+  // already returns [] when nothing is connected, so the gate bought nothing and cost those users the feature.
+  const showCalendarOverlay = isPersonalRoom;
+
+  // A "Sync Outlook" affordance right where the meetings are, so a user who notices a missing one does not
+  // have to go to Preferences to refresh. Availability is asked once; the phase keeps the button honest while
+  // a sync runs. All three are inert in a browser, so this costs nothing off the desktop.
+  const [outlookAvailable, setOutlookAvailable] = useState(false);
+  const [outlookSyncing, setOutlookSyncing] = useState(false);
+  const outlookOptedIn = outlookAvailable && settings?.outlookSyncEnabled === true;
+
+  useEffect(() => {
+    let live = true;
+    void checkOutlookAvailable().then((ok) => {
+      if (live) setOutlookAvailable(ok);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  useEffect(() => onOutlookState((s) => setOutlookSyncing(s.phase !== "idle")), []);
+
+  async function syncOutlook() {
+    const { started } = await syncOutlookNow();
+    // A refusal (cooldown, busy) needs no message here - Preferences is where the detail lives. Refreshing on
+    // a started sync is what makes the new meetings appear without the user doing anything else.
+    if (started) void qc.invalidateQueries({ queryKey: ["calendar-events", month.year, month.month] });
+  }
   // Memoised, not `isPersonalRoom ? calendarEvents : []`: a fresh [] every render defeated the eventKeys
   // memo on the next line, and dayItems below it, for every shared-room render.
   const events = useMemo(() => (isPersonalRoom ? calendarEvents : []), [isPersonalRoom, calendarEvents]);
@@ -92,7 +128,19 @@ export default function CalendarTab({
           onNext={() => stepMonth(1)}
         />
         {showCalendarOverlay && (
-          <div className="flex items-center justify-end px-2 pb-1">
+          <div className="flex items-center justify-end gap-3 px-2 pb-1">
+            {/* Only on the Windows desktop, with Outlook reachable and the user opted in - elsewhere there is
+                nothing that could answer, so no button rather than one that explains itself away. */}
+            {shellCanSyncOutlook() && outlookOptedIn && (
+              <button
+                type="button"
+                onClick={() => void syncOutlook()}
+                disabled={outlookSyncing}
+                className="text-[10px] text-gray-400 hover:text-gray-600 disabled:opacity-50 dark:text-gray-500 dark:hover:text-gray-300"
+              >
+                {outlookSyncing ? t("calSyncingOutlook") : t("calSyncOutlook")}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => qc.invalidateQueries({ queryKey: ["calendar-events", month.year, month.month] })}
