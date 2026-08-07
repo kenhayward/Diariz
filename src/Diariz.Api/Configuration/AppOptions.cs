@@ -308,8 +308,13 @@ public class UploadOptions
 
     /// <summary>Max size of a single uploaded file, in bytes (in addition to the per-user storage quota).
     /// Enforced by the action itself, so it is the limit that produces a readable 413; it must stay at or
-    /// below <see cref="MaxRequestBytes"/>, which the request never gets past.</summary>
-    public long MaxBytes { get; set; } = 500L * 1024 * 1024; // 500 MB (~4 h of typical voice audio)
+    /// below <see cref="MaxRequestBytes"/>, which the request never gets past.
+    ///
+    /// <para>How long 500 MB is depends entirely on the format, which is why the limit is in bytes and no
+    /// hour figure is shown to users: the browser recorder's WebM/Opus measures ~0.9 MB/min (a 3 h 17 m
+    /// meeting came to 178 MB), so ~9 h; a 256 kbps MP3 is ~2 MB/min, so ~4 h; uncompressed 44.1 kHz stereo
+    /// WAV is ~10 MB/min and reaches the cap in under an hour.</para></summary>
+    public long MaxBytes { get; set; } = 500L * 1024 * 1024; // 500 MB
     /// <summary>Accept M4A/AAC uploads. AAC has active patents, so it can be disabled for maximum
     /// commercial caution; the royalty-free formats (WAV/MP3/FLAC/Ogg/Opus/WebM) are always accepted.</summary>
     public bool AllowAac { get; set; } = true;
