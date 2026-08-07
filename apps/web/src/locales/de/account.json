@@ -324,5 +324,6 @@
   "outlookWindowPast": "Tage rueckwaerts",
   "outlookWindowFuture": "Tage voraus",
   "outlookSkipPrivate": "Private Termine ueberspringen",
-  "outlookIncludeBody": "Einladungstext einschliessen"
+  "outlookIncludeBody": "Einladungstext einschliessen",
+  "googleCalendarGrantedHint": "Kalenderzugriff ist erteilt. Zum Widerrufen nutzen Sie Trennen - oder entfernen Sie unten einzelne Kalender, damit sie nicht verwendet werden."
 }

@@ -1628,10 +1628,22 @@ into it with no URL or per-user setup at all.
       helper never interprets a recurrence pattern itself. It **never calls `Application.Quit()`**: releasing
       the references leaves an Outlook the user had open exactly as it was. COM *will* start Outlook if it is
       closed.
-    - **Two bugs the first real run caught**, both of which would only have failed on a user's machine:
-      `InvariantGlobalization` makes `GetCultureInfo("en-US")` throw, so the `Restrict` date format is now an
-      explicit format string; and `TimeZoneInfo.Local.Id` is a **Windows** id on Windows, so the server converts
-      the device-zone fallback rather than storing it verbatim in an IANA column.
+    - **Three bugs only a real calendar exposed**, all of which would have failed solely on a user's machine:
+      `InvariantGlobalization` makes `GetCultureInfo("en-US")` throw, so the `Restrict` date format is built
+      explicitly; `TimeZoneInfo.Local.Id` is a **Windows** id on Windows, so the server converts the
+      device-zone fallback rather than storing it verbatim in an IANA column; and the bracketed
+      `[Start] < '...'` filter parses its dates in **Outlook's** locale while this process formats them in its
+      own, so a US-ordered date handed to an en-GB Outlook silently stopped constraining anything and
+      `Restrict` returned the whole folder (asking for two months yielded hundreds of appointments from six
+      months earlier, and none of the recent ones). The filter is now **DASL with ISO-8601 dates**, which is
+      locale-independent. `Sort("[Start]")` must also come **before** `IncludeRecurrences`, not after.
+    - **`GlobalAppointmentID` is NOT per-occurrence**, contrary to the assumption inherited from the reference
+      implementation: a real calendar returned 87 recurring occurrences sharing 24 ids - one per series. Since
+      the server keys a row on `(source, uid)`, occurrences would collapse into a single row and overwrite each
+      other every sync. `normalizeAppointment` therefore qualifies a recurring occurrence's uid with its start.
+      Done there rather than in `dedupeUids` for stability: dedupe keeps the *first* sighting bare, so an
+      occurrence's id would depend on where the rolling window began and would change as it rolled, orphaning
+      its recording link and pre-meeting notes.
     - **Size.** Self-contained is required (a consumer installer cannot demand a .NET runtime) and trimming must
       stay **off** (late-bound COM is entirely reflection), so the payload is compressed instead: 73 MB → 37 MB,
       taking the Windows installer to ~131 MB.

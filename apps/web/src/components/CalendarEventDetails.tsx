@@ -114,8 +114,10 @@ export default function CalendarEventDetails({
         </div>
       )}
 
-      {/* When the title is shown (Overview) it already links out to Google, so skip the redundant line. */}
-      {!showTitle && event.htmlLink && (
+      {/* When the title is shown (Overview) it already links out to Google, so skip the redundant line.
+          Skipped for a mirrored Outlook event too: there htmlLink is the meeting's JOIN link, not a calendar
+          page, so this label would be plainly wrong - the Join the meeting button is the control for it. */}
+      {!showTitle && event.htmlLink && !event.calendarId?.startsWith("outlook:") && (
         <a
           href={event.htmlLink}
           target="_blank"

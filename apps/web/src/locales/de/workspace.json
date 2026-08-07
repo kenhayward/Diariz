@@ -621,5 +621,7 @@
   "speakerNoContactDetails": "Keine Kontaktdaten hinterlegt.",
   "speakerAddContactDetails": "Daten erganzen",
   "calSyncOutlook": "Outlook synchronisieren",
-  "calSyncingOutlook": "Outlook wird synchronisiert..."
+  "calSyncingOutlook": "Outlook wird synchronisiert...",
+  "calJoinMeeting": "Meeting beitreten",
+  "calNoMeetingLink": "Diese Einladung enthaelt keinen Meeting-Link."
 }

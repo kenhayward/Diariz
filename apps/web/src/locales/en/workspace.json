@@ -621,5 +621,7 @@
   "speakerNoContactDetails": "No contact details recorded.",
   "speakerAddContactDetails": "Add details",
   "calSyncOutlook": "Sync Outlook",
-  "calSyncingOutlook": "Syncing Outlook..."
+  "calSyncingOutlook": "Syncing Outlook...",
+  "calJoinMeeting": "Join the Meeting",
+  "calNoMeetingLink": "This invite has no meeting link."
 }

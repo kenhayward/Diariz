@@ -74,11 +74,13 @@ public static class Program
             var items = Get(folder, "Items");
             if (items is null) return ReadResult.Failed("error", "The calendar had no item collection.");
 
-            // The standard idiom, and the order matters: IncludeRecurrences only expands a series once the
-            // collection is sorted by Start. Outlook then hands back flattened occurrences, so this never has to
-            // interpret a recurrence pattern itself.
-            Set(items, "IncludeRecurrences", true);
+            // The standard idiom, and the order is load-bearing: Sort FIRST, then IncludeRecurrences, then
+            // Restrict. Setting IncludeRecurrences before sorting silently breaks the subsequent Restrict -
+            // it returns items from outside the requested window entirely (observed: asking for two months
+            // returned hundreds of appointments from six months earlier). Outlook then hands back flattened
+            // occurrences, so this never has to interpret a recurrence pattern itself.
             Invoke(items, "Sort", "[Start]", false);
+            Set(items, "IncludeRecurrences", true);
 
             var restricted = Invoke(items, "Restrict", Filter(options.Start, options.End));
             if (restricted is null) return ReadResult.Failed("error", "The calendar filter returned nothing.");
@@ -308,16 +310,23 @@ public static class Program
         return url.Length > 8 ? url : null;
     }
 
-    /// <summary>Outlook's Restrict filter.
-    /// <para>The date format is pinned explicitly rather than taken from a culture. Outlook wants US-style
-    /// <c>MM/dd/yyyy hh:mm tt</c>, and a locale-formatted date is a classic cause of a silently empty result
-    /// set. Spelling the format out also keeps this working under <c>InvariantGlobalization</c>, where asking
-    /// for <c>en-US</c> by name throws - which it did, on the first real run.</para></summary>
-    private const string RestrictDateFormat = "MM/dd/yyyy hh:mm tt";
+    /// <summary>Outlook's Restrict filter, in <b>DASL</b> form with ISO-8601 dates.
+    ///
+    /// <para>The obvious alternative - the bracketed <c>[Start] &lt; '...'</c> syntax - parses its dates using
+    /// <b>Outlook's</b> locale, while this process formats them using its own. Under
+    /// <c>InvariantGlobalization</c> that means writing <c>08/20/2026</c> (US order) and handing it to an
+    /// en-GB Outlook that reads it as day 8 of month 20. The filter does not throw; it silently stops
+    /// constraining anything, and Restrict hands back the whole folder - which is exactly what happened:
+    /// asking for two months returned hundreds of appointments from six months earlier.</para>
+    ///
+    /// <para>DASL takes ISO-8601 and is locale-independent, so there is no format to get wrong. The comparison
+    /// is an <b>overlap</b> test, so a meeting already under way when the window opens still belongs to it.</para></summary>
+    private const string DtStart = "urn:schemas:calendar:dtstart";
+    private const string DtEnd = "urn:schemas:calendar:dtend";
 
     private static string Filter(DateTime start, DateTime end) =>
-        $"[Start] < '{end.ToString(RestrictDateFormat, CultureInfo.InvariantCulture)}' AND " +
-        $"[End] > '{start.ToString(RestrictDateFormat, CultureInfo.InvariantCulture)}'";
+        $"@SQL=\"{DtStart}\" < '{end.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}' AND " +
+        $"\"{DtEnd}\" > '{start.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}'";
 
     private static string Classify(Exception ex) => ex switch
     {

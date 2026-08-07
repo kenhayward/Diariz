@@ -324,5 +324,6 @@
   "outlookWindowPast": "Jours en arriere",
   "outlookWindowFuture": "Jours a venir",
   "outlookSkipPrivate": "Ignorer les rendez-vous prives",
-  "outlookIncludeBody": "Inclure le texte de l'invitation"
+  "outlookIncludeBody": "Inclure le texte de l'invitation",
+  "googleCalendarGrantedHint": "L'acces au calendrier est accorde. Pour le retirer, utilisez Deconnecter, ou decochez des agendas ci-dessous pour cesser de les utiliser."
 }

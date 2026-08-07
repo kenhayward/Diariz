@@ -55,6 +55,36 @@ const raw = {
   lastModified: "2026-07-01T08:00:00Z",
 };
 
+// Outlook was expected to give each occurrence of a series its own GlobalAppointmentID. Against a real
+// calendar it does not - 87 occurrences came back sharing 24 ids. The server keys a row on source + uid, so
+// unqualified these would collapse into one row per series and overwrite each other on every sync.
+test("normalizeAppointment keys a recurring occurrence by its start as well as its uid", () => {
+  const series = { ...raw, isRecurring: true };
+  const first = normalizeAppointment({ ...series, start: "2026-07-02T09:00:00Z" });
+  const second = normalizeAppointment({ ...series, start: "2026-07-09T09:00:00Z" });
+
+  assert.notEqual(first.uid, second.uid);
+  assert.equal(first.uid, `${raw.uid}#2026-07-02T09:00:00Z`);
+});
+
+// Order-independence is the point. Qualifying only on a second sighting (which is what dedupeUids does)
+// would make an occurrence's id depend on where the rolling window happened to start, so it would change as
+// the window moved - orphaning its recording link and pre-meeting notes.
+test("a recurring occurrence keeps the same uid whatever order it arrives in", () => {
+  const series = { ...raw, isRecurring: true };
+  const alone = normalizeAppointment({ ...series, start: "2026-07-09T09:00:00Z" });
+  const afterAnother = [
+    { ...series, start: "2026-07-02T09:00:00Z" },
+    { ...series, start: "2026-07-09T09:00:00Z" },
+  ].map((e) => normalizeAppointment(e))[1];
+
+  assert.equal(alone.uid, afterAnother.uid);
+});
+
+test("a one-off appointment keeps its uid unqualified", () => {
+  assert.equal(normalizeAppointment({ ...raw, isRecurring: false }).uid, raw.uid);
+});
+
 test("normalizeAppointment maps a timed appointment", () => {
   const e = normalizeAppointment(raw);
   assert.equal(e.uid, raw.uid);

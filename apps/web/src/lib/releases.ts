@@ -60,6 +60,41 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.193.0",
+    date: "2026-08-07",
+    pr: 481,
+    headline: "Join a meeting and record it in one click, plus two Outlook sync fixes",
+    summary:
+      "Opening a meeting from the calendar now offers **Join the Meeting** next to Link a recording. It opens " +
+      "the meeting and starts recording at the same time, using whichever microphone or system-audio setting " +
+      "you already have chosen. It is greyed out when an invite carries no meeting link.\n\n" +
+      "This replaces a link at the foot of an Outlook invite that said \"Open in Google Calendar\" and did " +
+      "nothing of the sort - it actually joined the meeting. Useful, but not what it claimed.\n\n" +
+      "Two Outlook sync bugs are fixed with it, and both were significant enough to warrant syncing again.\n\n" +
+      "**Meetings before today were missing.** The date range being asked for was written in US order and read " +
+      "by a UK Outlook as a nonsense date, so it was quietly ignored and Outlook returned whatever it liked - " +
+      "in testing, hundreds of appointments from six months outside the range, and none of the recent ones. " +
+      "Your past meetings will appear once you have synced again.\n\n" +
+      "**Repeating meetings were collapsing into one.** Outlook gives every occurrence of a repeating meeting " +
+      "the same identifier, so a weekly meeting was stored as a single entry that each occurrence overwrote. " +
+      "Occurrences are now kept apart properly.\n\n" +
+      "Because the old, wrong entries sit outside the range a normal sync tidies up, the cleanest fix is to " +
+      "disconnect the machine in Preferences and let it sync afresh - that clears everything it had stored.\n\n" +
+      "Also, the \"Read my Google Calendar\" tickbox no longer looks like a setting once access has been " +
+      "granted. It only ever chose what to ask for when connecting; unticking it appeared to do something and " +
+      "silently reverted. It is now shown as granted, with a note pointing at Disconnect, or at unticking " +
+      "individual calendars to stop them being used.",
+    added: [
+      "Join the Meeting on a calendar meeting: opens the meeting and starts recording together.",
+    ],
+    fixed: [
+      "Outlook meetings before today were missing, and meetings from outside the chosen date range could be stored instead.",
+      "Every occurrence of a repeating Outlook meeting was stored as one entry, overwriting itself on each sync.",
+      "An Outlook invite offered \"Open in Google Calendar\", which actually joined the meeting.",
+      "The \"Read my Google Calendar\" tickbox reverted silently when unticked, because it was never a setting.",
+    ],
+  },
+  {
     version: "0.192.0",
     date: "2026-08-07",
     pr: 480,

@@ -621,5 +621,7 @@
   "speakerNoContactDetails": "No hay datos de contacto.",
   "speakerAddContactDetails": "Anadir datos",
   "calSyncOutlook": "Sincronizar Outlook",
-  "calSyncingOutlook": "Sincronizando Outlook..."
+  "calSyncingOutlook": "Sincronizando Outlook...",
+  "calJoinMeeting": "Unirse a la reunion",
+  "calNoMeetingLink": "Esta invitacion no tiene enlace de reunion."
 }

@@ -49,10 +49,23 @@ export default function GoogleAccountSection() {
               </span>
               {t("googleConnectedAs", { email: profile.email })}
             </p>
+            {/* This is the scope asked for when CONNECTING, not a live setting - there is no save behind it,
+                and the only way to withdraw the grant is Disconnect. Left editable once connected it silently
+                reverted on reopen, which is indistinguishable from a broken setting. */}
             <label className="flex items-center gap-2">
-              <input type="checkbox" checked={gCalendar} onChange={(e) => setGCalendar(e.target.checked)} />
-              <span className="dark:text-gray-200">{t("googleCalendarRead")}</span>
+              <input
+                type="checkbox"
+                checked={gCalendar}
+                disabled={profile.googleCalendar}
+                onChange={(e) => setGCalendar(e.target.checked)}
+              />
+              <span className={profile.googleCalendar ? "text-gray-400 dark:text-gray-500" : "dark:text-gray-200"}>
+                {t("googleCalendarRead")}
+              </span>
             </label>
+            {profile.googleCalendar && (
+              <p className="text-xs text-gray-400 dark:text-gray-500">{t("googleCalendarGrantedHint")}</p>
+            )}
             <p className="text-xs text-gray-400 dark:text-gray-500">{t("googleDataHint")}</p>
             <div className="flex gap-2">
               <button

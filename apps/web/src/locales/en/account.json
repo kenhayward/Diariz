@@ -324,5 +324,6 @@
   "outlookWindowPast": "Days back",
   "outlookWindowFuture": "Days ahead",
   "outlookSkipPrivate": "Skip private appointments",
-  "outlookIncludeBody": "Include invite text"
+  "outlookIncludeBody": "Include invite text",
+  "googleCalendarGrantedHint": "Calendar access is granted. To withdraw it, use Disconnect - or untick individual calendars below to stop them being used."
 }

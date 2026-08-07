@@ -25,6 +25,7 @@ import {
   type SourceSelection,
 } from "../lib/audioDevices";
 import { connectTrayRecorder, type RecorderState, type TrayBridge } from "../lib/trayRecorder";
+import { onRecordingRequested } from "../lib/recordRequest";
 import { useStatus } from "../lib/status";
 import { useRoom } from "../lib/rooms";
 import { RoomPermission } from "../lib/types";
@@ -996,6 +997,11 @@ export default function Recorder({
       reportRef.current = () => {};
     };
   }, []);
+
+  // Somewhere else in the app asking us to record - today, the Join-the-meeting button on a calendar event.
+  // Started with no argument, so it uses whatever audio source the user has already chosen on screen rather
+  // than second-guessing them from a different page.
+  useEffect(() => onRecordingRequested(() => void startFn.current()), []);
 
   const secs = Math.floor(elapsed / 1000);
   const mmss = `${String(Math.floor(secs / 60)).padStart(2, "0")}:${String(secs % 60).padStart(2, "0")}`;

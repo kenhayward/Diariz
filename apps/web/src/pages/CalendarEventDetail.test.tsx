@@ -11,6 +11,7 @@ vi.mock("../lib/api", () => ({
 
 import { api } from "../lib/api";
 import CalendarEventDetail from "./CalendarEventDetail";
+import { onRecordingRequested } from "../lib/recordRequest";
 
 const event: CalendarEvent = {
   id: "evt1", summary: "Quarterly Planning", start: "2026-07-02T09:00:00Z", end: "2026-07-02T10:00:00Z",
@@ -68,5 +69,65 @@ describe("CalendarEventDetail", () => {
     (api.getCalendarEvent as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("404"));
     renderPage();
     expect(await screen.findByText(/no longer available/i)).toBeTruthy();
+  });
+});
+
+describe("CalendarEventDetail: Join the Meeting", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  /// Joining and recording are one action: the reason you opened this page is to capture the meeting you are
+  /// about to be in, so the button must do both.
+  it("opens the join link and asks the recorder to start", async () => {
+    (api.getCalendarEvent as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...event,
+      calendarId: "outlook:2f1c0000-0000-0000-0000-000000000000",
+      htmlLink: "https://teams.example/join/abc",
+    });
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    const started = vi.fn();
+    const off = onRecordingRequested(started);
+    try {
+      renderPage();
+      fireEvent.click(await screen.findByRole("button", { name: /join the meeting/i }));
+
+      expect(open).toHaveBeenCalledWith("https://teams.example/join/abc", "_blank", "noopener,noreferrer");
+      expect(started).toHaveBeenCalled();
+    } finally {
+      off();
+      open.mockRestore();
+    }
+  });
+
+  /// Disabled rather than hidden, so the control does not appear and disappear between meetings.
+  it("disables the button when the invite carries no join link", async () => {
+    (api.getCalendarEvent as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...event,
+      calendarId: "primary",
+      htmlLink: "https://calendar.google.com/event?eid=xyz", // a calendar page, not a join link
+      location: "Room 4",
+      description: "Agenda",
+    });
+    renderPage();
+
+    const button = await screen.findByRole("button", { name: /join the meeting/i });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("finds a Google meeting's join link in its location", async () => {
+    (api.getCalendarEvent as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...event,
+      calendarId: "primary",
+      location: "https://meet.google.com/abc-defg-hij",
+    });
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    try {
+      renderPage();
+      fireEvent.click(await screen.findByRole("button", { name: /join the meeting/i }));
+      expect(open).toHaveBeenCalledWith("https://meet.google.com/abc-defg-hij", "_blank", "noopener,noreferrer");
+    } finally {
+      open.mockRestore();
+    }
   });
 });

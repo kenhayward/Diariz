@@ -324,5 +324,6 @@
   "outlookWindowPast": "Dias atras",
   "outlookWindowFuture": "Dias adelante",
   "outlookSkipPrivate": "Omitir citas privadas",
-  "outlookIncludeBody": "Incluir el texto de la invitacion"
+  "outlookIncludeBody": "Incluir el texto de la invitacion",
+  "googleCalendarGrantedHint": "El acceso al calendario esta concedido. Para retirarlo usa Desconectar, o desmarca calendarios concretos abajo para dejar de usarlos."
 }
