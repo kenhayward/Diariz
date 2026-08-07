@@ -231,7 +231,35 @@ three-second window the case for that work is weak.
      own `Uploads:MaxBytes` (500 MB) which is the one that produces a readable 413. The multipart one is set
      explicitly in `Program.cs` because it defaults to **128 MB** and is *not* raised by `[RequestSizeLimit]`;
      left at the default it rejected anything larger while binding the form, before the action could explain
-     why. Any outer reverse proxy needs a matching body limit too.
+     why (a 400 reading `Failed to read the request form. Multipart body length limit 134217728 exceeded`,
+     which reads as a framework fault rather than a size refusal). Fixed in 0.186.12 / PR #472; covered by
+     `UploadSizeLimitIntegrationTests`, which posts a real 132 MB body over HTTP.
+   - **The outer reverse proxy is a fifth limit, and it is not in this repo.** Anything in front of the web
+     container (an nginx-proxy-manager host, a cloud load balancer) applies its own body cap and timeouts.
+     Deployed settings, in use since 2026-08-07 and confirmed against the recording that previously tripped
+     the 128 MB multipart limit (so the size range above 128 MB is exercised; the 500 MB ceiling itself is
+     not yet):
+
+     ```nginx
+     client_max_body_size 1024m;      # match apps/web/nginx.conf; see below for why not 500m
+     proxy_read_timeout 600s;
+     proxy_send_timeout 600s;
+     proxy_request_buffering off;
+     ```
+
+     Three things worth keeping straight:
+     - **Size the proxy above the app, never at it.** `Uploads:MaxBytes` should stay the narrowest limit,
+       because the action is the only layer that can answer with "the maximum upload size is 500 MB". A proxy
+       set to `500m` both pre-empts that message with a bare nginx 413 *and* rejects a genuine 500 MB file,
+       since the multipart envelope adds a few hundred bytes on top of it.
+     - **Timeouts, not size, are the next failure.** A 500 MB upload takes minutes on a domestic connection,
+       and the API then streams it into MinIO before it answers - well past a typical 60s default, which
+       surfaces as a **504** rather than anything about size. Diagnose by the status code: 413 is a limit,
+       504 is a timeout.
+     - **`proxy_request_buffering off` matters most.** Left on, the proxy spools the whole upload to its own
+       disk before forwarding a byte - doubling the wall-clock wait and needing scratch space equal to the
+       file. (Note the distinction from the `/mcp` requirement further down: that one disables **response**
+       buffering, `proxy_buffering`, for a different reason.)
    - Job payload is JSON with **PascalCase** keys: `{ RecordingId, TranscriptionId, BlobKey, Model, MinSpeakers?, MaxSpeakers? }` —
      produced by .NET, consumed by Python.
 3. **Transcribe.** The worker `XREADGROUP`s a job, downloads the blob from MinIO to a temp file, then runs
