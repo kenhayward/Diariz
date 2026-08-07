@@ -60,6 +60,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.186.10",
+    date: "2026-08-07",
+    pr: 470,
+    headline: "Groundwork: the drag, drop and paste rules move to one place",
+    summary:
+      "Nothing changes on screen. Everything the meetings list does when you drag a meeting into a folder, " +
+      "reorder or reparent a folder, or cut and paste - along with the message strip those actions report " +
+      "failures in - now lives in a single small module instead of being spread through the panel. This is " +
+      "the part of the app that changes most often, so giving it its own home is the point of the whole " +
+      "exercise: the panel is now 393 lines, down from 1,373 when this started.",
+    changed: [
+      "Internal only: the list's drag-drop, folder-reorder and cut/paste operations moved into lib/recordingDrop. No user-visible change.",
+    ],
+  },
+  {
     version: "0.186.9",
     date: "2026-08-07",
     pr: 469,
