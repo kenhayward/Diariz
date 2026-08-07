@@ -39,14 +39,14 @@ test("packaging always rebuilds the reader first", () => {
   assert.match(pkg.scripts["build:outlook"], /dotnet publish/);
 });
 
-/// The csproj with XML comments stripped. The comments explain these very decisions and mention the elements
-/// by name, so matching against the raw text gives false positives - as this test found on its first run.
+/// The csproj as written. Its comments deliberately describe these decisions in prose rather than naming the
+/// XML elements, so a plain match here cannot be fooled by a comment - which it was on this test's first run,
+/// before the comment was reworded. That is cheaper and more honest than stripping comments with a regex.
 function readerCsproj() {
-  const raw = fs.readFileSync(
+  return fs.readFileSync(
     path.join(root, "native", "Diariz.OutlookReader", "Diariz.OutlookReader.csproj"),
     "utf8",
   );
-  return raw.replace(/<!--[\s\S]*?-->/g, "");
 }
 
 test("the reader is not a fifth version mirror", () => {

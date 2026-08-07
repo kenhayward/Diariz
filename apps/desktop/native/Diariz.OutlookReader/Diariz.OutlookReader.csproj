@@ -6,9 +6,9 @@
     Deliberately NOT in Diariz.slnx: that solution is built on Linux in CI, and a -windows TFM would break it.
     This is published by its own Windows-only step and shipped alongside the Electron app.
 
-    Deliberately carries NO <Version>: it is never published to a registry, so making it a fifth thing to keep
-    in lockstep with version.json on every PR would be all cost and no benefit. versionMirrors.test.ts pins the
-    four that matter.
+    Deliberately carries no version element: it is never published to a registry, so making it a fifth thing to
+    keep in lockstep with version.json on every PR would be all cost and no benefit. versionMirrors.test.ts pins
+    the four that matter, and outlookPackaging.test.js asserts this file adds no fifth.
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
