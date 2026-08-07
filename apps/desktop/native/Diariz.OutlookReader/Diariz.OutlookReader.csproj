@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The Windows desktop app's Outlook reader.
+
+    Deliberately NOT in Diariz.slnx: that solution is built on Linux in CI, and a -windows TFM would break it.
+    This is published by its own Windows-only step and shipped alongside the Electron app.
+
+    Deliberately carries no version element: it is never published to a registry, so making it a fifth thing to
+    keep in lockstep with version.json on every PR would be all cost and no benefit. versionMirrors.test.ts pins
+    the four that matter, and outlookPackaging.test.js asserts this file adds no fifth.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Diariz.OutlookReader</AssemblyName>
+    <RootNamespace>Diariz.OutlookReader</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+
+    <!--
+      Late-bound COM is entirely reflection, so trimming would strip exactly what this needs - it stays off,
+      which is what makes the payload large. Self-contained is non-negotiable for a consumer installer (a
+      framework-dependent build would demand the user install a .NET runtime first), so the size is recovered
+      by compressing the bundle instead: ~73 MB -> ~33 MB, paid back as a little decompression on launch. This
+      runs on app start and on demand, not in a hot loop, so that is the right side of the trade.
+    -->
+    <PublishTrimmed>false</PublishTrimmed>
+    <PublishSingleFile>true</PublishSingleFile>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <SelfContained>true</SelfContained>
+    <!-- Nothing here needs the debug symbols shipped alongside the exe. -->
+    <DebugType>none</DebugType>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- Built-in COM interop; no interop assembly and therefore no Outlook version coupling. -->
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+  </PropertyGroup>
+
+</Project>

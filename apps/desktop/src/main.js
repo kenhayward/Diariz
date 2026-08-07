@@ -1,7 +1,9 @@
 "use strict";
 
 const path = require("node:path");
+const os = require("node:os");
 const crypto = require("node:crypto");
+const { randomUUID } = require("node:crypto");
 const {
   app,
   BrowserWindow,
@@ -21,6 +23,18 @@ const { trayRecorderItems, trayTooltip, notificationFor } = require("./recorderS
 const { updateRestartItem, notificationForUpdate, isNewerVersion } = require("./updateState");
 const { buildStartUrl, codeFromArgv, notificationForAuthError } = require("./desktopAuth");
 const { cropRectFor, resizeDims, clampRect } = require("./captureTarget");
+const {
+  SYNC_DEFAULTS,
+  windowFor,
+  normalizeAppointment,
+  dedupeUids,
+  capEvents,
+  shouldStartSync,
+  trayOutlookItems,
+  notificationForSyncResult,
+} = require("./outlookSync");
+const outlookHost = require("./outlookHost");
+const { deviceIdFor } = require("./deviceId");
 const {
   trayScreenshotItems,
   DEFAULT_ACCELERATOR,
@@ -310,6 +324,133 @@ async function handleAuthDeepLink(argv) {
 
 // Surface a whole window to the renderer, waiting for the page to finish loading on a cold start. Used
 // for both the signed-in token and sign-in failures.
+// ---- Desktop Outlook calendar ----
+//
+// The shell can read the local calendar but holds no token; the renderer holds the token but cannot see
+// Outlook. So this harvests a window and hands it over for the web app to POST - the same split the screenshot
+// feature uses. Nothing runs until the renderer reports the user has opted in.
+const outlook = {
+  phase: "idle",           // idle | reading | pushing
+  available: false,        // Windows, and the reader is actually present
+  enabled: false,          // the user's opt-in, as reported by the renderer
+  inFlight: false,
+  lastSyncAt: 0,
+  lastError: null,
+  cfg: { ...SYNC_DEFAULTS },
+  launchSyncDone: false,
+};
+
+function setOutlookPhase(phase) {
+  if (outlook.phase === phase) return;
+  outlook.phase = phase;
+  refreshTray();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("outlook:state", {
+      phase,
+      lastSyncAt: outlook.lastSyncAt,
+      lastError: outlook.lastError,
+    });
+  }
+}
+
+/// Read the calendar and hand the window to the renderer to upload.
+///
+/// Resolves to a reason when it did not start, so a caller (the tray, or the button in the web app) can say
+/// why rather than appearing to do nothing.
+async function syncOutlook() {
+  if (process.platform !== "win32") return { started: false, reason: "not-windows" };
+  if (!outlook.available) return { started: false, reason: "unavailable" };
+  if (!outlook.enabled) return { started: false, reason: "disabled" };
+  if (outlook.inFlight) return { started: false, reason: "busy" };
+  if (!shouldStartSync(outlook, Date.now())) return { started: false, reason: "cooldown" };
+
+  outlook.inFlight = true;
+  setOutlookPhase("reading");
+  try {
+    const { start, end } = windowFor(new Date(), outlook.cfg);
+    const result = await outlookHost.read({
+      start,
+      end,
+      skipPrivate: outlook.cfg.skipPrivate,
+      includeBody: outlook.cfg.includeBody,
+    });
+
+    if (!result.ok) {
+      outlook.lastError = result.reason || "error";
+      const note = notificationForSyncResult({ ok: false, reason: result.reason });
+      if (note && Notification.isSupported()) new Notification(note).show();
+      return { started: false, reason: result.reason || "error" };
+    }
+
+    const events = capEvents(
+      dedupeUids(
+        (result.events || [])
+          .map((raw) => normalizeAppointment(raw, outlook.cfg))
+          .filter(Boolean),
+      ),
+    );
+
+    setOutlookPhase("pushing");
+    // The renderer POSTs from here; `outlook:result` reports what the server did.
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("outlook:push", {
+        syncId: randomUUID(),
+        device: {
+          deviceId: deviceIdFor(store),
+          deviceName: os.hostname(),
+          mailboxName: result.mailboxName || null,
+          timeZone: result.deviceTimeZone || null,
+        },
+        windowStart: start,
+        windowEnd: end,
+        // Passed through untouched: a partial read must reach the server as incomplete, or it would treat the
+        // events the failed read never got to as cancellations and delete them.
+        complete: result.complete !== false,
+        events,
+      });
+    }
+    return { started: true };
+  } catch (err) {
+    outlook.lastError = "error";
+    console.error("Outlook sync failed:", err);
+    return { started: false, reason: "error" };
+  } finally {
+    outlook.inFlight = false;
+    outlook.lastSyncAt = Date.now();
+    store.set("outlookLastSyncAt", outlook.lastSyncAt);
+    if (outlook.phase !== "pushing") setOutlookPhase("idle");
+  }
+}
+
+// The renderer telling us the connector's settings - and, by arriving at all, that a signed-in renderer is
+// ready to POST. That is what licenses the launch sync: app-ready cannot be the trigger, because the user may
+// not be signed in yet and the push needs their token.
+ipcMain.on("outlook:ready", (_e, cfg) => {
+  outlook.enabled = cfg?.enabled === true;
+  outlook.cfg = {
+    pastDays: cfg?.pastDays ?? SYNC_DEFAULTS.pastDays,
+    futureDays: cfg?.futureDays ?? SYNC_DEFAULTS.futureDays,
+    skipPrivate: cfg?.skipPrivate !== false,
+    includeBody: cfg?.includeBody !== false,
+  };
+  refreshTray();
+
+  if (outlook.enabled && outlook.available && !outlook.launchSyncDone) {
+    outlook.launchSyncDone = true;
+    void syncOutlook();
+  }
+});
+
+ipcMain.handle("outlook:available", () => outlook.available);
+ipcMain.handle("outlook:sync-now", () => syncOutlook());
+
+ipcMain.on("outlook:result", (_e, result) => {
+  outlook.lastError = result?.ok ? null : result?.error || "error";
+  setOutlookPhase("idle");
+  const note = notificationForSyncResult(result);
+  if (note && Notification.isSupported()) new Notification(note).show();
+});
+
 function sendToRenderer(channel, payload) {
   showMainWindow();
   if (!mainWindow) return;
@@ -874,6 +1015,14 @@ function refreshTray() {
     },
   }));
 
+  const outlookItems = trayOutlookItems(outlook).map((item) => ({
+    label: item.label,
+    enabled: item.enabled,
+    click: () => {
+      if (item.id === "outlook-sync") void syncOutlook();
+    },
+  }));
+
   const restart = updateRestartItem(update);
 
   tray.setToolTip(trayTooltip(recorder));
@@ -891,6 +1040,7 @@ function refreshTray() {
       { type: "separator" },
       ...recordItems,
       ...shotItems,
+      ...outlookItems,
       { type: "separator" },
       {
         label: process.platform === "darwin" ? "Open at Login" : "Start with Windows",
@@ -973,6 +1123,11 @@ if (!app.requestSingleInstanceLock()) {
     } else {
       Menu.setApplicationMenu(null);
     }
+    // Whether this build can reach Outlook at all (Windows + the bundled reader is present). Resolved once
+    // here so the tray and the web app agree; the user's opt-in arrives separately from the renderer.
+    outlook.available = outlookHost.isAvailable();
+    outlook.lastSyncAt = store.get("outlookLastSyncAt") || 0;
+
     buildTray();
     if (targetUrl()) createMainWindow(targetUrl());
     else showSetupWindow();

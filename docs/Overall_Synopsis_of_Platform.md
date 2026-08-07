@@ -1604,6 +1604,41 @@ into it with no URL or per-user setup at all.
     fires on launch and from the tray - neither of which opens the settings window. Its `reportOutlookReady`
     doubles as "a signed-in renderer is ready to POST", which is what licenses the shell's launch sync: the
     shell cannot use app-ready for that, since the user may not be signed in yet.
+  - **The reader (desktop shell).** A **self-contained .NET console exe**,
+    `apps/desktop/native/Diariz.OutlookReader`, published to `native/publish` and shipped via electron-builder
+    `extraResources` to `resources/outlook/`. It takes `--start/--end/--max/--no-body/--include-private` and
+    writes **one JSON document to stdout**; `outlookHost.js` spawns it with a 120 s timeout and parses that.
+    - **Why a separate process, not a native Node module.** An in-process COM binding (`winax`) is broken from
+      Electron 41 up - it compiles against raw V8 headers with no N-API, so it breaks every Electron major - and
+      would have made this the shell's first native dependency. Beyond that, COM is synchronous: a
+      1,200-appointment read takes tens of seconds and would freeze the tray, the recorder IPC and the
+      screenshot hotkey, possibly mid-meeting. A process boundary also means a hung or crashing COM call kills
+      the helper, not Diariz. The shell keeps **zero native dependencies** (guarded by
+      `outlookPackaging.test.js`).
+    - **How it reads.** Late binding only (`Type.GetTypeFromProgID` + `InvokeMember`), so no interop assembly
+      and no Outlook version coupling. `IncludeRecurrences = true` then `Sort("[Start]")` then `Restrict(...)`
+      - the order matters, as Outlook only expands a series once the collection is sorted by start - so the
+      helper never interprets a recurrence pattern itself. It **never calls `Application.Quit()`**: releasing
+      the references leaves an Outlook the user had open exactly as it was. COM *will* start Outlook if it is
+      closed.
+    - **Two bugs the first real run caught**, both of which would only have failed on a user's machine:
+      `InvariantGlobalization` makes `GetCultureInfo("en-US")` throw, so the `Restrict` date format is now an
+      explicit format string; and `TimeZoneInfo.Local.Id` is a **Windows** id on Windows, so the server converts
+      the device-zone fallback rather than storing it verbatim in an IANA column.
+    - **Size.** Self-contained is required (a consumer installer cannot demand a .NET runtime) and trimming must
+      stay **off** (late-bound COM is entirely reflection), so the payload is compressed instead: 73 MB → 37 MB,
+      taking the Windows installer to ~131 MB.
+    - **Errors** are reported as machine-readable reasons - `not-installed`, `new-outlook`, `busy` (retried once
+      on `RPC_E_CALL_REJECTED` / `RPC_E_SERVERCALL_RETRYLATER`), `denied`, `timeout`, `error` - which
+      `describeComError` turns into copy. `new-outlook` is deliberately distinct: the new Outlook exposes no COM
+      at all, and it is the case a growing share of Windows users will hit.
+    - **Triggers:** the once-per-launch sync (on the renderer's `outlook:ready`), the tray item
+      (`trayOutlookItems`, hidden unless the reader is present *and* the user opted in), and `outlook:sync-now`
+      from the web app. A 60 s per-machine cooldown (`shouldStartSync`) sits in front of the server's own.
+    - **Packaging/CI:** `npm run build:outlook` runs `dotnet publish`, and `dist`/`publish` depend on it so a
+      stale reader can never be packaged; `desktop-release.yml` gains a `setup-dotnet` step plus a verify step
+      that fails legibly rather than shipping an installer whose sync could never find a reader. The Windows
+      target is pinned **x64**, matching the reader's RID.
 - **Isolation:** every recording/section/chat/voiceprint query filters by `UserId` from the JWT
   `NameIdentifier` claim. **Storage quotas** (audio bytes) are per-user: the Platform Administrator sets the
   starter + maximum (`PlatformSettings`), any admin can raise an individual user up to the max.

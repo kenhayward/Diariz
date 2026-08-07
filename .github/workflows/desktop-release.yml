@@ -30,10 +30,24 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
+      # The Outlook reader is a self-contained .NET exe shipped inside the installer (a separate process
+      # rather than a native Node module, so the shell keeps zero native dependencies).
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
       - name: Install
         run: npm ci
       - name: Unit tests
         run: npm test
+      - name: Publish the Outlook reader
+        run: npm run build:outlook
+      # Fail here, legibly, rather than shipping an installer whose Outlook sync silently never finds a reader.
+      - name: Verify the Outlook reader was produced
+        shell: pwsh
+        run: |
+          $exe = "native/publish/Diariz.OutlookReader.exe"
+          if (-not (Test-Path $exe)) { throw "The Outlook reader was not published to $exe" }
+          "Reader size: {0:N1} MB" -f ((Get-Item $exe).Length / 1MB)
       # electron-builder's GitHub publisher can race while uploading multiple assets and create TWO
       # releases for the same tag, splitting latest.yml / .exe / .blockmap across them - which breaks
       # electron-updater's asset resolution so "Check for updates" finds nothing. Pre-creating the

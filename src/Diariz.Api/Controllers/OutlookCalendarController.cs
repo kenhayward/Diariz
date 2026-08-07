@@ -300,15 +300,20 @@ public class OutlookCalendarController : ControllerBase
 
     /// <summary>Windows zone id to IANA, using .NET's built-in ICU mapping so there is no CLDR table to ship.
     /// Falls back to the device's own zone rather than leaving the field null - a "declared but never
-    /// populated" timezone is exactly the trap the reference implementation fell into.</summary>
+    /// populated" timezone is exactly the trap the reference implementation fell into.
+    /// <para>The fallback is converted too. The desktop reports <c>TimeZoneInfo.Local.Id</c>, which on Windows
+    /// is a <b>Windows</b> id ("GMT Standard Time"), not IANA - taking it verbatim would quietly put a Windows
+    /// id in a column documented as IANA. Anything already IANA passes straight through.</para></summary>
     private static string? ToIana(string? windowsId, string? deviceZone)
     {
-        if (!string.IsNullOrWhiteSpace(windowsId) &&
-            TimeZoneInfo.TryConvertWindowsIdToIanaId(windowsId, out var iana))
-        {
-            return iana;
-        }
+        if (Convert(windowsId) is { } fromEvent) return fromEvent;
+        if (Convert(deviceZone) is { } fromDevice) return fromDevice;
         return deviceZone;
+
+        static string? Convert(string? id) =>
+            !string.IsNullOrWhiteSpace(id) && TimeZoneInfo.TryConvertWindowsIdToIanaId(id, out var iana)
+                ? iana
+                : null;
     }
 
     private static string? Clamp(string? value, int max) =>

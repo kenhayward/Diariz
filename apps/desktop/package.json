@@ -1,17 +1,22 @@
 {
   "name": "diariz-desktop",
   "private": true,
-  "version": "0.190.0",
-  "description": "Diariz desktop app ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â a tray / menu-bar shell that loads your Diariz server, with mic + system-audio capture (Windows; macOS beta).",
+  "version": "0.191.0",
+  "description": "Diariz desktop app \u00c3\u0192\u00c2\u00a2\u00c3\u00a2\u00e2\u20ac\u0161\u00c2\u00ac\u00c3\u00a2\u00e2\u201a\u00ac\u00c2\u009d a tray / menu-bar shell that loads your Diariz server, with mic + system-audio capture (Windows; macOS beta).",
   "main": "src/main.js",
   "author": "Ken Hayward",
-  "repository": { "type": "git", "url": "https://github.com/kenhayward/Diariz.git", "directory": "apps/desktop" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kenhayward/Diariz.git",
+    "directory": "apps/desktop"
+  },
   "scripts": {
     "dev": "cross-env DIARIZ_DEV=1 electron .",
     "start": "electron .",
     "test": "node --test \"src/**/*.test.js\"",
-    "dist": "electron-builder --config electron-builder.config.js",
-    "publish": "electron-builder --config electron-builder.config.js --publish always"
+    "dist": "npm run build:outlook && electron-builder --config electron-builder.config.js",
+    "publish": "npm run build:outlook && electron-builder --config electron-builder.config.js --publish always",
+    "build:outlook": "dotnet publish native/Diariz.OutlookReader -c Release -o native/publish"
   },
   "dependencies": {
     "electron-store": "^8.2.0",

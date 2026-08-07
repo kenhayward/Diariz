@@ -20,8 +20,20 @@ module.exports = {
   // Loads the web app from the configured server, so the SPA itself isn't bundled.
   files: ["src/**/*", "!src/**/*.test.js", "build/icon.png", "build/trayTemplate.png", "build/trayTemplate@2x.png", "package.json"],
   win: {
-    target: ["nsis"],
+    // x64 only: the Outlook reader is published win-x64, and an arm64 installer that silently could not read
+    // Outlook would be worse than no arm64 installer.
+    target: [{ target: "nsis", arch: ["x64"] }],
     icon: "build/icon.png",
+    // The Outlook reader, published by `npm run build:outlook` (or the CI step) before packaging. Shipped as a
+    // separate exe rather than a native Node module so the shell keeps zero native dependencies, and so a COM
+    // read that hangs or crashes takes the helper down instead of Diariz. Windows-only by construction.
+    extraResources: [
+      {
+        from: "native/publish",
+        to: "outlook",
+        filter: ["Diariz.OutlookReader.exe"],
+      },
+    ],
   },
   nsis: {
     oneClick: false,

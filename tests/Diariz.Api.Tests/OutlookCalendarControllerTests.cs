@@ -268,6 +268,25 @@ public class OutlookCalendarControllerTests
         Assert.Equal("Europe/London", db.OutlookCalendarEvents.Single().TimeZoneId);
     }
 
+    /// <summary>The desktop reports <c>TimeZoneInfo.Local.Id</c>, which on Windows is a <b>Windows</b> id
+    /// ("GMT Standard Time") rather than IANA - confirmed by running the real reader. Taking the fallback
+    /// verbatim would put a Windows id in a column documented as IANA, so it is converted too.</summary>
+    [Fact]
+    public async Task Sync_ConvertsAWindowsStyleDeviceZoneToo()
+    {
+        using var db = TestDb.Create();
+        var userId = SeedOptedInUser(db);
+        var ev = Event("u1", "A", "2026-07-02T09:00:00Z", "2026-07-02T10:00:00Z"); // no per-event zone
+        var push = Push(Guid.NewGuid(), [ev]) with
+        {
+            Device = new OutlookDeviceDto("dev-1", "WORK-PC", "ken@x.test", "GMT Standard Time"),
+        };
+
+        await Build(db, userId).Sync(push, default);
+
+        Assert.Equal("Europe/London", db.OutlookCalendarEvents.Single().TimeZoneId);
+    }
+
     /// <summary>All-day dates are stored as the local date strings the desktop sent, never re-derived from the
     /// UTC instant - re-deriving is the off-by-one that puts every summer all-day entry a day early.</summary>
     [Fact]
