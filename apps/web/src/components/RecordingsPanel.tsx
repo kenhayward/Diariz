@@ -220,11 +220,23 @@ export default function RecordingsPanel() {
   /// Every recording drop funnels through here - onto a folder row, onto a breadcrumb crumb, onto the level
   /// background, or between two rows - which is why the multi-select rule lives here and nowhere else:
   /// dragging one of several ticked rows moves the whole set, in the order the rows are shown.
+  ///
+  /// Reports failures in the banner like every other list operation. Not optional politeness: all four call
+  /// sites are **sync** drop handlers, so this promise is floated - without the catch a rejected reorder
+  /// (a 403 after a permission change, the server's depth cap) left the row springing back to where it
+  /// started with nothing said, and an unhandled rejection in the console.
   async function drop(sectionId: string | null, groupIds: string[], draggedId: string, beforeId: string | null) {
     if (!draggedId || !canManageContents) return;
-    const ids = draggedRecordingIds(draggedId, selection.selectedIds, recordings.map((r) => r.id));
-    await api.reorderRecordings(sectionId, computeReorder(groupIds, ids, beforeId), aggRoomId);
-    qc.invalidateQueries({ queryKey: ["recordings"] });
+    setOpError(null);
+    try {
+      const ids = draggedRecordingIds(draggedId, selection.selectedIds, recordings.map((r) => r.id));
+      await api.reorderRecordings(sectionId, computeReorder(groupIds, ids, beforeId), aggRoomId);
+      qc.invalidateQueries({ queryKey: ["recordings"] });
+    } catch (e) {
+      // Deliberately not `runSection`, which invalidates ["sections"] too: no folder changed here, and a
+      // second refetch of the tree on every row drag is a cost with nothing to show for it.
+      setOpError(apiErrorMessage(e));
+    }
   }
 
   /// Section drag-and-drop. The server may reject a move whose target is the section itself or one of

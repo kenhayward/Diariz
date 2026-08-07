@@ -1293,6 +1293,23 @@ describe("RecordingsPanel", () => {
     expect(await screen.findByText(/merge boom/i)).toBeTruthy();
   });
 
+  // The drop handlers are sync, so `drop` is floated: without its own try/catch a rejected reorder was
+  // swallowed whole. The row springs back to where it started (the list refetches nothing) and the user is
+  // told nothing - the same failure the toolbar actions have always reported in the banner.
+  it("surfaces an error when a drag-and-drop reorder fails", async () => {
+    (api.reorderRecordings as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("reorder boom"));
+    (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { ...rec, id: "a", name: "First" },
+      { ...rec, id: "b", name: "Second" },
+    ]);
+    renderList();
+
+    const target = (await screen.findByText("First")).closest("li")!;
+    fireEvent.drop(target, { dataTransfer: { getData: () => "b" } });
+
+    expect(await screen.findByText(/reorder boom/i)).toBeTruthy();
+  });
+
   it("reorders within a group via drag and drop", async () => {
     (api.reorderRecordings as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (api.listRecordings as ReturnType<typeof vi.fn>).mockResolvedValue([
