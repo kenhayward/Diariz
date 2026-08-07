@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, apiErrorMessage } from "../lib/api";
+import { api } from "../lib/api";
 import { usePanelTab, setPanelTab } from "../lib/panelTab";
 import { createHub } from "../lib/signalr";
 import { useSelection } from "../lib/selection";
 import { useMoveClipboard } from "../lib/moveClipboard";
+import { useRecordingDrop } from "../lib/recordingDrop";
 import { useRoom, useRoomBasePath } from "../lib/rooms";
-import { computeReorder, draggedRecordingIds } from "../lib/reorder";
 import { useDragAutoScroll } from "../lib/dragAutoScroll";
-import { buildRecordingTree, reorderBeforeSection, appendSectionUnder } from "../lib/recordingTree";
+import { buildRecordingTree } from "../lib/recordingTree";
 import { childrenOf, breadcrumbOf, recordingCountOf, depthOf, MAX_FOLDER_DEPTH } from "../lib/drillView";
 import { useDrillSectionId } from "../lib/drillRoute";
 import { SECTION_MIME, dragHasFiles } from "../lib/dragTypes";
@@ -68,7 +68,7 @@ export default function RecordingsPanel() {
   const selection = useSelection();
   // The move clipboard: cut items grey out here rather than disappear (nothing has moved yet), and pasting
   // reads the current drill level as the destination.
-  const { cut, clear: clearClipboard } = useMoveClipboard();
+  const { cut } = useMoveClipboard();
   const basePath = useRoomBasePath();
   // Where the drill-in list is: `?in=<sectionId>`, or the room's top level. Held in the URL so browser
   // back pops a level and the position survives a reload — see `useDrillSectionId`.
@@ -102,8 +102,6 @@ export default function RecordingsPanel() {
   // clearing the query drops straight back to where the user was browsing, with nothing to restore.
   const [searchQuery, setSearchQuery] = useState("");
   const searching = searchQuery.length > 0;
-  const [opError, setOpError] = useState<string | null>(null);
-
   // List vs Calendar tab (persisted). The calendar shows the month, focused on today, and lists the
   // selected day's recordings below it. Held in a shared store rather than local state because the tab
   // strip is no longer the only thing that moves it: a folder chip on a recording's detail page pulls the
@@ -126,6 +124,16 @@ export default function RecordingsPanel() {
   // owner-scoped path.
   const aggRoomId = isPersonalRoom ? undefined : roomId;
 
+  // Every write the list can perform by dragging or pasting, plus the banner they report into. Extracted
+  // because this is the code the last 15 commits kept landing in - see lib/recordingDrop.ts.
+  const { opError, setOpError, drop, dropSectionBefore, nestSection, pasteClipboard } = useRecordingDrop({
+    recordings,
+    sections,
+    sectionId: drill.sectionId,
+    roomId: aggRoomId,
+    canManageContents,
+  });
+
   // Actions tab: all actions in the current room, filtered by person + hide-complete, with one open editor.
   const { data: allActions = [] } = useQuery({
     queryKey: ["actions", "all", aggRoomId ?? null],
@@ -140,84 +148,6 @@ export default function RecordingsPanel() {
     () => filterActions(allActions, { person: personFilter, hideComplete }),
     [allActions, personFilter, hideComplete],
   );
-  /// Apply a drag-and-drop: set the dragged recordings' group + order within the current room, then refresh.
-  /// Order and folders are per-room, so this needs manage-contents (the personal-room owner always has it).
-  ///
-  /// Every recording drop funnels through here - onto a folder row, onto a breadcrumb crumb, onto the level
-  /// background, or between two rows - which is why the multi-select rule lives here and nowhere else:
-  /// dragging one of several ticked rows moves the whole set, in the order the rows are shown.
-  ///
-  /// Reports failures in the banner like every other list operation. Not optional politeness: all four call
-  /// sites are **sync** drop handlers, so this promise is floated - without the catch a rejected reorder
-  /// (a 403 after a permission change, the server's depth cap) left the row springing back to where it
-  /// started with nothing said, and an unhandled rejection in the console.
-  async function drop(sectionId: string | null, groupIds: string[], draggedId: string, beforeId: string | null) {
-    if (!draggedId || !canManageContents) return;
-    setOpError(null);
-    try {
-      const ids = draggedRecordingIds(draggedId, selection.selectedIds, recordings.map((r) => r.id));
-      await api.reorderRecordings(sectionId, computeReorder(groupIds, ids, beforeId), aggRoomId);
-      qc.invalidateQueries({ queryKey: ["recordings"] });
-    } catch (e) {
-      // Deliberately not `runSection`, which invalidates ["sections"] too: no folder changed here, and a
-      // second refetch of the tree on every row drag is a cost with nothing to show for it.
-      setOpError(apiErrorMessage(e));
-    }
-  }
-
-  /// Section drag-and-drop. The server may reject a move whose target is the section itself or one of
-  /// its own descendants, or whose branch would not fit within the depth cap - surface that in the banner.
-  async function runSection(fn: () => Promise<unknown>) {
-    setOpError(null);
-    try {
-      await fn();
-      qc.invalidateQueries({ queryKey: ["sections"] });
-      qc.invalidateQueries({ queryKey: ["recordings"] });
-    } catch (e) {
-      setOpError(apiErrorMessage(e));
-    }
-  }
-  /// Drop a section header onto another section header: reorder before it (adopting its level/parent).
-  function dropSectionBefore(targetId: string, draggedId: string) {
-    if (!draggedId || draggedId === targetId) return;
-    const payload = reorderBeforeSection(sections, draggedId, targetId);
-    if (payload) runSection(() => api.reorderSections(payload.parentId, payload.orderedIds, aggRoomId));
-  }
-  /// Drop a section into a top-level section's body (nest it) or onto the Ungrouped bar (promote to top).
-  function nestSection(parentId: string | null, draggedId: string) {
-    if (!draggedId || draggedId === parentId) return;
-    const payload = appendSectionUnder(sections, draggedId, parentId);
-    runSection(() => api.reorderSections(payload.parentId, payload.orderedIds, aggRoomId));
-  }
-
-  /// Perform the move clipboard's pending paste into the current drill level. Recordings go through the
-  /// bulk move endpoint in one call; a folder goes through the same reorderSections call the drag-and-drop
-  /// "nest" gesture already uses (appendSectionUnder), so both land at the bottom of the target, after
-  /// whatever is already there, preserving its existing relative order. A failed paste leaves the clipboard
-  /// intact and surfaces the error the same way the other section operations do - losing the cut to a
-  /// network blip would be worse than the error itself.
-  async function pasteClipboard() {
-    if (!cut) return;
-    setOpError(null);
-    try {
-      if (cut.kind === "recordings") {
-        await api.moveRecordingsBulk(cut.ids, drill.sectionId, aggRoomId);
-      } else {
-        // cut.ids[0]: cutFolder always stores exactly one id - folders are cut one at a time, there is no
-        // folder multi-select (see moveClipboard.tsx). pasteTarget still loops over cut.ids for the
-        // "folders" kind, so the two sides would disagree the moment a future multi-select folder cut
-        // exists; if that ever changes, this line needs to become a loop too.
-        const payload = appendSectionUnder(sections, cut.ids[0], drill.sectionId);
-        await api.reorderSections(payload.parentId, payload.orderedIds, aggRoomId);
-      }
-      clearClipboard();
-      qc.invalidateQueries({ queryKey: ["recordings"] });
-      qc.invalidateQueries({ queryKey: ["sections"] });
-    } catch (e) {
-      setOpError(apiErrorMessage(e));
-    }
-  }
-
   // Drag audio files anywhere onto the panel to upload them (distinct from the reorder DnD, which uses
   // the "text/plain" payload — file drags carry "Files"). A depth counter keeps the highlight stable as
   // the cursor moves over child rows.
