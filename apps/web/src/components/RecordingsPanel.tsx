@@ -44,6 +44,19 @@ import type { ActionListItem, CalendarEvent, RecordingSummary, SectionDto } from
 import { RoomPermission } from "../lib/types";
 
 const TAG_LIMIT_KEY = "diariz.recordings.tagLimit";
+const DEFAULT_TAG_LIMIT = 40;
+
+/// How many tags the cloud shows, from the last session. Guarded like `lib/panelTab.ts`: storage can be
+/// disabled outright (private browsing, a locked-down profile) and throw on access. This is read from a
+/// `useState` initialiser in the panel, so an unguarded throw took down the **whole panel's** render - the
+/// meetings list gone, behind an error boundary, over a preference for a tab the user may never open.
+function storedTagLimit(): number {
+  try {
+    return Number(localStorage.getItem(TAG_LIMIT_KEY)) || DEFAULT_TAG_LIMIT;
+  } catch {
+    return DEFAULT_TAG_LIMIT;
+  }
+}
 
 /// The recordings list for the left panel, grouped into user sections (Ungrouped last).
 /// Selecting a row routes to /recordings/:id (middle panel).
@@ -163,9 +176,13 @@ export default function RecordingsPanel() {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [tagCloudExpanded, setTagCloudExpanded] = useState(false);
   // Count slider: how many tags to show (the most-used first). Persisted; clamped to what's available.
-  const [tagLimit, setTagLimit] = useState<number>(() => Number(localStorage.getItem(TAG_LIMIT_KEY)) || 40);
+  const [tagLimit, setTagLimit] = useState<number>(storedTagLimit);
   function setTagLimitPersisted(n: number) {
-    localStorage.setItem(TAG_LIMIT_KEY, String(n));
+    try {
+      localStorage.setItem(TAG_LIMIT_KEY, String(n));
+    } catch {
+      /* storage disabled: the slider still moves this session, it just won't be remembered */
+    }
     setTagLimit(n);
   }
   // A refetch can drop the selected tag (recording deleted / re-tagged) — clear a stale selection so the
