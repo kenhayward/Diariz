@@ -60,6 +60,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.186.3",
+    date: "2026-08-07",
+    pr: 463,
+    headline: "A drag that fails now says so",
+    summary:
+      "Dragging a meeting into a folder, or into a new position, could fail on the server - a permission " +
+      "that changed while you were looking at the page, or a folder nested deeper than the eight-level " +
+      "limit. When that happened the row simply sprang back to where it started and nothing was said, which " +
+      "reads as the app ignoring you rather than refusing you. Every other list operation already reports " +
+      "failures in the strip above the list; drag-and-drop now does too.",
+    fixed: [
+      "A drag-and-drop that the server rejects now shows the reason above the list, instead of the row silently springing back.",
+    ],
+  },
+  {
     version: "0.186.2",
     date: "2026-08-06",
     pr: 462,
