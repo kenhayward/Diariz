@@ -4536,6 +4536,12 @@
               "string"
             ]
           },
+          "outlookSyncEnabled": {
+            "type": [
+              "null",
+              "boolean"
+            ]
+          },
           "placementMode": {
             "oneOf": [
               {
@@ -4794,6 +4800,10 @@
               "null",
               "string"
             ]
+          },
+          "outlookSyncEnabled": {
+            "default": false,
+            "type": "boolean"
           },
           "placementMode": {
             "$ref": "#/components/schemas/RecordingPlacementMode"
@@ -13185,7 +13195,7 @@
         ]
       },
       "put": {
-        "description": "A **partial update** - the opposite of the profile endpoint, which replaces everything. Each field is three-way: **omit it** (or send null) to leave it alone, send **empty** to clear your override and fall back to the platform default, or send a value to set one. That is what lets separate settings tabs save independently without wiping each other's fields.\n\nThe API key follows the same rule and is **write-only**: send it to replace, send empty to remove, omit to keep. It is encrypted at rest and never returned.\n\nFor the context window a value of zero or less clears the override rather than setting it. Choosing a placement mode other than a specific folder clears the stored folder, so a stale one cannot resurface if you switch back.",
+        "description": "A **partial update** - the opposite of the profile endpoint, which replaces everything. Each field is three-way: **omit it** (or send null) to leave it alone, send **empty** to clear your override and fall back to the platform default, or send a value to set one. That is what lets separate settings tabs save independently without wiping each other's fields.\n\nThe API key follows the same rule and is **write-only**: send it to replace, send empty to remove, omit to keep. It is encrypted at rest and never returned.\n\nFor the context window a value of zero or less clears the override rather than setting it. Choosing a placement mode other than a specific folder clears the stored folder, so a stale one cannot resurface if you switch back.\n\n`outlookSyncEnabled` is the one field with a side effect. Setting it **false erases**: every connected device is removed along with every meeting mirrored from it. It is a privacy switch, so it clears what was gathered rather than only stopping future syncs - omit the field if you just want to leave it as it is.",
         "requestBody": {
           "content": {
             "application/*+json": {

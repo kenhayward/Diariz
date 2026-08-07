@@ -19,6 +19,10 @@ import type {
   CalendarLink,
   IcsFeed,
   IcsFeedInput,
+  OutlookSource,
+  OutlookSourceInput,
+  OutlookSyncRequest,
+  OutlookSyncResult,
   ChatAttachment,
   ChatConversation,
   ChatConversationSummary,
@@ -509,6 +513,27 @@ export const api = {
   },
   async deleteCalendarFeed(id: string): Promise<void> {
     await http.delete(`/api/calendar/feeds/${id}`);
+  },
+
+  // ---- Desktop Outlook mirror ----
+  /// The machines that have connected their local Outlook calendar. Empty is the normal answer.
+  async listOutlookSources(): Promise<OutlookSource[]> {
+    const { data } = await http.get<OutlookSource[]>("/api/calendar/outlook/sources");
+    return data;
+  },
+  async updateOutlookSource(id: string, input: OutlookSourceInput): Promise<OutlookSource> {
+    const { data } = await http.put<OutlookSource>(`/api/calendar/outlook/sources/${id}`, input);
+    return data;
+  },
+  /// Disconnect a device. This deletes every meeting mirrored from it - it is the erase control.
+  async deleteOutlookSource(id: string): Promise<void> {
+    await http.delete(`/api/calendar/outlook/sources/${id}`);
+  },
+  /// Push one page of a harvested window. The desktop shell harvests; the web app uploads, because it is the
+  /// side holding the signed-in user's token.
+  async pushOutlookEvents(req: OutlookSyncRequest): Promise<OutlookSyncResult> {
+    const { data } = await http.post<OutlookSyncResult>("/api/calendar/outlook/sync", req);
+    return data;
   },
 
   // ---- Attachments (supporting documents) ----

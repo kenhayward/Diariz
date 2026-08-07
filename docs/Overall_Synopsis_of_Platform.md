@@ -1589,7 +1589,21 @@ into it with no URL or per-user setup at all.
   - **Privacy.** `UserSettings.OutlookSyncEnabled` is the opt-in, **default false**: the push 403s until it is
     set, so an installed desktop app stores nothing on its own. `SkipPrivate` (default on) drops private items
     **on the machine**; a private appointment's body is stripped server-side regardless of `IncludeBody`.
-    Disconnecting a device deletes its stored events by cascade.
+    Disconnecting a device deletes its stored events by cascade, and setting `OutlookSyncEnabled` to **false**
+    through `PUT /api/user/settings` **purges every device** (and, by cascade, every event) - the one field on
+    that endpoint with a side effect, because a privacy switch that left what it had gathered on the server
+    would not be one.
+  - **Web surface.** `OutlookSyncSection` is a Preferences tab (`PreferencesTab` gains `"outlook"`), shown to
+    **everyone** - a browser user must be able to read what it does, see which machines are syncing, and
+    revoke - with only the "Sync now" button gated on `canSyncOutlook() && outlookAvailable()`. The bridge is
+    `lib/outlookSync.ts` (structural typing of `window.diariz` with no-op fallbacks, the `trayScreenshots.ts`
+    pattern, so nothing branches on `isElectron`) plus `lib/outlookPush.ts` (`pushWindow` pages at 250, marks
+    `final` on the last page **only**, and **aborts on first failure** - carrying on after a gap would let the
+    server reach a final page having never seen the missing events and sweep them as cancellations).
+    `OutlookSyncBridge` renders null and is mounted in `WorkspaceLayout`, not in Preferences, because a sync
+    fires on launch and from the tray - neither of which opens the settings window. Its `reportOutlookReady`
+    doubles as "a signed-in renderer is ready to POST", which is what licenses the shell's launch sync: the
+    shell cannot use app-ready for that, since the user may not be signed in yet.
 - **Isolation:** every recording/section/chat/voiceprint query filters by `UserId` from the JWT
   `NameIdentifier` claim. **Storage quotas** (audio bytes) are per-user: the Platform Administrator sets the
   starter + maximum (`PlatformSettings`), any admin can raise an individual user up to the max.
