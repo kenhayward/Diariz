@@ -432,7 +432,10 @@ calendars** to consider (Preferences → Google Account); only the selected cale
 shown on the Calendar tab.
 - **Subscribe to external calendar feeds**: add any public iCalendar (`.ics`) URL — a team or shared
 calendar — in **Preferences → Calendar feeds**, give it a name and colour, and its meetings appear on the
-Calendar tab in that colour (fetched behind an SSRF guard, no Google connection required).
+Calendar tab in that colour (fetched behind an SSRF guard, no Google connection required). Feed meetings are
+**first-class**: a recording is matched and linked to one exactly as it is to a Google meeting, and opening one
+shows its full invite details. (Both used to be Google-only, so a user whose calendar was entirely feeds got a
+populated Calendar tab but no matching at all, and a feed meeting's details would not open.)
 - **Global AI timeout** (Platform Administrator, Settings → Model Settings): one platform-wide per-request
 timeout in seconds (default 120) applied to every AI call - summaries, minutes, actions, tags, and embeddings.
 Raise it for slow local models; the configured value is the single authority (no hidden HTTP cap).

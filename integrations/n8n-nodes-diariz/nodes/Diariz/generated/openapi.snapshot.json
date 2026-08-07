@@ -5599,7 +5599,7 @@
     },
     "/api/calendar/events": {
       "get": {
-        "description": "Your events between `timeMin` and `timeMax`, **merging connected Google calendars with subscribed `.ics` feeds** into one list sorted by start time. The two sources are independent, so someone with only feeds and no Google still gets a populated calendar.\n\nRead-only: this never creates or changes anything in your calendar. An empty list is the normal answer when nothing is connected - the calendar degrades rather than erroring.\n\nThe window must be positive and no wider than 62 days (400 otherwise), which is enough for the six-week month grid the app draws.",
+        "description": "Your events between `timeMin` and `timeMax`, **merging connected Google calendars, subscribed `.ics` feeds, and any desktop Outlook calendar you have mirrored** into one list sorted by start time. The sources are independent, so someone with only feeds and no Google still gets a populated calendar.\n\nRead-only: this never creates or changes anything in your calendar. An empty list is the normal answer when nothing is connected - the calendar degrades rather than erroring.\n\nThe window must be positive and no wider than 62 days (400 otherwise), which is enough for the six-week month grid the app draws.",
         "parameters": [
           {
             "in": "query",
@@ -5891,7 +5891,7 @@
     },
     "/api/calendar/events/{eventId}": {
       "get": {
-        "description": "A single event with its **full invite details** - attendees, description, location, organiser - which the range listing leaves out. Fetched live from Google rather than from a stored snapshot, so it reflects the invite as it stands now.\n\nGoogle events only; 404 when the event is gone or Calendar is not connected.",
+        "description": "A single event with its **full invite details** - attendees, description, location, organiser - which the range listing leaves out. Works for an event from any of your calendars: the id says which source it came from.\n\nA Google event is fetched **live**, so it reflects the invite as it stands now rather than a stored snapshot. A `.ics` feed event is resolved from the feed, and a desktop Outlook one from the copy your Windows app last mirrored.\n\n404 when the event is gone, or the calendar it belongs to is not connected.",
         "parameters": [
           {
             "in": "path",
@@ -8600,7 +8600,7 @@
     },
     "/api/recordings/{id}/calendar-match": {
       "get": {
-        "description": "Looks for the Google Calendar meeting the recording was most likely captured during, by overlapping its wall-clock span against your events. Only timed meetings are considered - an all-day entry (holiday, birthday, out-of-office day) is never suggested or linked automatically, though you can still link one by hand. This only suggests - nothing is stored until you confirm it with the calendar-link endpoint. Returns `{ \"match\": null }` when nothing overlaps, and requires you to have connected Google Calendar.",
+        "description": "Looks for the meeting the recording was most likely captured during, by overlapping its wall-clock span against your events. Considers **every calendar you have connected** - Google, subscribed `.ics` feeds, and any desktop Outlook calendar you have mirrored.\n\nOnly timed meetings are considered: an all-day entry (holiday, birthday, out-of-office day) is never suggested or linked automatically, because it blankets the day and would out-overlap every real meeting - you can still link one by hand.\n\nThis only suggests; nothing is stored until you confirm it with the calendar-link endpoint. Returns `{ \"match\": null }` when nothing overlaps, and 400 when you have no calendar connected at all.",
         "parameters": [
           {
             "in": "path",

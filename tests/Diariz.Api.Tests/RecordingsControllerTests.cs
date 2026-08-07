@@ -16,6 +16,35 @@ namespace Diariz.Api.Tests;
 
 public class RecordingsControllerTests
 {
+    /// <summary>An <c>.ics</c> client serving canned events, for the feeds-only matching cases.</summary>
+    private sealed class FeedWith(params CalendarEvent[] events) : IIcsCalendarClient
+    {
+        public Task<IReadOnlyList<CalendarEvent>> ListEventsAsync(
+            Guid userId, DateTimeOffset timeMin, DateTimeOffset timeMax, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<CalendarEvent>>(events);
+
+        public Task<(bool Ok, string? Error)> ProbeAsync(string url, CancellationToken ct = default) =>
+            Task.FromResult((true, (string?)null));
+    }
+
+    /// <summary>A controller whose only calendar is an <c>.ics</c> feed - no Google client at all.</summary>
+    private static RecordingsController BuildWithFeedEvents(DiarizDbContext db, Guid userId, params CalendarEvent[] events)
+    {
+        var controller = Build(db, userId, new FakeJobQueue());
+        return new RecordingsController(db, new FakeAudioStorage(), new FakeJobQueue(), new FakeHubContext(),
+            new ConfigurationBuilder().AddInMemoryCollection(
+                new Dictionary<string, string?> { ["Transcription:DefaultModel"] = "whisperx-large-v3" }).Build(),
+            new SummarizationSettingsResolver(db, Options.Create(new SummarizationOptions { ApiBase = "http://llm.test/v1" }),
+                new FakeApiKeyProtector()),
+            new FakeEmailSender(), new FakeSpeakerIdentifier(), Options.Create(new UploadOptions()),
+            new RoomScope(db), new PeopleDirectory(db), new CapturingWebhookPublisher(),
+            Options.Create(new AppPublicOptions()), null,
+            new CalendarAggregator(new NoGoogleCalendar(), new FeedWith(events), new NoOutlookDevices(), db))
+        {
+            ControllerContext = controller.ControllerContext,
+        };
+    }
+
     private static RecordingsController Build(DiarizDbContext db, Guid userId, FakeJobQueue queue,
         FakeAudioStorage? storage = null, bool summarizationEnabled = true, FakeEmailSender? email = null,
         FakeSpeakerIdentifier? identifier = null, UploadOptions? uploads = null, IExportLocalizer? exportLocalizer = null,
@@ -31,7 +60,10 @@ public class RecordingsControllerTests
         return new RecordingsController(db, storage ?? new FakeAudioStorage(), queue, new FakeHubContext(), config,
             resolver, email ?? new FakeEmailSender(), identifier ?? new FakeSpeakerIdentifier(),
             Options.Create(uploads ?? new UploadOptions()), new RoomScope(db), new PeopleDirectory(db), new CapturingWebhookPublisher(),
-            Options.Create(new AppPublicOptions()), exportLocalizer, calendar)
+            // A real aggregator over the Google fake, so these tests exercise the actual merge and the actual
+            // "has any calendar" gate rather than a stand-in for them.
+            Options.Create(new AppPublicOptions()), exportLocalizer,
+            new CalendarAggregator(calendar ?? new NoGoogleCalendar(), new NoIcsFeeds(), new NoOutlookDevices(), db))
         {
             ControllerContext = Http.Context(userId)
         };
@@ -2386,6 +2418,53 @@ public class RecordingsControllerTests
         var controller = Build(db, userId, new FakeJobQueue(), calendar: cal);
 
         Assert.IsType<BadRequestObjectResult>(await controller.CalendarMatch(rec.Id, default));
+    }
+
+    /// <summary>...but only when Google is their <b>only</b> calendar. With a feed also connected, that feed
+    /// legitimately answers the question, so a broken Google connection must degrade quietly rather than
+    /// failing a match the user could otherwise have got.</summary>
+    [Fact]
+    public async Task CalendarMatch_WhenGoogleIsBrokenButAFeedIsConnected_StillAnswers()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var rec = await SeedRecordingAt(db, userId, DateTimeOffset.Parse("2026-07-02T09:00:00Z"), 600_000);
+        GrantCalendar(db, userId);
+        db.IcsCalendarSources.Add(new Domain.Entities.IcsCalendarSource
+        {
+            Id = Guid.NewGuid(), UserId = userId, Name = "Team", Url = "https://x.test/f.ics", Enabled = true,
+        });
+        await db.SaveChangesAsync();
+        var cal = new FakeCalendarClient { Events = null }; // Google revoked
+        var controller = Build(db, userId, new FakeJobQueue(), calendar: cal);
+
+        var ok = Assert.IsType<OkObjectResult>(await controller.CalendarMatch(rec.Id, default));
+        Assert.Contains("\"match\":null", System.Text.Json.JsonSerializer.Serialize(ok.Value));
+    }
+
+    /// <summary>The gap this refactor closes: matching used to demand a Google grant outright, so someone whose
+    /// calendar was entirely `.ics` feeds could never have a recording matched - even though their events were
+    /// already drawn on the Calendar tab.</summary>
+    [Fact]
+    public async Task CalendarMatch_WorksForAFeedsOnlyUser_WithNoGoogleGrant()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var rec = await SeedRecordingAt(db, userId, DateTimeOffset.Parse("2026-07-02T09:00:00Z"), 3_600_000);
+        db.IcsCalendarSources.Add(new Domain.Entities.IcsCalendarSource
+        {
+            Id = Guid.NewGuid(), UserId = userId, Name = "Team", Url = "https://x.test/f.ics", Enabled = true,
+        });
+        await db.SaveChangesAsync();
+
+        var controller = BuildWithFeedEvents(db, userId,
+            new CalendarEvent("ics:1:a", "Team sync",
+                DateTimeOffset.Parse("2026-07-02T09:00:00Z"), DateTimeOffset.Parse("2026-07-02T10:00:00Z"), null));
+
+        var ok = Assert.IsType<OkObjectResult>(await controller.CalendarMatch(rec.Id, default));
+        Assert.Contains("Team sync", System.Text.Json.JsonSerializer.Serialize(ok.Value));
     }
 
     // ---- Calendar link (persisted) ----

@@ -819,3 +819,43 @@ public sealed class FakeLlmTrace : ILlmTrace
         public void Dispose() => _rec.Finished = true;
     }
 }
+
+/// <summary>An <c>.ics</c> client that owns no feeds - for tests about something else entirely, so they do not
+/// have to care that the calendar has three sources.</summary>
+public sealed class NoIcsFeeds : IIcsCalendarClient
+{
+    public Task<IReadOnlyList<CalendarEvent>> ListEventsAsync(
+        Guid userId, DateTimeOffset timeMin, DateTimeOffset timeMax, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<CalendarEvent>>([]);
+
+    public Task<(bool Ok, string? Error)> ProbeAsync(string url, CancellationToken ct = default) =>
+        Task.FromResult((true, (string?)null));
+}
+
+/// <summary>An Outlook store with no connected devices. Companion to <see cref="NoIcsFeeds"/>.</summary>
+public sealed class NoOutlookDevices : IOutlookCalendarStore
+{
+    public Task<IReadOnlyList<CalendarEvent>> ListEventsAsync(
+        Guid userId, DateTimeOffset timeMin, DateTimeOffset timeMax, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<CalendarEvent>>([]);
+
+    public Task<CalendarEvent?> GetEventAsync(Guid userId, string eventId, CancellationToken ct = default) =>
+        Task.FromResult<CalendarEvent?>(null);
+
+    public Task<bool> HasEnabledSourceAsync(Guid userId, CancellationToken ct = default) => Task.FromResult(false);
+}
+
+/// <summary>A Google client that is not connected - <c>ListEventsAsync</c> returns null, which is how the real
+/// one signals "no grant / token revoked" as distinct from "no events".</summary>
+public sealed class NoGoogleCalendar : IGoogleCalendarClient
+{
+    public Task<IReadOnlyList<CalendarEvent>?> ListEventsAsync(
+        Guid userId, DateTimeOffset timeMin, DateTimeOffset timeMax, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<CalendarEvent>?>(null);
+
+    public Task<CalendarEvent?> GetEventAsync(Guid userId, string eventId, CancellationToken ct = default) =>
+        Task.FromResult<CalendarEvent?>(null);
+
+    public Task<IReadOnlyList<CalendarListEntry>?> ListAllCalendarsAsync(Guid userId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<CalendarListEntry>?>(null);
+}

@@ -434,6 +434,10 @@ builder.Services.AddScoped<IIcsCalendarClient, IcsCalendarClient>();
 // read their local Outlook, so the desktop app pushes the window and this reads it back from our tables. ----
 builder.Services.AddScoped<IOutlookCalendarStore, OutlookCalendarStore>();
 
+// ---- The one place the three calendar sources are combined. Both the Calendar tab and recording-to-meeting
+// matching go through this, so they can never again disagree about what calendars the user has. ----
+builder.Services.AddScoped<ICalendarAggregator, CalendarAggregator>();
+
 // ---- MCP server (in-process Streamable-HTTP /mcp endpoint; per-user token auth) ----
 // The token services back both the management controller (JWT) and the /mcp bearer scheme.
 builder.Services.AddSingleton<IMcpTokenService, McpTokenService>();

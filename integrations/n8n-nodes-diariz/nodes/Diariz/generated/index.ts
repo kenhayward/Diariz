@@ -215,7 +215,7 @@ const GENERATED: GeneratedResource[] = [
       {
         "value": "getOneCalendarEvent",
         "displayName": "Get one calendar event",
-        "description": "A single event with its full invite details - attendees, description, location, organiser - which the range listing leaves out. Fetched live from Google rather than from a stored snapshot, so it reflects the invite as it stands now.",
+        "description": "A single event with its full invite details - attendees, description, location, organiser - which the range listing leaves out. Works for an event from any of your calendars: the id says which source it came from.",
         "method": "GET",
         "path": "/api/calendar/events/{eventId}",
         "pathParams": [
@@ -228,7 +228,7 @@ const GENERATED: GeneratedResource[] = [
       {
         "value": "listCalendarEventsInADateRange",
         "displayName": "List calendar events in a date range",
-        "description": "Your events between timeMin and timeMax, merging connected Google calendars with subscribed .ics feeds into one list sorted by start time. The two sources are independent, so someone with only feeds and no Google still gets a populated calendar.",
+        "description": "Your events between timeMin and timeMax, merging connected Google calendars, subscribed .ics feeds, and any desktop Outlook calendar you have mirrored into one list sorted by start time. The sources are independent, so someone with only feeds and no Google still gets a populated calendar.",
         "method": "GET",
         "path": "/api/calendar/events",
         "pathParams": [],
@@ -1705,7 +1705,7 @@ const GENERATED: GeneratedResource[] = [
       {
         "value": "suggestTheCalendarEventThisRecordingBelongsTo",
         "displayName": "Suggest the calendar event this recording belongs to",
-        "description": "Looks for the Google Calendar meeting the recording was most likely captured during, by overlapping its wall-clock span against your events. Only timed meetings are considered - an all-day entry (holiday, birthday, out-of-office day) is never suggested or linked automatically, though you can still link one by hand. This only suggests - nothing is stored until you confirm it with the calendar-link endpoint. Returns { \"match\": null } when nothing overlaps, and requires you to have connected Google Calendar.",
+        "description": "Looks for the meeting the recording was most likely captured during, by overlapping its wall-clock span against your events. Considers every calendar you have connected - Google, subscribed .ics feeds, and any desktop Outlook calendar you have mirrored.",
         "method": "GET",
         "path": "/api/recordings/{id}/calendar-match",
         "pathParams": [
