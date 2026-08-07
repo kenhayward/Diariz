@@ -60,6 +60,16 @@ describe("statusBadgeClass", () => {
   it("carries a dark-mode variant for every status", () => {
     for (const s of ALL) expect(statusBadgeClass(s)).toContain("dark:");
   });
+
+  it("falls back to a neutral pill for a status this build does not know", () => {
+    // RecordingStatus is append-only on the server (ints in Postgres), so a deployed web build can be
+    // handed a status added after it shipped. Without a fallback the row rendered class="... undefined",
+    // which is unstyled text where a pill should be, on the one row the user most needs to read.
+    const cls = statusBadgeClass("Archived" as RecordingStatus);
+    expect(cls).not.toBe("");
+    expect(cls).not.toContain("undefined");
+    expect(cls).toContain("dark:"); // legible in both themes, like every known status
+  });
 });
 
 describe("statusLabel", () => {

@@ -60,6 +60,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.186.5",
+    date: "2026-08-07",
+    pr: 465,
+    headline: "An unfamiliar status still reads as a status",
+    summary:
+      "The coloured status pill on a meeting row had no colour to fall back on if the server reported a " +
+      "state the browser did not recognise - something that happens for a few seconds after an upgrade, " +
+      "while an open tab is still running the previous version. The pill lost its styling entirely and the " +
+      "status appeared as bare text in the middle of the row. It now falls back to a plain grey pill, so an " +
+      "unfamiliar status still looks like a status.",
+    fixed: [
+      "A recording status the browser does not recognise (an open tab running a previous version after an upgrade) renders as a neutral grey pill instead of unstyled text.",
+    ],
+  },
+  {
     version: "0.186.4",
     date: "2026-08-07",
     pr: 464,
