@@ -501,6 +501,8 @@ export interface UserSettings {
   placementSectionId: string | null;
   /// True when the server has an STT endpoint configured (dictation server-fallback path is available).
   dictationServerAvailable: boolean;
+  /// Whether the user has opted in to mirroring a desktop Outlook calendar. Off by default.
+  outlookSyncEnabled: boolean;
 }
 
 /// Where a new recording lands in the user's Personal room. Mirrors the server enum names.
@@ -785,6 +787,96 @@ export interface IcsFeedInput {
   enabled?: boolean;
 }
 
+// ---- Desktop Outlook mirror ----
+
+/// One machine that has connected its local desktop Outlook calendar. `lastSyncedAt` / `lastError` /
+/// `eventCount` are the health triple shown in Preferences, mirroring a feed's.
+export interface OutlookSource {
+  id: string;
+  deviceId: string;
+  deviceName: string | null;
+  mailboxName: string | null;
+  displayName: string;
+  color: string | null;
+  enabled: boolean;
+  pastDays: number;
+  futureDays: number;
+  skipPrivate: boolean;
+  includeBody: boolean;
+  lastSyncedAt: string | null;
+  lastError: string | null;
+  eventCount: number;
+}
+
+/// Partial update for a connected device - omit a field to leave it unchanged.
+export interface OutlookSourceInput {
+  displayName?: string;
+  color?: string | null;
+  enabled?: boolean;
+  pastDays?: number;
+  futureDays?: number;
+  skipPrivate?: boolean;
+  includeBody?: boolean;
+  lastError?: string | null;
+}
+
+export interface OutlookAttendeeInput {
+  name?: string | null;
+  email?: string | null;
+  /// Google's vocabulary (accepted/declined/tentative/needsAction), mapped on the desktop.
+  response?: string | null;
+  optional?: boolean;
+}
+
+/// One flattened occurrence as the desktop reports it. All-day entries carry `startDate`/`endDate` as **local**
+/// yyyy-MM-dd strings - deriving them from the UTC instant is the classic off-by-one.
+export interface OutlookEventInput {
+  uid: string;
+  subject?: string | null;
+  start: string;
+  end: string;
+  allDay?: boolean;
+  startDate?: string | null;
+  endDate?: string | null;
+  windowsTimeZoneId?: string | null;
+  location?: string | null;
+  onlineMeetingUrl?: string | null;
+  bodyText?: string | null;
+  categories?: string | null;
+  sensitivity?: number;
+  busyStatus?: number;
+  isRecurring?: boolean;
+  organizerName?: string | null;
+  organizerEmail?: string | null;
+  attendees?: OutlookAttendeeInput[];
+  lastModified?: string | null;
+}
+
+/// One page of a sync run. The desktop sends the whole window and the server reconciles; `final` marks the
+/// last page and `complete` says the read finished cleanly - the server only deletes when both hold.
+export interface OutlookSyncRequest {
+  syncId: string;
+  device: { deviceId: string; deviceName?: string; mailboxName?: string; timeZone?: string };
+  windowStart: string;
+  windowEnd: string;
+  events: OutlookEventInput[];
+  complete?: boolean;
+  pageIndex?: number;
+  final?: boolean;
+}
+
+export interface OutlookSyncResult {
+  sourceId: string;
+  syncId: string;
+  created: number;
+  updated: number;
+  unchanged: number;
+  deleted: number;
+  skipped: number;
+  eventCount: number;
+  syncedAt: string;
+}
+
 export interface UpdateUserProfile {
   fullName: string | null;
   nativeLanguage: string | null;
@@ -817,6 +909,9 @@ export interface UpdateUserSettings {
   /// Where a new recording lands; omit to leave unchanged. A non-SpecificFolder mode clears any fixed folder.
   placementMode?: RecordingPlacementMode;
   placementSectionId?: string | null;
+  /// The desktop Outlook opt-in; omit to leave unchanged. Setting it false also **erases** every connected
+  /// device and the meetings mirrored from them - it is a privacy switch, not a pause.
+  outlookSyncEnabled?: boolean;
 }
 
 // ---- Chat ----

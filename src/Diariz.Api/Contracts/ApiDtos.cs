@@ -573,7 +573,10 @@ public record UserSettingsDto(
     // ("SelectedFolder" etc.) via the global string-enum converter, same as MinutesGenerationMode.
     RecordingPlacementMode PlacementMode, Guid? PlacementSectionId,
     // True when the server has an STT endpoint configured (the dictation server-fallback path is available).
-    bool DictationServerAvailable);
+    bool DictationServerAvailable,
+    /// <summary>Whether the user has opted in to mirroring a desktop Outlook calendar. Off by default; turning
+    /// it off erases every device and its stored meetings.</summary>
+    bool OutlookSyncEnabled = false);
 
 /// <summary>A chat tool's state for the settings panel: whether it is on for this user
 /// (<paramref name="Enabled"/>) and its server-side default.</summary>
@@ -594,7 +597,11 @@ public record UpdateUserSettingsRequest(
     bool? ReasoningEnabled = null, string? ReasoningEffort = null,
     // PlacementMode: null leaves the placement preference unchanged; a value sets it (and, unless it is
     // SpecificFolder, clears PlacementSectionId).
-    RecordingPlacementMode? PlacementMode = null, Guid? PlacementSectionId = null);
+    RecordingPlacementMode? PlacementMode = null, Guid? PlacementSectionId = null,
+    /// <summary>The desktop Outlook sync opt-in. Null leaves it unchanged. Setting it <c>false</c> also
+    /// <b>purges</b> every connected device and, by cascade, every meeting mirrored from them - the switch
+    /// erases rather than merely stopping future syncs.</summary>
+    bool? OutlookSyncEnabled = null);
 
 // ---- MCP access tokens ----
 /// <summary>A stored MCP token, listed in Preferences. The secret is never returned — only a short display

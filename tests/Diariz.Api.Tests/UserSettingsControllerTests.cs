@@ -287,4 +287,97 @@ public class UserSettingsControllerTests
 
         Assert.False(dto.DictationServerAvailable);
     }
+
+    // ---- Desktop Outlook sync opt-in ----
+
+    [Fact]
+    public async Task Get_ReportsTheOutlookOptIn_OffByDefault()
+    {
+        using var db = TestDb.Create();
+        Assert.False((await Build(db, Guid.NewGuid()).Get()).OutlookSyncEnabled);
+    }
+
+    [Fact]
+    public async Task Update_TurnsTheOutlookOptInOn()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        Users.Ensure(db, userId);
+        await db.SaveChangesAsync();
+
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(null, null, null, OutlookSyncEnabled: true));
+
+        Assert.True((await db.UserSettings.SingleAsync(s => s.UserId == userId)).OutlookSyncEnabled);
+    }
+
+    /// <summary>Omitting the field leaves it alone - the personal settings tabs each PUT only what they own,
+    /// so a save from the Model Settings tab must not silently revoke an Outlook opt-in.</summary>
+    [Fact]
+    public async Task Update_WithoutTheField_LeavesTheOptInAlone()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        Users.Ensure(db, userId);
+        db.UserSettings.Add(new Domain.Entities.UserSettings { UserId = userId, OutlookSyncEnabled = true });
+        await db.SaveChangesAsync();
+
+        await Build(db, userId).Update(new UpdateUserSettingsRequest("http://llm.test/v1", null, null));
+
+        Assert.True((await db.UserSettings.SingleAsync(s => s.UserId == userId)).OutlookSyncEnabled);
+    }
+
+    /// <summary>Turning the switch off <b>erases</b>, rather than merely stopping future syncs. A privacy
+    /// control that leaves the meeting bodies and attendee addresses it gathered sitting on the server is not
+    /// one, and this is the behaviour the confirm dialog promises.</summary>
+    [Fact]
+    public async Task Update_TurningTheOptInOff_PurgesEveryDeviceAndItsEvents()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        Users.Ensure(db, userId);
+        db.UserSettings.Add(new Domain.Entities.UserSettings { UserId = userId, OutlookSyncEnabled = true });
+        var source = new Domain.Entities.OutlookCalendarSource
+        {
+            Id = Guid.NewGuid(), UserId = userId, DeviceId = "dev-1", DisplayName = "Outlook (WORK-PC)",
+        };
+        db.OutlookCalendarSources.Add(source);
+        db.OutlookCalendarEvents.Add(new Domain.Entities.OutlookCalendarEvent
+        {
+            Id = OutlookEventId.For(source.Id, "uid-1"), SourceId = source.Id, UserId = userId, Uid = "uid-1",
+            Subject = "Planning", StartsAt = DateTimeOffset.UtcNow, EndsAt = DateTimeOffset.UtcNow.AddHours(1),
+        });
+        await db.SaveChangesAsync();
+
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(null, null, null, OutlookSyncEnabled: false));
+
+        Assert.False((await db.UserSettings.SingleAsync(s => s.UserId == userId)).OutlookSyncEnabled);
+        Assert.Empty(db.OutlookCalendarSources);
+        Assert.Empty(db.OutlookCalendarEvents);
+    }
+
+    /// <summary>The purge is the caller's own, never anyone else's.</summary>
+    [Fact]
+    public async Task Update_TurningTheOptInOff_LeavesOtherUsersDevicesAlone()
+    {
+        using var db = TestDb.Create();
+        var mine = Guid.NewGuid();
+        var theirs = Guid.NewGuid();
+        Users.Ensure(db, mine);
+        Users.Ensure(db, theirs);
+        db.UserSettings.Add(new Domain.Entities.UserSettings { UserId = mine, OutlookSyncEnabled = true });
+        db.OutlookCalendarSources.Add(new Domain.Entities.OutlookCalendarSource
+        {
+            Id = Guid.NewGuid(), UserId = mine, DeviceId = "dev-mine", DisplayName = "Mine",
+        });
+        db.OutlookCalendarSources.Add(new Domain.Entities.OutlookCalendarSource
+        {
+            Id = Guid.NewGuid(), UserId = theirs, DeviceId = "dev-theirs", DisplayName = "Theirs",
+        });
+        await db.SaveChangesAsync();
+
+        await Build(db, mine).Update(new UpdateUserSettingsRequest(null, null, null, OutlookSyncEnabled: false));
+
+        var left = Assert.Single(db.OutlookCalendarSources);
+        Assert.Equal(theirs, left.UserId);
+    }
 }

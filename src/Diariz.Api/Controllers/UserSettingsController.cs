@@ -6,6 +6,7 @@ using Diariz.Domain;
 using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace Diariz.Api.Controllers;
@@ -70,7 +71,8 @@ public class UserSettingsController : ControllerBase
             DefaultReasoningEffort: _serverDefaults.ReasoningEffort,
             PlacementMode: s?.RecordingPlacementMode ?? RecordingPlacementMode.SelectedFolder,
             PlacementSectionId: s?.RecordingPlacementSectionId,
-            DictationServerAvailable: _dictationDefaults.Enabled);
+            DictationServerAvailable: _dictationDefaults.Enabled,
+            OutlookSyncEnabled: s?.OutlookSyncEnabled ?? false);
     }
 
     private static string? NullIfBlank(string? v) => string.IsNullOrWhiteSpace(v) ? null : v;
@@ -86,7 +88,11 @@ public class UserSettingsController : ControllerBase
         "omit to keep. It is encrypted at rest and never returned.\n\n" +
         "For the context window a value of zero or less clears the override rather than setting it. Choosing " +
         "a placement mode other than a specific folder clears the stored folder, so a stale one cannot " +
-        "resurface if you switch back.")]
+        "resurface if you switch back.\n\n" +
+        "`outlookSyncEnabled` is the one field with a side effect. Setting it **false erases**: every connected " +
+        "device is removed along with every meeting mirrored from it. It is a privacy switch, so it clears what " +
+        "was gathered rather than only stopping future syncs - omit the field if you just want to leave it as " +
+        "it is.")]
     public async Task<IActionResult> Update(UpdateUserSettingsRequest req)
     {
         var s = await _db.UserSettings.FindAsync(UserId);
@@ -131,6 +137,19 @@ public class UserSettingsController : ControllerBase
             s.RecordingPlacementMode = mode;
             s.RecordingPlacementSectionId =
                 mode == RecordingPlacementMode.SpecificFolder ? req.PlacementSectionId : null;
+        }
+
+        // The desktop Outlook opt-in. Turning it OFF erases: a privacy switch that left the meeting bodies and
+        // attendee addresses it had already gathered sitting on the server would not be one, and this is what
+        // the confirm dialog in Preferences promises. Removing the sources cascades their events away.
+        if (req.OutlookSyncEnabled is { } outlook)
+        {
+            s.OutlookSyncEnabled = outlook;
+            if (!outlook)
+            {
+                var devices = await _db.OutlookCalendarSources.Where(x => x.UserId == UserId).ToListAsync();
+                _db.OutlookCalendarSources.RemoveRange(devices);
+            }
         }
 
         await _db.SaveChangesAsync();

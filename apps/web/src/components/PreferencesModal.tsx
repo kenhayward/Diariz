@@ -14,6 +14,7 @@ import McpAccessSection from "./McpAccessSection";
 import DeveloperAccessSection from "./DeveloperAccessSection";
 import FormulasSection from "./FormulasSection";
 import AutomationsSection from "./AutomationsSection";
+import OutlookSyncSection from "./OutlookSyncSection";
 
 export type PreferencesTab =
   | "profile"
@@ -23,6 +24,7 @@ export type PreferencesTab =
   | "formulas"
   | "google"
   | "feeds"
+  | "outlook"
   | "claude"
   | "developers"
   | "automations";
@@ -58,6 +60,7 @@ export default function PreferencesModal({
     { id: "formulas", label: t("tabFormulas") },
     { id: "google", label: t("tabGoogleAccount") },
     { id: "feeds", label: t("tabCalendarFeeds") },
+    { id: "outlook", label: t("tabOutlook") },
     { id: "claude", label: t("tabClaudeAccess") },
     ...(profile?.apiAccessEnabled ? [{ id: "developers" as const, label: t("tabDevelopers") }] : []),
     ...(profile?.webhooksEnabled ? [{ id: "automations" as const, label: t("tabAutomations") }] : []),
@@ -113,6 +116,7 @@ export default function PreferencesModal({
             {tab === "formulas" && <FormulasSection />}
             {tab === "google" && <GoogleAccountSection />}
             {tab === "feeds" && <CalendarFeedsSection />}
+            {tab === "outlook" && <OutlookSyncSection />}
             {tab === "claude" && <McpAccessSection />}
             {tab === "developers" && <DeveloperAccessSection />}
             {tab === "automations" && <AutomationsSection />}

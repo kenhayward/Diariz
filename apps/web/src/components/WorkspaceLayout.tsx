@@ -2,6 +2,7 @@ import TopBar from "./TopBar";
 import Workspace from "./Workspace";
 import TourOverlay from "./TourOverlay";
 import StatusBar from "./StatusBar";
+import OutlookSyncBridge from "./OutlookSyncBridge";
 import { UploadProvider } from "../lib/uploadContext";
 import { TourProvider } from "../lib/tour";
 import { StatusProvider } from "../lib/status";
@@ -24,6 +25,9 @@ export default function WorkspaceLayout() {
                 <TopBar />
                 <Workspace />
                 <StatusBar />
+                {/* Renders nothing. Mounted here rather than in Preferences because a sync fires on launch
+                    and from the tray, neither of which opens the settings window. A no-op in a browser. */}
+                <OutlookSyncBridge />
               </div>
               <TourOverlay />
             </ToastProvider>

@@ -436,6 +436,16 @@ Calendar tab in that colour (fetched behind an SSRF guard, no Google connection 
 **first-class**: a recording is matched and linked to one exactly as it is to a Google meeting, and opening one
 shows its full invite details. (Both used to be Google-only, so a user whose calendar was entirely feeds got a
 populated Calendar tab but no matching at all, and a feed meeting's details would not open.)
+- **Mirror a desktop Outlook calendar**: opt in at **Preferences → Outlook** to copy the calendar from
+**classic Outlook** on a Windows PC into Diariz, so those meetings behave like any other — on the Calendar tab,
+matched to recordings, carrying pre-meeting notes — and keep working in a browser and once the desktop app is
+closed. Off by default, and the page states what is stored (titles, times, locations, attendees, invite text)
+before it is switched on. Each machine is listed separately with its mailbox, meeting count, last sync and last
+failure, so a connector broken on one PC is visible from another or from any browser; per machine you can
+rename it, hide it without disconnecting, set how many days back and ahead it reads, skip private appointments
+(on by default), and exclude invite text. **Disconnecting a machine deletes the meetings copied from it, and
+turning the opt-in off clears every machine** — both confirm first. Managing it works from any browser; the
+syncing itself runs from the Windows desktop app.
 - **Global AI timeout** (Platform Administrator, Settings → Model Settings): one platform-wide per-request
 timeout in seconds (default 120) applied to every AI call - summaries, minutes, actions, tags, and embeddings.
 Raise it for slow local models; the configured value is the single authority (no hidden HTTP cap).
