@@ -60,6 +60,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.186.13",
+    date: "2026-08-07",
+    pr: 474,
+    headline: "Notes on how long an upload can be",
+    summary:
+      "Nothing changes on screen. The upload limit is set in megabytes, which says little about the length " +
+      "of meeting it allows, so the internal notes now record what it works out to in practice: a recording " +
+      "made in Diariz runs about 0.9 MB a minute, so the 500 MB limit is roughly nine hours. It also " +
+      "records how far the recent upload bug reached - the old cap was stopping anything over about two " +
+      "hours and twenty minutes, which is a long meeting rather than an unusual one.",
+    changed: [
+      "Internal documentation only: recorded the measured audio size per minute, what the upload limits mean in hours for each format, and the outer reverse proxy's confirmed settings.",
+    ],
+  },
+  {
     version: "0.186.12",
     date: "2026-08-07",
     pr: 472,

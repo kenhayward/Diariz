@@ -234,11 +234,18 @@ three-second window the case for that work is weak.
      why (a 400 reading `Failed to read the request form. Multipart body length limit 134217728 exceeded`,
      which reads as a framework fault rather than a size refusal). Fixed in 0.186.12 / PR #472; covered by
      `UploadSizeLimitIntegrationTests`, which posts a real 132 MB body over HTTP.
+   - **What these limits mean in minutes.** Measured against the recording that surfaced the bug: a
+     **3 h 17 m** all-hands from the desktop recorder was **178 MB**, i.e. **~0.9 MB/min** for the WebM/Opus
+     the browser produces. At that rate the 128 MB default was cutting in at about **2 h 20 m** - so the bug
+     was not an edge case, it made any long meeting unuploadable - and `Uploads:MaxBytes` (500 MB) allows
+     roughly **9 hours**. Uploaded *files* are a different story and the reason the cap is not expressed in
+     hours anywhere: a 256 kbps MP3 runs ~2 MB/min (500 MB ≈ 4 h) and uncompressed 44.1 kHz stereo WAV runs
+     ~10 MB/min, which reaches the cap in under an hour.
    - **The outer reverse proxy is a fifth limit, and it is not in this repo.** Anything in front of the web
      container (an nginx-proxy-manager host, a cloud load balancer) applies its own body cap and timeouts.
-     Deployed settings, in use since 2026-08-07 and confirmed against the recording that previously tripped
-     the 128 MB multipart limit (so the size range above 128 MB is exercised; the 500 MB ceiling itself is
-     not yet):
+     Deployed settings, in use since 2026-08-07 and confirmed by a 178 MB upload that survived a server
+     redeploy and a client re-login mid-flight (so the range above 128 MB is exercised; the 500 MB ceiling
+     itself is not):
 
      ```nginx
      client_max_body_size 1024m;      # match apps/web/nginx.conf; see below for why not 500m
