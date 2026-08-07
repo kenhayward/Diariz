@@ -225,6 +225,13 @@ three-second window the case for that work is weak.
    writes a **`Recording`** row, creates a **`Transcription`** row (version 1) and **enqueues a job** on the
    Redis stream **`transcription-jobs`** (consumer group **`workers`**). Uploads are gated by magic-byte
    format sniffing (`AudioFormats`) + size cap (`Uploads:MaxBytes`) + the owner's storage quota.
+   - **Four size limits sit in front of this endpoint and must agree**, largest first: nginx
+     `client_max_body_size` (1024m, `apps/web/nginx.conf`), Kestrel's per-request `[RequestSizeLimit]` and
+     `FormOptions.MultipartBodyLengthLimit` (both `UploadOptions.MaxRequestBytes`, 1 GiB), then the action's
+     own `Uploads:MaxBytes` (500 MB) which is the one that produces a readable 413. The multipart one is set
+     explicitly in `Program.cs` because it defaults to **128 MB** and is *not* raised by `[RequestSizeLimit]`;
+     left at the default it rejected anything larger while binding the form, before the action could explain
+     why. Any outer reverse proxy needs a matching body limit too.
    - Job payload is JSON with **PascalCase** keys: `{ RecordingId, TranscriptionId, BlobKey, Model, MinSpeakers?, MaxSpeakers? }` —
      produced by .NET, consumed by Python.
 3. **Transcribe.** The worker `XREADGROUP`s a job, downloads the blob from MinIO to a temp file, then runs
