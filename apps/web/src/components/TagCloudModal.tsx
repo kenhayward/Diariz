@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import TagCloud from "./TagCloud";
-import { RecordingRow, TagCountSlider } from "./RecordingsPanel";
+import { RecordingRow } from "./nav/RecordingRow";
+import { TagCountSlider } from "./nav/TagCountSlider";
 import { recordingsForTags, topTagsByCount } from "../lib/tagCloud";
 import type { RecordingSummary, TagCloudEntry } from "../lib/types";
 

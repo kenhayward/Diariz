@@ -60,6 +60,21 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.186.6",
+    date: "2026-08-07",
+    pr: 466,
+    headline: "Groundwork: the meeting row becomes its own component",
+    summary:
+      "Nothing changes on screen. Continuing to break up the meetings panel - the most-edited file in the " +
+      "app - the row that represents a single meeting, and the tag-count slider, now live in their own " +
+      "files. Both were reached into from the expanded tag-cloud window, which meant that window had to " +
+      "load the entire panel just to draw a row; that circular dependency is gone. The panel is down from " +
+      "1,380 lines to 1,068, and its behaviour is unchanged - the same 85 tests cover it, untouched.",
+    changed: [
+      "Internal only: the meeting row and tag-count slider moved into components/nav/, removing the tag-cloud modal's dependency on the whole panel. No user-visible change.",
+    ],
+  },
+  {
     version: "0.186.5",
     date: "2026-08-07",
     pr: 465,
