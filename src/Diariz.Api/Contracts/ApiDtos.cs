@@ -141,7 +141,13 @@ public record RecordingSummaryDto(
     /// unlinked or unknown.</summary>
     string? CalendarColor = null,
     /// <summary>The chosen meeting type driving the minutes template, or null for the General default.</summary>
-    Guid? MeetingTypeId = null);
+    Guid? MeetingTypeId = null,
+    /// <summary>Wall-clock instant capture began. Null for uploaded files and rows predating the field - show
+    /// <see cref="CreatedAt"/> then. This, not <see cref="CreatedAt"/>, is when the meeting happened.</summary>
+    DateTimeOffset? StartedAt = null,
+    /// <summary>Wall-clock instant capture stopped. Null when unknown; fall back to
+    /// <see cref="StartedAt"/> + <see cref="DurationMs"/>, which excludes any paused time.</summary>
+    DateTimeOffset? EndedAt = null);
 
 /// <summary>A recording's persisted link to a Google Calendar event (the stored snapshot). The rich invite
 /// details are fetched live via <c>GET /api/calendar/events/{eventId}</c>. <see cref="CalendarId"/> targets
@@ -241,7 +247,13 @@ public record RecordingDetailDto(
     Guid? RecordedByUserId = null,
     string? RecordedByName = null,
     /// <summary>The rooms this recording is placed in that the caller can see, main room first.</summary>
-    IReadOnlyList<RecordingRoomDto>? Rooms = null);
+    IReadOnlyList<RecordingRoomDto>? Rooms = null,
+    /// <summary>Wall-clock instant capture began. Null for uploaded files and rows predating the field - show
+    /// <see cref="CreatedAt"/> then. This, not <see cref="CreatedAt"/>, is when the meeting happened.</summary>
+    DateTimeOffset? StartedAt = null,
+    /// <summary>Wall-clock instant capture stopped. Null when unknown; fall back to
+    /// <see cref="StartedAt"/> + <see cref="DurationMs"/>, which excludes any paused time.</summary>
+    DateTimeOffset? EndedAt = null);
 
 /// <summary>A room a recording sits in, for the detail Overview. <paramref name="IsMain"/> marks the recorder's
 /// personal (home) room - the only room a recording can be deleted from.</summary>

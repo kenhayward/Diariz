@@ -5,9 +5,12 @@ import {
 } from "./calendar";
 import type { CalendarEvent, RecordingSummary } from "./types";
 
-const rec = (id: string, createdAt: string, calendarEventId: string | null = null): RecordingSummary => ({
+const rec = (
+  id: string, createdAt: string, calendarEventId: string | null = null, startedAt: string | null = null,
+): RecordingSummary => ({
   id, title: id, name: null, source: "Microphone", durationMs: 0, status: "Transcribed",
   createdAt, sectionId: null, sectionName: null, hasActions: false, hasAudio: true, calendarEventId,
+  startedAt,
 });
 
 /// Build an event from local Date parts so the ISO round-trips back to the same local day regardless of
@@ -131,5 +134,43 @@ describe("recordingDayKeys / recordingsForDay", () => {
 
   it("files a recording under its local date via isoToDayKey", () => {
     expect(isoToDayKey(new Date(2026, 0, 1, 23, 59).toISOString())).toBe("2026-01-01");
+  });
+
+  // A meeting recorded 23:30-00:30 finishes (and therefore uploads) on the following day. Placing it by
+  // createdAt files it under the wrong date - and worse, in a different cell from the very calendar event
+  // it is linked to, since the event still sits on the day it started.
+  it("places a recording on the day it started, not the day the upload landed", () => {
+    const lateNight = [
+      rec("night", new Date(2026, 5, 10, 0, 30).toISOString(), null, new Date(2026, 5, 9, 23, 30).toISOString()),
+    ];
+    expect(recordingDayKeys(lateNight)).toEqual(new Set(["2026-06-09"]));
+    expect(recordingsForDay(lateNight, "2026-06-09").map((r) => r.id)).toEqual(["night"]);
+    expect(recordingsForDay(lateNight, "2026-06-10")).toEqual([]);
+  });
+
+  it("falls back to createdAt when the start is unknown", () => {
+    const uploaded = [rec("file", new Date(2026, 5, 10, 0, 30).toISOString())];
+    expect(recordingDayKeys(uploaded)).toEqual(new Set(["2026-06-10"]));
+  });
+
+  it("orders a day by start time, so a late-uploaded early recording still sorts first", () => {
+    const mixed = [
+      // Started 09:00 but only uploaded at 17:00 (a long take).
+      rec("early", new Date(2026, 5, 9, 17, 0).toISOString(), null, new Date(2026, 5, 9, 9, 0).toISOString()),
+      rec("later", new Date(2026, 5, 9, 11, 0).toISOString(), null, new Date(2026, 5, 9, 11, 0).toISOString()),
+    ];
+    expect(recordingsForDay(mixed, "2026-06-09").map((r) => r.id)).toEqual(["early", "later"]);
+  });
+});
+
+describe("dayItems with a true start", () => {
+  it("timelines a recording at the time it started", () => {
+    const recordings = [
+      rec("r9", new Date(2026, 6, 2, 17, 0).toISOString(), null, new Date(2026, 6, 2, 9, 0).toISOString()),
+    ];
+    const events = [ev("e10", new Date(2026, 6, 2, 10, 0), new Date(2026, 6, 2, 10, 30))];
+    // Sorted by start, the 09:00 recording precedes the 10:00 event despite uploading at 17:00.
+    expect(dayItems(recordings, events, "2026-07-02").map((i) => (i.type === "recording" ? i.recording.id : i.event.id)))
+      .toEqual(["r9", "e10"]);
   });
 });

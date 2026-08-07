@@ -220,7 +220,12 @@ three-second window the case for that work is weak.
    noise suppression / auto gain / mono) applied to `getUserMedia`. While recording, a **Web Audio
    `AnalyserNode`** taps the same stream to drive a live **input-level meter** (`lib/audioLevel.ts` +
    `InputLevelMeter.tsx`; a passive read, not connected to output) with a subtle sustained-silence hint. The
-   client `POST`s multipart to `POST /api/recordings` (`source = Microphone | System | Upload`).
+   client `POST`s multipart to `POST /api/recordings` (`source = Microphone | System | Upload`), including
+   **`startedAt`/`endedAt`** - the wall clock capture began and stopped. The recorder holds the start in its own
+   ref rather than in `Timing`, because `recorderTiming.pause()` folds `runningSince` into an accumulator and
+   nulls it, destroying the original start on the first pause; both are also stashed with the offline pending
+   recording so a recovered upload replays the real time instead of the recovery moment. The server drops an
+   implausible value (>24 h future, >366 d past, end before start) rather than failing the upload.
 2. **Store + enqueue.** The API streams the blob into **MinIO** (`recordings` bucket, key `{userId}/{recordingId}{ext}`),
    writes a **`Recording`** row, creates a **`Transcription`** row (version 1) and **enqueues a job** on the
    Redis stream **`transcription-jobs`** (consumer group **`workers`**). Uploads are gated by magic-byte
@@ -1453,8 +1458,15 @@ into it with no URL or per-user setup at all.
   covers team/shared/subscribed calendars, so no new scope.
 - **Match a recording to its calendar meeting (Phase 2 feature):** with the Calendar grant, the recording's
   Overview calls **`GET /api/recordings/{id}/calendar-match`**, which asks `ListEventsAsync` for events across the
-  user's selected calendars around the recording's wall-clock span (`CreatedAt` .. `+DurationMs`, padded ±30 min),
-  and returns the **best time-overlapping** event (`GoogleCalendarClient.PickBest`) as `{ match }` (or `null`).
+  user's selected calendars around the recording's wall-clock span (padded ±30 min), and returns the **best
+  time-overlapping** event (`GoogleCalendarClient.PickBest`) as `{ match }` (or `null`).
+  - **The span is `StartedAt` .. `EndedAt`**, falling back to `CreatedAt` .. `+DurationMs` when the client did not
+    report them (uploaded files, pre-`AddRecordingStartedAt` rows). This distinction is the whole feature:
+    `CreatedAt` is when the **upload** landed, so for a recorded take it is roughly when it *stopped* - spanning
+    from it put the window a full recording-length late and it overlapped nothing. Note the ±30 min pad only
+    widens the **fetch**; `PickBest` scores the unpadded span and requires `overlap > 0`, so the pad never
+    rescued a mis-anchored span. `EndedAt` is tracked separately from `DurationMs` because `DurationMs` is
+    captured-audio length: it excludes paused time, and after a merge it is the concatenated length.
   **All-day entries are excluded from matching**: a date-only event (holiday, birthday, out-of-office day) blankets
   the whole day, so it would out-overlap every real meeting and would be auto-linked to anything recorded that day.
   `CalendarEvent.AllDay` carries the flag (Google: a `date` rather than `dateTime` start; ICS: a date-only `DTSTART`)

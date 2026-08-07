@@ -38,17 +38,26 @@ export function buildMonthGrid(year: number, month: number): CalendarDay[][] {
   return weeks;
 }
 
+/// When a recording happened, for placing it on the calendar: the wall clock capture began, falling back to
+/// the upload time for uploaded files and recordings made before the start was tracked.
+///
+/// Using `createdAt` here files a meeting recorded 23:30-00:30 under the *following* day - and in a different
+/// cell from the very event it is linked to, which still sits on the day it started.
+function recordingTime(r: RecordingSummary): string {
+  return r.startedAt ?? r.createdAt;
+}
+
 /// The set of local day-keys that have at least one recording (drives which calendar cells are
 /// highlighted and selectable).
 export function recordingDayKeys(recordings: RecordingSummary[]): Set<string> {
-  return new Set(recordings.map((r) => isoToDayKey(r.createdAt)));
+  return new Set(recordings.map((r) => isoToDayKey(recordingTime(r))));
 }
 
-/// Recordings created on the given local day-key, oldest first (so the day reads top-to-bottom in time).
+/// Recordings that started on the given local day-key, oldest first (so the day reads top-to-bottom in time).
 export function recordingsForDay(recordings: RecordingSummary[], key: string): RecordingSummary[] {
   return recordings
-    .filter((r) => isoToDayKey(r.createdAt) === key)
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    .filter((r) => isoToDayKey(recordingTime(r)) === key)
+    .sort((a, b) => new Date(recordingTime(a)).getTime() - new Date(recordingTime(b)).getTime());
 }
 
 /// The set of local day-keys a set of calendar events covers — expands multi-day and all-day events
@@ -99,7 +108,8 @@ export function dayItems(recordings: RecordingSummary[], events: CalendarEvent[]
   const linkedEventIds = new Set(recordings.map((r) => r.calendarEventId).filter((id): id is string => id != null));
   const items: DayItem[] = [];
   for (const r of recordings) {
-    if (isoToDayKey(r.createdAt) === key) items.push({ type: "recording", time: new Date(r.createdAt).getTime(), recording: r });
+    const at = recordingTime(r);
+    if (isoToDayKey(at) === key) items.push({ type: "recording", time: new Date(at).getTime(), recording: r });
   }
   for (const e of events) {
     if (linkedEventIds.has(e.id)) continue; // represented by its recording row (both icons)

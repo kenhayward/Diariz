@@ -33,6 +33,13 @@ export interface RecordingSummary {
   calendarColor?: string | null;
   /// The chosen meeting type driving the minutes template, or null for the General default.
   meetingTypeId?: string | null;
+  /// Wall clock the capture began. Null for uploaded files and recordings made before this was tracked -
+  /// fall back to `createdAt`. Prefer this wherever you mean "when the meeting happened": `createdAt` is
+  /// upload time, so for a recorded take it is roughly when it *stopped*.
+  startedAt?: string | null;
+  /// Wall clock the capture stopped. Null when unknown. Distinct from `durationMs`, which is recorded-audio
+  /// length and excludes any paused stretches.
+  endedAt?: string | null;
 }
 
 // ---- Tag cloud ----
@@ -386,6 +393,11 @@ export interface RecordingDetail {
   recordedByName: string | null;
   /// The rooms this recording is placed in that the caller can see, home (main) room first.
   rooms: RecordingRoom[] | null;
+  /// Wall clock the capture began. Null for uploaded files and recordings made before this was tracked -
+  /// fall back to `createdAt`. Prefer this wherever you mean "when the meeting happened".
+  startedAt?: string | null;
+  /// Wall clock the capture stopped. Null when unknown. Distinct from `durationMs`, which excludes pauses.
+  endedAt?: string | null;
 }
 
 /// A room a recording sits in, for the detail Overview. `isMain` = the recorder's personal (home) room -

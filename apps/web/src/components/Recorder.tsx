@@ -282,6 +282,10 @@ export default function Recorder({
   const chunksRef = useRef<Blob[]>([]);
   // Tracks *recorded* time (excludes paused stretches) so the timer + uploaded duration stay honest.
   const timingRef = useRef<Timing>({ accumulatedMs: 0, runningSince: null });
+  // The wall clock this take began, kept deliberately OUTSIDE `timingRef`: timing.pause() folds runningSince
+  // into accumulatedMs and nulls it, so by the time upload() runs the original start is gone from Timing. This
+  // is what the server matches meetings against, so it has to survive every pause.
+  const startedAtRef = useRef<number | null>(null);
   // Read inside upload() (state may not have flushed when onstop fires).
   const liveLinesRef = useRef<MeetingNote[]>([]);
   // Mirrors `recording` (true for the whole recording, including while paused) so the screenshot
@@ -743,6 +747,7 @@ export default function Recorder({
       recorderRef.current = recorder;
       activeSourceRef.current = coarse;
       timingRef.current = timing.start(Date.now());
+      startedAtRef.current = Date.now();
       // Re-anchor a relative auto-stop to record-start, so "in N minutes" means N minutes of recording.
       applySchedule(autoStopChoice, autoStopTime, Date.now());
       setElapsed(0);
@@ -833,7 +838,13 @@ export default function Recorder({
       : source === "System" ? t("recTitlePrefixSystem")
       : t("recTitlePrefixMic");
     const title = `${prefix} ${new Date().toLocaleString()}`;
-    const rec: PendingRecording = { userId: userId ?? "", blob, title, durationMs, source, createdAt: Date.now() };
+    // The wall-clock span. endedAt is "now" because upload() runs from onstop; it is sent separately from
+    // durationMs because durationMs excludes paused time, so it cannot reconstruct when the take actually ended.
+    const startedAt = startedAtRef.current ?? undefined;
+    const endedAt = Date.now();
+    const rec: PendingRecording = {
+      userId: userId ?? "", blob, title, durationMs, source, createdAt: Date.now(), startedAt, endedAt,
+    };
 
     // Stash the audio BEFORE uploading. If the upload fails (e.g. an expired session redirects to login),
     // the recording survives in local storage and is offered for re-upload on the next visit.
@@ -843,7 +854,10 @@ export default function Recorder({
       // Retried past a proxy-level gateway error, so an API redeploy during a meeting is not felt as a
       // failed upload. Only 502/503/504 are retried - see retry.ts for why a bare network error is not.
       const created = await retryOnGatewayError(() =>
-        api.upload(blob, title, durationMs, source, pendingSectionRef.current, pendingRoomRef.current),
+        api.upload(blob, title, durationMs, source, pendingSectionRef.current, pendingRoomRef.current, {
+          startedAt,
+          endedAt,
+        }),
       );
       if (userId) await clearPendingRecording(userId);
       setPending(null);
@@ -882,7 +896,12 @@ export default function Recorder({
     setError(null);
     try {
       const created = await retryOnGatewayError(() =>
-        api.upload(pending.blob, pending.title, pending.durationMs, pending.source),
+        // Replay the stashed wall clock, not "now": a recording recovered on the next visit still happened when
+        // it happened, and stamping it with the recovery moment would lose its meeting.
+        api.upload(pending.blob, pending.title, pending.durationMs, pending.source, null, null, {
+          startedAt: pending.startedAt,
+          endedAt: pending.endedAt,
+        }),
       );
       if (userId) await clearPendingRecording(userId);
       setPending(null);

@@ -97,6 +97,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddWebhookDeliveryLastAttemptAt` | `WebhookDeliveries.LastAttemptAt` (timestamptz null) - records when the worker last contacted the target, so the delivery worker can enforce a per-subscription rolling-minute rate cap (`WebhookOptions.MaxPerSubscriptionPerMinute`, default 120) that paces bursts to a single fan-out automation. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddFeedback` | `Feedback` (a user's "something looks or behaves wrong" report; `UserId` FK → `AspNetUsers`, **cascade** on user delete; `Description`/`Route`/`Release`/`TrailJson` text, not null; `ScreenshotBlobKey` text null - reserved for a deferred screenshot phase, always null today; index `(UserId)`) - readable and deletable only by a Platform Administrator, including a submitter's own. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddIncludeFeedbackText` | `Webhooks.IncludeFeedbackText` (boolean NOT NULL DEFAULT false) - opt-in, per **Platform** subscription, to include the submitter's own words in a `feedback.submitted` payload. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddRecordingStartedAt` | `Recordings.StartedAt` / `Recordings.EndedAt` (timestamptz null) plus index `(UserId, StartedAt)` - the recording's true wall-clock span, so calendar matching stops spanning from upload time (which made a recorded meeting's window a full recording-length late, so it overlapped nothing). **Backfills** `StartedAt = CreatedAt - DurationMs` for existing rows where `Source <> 2` (not an upload, whose `CreatedAt` says nothing about when the audio was recorded) and `DurationMs > 0`; `EndedAt` is left null on backfilled rows so `recEnd` falls back to exactly the pre-migration value rather than a guess. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
 
@@ -172,9 +173,11 @@ The owned audio recording.
 | `Position` | int | manual sort order within its group |
 | `ActionsExtractedAt` | timestamptz null | non-null once action extraction has run (drives the by-exception Actions panel) |
 | `TagsExtractedAt` | timestamptz null | non-null once tag extraction has run (even a zero-tag result); null rows are the tag backfill's work list. Left null when the owner has no LLM so a later backfill retries |
-| `CreatedAt` | timestamptz | |
+| `CreatedAt` | timestamptz | when the row was created, i.e. when the **upload landed** - for a recorded take, roughly when it stopped. Keep for retention/ordering, not for "when the meeting happened" |
+| `StartedAt` | timestamptz null | wall clock capture began, reported by the client and sanity-checked server-side (rejects >24 h future / >366 d past, normalised to UTC). Null for `Source=Upload` and pre-`AddRecordingStartedAt` rows; callers fall back to `CreatedAt`. **This is what calendar matching spans from** |
+| `EndedAt` | timestamptz null | wall clock capture stopped. Null when unknown; callers fall back to `StartedAt + DurationMs`. Stored separately because `DurationMs` is captured-audio length - it excludes paused time, and after a merge it is the concatenated length - so it cannot describe a wall-clock span |
 
-Index: `(UserId, CreatedAt)`. Children cascade: `Transcriptions`, `Speakers`, `RecordingActions`, `RecordingTags`.
+Index: `(UserId, CreatedAt)`, `(UserId, StartedAt)`. Children cascade: `Transcriptions`, `Speakers`, `RecordingActions`, `RecordingTags`.
 
 #### `Transcriptions`
 One transcription pass; recordings are **versioned**.

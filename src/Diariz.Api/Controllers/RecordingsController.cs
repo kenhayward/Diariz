@@ -100,7 +100,7 @@ public class RecordingsController : ControllerBase
             orderby p.Position, r.CreatedAt descending
             select new
             {
-                r.Id, r.Title, r.Name, r.Source, r.DurationMs, r.Status, r.CreatedAt,
+                r.Id, r.Title, r.Name, r.Source, r.DurationMs, r.Status, r.CreatedAt, r.StartedAt, r.EndedAt,
                 HasActions = r.Actions.Any(), HasAudio = r.AudioDeletedAt == null,
                 EventId = r.CalendarLink != null ? r.CalendarLink.EventId : null,
                 Color = r.CalendarLink != null ? r.CalendarLink.Color : null,
@@ -113,7 +113,8 @@ public class RecordingsController : ControllerBase
             {
                 var folder = folderOf.TryGetValue(r.Id, out var f) ? f : (SectionId: (Guid?)null, SectionName: (string?)null);
                 return new RecordingSummaryDto(r.Id, r.Title, r.Name, r.Source, r.DurationMs, r.Status, r.CreatedAt,
-                    folder.SectionId, folder.SectionName, r.HasActions, r.HasAudio, r.EventId, r.Color, r.MeetingTypeId);
+                    folder.SectionId, folder.SectionName, r.HasActions, r.HasAudio, r.EventId, r.Color, r.MeetingTypeId,
+                    r.StartedAt, r.EndedAt);
             })
             .ToList();
     }
@@ -242,12 +243,28 @@ public class RecordingsController : ControllerBase
             rec.Status, rec.Error, rec.CreatedAt, rec.MinSpeakers, rec.MaxSpeakers, names, speakers, tDto, sDto,
             mDto, actions, rec.ActionsExtractedAt != null, rec.HasAudio, ToLinkDto(rec.CalendarLink),
             rec.MeetingTypeId, rec.AudioProtectedAt, rec.AudioDeletedAt, scheduledDeletion,
-            rec.UserId, recordedByName, visibleRooms);
+            rec.UserId, recordedByName, visibleRooms, rec.StartedAt, rec.EndedAt);
     }
 
     private static CalendarLinkDto? ToLinkDto(RecordingCalendarLink? link) => link is null
         ? null
         : new CalendarLinkDto(link.EventId, link.CalendarId, link.Summary, link.StartsAt, link.EndsAt, link.HtmlLink, link.LinkedManually, link.Color);
+
+    /// <summary>A client-reported capture time, normalised to UTC, or null when it is not believable.
+    /// <para>The value comes from the browser's clock, so it can be skewed or forged. It only ever feeds the
+    /// calendar span, and a wrong span is worse than no span (it would match the wrong meeting), so anything
+    /// outside a generous window is dropped in favour of the CreatedAt fallback. The window is deliberately
+    /// wide: a modest clock skew still produces a usable match, and the caller keeps their audio either way.</para>
+    /// <para>Normalising to UTC is not cosmetic - Npgsql rejects a non-zero-offset DateTimeOffset for a
+    /// <c>timestamptz</c> column, and browsers send the local offset.</para></summary>
+    private static DateTimeOffset? PlausibleCaptureTime(DateTimeOffset? value)
+    {
+        if (value is not { } t) return null;
+        var now = DateTimeOffset.UtcNow;
+        if (t > now.AddHours(24)) return null;      // a clock running fast, or a forged future time
+        if (t < now.AddDays(-366)) return null;     // a clock stuck in the past, or an epoch-zero default
+        return t.ToUniversalTime();
+    }
 
     /// <summary>Upload an audio file and kick off transcription.</summary>
     [HttpPost]
@@ -260,6 +277,12 @@ public class RecordingsController : ControllerBase
         "format is sniffed from the actual bytes rather than trusted from the extension or MIME type " +
         "(415 if unsupported), and the file is capped by the platform's upload limit (413). Every source counts " +
         "against your storage quota (413 when it would be exceeded).\n\n" +
+        "Send `startedAt` and `endedAt` (the wall clock the capture began and stopped) whenever you know them. " +
+        "They are what meeting matching spans from - without them it falls back to the upload time, which for a " +
+        "recorded take is roughly when it *stopped*, so the span lands a full recording-length late and the " +
+        "meeting never overlaps. `endedAt` matters separately from `durationMs`, which is captured-audio length " +
+        "and excludes any paused time. Both are optional, and an implausible value (far future, over a year old, " +
+        "or an end before the start) is ignored rather than failing the upload.\n\n" +
         "The recording is always filed in your personal room. Passing `roomId` for a shared room also shares it " +
         "there and needs `CreateRecording` in that room; `sectionId` files it in a folder of your personal room.")]
     // Kestrel's per-request ceiling. NOT the only one that matters: the multipart form reader has its own,
@@ -268,7 +291,8 @@ public class RecordingsController : ControllerBase
     public async Task<ActionResult<RecordingSummaryDto>> Upload(
         [FromForm] IFormFile audio, [FromForm] string? title, [FromForm] long durationMs,
         [FromForm] RecordingSource source = RecordingSource.Microphone, [FromForm] Guid? sectionId = null,
-        [FromForm] Guid? roomId = null)
+        [FromForm] Guid? roomId = null, [FromForm] DateTimeOffset? startedAt = null,
+        [FromForm] DateTimeOffset? endedAt = null)
     {
         if (audio is null || audio.Length == 0) return BadRequest("Empty audio.");
 
@@ -303,6 +327,13 @@ public class RecordingsController : ControllerBase
             if (!ok) return StatusCode(StatusCodes.Status415UnsupportedMediaType, reason);
         }
 
+        // The client's wall clock, sanity-checked. A skewed or hostile clock must not poison the calendar span,
+        // but it must never cost the user their audio either - so an implausible value is dropped and we fall
+        // back to CreatedAt rather than rejecting the upload.
+        var started = PlausibleCaptureTime(startedAt);
+        var ended = PlausibleCaptureTime(endedAt);
+        if (started is not null && ended is not null && ended < started) ended = null; // incoherent span
+
         var rec = new Recording
         {
             Id = Guid.NewGuid(),
@@ -312,6 +343,8 @@ public class RecordingsController : ControllerBase
             ContentType = audio.ContentType,
             SizeBytes = audio.Length,
             DurationMs = durationMs,
+            StartedAt = started,
+            EndedAt = ended,
             Status = RecordingStatus.Uploaded
         };
         rec.BlobKey = $"{UserId}/{rec.Id}{Path.GetExtension(audio.FileName)}";
@@ -351,7 +384,7 @@ public class RecordingsController : ControllerBase
 
         return CreatedAtAction(nameof(Get), new { id = rec.Id },
             new RecordingSummaryDto(rec.Id, rec.Title, rec.Name, rec.Source, rec.DurationMs, rec.Status, rec.CreatedAt,
-                null, null, false, rec.HasAudio));
+                null, null, false, rec.HasAudio, StartedAt: rec.StartedAt, EndedAt: rec.EndedAt));
     }
 
     [HttpPost("{id:guid}/retranscribe")]
@@ -745,15 +778,21 @@ public class RecordingsController : ControllerBase
 
         var rec = await _db.Recordings
             .Where(r => r.Id == id && r.UserId == UserId)
-            .Select(r => new { r.CreatedAt, r.DurationMs })
+            .Select(r => new { r.CreatedAt, r.DurationMs, r.StartedAt, r.EndedAt })
             .FirstOrDefaultAsync(ct);
         if (rec is null) return NotFound();
 
         // The recording's wall-clock span, padded so a meeting that started a little before recording began
         // (or a recording started a touch late) still matches.
+        //
+        // Span from StartedAt, not CreatedAt: CreatedAt is when the upload landed, i.e. roughly when the take
+        // *stopped*, so spanning from it put the window a full recording-length late and PickBest (which needs
+        // overlap > 0) never picked the recording's own meeting. Fall back to CreatedAt for uploaded files and
+        // rows predating the field. EndedAt likewise beats StartedAt + DurationMs, because DurationMs is
+        // captured-audio length: it excludes paused time, and after a merge it is the concatenated length.
         var pad = TimeSpan.FromMinutes(30);
-        var recStart = rec.CreatedAt;
-        var recEnd = rec.CreatedAt.AddMilliseconds(rec.DurationMs);
+        var recStart = rec.StartedAt ?? rec.CreatedAt;
+        var recEnd = rec.EndedAt ?? recStart.AddMilliseconds(rec.DurationMs);
         var events = await _calendar!.ListEventsAsync(UserId, recStart - pad, recEnd + pad, ct);
         if (events is null) return BadRequest("Your Google connection needs reauthorising — reconnect Calendar in Preferences.");
 
@@ -1431,9 +1470,19 @@ public class RecordingsController : ControllerBase
             .ToListAsync();
         if (recs.Count != ids.Count) return NotFound();                 // some aren't the caller's
 
-        // Earliest-created recording survives; the rest are folded into it (chronological order).
-        var ordered = recs.OrderBy(r => r.CreatedAt).ToList();
+        // Earliest recording survives; the rest are folded into it (chronological order). Ordered by when each
+        // was actually captured, not when it was uploaded - a long take started first can easily upload after a
+        // short one started later, which would otherwise fold the parts together in the wrong order.
+        var ordered = recs.OrderBy(r => r.StartedAt ?? r.CreatedAt).ToList();
         var survivor = ordered[0];
+
+        // The merged recording spans from the earliest part's start to the latest part's end. Taken across all
+        // parts rather than just the survivor's, so the span still describes the whole merged result.
+        survivor.StartedAt = ordered.Min(r => r.StartedAt ?? r.CreatedAt);
+        var ends = ordered
+            .Select(r => r.EndedAt ?? (r.StartedAt ?? r.CreatedAt).AddMilliseconds(r.DurationMs))
+            .ToList();
+        survivor.EndedAt = ends.Max();
 
         var sources = ordered.Select((rec, idx) =>
         {

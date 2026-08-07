@@ -1632,7 +1632,7 @@ export default function RecordingDetail() {
 
       <p className="-mt-1 text-xs text-gray-500 dark:text-gray-400">
         {rec.source === "System" ? t("workspace:sourceSystem") : rec.source === "Upload" ? t("workspace:sourceUpload") : t("workspace:sourceMicrophone")} ·{" "}
-        {formatDate(rec.createdAt, i18n.language)}
+        {formatDate(rec.startedAt ?? rec.createdAt, i18n.language)}
         {rec.durationMs > 0 ? ` · ${formatDuration(rec.durationMs)}` : ""} · {rec.status}
         {rec.sizeBytes > 0 ? ` · ${formatBytes(rec.sizeBytes)}` : ""}
         {rec.current?.processingMs ? ` · ${t("workspace:processedIn", { time: formatDuration(rec.current.processingMs) })}` : ""}
@@ -1738,8 +1738,13 @@ export default function RecordingDetail() {
           onSaved={() => void qc.invalidateQueries({ queryKey: ["recording", id] })}
         />
       )}
+      {/* Centre the picker on the day the meeting happened, not the day the upload landed. */}
       {linkModalOpen && (
-        <CalendarLinkModal recordingId={id} aroundDate={rec.createdAt} onClose={() => setLinkModalOpen(false)} />
+        <CalendarLinkModal
+          recordingId={id}
+          aroundDate={rec.startedAt ?? rec.createdAt}
+          onClose={() => setLinkModalOpen(false)}
+        />
       )}
 
       {openShot !== null && (

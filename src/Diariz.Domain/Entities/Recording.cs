@@ -76,7 +76,23 @@ public class Recording
     /// not retry-forever). Left null when the owner has no LLM configured so a later backfill retries.</summary>
     public DateTimeOffset? TagsExtractedAt { get; set; }
 
+    /// <summary>When the row was created - i.e. when the upload request landed, which for a recorded take is
+    /// roughly when it <i>stopped</i>. Keep using this for anything that measures how long the platform has
+    /// held the data (audio retention, list ordering); use <see cref="StartedAt"/> for anything that means
+    /// "when did the meeting happen".</summary>
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Wall-clock instant the capture began, as reported by the client. Null for uploaded files (no
+    /// reliable value exists) and for rows predating the field - callers fall back to <see cref="CreatedAt"/>.
+    /// This is what calendar matching spans from: <see cref="CreatedAt"/> is upload time, so using it put the
+    /// span a full recording-length late and meetings never overlapped.</summary>
+    public DateTimeOffset? StartedAt { get; set; }
+
+    /// <summary>Wall-clock instant the capture stopped, as reported by the client. Null for uploaded files and
+    /// for rows predating the field; callers fall back to <see cref="StartedAt"/> + <see cref="DurationMs"/>.
+    /// Stored separately because <see cref="DurationMs"/> is captured-audio length - it excludes paused time,
+    /// and after a merge it is the concatenated length - so it does not describe a wall-clock span.</summary>
+    public DateTimeOffset? EndedAt { get; set; }
 
     /// <summary>Optional link to the Google Calendar event this recording belongs to (1:1). Null = unlinked.</summary>
     public RecordingCalendarLink? CalendarLink { get; set; }

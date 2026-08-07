@@ -402,6 +402,85 @@ public class RecordingsControllerTests
         Assert.Null(placement.SectionId);
     }
 
+    /// <summary>The recorder reports the wall clock it started and stopped, and both are stored normalised to
+    /// UTC (Npgsql rejects a non-zero offset for a timestamptz column).</summary>
+    [Fact]
+    public async Task Upload_StoresTheReportedStartAndEnd_NormalisedToUtc()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.Upload(
+            FakeAudio(Encoding.UTF8.GetBytes("audio")), title: "Standup", durationMs: 600_000,
+            startedAt: DateTimeOffset.Parse("2026-07-02T10:00:00+01:00"),
+            endedAt: DateTimeOffset.Parse("2026-07-02T10:10:00+01:00"));
+
+        var rec = db.Recordings.Single();
+        Assert.Equal(DateTimeOffset.Parse("2026-07-02T09:00:00Z"), rec.StartedAt);
+        Assert.Equal(DateTimeOffset.Parse("2026-07-02T09:10:00Z"), rec.EndedAt);
+        Assert.Equal(TimeSpan.Zero, rec.StartedAt!.Value.Offset);
+    }
+
+    /// <summary>An upload with no reported times (a file upload, or an older client) leaves both null rather
+    /// than inventing a value - callers fall back to CreatedAt.</summary>
+    [Fact]
+    public async Task Upload_WithoutReportedTimes_LeavesThemNull()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        await controller.Upload(FakeAudio(Encoding.UTF8.GetBytes("audio")), title: "File", durationMs: 0);
+
+        var rec = db.Recordings.Single();
+        Assert.Null(rec.StartedAt);
+        Assert.Null(rec.EndedAt);
+    }
+
+    /// <summary>A client clock that is wrong (or a hostile caller) must not poison the calendar span. A start in
+    /// the future, or absurdly far in the past, is dropped rather than rejecting the upload - losing the audio
+    /// over a bad timestamp would be far worse than falling back to CreatedAt.</summary>
+    [Theory]
+    [InlineData(48, 0)]    // starts two days in the future
+    [InlineData(-24 * 400, 0)] // starts over a year ago
+    public async Task Upload_WithAnImplausibleStart_DropsItAndKeepsTheAudio(int startOffsetHours, int _)
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+
+        var result = await controller.Upload(
+            FakeAudio(Encoding.UTF8.GetBytes("audio")), title: "Skewed", durationMs: 1000,
+            startedAt: DateTimeOffset.UtcNow.AddHours(startOffsetHours));
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+        Assert.Null(db.Recordings.Single().StartedAt);
+    }
+
+    /// <summary>An end before the start is incoherent, so it is dropped while the start is kept - recEnd then
+    /// falls back to StartedAt + DurationMs rather than producing a negative span.</summary>
+    [Fact]
+    public async Task Upload_WithAnEndBeforeTheStart_DropsOnlyTheEnd()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var controller = Build(db, userId, new FakeJobQueue());
+        var started = DateTimeOffset.UtcNow.AddMinutes(-10);
+
+        await controller.Upload(
+            FakeAudio(Encoding.UTF8.GetBytes("audio")), title: "Backwards", durationMs: 1000,
+            startedAt: started, endedAt: started.AddMinutes(-5));
+
+        var rec = db.Recordings.Single();
+        Assert.NotNull(rec.StartedAt);
+        Assert.Null(rec.EndedAt);
+    }
+
     /// <summary>A recording uploaded with a folder in the caller's personal room lands in that folder (the
     /// placement-preference "record into the selected folder" path).</summary>
     [Fact]
@@ -2100,10 +2179,16 @@ public class RecordingsControllerTests
 
     // ---- Calendar match ----
 
-    private static async Task<Recording> SeedRecordingAt(DiarizDbContext db, Guid userId, DateTimeOffset createdAt, long durationMs)
+    private static async Task<Recording> SeedRecordingAt(
+        DiarizDbContext db, Guid userId, DateTimeOffset createdAt, long durationMs,
+        DateTimeOffset? startedAt = null, DateTimeOffset? endedAt = null)
     {
         Users.Ensure(db, userId);
-        var rec = new Recording { Id = Guid.NewGuid(), UserId = userId, BlobKey = "k", CreatedAt = createdAt, DurationMs = durationMs };
+        var rec = new Recording
+        {
+            Id = Guid.NewGuid(), UserId = userId, BlobKey = "k", CreatedAt = createdAt, DurationMs = durationMs,
+            StartedAt = startedAt, EndedAt = endedAt,
+        };
         db.Recordings.Add(rec);
         await db.SaveChangesAsync();
         await new RoomScope(db).PlaceInMainRoomAsync(rec.Id, userId, sectionId: null); // list is room-scoped now
@@ -2152,6 +2237,93 @@ public class RecordingsControllerTests
         Assert.Contains("https://cal/main", json);
         // Window padded ±30 min around the recording span.
         Assert.Equal(DateTimeOffset.Parse("2026-07-02T08:30:00Z"), cal.TimeMin);
+        Assert.Equal(DateTimeOffset.Parse("2026-07-02T10:30:00Z"), cal.TimeMax);
+    }
+
+    // The bug this whole field exists for: CreatedAt is when the *upload* landed, so a recorded meeting's span
+    // was a full recording-length late and had zero overlap with its own event. PickBest requires overlap > 0,
+    // and the ±30 min pad only widens the fetch - it is not applied to the span PickBest scores - so the event
+    // was fetched and then never picked.
+    [Fact]
+    public async Task CalendarMatch_SpansFromStartedAt_NotUploadTime()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        // A 09:00-10:00 meeting, uploaded at 10:00 the moment it stopped.
+        var rec = await SeedRecordingAt(
+            db, userId, createdAt: DateTimeOffset.Parse("2026-07-02T10:00:00Z"), durationMs: 3_600_000,
+            startedAt: DateTimeOffset.Parse("2026-07-02T09:00:00Z"));
+        GrantCalendar(db, userId);
+        await db.SaveChangesAsync();
+        var cal = new FakeCalendarClient
+        {
+            Events = new List<CalendarEvent>
+            {
+                new("main", "Planning", DateTimeOffset.Parse("2026-07-02T09:00:00Z"), DateTimeOffset.Parse("2026-07-02T10:00:00Z"), "https://cal/main"),
+            },
+        };
+        var controller = Build(db, userId, new FakeJobQueue(), calendar: cal);
+
+        var ok = Assert.IsType<OkObjectResult>(await controller.CalendarMatch(rec.Id, default));
+        Assert.Contains("Planning", System.Text.Json.JsonSerializer.Serialize(ok.Value));
+        // The fetch window is padded around the true span, not the upload time.
+        Assert.Equal(DateTimeOffset.Parse("2026-07-02T08:30:00Z"), cal.TimeMin);
+        Assert.Equal(DateTimeOffset.Parse("2026-07-02T10:30:00Z"), cal.TimeMax);
+    }
+
+    // Rows predating the field (and uploaded files, which have no reliable start) keep the old behaviour rather
+    // than guessing - so the same meeting genuinely does not match.
+    [Fact]
+    public async Task CalendarMatch_WithoutStartedAt_FallsBackToCreatedAt()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        var rec = await SeedRecordingAt(
+            db, userId, createdAt: DateTimeOffset.Parse("2026-07-02T10:00:00Z"), durationMs: 3_600_000);
+        GrantCalendar(db, userId);
+        await db.SaveChangesAsync();
+        var cal = new FakeCalendarClient
+        {
+            Events = new List<CalendarEvent>
+            {
+                new("main", "Planning", DateTimeOffset.Parse("2026-07-02T09:00:00Z"), DateTimeOffset.Parse("2026-07-02T10:00:00Z"), "https://cal/main"),
+            },
+        };
+        var controller = Build(db, userId, new FakeJobQueue(), calendar: cal);
+
+        var ok = Assert.IsType<OkObjectResult>(await controller.CalendarMatch(rec.Id, default));
+        Assert.Contains("\"match\":null", System.Text.Json.JsonSerializer.Serialize(ok.Value));
+    }
+
+    // DurationMs is captured-audio length: it excludes paused time, so a take paused for 20 minutes ends 20
+    // minutes later than StartedAt + DurationMs suggests. EndedAt is the wall clock the client actually saw.
+    [Fact]
+    public async Task CalendarMatch_UsesEndedAt_WhenTheTakeWasPaused()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await SeedUser(db, userId);
+        // Ran 09:00-10:00 on the clock, but only 40 minutes of audio was captured (20 minutes paused).
+        var rec = await SeedRecordingAt(
+            db, userId, createdAt: DateTimeOffset.Parse("2026-07-02T10:00:00Z"), durationMs: 2_400_000,
+            startedAt: DateTimeOffset.Parse("2026-07-02T09:00:00Z"),
+            endedAt: DateTimeOffset.Parse("2026-07-02T10:00:00Z"));
+        GrantCalendar(db, userId);
+        await db.SaveChangesAsync();
+        var cal = new FakeCalendarClient
+        {
+            // Only overlaps the part of the meeting after the pause - unreachable from StartedAt + DurationMs.
+            Events = new List<CalendarEvent>
+            {
+                new("late", "Second half", DateTimeOffset.Parse("2026-07-02T09:45:00Z"), DateTimeOffset.Parse("2026-07-02T10:00:00Z"), null),
+            },
+        };
+        var controller = Build(db, userId, new FakeJobQueue(), calendar: cal);
+
+        var ok = Assert.IsType<OkObjectResult>(await controller.CalendarMatch(rec.Id, default));
+        Assert.Contains("Second half", System.Text.Json.JsonSerializer.Serialize(ok.Value));
         Assert.Equal(DateTimeOffset.Parse("2026-07-02T10:30:00Z"), cal.TimeMax);
     }
 
@@ -2879,12 +3051,14 @@ public class RecordingsControllerTests
     // ---- Merge transcripts (+ audio concatenation) ----
 
     private static async Task<Recording> SeedMergeable(
-        DiarizDbContext db, Guid userId, DateTimeOffset createdAt, long durationMs, string text)
+        DiarizDbContext db, Guid userId, DateTimeOffset createdAt, long durationMs, string text,
+        DateTimeOffset? startedAt = null, DateTimeOffset? endedAt = null)
     {
         var rec = new Recording
         {
             Id = Guid.NewGuid(), UserId = userId, BlobKey = $"{userId}/{Guid.NewGuid():N}.webm",
             Status = RecordingStatus.Transcribed, CreatedAt = createdAt, DurationMs = durationMs,
+            StartedAt = startedAt, EndedAt = endedAt,
         };
         var tr = new Transcription { Id = Guid.NewGuid(), RecordingId = rec.Id, Model = "m", Version = 1 };
         db.Recordings.Add(rec);
@@ -2943,6 +3117,39 @@ public class RecordingsControllerTests
         var job = Assert.Single(queue.AudioMergeEnqueued);
         Assert.Equal([early.BlobKey], job.BlobKeys);
         Assert.Equal([later.Id], job.DeleteRecordingIds);
+    }
+
+    /// <summary>The merged recording spans the whole set: earliest start to latest end. Also pins the survivor
+    /// choice to capture order rather than upload order - a long take started first can upload after a short one
+    /// started later, which by CreatedAt would fold the parts together backwards.</summary>
+    [Fact]
+    public async Task Merge_SurvivorSpansEveryPart_OrderedByCaptureNotUpload()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var queue = new FakeJobQueue();
+        // Started 09:00, ran an hour, so it only uploaded at 10:00.
+        var early = await SeedMergeable(
+            db, userId, DateTimeOffset.Parse("2026-07-02T10:00:00Z"), 3_600_000, "Hello",
+            startedAt: DateTimeOffset.Parse("2026-07-02T09:00:00Z"),
+            endedAt: DateTimeOffset.Parse("2026-07-02T10:00:00Z"));
+        // Started later but was short, so it uploaded FIRST - ordering by CreatedAt would make this the survivor.
+        var later = await SeedMergeable(
+            db, userId, DateTimeOffset.Parse("2026-07-02T09:35:00Z"), 300_000, "World",
+            startedAt: DateTimeOffset.Parse("2026-07-02T09:30:00Z"),
+            endedAt: DateTimeOffset.Parse("2026-07-02T09:35:00Z"));
+        var controller = Build(db, userId, queue);
+
+        var result = await controller.Merge(new MergeRecordingsRequest([later.Id, early.Id]));
+
+        Assert.IsType<AcceptedResult>(result);
+        var survivor = (await db.Recordings.FindAsync(early.Id))!;   // the one that started first
+        Assert.Equal(DateTimeOffset.Parse("2026-07-02T09:00:00Z"), survivor.StartedAt);
+        Assert.Equal(DateTimeOffset.Parse("2026-07-02T10:00:00Z"), survivor.EndedAt);
+        // And the transcript is laid out in capture order, not upload order.
+        var merged = await db.Transcriptions.Where(t => t.RecordingId == early.Id).OrderByDescending(t => t.Version).FirstAsync();
+        var segs = await db.Segments.Where(s => s.TranscriptionId == merged.Id).OrderBy(s => s.Ordinal).ToListAsync();
+        Assert.Equal(["Hello", "World"], segs.Select(s => s.Original));
     }
 
     [Fact]

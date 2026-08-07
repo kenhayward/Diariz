@@ -342,6 +342,9 @@ export const api = {
     source: RecordingSource = "Microphone",
     sectionId: string | null = null,
     roomId: string | null = null,
+    /// Wall clock (epoch ms) the capture began and stopped. Trailing and optional so existing callers and
+    /// their positional-argument assertions are unaffected.
+    times: { startedAt?: number; endedAt?: number } = {},
   ): Promise<RecordingSummary> {
     const form = new FormData();
     const ext = blob.type.includes("wav") ? "wav" : "webm";
@@ -353,6 +356,10 @@ export const api = {
     if (sectionId) form.append("sectionId", sectionId);
     // A shared room to also share the recording into; omitted = a plain personal recording.
     if (roomId) form.append("roomId", roomId);
+    // What meeting matching spans from. durationMs is recorded-audio length (pauses excluded), so it cannot
+    // stand in for the wall-clock end; the server falls back to upload time when these are absent.
+    if (times.startedAt) form.append("startedAt", new Date(times.startedAt).toISOString());
+    if (times.endedAt) form.append("endedAt", new Date(times.endedAt).toISOString());
     const { data } = await http.post<RecordingSummary>("/api/recordings", form);
     return data;
   },
