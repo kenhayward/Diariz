@@ -32,6 +32,8 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<RecordingCalendarLink> RecordingCalendarLinks => Set<RecordingCalendarLink>();
     public DbSet<IcsCalendarSource> IcsCalendarSources => Set<IcsCalendarSource>();
+    public DbSet<OutlookCalendarSource> OutlookCalendarSources => Set<OutlookCalendarSource>();
+    public DbSet<OutlookCalendarEvent> OutlookCalendarEvents => Set<OutlookCalendarEvent>();
     public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
     public DbSet<McpAccessToken> McpAccessTokens => Set<McpAccessToken>();
     public DbSet<ApiAccessToken> ApiAccessTokens => Set<ApiAccessToken>();
@@ -600,6 +602,57 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
                 .WithMany()
                 .HasForeignKey(s => s.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Desktop Outlook connectors, one row per (user, device). Unlike Google and .ics - both fetched live at
+        // read time - Outlook is only reachable from the user's own PC, so its events are pushed and stored.
+        builder.Entity<OutlookCalendarSource>(e =>
+        {
+            e.HasKey(s => s.Id);
+            e.HasIndex(s => s.UserId);
+            // A repeat push from the same machine must update its own source, never create a second one.
+            e.HasIndex(s => new { s.UserId, s.DeviceId }).IsUnique();
+            e.Property(s => s.DeviceId).HasMaxLength(64).IsRequired();
+            e.Property(s => s.DeviceName).HasMaxLength(128);
+            e.Property(s => s.MailboxName).HasMaxLength(256);
+            e.Property(s => s.DisplayName).HasMaxLength(128);
+            e.Property(s => s.Color).HasMaxLength(32);
+            e.Property(s => s.LastError).HasMaxLength(512);
+            e.HasOne(s => s.User)
+                .WithMany()
+                .HasForeignKey(s => s.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<OutlookCalendarEvent>(e =>
+        {
+            e.HasKey(x => x.Id);
+            // The hot read is "this user's events overlapping a window"; the sweep and the per-source listing
+            // both go by source.
+            e.HasIndex(x => new { x.UserId, x.StartsAt });
+            e.HasIndex(x => new { x.SourceId, x.StartsAt });
+            e.HasIndex(x => new { x.SourceId, x.Uid }).IsUnique();
+            e.Property(x => x.Uid).HasMaxLength(512).IsRequired();
+            e.Property(x => x.Subject).HasMaxLength(512);
+            e.Property(x => x.StartDate).HasMaxLength(10);
+            e.Property(x => x.EndDate).HasMaxLength(10);
+            e.Property(x => x.TimeZoneId).HasMaxLength(128);
+            e.Property(x => x.WindowsTimeZoneId).HasMaxLength(128);
+            e.Property(x => x.Location).HasMaxLength(1024);
+            e.Property(x => x.OnlineMeetingUrl).HasMaxLength(2048);
+            e.Property(x => x.Categories).HasMaxLength(512);
+            e.Property(x => x.OrganizerName).HasMaxLength(256);
+            e.Property(x => x.OrganizerEmail).HasMaxLength(256);
+            e.HasOne(x => x.Source)
+                .WithMany(s => s.Events)
+                .HasForeignKey(x => x.SourceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // The only Postgres-only line here, so the in-memory provider can still build the model.
+            if (isNpgsql) e.Property(x => x.AttendeesJson).HasColumnType("jsonb");
         });
 
         // Meeting types (minutes templates). UserId null = a shared Platform type; non-null = a user's Personal

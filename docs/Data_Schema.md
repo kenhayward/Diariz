@@ -98,6 +98,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddFeedback` | `Feedback` (a user's "something looks or behaves wrong" report; `UserId` FK → `AspNetUsers`, **cascade** on user delete; `Description`/`Route`/`Release`/`TrailJson` text, not null; `ScreenshotBlobKey` text null - reserved for a deferred screenshot phase, always null today; index `(UserId)`) - readable and deletable only by a Platform Administrator, including a submitter's own. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddIncludeFeedbackText` | `Webhooks.IncludeFeedbackText` (boolean NOT NULL DEFAULT false) - opt-in, per **Platform** subscription, to include the submitter's own words in a `feedback.submitted` payload. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddRecordingStartedAt` | `Recordings.StartedAt` / `Recordings.EndedAt` (timestamptz null) plus index `(UserId, StartedAt)` - the recording's true wall-clock span, so calendar matching stops spanning from upload time (which made a recorded meeting's window a full recording-length late, so it overlapped nothing). **Backfills** `StartedAt = CreatedAt - DurationMs` for existing rows where `Source <> 2` (not an upload, whose `CreatedAt` says nothing about when the audio was recorded) and `DurationMs > 0`; `EndedAt` is left null on backfilled rows so `recEnd` falls back to exactly the pre-migration value rather than a guess. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddOutlookCalendarSync` | `OutlookCalendarSources` (one per user+device, unique `(UserId, DeviceId)`, cascade on user delete) and `OutlookCalendarEvents` (flattened occurrences; deterministic uuid PK, unique `(SourceId, Uid)`, indexes `(UserId, StartsAt)` and `(SourceId, StartsAt)`, `AttendeesJson` as **jsonb**, cascade from both the source and the user), plus `UserSettings.OutlookSyncEnabled` (boolean NOT NULL DEFAULT false - the privacy opt-in). Two new tables and one defaulted column: additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
 
@@ -506,6 +507,61 @@ and merged into the Calendar views tagged `ics:{Id}`; nothing from the feed is s
 | `LastFetchedAt` | timestamptz null | last successful fetch; null until first read |
 | `LastError` | text null | last fetch error (unreachable, non-200, too large, parse failure); null when healthy |
 
+#### `OutlookCalendarSources`
+One machine's connection to a **classic desktop Outlook** calendar. Keyed **per (user, device)**, not per user:
+two PCs against two mailboxes are independent mirrors, or each machine's orphan sweep would delete the other's
+events on every launch. Unlike Google and `.ics` - both fetched live and never stored - Outlook is only
+reachable from the user's own PC, so its events are **pushed** by the desktop app and persisted
+(`OutlookCalendarEvents`), which is what lets them keep working in a browser and after the app is closed.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | |
+| `UserId` | uuid FK → AspNetUsers | indexed; **cascade** delete with the user |
+| `DeviceId` | varchar(64) | opaque per-installation id minted by the desktop app; **unique with `UserId`** so a repeat push updates its own source rather than creating another |
+| `DeviceName` | varchar(128) null | hostname, for telling two devices apart. Display only |
+| `MailboxName` | varchar(256) null | the Outlook default account's address. Display only; never logged |
+| `DisplayName` | varchar(128) | user-editable label, defaulting to "Outlook ({DeviceName})" |
+| `Color` | varchar(32) null | hex colour used to tint this device's events |
+| `Enabled` | bool | off = kept but excluded from reads (as `IcsCalendarSources.Enabled`) |
+| `PastDays` / `FutureDays` | int | rolling read window (defaults 30 / 180; clamped 0-365 and 1-730). The sweep is bounded by the window a run covered, so narrowing it never deletes history outside it |
+| `SkipPrivate` | bool | default **true**; private/confidential appointments are dropped **on the machine**, so they never leave it |
+| `IncludeBody` | bool | default true; a private appointment's body is stripped regardless |
+| `CreatedAt` | timestamptz | |
+| `LastSyncedAt` | timestamptz null | last completed push; also gates the 60s per-device run cooldown |
+| `LastError` | varchar(512) null | last sync failure (Outlook not installed, the new Outlook, blocked COM), surfaced in Preferences from any device |
+| `LastEventCount` | int | events held after the last completed run |
+
+#### `OutlookCalendarEvents`
+One **flattened occurrence** of a desktop Outlook appointment. Outlook expands recurring series itself, so there
+is no master row and no recurrence rule. Cancelled appointments are never stored - the desktop stops reporting
+them and the sweep removes any existing copy.
+
+| Column | Type | Notes |
+|---|---|---|
+| `Id` | uuid PK | **deterministic**: first 16 bytes of `SHA-256(SourceId ‖ Uid)` with RFC-4122 bits set (`OutlookEventId.For`). Public ids are `outlook:{Id}` = **44 chars**, which is what keeps them inside `MeetingNotes.EventId`/`CalendarId` (varchar 256) - `CalendarEventNotesController` clamps writes at 256 but reads raw, so a longer id would save a note under a truncated key and never read it back. Deterministic rather than random so an occurrence that leaves the window and returns keeps its links |
+| `SourceId` | uuid FK → OutlookCalendarSources | **cascade**; indexed with `StartsAt` |
+| `UserId` | uuid FK → AspNetUsers | **cascade**; denormalised for the hot window read, indexed with `StartsAt`. Double cascade path as `MeetingNotes` / `MeetingScreenshots` |
+| `Uid` | varchar(512) | Outlook `GlobalAppointmentID` (the per-occurrence Global Object ID, = EWS `calendar:UID`), or `entry:{sha1(EntryID)}` for local items without one. **Unique with `SourceId`**. Chosen over `EntryID` (unstable across moves/stores) and `CleanGlobalObjectId` (identical for a whole series) |
+| `Subject` | varchar(512) null | |
+| `StartsAt` / `EndsAt` | timestamptz | always populated, including for all-day (local midnight as UTC), so the window query, ordering and sweep have one sortable column |
+| `AllDay` | bool | date-only entry; never auto-matched to a recording |
+| `StartDate` / `EndDate` | varchar(10) null | for all-day, the **local** `yyyy-MM-dd` dates - the display truth, stored verbatim and never re-derived from the UTC instant (that is the classic off-by-one: an all-day 2026-03-15 in Europe/London is `2026-03-14T23:00:00Z`). `EndDate` is the exclusive next day, as Google and iCalendar |
+| `TimeZoneId` | varchar(128) null | IANA, converted server-side via `TimeZoneInfo.TryConvertWindowsIdToIanaId`; falls back to the device's zone rather than being left null |
+| `WindowsTimeZoneId` | varchar(128) null | the raw Windows id, kept for diagnosing an unmapped zone |
+| `Location` | varchar(1024) null | |
+| `OnlineMeetingUrl` | varchar(2048) null | Teams/Zoom join link; doubles as the event's clickable target, since a local appointment has no web permalink |
+| `BodyText` | text null | plain text only - HTML is never transmitted - capped at 8000 chars on write. Null when `IncludeBody` is off or the item is private |
+| `Categories` | varchar(512) null | comma-joined as Outlook gives them |
+| `Sensitivity` | int | 0 Normal, 1 Personal, 2 Private, 3 Confidential - **append only** |
+| `BusyStatus` | int | 0 Free, 1 Tentative, 2 Busy, 3 OOF, 4 Working Elsewhere - **append only** |
+| `IsRecurring` | bool | informational; occurrences are stored flat either way |
+| `OrganizerName` / `OrganizerEmail` | varchar(256) null | |
+| `AttendeesJson` | **jsonb** (Npgsql only) | `[{name,email,response,optional}]`; `response` uses Google's vocabulary (accepted/declined/tentative/needsAction) so the shared `CalendarAttendee` projection needs no translation |
+| `SourceLastModified` | timestamptz | Outlook's `LastModificationTime` - the change-detection fingerprint (no content hashing) |
+| `SyncId` | uuid | stamped by every upsert; the sweep deletes in-window rows carrying a stale one. Scoping is **structural** - this table holds only rows the sync created for this source - so there is nothing else it could hit |
+| `SyncedAt` | timestamptz | |
+
 #### `MeetingTypes`
 Reusable minutes templates. A type is **presentation + selection**: it carries no prompts of its own, and names the **formula** whose template generates the minutes (`PrimaryFormulaId`) plus any run alongside it (`MeetingTypeFormulas`). A **Platform** type (`UserId` null) is created by a Platform Administrator and is
 shared read-only to everyone (the app seeds a standard set on startup, insert-if-missing by `Key`); a **Personal**
@@ -681,6 +737,7 @@ Per-user preferences (1:1 with the user via a **shared primary key** = `UserId`)
 | `UiLanguage` | text null | the language the app UI is shown in (BCP-47); null → follow the browser |
 | `GoogleRefreshTokenEncrypted` | text null | Google OAuth refresh token (offline Calendar access), **encrypted at rest** (Data Protection); never returned to clients |
 | `GoogleCalendarGranted` | bool | user granted Google Calendar read access |
+| `OutlookSyncEnabled` | bool | opt-in to mirroring a desktop Outlook calendar; **default false**. Gates storing meeting bodies and attendee addresses server-side, so an installed desktop app changes nothing until it is set. Deliberately separate from the per-device `OutlookCalendarSources.Enabled` plumbing flag; turning it off purges every source and, by cascade, every stored event |
 | `GoogleSelectedCalendarIdsJson` | jsonb null | JSON array of the Google calendar ids to consider for attribution + the overlay; null → not chosen (fall back to the Google-visible calendars + primary) |
 | `JobTitle` / `CompanyName` / `LinkedIn` | varchar(256) null | free-text profile fields |
 | `JobDescription` / `CompanyDescription` | varchar(2048) null | free-text profile fields |

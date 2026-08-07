@@ -1522,6 +1522,52 @@ into it with no URL or per-user setup at all.
   events are display-only in the Calendar tab). Users manage their feeds in **Preferences → Calendar feeds**
   (`CalendarFeedsSection`: add/rename/recolour/enable/remove, with the last-fetch error surfaced per feed); the
   Calendar tab renders feed events **coloured but non-clickable** (a row whose `calendarId` starts `ics:`).
+- **Desktop Outlook mirror (Phase 4 feature - storage layer):** a third calendar source, and the only one that
+  **inverts the fetch model**. Google and `.ics` live on the internet, so the API pulls them live at read time
+  and stores nothing (an invariant `RecordingCalendarLink`'s doc comment calls out explicitly). A classic
+  desktop Outlook calendar lives on the user's PC and is reachable **only from the Windows desktop shell**, so
+  its events are **pushed** to the API and **persisted** - which is what makes them work in a plain browser and
+  after the desktop app is closed.
+  - **Storage.** `OutlookCalendarSource` is keyed **per (user, device)** (unique `(UserId, DeviceId)`), not per
+    user: two PCs against two mailboxes are independent mirrors, or each machine's sweep would delete the
+    other's events every launch. `OutlookCalendarEvent` holds **flattened occurrences** (Outlook expands series
+    itself - no master row, no recurrence rule); cancelled appointments are never stored.
+  - **Identity.** `OutlookEventId.For(sourceId, uid)` = first 16 bytes of `SHA-256(sourceId ‖ uid)` with
+    RFC-4122 bits set, exposed as `outlook:{guid}` = **44 chars**. Deterministic so an occurrence that leaves
+    the rolling window and returns keeps its recording link and pre-meeting notes; **short** because
+    `MeetingNote.CalendarId`/`EventId` are `varchar(256)` and `CalendarEventNotesController` clamps writes at
+    256 while reading raw - a raw `GlobalAppointmentID` (routinely >256 chars) would save a note under a
+    truncated key and never read it back. The uid itself is `GlobalAppointmentID`, chosen over `EntryID`
+    (unstable across moves/stores) and `CleanGlobalObjectId` (identical for a whole series).
+  - **The push contract.** `POST /api/calendar/outlook/sync`, **`[Authorize]` with the user's own JWT** -
+    deliberately *not* the `internal/` + `X-Worker-Secret` pattern, which is a server-to-server credential that
+    would leak to every installer if embedded in a desktop binary. This mirrors the **screenshot** precedent:
+    the shell harvests, the renderer POSTs, `main.js` never holds a token. The desktop sends the **whole
+    window** and the **server reconciles** (upsert present, delete absent), because the desktop has no
+    trustworthy view of server state - a restore from backup, a second machine, a reinstall or a
+    disable/re-enable all silently stale a local mirror, and every one produces *missing events*.
+  - **The sweep, and its guards.** Rows are stamped with the run's `SyncId`; on the page marked `final`, and
+    **only when `complete == true`**, in-window rows carrying a stale `SyncId` are deleted. Scoping is
+    **structural, not marker-based** - the table holds only rows this sync created for this source, so unlike a
+    mirror written into someone's real calendar there is nothing else it could hit. A partial read
+    (`complete: false`) never sweeps, a run that never reaches `final` degrades to upsert-only, and the sweep is
+    bounded by the window the run covered so a narrower run never deletes history outside it. Limits: 500
+    events/page (413), uid ≤400 chars, window ≤730 days, body capped at 8000 chars, and a **60s per-device run
+    cooldown** (409) that exempts later pages of a run already in flight.
+  - **Timezone and all-day.** The desktop sends all-day dates as **local `yyyy-MM-dd` strings**, stored verbatim
+    and never re-derived from the UTC instant (re-deriving is the classic off-by-one - an all-day 2026-03-15 in
+    Europe/London is `2026-03-14T23:00:00Z`). Windows zone ids convert server-side via
+    `TimeZoneInfo.TryConvertWindowsIdToIanaId` (ICU-backed, no CLDR table to ship), falling back to the device's
+    own zone rather than leaving the field null.
+  - **Reading back.** `IOutlookCalendarStore` is shaped like `IIcsCalendarClient` and projects rows into the
+    **existing** `CalendarEvent` record, so nothing downstream knows the source; the join URL stands in for
+    `HtmlLink` (a local appointment has no web permalink) and attendee response statuses use **Google's**
+    vocabulary so every existing renderer works unchanged. *(Wiring it into `CalendarController` and
+    recording↔meeting matching is the following change.)*
+  - **Privacy.** `UserSettings.OutlookSyncEnabled` is the opt-in, **default false**: the push 403s until it is
+    set, so an installed desktop app stores nothing on its own. `SkipPrivate` (default on) drops private items
+    **on the machine**; a private appointment's body is stripped server-side regardless of `IncludeBody`.
+    Disconnecting a device deletes its stored events by cascade.
 - **Isolation:** every recording/section/chat/voiceprint query filters by `UserId` from the JWT
   `NameIdentifier` claim. **Storage quotas** (audio bytes) are per-user: the Platform Administrator sets the
   starter + maximum (`PlatformSettings`), any admin can raise an individual user up to the max.

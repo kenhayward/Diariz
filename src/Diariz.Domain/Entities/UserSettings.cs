@@ -51,6 +51,14 @@ public class UserSettings
     /// <summary>The user granted read access to their Google Calendar.</summary>
     public bool GoogleCalendarGranted { get; set; }
 
+    /// <summary>The user has opted in to mirroring their desktop Outlook calendar into Diariz. Off by default:
+    /// installing the desktop app changes nothing until this is set, and the desktop never opens Outlook until
+    /// the web app reports it. This is the <b>privacy</b> switch - it gates storing meeting bodies and attendee
+    /// email addresses server-side - and is deliberately separate from the per-device
+    /// <see cref="OutlookCalendarSource.Enabled"/> plumbing flag. Turning it off purges every source and, by
+    /// cascade, every stored event.</summary>
+    public bool OutlookSyncEnabled { get; set; }
+
     /// <summary>Which Google calendars to consider for recording attribution + the Calendar overlay, as a
     /// JSON array of calendar ids. Null = the user hasn't chosen (fall back to the calendars they've made
     /// visible in Google + their primary).</summary>
