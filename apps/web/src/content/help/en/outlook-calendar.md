@@ -11,11 +11,14 @@ meeting it came from, and you can jot notes on one before it starts.
 
 ## Turning it on
 
-Open **Preferences** from the account menu, then the **Outlook** tab, and tick **Sync my desktop
-Outlook calendar**. Nothing is copied until you do.
+Open **Preferences** from the account menu, then the **Calendars** tab. Find the **Desktop Outlook**
+card and tick **Mirror enabled**. Nothing is copied until you do.
 
 The tab works from any browser, so you can check which machines are syncing and turn it off from
 anywhere. The copying itself only happens in the Diariz desktop app on Windows.
+
+The same tab holds every other calendar source too - your Google account and any .ics feeds you have
+subscribed to - one card each.
 
 ## What gets stored, and where
 
@@ -41,7 +44,7 @@ A meeting you cancel or delete in Outlook disappears from Diariz on the next syn
 
 ## Each PC is separate
 
-Every machine you use appears on its own in Preferences, showing its mailbox, how many meetings it
+Every machine you use appears on its own in the Desktop Outlook card, showing its mailbox, how many meetings it
 holds, when it last synced, and anything that went wrong. Two PCs never interfere with each other, so
 you can sync a work calendar from one and a personal one from another.
 

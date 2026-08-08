@@ -1,18 +1,20 @@
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { api, apiErrorMessage } from "../lib/api";
-import { canSyncOutlook, onOutlookState, outlookAvailable, syncOutlookNow } from "../lib/outlookSync";
-import type { OutlookSource } from "../lib/types";
+import { api, apiErrorMessage } from "../../lib/api";
+import { canSyncOutlook, onOutlookState, outlookAvailable, syncOutlookNow } from "../../lib/outlookSync";
+import { CalendarIcon } from "../icons";
+import SourceCard, { cardBtn } from "./SourceCard";
+import type { OutlookSource } from "../../lib/types";
 
 const DEFAULT_COLOR = "#0F6CBD"; // Outlook blue
 
-/// The Preferences "Outlook" section: opt in to mirroring a classic desktop Outlook calendar, and manage the
-/// machines that have connected one.
+/// The desktop Outlook mirror: opt in to copying a classic Outlook calendar from a Windows PC, and manage
+/// the machines that have connected one.
 ///
-/// The tab is shown to everyone, not only on the desktop - a browser user has to be able to read what this
-/// does, see which of their machines are syncing, and revoke it. Only the "Sync now" button is desktop-gated.
-export default function OutlookSyncSection() {
+/// The card is shown to everyone, not only on the desktop - a browser user has to be able to read what
+/// this does, see which of their machines are syncing, and revoke it. Only "Sync now" is desktop-gated.
+export default function OutlookCard() {
   const { t } = useTranslation("account");
   const qc = useQueryClient();
   const { data: settings } = useQuery({ queryKey: ["user-settings"], queryFn: api.getUserSettings });
@@ -87,49 +89,56 @@ export default function OutlookSyncSection() {
     if (!started) setError(t(reason === "cooldown" ? "outlookErrCooldown" : "outlookErrGeneric"));
   }
 
-  const btn =
-    "rounded border px-2 py-1 text-xs hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800";
-  const num =
-    "w-16 rounded border px-1 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100";
+  const num = "w-[52px] rounded border px-1 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100";
+  const count = sources?.length ?? 0;
+  const meta = count > 0
+    ? `${t("calendarsOutlookMeta")} · ${t("calendarsOutlookMachines", { count })}`
+    : t("calendarsOutlookMeta");
 
   return (
-    <div className="border-t pt-3 dark:border-gray-700">
-      <span className="mb-1 block text-sm text-gray-600 dark:text-gray-300">{t("outlookTitle")}</span>
-      <p className="text-xs text-gray-400 dark:text-gray-500">{t("outlookIntro")}</p>
-
-      <label className="mt-2 flex items-start gap-2 text-xs text-gray-700 dark:text-gray-200">
-        <input
-          type="checkbox"
-          checked={enabled}
-          disabled={busy}
-          onChange={(e) => toggleOptIn(e.target.checked)}
-          className="mt-0.5"
-        />
-        <span>
-          {t("outlookOptIn")}
-          <span className="mt-0.5 block text-gray-400 dark:text-gray-500">{t("outlookPrivacyNote")}</span>
-        </span>
-      </label>
+    <SourceCard
+      name={t("calendarsOutlookName")}
+      meta={meta}
+      tint={DEFAULT_COLOR}
+      glyph={CalendarIcon}
+      status={enabled ? t("calendarsStatusMirroring") : undefined}
+      error={error}
+      actions={
+        <>
+          <label className="flex shrink-0 items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
+            <input
+              type="checkbox"
+              checked={enabled}
+              disabled={busy}
+              onChange={(e) => toggleOptIn(e.target.checked)}
+              aria-label={t("outlookOptIn")}
+            />
+            {t("calendarsOutlookEnabled")}
+          </label>
+          {onDesktop && available && enabled && (
+            <button type="button" onClick={syncNow} disabled={phase !== "idle"} className={cardBtn}>
+              {phase === "idle" ? t("outlookSyncNow") : t("outlookSyncing")}
+            </button>
+          )}
+        </>
+      }
+    >
+      <p className="text-[11px] text-gray-400 dark:text-gray-500">{t("outlookPrivacyNote")}</p>
 
       {/* A browser (or a Mac) can manage everything here except starting a sync, so say where that happens
           rather than showing a button that could not work. */}
-      {!onDesktop && <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">{t("outlookRequiresDesktop")}</p>}
+      {!onDesktop && <p className="mt-1.5 text-[11px] text-gray-400 dark:text-gray-500">{t("outlookRequiresDesktop")}</p>}
       {onDesktop && !available && (
-        <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">{t("outlookErrNotAvailable")}</p>
-      )}
-      {onDesktop && available && enabled && (
-        <button type="button" onClick={syncNow} disabled={phase !== "idle"} className={`${btn} mt-2`}>
-          {phase === "idle" ? t("outlookSyncNow") : t("outlookSyncing")}
-        </button>
+        <p className="mt-1.5 text-[11px] text-gray-400 dark:text-gray-500">{t("outlookErrNotAvailable")}</p>
       )}
 
-      <ul className="mt-3 space-y-2">
+      <ul className="mt-2 space-y-2">
         {sources?.map((s) => (
           <li key={s.id} className="text-xs">
             <div className="flex items-center gap-2">
               <span
                 aria-hidden
-                className="inline-block h-3 w-3 shrink-0 rounded-sm border dark:border-gray-600"
+                className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border dark:border-gray-600"
                 style={{ backgroundColor: s.color ?? DEFAULT_COLOR }}
               />
               <input
@@ -139,29 +148,32 @@ export default function OutlookSyncSection() {
                   if (name && name !== s.displayName) void update(s, { displayName: name });
                 }}
                 aria-label={t("outlookDeviceName")}
-                className={`min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-gray-300 dark:text-gray-200 dark:hover:border-gray-600 ${
-                  s.enabled ? "text-gray-700 dark:text-gray-200" : "text-gray-400 dark:text-gray-500"
+                className={`min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-[13px] hover:border-gray-300 dark:text-gray-200 dark:hover:border-gray-600 ${
+                  s.enabled ? "text-gray-800 dark:text-gray-200" : "text-gray-400 dark:text-gray-500"
                 }`}
               />
               <label className="flex shrink-0 items-center gap-1 text-gray-500 dark:text-gray-400">
+                {/* "Shown" reads the same on a feed two cards down, so the accessible name says which
+                    machine this one hides. */}
                 <input
                   type="checkbox"
                   checked={s.enabled}
                   onChange={() => void update(s, { enabled: !s.enabled })}
-                  aria-label={t("outlookShown")}
+                  aria-label={t("outlookShownAria", { name: s.displayName })}
                 />
                 {t("outlookShown")}
               </label>
               <button
                 type="button"
                 onClick={() => void remove(s)}
+                aria-label={t("outlookRemoveAria", { name: s.displayName })}
                 className="shrink-0 text-red-600 hover:underline dark:text-red-400"
               >
                 {t("outlookRemove")}
               </button>
             </div>
 
-            <p className="ml-5 mt-0.5 text-[11px] text-gray-400 dark:text-gray-500">
+            <p className="ml-4.5 mt-0.5 text-[11px] text-gray-400 dark:text-gray-500">
               {s.mailboxName ?? s.deviceName ?? t("outlookUnknownDevice")}
               {" - "}
               {s.lastSyncedAt
@@ -169,13 +181,13 @@ export default function OutlookSyncSection() {
                 : t("outlookNeverSynced")}
             </p>
             {s.lastError && (
-              <p className="ml-5 mt-0.5 text-[11px] text-red-600 dark:text-red-400">
+              <p className="ml-4.5 mt-0.5 text-[11px] text-red-600 dark:text-red-400">
                 {t("outlookLastError", { error: s.lastError })}
               </p>
             )}
 
-            <div className="ml-5 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500 dark:text-gray-400">
-              <label className="flex items-center gap-1">
+            <div className="ml-4.5 mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-500 dark:text-gray-400">
+              <label className="flex items-center gap-1.5">
                 {t("outlookWindowPast")}
                 <input
                   type="number"
@@ -190,7 +202,7 @@ export default function OutlookSyncSection() {
                   className={num}
                 />
               </label>
-              <label className="flex items-center gap-1">
+              <label className="flex items-center gap-1.5">
                 {t("outlookWindowFuture")}
                 <input
                   type="number"
@@ -205,7 +217,7 @@ export default function OutlookSyncSection() {
                   className={num}
                 />
               </label>
-              <label className="flex items-center gap-1">
+              <label className="flex items-center gap-1.5">
                 <input
                   type="checkbox"
                   checked={s.skipPrivate}
@@ -214,7 +226,7 @@ export default function OutlookSyncSection() {
                 />
                 {t("outlookSkipPrivate")}
               </label>
-              <label className="flex items-center gap-1">
+              <label className="flex items-center gap-1.5">
                 <input
                   type="checkbox"
                   checked={s.includeBody}
@@ -230,8 +242,6 @@ export default function OutlookSyncSection() {
           <li className="text-xs text-gray-400 dark:text-gray-500">{t("outlookNoDevices")}</li>
         )}
       </ul>
-
-      {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
-    </div>
+    </SourceCard>
   );
 }

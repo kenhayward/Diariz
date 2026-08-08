@@ -8,13 +8,11 @@ import ProfileSection from "./ProfileSection";
 import AiSettingsSection from "./AiSettingsSection";
 import ChatToolsSection from "./ChatToolsSection";
 import RecordingsSection from "./RecordingsSection";
-import GoogleAccountSection from "./GoogleAccountSection";
-import CalendarFeedsSection from "./CalendarFeedsSection";
+import CalendarsSection from "./calendars/CalendarsSection";
 import McpAccessSection from "./McpAccessSection";
 import DeveloperAccessSection from "./DeveloperAccessSection";
 import FormulasSection from "./FormulasSection";
 import AutomationsSection from "./AutomationsSection";
-import OutlookSyncSection from "./OutlookSyncSection";
 
 export type PreferencesTab =
   | "profile"
@@ -22,9 +20,9 @@ export type PreferencesTab =
   | "tools"
   | "recordings"
   | "formulas"
-  | "google"
-  | "feeds"
-  | "outlook"
+  /// One entry for every calendar source. Was three - "google", "feeds" and "outlook" - which made
+  /// "what feeds my Calendar tab?" a question you had to visit three pages to answer.
+  | "calendars"
   | "claude"
   | "developers"
   | "automations";
@@ -58,9 +56,7 @@ export default function PreferencesModal({
     { id: "tools", label: t("chatToolsTab") },
     { id: "recordings", label: t("recordingsTab") },
     { id: "formulas", label: t("tabFormulas") },
-    { id: "google", label: t("tabGoogleAccount") },
-    { id: "feeds", label: t("tabCalendarFeeds") },
-    { id: "outlook", label: t("tabOutlook") },
+    { id: "calendars", label: t("tabCalendars") },
     { id: "claude", label: t("tabClaudeAccess") },
     ...(profile?.apiAccessEnabled ? [{ id: "developers" as const, label: t("tabDevelopers") }] : []),
     ...(profile?.webhooksEnabled ? [{ id: "automations" as const, label: t("tabAutomations") }] : []),
@@ -114,9 +110,7 @@ export default function PreferencesModal({
             {tab === "tools" && <ChatToolsSection />}
             {tab === "recordings" && <RecordingsSection />}
             {tab === "formulas" && <FormulasSection />}
-            {tab === "google" && <GoogleAccountSection />}
-            {tab === "feeds" && <CalendarFeedsSection />}
-            {tab === "outlook" && <OutlookSyncSection />}
+            {tab === "calendars" && <CalendarsSection />}
             {tab === "claude" && <McpAccessSection />}
             {tab === "developers" && <DeveloperAccessSection />}
             {tab === "automations" && <AutomationsSection />}

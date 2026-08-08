@@ -34,7 +34,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Rooms** | A private Personal Room per account plus shareable Rooms: invite users and groups with per-member permissions. Each Shared Room has its **own folder structure** (sections/sub-sections, drag-and-drop, per-room order) and its own List/Calendar/Actions/Tags scoped to it; record or upload files straight into a room (your Personal Room keeps the original), and search + chat over every room you belong to. A member who can read a shared recording sees its notes and screenshots too - only the owner can add, edit, or delete them. Your Google Calendar and its linking stay personal. The switcher shows each room's folder and meeting counts (shared ones labelled), ticks the one you are in, and remembers where you were. Manage rooms from the switcher. |
 | **Organise & merge** | Folders nested up to 8 levels deep with drag-and-drop (dragging one of several ticked rows moves the whole selection); the meetings list drills in one folder at a time (coloured folder rows with counts, a breadcrumb showing the full path with every part clickable, browser back pops a level) so it stays readable however many recordings you have, with **Open section page** in the breadcrumb's menu as a separate target from browsing deeper; an open recording shows its folder path as clickable chips under its name, each taking the list straight to that folder; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); cut one or more recordings, or a folder, and paste them into another folder in one move (landing at the bottom, in the order you cut them), with the Paste control showing why it's disabled when a move isn't allowed yet; browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
-| **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds and - synced by the Windows desktop app on launch, from the tray or on demand - a mirror of your classic Outlook calendar (opt-in, per machine, erasable). Every calendar you connect is treated the same: meetings from any of them show on the Calendar tab, match to a recording, and open with their full invite details. A month grid highlights the days that have something on them; picking one lays that day out on an hour axis, with meetings and recordings placed and sized by when they ran, clashes side by side, all-day entries in their own strip, and a line marking the current time. |
+| **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds and - synced by the Windows desktop app on launch, from the tray or on demand - a mirror of your classic Outlook calendar (opt-in, per machine, erasable). All three are set up in one **Calendars** tab in Preferences, a card per source showing its account, its calendars and whether it is live. Every calendar you connect is treated the same: meetings from any of them show on the Calendar tab, match to a recording, and open with their full invite details. A month grid highlights the days that have something on them; picking one lays that day out on an hour axis, with meetings and recordings placed and sized by when they ran, clashes side by side, all-day entries in their own strip, and a line marking the current time. |
 | **API access** | Generate a personal API token (when enabled), read-only or read-write, with an optional expiry date, to call the REST API as yourself, with a built-in API reference documenting every endpoint - what it does, who may call it, and what it changes. |
 | **Automations (webhooks)** | When enabled, register outbound webhooks from Preferences that fire when a recording is created, finishes or fails transcription, a summary / meeting minutes / action items / tags become ready (each carrying its output), or a formula finishes or fails. Every recording event also carries an **attendees** list - who spoke, the person they are, their title, company, and internal or external - with email addresses and phone numbers included only when that automation opts in. Signed deliveries with automatic retries (rate-limited per automation and 429-aware), a test-event button, auto-pause after repeated failures, and a Pause / Resume button that stops deliveries reversibly (deleting an automation discards its signing secret; pausing keeps it). Admins can also define named Workflow Signals and wire a platform automation to one, so a formula author just picks "When this finishes, trigger: ..." in the formula editor - no URL or per-user setup - and the formula's output is delivered inline to everyone routed through that signal. |
 | **n8n** | A published community node (\`n8n-nodes-diariz\`): a trigger that registers its own automation and verifies every signed delivery, with a Platform scope for administrators that adds events across every user including Feedback Received, plus an action node covering the whole REST API - with dropdowns listing your real recordings and formulas, files in and out, and a Run Formula step that waits for the document to finish. |
@@ -59,6 +59,47 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.195.0",
+    date: "2026-08-08",
+    pr: 487,
+    headline: "One Calendars tab in Preferences, instead of three",
+    summary:
+      "Setting up calendars meant visiting three separate places - **Google Account**, **Calendar Feeds** " +
+      "and **Outlook** - each laid out differently. Answering something as simple as \"what feeds my " +
+      "Calendar tab?\" meant opening all three and piecing it together.\n\n" +
+      "They are now one **Calendars** tab, and every source is a card in one stack: what it is, which " +
+      "account it belongs to, how many calendars it has, whether it is live, and its own controls. Nothing " +
+      "you could do before has gone - the same calendars, machines, feeds and options are all there, just " +
+      "readable side by side.\n\n" +
+      "Three things are deliberately simpler. The **Read my Google Calendar** tick has gone: it was the " +
+      "permission asked for when connecting, not a setting, and it greyed itself out the moment you had " +
+      "granted it. **Reconnect** asks for it instead, and if Diariz is signed in to Google but cannot read " +
+      "the calendar, the card says so and offers a single **Grant calendar access** button. The Google " +
+      "calendar list now saves as you tick, like every other control on the panel. And the **add-a-feed " +
+      "form** sits behind **+ Add feed** rather than taking up a third of the page while empty.\n\n" +
+      "Two fixes came with it. **Disconnect** is now offered whenever Google is connected - it used to " +
+      "appear only once you had granted calendar access, so anyone connected without it had no way to " +
+      "disconnect at all - and it asks before it does anything, which it never used to. Screen readers also " +
+      "get a fair deal now: with three sources on one page, controls that all said just \"Shown\" or " +
+      "\"Disconnect\" now name what they act on.",
+    added: [
+      "A single Calendars tab in Preferences, with one card per source: Google Calendar, Desktop Outlook, and subscribed .ics feeds.",
+      "Each card shows its account, its calendar or machine counts, and whether it is connected or mirroring, without opening anything.",
+      "Grant calendar access, for an account that is signed in to Google but cannot read its calendar yet.",
+    ],
+    changed: [
+      "Google Account, Calendar Feeds and Outlook are replaced by the one Calendars tab.",
+      "The Google calendar list saves as you tick it, instead of behind a Save button.",
+      "The add-a-feed form is behind a + Add feed button; Edit opens the same form prefilled.",
+      "The Read my Google Calendar tick is gone - Reconnect asks Google for calendar access instead.",
+      "A feed now shows its URL under its name, and a meeting source's calendar name reads out with the control that changes it.",
+    ],
+    fixed: [
+      "Disconnect Google is available whenever Google is connected - previously it was hidden unless calendar access had been granted, leaving those accounts unable to disconnect.",
+      "Disconnecting Google now asks for confirmation first.",
+    ],
+  },
   {
     version: "0.194.0",
     date: "2026-08-08",

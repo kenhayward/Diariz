@@ -422,13 +422,13 @@ picture (shown in the account menu). New Google sign-ups still require admin app
 matching an existing account links to it automatically. Enabled when the operator configures a Google
 OAuth client. It works in the web app and in the **desktop app** (the desktop client runs consent in your
 system browser and returns you to the app, since Google blocks sign-in inside embedded windows). A Google-linked user can opt in
-(Preferences → Google) to let Diariz **read their Google Calendar** (read-only) so a recording is **linked to
+(Preferences → Calendars) to let Diariz **read their Google Calendar** (read-only) so a recording is **linked to
 the meeting it belongs to** (auto-saved on open, or picked by hand when the times don't line up), its Overview
 shows the meeting's **full details** (time, location, organiser, attendees, description) with any **URLs in the
 location/description rendered as clickable links** (so you can join a Zoom/Meet call straight from the app), and the **Calendar
 tab overlays their meetings** (a linked recording and its meeting show as one block; a meeting with no recording
 opens a preview you can link a recording to) — a revocable grant. They can also **choose which of their Google
-calendars** to consider (Preferences → Google Account); only the selected calendars are used for matching and
+calendars** to consider (Preferences → Calendars); only the selected calendars are used for matching and
 shown on the Calendar tab.
 - **The Calendar tab's day view is a time grid**: pick a day in the month grid and it is laid out on an hour
 axis, with every meeting and recording placed and sized by when it actually ran, so the back-to-backs and the
@@ -441,12 +441,12 @@ A block does what its row did — a recording opens its transcript and keeps its
 opens its invite — and a block too short for two lines puts its title and time on one. The calendar a meeting
 came from is shown in the block's tooltip.
 - **Subscribe to external calendar feeds**: add any public iCalendar (`.ics`) URL — a team or shared
-calendar — in **Preferences → Calendar feeds**, give it a name and colour, and its meetings appear on the
+calendar — in **Preferences → Calendars**, give it a name and colour, and its meetings appear on the
 Calendar tab in that colour (fetched behind an SSRF guard, no Google connection required). Feed meetings are
 **first-class**: a recording is matched and linked to one exactly as it is to a Google meeting, and opening one
 shows its full invite details. (Both used to be Google-only, so a user whose calendar was entirely feeds got a
 populated Calendar tab but no matching at all, and a feed meeting's details would not open.)
-- **Mirror a desktop Outlook calendar**: opt in at **Preferences → Outlook** to copy the calendar from
+- **Mirror a desktop Outlook calendar**: opt in at **Preferences → Calendars** to copy the calendar from
 **classic Outlook** on a Windows PC into Diariz, so those meetings behave like any other — on the Calendar tab,
 matched to recordings, carrying pre-meeting notes — and keep working in a browser and once the desktop app is
 closed. Off by default, and the page states what is stored (titles, times, locations, attendees, invite text)
