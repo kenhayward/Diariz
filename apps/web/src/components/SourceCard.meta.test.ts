@@ -8,6 +8,11 @@ import { describe, it, expect } from "vitest";
 /// So they are capped. The number is a proxy for a width, not a truth: it is set just above the longest
 /// string that has been seen to render whole, and its job is to fail in CI rather than in a screenshot.
 /// A translation that genuinely needs more room is a reason to shorten the English, not to raise the cap.
+///
+/// It cannot see how crowded a given header is, which is its real limit: the Outlook card carries a chip,
+/// a checkbox and a button, and truncated a 47-character line straight through this gate. The fix there
+/// was to unclutter the header rather than to lower the cap for every card - so a card that fails to fit
+/// while passing here is telling you its header is doing too much.
 const MAX_META = 90;
 
 /// Every key rendered as a card's single-line `meta`, plus the one sub-heading that sits under one.

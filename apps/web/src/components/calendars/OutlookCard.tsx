@@ -90,18 +90,19 @@ export default function OutlookCard() {
   }
 
   const num = "w-[52px] rounded border px-1 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100";
+  // The count goes in the chip, not on the end of the description: this header carries a chip, a
+  // checkbox and a button, so it is the tightest of the three and an appended count was simply cut off.
   const count = sources?.length ?? 0;
-  const meta = count > 0
-    ? `${t("calendarsOutlookMeta")} · ${t("calendarsOutlookMachines", { count })}`
-    : t("calendarsOutlookMeta");
 
   return (
     <SourceCard
       name={t("calendarsOutlookName")}
-      meta={meta}
+      meta={t("calendarsOutlookMeta")}
       tint={DEFAULT_COLOR}
       glyph={CalendarIcon}
-      status={enabled ? t("calendarsStatusMirroring") : undefined}
+      // Not "Mirroring": the "Mirror enabled" tick immediately to its right already says that.
+      status={count > 0 ? t("calendarsOutlookMachines", { count }) : undefined}
+      statusTone="muted"
       error={error}
       actions={
         <>

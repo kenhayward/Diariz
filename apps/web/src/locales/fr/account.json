@@ -79,7 +79,6 @@
   "calendarsFeedsName": "Flux abonnés (.ics)",
   "calendarsFeedsMeta": "Agendas publics ou partagés par URL, avec ou sans compte",
   "calendarsFeedsAdd": "+ Ajouter un flux",
-  "calendarsStatusMirroring": "Copie en cours",
   "calendarsStatusShown_one": "{{count}} affiché",
   "calendarsStatusShown_other": "{{count}} affichés",
   "calFeedShownAria": "Affiché - {{name}}",

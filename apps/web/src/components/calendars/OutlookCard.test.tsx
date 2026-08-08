@@ -165,18 +165,19 @@ describe("OutlookCard", () => {
     expect(screen.queryByRole("button", { name: /sync now/i })).toBeNull();
   });
 
-  // The card header has to say what this source is doing without the body being read: the panel stacks
-  // three of them, and at a glance you want to know which are live.
-  it("reports mirroring, and how many machines, in the card header", async () => {
+  /// The count used to sit on the end of the description, where this card's unusually busy header - a
+  /// chip, a checkbox and a button - truncated it away. It is in the chip now, as on every other card.
+  /// The chip used to read "Mirroring", which the "Mirror enabled" tick beside it already said.
+  it("counts its machines in the chip rather than on the end of the description", async () => {
     (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: true });
     (api.listOutlookSources as Mock).mockResolvedValue([device]);
     renderCard();
 
-    expect(await screen.findByTestId("source-status")).toHaveProperty("textContent", "Mirroring");
-    expect(screen.getByText(/1 machine/)).toBeTruthy();
+    expect(await screen.findByTestId("source-status")).toHaveProperty("textContent", "1 machine");
+    expect(screen.getByText(/Mirrored from classic Outlook/).textContent).not.toMatch(/1 machine/);
   });
 
-  it("says nothing in the header when the mirror is off", async () => {
+  it("says nothing in the header when no machine has connected", async () => {
     renderCard();
     await screen.findByText(/desktop app on Windows/i);
     expect(screen.queryByTestId("source-status")).toBeNull();

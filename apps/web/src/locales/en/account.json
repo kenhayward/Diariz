@@ -87,7 +87,6 @@
   "calendarsFeedsName": "Subscribed feeds (.ics)",
   "calendarsFeedsMeta": "Public team or shared calendars by URL, with or without an account",
   "calendarsFeedsAdd": "+ Add feed",
-  "calendarsStatusMirroring": "Mirroring",
   "calendarsStatusShown_one": "{{count}} shown",
   "calendarsStatusShown_other": "{{count}} shown",
   "calFeedShownAria": "Shown - {{name}}",

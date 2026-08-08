@@ -79,7 +79,6 @@
   "calendarsFeedsName": "Feeds suscritos (.ics)",
   "calendarsFeedsMeta": "Calendarios públicos o compartidos por URL, con o sin una cuenta",
   "calendarsFeedsAdd": "+ Añadir feed",
-  "calendarsStatusMirroring": "Replicando",
   "calendarsStatusShown_one": "{{count}} visible",
   "calendarsStatusShown_other": "{{count}} visibles",
   "calFeedShownAria": "Visible - {{name}}",
