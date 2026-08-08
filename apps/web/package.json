@@ -45,7 +45,7 @@
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^30.0.1",
     "tailwindcss": "^4.0.0",
-    "typescript": "^5.7.2",
+    "typescript": "^7.0.2",
     "vite": "^8.2.0",
     "vitest": "^4.1.9"
   }
