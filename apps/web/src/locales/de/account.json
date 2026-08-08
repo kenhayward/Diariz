@@ -79,7 +79,6 @@
   "calendarsFeedsName": "Abonnierte Feeds (.ics)",
   "calendarsFeedsMeta": "Öffentliche Team- oder geteilte Kalender per URL, mit oder ohne Konto",
   "calendarsFeedsAdd": "+ Feed hinzufügen",
-  "calendarsStatusMirroring": "Spiegelt",
   "calendarsStatusShown_one": "{{count}} sichtbar",
   "calendarsStatusShown_other": "{{count}} sichtbar",
   "calFeedShownAria": "Sichtbar - {{name}}",

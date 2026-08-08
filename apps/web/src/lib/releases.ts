@@ -60,6 +60,25 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.197.3",
+    date: "2026-08-08",
+    pr: 492,
+    headline: "The Desktop Outlook card says how many machines again",
+    summary:
+      "The **Desktop Outlook** card's description was cut off, taking its machine count with it. That card " +
+      "has the busiest header of the lot - a badge, a tick and a button - so there was never room for the " +
+      "count on the end of a sentence. It has moved to the badge, where every other card already puts " +
+      "its count.\n\n" +
+      "The badge used to read **Mirroring**, immediately to the left of a tick labelled **Mirror enabled**, " +
+      "which said the same thing twice. Dropping it is what made the room.",
+    fixed: [
+      "The Desktop Outlook description is no longer cut off, and its machine count is shown in the badge.",
+    ],
+    changed: [
+      "The Desktop Outlook badge shows how many machines are connected, rather than repeating the Mirror enabled tick beside it.",
+    ],
+  },
+  {
     version: "0.197.2",
     date: "2026-08-08",
     pr: 491,
