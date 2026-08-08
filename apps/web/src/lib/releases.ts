@@ -62,7 +62,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.194.0",
     date: "2026-08-08",
-    pr: 482,
+    pr: 483,
     headline: "The Calendar tab's day view is now a time grid",
     summary:
       "Picking a day on the Calendar tab used to give you a flat list: what happened, in order, but nothing " +
