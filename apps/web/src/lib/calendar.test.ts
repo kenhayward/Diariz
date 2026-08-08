@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   dayKey, isoToDayKey, buildMonthGrid, recordingDayKeys, recordingsForDay,
-  eventDayKeys, visibleGridRange, dayItems,
+  eventDayKeys, visibleGridRange, dayItems, recordingSpan, dayItemSpan,
 } from "./calendar";
 import type { CalendarEvent, RecordingSummary } from "./types";
 
@@ -172,5 +172,110 @@ describe("dayItems with a true start", () => {
     // Sorted by start, the 09:00 recording precedes the 10:00 event despite uploading at 17:00.
     expect(dayItems(recordings, events, "2026-07-02").map((i) => (i.type === "recording" ? i.recording.id : i.event.id)))
       .toEqual(["r9", "e10"]);
+  });
+});
+
+/// A recording with fields overridden - the positional `rec()` above can't express durationMs/endedAt.
+const recWith = (over: Partial<RecordingSummary>): RecordingSummary => ({
+  ...rec("r", new Date(2026, 6, 2, 10, 0).toISOString()),
+  ...over,
+});
+
+describe("recordingSpan", () => {
+  it("starts at startedAt when it is known, ignoring the upload time", () => {
+    const { start } = recordingSpan(recWith({
+      startedAt: new Date(2026, 6, 2, 9, 0).toISOString(),
+      createdAt: new Date(2026, 6, 2, 17, 0).toISOString(),
+    }));
+    expect(start.getHours()).toBe(9);
+  });
+
+  it("falls back to createdAt when the start was never tracked", () => {
+    const { start } = recordingSpan(recWith({ startedAt: null, createdAt: new Date(2026, 6, 2, 14, 0).toISOString() }));
+    expect(start.getHours()).toBe(14);
+  });
+
+  // durationMs is recorded-audio length and excludes paused stretches, so a meeting paused for ten minutes
+  // would occupy the wrong slot if the end came from it. endedAt is the wall clock the capture stopped.
+  it("ends at endedAt even when durationMs disagrees", () => {
+    const { start, end } = recordingSpan(recWith({
+      startedAt: new Date(2026, 6, 2, 9, 0).toISOString(),
+      endedAt: new Date(2026, 6, 2, 9, 30).toISOString(),
+      durationMs: 20 * 60_000,
+    }));
+    expect(end.getTime() - start.getTime()).toBe(30 * 60_000);
+  });
+
+  it("falls back to start + durationMs when the stop is unknown", () => {
+    const { start, end } = recordingSpan(recWith({
+      startedAt: new Date(2026, 6, 2, 9, 0).toISOString(), endedAt: null, durationMs: 45 * 60_000,
+    }));
+    expect(end.getTime() - start.getTime()).toBe(45 * 60_000);
+  });
+
+  // Clock skew on a machine that pushed both timestamps would otherwise give the block a negative height.
+  it("never ends before it starts", () => {
+    const { start, end } = recordingSpan(recWith({
+      startedAt: new Date(2026, 6, 2, 9, 0).toISOString(),
+      endedAt: new Date(2026, 6, 2, 8, 0).toISOString(),
+      durationMs: 0,
+    }));
+    expect(end.getTime()).toBe(start.getTime());
+  });
+
+  it("gives a zero-length span to a recording with no duration yet", () => {
+    const { start, end } = recordingSpan(recWith({ startedAt: null, endedAt: null, durationMs: 0 }));
+    expect(end.getTime()).toBe(start.getTime());
+  });
+});
+
+describe("dayItemSpan", () => {
+  const spanOf = (item: CalendarEvent | RecordingSummary, key: string) =>
+    dayItemSpan("summary" in item
+      ? { type: "event", time: 0, event: item as CalendarEvent }
+      : { type: "recording", time: 0, recording: item as RecordingSummary }, key);
+
+  it("reduces a timed event to fractional local hours", () => {
+    const span = spanOf(ev("e", new Date(2026, 6, 2, 9, 0), new Date(2026, 6, 2, 9, 30)), "2026-07-02");
+    expect(span).toEqual({ startHour: 9, endHour: 9.5, allDay: false });
+  });
+
+  it("treats a meeting that began on an earlier day as all-day on this one", () => {
+    const span = spanOf(ev("span", new Date(2026, 6, 1, 22, 0), new Date(2026, 6, 3, 1, 0)), "2026-07-02");
+    expect(span.allDay).toBe(true);
+  });
+
+  it("honours the server's allDay flag", () => {
+    const flagged: CalendarEvent = {
+      ...ev("holiday", new Date(2026, 6, 2, 0, 0), new Date(2026, 6, 3, 0, 0)), allDay: true,
+    };
+    expect(spanOf(flagged, "2026-07-02").allDay).toBe(true);
+  });
+
+  it("treats a local-midnight-to-midnight span as all-day even without the flag", () => {
+    expect(spanOf(ev("d", new Date(2026, 6, 2), new Date(2026, 6, 3)), "2026-07-02").allDay).toBe(true);
+  });
+
+  // A slim payload can carry start === end. That is a zero-length timed event sitting at its own hour,
+  // not an all-day one - misclassifying it would banish it to the chip row.
+  it("does not mistake a zero-length event for an all-day one", () => {
+    const midnight = spanOf(ev("z", new Date(2026, 6, 2), new Date(2026, 6, 2)), "2026-07-02");
+    expect(midnight.allDay).toBe(false);
+    expect(midnight.startHour).toBe(0);
+  });
+
+  it("lets a recording run past midnight rather than clamping it here", () => {
+    const night = recWith({
+      startedAt: new Date(2026, 6, 2, 23, 30).toISOString(),
+      endedAt: new Date(2026, 6, 3, 0, 30).toISOString(),
+    });
+    const span = spanOf(night, "2026-07-02");
+    expect(span.startHour).toBe(23.5);
+    expect(span.endHour).toBe(24.5);
+  });
+
+  it("never marks a recording all-day", () => {
+    expect(spanOf(recWith({ startedAt: new Date(2026, 6, 2).toISOString(), durationMs: 0 }), "2026-07-02").allDay)
+      .toBe(false);
   });
 });

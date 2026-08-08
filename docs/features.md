@@ -339,7 +339,7 @@ to that folder without closing the recording (from the Calendar, Actions or Tags
 list first). A deep path collapses in the middle the same way, and a recording shared into several rooms
 shows its folder in the room you are currently viewing, since it is filed independently in each. Recordings
 with no folder simply sit at the top level, and show just the room chip. Browse them as a **list or a calendar**
-(days with recordings are highlighted; click one to see that day's recordings). You can also **cut and
+(days with recordings are highlighted; click one to see that day on an hour-by-hour timeline). You can also **cut and
 paste** to move several things at once: select recordings and click **Cut** in the toolbar, or **Cut** a
 single folder from its own menu, then drill into wherever you want them and click **Paste**. A bar under
 the toolbar names the destination and carries the Paste and Cancel buttons; cut rows grey out with a dashed
@@ -426,10 +426,20 @@ system browser and returns you to the app, since Google blocks sign-in inside em
 the meeting it belongs to** (auto-saved on open, or picked by hand when the times don't line up), its Overview
 shows the meeting's **full details** (time, location, organiser, attendees, description) with any **URLs in the
 location/description rendered as clickable links** (so you can join a Zoom/Meet call straight from the app), and the **Calendar
-tab overlays their meetings** (a linked recording and its meeting show as one row; a meeting with no recording
+tab overlays their meetings** (a linked recording and its meeting show as one block; a meeting with no recording
 opens a preview you can link a recording to) — a revocable grant. They can also **choose which of their Google
 calendars** to consider (Preferences → Google Account); only the selected calendars are used for matching and
 shown on the Calendar tab.
+- **The Calendar tab's day view is a time grid**: pick a day in the month grid and it is laid out on an hour
+axis, with every meeting and recording placed and sized by when it actually ran, so the back-to-backs and the
+gaps are visible at a glance. Meetings that clash sit **side by side** (up to three across, then a `+N` chip
+that opens the rest); **all-day entries and meetings that began on an earlier day** sit in a strip above the
+axis rather than being drawn at midnight; and on today a **red line marks the current time** and moves as the
+day goes on. The grid opens on the working day (an hour behind the clock when the day is today) and stretches
+past its usual 06:00-23:00 window whenever something falls outside it, so a meeting can never be off the edge.
+A block does what its row did — a recording opens its transcript and keeps its full actions menu, a meeting
+opens its invite — and a block too short for two lines puts its title and time on one. The calendar a meeting
+came from is shown in the block's tooltip.
 - **Subscribe to external calendar feeds**: add any public iCalendar (`.ics`) URL — a team or shared
 calendar — in **Preferences → Calendar feeds**, give it a name and colour, and its meetings appear on the
 Calendar tab in that colour (fetched behind an SSRF guard, no Google connection required). Feed meetings are

@@ -1,19 +1,13 @@
-import { useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { useQueryClient } from "@tanstack/react-query";
-import { api, apiErrorMessage } from "../../lib/api";
-import { hasTranscript, isProcessing, showStatusBadge, statusBadgeClass, statusLabel } from "../../lib/recordingStatus";
+import { showStatusBadge, statusBadgeClass, statusLabel } from "../../lib/recordingStatus";
 import { sourceLabel } from "../../lib/recordingSource";
-import { copyRichLink, transcriptUrl } from "../../lib/clipboard";
-import { useRoomBasePath, useSharedRoomId } from "../../lib/rooms";
-import { useActiveRecordingId } from "../../lib/activeRoute";
+import { useRoomBasePath } from "../../lib/rooms";
 import { useDrillSearch } from "../../lib/drillRoute";
 import { formatDuration } from "../../lib/format";
 import KebabMenu from "../KebabMenu";
-import MoveToSectionModal from "../MoveToSectionModal";
-import DownloadTranscriptModal from "../DownloadTranscriptModal";
-import { recordingMenu } from "../recordingMenu";
+import RenameForm from "./RenameForm";
+import { useRecordingActions } from "./useRecordingActions";
 import type { RecordingSummary } from "../../lib/types";
 
 /// One recording in a list: the row you drag, tick, rename, and open. Used by the panel's three lists (the
@@ -104,70 +98,12 @@ export function RecordingRow({
   cut?: boolean;
 }) {
   const { t, i18n } = useTranslation();
-  const qc = useQueryClient();
-  const navigate = useNavigate();
   const basePath = useRoomBasePath();
-  const sharedRoomId = useSharedRoomId();
-  const activeRecordingId = useActiveRecordingId();
   // The row links back into the drill level it was rendered from. Empty outside the List tab (the
   // Calendar/Tags lists aren't drilled), so those links are unchanged.
   const drillSearch = useDrillSearch();
-  const [renaming, setRenaming] = useState(false);
-  const [moving, setMoving] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const refresh = () => qc.invalidateQueries({ queryKey: ["recordings"] });
-  const run = (fn: () => Promise<unknown>) => async () => {
-    setError(null);
-    try {
-      await fn();
-    } catch (e) {
-      setError(apiErrorMessage(e));
-    }
-  };
-
-  async function saveName(name: string) {
-    await api.renameRecording(r.id, name.trim() || null);
-    setRenaming(false);
-    refresh();
-  }
-
-  const actions = recordingMenu({
-    onRename: () => setRenaming(true),
-    onCopyLink: run(() => copyRichLink(transcriptUrl(r.id), r.name ?? r.title)),
-    onRetranscribe: run(async () => { await api.retranscribe(r.id); refresh(); }),
-    onSummarise: run(async () => { await api.summarize(r.id); refresh(); }),
-    onExtractActions: run(async () => {
-      if (r.hasActions && !window.confirm(t("workspace:confirmReextract"))) return;
-      await api.extractActions(r.id);
-      refresh();
-    }),
-    onReidentify: run(async () => { await api.reidentify(r.id); refresh(); }),
-    onMove: () => setMoving(true),
-    onDownloadTranscript: () => setDownloading(true),
-    onEmailTranscript: run(() => api.emailTranscript(r.id)),
-    onDownloadAudio: run(() => api.downloadAudio(r.id)),
-    onDeleteAudio: run(async () => {
-      if (!window.confirm(t("workspace:confirmDeleteAudio", { name: r.name ?? r.title }))) return;
-      await api.deleteAudio(r.id);
-      refresh();
-      qc.invalidateQueries({ queryKey: ["user-storage"] }); // freed quota → refresh the account menu
-    }),
-    onDelete: run(async () => {
-      if (!window.confirm(t("workspace:confirmDelete", { name: r.name ?? r.title }))) return;
-      await api.deleteRecording(r.id);
-      // If the deleted recording is the one open in the detail panel, leave it — otherwise its transcript
-      // stays on screen and any further action targets a now-missing recording.
-      if (activeRecordingId === r.id) navigate(basePath || "/");
-      refresh();
-      qc.invalidateQueries({ queryKey: ["user-storage"] });
-    }),
-    hasTranscript: hasTranscript(r.status),
-    hasAudio: r.hasAudio,
-    isSummarizing: r.status === "Summarizing",
-    isProcessing: isProcessing(r.status),
-  }, t);
+  // Shared with the Calendar tab's day-grid blocks, so both surfaces drive the same menu and modals.
+  const { actions, modals, error, renaming, saveName, cancelRename } = useRecordingActions(r);
 
   return (
     // The whole row is the drag source (no separate handle) — it already highlights on hover. Dragging is
@@ -215,7 +151,7 @@ export function RecordingRow({
             linked calendar's Google colour. */}
         {r.calendarEventId && <CalendarIcon title={t("workspace:hasCalendarTitle")} color={r.calendarColor} />}
         {renaming ? (
-          <RenameForm initial={r.name ?? ""} onSave={saveName} onCancel={() => setRenaming(false)} />
+          <RenameForm initial={r.name ?? ""} onSave={saveName} onCancel={cancelRename} />
         ) : (
           <NavLink
             // Keeps `?in=` so opening a recording doesn't pop the list back to the root behind it.
@@ -253,45 +189,7 @@ export function RecordingRow({
         <KebabMenu actions={actions} />
       </div>
       {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
-      {moving && (
-        <MoveToSectionModal recordingId={r.id} currentSectionId={r.sectionId} roomId={sharedRoomId} onClose={() => setMoving(false)} />
-      )}
-      {downloading && <DownloadTranscriptModal recordingId={r.id} onClose={() => setDownloading(false)} />}
+      {modals}
     </li>
-  );
-}
-
-function RenameForm({
-  initial,
-  onSave,
-  onCancel,
-}: {
-  initial: string;
-  onSave: (name: string) => void;
-  onCancel: () => void;
-}) {
-  const { t } = useTranslation("workspace");
-  const [value, setValue] = useState(initial);
-  return (
-    <form
-      className="flex min-w-0 flex-1 items-center gap-1"
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSave(value);
-      }}
-    >
-      <input
-        autoFocus
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => e.key === "Escape" && onCancel()}
-        placeholder={t("recordingNamePlaceholder")}
-        aria-label={t("recordingNamePlaceholder")}
-        className="min-w-0 flex-1 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-      />
-      <button type="submit" className="rounded border px-2 py-1 text-xs hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800 dark:text-gray-200">
-        {t("common:save")}
-      </button>
-    </form>
   );
 }

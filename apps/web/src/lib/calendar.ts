@@ -43,9 +43,66 @@ export function buildMonthGrid(year: number, month: number): CalendarDay[][] {
 ///
 /// Using `createdAt` here files a meeting recorded 23:30-00:30 under the *following* day - and in a different
 /// cell from the very event it is linked to, which still sits on the day it started.
-function recordingTime(r: RecordingSummary): string {
+///
+/// Exported because the day grid places blocks by the same rule that files them into a day cell: if the two
+/// ever disagreed, a block would sit on a day the month grid says it isn't on.
+export function recordingTime(r: RecordingSummary): string {
   return r.startedAt ?? r.createdAt;
 }
+
+/// A recording's wall-clock span, for sizing its block on the day grid.
+///
+/// The end prefers `endedAt`: `durationMs` is recorded-audio length and excludes paused stretches, so a
+/// meeting paused for ten minutes would occupy the wrong slot. Clock skew between the two timestamps is
+/// floored at the start rather than allowed to produce a negative height.
+export function recordingSpan(r: RecordingSummary): { start: Date; end: Date } {
+  const start = new Date(recordingTime(r));
+  const endMs = r.endedAt ? new Date(r.endedAt).getTime() : start.getTime() + Math.max(0, r.durationMs);
+  return { start, end: new Date(Math.max(start.getTime(), endMs)) };
+}
+
+/// A day item reduced to the day grid's coordinates: fractional local hours on `key`'s day.
+///
+/// `endHour` may exceed 24 for an item that runs past midnight (the layout clamps it) - and both are read
+/// from real timestamps rather than `DayItem.time`, which is a *sort sentinel* (`dayItems` sets 0 for a
+/// spilled-in multi-day event) and is meaningless as a coordinate.
+export interface DayItemSpan {
+  startHour: number;
+  endHour: number;
+  /// Belongs in the pinned chip row rather than on the time axis.
+  allDay: boolean;
+}
+
+/// Fractional local hours since midnight - wall clock, never `(ms - dayStart) / 3600000`, which is an hour
+/// out for the whole of a DST day.
+function hourOfDay(d: Date): number {
+  return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+}
+
+export function dayItemSpan(item: DayItem, key: string): DayItemSpan {
+  if (item.type === "recording") {
+    const { start, end } = recordingSpan(item.recording);
+    // Whole days elapsed, so a recording that ran past midnight reports endHour > 24 rather than wrapping.
+    const dayOffset = Math.round((midnightOf(end).getTime() - midnightOf(start).getTime()) / 86_400_000);
+    return { startHour: hourOfDay(start), endHour: hourOfDay(end) + dayOffset * 24, allDay: false };
+  }
+
+  const e = item.event;
+  const start = new Date(e.start);
+  const end = new Date(e.end);
+  const midnight = (d: Date) => d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0;
+  // A date-only entry from the server, a span that began on an earlier day (no meaningful start on this
+  // one), or - for older payloads with no flag - a local-midnight-to-midnight span. `end > start` keeps a
+  // zero-length event out of this: that is a timed event at its own hour, not an all-day one.
+  const allDay =
+    e.allDay === true ||
+    isoToDayKey(e.start) !== key ||
+    (midnight(start) && midnight(end) && end.getTime() > start.getTime());
+  const dayOffset = Math.round((midnightOf(end).getTime() - midnightOf(start).getTime()) / 86_400_000);
+  return { startHour: hourOfDay(start), endHour: hourOfDay(end) + dayOffset * 24, allDay };
+}
+
+const midnightOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
 /// The set of local day-keys that have at least one recording (drives which calendar cells are
 /// highlighted and selectable).

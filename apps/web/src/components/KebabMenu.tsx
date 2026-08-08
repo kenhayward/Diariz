@@ -15,9 +15,13 @@ export interface KebabAction {
 export default function KebabMenu({
   actions,
   label = "Actions",
+  buttonClassName = "rounded px-2 py-1 text-lg leading-none text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800",
 }: {
   actions: KebabAction[];
   label?: string;
+  /// Classes for the trigger. The default is sized for a list row (~28px tall); the calendar day grid
+  /// passes a compact variant because a 30-minute meeting's block is only 22px.
+  buttonClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -50,7 +54,7 @@ export default function KebabMenu({
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        className="rounded px-2 py-1 text-lg leading-none text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+        className={buttonClassName}
       >
         ⋮
       </button>

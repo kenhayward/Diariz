@@ -747,6 +747,11 @@ export interface CalendarEvent {
   calendarId?: string | null;
   calendarName?: string | null;
   color?: string | null;
+  /// A date-only entry (holiday, birthday, "out of office" day) rather than a timed meeting. Sent by the
+  /// API for Google, .ics and Outlook events alike; the day grid pins these above the time axis rather
+  /// than placing them on it. Null/absent on older payloads, where `dayItemSpan` falls back to a
+  /// midnight-to-midnight heuristic.
+  allDay?: boolean;
 }
 
 /// A Google Calendar meeting matched to a recording by time overlap (same shape as an event).
