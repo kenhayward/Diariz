@@ -60,6 +60,26 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.197.4",
+    date: "2026-08-09",
+    pr: 493,
+    headline: "Security updates to four bundled libraries",
+    summary:
+      "Four third-party libraries had advisories against the versions Diariz was pinned to, and all four " +
+      "are now on the patched release. Nothing in the app behaves differently - this is housekeeping on the " +
+      "supply chain.\n\n" +
+      "**dompurify** is the one that touches you directly: it is what sanitises the HTML Diariz renders for " +
+      "summaries, minutes, formula documents and chat answers, and the advisory described a way a crafted " +
+      "document could keep a fragment of script alive through sanitising. The other three - **js-yaml**, " +
+      "**nanoid** and **brace-expansion** - are build- and packaging-time dependencies that never reach " +
+      "the browser.",
+    fixed: [
+      "dompurify 3.4.12 to 3.4.13 - a sanitised document could leave a detached subtree still able to run script.",
+      "js-yaml 4.3.0 to 4.3.1 in the desktop app and the n8n node - quadratic CPU consumption on a crafted document.",
+      "nanoid and brace-expansion moved to their patched releases across the web, desktop and n8n lockfiles.",
+    ],
+  },
+  {
     version: "0.197.3",
     date: "2026-08-08",
     pr: 492,

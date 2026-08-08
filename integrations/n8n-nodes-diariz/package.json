@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-diariz",
-  "version": "0.197.3",
+  "version": "0.197.4",
   "description": "n8n community node for Diariz meeting transcription: react to transcriptions and drive the full REST API.",
   "keywords": [
     "n8n-community-node-package",
@@ -57,5 +57,8 @@
   },
   "peerDependencies": {
     "n8n-workflow": "*"
+  },
+  "overrides": {
+    "nanoid": "^3.3.17"
   }
 }
