@@ -465,7 +465,8 @@ elsewhere. Requires **classic Outlook for Windows**.
 - **Global AI timeout** (Platform Administrator, Settings → Model Settings): one platform-wide per-request
 timeout in seconds (default 120) applied to every AI call - summaries, minutes, actions, tags, and embeddings.
 Raise it for slow local models; the configured value is the single authority (no hidden HTTP cap).
-- **Preferences**: a tabbed window (Profile, Model Settings, Chat Tools, Recordings, Formulas, Calendars, Integrations).
+- **Preferences**: a tabbed window with the everyday entries (Profile, Recordings, Formulas, Calendars) over an
+**Advanced** divider holding the exception settings (Integrations, Assistant).
 Each user can edit their **profile** — display name, job title, company, job/company descriptions, LinkedIn
 account name — pick their **native** and **app** language, and choose a **theme** (Light/Dark/Auto) that is
 saved to their account and follows them across devices.

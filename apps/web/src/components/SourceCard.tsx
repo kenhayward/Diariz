@@ -30,6 +30,7 @@ export default function SourceCard({
   tintDark,
   glyph: Glyph,
   status,
+  statusTone = "positive",
   actions,
   help,
   error,
@@ -48,6 +49,9 @@ export default function SourceCard({
   /// Per-source vocabulary ("Connected", "Mirroring", "2 shown") - not one word forced on every provider.
   /// Omitted when the source has nothing to report.
   status?: string;
+  /// Green reads as "this is on and working". A chip that is merely stating which of two normal states
+  /// something is in ("Platform default" / "Overridden") is information, not good news, so it goes grey.
+  statusTone?: "positive" | "muted";
   /// This source's own header controls.
   actions?: ReactNode;
   /// A contextual `?` sitting after the meta line, where the old sections put it after their intro.
@@ -59,7 +63,8 @@ export default function SourceCard({
   /// Shown rather than hidden so the capability stays discoverable - a missing card reads as a bug, and
   /// "ask an administrator" is a better answer than nothing at all.
   disabledNote?: string | null;
-  children: ReactNode;
+  /// Null for a card whose whole content is its header - it then renders no body at all.
+  children?: ReactNode;
 }) {
   return (
     // A labelled region, so a screen reader can tell which source a "Shown" tick belongs to. Three
@@ -95,7 +100,11 @@ export default function SourceCard({
         {status && !disabledNote && (
           <span
             data-testid="source-status"
-            className="shrink-0 rounded px-1.5 text-[10px] font-medium text-green-800 bg-green-100 dark:bg-green-500/[0.14] dark:text-green-400"
+            className={`shrink-0 rounded px-1.5 text-[10px] font-medium ${
+              statusTone === "muted"
+                ? "bg-gray-100 text-gray-500 dark:bg-slate-400/[0.16] dark:text-slate-300"
+                : "bg-green-100 text-green-800 dark:bg-green-500/[0.14] dark:text-green-400"
+            }`}
           >
             {status}
           </span>
@@ -104,6 +113,7 @@ export default function SourceCard({
             but loses its buttons. */}
         {!disabledNote && actions}
       </div>
+      {(children != null || disabledNote || error) && (
       <div className="px-3 pb-3 pt-2.5">
         {disabledNote ? (
           <p className="text-[13px] text-gray-500 dark:text-gray-400">{disabledNote}</p>
@@ -114,6 +124,7 @@ export default function SourceCard({
           </>
         )}
       </div>
+      )}
     </section>
   );
 }
