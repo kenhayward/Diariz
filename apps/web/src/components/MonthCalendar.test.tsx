@@ -54,7 +54,9 @@ describe("MonthCalendar", () => {
     expect(eventDay.className).toContain("bg-green-300/60"); // events-only fill
   });
 
-  it("marks a recording day that also has events with a dot", () => {
+  // The marker used to be a dot centred at the bottom of the 20px cell, which landed on the day number's
+  // descender space and collided with it. It is an underline bar along the cell's bottom edge instead.
+  it("marks a recording day that also has events with an underline bar", () => {
     const { container } = render(
       <MonthCalendar
         year={YEAR}
@@ -69,7 +71,11 @@ describe("MonthCalendar", () => {
     );
     const recDay = screen.getByRole("button", { name: "15" });
     expect(recDay.className).toContain("bg-green-100"); // still a recording (green) cell
-    expect(recDay.querySelector("span[aria-hidden]")).not.toBeNull(); // + the events dot
+    const marker = recDay.querySelector("span[aria-hidden]");
+    expect(marker).not.toBeNull();
+    expect(marker!.className).toContain("h-0.5"); // a 2px bar...
+    expect(marker!.className).toContain("inset-x-[5px]"); // ...inset from both edges...
+    expect(marker!.className).not.toContain("rounded-full"); // ...not the old dot
     expect(container).toBeTruthy();
   });
 });

@@ -1,10 +1,10 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { useState } from "react";
-import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import { SelectionProvider } from "../../lib/selection";
-import type { RecordingSummary } from "../../lib/types";
+import type { CalendarEvent, RecordingSummary } from "../../lib/types";
 
 // Only what this leaf reaches for - not the panel's whole mock wall. Follows the
 // RecordingDetail.speakers.test.tsx precedent: test an extracted leaf with its own minimal preamble.
@@ -25,6 +25,11 @@ import CalendarTab from "./CalendarTab";
 
 const today = new Date();
 
+/// Today at a fixed local hour. The day view places blocks by the clock, so the fixtures need a known one -
+/// "now" would move every assertion about a block's top with the wall clock.
+const at = (hour: number, minute = 0) =>
+  new Date(today.getFullYear(), today.getMonth(), today.getDate(), hour, minute);
+
 const rec: RecordingSummary = {
   id: "today",
   title: "Mic",
@@ -38,6 +43,8 @@ const rec: RecordingSummary = {
   hasActions: false,
   hasAudio: true,
   calendarEventId: null,
+  startedAt: at(10).toISOString(),
+  endedAt: at(10, 30).toISOString(),
 };
 
 /// The tab behind a toggle, mirroring how the panel mounts it: switching away unmounts it. `SelectionProvider`
@@ -67,6 +74,10 @@ function renderTab(recordings: RecordingSummary[] = [rec]) {
 const monthName = (offset: number) =>
   new Date(today.getFullYear(), today.getMonth() + offset, 1).toLocaleString("en", { month: "long" });
 
+/// The month grid's own heading ("August 2026"). The year matters: the day heading below the grid names
+/// the same month ("Saturday 8 August"), so a bare month name matches two elements.
+const monthHeading = (offset: number) => new RegExp(`${monthName(offset)}\\s+\\d{4}`, "i");
+
 describe("CalendarTab", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -78,7 +89,7 @@ describe("CalendarTab", () => {
   it("opens on today's month and lists that day's recordings", async () => {
     renderTab();
     expect(await screen.findByText("Today call")).toBeTruthy();
-    expect(screen.getByText(new RegExp(monthName(0), "i"))).toBeTruthy();
+    expect(screen.getByText(monthHeading(0))).toBeTruthy();
   });
 
   // The tab now unmounts when you switch away, which is what stops its two queries running while you are
@@ -90,12 +101,12 @@ describe("CalendarTab", () => {
     await screen.findByText("Today call");
 
     fireEvent.click(screen.getByRole("button", { name: /next month/i }));
-    await waitFor(() => expect(screen.getByText(new RegExp(monthName(1), "i"))).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(monthHeading(1))).toBeTruthy());
 
     fireEvent.click(screen.getByText("toggle-tab")); // leave the tab
     fireEvent.click(screen.getByText("toggle-tab")); // come back
 
-    expect(await screen.findByText(new RegExp(monthName(0), "i"))).toBeTruthy();
+    expect(await screen.findByText(monthHeading(0))).toBeTruthy();
   });
 
   // The overlay used to be gated on a Google connection, which left anyone whose calendar was entirely .ics
@@ -205,5 +216,243 @@ describe("CalendarTab", () => {
     await waitFor(() => expect(syncOutlookNow).toHaveBeenCalled());
     // A started sync refetches the month, which is what makes the new meetings appear without another click.
     await waitFor(() => expect(api.getCalendarEvents).toHaveBeenCalled());
+  });
+});
+
+// ---- the day view: a time grid, not a list ----
+
+/// A calendar event as the events query returns it.
+const event = (id: string, start: Date, end: Date, over: Partial<CalendarEvent> = {}): CalendarEvent => ({
+  id, summary: id, start: start.toISOString(), end: end.toISOString(), htmlLink: null, ...over,
+});
+
+const blocks = () => screen.getAllByTestId("day-block");
+
+describe("CalendarTab day grid", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: false });
+    (api.getCalendarEvents as Mock).mockResolvedValue([]);
+    delete (window as { diariz?: unknown }).diariz;
+  });
+
+  it("draws an hour axis over the whole day window", async () => {
+    renderTab();
+    await screen.findByText("Today call");
+
+    expect(screen.getAllByTestId("hour-row")).toHaveLength(17); // 06:00-23:00
+    expect(screen.getByText(/^8\s?AM$/i)).toBeTruthy();
+  });
+
+  it("places a recording at the hour it started and sizes it by its length", async () => {
+    renderTab();
+    await screen.findByText("Today call");
+
+    const block = blocks()[0];
+    expect(block.style.top).toBe("176px"); // (10:00 - 06:00) * 44
+    expect(block.style.height).toBe("22px"); // a 30-minute meeting
+  });
+
+  // The block is too short for two lines, so the title and time collapse onto one. The title must stay its
+  // own text node - a `${title} - ${time}` template would make every name unfindable by text.
+  it("collapses a short block to one line without welding the title to the time", async () => {
+    renderTab();
+    expect(await screen.findByText("Today call")).toBeTruthy();
+    expect(blocks()[0].textContent).toMatch(/Today call.*10/);
+  });
+
+  it("puts two overlapping meetings side by side", async () => {
+    (api.getCalendarEvents as Mock).mockResolvedValue([
+      event("Standup", at(14), at(15)),
+      event("Review", at(14, 30), at(15, 30)),
+    ]);
+    renderTab([]);
+    await screen.findByText("Standup");
+
+    const [first, second] = blocks();
+    expect(first.style.left).toBe("0%");
+    expect(first.style.width).toBe("49%");
+    expect(second.style.left).toBe("51%");
+    expect(second.style.width).toBe("49%");
+  });
+
+  it("gives a meeting with nothing beside it the full width", async () => {
+    (api.getCalendarEvents as Mock).mockResolvedValue([event("Standup", at(14), at(15))]);
+    renderTab([]);
+    await screen.findByText("Standup");
+
+    expect(blocks()[0].style.width).toBe("100%");
+  });
+
+  // A meeting that began yesterday has no meaningful start on this day, so it is pinned above the axis
+  // rather than being drawn as a block at midnight.
+  it("pins a spilled-in multi-day meeting above the grid", async () => {
+    const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1, 22, 0);
+    (api.getCalendarEvents as Mock).mockResolvedValue([event("Offsite", yesterday, at(23, 59))]);
+    renderTab([]);
+
+    const chip = await screen.findByText("Offsite");
+    expect(screen.getByTestId("all-day-row").contains(chip)).toBe(true);
+    expect(screen.queryAllByTestId("day-block")).toHaveLength(0);
+  });
+
+  // The axis is the point of the view - an empty day should still show you where the gaps are, rather than
+  // replacing the whole grid with a sentence.
+  it("keeps the axis visible on an empty day", async () => {
+    renderTab([]);
+
+    expect(await screen.findByText(/nothing on this day/i)).toBeTruthy();
+    expect(screen.getAllByTestId("hour-row")).toHaveLength(17);
+  });
+
+  it("heads the day with its date and what is on it", async () => {
+    (api.getCalendarEvents as Mock).mockResolvedValue([
+      event("Standup", at(14), at(15)),
+      event("Review", at(16), at(17)),
+    ]);
+    renderTab();
+
+    expect(await screen.findByText(/2 meetings/)).toBeTruthy();
+    expect(screen.getByText(/1 recording/)).toBeTruthy();
+  });
+
+  it("offers a recording's actions from its block", async () => {
+    renderTab();
+    await screen.findByText("Today call");
+
+    fireEvent.click(screen.getByRole("button", { name: "Actions" }));
+    expect(screen.getByRole("menuitem", { name: /rename/i })).toBeTruthy();
+  });
+
+  // A meeting has no menu: clicking the block already opens the event, so a one-item kebab would only
+  // repeat it.
+  it("gives a meeting block no kebab", async () => {
+    (api.getCalendarEvents as Mock).mockResolvedValue([event("Standup", at(14), at(15))]);
+    renderTab([]);
+    await screen.findByText("Standup");
+
+    expect(screen.queryByRole("button", { name: "Actions" })).toBeNull();
+  });
+
+  it("keeps a recording block a drag source", async () => {
+    renderTab();
+    await screen.findByText("Today call");
+
+    const block = blocks()[0];
+    expect(block.getAttribute("draggable")).toBe("true");
+    const setData = vi.fn();
+    fireEvent.dragStart(block, { dataTransfer: { setData, effectAllowed: "" } });
+    expect(setData).toHaveBeenCalledWith("text/plain", "today");
+  });
+
+  // A feed meeting has no Google event behind it, so there is nothing to open - it stays a static block,
+  // exactly as its row did.
+  it("does not link a meeting from an external feed", async () => {
+    (api.getCalendarEvents as Mock).mockResolvedValue([
+      event("Team sync", at(14), at(15), { calendarId: "ics:1" }),
+    ]);
+    renderTab([]);
+    await screen.findByText("Team sync");
+
+    expect(screen.queryByRole("link", { name: /team sync/i })).toBeNull();
+  });
+
+  it("links a meeting to its event preview", async () => {
+    (api.getCalendarEvents as Mock).mockResolvedValue([event("Standup", at(14), at(15))]);
+    renderTab([]);
+
+    const link = await screen.findByRole("link", { name: /standup/i });
+    expect(link.getAttribute("href")).toBe("/calendar-event/Standup");
+  });
+});
+
+// jsdom has no layout, so `scrollTop` is an accessor that clamps every write back to 0. Make it a plain
+// property for this block only (restored after), so the grid's own scroll positioning is observable.
+describe("CalendarTab day grid scroll position", () => {
+  let original: PropertyDescriptor | undefined;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: false });
+    (api.getCalendarEvents as Mock).mockResolvedValue([]);
+    original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollTop");
+    Object.defineProperty(HTMLElement.prototype, "scrollTop", { configurable: true, writable: true, value: 0 });
+  });
+
+  afterEach(() => {
+    if (original) Object.defineProperty(HTMLElement.prototype, "scrollTop", original);
+    vi.useRealTimers();
+  });
+
+  it("opens the grid at the working day rather than its first hour", async () => {
+    // Before 09:00 the grid opens on the working day; the clock is pinned so the assertion does not
+    // depend on when the suite happens to run.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(at(7));
+    renderTab();
+    await screen.findByText("Today call");
+
+    expect(screen.getByTestId("day-scroller").scrollTop).toBe(88); // (08:00 - 06:00) * 44
+  });
+
+  // Later in the day the working-day default would leave the now line off screen, so the grid opens an
+  // hour behind the clock instead.
+  it("opens an hour before now once the day is under way", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(at(15));
+    renderTab();
+    await screen.findByText("Today call");
+
+    expect(screen.getByTestId("day-scroller").scrollTop).toBe((14 - 6) * 44);
+  });
+});
+
+describe("CalendarTab now line", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: false });
+    (api.getCalendarEvents as Mock).mockResolvedValue([]);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("marks the current time on today's grid", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(at(14));
+    renderTab();
+    await screen.findByText("Today call");
+
+    expect(screen.getByTestId("now-line").style.top).toBe("352px"); // (14:00 - 06:00) * 44
+  });
+
+  it("moves the line as time passes and stops when the tab closes", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(at(14));
+    const setInterval = vi.spyOn(globalThis, "setInterval");
+    const clearInterval = vi.spyOn(globalThis, "clearInterval");
+    const { unmount } = renderTab();
+    await screen.findByText("Today call");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+    });
+    expect(screen.getByTestId("now-line").style.top).toBe(`${(14 + 10 / 60 - 6) * 44}px`);
+
+    // The minute tick is the only one-minute interval in the tree; leaving it running would keep
+    // re-rendering a grid nobody is looking at.
+    const tick = setInterval.mock.calls.findIndex(([, ms]) => ms === 60_000);
+    expect(tick).toBeGreaterThanOrEqual(0);
+    unmount();
+    expect(clearInterval).toHaveBeenCalledWith(setInterval.mock.results[tick].value);
+  });
+
+  it("shows no now line on a day that is not today", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(at(14));
+    renderTab();
+    await screen.findByText("Today call");
+
+    const other = today.getDate() === 1 ? 2 : 1;
+    fireEvent.click(screen.getByRole("button", { name: String(other) }));
+    expect(screen.queryByTestId("now-line")).toBeNull();
   });
 });

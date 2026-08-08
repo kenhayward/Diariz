@@ -90,9 +90,11 @@ export default function MonthCalendar({
               ].join(" ")}
             >
               {day.date.getDate()}
-              {/* A recording day that also has calendar events gets a small dot so the grid shows both. */}
+              {/* A recording day that also has calendar events is underlined, so the grid shows both. A
+                  centred dot was tried first and collided with the day number: the 20px cell centres the
+                  number, leaving the dot sitting in its descender space. */}
               {hasRec && hasEvent && (
-                <span className="absolute bottom-0.5 h-1 w-1 rounded-full bg-green-600 dark:bg-green-300" aria-hidden />
+                <span className="absolute inset-x-[5px] bottom-0.5 h-0.5 rounded-[1px] bg-green-600 dark:bg-green-300" aria-hidden />
               )}
             </button>
           );

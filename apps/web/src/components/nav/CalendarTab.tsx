@@ -1,26 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
-import { NavLink } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import type { TFunction } from "i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
-import { useSelection } from "../../lib/selection";
 import { useDragAutoScroll } from "../../lib/dragAutoScroll";
-import { recordingDayKeys, dayKey, eventDayKeys, visibleGridRange, dayItems } from "../../lib/calendar";
+import { recordingDayKeys, dayKey, eventDayKeys, visibleGridRange, dayItems, type DayItem } from "../../lib/calendar";
 import {
   canSyncOutlook as shellCanSyncOutlook,
   onOutlookState,
   outlookAvailable as checkOutlookAvailable,
   syncOutlookNow,
 } from "../../lib/outlookSync";
-import { iconProps } from "../ToolbarButton";
 import MonthCalendar from "../MonthCalendar";
-import { RecordingRow } from "./RecordingRow";
-import type { CalendarEvent, RecordingSummary } from "../../lib/types";
+import DayGrid from "./DayGrid";
+import type { RecordingSummary } from "../../lib/types";
 
-/// The panel's Calendar tab: a month grid over the selected day's merged list of recordings and (in a personal
-/// room) unlinked calendar events from every source the user has - Google, subscribed .ics feeds, and a
-/// mirrored desktop Outlook calendar.
+/// The panel's Calendar tab: a month grid over the selected day laid out on a **time axis** - recordings and
+/// (in a personal room) unlinked calendar events from every source the user has (Google, subscribed .ics
+/// feeds, and a mirrored desktop Outlook calendar), positioned and sized by when they actually ran.
 ///
 /// Owns its own state and its two queries. Because the panel mounts this only while the tab is showing,
 /// those queries do not run while you are reading the meetings list - and the month resets to today when
@@ -36,9 +32,9 @@ export default function CalendarTab({
 }) {
   const { t, i18n } = useTranslation("workspace");
   const qc = useQueryClient();
-  const selection = useSelection();
   // Native HTML5 DnD doesn't scroll the list while dragging near its edges, so a drop target outside the
-  // viewport is unreachable in a long day list.
+  // viewport is unreachable in a long day. DayGrid owns the scroller (it positions it on the hour axis)
+  // and merges this callback ref onto it.
   const dayScrollRef = useDragAutoScroll<HTMLDivElement>();
 
   const [month, setMonth] = useState(() => {
@@ -111,10 +107,11 @@ export default function CalendarTab({
   }
 
   return (
-    // Calendar: the month grid stays fixed at the top; only the selected day's list scrolls.
-    // min-w-0 is essential: without it this flex child grows to the widest day-list row, which would
-    // stretch the grid-cols-7 month grid wider than the panel and make the calendar appear to resize
-    // when you pick a day with longer recording names.
+    // Calendar: the month grid, the day heading and the all-day strip stay fixed at the top; only the
+    // hour axis scrolls.
+    // min-w-0 is essential: without it this flex child grows to its widest content, which would stretch
+    // the grid-cols-7 month grid wider than the panel and make the calendar appear to resize when you
+    // pick a day with longer recording names.
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="shrink-0 border-b dark:border-gray-800">
         <MonthCalendar
@@ -152,86 +149,42 @@ export default function CalendarTab({
           </div>
         )}
       </div>
-      {/* Reserve the scrollbar gutter so toggling the day list's scrollbar never shifts its width. */}
-      <div ref={dayScrollRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
-        {selectedItems.length === 0 ? (
-          <p className="p-4 text-sm text-gray-500 dark:text-gray-400">
-            {showCalendarOverlay ? t("calDayEmpty") : t("calNoRecordings")}
-          </p>
-        ) : (
-          <ul className="divide-y dark:divide-gray-800">
-            {selectedItems.map((it) =>
-              it.type === "recording" ? (
-                <RecordingRow
-                  key={it.recording.id}
-                  r={it.recording}
-                  indentClass="pl-3"
-                  selectMode={selection.selectMode}
-                  selected={selection.selectedIds.includes(it.recording.id)}
-                  onToggleSelect={() => selection.toggle(it.recording.id)}
-                  onDropBefore={() => {}}
-                />
-              ) : (
-                <EventRow key={`ev-${it.event.id}`} event={it.event} locale={i18n.language} t={t} />
-              ),
-            )}
-          </ul>
-        )}
-      </div>
+      {selectedDay && (
+        <>
+          <DayHeading dayKey={selectedDay} items={selectedItems} locale={i18n.language} />
+          <DayGrid
+            items={selectedItems}
+            dayKey={selectedDay}
+            isToday={selectedDay === dayKey(new Date())}
+            emptyLabel={showCalendarOverlay ? t("calDayEmpty") : t("calNoRecordings")}
+            autoScrollRef={dayScrollRef}
+          />
+        </>
+      )}
     </div>
   );
 }
 
-/// A Google Calendar event row in the Calendar tab's merged day list — time range + title. Clicking the row
-/// opens the event preview (a meeting with no recording); the calendar glyph still links out to Google.
-/// Only unlinked events reach this row (a linked event is shown by its recording row, deduped in `dayItems`).
-/// Events from an external .ics feed (`calendarId` starting `ics:`) are display-only - they have no Google
-/// event to preview or link a recording to - so their row is a static (non-clickable) block, still coloured.
-function EventRow({ event, locale, t }: { event: CalendarEvent; locale: string; t: TFunction }) {
-  const fmt = new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" });
-  const title = event.summary || t("calUntitledEvent");
-  const range = `${fmt.format(new Date(event.start))} – ${fmt.format(new Date(event.end))}`;
-  const isFeed = event.calendarId?.startsWith("ics:") ?? false;
-
-  const inner = (
-    <>
-      <svg
-        {...iconProps}
-        style={event.color ? { color: event.color } : undefined}
-        className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${event.color ? "" : "text-green-600 dark:text-green-400"}`}
-        aria-label={t("calEventLabel")}
-      >
-        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-        <line x1="16" y1="2" x2="16" y2="6" />
-        <line x1="8" y1="2" x2="8" y2="6" />
-        <line x1="3" y1="10" x2="21" y2="10" />
-      </svg>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-gray-800 dark:text-gray-200">{title}</div>
-        <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-          <span className="tabular-nums">{range}</span>
-          {event.calendarName && <span className="truncate">· {event.calendarName}</span>}
-        </div>
-      </div>
-    </>
-  );
+/// The day's date and what is on it, pinned above the grid so it does not scroll away with the hours.
+function DayHeading({ dayKey: key, items, locale }: { dayKey: string; items: DayItem[]; locale: string }) {
+  const { t } = useTranslation("workspace");
+  const [y, m, d] = key.split("-").map(Number);
+  // Built from parts, never `new Date("2026-08-08")`: the string form is parsed as UTC midnight, which
+  // renders the *previous* day anywhere west of Greenwich.
+  const date = new Date(y, m - 1, d);
+  const recordings = items.filter((i) => i.type === "recording").length;
+  const meetings = items.length - recordings;
+  const counts = [
+    meetings > 0 ? t("calDayMeetingCount", { count: meetings }) : null,
+    recordings > 0 ? t("calDayRecordingCount", { count: recordings }) : null,
+  ].filter(Boolean).join(" · ");
 
   return (
-    <li>
-      {isFeed ? (
-        <div className="flex items-start gap-2 py-1.5 pl-3 pr-2 text-sm">{inner}</div>
-      ) : (
-        <NavLink
-          to={`/calendar-event/${encodeURIComponent(event.id)}`}
-          className={({ isActive }) =>
-            `flex items-start gap-2 py-1.5 pl-3 pr-2 text-sm ${
-              isActive ? "bg-blue-50 dark:bg-blue-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-800"
-            }`
-          }
-        >
-          {inner}
-        </NavLink>
-      )}
-    </li>
+    <div className="flex shrink-0 items-baseline justify-between gap-2 border-b px-2.5 py-1.5 dark:border-gray-800">
+      <span className="truncate text-[13px] font-semibold capitalize text-gray-900 dark:text-gray-100">
+        {new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long" }).format(date)}
+      </span>
+      <span className="shrink-0 text-[11px] text-gray-400 dark:text-gray-500">{counts}</span>
+    </div>
   );
 }
