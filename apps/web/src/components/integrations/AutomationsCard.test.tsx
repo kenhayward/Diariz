@@ -2,8 +2,9 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../lib/api", () => ({
+vi.mock("../../lib/api", () => ({
   api: {
+    getProfile: vi.fn(),
     createWebhook: vi.fn(),
     listWebhooks: vi.fn(),
     testWebhook: vi.fn(),
@@ -14,33 +15,44 @@ vi.mock("../lib/api", () => ({
   },
   apiErrorMessage: (e: unknown) => (e instanceof Error ? e.message : String(e)),
 }));
-import { api } from "../lib/api";
-import AutomationsSection from "./AutomationsSection";
+import { api } from "../../lib/api";
+import AutomationsCard from "./AutomationsCard";
 
 function Wrapped() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
     <QueryClientProvider client={qc}>
-      <AutomationsSection />
+      <AutomationsCard />
     </QueryClientProvider>
   );
 }
 
-describe("AutomationsSection", () => {
+/// Creating moved into a dialog: the card body is the list of what you already have, which is what the
+/// tab used to bury under nine checkboxes.
+const openComposer = async () =>
+  fireEvent.click(await screen.findByRole("button", { name: /new automation/i }));
+
+/// A row's four buttons became one kebab. There is exactly one row in every fixture below.
+const openKebab = () => fireEvent.click(screen.getByRole("button", { name: /actions for/i }));
+const openKebabAsync = async () => fireEvent.click(await screen.findByRole("button", { name: /actions for/i }));
+
+describe("AutomationsCard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(api.getProfile).mockResolvedValue({ webhooksEnabled: true } as never);
     vi.mocked(api.listWebhooks).mockResolvedValue([]);
     vi.mocked(api.listWebhookDeliveries).mockResolvedValue([]);
   });
 
   it("offers the AI output events alongside the transcription ones", async () => {
     render(<Wrapped />);
+    await openComposer();
     // The four events added so an automation can fire when an AI output is ready, rather than
     // triggering on transcription and polling for the summary.
-    expect(await screen.findByLabelText(/summary is ready/i)).toBeTruthy();
-    expect(screen.getByLabelText(/meeting minutes are ready/i)).toBeTruthy();
-    expect(screen.getByLabelText(/action items are ready/i)).toBeTruthy();
-    expect(screen.getByLabelText(/tags are ready/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /summary is ready/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /meeting minutes are ready/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /action items are ready/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /tags are ready/i })).toBeTruthy();
   });
 
   it("creates an automation with the chosen event and url", async () => {
@@ -52,9 +64,10 @@ describe("AutomationsSection", () => {
       secret: "dz_whsec_x",
     });
     render(<Wrapped />);
-    fireEvent.click(await screen.findByLabelText(/finishes transcribing/i));
+    await openComposer();
+    fireEvent.click(screen.getByRole("button", { name: /finishes transcribing/i }));
     fireEvent.change(screen.getByLabelText(/destination url/i), { target: { value: "https://x/y" } });
-    fireEvent.click(screen.getByRole("button", { name: /create|save/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create automation/i }));
     await waitFor(() =>
       expect(createWebhook).toHaveBeenCalledWith(
         expect.objectContaining({ url: "https://x/y", eventTypes: ["recording.transcribed"] }),
@@ -71,18 +84,20 @@ describe("AutomationsSection", () => {
       secret: "dz_whsec_x",
     });
     render(<Wrapped />);
-    fireEvent.click(await screen.findByLabelText(/finishes transcribing/i));
+    await openComposer();
+    fireEvent.click(screen.getByRole("button", { name: /finishes transcribing/i }));
     fireEvent.change(screen.getByLabelText(/destination url/i), { target: { value: "https://x/y" } });
-    fireEvent.click(screen.getByRole("button", { name: /create|save/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create automation/i }));
     expect(await screen.findByText("dz_whsec_x")).toBeTruthy();
   });
 
   it("surfaces an error message when creation fails", async () => {
     vi.mocked(api.createWebhook).mockRejectedValue(new Error("nope"));
     render(<Wrapped />);
-    fireEvent.click(await screen.findByLabelText(/finishes transcribing/i));
+    await openComposer();
+    fireEvent.click(screen.getByRole("button", { name: /finishes transcribing/i }));
     fireEvent.change(screen.getByLabelText(/destination url/i), { target: { value: "https://x/y" } });
-    fireEvent.click(screen.getByRole("button", { name: /create|save/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create automation/i }));
     expect(await screen.findByText("nope")).toBeTruthy();
   });
 
@@ -103,8 +118,10 @@ describe("AutomationsSection", () => {
     ]);
     render(<Wrapped />);
     expect(await screen.findByText("My Zap")).toBeTruthy();
-    expect(screen.getByText("hooks.zapier.com")).toBeTruthy();
-    expect(screen.getByText(/active/i)).toBeTruthy();
+    // Host and triggers read as one line now, rather than a host line over a row of chips - that chip
+    // row per automation is what made a list of three taller than the screen.
+    expect(screen.getByText(/hooks\.zapier\.com.*finishes transcribing/i)).toBeTruthy();
+    expect(screen.getByText("Active")).toBeTruthy();
     expect(screen.getAllByText(/finishes transcribing/i).length).toBeGreaterThan(0);
   });
 
@@ -137,7 +154,7 @@ describe("AutomationsSection", () => {
       lastStatus: null,
       createdAt: new Date().toISOString(),
     });
-    fireEvent.click(screen.getByRole("button", { name: /resume/i }));
+    fireEvent.click((openKebab(), screen.getByRole("menuitem", { name: /resume/i })));
     await waitFor(() =>
       expect(updateWebhook).toHaveBeenCalledWith(
         "2",
@@ -177,7 +194,7 @@ describe("AutomationsSection", () => {
       createdAt: new Date().toISOString(),
     });
     render(<Wrapped />);
-    fireEvent.click(await screen.findByRole("button", { name: /pause/i }));
+    fireEvent.click((await openKebabAsync(), screen.getByRole("menuitem", { name: /pause/i })));
     await waitFor(() =>
       expect(updateWebhook).toHaveBeenCalledWith(
         "3",
@@ -233,7 +250,7 @@ describe("AutomationsSection", () => {
     ]);
     const testWebhook = vi.mocked(api.testWebhook).mockResolvedValue();
     render(<Wrapped />);
-    fireEvent.click(await screen.findByRole("button", { name: /send test/i }));
+    fireEvent.click((await openKebabAsync(), screen.getByRole("menuitem", { name: /send test/i })));
     await waitFor(() => expect(testWebhook).toHaveBeenCalledWith("1"));
   });
 
@@ -253,9 +270,38 @@ describe("AutomationsSection", () => {
       },
     ]);
     const deleteWebhook = vi.mocked(api.deleteWebhook).mockResolvedValue();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<Wrapped />);
-    fireEvent.click(await screen.findByRole("button", { name: /delete/i }));
+    fireEvent.click((await openKebabAsync(), screen.getByRole("menuitem", { name: /delete/i })));
+    expect(confirm).toHaveBeenCalled();
     await waitFor(() => expect(deleteWebhook).toHaveBeenCalledWith("1"));
+    confirm.mockRestore();
+  });
+
+  /// Deleting destroys the signing secret, so the receiving end has to be reconfigured from scratch -
+  /// it must not be one stray click from a menu.
+  it("does not delete when the confirmation is declined", async () => {
+    vi.mocked(api.listWebhooks).mockResolvedValue([
+      {
+        id: "1",
+        name: "Doomed",
+        url: "https://example.com/hook",
+        eventTypes: ["recording.created"],
+        isActive: true,
+        consecutiveFailures: 0,
+        disabledReason: null,
+        lastDeliveryAt: null,
+        lastStatus: null,
+        createdAt: new Date().toISOString(),
+      },
+    ] as never);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<Wrapped />);
+    fireEvent.click((await openKebabAsync(), screen.getByRole("menuitem", { name: /delete/i })));
+
+    expect(confirm).toHaveBeenCalled();
+    expect(api.deleteWebhook).not.toHaveBeenCalled();
+    confirm.mockRestore();
   });
 
   it("shows an empty state when there are no automations", async () => {
@@ -271,7 +317,8 @@ describe("AutomationsSection", () => {
       token: "dz_plaintext_x",
     });
     render(<Wrapped />);
-    fireEvent.click(await screen.findByLabelText(/formula finishes/i));
+    await openComposer();
+    fireEvent.click(screen.getByRole("button", { name: /formula finishes/i }));
     expect(await screen.findByText(/read-only access token/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /create token/i }));
     await waitFor(() =>
@@ -308,7 +355,7 @@ describe("AutomationsSection", () => {
       },
     ]);
     render(<Wrapped />);
-    fireEvent.click(await screen.findByRole("button", { name: /recent deliveries/i }));
+    fireEvent.click((await openKebabAsync(), screen.getByRole("menuitem", { name: /recent deliveries/i })));
     await waitFor(() => expect(listWebhookDeliveries).toHaveBeenCalledWith("1"));
     expect(await screen.findByText(/success/)).toBeTruthy();
   });
@@ -329,6 +376,6 @@ describe("AutomationsSection", () => {
       },
     ]);
     render(<Wrapped />);
-    expect(await screen.findByText("too many failures")).toBeTruthy();
+    expect(await screen.findByText(/too many failures/)).toBeTruthy();
   });
 });

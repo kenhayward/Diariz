@@ -8,7 +8,9 @@ order: 50
 Diariz hosts a **Model Context Protocol** server at `/mcp`. Connecting Claude to it lets Claude search
 your transcripts, read minutes and action items, and run your formulas.
 
-Everything below lives in **Preferences**, on the **Claude Access** tab.
+Everything below lives in **Preferences**, on the **Integrations** tab, in the **MCP access** card.
+The card is named for the protocol rather than for Claude, because several clients speak it - but
+Claude Desktop, Claude Code and the claude.ai connector are all set up from here.
 
 A Platform Administrator can turn this off for everyone with the **Claude / MCP access** switch at
 **Settings**, **Integration**. It is **on** by default.
@@ -23,7 +25,8 @@ A Platform Administrator can turn this off for everyone with the **Claude / MCP 
 
 ## Generating a personal token
 
-On the **Claude Access** tab, name the token after where you will use it (for example "Claude Desktop")
+On the **MCP access** card, click **+ New token** and name it after where you will use it (for example
+"Claude Desktop")
 and click **Generate token**.
 
 **The token is shown once.** Only a hash of it is stored, so if you lose it you generate a new one. You
@@ -45,7 +48,7 @@ claude mcp add --transport http diariz https://your-server/mcp --header "Authori
 Claude Desktop only speaks to local programs, so it bridges to Diariz through `mcp-remote`. **This needs
 Node.js installed.**
 
-Click **Show Claude Desktop config** on the Claude Access tab and copy the generated snippet - it already
+Click **Show Claude Desktop config** in the token dialog and copy the generated snippet - it already
 has your server address and token filled in:
 
 ```json
@@ -74,7 +77,7 @@ The website connects by signing in to Diariz, not by pasting a token.
 The connector can search and read your meetings, transcripts, minutes and action items, and email
 content **to your own registered address only** - it can never email anyone else.
 
-Revoke it any time from the **Web connections** list on the same Claude Access tab.
+Revoke it any time from the **Connected apps** list on the same MCP access card.
 
 ## What Claude can do once connected
 

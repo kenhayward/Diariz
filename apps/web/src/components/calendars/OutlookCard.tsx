@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../../lib/api";
 import { canSyncOutlook, onOutlookState, outlookAvailable, syncOutlookNow } from "../../lib/outlookSync";
 import { CalendarIcon } from "../icons";
-import SourceCard, { cardBtn } from "./SourceCard";
+import SourceCard, { cardBtn } from "../SourceCard";
 import type { OutlookSource } from "../../lib/types";
 
 const DEFAULT_COLOR = "#0F6CBD"; // Outlook blue

@@ -22,8 +22,8 @@ is a feature rather than a limitation: you can read exactly what is being sent.
 ## Before you start
 
 **In Diariz**, a Platform Administrator turns on **Enable user API access** and **Automations
-(webhooks)** at **Settings**, **Integration**. Generate a personal token at **Preferences**,
-**Developers**, and set up the **Diariz API** credential in n8n as described in
+(webhooks)** at **Settings**, **Integration**. Generate a personal token at **Preferences**, **Integrations**,
+on the **API access** card, and set up the **Diariz API** credential in n8n as described in
 [Building an n8n workflow](/help/n8n-workflows).
 
 **In EspoCRM**, create an API user:
@@ -362,7 +362,7 @@ somebody has to keep correct.
 | Five CRM records for one meeting | No `diarizRecordingId` check. Add the search-then-create-or-update step. |
 | Meetings on the wrong day | Datetimes sent as local time. EspoCRM wants UTC. |
 | Everyone in the company appearing as a customer | Filtering on `isInternal` being falsy instead of `=== false`. Unidentified speakers have no such field. |
-| It worked, then stopped | **Preferences**, **Automations** has a delivery log with the HTTP status your n8n instance returned. An automation auto-pauses after repeated failures. |
+| It worked, then stopped | **Preferences**, **Integrations** has a delivery log per automation (**Recent deliveries**) with the HTTP status your n8n instance returned. An automation auto-pauses after repeated failures. |
 | 403 from Diariz on a write | The API token is read-only, or has expired. Updating people also needs the **Manage people** permission. |
 | 400 "Name and email follow the linked user account" | Recipe 6 is sending a name or an email for somebody who has a Diariz account. Send only title, company and phone. |
 

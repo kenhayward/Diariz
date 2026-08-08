@@ -676,11 +676,15 @@ export interface UserProfile {
   companyDescription: string | null;
   linkedIn: string | null;
   theme: "auto" | "light" | "dark";
-  /// Whether the platform has user API access enabled (drives the Preferences "Developers" tab).
+  /// Whether the platform has user API access enabled (drives the API card on Preferences -> Integrations).
   apiAccessEnabled: boolean;
   /// The caller's platform permissions. Optional only because the server marks it nullable; always sent.
   permissions?: Permissions;
-  webhooksEnabled: boolean;   // drives the "Automations" tab
+  /// Drives the Automations card on Preferences -> Integrations.
+  webhooksEnabled: boolean;
+  /// Drives the MCP card on Preferences -> Integrations. Optional because a server older than the flag
+  /// omits it, and MCP defaults to on - a missing value must not switch the card off.
+  mcpAccessEnabled?: boolean;
 }
 
 /// A stored personal REST-API token, listed in Preferences -> Developers. The secret is never returned -

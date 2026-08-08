@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../../lib/api";
 import { CalendarIcon } from "../icons";
-import SourceCard, { cardBtn, cardBtnDanger } from "./SourceCard";
+import SourceCard, { cardBtn, cardBtnDanger } from "../SourceCard";
 
 const TINT = "#1a73e8"; // Google blue
 

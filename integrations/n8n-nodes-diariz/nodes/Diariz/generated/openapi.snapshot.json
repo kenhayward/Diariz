@@ -4704,6 +4704,10 @@
               "string"
             ]
           },
+          "mcpAccessEnabled": {
+            "default": true,
+            "type": "boolean"
+          },
           "nativeLanguage": {
             "type": [
               "null",
@@ -13086,7 +13090,7 @@
     },
     "/api/user/profile": {
       "get": {
-        "description": "Who you are and how the app is set up for you: email, display name, interface and native languages, theme, the professional details that give the model context about your work, and whether Google sign-in and Calendar are connected.\n\nIt also reports your **platform permissions** and which optional features the administrator has enabled (API access, Automations) - so a client can hide what you cannot use rather than discovering it through a 403.",
+        "description": "Who you are and how the app is set up for you: email, display name, interface and native languages, theme, the professional details that give the model context about your work, and whether Google sign-in and Calendar are connected.\n\nIt also reports your **platform permissions** and which optional features the administrator has enabled (API access, MCP access, Automations) - so a client can hide what you cannot use rather than discovering it through a 403.",
         "responses": {
           "200": {
             "content": {

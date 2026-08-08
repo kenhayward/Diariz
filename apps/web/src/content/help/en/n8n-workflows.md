@@ -15,7 +15,8 @@ Two things must be switched on by a Platform Administrator at **Settings**, **In
 - **Enable user API access** - needed for everything. Off by default.
 - **Automations (webhooks)** - needed for the trigger only. Off by default.
 
-You also need a personal API token. Generate one in **Preferences**, **Developers**. See
+You also need a personal API token. Generate one in **Preferences**, **Integrations**, on the **API
+access** card. See
 [The Diariz API](/help/api-overview).
 
 **Community nodes only install on self-hosted n8n.** n8n Cloud does not allow them.
@@ -165,5 +166,6 @@ event.
 - You can have **20 automations per user**. Each active trigger uses one, and n8n's "Listen for test
   event" briefly registers a second temporary one.
 - Failed deliveries retry with growing backoff over roughly 24 hours.
-- **Preferences**, **Automations** has a delivery log showing the HTTP status your n8n instance returned
+- **Preferences**, **Integrations** has a delivery log per automation (its **Recent deliveries** action)
+  showing the HTTP status your n8n instance returned
   - the first place to look when a workflow is not firing.

@@ -54,4 +54,33 @@ public class UserProfileControllerTests
 
         Assert.False(res.Value!.WebhooksEnabled);
     }
+
+    /// <summary>The MCP switch existed in platform settings but was never reported to the user, so the
+    /// Preferences MCP section rendered its controls whatever an administrator had set - the user only
+    /// found out when the server refused the token. It travels with the other two flags now.</summary>
+    [Fact]
+    public async Task Profile_reports_mcp_access_enabled()
+    {
+        using var host = new IdentityTestHost();
+        host.Db.PlatformSettings.Add(new PlatformSettings { Id = PlatformSettings.SingletonId, McpAccessEnabled = true });
+        await host.Db.SaveChangesAsync();
+        var sut = await BuildAsync(host);
+
+        var res = await sut.Get();
+
+        Assert.True(res.Value!.McpAccessEnabled);
+    }
+
+    [Fact]
+    public async Task Profile_reports_mcp_access_disabled()
+    {
+        using var host = new IdentityTestHost();
+        host.Db.PlatformSettings.Add(new PlatformSettings { Id = PlatformSettings.SingletonId, McpAccessEnabled = false });
+        await host.Db.SaveChangesAsync();
+        var sut = await BuildAsync(host);
+
+        var res = await sut.Get();
+
+        Assert.False(res.Value!.McpAccessEnabled);
+    }
 }

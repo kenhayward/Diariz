@@ -13,9 +13,7 @@ vi.mock("./ChatToolsSection", () => ({ default: () => <div>TOOLS_SECTION</div> }
 vi.mock("./RecordingsSection", () => ({ default: () => <div>RECORDINGS_SECTION</div> }));
 vi.mock("./FormulasSection", () => ({ default: () => <div>FORMULAS_SECTION</div> }));
 vi.mock("./calendars/CalendarsSection", () => ({ default: () => <div>CALENDARS_SECTION</div> }));
-vi.mock("./McpAccessSection", () => ({ default: () => <div>CLAUDE_SECTION</div> }));
-vi.mock("./DeveloperAccessSection", () => ({ default: () => <div>DEVELOPERS_SECTION</div> }));
-vi.mock("./AutomationsSection", () => ({ default: () => <div>AUTOMATIONS_SECTION</div> }));
+vi.mock("./integrations/IntegrationsSection", () => ({ default: () => <div>INTEGRATIONS_SECTION</div> }));
 
 import { api } from "../lib/api";
 import PreferencesModal, { type PreferencesTab } from "./PreferencesModal";
@@ -39,7 +37,7 @@ describe("PreferencesModal", () => {
     renderModal();
 
     expect(screen.getByText("Jane Doe")).toBeTruthy();
-    for (const name of [/profile/i, /^calendars$/i, /claude access/i])
+    for (const name of [/profile/i, /^calendars$/i, /^integrations$/i])
       expect(screen.getByRole("tab", { name })).toBeTruthy();
     expect(screen.getByText("PROFILE_SECTION")).toBeTruthy();
   });
@@ -63,27 +61,22 @@ describe("PreferencesModal", () => {
     expect(screen.getByText("FORMULAS_SECTION")).toBeTruthy();
   });
 
-  it("hides the Developers tab when API access is disabled, shows it when enabled", async () => {
-    renderModal();
-    // Disabled by default (getProfile → apiAccessEnabled:false): no Developers tab.
-    expect(screen.queryByRole("tab", { name: /developers/i })).toBeNull();
+  // The tab list used to grow and shrink with the platform's feature switches, so a user whose
+  // administrator had turned API access off simply had no Developers tab and no way to know it existed.
+  // The entries are fixed now and each card says on its own face what is switched off - see
+  // ApiCard.test.tsx and AutomationsCard.test.tsx.
+  it("keeps a fixed tab list whatever the platform has switched off", async () => {
+    // Scoped to each render's own container: both modals share the document, so a global tab query would
+    // see one list of twelve rather than two of six.
+    const tabsIn = (c: HTMLElement) => [...c.querySelectorAll('[role="tab"]')].map((x) => x.textContent);
 
-    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ apiAccessEnabled: true, webhooksEnabled: false });
-    renderModal();
-    expect(await screen.findByRole("tab", { name: /developers/i })).toBeTruthy();
-  });
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ apiAccessEnabled: false, webhooksEnabled: false });
+    const off = renderModal();
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ apiAccessEnabled: true, webhooksEnabled: true });
+    const on = renderModal();
 
-  it("hides the Automations tab when webhooks are disabled, shows it when enabled", async () => {
-    renderModal();
-    // Disabled by default (getProfile → webhooksEnabled:false): no Automations tab.
-    expect(screen.queryByRole("tab", { name: /automations/i })).toBeNull();
-
-    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ apiAccessEnabled: false, webhooksEnabled: true });
-    renderModal();
-    expect(await screen.findByRole("tab", { name: /automations/i })).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("tab", { name: /automations/i }));
-    expect(screen.getByText("AUTOMATIONS_SECTION")).toBeTruthy();
+    expect(tabsIn(on.container)).toEqual(tabsIn(off.container));
+    expect(tabsIn(on.container)).toContain("Integrations");
   });
 
   it("switches the content panel when another tab is selected", () => {
@@ -102,6 +95,17 @@ describe("PreferencesModal", () => {
     for (const gone of [/google account/i, /calendar feeds/i, /^outlook$/i])
       expect(screen.queryByRole("tab", { name: gone })).toBeNull();
     expect(screen.getByRole("tab", { name: /^calendars$/i })).toBeTruthy();
+  });
+
+  // Claude Access, Developers and Automations were the same kind of thing - how other software talks to
+  // Diariz - and thin on their own.
+  it("has one Integrations tab in place of the three technical tabs", () => {
+    renderModal();
+    for (const gone of [/claude access/i, /developers/i, /^automations$/i])
+      expect(screen.queryByRole("tab", { name: gone })).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: /^integrations$/i }));
+    expect(screen.getByText("INTEGRATIONS_SECTION")).toBeTruthy();
   });
 
   it("honours initialTab", () => {

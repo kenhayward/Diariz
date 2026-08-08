@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
-import { GlobeIcon } from "../icons";
+import { GlobeIcon } from "./icons";
 import SourceCard from "./SourceCard";
 
 /// The shell every calendar source shares. Its whole job is to make a fourth provider cheap, so what is
@@ -58,5 +58,26 @@ describe("SourceCard", () => {
   it("tints its tile with the provider colour", () => {
     renderCard({ tint: "#0F6CBD" });
     expect(screen.getByTestId("source-tile").getAttribute("style")).toContain("15, 108, 189");
+  });
+
+  // A source switched off platform-wide is shown, not hidden: a card that simply vanishes reads as a bug,
+  // and "ask an administrator" is a better answer than nothing. Its actions go, because an action that
+  // cannot work is worse than no action.
+  it("replaces the body and drops the actions when the source is switched off", () => {
+    renderCard({
+      disabledNote: "API access is switched off for this platform.",
+      status: "Connected",
+      actions: <button type="button">Reconnect</button>,
+    });
+
+    expect(screen.getByText(/switched off for this platform/)).toBeTruthy();
+    expect(screen.queryByText("BODY")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reconnect" })).toBeNull();
+    expect(screen.queryByTestId("source-status")).toBeNull();
+  });
+
+  it("carries a contextual help control beside its meta line", () => {
+    renderCard({ help: <button type="button">?</button> });
+    expect(screen.getByRole("button", { name: "?" })).toBeTruthy();
   });
 });

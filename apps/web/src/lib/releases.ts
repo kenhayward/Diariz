@@ -28,15 +28,15 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Search** | A search box above the meetings list, scoped by default to the folder you are browsing: typing takes the list over, each hit shows the matching words in context plus the folder it lives in, and clicking one opens the transcript at that moment. Matching folders show up too. **Search everywhere** widens it to every room you can see, grouping the results by folder with Section / Date / Speaker chips to narrow them. Keyword search across your library, upgraded to semantic (meaning-based) search when an embeddings endpoint is configured. |
 | **Chat tools** | The assistant searches your library with built-in tools (who-said-what, attendees, talk time, summaries, email-to-self) and links to the exact segment. |
 | **Voice dictation** | Speak your chat questions - transcribed into the chat box in Chrome/Edge or via a server speech-to-text endpoint. |
-| **Connect Claude (MCP)** | Connect Claude to your own meetings via OAuth (claude.ai) or a personal token (Claude Desktop/Code), when the platform's Claude/MCP toggle is on, including a \`run_formula\` tool to run your saved Formulas. |
+| **MCP access** | Let an AI assistant read your own meetings over MCP - via OAuth (the claude.ai connector) or a personal token (Claude Desktop, Claude Code), when the platform's MCP toggle is on - including a \`run_formula\` tool to run your saved Formulas. Set up on the **Integrations** tab in Preferences, alongside API access and Automations, a card each. |
 | **Translate** | Translate a whole transcript or a single segment, stored as revisions you can flip back. |
 | **Attachments** | Attach files or URLs (PDF, Office, email, calendar, images) to a recording or directly to a folder, edit Markdown attachments in place, save a chat conversation as an attachment with /attach, and optionally feed them to chat. |
 | **Rooms** | A private Personal Room per account plus shareable Rooms: invite users and groups with per-member permissions. Each Shared Room has its **own folder structure** (sections/sub-sections, drag-and-drop, per-room order) and its own List/Calendar/Actions/Tags scoped to it; record or upload files straight into a room (your Personal Room keeps the original), and search + chat over every room you belong to. A member who can read a shared recording sees its notes and screenshots too - only the owner can add, edit, or delete them. Your Google Calendar and its linking stay personal. The switcher shows each room's folder and meeting counts (shared ones labelled), ticks the one you are in, and remembers where you were. Manage rooms from the switcher. |
 | **Organise & merge** | Folders nested up to 8 levels deep with drag-and-drop (dragging one of several ticked rows moves the whole selection); the meetings list drills in one folder at a time (coloured folder rows with counts, a breadcrumb showing the full path with every part clickable, browser back pops a level) so it stays readable however many recordings you have, with **Open section page** in the breadcrumb's menu as a separate target from browsing deeper; an open recording shows its folder path as clickable chips under its name, each taking the list straight to that folder; choose where a new recording is filed (Ungrouped, the open folder, or a specific folder); cut one or more recordings, or a folder, and paste them into another folder in one move (landing at the bottom, in the order you cut them), with the Paste control showing why it's disabled when a move isn't allowed yet; browse as a list, calendar, actions, or tag cloud; merge recordings into one. |
 | **Folder pages** | Open any folder as a page: a roll-up LLM summary and consolidated minutes across it and its sub-folders, plus every action, note, and attachment aggregated with the meeting each came from. |
 | **Google & calendars** | Optional Google sign-in and read-only Calendar linking, plus subscriptions to public iCalendar (.ics) feeds and - synced by the Windows desktop app on launch, from the tray or on demand - a mirror of your classic Outlook calendar (opt-in, per machine, erasable). All three are set up in one **Calendars** tab in Preferences, a card per source showing its account, its calendars and whether it is live. Every calendar you connect is treated the same: meetings from any of them show on the Calendar tab, match to a recording, and open with their full invite details. A month grid highlights the days that have something on them; picking one lays that day out on an hour axis, with meetings and recordings placed and sized by when they ran, clashes side by side, all-day entries in their own strip, and a line marking the current time. |
-| **API access** | Generate a personal API token (when enabled), read-only or read-write, with an optional expiry date, to call the REST API as yourself, with a built-in API reference documenting every endpoint - what it does, who may call it, and what it changes. |
-| **Automations (webhooks)** | When enabled, register outbound webhooks from Preferences that fire when a recording is created, finishes or fails transcription, a summary / meeting minutes / action items / tags become ready (each carrying its output), or a formula finishes or fails. Every recording event also carries an **attendees** list - who spoke, the person they are, their title, company, and internal or external - with email addresses and phone numbers included only when that automation opts in. Signed deliveries with automatic retries (rate-limited per automation and 429-aware), a test-event button, auto-pause after repeated failures, and a Pause / Resume button that stops deliveries reversibly (deleting an automation discards its signing secret; pausing keeps it). Admins can also define named Workflow Signals and wire a platform automation to one, so a formula author just picks "When this finishes, trigger: ..." in the formula editor - no URL or per-user setup - and the formula's output is delivered inline to everyone routed through that signal. |
+| **API access** | Generate a personal API token (when enabled), read-only or read-write, with an optional expiry date, to call the REST API as yourself; the list shows which tokens are read-only and when each expires. A built-in API reference documents every endpoint - what it does, who may call it, and what it changes. |
+| **Automations (webhooks)** | When enabled, register outbound webhooks from Preferences - a list of what you have, with a composer for making or editing one - that fire when a recording is created, finishes or fails transcription, a summary / meeting minutes / action items / tags become ready (each carrying its output), or a formula finishes or fails. Every recording event also carries an **attendees** list - who spoke, the person they are, their title, company, and internal or external - with email addresses and phone numbers included only when that automation opts in. Signed deliveries with automatic retries (rate-limited per automation and 429-aware), a test-event button, auto-pause after repeated failures, and a Pause / Resume button that stops deliveries reversibly (deleting an automation discards its signing secret; pausing keeps it). Admins can also define named Workflow Signals and wire a platform automation to one, so a formula author just picks "When this finishes, trigger: ..." in the formula editor - no URL or per-user setup - and the formula's output is delivered inline to everyone routed through that signal. |
 | **n8n** | A published community node (\`n8n-nodes-diariz\`): a trigger that registers its own automation and verifies every signed delivery, with a Platform scope for administrators that adds events across every user including Feedback Received, plus an action node covering the whole REST API - with dropdowns listing your real recordings and formulas, files in and out, and a Run Formula step that waits for the document to finish. |
 | **Multi-user & groups** | User groups grant platform permissions (manage rooms / users / platform), with an approval lifecycle, per-user isolation, and Light/Dark/Auto themes. |
 | **Admin controls** | Storage quotas, optional audio auto-deletion, a global AI request timeout, separate platform toggles for API access, Claude/MCP, and Automations (webhooks), and whole-platform backup & restore. |
@@ -59,6 +59,55 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.196.0",
+    date: "2026-08-08",
+    pr: 488,
+    headline: "One Integrations tab, and Automations opens on what you have",
+    summary:
+      "**Claude Access**, **Developers** and **Automations** were three separate places in Preferences for " +
+      "the same kind of thing: how other software talks to Diariz. They are now one **Integrations** tab, a " +
+      "card each. With the Calendars merge before it, the Preferences list is down from eleven entries to " +
+      "seven.\n\n" +
+      "**Automations now opens on your automations.** It used to open on a form - nine stacked tickboxes - " +
+      "so the automations you came to check on were below the fold. The list is the page now, one line each " +
+      "with its status and a menu; making a new one opens a dialog where those nine tickboxes are grouped " +
+      "chips you can read at a glance. The two Zapier/n8n tabs that swapped one sentence between them are " +
+      "gone, replaced by the sentence. You can also **edit** an automation now, which you simply could not " +
+      "do before - the only way to change one was to delete it and start again, which meant reconfiguring " +
+      "the receiving end with a new signing secret.\n\n" +
+      "**\"Claude Access\" is now \"MCP access\"**, named for the protocol rather than one of the several " +
+      "clients that speak it. Claude Desktop, Claude Code and the claude.ai connector are all named as " +
+      "examples, and the Claude Desktop config snippet is still there when you generate a token. \"Web " +
+      "connections\" reads as \"Connected apps\".\n\n" +
+      "**Generating a token is a dialog** on both cards, and for API tokens the read-only and expiry choices " +
+      "moved into it - they are decided once when the token is made and can never be changed, so sitting on " +
+      "the page as though they were settings was misleading. In exchange the token list finally shows what " +
+      "you chose: which tokens are read-only, and when each one expires.\n\n" +
+      "Two things that were switched off used to disappear. If an administrator had turned API access or " +
+      "Automations off, the whole tab vanished and there was no way to find out it existed. The card is " +
+      "there now and says so. The **MCP switch** had the opposite problem - it existed in admin settings but " +
+      "was never sent to the app, so the section offered a token the server would refuse. It is honoured now.",
+    added: [
+      "A single Integrations tab in Preferences: MCP access, API access and Automations, a card each.",
+      "Edit an automation - change its triggers, destination, name or contact setting without deleting and recreating it.",
+      "API tokens show whether they are read-only and when they expire, in the list.",
+      "A card whose capability an administrator has switched off now says so, instead of vanishing.",
+    ],
+    changed: [
+      "Claude Access, Developers and Automations are replaced by the one Integrations tab.",
+      "\"Claude Access\" is now \"MCP access\", and \"Web connections\" is now \"Connected apps\".",
+      "Automations opens on your list of automations; creating one opens a dialog with the nine triggers as grouped chips.",
+      "Each automation is one line with a status and an actions menu, rather than a card with four buttons and a chip per trigger.",
+      "Generating a token happens in a dialog; the read-only and expiry choices for an API token moved into it.",
+      "The Zapier / n8n hint tabs are replaced by a single line of guidance covering both.",
+      "Deleting an automation asks first - it destroys the signing secret, so the receiving end has to be set up again.",
+    ],
+    fixed: [
+      "The platform's MCP access switch is honoured by the app: with it off, the card says so rather than offering a token the server will refuse.",
+      "Failures when testing, pausing or deleting an automation said \"Could not create the automation\".",
+    ],
+  },
   {
     version: "0.195.0",
     date: "2026-08-08",
