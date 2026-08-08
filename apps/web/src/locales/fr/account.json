@@ -120,7 +120,7 @@
   "integrationsTitle": "Intégrations",
   "integrationsIntro": "Les moyens par lesquels d'autres logiciels atteignent Diariz, et ceux par lesquels Diariz sort vers l'extérieur. Les jetons sont affichés une seule fois à leur création, jamais ensuite.",
   "integrationsMcpName": "Accès MCP",
-  "integrationsMcpMeta": "Laissez un assistant IA lire vos réunions via MCP - Claude Desktop, Claude Code ou le connecteur claude.ai",
+  "integrationsMcpMeta": "Lisez vos réunions depuis Claude Desktop, Claude Code ou claude.ai",
   "integrationsApiName": "Accès API",
   "integrationsApiMeta": "Appelez l'API REST de Diariz en votre nom depuis un script ou un autre système",
   "integrationsAutomationsName": "Automatisations",

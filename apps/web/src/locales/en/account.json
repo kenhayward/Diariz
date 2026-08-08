@@ -120,7 +120,7 @@
   "integrationsTitle": "Integrations",
   "integrationsIntro": "Ways other software reaches Diariz, and ways Diariz reaches out. Tokens are shown once when generated and never again.",
   "integrationsMcpName": "MCP access",
-  "integrationsMcpMeta": "Let an AI assistant read your meetings over MCP - Claude Desktop, Claude Code, or the claude.ai connector",
+  "integrationsMcpMeta": "Read your meetings from Claude Desktop, Claude Code or claude.ai",
   "integrationsApiName": "API access",
   "integrationsApiMeta": "Call the Diariz REST API as yourself from a script or another system",
   "integrationsAutomationsName": "Automations",

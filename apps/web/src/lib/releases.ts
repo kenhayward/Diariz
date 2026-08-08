@@ -60,6 +60,27 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.197.1",
+    date: "2026-08-08",
+    pr: 490,
+    headline: "Fixes to the new Preferences cards",
+    summary:
+      "Three things the new cards got wrong.\n\n" +
+      "**An automation's actions menu was cut off** at the bottom of its card - you could see the top of " +
+      "**Edit** and nothing else. The cards were clipping their own contents for the sake of their rounded " +
+      "corners, which took the menu with it. Menus also open **upwards** now when they are near the bottom " +
+      "of the panel, so the last row in a list is no longer the one you cannot use.\n\n" +
+      "**The MCP access description was too long to read** - it ended in \"Claude Desktop, C...\". It is " +
+      "shorter, and says the same thing.\n\n" +
+      "**The Automations card lost its count** off the end of that same line. It has moved to the chip on " +
+      "the right, where the other cards already put theirs.",
+    fixed: [
+      "An automation's actions menu is no longer clipped by its card, and opens upwards when there is no room below.",
+      "The MCP access description no longer runs off the end of its line.",
+      "The number of automations is shown in the card's chip instead of being truncated off the description.",
+    ],
+  },
+  {
     version: "0.197.0",
     date: "2026-08-08",
     pr: 489,

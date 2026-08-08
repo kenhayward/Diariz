@@ -76,19 +76,20 @@ export default function AutomationsCard() {
     }
   }
 
+  // The count goes in the chip, not on the end of the meta line: appended, it was the first thing to be
+  // truncated away, and a chip is what the other two cards use to say how much of a thing there is.
   const count = webhooks?.length ?? 0;
-  const meta = count > 0
-    ? `${t("integrationsAutomationsMeta")} · ${t("integrationsAutomationCount", { count })}`
-    : t("integrationsAutomationsMeta");
 
   return (
     <>
       <SourceCard
         name={t("integrationsAutomationsName")}
-        meta={meta}
+        meta={t("integrationsAutomationsMeta")}
         tint={TINT}
         tintDark={TINT_DARK}
         glyph={RefreshIcon}
+        status={count > 0 ? t("integrationsAutomationCount", { count }) : undefined}
+        statusTone="muted"
         help={<HelpButton topic="automations-and-signals" className="ml-1" />}
         error={error}
         disabledNote={profile != null && !enabled ? t("integrationsAutomationsDisabled") : null}

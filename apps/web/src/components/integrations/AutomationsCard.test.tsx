@@ -304,6 +304,21 @@ describe("AutomationsCard", () => {
     confirm.mockRestore();
   });
 
+  // Appended to the meta line the count was simply truncated off, which is the one number the header was
+  // meant to give you at a glance.
+  it("counts its automations in the card's chip, not on the end of the meta line", async () => {
+    vi.mocked(api.listWebhooks).mockResolvedValue([
+      {
+        id: "1", name: "My Zap", url: "https://hooks.zapier.com/abc", eventTypes: ["recording.transcribed"],
+        isActive: true, consecutiveFailures: 0, disabledReason: null, lastDeliveryAt: null, lastStatus: null,
+        createdAt: new Date().toISOString(),
+      },
+    ] as never);
+    render(<Wrapped />);
+
+    expect(await screen.findByTestId("source-status")).toHaveProperty("textContent", "1 automation");
+  });
+
   it("shows an empty state when there are no automations", async () => {
     render(<Wrapped />);
     expect(await screen.findByText(/no automations yet/i)).toBeTruthy();
