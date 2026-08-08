@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
+/// Enough of the popover to decide which way it should open. It varies with the number of actions, but a
+/// single number is what keeps this a measurement of the trigger rather than of a node not yet rendered.
+const MENU_HEIGHT = 200;
+
 export interface KebabAction {
   label: string;
   onClick: () => void;
@@ -24,7 +28,11 @@ export default function KebabMenu({
   buttonClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
+  // Which way the popover goes, decided at the moment of opening. A menu on the last row of a scrolling
+  // panel would otherwise open into its bottom edge and be cut off.
+  const [up, setUp] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -49,9 +57,14 @@ export default function KebabMenu({
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
+        ref={trigger}
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
+          // Roughly the popover's own height: enough to tell "this will not fit" without measuring a
+          // node that does not exist yet.
+          const room = window.innerHeight - (trigger.current?.getBoundingClientRect().bottom ?? 0);
+          setUp(room < MENU_HEIGHT);
           setOpen((v) => !v);
         }}
         className={buttonClassName}
@@ -63,7 +76,9 @@ export default function KebabMenu({
           role="menu"
           // z-30 keeps the menu above sticky headers (the recording detail tab strip is z-10), which would
           // otherwise paint over the menu's top items.
-          className="absolute right-0 z-30 mt-1 w-44 overflow-hidden rounded-lg border bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-900"
+          className={`absolute right-0 z-30 w-44 overflow-hidden rounded-lg border bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-900 ${
+            up ? "bottom-full mb-1" : "mt-1"
+          }`}
         >
           {actions.map((a) => (
             <button

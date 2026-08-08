@@ -76,6 +76,17 @@ describe("SourceCard", () => {
     expect(screen.queryByTestId("source-status")).toBeNull();
   });
 
+  /// The card used to clip its own overflow for the sake of the rounded corners, which quietly cut the
+  /// top off any menu a row opened - the Automations kebab lost everything below the card's edge.
+  it("does not clip a menu opened from inside it", () => {
+    const { container } = renderCard();
+    const card = container.querySelector("section")!;
+
+    expect(card.className).not.toContain("overflow-hidden");
+    // The header keeps its own top corners instead, or its fill squares off outside the border radius.
+    expect(card.firstElementChild!.className).toContain("rounded-t-");
+  });
+
   it("carries a contextual help control beside its meta line", () => {
     renderCard({ help: <button type="button">?</button> });
     expect(screen.getByRole("button", { name: "?" })).toBeTruthy();

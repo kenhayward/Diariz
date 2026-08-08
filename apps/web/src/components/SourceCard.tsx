@@ -71,9 +71,11 @@ export default function SourceCard({
     // sections on separate tabs could reuse control names; in one stack they cannot.
     <section
       aria-label={name}
-      className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-white/[0.03]"
+      // No `overflow-hidden`: it clipped any menu a row inside the card opened. The header rounds its own
+      // top corners instead (7px = the 8px radius less the 1px border), which is what the clip was for.
+      className="rounded-lg border border-gray-200 bg-white dark:border-gray-700 dark:bg-white/[0.03]"
     >
-      <div className="flex items-center gap-2.5 border-b border-gray-100 bg-gray-50 px-3 py-2.5 dark:border-gray-800 dark:bg-transparent">
+      <div className="flex items-center gap-2.5 rounded-t-[7px] border-b border-gray-100 bg-gray-50 px-3 py-2.5 dark:border-gray-800 dark:bg-transparent">
         {/* The dark variant rides on CSS custom properties rather than two elements, so the glyph inherits
             whichever is live via `currentColor`. */}
         <span
