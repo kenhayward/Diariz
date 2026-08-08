@@ -60,6 +60,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.197.5",
+    date: "2026-08-09",
+    pr: 494,
+    headline: "The web app builds on TypeScript 7",
+    summary:
+      "Build tooling only - nothing about the app changed, and nothing here ships to your browser. " +
+      "The web app's type checker moves from TypeScript 5.9 to 7.0, the rewritten native compiler, which " +
+      "makes the build gate substantially faster.\n\n" +
+      "TypeScript 7 no longer picks up type definitions that merely happen to be installed, so the web " +
+      "app now names the two sets it actually relies on. That is a tightening, not a loss: it stops a " +
+      "type package that arrived as somebody else's dependency quietly widening what the browser code is " +
+      "allowed to refer to.",
+    changed: [
+      "The web app type-checks with TypeScript 7.0.2 instead of 5.9.3.",
+      "Ambient type definitions are named explicitly rather than picked up from whatever is installed.",
+    ],
+  },
+  {
     version: "0.197.4",
     date: "2026-08-09",
     pr: 493,
