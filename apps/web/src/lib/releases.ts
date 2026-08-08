@@ -26,7 +26,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **Chat over transcripts** | Stream answers over one meeting, a folder (its summary/minutes/actions), several selected, or all meetings - context inferred from what you're viewing - via your OpenAI-compatible model, with attachments and saved conversations. |
 | **Formulas** | Build a document from headings, literal text, substituted meeting details and instructions to the model; choose what it may see (transcript, notes, summary, minutes, actions) and run it over a recording - or a whole folder and its sub-sections - to generate a Markdown document you can edit, download, or email. Runs in the background (\"Generating...\" then fills in); re-running one replaces its previous document, and a document you edited by hand is left alone. Personal, platform-wide, or built-in; from the Formulas tab (on a recording or a folder), \`/formula\` in chat, or Claude via MCP; share a personal one so others can find and add it (a live link); admins manage the shared ones. |
 | **Search** | A search box above the meetings list, scoped by default to the folder you are browsing: typing takes the list over, each hit shows the matching words in context plus the folder it lives in, and clicking one opens the transcript at that moment. Matching folders show up too. **Search everywhere** widens it to every room you can see, grouping the results by folder with Section / Date / Speaker chips to narrow them. Keyword search across your library, upgraded to semantic (meaning-based) search when an embeddings endpoint is configured. |
-| **Chat tools** | The assistant searches your library with built-in tools (who-said-what, attendees, talk time, summaries, email-to-self) and links to the exact segment. |
+| **Chat tools** | The assistant searches your library with built-in tools (who-said-what, attendees, talk time, summaries, email-to-self) and links to the exact segment. Turn the set on or off, and pick tool by tool, on the **Assistant** tab in Preferences - which also carries your own model override, collapsed to a line saying what is actually in effect. |
 | **Voice dictation** | Speak your chat questions - transcribed into the chat box in Chrome/Edge or via a server speech-to-text endpoint. |
 | **MCP access** | Let an AI assistant read your own meetings over MCP - via OAuth (the claude.ai connector) or a personal token (Claude Desktop, Claude Code), when the platform's MCP toggle is on - including a \`run_formula\` tool to run your saved Formulas. Set up on the **Integrations** tab in Preferences, alongside API access and Automations, a card each. |
 | **Translate** | Translate a whole transcript or a single segment, stored as revisions you can flip back. |
@@ -59,6 +59,42 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.197.0",
+    date: "2026-08-08",
+    pr: 489,
+    headline: "Preferences is six entries with an Advanced section, and an Assistant tab",
+    summary:
+      "**Model Settings** and **Chat Tools** become one tab called **Assistant**. Both were exception " +
+      "settings - the platform already has a working model and a sensible set of tools - yet they sat near " +
+      "the top of the list where they read as things you were supposed to deal with.\n\n" +
+      "So the nav now has an **Advanced** divider, with the exception settings below it. Preferences goes " +
+      "from eleven entries to six: Profile, Recordings, Formulas, Calendars, then Advanced holding " +
+      "Integrations and Assistant. Every entry has an icon.\n\n" +
+      "Inside Assistant, the model override collapses to **one line that tells you what you are actually " +
+      "running** - the model, where it lives, and whether reasoning is on - with a **Change...** button " +
+      "opening a dialog for the rest. That line is the point: the question people had was \"which model is " +
+      "answering me?\", and it used to take opening a tab and reading three half-filled fields to work out " +
+      "that the answer was \"the platform's\".\n\n" +
+      "The chat tools become one line per tool with a short plain description, instead of a three-column " +
+      "table of paragraphs. Both halves save as you change them rather than behind a Save button.\n\n" +
+      "In the model dialog, the reasoning level is three buttons rather than a dropdown - with three " +
+      "options there is nothing to gain by hiding two of them - and the footer says in words what you have " +
+      "overridden and what still comes from the platform.",
+    added: [
+      "An Assistant tab: the model your questions go to, and which tools chat may use to look things up.",
+      "An Advanced divider in the Preferences nav, with the exception settings below it.",
+      "An icon on every Preferences nav entry.",
+      "A one-line summary of the model actually in effect, without opening anything.",
+    ],
+    changed: [
+      "Model Settings and Chat Tools are replaced by the one Assistant tab, under Advanced.",
+      "The model override moved into a dialog behind Change... - it is the least-used setting in Preferences.",
+      "Chat tools are a list with a short description each, rather than a table of paragraphs; the full technical description is on hover.",
+      "Both halves save as you change them, instead of each having its own Save button.",
+      "The reasoning level is a three-button control rather than a dropdown.",
+    ],
+  },
   {
     version: "0.196.0",
     date: "2026-08-08",

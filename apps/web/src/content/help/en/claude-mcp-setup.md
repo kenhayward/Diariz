@@ -81,7 +81,7 @@ Revoke it any time from the **Connected apps** list on the same MCP access card.
 
 ## What Claude can do once connected
 
-Claude gets the same tools the in-app chat has, respecting your per-tool choices in **Chat Tools**:
+Claude gets the same tools the in-app chat has, respecting your per-tool choices on the **Assistant** tab in Preferences:
 finding who said something, what a person said about a topic, searching transcripts, when a topic came
 up, counting mentions, listing recordings and action items, summaries, attendees, talk time, transcript
 context, minutes, and recording details.

@@ -1,19 +1,17 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth";
 import Avatar from "./Avatar";
 import ProfileSection from "./ProfileSection";
-import AiSettingsSection from "./AiSettingsSection";
-import ChatToolsSection from "./ChatToolsSection";
 import RecordingsSection from "./RecordingsSection";
 import CalendarsSection from "./calendars/CalendarsSection";
 import IntegrationsSection from "./integrations/IntegrationsSection";
+import AssistantSection from "./assistant/AssistantSection";
 import FormulasSection from "./FormulasSection";
+import { CalendarIcon, FileTextIcon, GlobeIcon, MessageSquareIcon, MicIcon, UserIcon } from "./icons";
 
 export type PreferencesTab =
   | "profile"
-  | "ai"
-  | "tools"
   | "recordings"
   | "formulas"
   /// One entry for every calendar source. Was three - "google", "feeds" and "outlook" - which made
@@ -21,7 +19,10 @@ export type PreferencesTab =
   | "calendars"
   /// One entry for every way software talks to Diariz. Was three - "claude", "developers" and
   /// "automations" - which were the same kind of thing and thin on their own.
-  | "integrations";
+  | "integrations"
+  /// Which model answers and what it may look up. Was two - "ai" and "tools" - both of them exceptions to
+  /// a working platform default, sitting near the top of the list where they read as routine.
+  | "assistant";
 
 /// Personal preferences, organised as a vertical-tabbed modal (a left nav headed by the user's avatar/name,
 /// with a content panel on the right). Each tab self-saves; the footer only closes. Sized to 80vw x 80vh
@@ -47,18 +48,20 @@ export default function PreferencesModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const tabs: { id: PreferencesTab; label: string }[] = [
-    { id: "profile", label: t("tabProfile") },
-    { id: "ai", label: t("aiSettings") },
-    { id: "tools", label: t("chatToolsTab") },
-    { id: "recordings", label: t("recordingsTab") },
-    { id: "formulas", label: t("tabFormulas") },
-    { id: "calendars", label: t("tabCalendars") },
+  // Two groups: what most people come here for, then the exception settings. Every entry carries a glyph
+  // so the list scans as a list of things rather than a wall of words.
+  const tabs: { id: PreferencesTab; label: string; glyph: ComponentType<{ size?: number }>; advanced?: true }[] = [
+    { id: "profile", label: t("tabProfile"), glyph: UserIcon },
+    { id: "recordings", label: t("recordingsTab"), glyph: MicIcon },
+    { id: "formulas", label: t("tabFormulas"), glyph: FileTextIcon },
+    { id: "calendars", label: t("tabCalendars"), glyph: CalendarIcon },
     // Always present. What an administrator has switched off is said on the card that offers it, rather
     // than by a nav entry quietly going missing - which read as a bug and left the capability
     // undiscoverable.
-    { id: "integrations", label: t("tabIntegrations") },
+    { id: "integrations", label: t("tabIntegrations"), glyph: GlobeIcon, advanced: true },
+    { id: "assistant", label: t("tabAssistant"), glyph: MessageSquareIcon, advanced: true },
   ];
+  const firstAdvanced = tabs.findIndex((x) => x.advanced);
 
   // The backdrop does NOT close on click (Close/Escape only) — prevents accidental dismissal mid-edit.
   return (
@@ -78,21 +81,35 @@ export default function PreferencesModal({
           </div>
           <div className="border-b dark:border-gray-700" />
           <nav className="flex flex-col gap-0.5 p-2" role="tablist" aria-label={t("preferencesTitle")}>
-            {tabs.map((x) => (
-              <button
-                key={x.id}
-                type="button"
-                role="tab"
-                aria-selected={tab === x.id}
-                onClick={() => setTab(x.id)}
-                className={`rounded px-3 py-2 text-left text-sm ${
-                  tab === x.id
-                    ? "bg-gray-900 font-medium text-white dark:bg-gray-100 dark:text-gray-900"
-                    : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
-                }`}
-              >
-                {x.label}
-              </button>
+            {tabs.map((x, i) => (
+              <Fragment key={x.id}>
+                {/* A label, not a control - nothing collapses. It marks where the exception settings
+                    start, so the entries above read as the ones worth looking at. */}
+                {i === firstAdvanced && (
+                  <div className="flex items-center gap-2 px-3 pt-3 pb-1.5">
+                    <span className="text-[10px] uppercase tracking-[.06em] text-gray-400 dark:text-gray-600">
+                      {t("navAdvanced")}
+                    </span>
+                    <span aria-hidden className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
+                  </div>
+                )}
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === x.id}
+                  onClick={() => setTab(x.id)}
+                  className={`flex items-center gap-2.5 rounded px-3 py-2 text-left text-sm ${
+                    tab === x.id
+                      ? "bg-gray-900 font-medium text-white dark:bg-gray-100 dark:text-gray-900"
+                      : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
+                  }`}
+                >
+                  {/* Decorative: the row's own text is the label, and stroke="currentColor" makes the
+                      glyph invert with the active row. */}
+                  <x.glyph size={14} />
+                  {x.label}
+                </button>
+              </Fragment>
             ))}
           </nav>
         </div>
@@ -104,12 +121,11 @@ export default function PreferencesModal({
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-5">
             {tab === "profile" && <ProfileSection />}
-            {tab === "ai" && <AiSettingsSection />}
-            {tab === "tools" && <ChatToolsSection />}
             {tab === "recordings" && <RecordingsSection />}
             {tab === "formulas" && <FormulasSection />}
             {tab === "calendars" && <CalendarsSection />}
             {tab === "integrations" && <IntegrationsSection />}
+            {tab === "assistant" && <AssistantSection />}
           </div>
           <div className="flex items-center justify-end border-t px-5 py-3 dark:border-gray-700">
             <button

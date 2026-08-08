@@ -13,7 +13,9 @@ chat, translation, and formulas.
 
 ## Configuring it
 
-Open **Settings -> Model Settings** and give Diariz:
+A Platform Administrator sets the platform-wide one at **Settings**, **Model Settings**. Your own
+override, if you want one, is at **Preferences**, **Assistant**, on the **Model** card - click
+**Change...**. Either way you give Diariz:
 
 - **An API base URL.** Any OpenAI-compatible `/chat/completions` endpoint. This includes hosted
   providers and local runtimes such as LM Studio or Ollama.

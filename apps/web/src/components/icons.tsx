@@ -58,11 +58,15 @@ export const GlobeIcon = (p: IconProps) => (
   </svg>
 );
 
-/// A calendar page. Used by the Preferences Calendars panel to mark a source that is a real calendar
-/// account (Google, desktop Outlook) rather than a URL subscription, which takes `GlobeIcon`. Providers
-/// are told apart by their tint and name, not by a different shape - no logos are used.
-export const CalendarIcon = (p: IconProps) => (
-  <svg {...svgProps(p)}>
+/// A calendar page. Marks a real calendar account (Google, desktop Outlook) on the Preferences Calendars
+/// panel - a URL subscription takes `GlobeIcon` - a recording linked to a meeting in the list, and the
+/// Calendars row in the Preferences nav. Providers are told apart by their tint and name, not by a
+/// different shape: no logos are used.
+///
+/// `color` overrides `currentColor` with a linked calendar's own colour, as `FolderIcon` does for a
+/// section. A caller that passes neither inherits its row, so the glyph inverts with an active nav tab.
+export const CalendarIcon = ({ size = 18, title, color, className }: IconProps & { color?: string | null; className?: string }) => (
+  <svg {...svgProps({ size, title })} className={className} style={color ? { color } : undefined}>
     <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
     <line x1="16" y1="2" x2="16" y2="6" />
     <line x1="8" y1="2" x2="8" y2="6" />
@@ -86,6 +90,43 @@ export const RefreshIcon = (p: IconProps) => (
     <path d="M23 4v6h-6" />
     <path d="M1 20v-6h6" />
     <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+  </svg>
+);
+
+/// A person - Feather `user`. The Preferences nav's Profile row.
+export const UserIcon = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
+/// A page with lines - Feather `file-text`. The Preferences nav's Formulas row.
+export const FileTextIcon = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+    <line x1="16" y1="13" x2="8" y2="13" />
+    <line x1="16" y1="17" x2="8" y2="17" />
+  </svg>
+);
+
+/// A speech bubble - Feather `message-square`. The Preferences nav's Assistant row.
+export const MessageSquareIcon = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </svg>
+);
+
+/// A microphone. Marks a recording in the meetings list, and the Recordings row in the Preferences nav.
+/// `color` overrides `currentColor` for the list's audio-present/deleted states; the nav takes neither and
+/// inherits the row, so the glyph inverts with it when the tab is active.
+export const MicIcon = ({ size = 18, title, className }: IconProps & { className?: string }) => (
+  <svg {...svgProps({ size, title })} className={className}>
+    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+    <line x1="12" y1="19" x2="12" y2="23" />
+    <line x1="8" y1="23" x2="16" y2="23" />
   </svg>
 );
 

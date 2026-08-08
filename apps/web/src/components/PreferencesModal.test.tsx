@@ -8,12 +8,11 @@ vi.mock("../auth", () => ({
 vi.mock("../lib/api", () => ({ api: { getProfile: vi.fn() } }));
 // Isolate the shell: each tab's content is a simple marker.
 vi.mock("./ProfileSection", () => ({ default: () => <div>PROFILE_SECTION</div> }));
-vi.mock("./AiSettingsSection", () => ({ default: () => <div>AI_SECTION</div> }));
-vi.mock("./ChatToolsSection", () => ({ default: () => <div>TOOLS_SECTION</div> }));
 vi.mock("./RecordingsSection", () => ({ default: () => <div>RECORDINGS_SECTION</div> }));
 vi.mock("./FormulasSection", () => ({ default: () => <div>FORMULAS_SECTION</div> }));
 vi.mock("./calendars/CalendarsSection", () => ({ default: () => <div>CALENDARS_SECTION</div> }));
 vi.mock("./integrations/IntegrationsSection", () => ({ default: () => <div>INTEGRATIONS_SECTION</div> }));
+vi.mock("./assistant/AssistantSection", () => ({ default: () => <div>ASSISTANT_SECTION</div> }));
 
 import { api } from "../lib/api";
 import PreferencesModal, { type PreferencesTab } from "./PreferencesModal";
@@ -37,22 +36,41 @@ describe("PreferencesModal", () => {
     renderModal();
 
     expect(screen.getByText("Jane Doe")).toBeTruthy();
-    for (const name of [/profile/i, /^calendars$/i, /^integrations$/i])
+    for (const name of [/profile/i, /^calendars$/i, /^integrations$/i, /^assistant$/i])
       expect(screen.getByRole("tab", { name })).toBeTruthy();
     expect(screen.getByText("PROFILE_SECTION")).toBeTruthy();
   });
 
-  it("carries the personal settings tabs moved out of Settings (Model Settings, Chat Tools, Recordings)", () => {
+  // Model Settings and Chat Tools were two of the personal settings moved out of the admin Settings
+  // modal; they are one Assistant tab now, under Advanced. Recordings stays where it was.
+  it("carries the personal settings moved out of Settings, with the model and tools under Assistant", () => {
     renderModal();
-    for (const name of [/model settings/i, /chat tools/i, /^recordings$/i])
-      expect(screen.getByRole("tab", { name })).toBeTruthy();
-
-    fireEvent.click(screen.getByRole("tab", { name: /model settings/i }));
-    expect(screen.getByText("AI_SECTION")).toBeTruthy();
-    fireEvent.click(screen.getByRole("tab", { name: /chat tools/i }));
-    expect(screen.getByText("TOOLS_SECTION")).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: /^recordings$/i }));
     expect(screen.getByText("RECORDINGS_SECTION")).toBeTruthy();
+
+    for (const gone of [/model settings/i, /chat tools/i])
+      expect(screen.queryByRole("tab", { name: gone })).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: /^assistant$/i }));
+    expect(screen.getByText("ASSISTANT_SECTION")).toBeTruthy();
+  });
+
+  /// The exception settings sit below a divider so the entries above read as the ones worth looking at.
+  /// It is a label, not a control - there is nothing to expand.
+  it("separates the advanced entries with a label, not a control", () => {
+    renderModal();
+    const advanced = screen.getByText("Advanced");
+    expect(advanced).toBeTruthy();
+    expect(advanced.closest("button")).toBeNull();
+
+    // Everything after it in the nav is an exception setting.
+    const labels = [...screen.getAllByRole("tab")].map((x) => x.textContent);
+    expect(labels.slice(-2)).toEqual(["Integrations", "Assistant"]);
+  });
+
+  it("gives every nav entry a glyph", () => {
+    renderModal();
+    for (const tab of screen.getAllByRole("tab")) expect(tab.querySelector("svg")).not.toBeNull();
   });
 
   it("has a Formulas tab that shows the Formulas section and honours initialTab", () => {
