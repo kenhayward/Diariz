@@ -62,7 +62,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.195.0",
     date: "2026-08-08",
-    pr: 484,
+    pr: 487,
     headline: "One Calendars tab in Preferences, instead of three",
     summary:
       "Setting up calendars meant visiting three separate places - **Google Account**, **Calendar Feeds** " +
