@@ -1451,7 +1451,7 @@ into it with no URL or per-user setup at all.
   visible in Google (`selected`) plus their `primary`. `ListEventsAsync` then fetches each calendar's events
   **in parallel** (a single flaky/shared calendar is skipped, not fatal), tagging every event with its
   **`CalendarId`/`CalendarName`/`Color`** (the calendar's Google background hex). `GetEventAsync` searches the
-  selected calendars (primary first) for an event by id. Users manage the selection in **Preferences → Google
+  selected calendars (primary first) for an event by id. Users manage the selection in **Preferences → Calendars
   Account** (`GET`/`PUT /api/calendar/calendars`, backed by the public `ListAllCalendarsAsync` which returns the
   unfiltered list for the picker); the single `ListCalendarsAsync` chokepoint means the selection restricts
   matching, linking, and the Calendar overlay alike. Still `calendar.readonly` - the existing grant already
@@ -1525,7 +1525,7 @@ into it with no URL or per-user setup at all.
   **`CalendarFeedsController`** (`/api/calendar/feeds`, JWT, owner-scoped): `GET` list, `POST`/`PUT`
   (name/url/colour/enabled - the URL is validated and **test-fetched** via `ProbeAsync` before it's stored, so a
   broken/unsafe URL is rejected up front; ≤20 feeds/user), `DELETE`. Events are always fetched **live** and never
-  stored. **Ical.Net** (MIT) is a new API dependency. Users manage their feeds in **Preferences → Calendar feeds**
+  stored. **Ical.Net** (MIT) is a new API dependency. Users manage their feeds in **Preferences → Calendars**
   (`CalendarFeedsSection`: add/rename/recolour/enable/remove, with the last-fetch error surfaced per feed).
   Feed events are **first-class since `ICalendarAggregator`**: they participate in recording↔meeting matching
   and linking, and resolve by id for the detail view. (Both were previously Google-only, so a feeds-only user

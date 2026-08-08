@@ -66,7 +66,7 @@ Paste into the published privacy policy (adjust the operator name / contact if d
 > memory and are never written to disk or exposed to your browser. Calendar events themselves are **not**
 > stored — they are fetched on demand and discarded.
 >
-> **How to revoke** — You can disconnect Google Calendar at any time from **Preferences → Google** in Diariz
+> **How to revoke** — You can disconnect Google Calendar at any time from **Preferences → Calendars** in Diariz
 > (which revokes the token at Google), or from your Google Account's **Security → Third-party access** page.
 > Revoking immediately stops all further access.
 >

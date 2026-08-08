@@ -58,6 +58,18 @@ export const GlobeIcon = (p: IconProps) => (
   </svg>
 );
 
+/// A calendar page. Used by the Preferences Calendars panel to mark a source that is a real calendar
+/// account (Google, desktop Outlook) rather than a URL subscription, which takes `GlobeIcon`. Providers
+/// are told apart by their tint and name, not by a different shape - no logos are used.
+export const CalendarIcon = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+  </svg>
+);
+
 export const HomeIcon = (p: IconProps) => (
   <svg {...svgProps(p)}>
     <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />

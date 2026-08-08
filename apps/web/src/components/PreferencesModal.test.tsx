@@ -12,8 +12,7 @@ vi.mock("./AiSettingsSection", () => ({ default: () => <div>AI_SECTION</div> }))
 vi.mock("./ChatToolsSection", () => ({ default: () => <div>TOOLS_SECTION</div> }));
 vi.mock("./RecordingsSection", () => ({ default: () => <div>RECORDINGS_SECTION</div> }));
 vi.mock("./FormulasSection", () => ({ default: () => <div>FORMULAS_SECTION</div> }));
-vi.mock("./GoogleAccountSection", () => ({ default: () => <div>GOOGLE_SECTION</div> }));
-vi.mock("./CalendarFeedsSection", () => ({ default: () => <div>FEEDS_SECTION</div> }));
+vi.mock("./calendars/CalendarsSection", () => ({ default: () => <div>CALENDARS_SECTION</div> }));
 vi.mock("./McpAccessSection", () => ({ default: () => <div>CLAUDE_SECTION</div> }));
 vi.mock("./DeveloperAccessSection", () => ({ default: () => <div>DEVELOPERS_SECTION</div> }));
 vi.mock("./AutomationsSection", () => ({ default: () => <div>AUTOMATIONS_SECTION</div> }));
@@ -40,7 +39,7 @@ describe("PreferencesModal", () => {
     renderModal();
 
     expect(screen.getByText("Jane Doe")).toBeTruthy();
-    for (const name of [/profile/i, /google account/i, /calendar feeds/i, /claude access/i])
+    for (const name of [/profile/i, /^calendars$/i, /claude access/i])
       expect(screen.getByRole("tab", { name })).toBeTruthy();
     expect(screen.getByText("PROFILE_SECTION")).toBeTruthy();
   });
@@ -91,15 +90,24 @@ describe("PreferencesModal", () => {
     renderModal();
     // Voice Prints moved out to the top-level People page: a platform-wide directory is not a personal
     // preference, so it is no longer a tab here.
-    fireEvent.click(screen.getByRole("tab", { name: /calendar feeds/i }));
-    expect(screen.getByText("FEEDS_SECTION")).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: /^calendars$/i }));
+    expect(screen.getByText("CALENDARS_SECTION")).toBeTruthy();
     expect(screen.queryByText("PROFILE_SECTION")).toBeNull();
   });
 
+  // Three nav entries - Google Account, Calendar Feeds and Outlook - became one. Answering "what feeds my
+  // Calendar tab?" used to mean visiting three pages and reconciling three layouts.
+  it("has one Calendars tab in place of the three calendar-source tabs", () => {
+    renderModal();
+    for (const gone of [/google account/i, /calendar feeds/i, /^outlook$/i])
+      expect(screen.queryByRole("tab", { name: gone })).toBeNull();
+    expect(screen.getByRole("tab", { name: /^calendars$/i })).toBeTruthy();
+  });
+
   it("honours initialTab", () => {
-    renderModal({ initialTab: "google" });
-    expect(screen.getByText("GOOGLE_SECTION")).toBeTruthy();
-    expect(screen.getByRole("tab", { name: /google account/i }).getAttribute("aria-selected")).toBe("true");
+    renderModal({ initialTab: "calendars" });
+    expect(screen.getByText("CALENDARS_SECTION")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: /^calendars$/i }).getAttribute("aria-selected")).toBe("true");
   });
 
   it("is sized to 80vw x 80vh", () => {
