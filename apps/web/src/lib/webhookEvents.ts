@@ -49,6 +49,47 @@ export function webhookEvents(t: TFunction): { key: string; label: string }[] {
   return WEBHOOK_EVENT_KEYS.map((key) => ({ key, label: t(LABEL_KEYS[key]) }));
 }
 
+/// How the personal picker groups the nine events: a recording's own lifecycle, the things generated from
+/// it, and formula runs. Grouping only - the keys, their labels and their order are unchanged, and the
+/// server still receives one flat list.
+///
+/// It lives here rather than in the composer so the platform picker can adopt the same grouping without
+/// the two drifting, which is the reason the flat list lives here in the first place.
+const GROUPS: { id: string; labelKey: string; keys: readonly string[] }[] = [
+  {
+    id: "recordings",
+    labelKey: "evtGroupRecordings",
+    keys: ["recording.created", "recording.transcribed", "recording.transcription_failed"],
+  },
+  {
+    id: "documents",
+    labelKey: "evtGroupDocuments",
+    keys: [
+      "recording.summarized",
+      "recording.minutes_ready",
+      "recording.action_items_ready",
+      "recording.tags_ready",
+    ],
+  },
+  { id: "formulas", labelKey: "evtGroupFormulas", keys: ["formula_result.completed", "formula_result.failed"] },
+];
+
+export interface WebhookEventGroup {
+  id: string;
+  label: string;
+  events: { key: string; label: string }[];
+}
+
+/// The personal picker's events, grouped and labelled. `t` must be bound to the "account" namespace.
+export function webhookEventGroups(t: TFunction): WebhookEventGroup[] {
+  const labels = new Map(webhookEvents(t).map((e) => [e.key, e.label]));
+  return GROUPS.map((g) => ({
+    id: g.id,
+    label: t(g.labelKey),
+    events: g.keys.map((key) => ({ key, label: labels.get(key) ?? key })),
+  }));
+}
+
 /// The same list for the PLATFORM picker, plus the platform-only event types. A superset, so an admin
 /// never loses an event by managing a platform automation instead of a personal one.
 export function platformWebhookEvents(t: TFunction): { key: string; label: string }[] {

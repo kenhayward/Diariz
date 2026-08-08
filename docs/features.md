@@ -76,7 +76,7 @@ scrolled around instead of downloading it. The Notes tab also lists a recording'
 Screenshots section. A note or screenshot sitting between two turns by the same speaker now stops those
 turns from being merged past it.
 - **User API access.** When a Platform Administrator enables it (Settings → Integration), generate a **personal
-API token** (Preferences → Developers) to call the Diariz **REST API** directly as yourself — acting with your own
+API token** (Preferences → Integrations) to call the Diariz **REST API** directly as yourself — acting with your own
 permissions, over your own data — and browse a **built-in API reference** (Developers → View API reference). The
 reference documents **every endpoint individually**: what the call does, who may make it, what it changes, and the
 things worth knowing before calling it (which actions overwrite hand-edited text, which are permanent, which run in
@@ -85,7 +85,7 @@ token can be minted **read-only or read-write** and given an optional **expiry d
 external tool can be least-privilege and time-boxed; a pre-existing token keeps its original read-write, no-expiry
 behavior.
 - **Automations (outbound webhooks).** When a Platform Administrator enables it (Settings → Integration), register
-outbound webhooks from **Preferences → Automations**: pick which events fire it (recording created, transcription
+outbound webhooks from **Preferences → Integrations**: pick which events fire it (recording created, transcription
 finished or failed, a summary / meeting minutes / action items / tags ready, formula run finished or failed), paste
 your tool's webhook URL, and send a test event. The four **AI-output events each carry what they produced** - the
 summary text, the minutes Markdown, the extracted actions, the tags - so a workflow acts on the result directly
@@ -267,7 +267,7 @@ brief grey "Tool call: …" line shows while a tool runs. Chat also has **slash 
 - **Connect Claude to your transcripts (MCP server)** — Diariz hosts a **Model Context Protocol** server at
 `/mcp`, so you can connect **Claude** directly to *your own* meetings, two ways: **sign in from the Claude
 website** (add Diariz as a custom connector and approve it on a consent screen — an **OAuth 2.1** flow, nothing
-to copy), or generate a **personal access token** in **Preferences → Claude / MCP access** and paste the URL +
+to copy), or generate a **personal access token** in **Preferences → Integrations** and paste the URL +
 token into Claude Desktop or Code. Either way Claude uses the same built-in tools (search / who-said-what /
 action items / summaries / attendees / talk time / …, plus email-to-self) to answer grounded in your
 transcripts. Per-user and secure: tokens are shown once and stored only as a **SHA-256 hash**, work only for
@@ -465,7 +465,7 @@ elsewhere. Requires **classic Outlook for Windows**.
 - **Global AI timeout** (Platform Administrator, Settings → Model Settings): one platform-wide per-request
 timeout in seconds (default 120) applied to every AI call - summaries, minutes, actions, tags, and embeddings.
 Raise it for slow local models; the configured value is the single authority (no hidden HTTP cap).
-- **Preferences**: a tabbed window (Profile, Google Account, Calendar Feeds, Claude Access, Voice Prints).
+- **Preferences**: a tabbed window (Profile, Model Settings, Chat Tools, Recordings, Formulas, Calendars, Integrations).
 Each user can edit their **profile** — display name, job title, company, job/company descriptions, LinkedIn
 account name — pick their **native** and **app** language, and choose a **theme** (Light/Dark/Auto) that is
 saved to their account and follows them across devices.

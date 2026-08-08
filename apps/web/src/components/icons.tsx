@@ -70,6 +70,25 @@ export const CalendarIcon = (p: IconProps) => (
   </svg>
 );
 
+/// Angle brackets - Feather `code`. Marks the REST API on the Integrations page. New here: the shape did
+/// not exist anywhere in the app before.
+export const CodeIcon = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <polyline points="16 18 22 12 16 6" />
+    <polyline points="8 6 2 12 8 18" />
+  </svg>
+);
+
+/// Two arrows chasing each other - Feather `refresh-cw`. Marks outbound automations. Promoted from the
+/// local copy in `nav/ListToolbar.tsx`, which predates this file and takes no size or title.
+export const RefreshIcon = (p: IconProps) => (
+  <svg {...svgProps(p)}>
+    <path d="M23 4v6h-6" />
+    <path d="M1 20v-6h6" />
+    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+  </svg>
+);
+
 export const HomeIcon = (p: IconProps) => (
   <svg {...svgProps(p)}>
     <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />

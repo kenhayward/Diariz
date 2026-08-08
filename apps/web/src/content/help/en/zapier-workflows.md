@@ -26,7 +26,8 @@ In Zapier, add a **Webhooks by Zapier** trigger with the **Catch Hook** event. Z
 
 ## Step 2: point Diariz at it
 
-In Diariz, open **Preferences**, then the **Automations** tab.
+In Diariz, open **Preferences**, then the **Integrations** tab, and click **+ New automation** on the
+**Automations** card.
 
 1. Under **What should trigger it?**, tick the events you want. The full list is in
    [Automations and Workflow Signals](/help/automations-and-signals).
@@ -57,8 +58,9 @@ Formula events deliberately carry only ids and a link, not the generated text, s
 can never leak content to somewhere the recording's owner did not choose. To fetch the document you call
 the API.
 
-1. Generate a token in **Preferences**, **Developers**. **Read-only** is the right choice for fetching.
-   The Automations tab offers to create one for you when you tick a formula event.
+1. Generate a token in **Preferences**, **Integrations**, on the **API access** card. **Read-only** is the
+   right choice for fetching, and is a tickbox in the New token dialog.
+   The automation composer offers to create one for you when you pick a formula trigger.
 2. In your Zap, add a **Webhooks by Zapier** action with the **Custom Request** event:
    - **Method**: GET
    - **URL**: `https://your-server/api/recordings/{recordingId}/formula-results/{id}` using ids from the

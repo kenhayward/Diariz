@@ -503,10 +503,17 @@ public record UserProfileDto(
     string? CompanyDescription = null, string? LinkedIn = null,
     /// <summary>Colour theme: "auto" | "light" | "dark".</summary>
     string Theme = "auto",
-    /// <summary>Whether the platform has user API access enabled (drives the Preferences "Developers" tab).</summary>
+    /// <summary>Whether the platform has user API access enabled (drives the API card on Preferences →
+    /// Integrations).</summary>
     bool ApiAccessEnabled = false,
-    /// <summary>Whether the platform has outbound webhooks enabled (drives the Preferences "Automations" tab).</summary>
+    /// <summary>Whether the platform has outbound webhooks enabled (drives the Automations card on
+    /// Preferences → Integrations).</summary>
     bool WebhooksEnabled = false,
+    /// <summary>Whether the platform has personal MCP access enabled (drives the MCP card on Preferences →
+    /// Integrations). Defaults true on the server, unlike the other two, so an existing platform keeps
+    /// working; it is reported here because the section used to offer its controls whatever an
+    /// administrator had set, and the user only learned otherwise when the token request was refused.</summary>
+    bool McpAccessEnabled = true,
     /// <summary>The caller's platform permissions, from their group membership. Resolved server-side on every
     /// request: the web must not infer authority from the JWT, which goes stale when membership changes.</summary>
     PermissionsDto? Permissions = null);

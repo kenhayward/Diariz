@@ -117,7 +117,7 @@ Two switches must be on, and both are off by default. A Platform Administrator s
 - **Enable user API access**, for everything.
 - **Automations (webhooks)**, for anything triggered by a meeting.
 
-You also need a personal API token from **Preferences**, **Developers**.
+You also need a personal API token from **Preferences**, **Integrations**, on the **API access** card.
 
 ## A worked example
 

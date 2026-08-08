@@ -12,11 +12,12 @@ can never reach anything your account cannot.
 ## Turning it on
 
 A Platform Administrator enables **Enable user API access** at **Settings**, **Integration**. It is
-**off** by default, and while it is off the Developers tab does not appear at all.
+**off** by default. While it is off the **API access** card says so and offers nothing, rather than
+disappearing - so you can see the capability exists and who to ask.
 
 ## Generating a token
 
-**Preferences**, then the **Developers** tab.
+**Preferences**, then the **Integrations** tab.
 
 1. Name the token after whatever will use it.
 2. Decide the scope. **Read-only (cannot change anything)** rejects every POST, PUT, PATCH and DELETE.
@@ -44,7 +45,7 @@ An API token works only on `/api`. It is rejected on `/mcp`, and an MCP token is
 
 ## The reference
 
-Click **View API reference** in Preferences, Developers, or go to **`/developers/api`**. It is a full
+Click **View API reference** on the API access card, or go to **`/developers/api`**. It is a full
 browsable reference, signed-in users only, listing every endpoint with what it does, who may call it,
 and what it changes.
 

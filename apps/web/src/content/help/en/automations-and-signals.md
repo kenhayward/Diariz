@@ -14,7 +14,7 @@ it is off.
 
 ## Your own automations
 
-**Preferences**, then the **Automations** tab.
+**Preferences**, then the **Integrations** tab.
 
 1. Under **What should trigger it?**, tick the events you want.
 2. Paste your tool's webhook URL into **Destination URL**. The hint tabs give you the exact steps for

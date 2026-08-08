@@ -1,18 +1,14 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../auth";
-import { api } from "../lib/api";
 import Avatar from "./Avatar";
 import ProfileSection from "./ProfileSection";
 import AiSettingsSection from "./AiSettingsSection";
 import ChatToolsSection from "./ChatToolsSection";
 import RecordingsSection from "./RecordingsSection";
 import CalendarsSection from "./calendars/CalendarsSection";
-import McpAccessSection from "./McpAccessSection";
-import DeveloperAccessSection from "./DeveloperAccessSection";
+import IntegrationsSection from "./integrations/IntegrationsSection";
 import FormulasSection from "./FormulasSection";
-import AutomationsSection from "./AutomationsSection";
 
 export type PreferencesTab =
   | "profile"
@@ -23,9 +19,9 @@ export type PreferencesTab =
   /// One entry for every calendar source. Was three - "google", "feeds" and "outlook" - which made
   /// "what feeds my Calendar tab?" a question you had to visit three pages to answer.
   | "calendars"
-  | "claude"
-  | "developers"
-  | "automations";
+  /// One entry for every way software talks to Diariz. Was three - "claude", "developers" and
+  /// "automations" - which were the same kind of thing and thin on their own.
+  | "integrations";
 
 /// Personal preferences, organised as a vertical-tabbed modal (a left nav headed by the user's avatar/name,
 /// with a content panel on the right). Each tab self-saves; the footer only closes. Sized to 80vw x 80vh
@@ -41,8 +37,9 @@ export default function PreferencesModal({
   const { t } = useTranslation("account");
   const { initials, pictureUrl, fullName, email } = useAuth();
   const [tab, setTab] = useState<PreferencesTab>(initialTab);
-  // The Developers tab appears only when a Platform Admin has enabled API access platform-wide.
-  const { data: profile } = useQuery({ queryKey: ["user-profile"], queryFn: api.getProfile });
+  // The tab list is fixed now. It used to grow and shrink with the platform's feature switches, which
+  // meant the shell had to fetch the profile just to know how many entries to draw; the cards ask for it
+  // themselves, and say on their own face what an administrator has turned off.
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -57,9 +54,10 @@ export default function PreferencesModal({
     { id: "recordings", label: t("recordingsTab") },
     { id: "formulas", label: t("tabFormulas") },
     { id: "calendars", label: t("tabCalendars") },
-    { id: "claude", label: t("tabClaudeAccess") },
-    ...(profile?.apiAccessEnabled ? [{ id: "developers" as const, label: t("tabDevelopers") }] : []),
-    ...(profile?.webhooksEnabled ? [{ id: "automations" as const, label: t("tabAutomations") }] : []),
+    // Always present. What an administrator has switched off is said on the card that offers it, rather
+    // than by a nav entry quietly going missing - which read as a bug and left the capability
+    // undiscoverable.
+    { id: "integrations", label: t("tabIntegrations") },
   ];
 
   // The backdrop does NOT close on click (Close/Escape only) — prevents accidental dismissal mid-edit.
@@ -111,9 +109,7 @@ export default function PreferencesModal({
             {tab === "recordings" && <RecordingsSection />}
             {tab === "formulas" && <FormulasSection />}
             {tab === "calendars" && <CalendarsSection />}
-            {tab === "claude" && <McpAccessSection />}
-            {tab === "developers" && <DeveloperAccessSection />}
-            {tab === "automations" && <AutomationsSection />}
+            {tab === "integrations" && <IntegrationsSection />}
           </div>
           <div className="flex items-center justify-end border-t px-5 py-3 dark:border-gray-700">
             <button

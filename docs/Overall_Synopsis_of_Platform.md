@@ -855,7 +855,7 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   --header "Authorization: Bearer dz_mcp_…"` (or the `headers` block in `.mcp.json`). **Claude Desktop** only
   accepts stdio servers in `claude_desktop_config.json`, so it connects via the **`mcp-remote`** bridge
   (`command: npx -y mcp-remote {origin}/mcp --header "Authorization:${AUTH}"`, token in `env.AUTH="Bearer …"` — the
-  env indirection avoids mcp-remote splitting the header on its space). Preferences → *Claude / MCP access* shows
+  env indirection avoids mcp-remote splitting the header on its space). Preferences → *Integrations* (the MCP access card) shows
   this ready-to-paste. (Older/newer Desktop builds may also accept a `type:http` entry, but mcp-remote is the
   portable path.)
 - **Resources.** `ListResourcesHandler`/`ReadResourceHandler` expose each of the user's recordings as MCP
@@ -897,7 +897,7 @@ is the web app's `/logo.png` (built from `App:PublicUrl`; omitted when that orig
   served: RFC 9728 protected-resource metadata at `/.well-known/oauth-protected-resource` (`WellKnownController`),
   the AS metadata at both `/.well-known/openid-configuration` and `/.well-known/oauth-authorization-server`, with
   the hand-rolled `registration_endpoint` advertised via an OpenIddict config event. This is the point at which
-  **claude.ai can connect end-to-end**. Users **manage connections** in Preferences → *Claude / MCP access*:
+  **claude.ai can connect end-to-end**. Users **manage connections** in Preferences → *Integrations* (the MCP access card):
   `OAuthConnectionsController` (`/api/oauth/connections`, JWT-authed, owner-scoped by subject) lists the granted
   OpenIddict authorizations (client name + connected date) alongside the personal tokens, and **revoke** deletes
   the authorization + its tokens so the client can no longer connect (refresh dies immediately; any issued access
@@ -1180,7 +1180,7 @@ into it with no URL or per-user setup at all.
   specifically to route that output somewhere (e.g. post the generated minutes to a team Slack channel).
 - **New admin endpoints:** `api/workflow-signals` (signal CRUD + the open list for the picker, above) and
   `api/admin/webhooks` (platform subscription CRUD, above) — both surfaced in Settings → Integration
-  alongside the existing personal Automations tab.
+  alongside the personal Automations card on Preferences → Integrations.
 - **Deferred follow-ups (documented, not built in Phase 3):** a per-platform-subscription delivery rate cap
   (see the Phase 2 section above); detaching a platform subscription from the single admin who created it
   (today, deleting that admin cascades and deletes their platform subscriptions too — a future improvement
@@ -1208,7 +1208,7 @@ into it with no URL or per-user setup at all.
   flows) to JWT. Isolation: a `dz_mcp_` token is rejected on `/api/*` and a `dz_api_` token on `/mcp` (each scheme
   accepts only its own prefix). The feature is **gated by `PlatformSettings.ApiAccessEnabled` (default off)** —
   the authenticator fails while it's off — and a Platform Admin toggles it in **Settings → Integration**; users
-  manage tokens in **Preferences → Developers** (shown only when enabled). A **curated OpenAPI document** is
+  manage tokens in **Preferences → Integrations** (the card explains itself when disabled). A **curated OpenAPI document** is
   published at **`/api/openapi/v1.json`** (`Microsoft.AspNetCore.OpenApi`, authenticated; the user-facing REST
   surface only — `api/*` minus the admin/OAuth prefixes `api/oauth`/`api/platform`/`api/admin`/`api/maintenance`,
   and the non-`api/` `internal/*`, `connect/*`, `.well-known/*`, `/mcp` — with a bearer security scheme declared,

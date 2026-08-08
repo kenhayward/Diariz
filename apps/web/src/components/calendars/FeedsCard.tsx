@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api, apiErrorMessage } from "../../lib/api";
 import { GlobeIcon } from "../icons";
-import SourceCard, { cardBtn } from "./SourceCard";
+import SourceCard, { cardBtn } from "../SourceCard";
 import type { IcsFeed } from "../../lib/types";
 
 const DEFAULT_COLOR = "#7986CB"; // Google "Lavender"
