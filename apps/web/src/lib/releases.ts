@@ -61,7 +61,7 @@ export interface Release {
 export const RELEASES: Release[] = [
   {
     version: "0.197.4",
-    date: "2026-08-08",
+    date: "2026-08-09",
     pr: 493,
     headline: "Security updates to four bundled libraries",
     summary:
