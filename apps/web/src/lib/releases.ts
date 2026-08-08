@@ -60,6 +60,22 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.197.2",
+    date: "2026-08-08",
+    pr: 491,
+    headline: "The rest of the card descriptions fit on their line",
+    summary:
+      "The **Chat tools** description was cut off mid-sentence - \"needs a model that supports...\". It is " +
+      "shorter now, and still says both halves of what it needs to.\n\n" +
+      "This is the third of these to be spotted only once it was on screen, so the descriptions are now " +
+      "length-checked when the app is built. That immediately turned up two more nobody had reported: the " +
+      "subscribed-feeds description was over-running in German and Spanish. All of them are shortened.",
+    fixed: [
+      "The Chat tools description is no longer cut off.",
+      "The subscribed-feeds description is no longer cut off in German or Spanish.",
+    ],
+  },
+  {
     version: "0.197.1",
     date: "2026-08-08",
     pr: 490,
