@@ -38,7 +38,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | **API access** | Generate a personal API token (when enabled), read-only or read-write, with an optional expiry date, to call the REST API as yourself; the list shows which tokens are read-only and when each expires. A built-in API reference documents every endpoint - what it does, who may call it, and what it changes. |
 | **Automations (webhooks)** | When enabled, register outbound webhooks from Preferences - a list of what you have, with a composer for making or editing one - that fire when a recording is created, finishes or fails transcription, a summary / meeting minutes / action items / tags become ready (each carrying its output), or a formula finishes or fails. Every recording event also carries an **attendees** list - who spoke, the person they are, their title, company, and internal or external - with email addresses and phone numbers included only when that automation opts in. Signed deliveries with automatic retries (rate-limited per automation and 429-aware), a test-event button, auto-pause after repeated failures, and a Pause / Resume button that stops deliveries reversibly (deleting an automation discards its signing secret; pausing keeps it). Admins can also define named Workflow Signals and wire a platform automation to one, so a formula author just picks "When this finishes, trigger: ..." in the formula editor - no URL or per-user setup - and the formula's output is delivered inline to everyone routed through that signal. |
 | **n8n** | A published community node (\`n8n-nodes-diariz\`): a trigger that registers its own automation and verifies every signed delivery, with a Platform scope for administrators that adds events across every user including Feedback Received, plus an action node covering the whole REST API - with dropdowns listing your real recordings and formulas, files in and out, and a Run Formula step that waits for the document to finish. |
-| **Multi-user & groups** | User groups grant platform permissions (manage rooms / users / platform), with an approval lifecycle, per-user isolation, and Light/Dark/Auto themes. |
+| **Multi-user & groups** | A **Users & access** console: search and filter every account, and see on one panel what a person's groups actually let them do, alongside their quota, status and storage. Groups grant the five platform permissions - each explained in a sentence rather than a column heading - and carry a name, description and colour. Access requests are a tab with a waiting count, then an approval lifecycle. Per-user isolation and Light/Dark/Auto themes. |
 | **Admin controls** | Storage quotas, optional audio auto-deletion, a global AI request timeout, separate platform toggles for API access, Claude/MCP, and Automations (webhooks), and whole-platform backup & restore. |
 | **Provide Feedback** | Any signed-in user can describe something that looks or behaves wrong from the account menu; a scrubbed technical trail of recent app activity is attached automatically. Readable and deletable only by a Platform Administrator, in a Feedback tab in Settings, and can raise a \`feedback.submitted\` automation event - the submitter's words reach it only when that automation ticks Include What The Person Wrote. |
 | **Help & documentation** | A browsable help section at \`/help\` with a grouped article tree and instant search, plus contextual help throughout the app: a small \`?\` next to a feature opens a short explanation with a link straight to the full article. An **Advanced and admin** section covers configuring formulas, meeting types, Workflow Signals and webhooks, users and permissions, connecting Claude over MCP, building n8n and Zapier workflows, and the REST API. A **CRM integration** section covers wiring Diariz to any CRM through n8n or Zapier, with a worked EspoCRM example. |
@@ -59,6 +59,44 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.198.0",
+    date: "2026-08-09",
+    pr: 495,
+    headline: "Users & access: a real admin console",
+    summary:
+      "**Manage users** was a pair of tables. The user table put every attribute in its own cell and every " +
+      "action on the row; the Groups tab was a grid of bare checkboxes with a pop-up for membership; and " +
+      "access requests sat stacked above the user list, pushing it off screen whenever anyone was waiting. " +
+      "It is now **Users & access** - a searchable, filterable list on the left, everything about whoever " +
+      "you picked on the right, and requests in a tab of their own with a count badge.\n\n" +
+      "The part worth the upgrade is one line. Select a person and the panel now says, in plain words, " +
+      "what their groups actually let them do: *\"Grants: manage rooms, manage formulas, manage the People " +
+      "directory.\"* Both halves of that - which groups someone is in, and what each group permits - have " +
+      "always been on hand, but nothing joined them, so answering \"what can this person do?\" meant " +
+      "reading a checkbox matrix and cross-referencing membership by eye.\n\n" +
+      "Permissions are no longer column headings. Each is a tick with a sentence beside it, because " +
+      "**Manage platform** over an unlabelled checkbox never told anyone what they were about to hand out. " +
+      "Groups can also be given a description and a colour at last - the fields existed but no screen had " +
+      "ever set them.",
+    added: [
+      "A Grants line on each user, stating in plain language what their group memberships allow.",
+      "Search by name or email, and status filters that carry their own counts - so you can see how many accounts are still awaiting setup without clicking anything.",
+      "Requests are their own tab, with a badge while anyone is waiting.",
+      "Every permission now carries a sentence explaining what it allows.",
+      "Groups can be given a description and a colour, and are renamed in the same dialog.",
+      "Users signed in with Google show their profile photo rather than initials.",
+    ],
+    changed: [
+      "Group membership is edited on the group itself, or from the person, rather than in a separate pop-up.",
+      "A user's state is one status pill: Active, Awaiting setup, Requested, or Disabled.",
+      "The Platform Administrator and your own account say why they can't be disabled or deleted, instead of silently offering no controls.",
+      "The account menu's Manage Users entry is now Users & access.",
+    ],
+    fixed: [
+      "The help article said there were four platform permissions. There are five - Manage people was missing.",
+    ],
+  },
   {
     version: "0.197.5",
     date: "2026-08-09",

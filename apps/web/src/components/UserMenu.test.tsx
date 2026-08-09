@@ -62,15 +62,15 @@ describe("UserMenu", () => {
     authState.canManageFormulas = false;
   });
 
-  it("hides Manage Users for non-admins and shows it for admins", () => {
+  it("hides Users & access for non-admins and shows it for admins", () => {
     renderMenu();
     fireEvent.click(screen.getByRole("button", { name: /account/i }));
-    expect(screen.queryByRole("menuitem", { name: /manage users/i })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: /users & access/i })).toBeNull();
 
     authState.isAdmin = true;
     renderMenu();
     fireEvent.click(screen.getAllByRole("button", { name: /account/i })[1]);
-    expect(screen.getByRole("menuitem", { name: /manage users/i })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /users & access/i })).toBeTruthy();
   });
 
   it("hides Manage Formulas for non-privileged users and shows it when canManageFormulas", () => {

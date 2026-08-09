@@ -432,6 +432,9 @@ export interface AdminUser {
   quotaBytes: number;
   usedBytes: number;
   hasGoogle: boolean; // account is linked to a Google identity
+  /// Avatar from the linked Google account, or null - then the admin console shows initials, as the
+  /// account menu does.
+  pictureUrl: string | null;
 }
 
 /// The signed-in user's storage usage vs quota (bytes), plus total transcription wall-clock time (ms).

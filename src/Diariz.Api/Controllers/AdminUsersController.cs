@@ -67,7 +67,8 @@ public class AdminUsersController : ControllerBase
         var dtos = new List<AdminUserDto>(users.Count);
         foreach (var u in users)
             dtos.Add(new AdminUserDto(u.Id, u.Email ?? "", u.FullName, await AccountTypeOf(u), u.Status, u.IsEnabled,
-                u.QuotaBytes, usage.TryGetValue(u.Id, out var used) ? used : 0, u.GoogleSubject is not null));
+                u.QuotaBytes, usage.TryGetValue(u.Id, out var used) ? used : 0, u.GoogleSubject is not null,
+                u.PictureUrl));
         return dtos;
     }
 

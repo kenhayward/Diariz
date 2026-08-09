@@ -1,35 +1,33 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import GroupsTab from "./GroupsTab";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "../auth";
-import { api, apiErrorMessage } from "../lib/api";
-import { bytesToGb, formatBytes, gbToBytes } from "../lib/format";
-import type { AdminUser } from "../lib/types";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../lib/api";
 import HelpButton from "./HelpButton";
+import UsersTab from "./users/UsersTab";
+import GroupsTab from "./users/GroupsTab";
+import RequestsTab from "./users/RequestsTab";
 
-/// Admin-only user management: grant/deny access requests, change account type, enable/disable, and
-/// delete users. Destructive actions are hidden for the Platform Administrator and the current user
-/// (the server enforces this too).
+type Tab = "users" | "groups" | "requests";
+
+/// The Users & access console: the shell only - a title, three tabs, and whichever tab is showing.
+///
+/// It used to be one component holding a users table, an access-requests section stacked above it, and the
+/// groups matrix. Each tab now owns its own queries (react-query dedupes the shared ones), which is why
+/// nothing is drilled through here except `onClose`.
+///
+/// Requests were promoted from a section to a tab. On a busy platform they pushed the user list off screen,
+/// and when there were none they left a heading over nothing. As a tab with a count badge they are visible
+/// when they exist and silent when they do not.
 export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation("admin");
-  const qc = useQueryClient();
-  const { email: myEmail } = useAuth();
-  const { data: users = [], isLoading } = useQuery({ queryKey: ["admin-users"], queryFn: api.listUsers });
-  const { data: platform } = useQuery({ queryKey: ["platform-settings"], queryFn: api.getPlatformSettings });
-  // Group membership is the source of truth for a user's authority, so the user table shows it in place of the
-  // old account-type column.
-  const { data: groups = [] } = useQuery({ queryKey: ["groups"], queryFn: api.listGroups });
-  const [tab, setTab] = useState<"users" | "groups">("users");
-  const [error, setError] = useState<string | null>(null);
-  const [grantLink, setGrantLink] = useState<string | null>(null);
-  const [newEmail, setNewEmail] = useState("");
-  const [newName, setNewName] = useState("");
-  const [adding, setAdding] = useState(false);
+  const [tab, setTab] = useState<Tab>("users");
+  // Only for the badge. The Requests tab loads the same query itself.
+  const { data: users = [] } = useQuery({ queryKey: ["admin-users"], queryFn: api.listUsers });
+  const pendingCount = users.filter((u) => u.status === "Requested").length;
 
   useEffect(() => {
-    // Escape closes - but defer to a nested dialog (the group-members popup) when one is open so Escape
-    // dismisses that first, not the whole modal.
+    // Escape closes - but defer to a nested dialog (the Edit group dialog) when one is open, so Escape
+    // dismisses that first rather than the whole console.
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !document.querySelector("[data-nested-dialog]")) onClose();
     };
@@ -37,360 +35,69 @@ export default function ManageUsersModal({ onClose }: { onClose: () => void }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  // Promote/demote moves the user in and out of the Administrators group server-side, so the group chips must
-  // refresh alongside the user rows.
-  const refresh = () => {
-    void qc.invalidateQueries({ queryKey: ["admin-users"] });
-    return qc.invalidateQueries({ queryKey: ["groups"] });
-  };
-  const run = (fn: () => Promise<unknown>) => async () => {
-    setError(null);
-    try {
-      await fn();
-      refresh();
-    } catch (e) {
-      setError(apiErrorMessage(e));
-    }
-  };
-
-  async function grant(id: string) {
-    setError(null);
-    setGrantLink(null);
-    try {
-      const r = await api.grantUser(id);
-      refresh();
-      if (!r.emailed && r.setupUrl) setGrantLink(r.setupUrl);
-    } catch (e) {
-      setError(apiErrorMessage(e));
-    }
-  }
-
-  async function addUser(e: React.FormEvent) {
-    e.preventDefault();
-    const email = newEmail.trim();
-    if (!email || adding) return;
-    setAdding(true);
-    setError(null);
-    setGrantLink(null);
-    try {
-      const r = await api.addUser(email, newName.trim() || undefined);
-      refresh();
-      setNewEmail("");
-      setNewName("");
-      if (!r.emailed && r.setupUrl) setGrantLink(r.setupUrl);
-    } catch (err) {
-      setError(apiErrorMessage(err));
-    } finally {
-      setAdding(false);
-    }
-  }
-
-  const pending = users.filter((u) => u.status === "Requested");
-  const others = users.filter((u) => u.status !== "Requested");
+  const tabs: { id: Tab; label: string; badge?: number }[] = [
+    { id: "users", label: t("usersTab") },
+    { id: "groups", label: t("groupsTab") },
+    { id: "requests", label: t("requestsTab"), badge: pendingCount },
+  ];
 
   return (
+    // The backdrop does NOT close on click (the ✕ or Escape only) - prevents accidental dismissal mid-edit.
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      {/* Fixed height so switching tabs never resizes the modal; does NOT close on a backdrop click
-          (Close button or Escape only) - prevents accidental dismissal mid-edit. */}
+      {/* Fixed height so switching tabs never resizes the console. Wider than the old modal because the
+          detail pane needs the room; no padding here, since the list and the pane run to the edges. */}
       <div
         role="dialog"
         aria-label={t("title")}
-        className="flex h-[85vh] w-full max-w-4xl flex-col rounded-lg border bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-900"
+        className="flex h-[85vh] w-full max-w-6xl flex-col overflow-hidden rounded-[10px] border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900"
       >
-        <h2 className="mb-3 shrink-0 text-base font-semibold dark:text-gray-100">{t("title")}</h2>
-
-        <div role="tablist" className="mb-3 flex shrink-0 gap-1 border-b dark:border-gray-700">
-          {(["users", "groups"] as const).map((key) => (
+        <div className="flex shrink-0 items-center justify-between px-5 pt-4">
+          <h2 className="text-base font-semibold dark:text-gray-100">{t("title")}</h2>
+          <div className="flex items-center gap-1">
+            <HelpButton topic="users-and-groups" />
+            {/* Replaces the old footer Close, which cost the list a whole row on a full-height console. */}
             <button
-              key={key}
-              role="tab"
               type="button"
-              aria-selected={tab === key}
-              onClick={() => setTab(key)}
-              className={`-mb-px border-b-2 px-3 py-1.5 text-sm ${
-                tab === key
+              onClick={onClose}
+              aria-label={t("common:close")}
+              className="rounded px-2 py-1 text-lg leading-none text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <div role="tablist" className="flex shrink-0 gap-1 border-b border-gray-200 px-5 dark:border-gray-700">
+          {tabs.map((x) => (
+            <button
+              key={x.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === x.id}
+              onClick={() => setTab(x.id)}
+              className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm ${
+                tab === x.id
                   ? "border-blue-600 font-medium text-blue-700 dark:text-blue-300"
                   : "border-transparent text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
               }`}
             >
-              {t(key === "users" ? "usersTab" : "groupsTab")}
+              {x.label}
+              {/* Absent at zero rather than showing a 0 - an empty queue is not news. */}
+              {x.badge ? (
+                <span className="rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-700/80 dark:text-amber-100">
+                  {x.badge}
+                </span>
+              ) : null}
             </button>
           ))}
-          <span className="ml-auto self-center">
-            <HelpButton topic="users-and-groups" />
-          </span>
         </div>
 
-        {/* Shared scrolling body between the fixed header/tabs and the shared footer. */}
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {tab === "groups" ? (
-          <div className="min-h-0 flex-1 overflow-auto">
-            <GroupsTab />
-          </div>
-        ) : (
-        <>
-
-        {/* Add a user by name + email — creates the account and emails them a setup link (or shows it below). */}
-        <form onSubmit={addUser} className="mb-3 flex shrink-0 flex-wrap items-center gap-2">
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder={t("fullName")}
-            aria-label={t("newUserNameAria")}
-            className="min-w-0 flex-1 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          />
-          <input
-            type="email"
-            value={newEmail}
-            onChange={(e) => setNewEmail(e.target.value)}
-            placeholder="new.user@example.com"
-            aria-label={t("newUserEmailAria")}
-            className="min-w-0 flex-1 rounded border px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          />
-          <button
-            type="submit"
-            disabled={adding || !newEmail.trim()}
-            className="shrink-0 rounded bg-blue-600 px-3 py-1 text-sm text-white disabled:opacity-50"
-          >
-            {adding ? t("adding") : t("addUser")}
-          </button>
-        </form>
-
-        {grantLink && (
-          <div className="mb-3 shrink-0 rounded border border-blue-300 bg-blue-50 p-2 text-xs dark:border-blue-800 dark:bg-blue-950/40">
-            <p className="mb-1 font-medium text-blue-800 dark:text-blue-300">{t("grantLinkMsg")}</p>
-            <code className="block break-all text-blue-700 dark:text-blue-300">{grantLink}</code>
-          </div>
-        )}
-        {error && <p className="mb-2 shrink-0 text-sm text-red-600 dark:text-red-400">{error}</p>}
-        {isLoading && <p className="shrink-0 text-sm text-gray-500 dark:text-gray-400">{t("common:loading")}</p>}
-
-        {pending.length > 0 && (
-          <section className="mb-4 shrink-0">
-            <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-gray-400">{t("accessRequests")}</h3>
-            <ul className="divide-y dark:divide-gray-800">
-              {pending.map((u) => (
-                <li key={u.id} className="flex items-center justify-between gap-2 py-2 text-sm dark:text-gray-200">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span className="truncate">{u.email}</span>
-                    <StatusPill status={u.status} />
-                  </span>
-                  <span className="flex shrink-0 gap-2">
-                    <button onClick={() => grant(u.id)} className="rounded bg-blue-600 px-2 py-1 text-xs text-white">
-                      {t("grant")}
-                    </button>
-                    <button
-                      onClick={run(async () => {
-                        if (window.confirm(t("confirmDeny", { email: u.email }))) await api.denyUser(u.id);
-                      })}
-                      className="rounded border px-2 py-1 text-xs dark:border-gray-700"
-                    >
-                      {t("deny")}
-                    </button>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {/* Users table — the only part that scrolls, so it stays usable with many users. Sticky header row. */}
-        <div className="min-h-0 flex-1 overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 z-10 bg-white text-left text-xs text-gray-400 dark:bg-gray-900 dark:text-gray-500">
-              <tr>
-                <th className="py-1 pr-2 font-medium">{t("colUser")}</th>
-                <th className="py-1 pr-2 font-medium">{t("colType")}</th>
-                <th className="py-1 pr-2 font-medium">{t("colStatus")}</th>
-                <th className="py-1 pr-2 font-medium">{t("colStorage")}</th>
-                <th className="py-1 font-medium">{t("colActions")}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y dark:divide-gray-800">
-              {others.map((u) => (
-                <UserRow
-                  key={u.id}
-                  u={u}
-                  isSelf={!!myEmail && u.email === myEmail}
-                  maxQuotaBytes={platform?.maxQuotaBytes ?? null}
-                  groupNames={groups.filter((g) => g.memberIds.includes(u.id)).map((g) => g.name)}
-                  onSetEnabled={(v) => run(() => api.setUserEnabled(u.id, v))()}
-                  onSetQuota={(bytes) => run(async () => {
-                    await api.setUserQuota(u.id, bytes);
-                    // The account dropdown reads ["user-storage"]; refresh it so a quota change to the current
-                    // user shows immediately (a no-op refetch when the edited user is someone else).
-                    await qc.invalidateQueries({ queryKey: ["user-storage"] });
-                  })()}
-                  onDelete={run(async () => {
-                    if (window.confirm(t("confirmDeleteUser", { email: u.email }))) await api.deleteUser(u.id);
-                  })}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        </>
-        )}
-        </div>
-
-        {/* Shared footer: a modal-wide Close in the same place on both tabs. */}
-        <div className="mt-3 flex shrink-0 border-t pt-3 dark:border-gray-700">
-          <button
-            onClick={onClose}
-            className="w-full rounded border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-          >
-            {t("common:close")}
-          </button>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {tab === "users" && <UsersTab />}
+          {tab === "groups" && <GroupsTab />}
+          {tab === "requests" && <RequestsTab />}
         </div>
       </div>
     </div>
-  );
-}
-
-/// Onboarding status pill: Requested (awaiting grant) → Awaiting setup (granted) → Active.
-function StatusPill({ status }: { status: AdminUser["status"] }) {
-  const { t } = useTranslation("admin");
-  const styles: Record<AdminUser["status"], string> = {
-    Requested: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
-    Invited: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-    Active: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-  };
-  const labels: Record<AdminUser["status"], string> = {
-    Requested: t("statusRequested"),
-    Invited: t("statusAwaitingSetup"),
-    Active: t("statusActive"),
-  };
-  return <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${styles[status]}`}>{labels[status]}</span>;
-}
-
-function UserRow({
-  u,
-  isSelf,
-  maxQuotaBytes,
-  groupNames,
-  onSetEnabled,
-  onSetQuota,
-  onDelete,
-}: {
-  u: AdminUser;
-  isSelf: boolean;
-  maxQuotaBytes: number | null;
-  /// Names of the groups this user belongs to, shown in place of the old account type.
-  groupNames: string[];
-  onSetEnabled: (v: boolean) => void;
-  onSetQuota: (bytes: number) => void;
-  onDelete: () => void;
-}) {
-  const { t } = useTranslation("admin");
-  const isPlatform = u.accountType === "PlatformAdministrator";
-  const protectedRow = isPlatform || isSelf; // no destructive/role actions
-  const [editingQuota, setEditingQuota] = useState(false);
-  const [quotaGb, setQuotaGb] = useState(String(bytesToGb(u.quotaBytes)));
-  const maxGb = maxQuotaBytes != null ? bytesToGb(maxQuotaBytes) : undefined;
-  return (
-    <tr className="align-top dark:text-gray-200">
-      {/* User: name on top, email beneath (only when there's a distinct name), + disabled badge. */}
-      <td className="py-2 pr-2">
-        <div className="flex items-center gap-2">
-          <span className="truncate font-medium">{u.fullName || u.email}</span>
-          {u.hasGoogle && (
-            <span className="shrink-0 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
-              {t("google")}
-            </span>
-          )}
-          {!u.isEnabled && (
-            <span className="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-[10px] text-red-800 dark:bg-red-900/40 dark:text-red-300">
-              {t("disabled")}
-            </span>
-          )}
-        </div>
-        {u.fullName && (
-          <div className="truncate text-xs text-gray-500 dark:text-gray-400">{u.email}</div>
-        )}
-      </td>
-      <td className="py-2 pr-2">
-        <div className="flex flex-wrap gap-1">
-          {groupNames.length === 0 ? (
-            <span className="text-xs text-gray-400 dark:text-gray-500">-</span>
-          ) : (
-            groupNames.map((name) => (
-              <span
-                key={name}
-                className="rounded bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-700 dark:bg-gray-800 dark:text-gray-300"
-              >
-                {name}
-              </span>
-            ))
-          )}
-        </div>
-      </td>
-      <td className="py-2 pr-2">
-        <StatusPill status={u.status} />
-      </td>
-      <td className="py-2 pr-2 text-xs text-gray-500 dark:text-gray-400">
-        {editingQuota ? (
-          <span className="flex items-center gap-1.5">
-            <span>{t("quota")}</span>
-            <input
-              type="number"
-              min={0}
-              step={0.5}
-              max={maxGb}
-              value={quotaGb}
-              onChange={(e) => setQuotaGb(e.target.value)}
-              aria-label={t("quotaForAria", { email: u.email })}
-              className="w-20 rounded border px-1 py-0.5 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            />
-            <span>{t("gb")}</span>
-            <button
-              onClick={() => {
-                onSetQuota(gbToBytes(Number(quotaGb)));
-                setEditingQuota(false);
-              }}
-              className="rounded border px-1.5 py-0.5 text-[11px] dark:border-gray-700"
-            >
-              {t("common:save")}
-            </button>
-            <button onClick={() => setEditingQuota(false)} className="text-[11px] hover:underline">
-              {t("common:cancel")}
-            </button>
-          </span>
-        ) : (
-          <span className="flex flex-wrap items-center gap-x-1.5">
-            <span className="whitespace-nowrap">
-              {t("storageLine", { used: formatBytes(u.usedBytes), total: formatBytes(u.quotaBytes) })}
-            </span>
-            <button
-              onClick={() => {
-                setQuotaGb(String(bytesToGb(u.quotaBytes)));
-                setEditingQuota(true);
-              }}
-              className="text-[11px] text-blue-600 hover:underline dark:text-blue-400"
-            >
-              {t("editQuota")}
-            </button>
-          </span>
-        )}
-      </td>
-      <td className="py-2">
-        {!protectedRow && (
-          <span className="flex flex-wrap gap-1.5">
-            {/* Admin rights are managed via group membership (the Groups tab), not a per-user toggle; each
-                user's groups are shown in the Type column, so there is no Make Admin button here. */}
-            <button
-              onClick={() => onSetEnabled(!u.isEnabled)}
-              className="rounded border px-2 py-1 text-xs dark:border-gray-700"
-            >
-              {u.isEnabled ? t("disable") : t("enable")}
-            </button>
-            <button onClick={onDelete} className="rounded border border-red-300 px-2 py-1 text-xs text-red-600 dark:border-red-800 dark:text-red-400">
-              {t("delete")}
-            </button>
-          </span>
-        )}
-      </td>
-    </tr>
   );
 }

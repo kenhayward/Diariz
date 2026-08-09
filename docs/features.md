@@ -410,13 +410,25 @@ transcript, and **merge** several recordings into the earliest one — their tra
 and their action items are folded in. Audio is concatenated server-side (ffmpeg) for the recordings that
 still have it; recordings whose audio was deleted merge their transcript only (the summary is regenerated).
 - **Multi-user RBAC**: authority comes from **user groups**, each carrying platform permissions - manage
-rooms, manage users, manage platform. A user's permissions are the union of their groups', re-read on every
-request, so adding or removing someone from a group takes effect immediately rather than at their next
-sign-in. Two groups ship: **Platform Administrators** (everything; it cannot be deleted and its last member
-cannot be removed) and **Administrators** (manage users and rooms, but not backup/restore or platform
-settings). Administrators manage groups and membership in Manage Users → Groups. Around that sits an
+rooms, manage users, manage platform, manage formulas, manage people. A user's permissions are the union of
+their groups', re-read on every request, so adding or removing someone from a group takes effect immediately
+rather than at their next sign-in. Two groups ship: **Platform Administrators** (everything; it cannot be
+deleted and its last member cannot be removed) and **Administrators** (the other four, but not
+backup/restore or platform settings). Around that sits an
 access-request → admin-grant → account-setup lifecycle (one-time email link, with an in-app fallback when
 SMTP is unconfigured). Each user's data is isolated to them. Light/Dark/Auto theming.
+- **The Users & access console**: all of the above is administered from one place (account menu → Users &
+access), in the shape every admin tool uses - a list on the left, everything about the selected thing on the
+right. **Users** carries a search over name and email plus status chips that show their own counts, so
+"how many accounts are still awaiting setup?" is answered without a click; select someone and one panel holds
+their groups, quota, storage, status and the enable/delete controls. That panel answers the question the old
+table could not: a **Grants** line saying in plain language what the person's group memberships actually let
+them do (`Grants: manage rooms, manage formulas, manage the People directory.`) - both halves were always on
+the wire, but nothing joined them. **Groups** lists each group with its permission and member counts; its
+detail pane gives every permission a **sentence** rather than a column heading, edits membership in place, and
+sets a group's name, description and colour. **Requests** is its own tab carrying a badge while anyone is
+waiting. The Platform Administrator and your own account state *why* they cannot be disabled or deleted
+rather than silently offering no controls.
 - **Sign in with Google** (optional): OAuth 2.0 sign-in that reads the user's name, email, and profile
 picture (shown in the account menu). New Google sign-ups still require admin approval, and a Google email
 matching an existing account links to it automatically. Enabled when the operator configures a Google
@@ -524,7 +536,7 @@ configuring a formula field by field (the template blocks, break-after controls,
 toggles, sharing, and what blocks a deletion); meeting types and how one names the formula that
 generates its minutes; automations and Workflow Signals, including how an admin wires a destination once
 so formula authors just tick a box, and why personal subscribers get a thin payload while platform ones
-get the full output; users, groups and the four platform permissions, the access-request lifecycle, and
+get the full output; users, groups and the five platform permissions, the access-request lifecycle, and
 how room permissions differ; connecting Claude over MCP for claude.ai, Claude Desktop, and Claude Code,
 with the reverse-proxy requirements that cause almost every connection failure; a step-by-step guide to
 the `n8n-nodes-diariz` community node; the equivalent recipe for Zapier, which is **deliberately honest

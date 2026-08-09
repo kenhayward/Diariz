@@ -25,88 +25,42 @@ vi.mock("../lib/api", () => ({
 
 import { api } from "../lib/api";
 import ManageUsersModal from "./ManageUsersModal";
-import type { AdminUser } from "../lib/types";
+import type { AdminUser, Group } from "../lib/types";
 
 const u = (over: Partial<AdminUser>): AdminUser => ({
   id: "id", email: "e@x.test", fullName: null, accountType: "Standard", status: "Active", isEnabled: true,
-  quotaBytes: 5 * 1024 ** 3, usedBytes: 0, hasGoogle: false, ...over,
+  quotaBytes: 5 * 1024 ** 3, usedBytes: 0, hasGoogle: false, pictureUrl: null, ...over,
+});
+
+const g = (over: Partial<Group> & Pick<Group, "id" | "name">): Group => ({
+  description: null, icon: null, color: null, permissions: 0, isSystem: false, memberIds: [], ...over,
 });
 
 const mock = (f: unknown) => f as ReturnType<typeof vi.fn>;
-const render_ = () => {
+const render_ = (onClose: () => void = () => {}) => {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={qc}><ManageUsersModal onClose={() => {}} /></QueryClientProvider>);
+  return render(<QueryClientProvider client={qc}><ManageUsersModal onClose={onClose} /></QueryClientProvider>);
 };
+
+/// Selecting a row is the gateway to the whole detail pane, so nearly every test below starts here. Rows are
+/// buttons whose accessible name is "name, email, status".
+const selectUser = async (email: string) =>
+  fireEvent.click(await screen.findByRole("button", { name: new RegExp(email) }));
+
+const openTab = async (name: RegExp) => fireEvent.click(await screen.findByRole("tab", { name }));
 
 describe("ManageUsersModal", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("grants a request and shows the fallback link when email is unconfigured", async () => {
-    mock(api.listUsers).mockResolvedValue([u({ id: "req1", email: "want@x.test", status: "Requested" })]);
-    mock(api.grantUser).mockResolvedValue({ emailed: false, setupUrl: "http://x/setup?email=want&token=abc" });
-    render_();
+  // ---- Shell ----
 
-    fireEvent.click(await screen.findByRole("button", { name: /grant/i }));
-
-    await waitFor(() => expect(api.grantUser).toHaveBeenCalledWith("req1"));
-    expect(await screen.findByText(/setup\?email=want&token=abc/)).toBeTruthy();
-  });
-
-  it("adds a user by email and shows the fallback link when email is unconfigured", async () => {
+  it("does not close on a backdrop click, but does on Escape and on the close button", async () => {
     mock(api.listUsers).mockResolvedValue([]);
-    mock(api.addUser).mockResolvedValue({ emailed: false, setupUrl: "http://x/setup?email=new&token=abc" });
-    render_();
-
-    fireEvent.change(await screen.findByLabelText(/new user email/i), { target: { value: "new@x.test" } });
-    fireEvent.click(screen.getByRole("button", { name: /add user/i }));
-
-    await waitFor(() => expect(api.addUser).toHaveBeenCalledWith("new@x.test", undefined));
-    expect(await screen.findByText(/setup\?email=new&token=abc/)).toBeTruthy();
-  });
-
-  it("shows an onboarding status pill for invited users", async () => {
-    mock(api.listUsers).mockResolvedValue([u({ id: "i1", email: "inv@x.test", status: "Invited" })]);
-    render_();
-    expect(await screen.findByText(/awaiting setup/i)).toBeTruthy();
-  });
-
-  it("shows a Google badge only for Google-linked users", async () => {
-    mock(api.listUsers).mockResolvedValue([
-      u({ id: "g1", email: "goog@x.test", hasGoogle: true }),
-      u({ id: "p1", email: "pass@x.test", hasGoogle: false }),
-    ]);
-    render_();
-    await screen.findByText("goog@x.test");
-    expect(screen.getAllByText("Google")).toHaveLength(1); // exactly the one linked user
-  });
-
-  it("has no Make Admin button (admin rights are managed via group membership)", async () => {
-    mock(api.listUsers).mockResolvedValue([u({ id: "s1", email: "std@x.test", accountType: "Standard" })]);
-    render_();
-    await screen.findByText("std@x.test");
-    expect(screen.queryByRole("button", { name: /make admin/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /make standard/i })).toBeNull();
-  });
-
-  it("shows the Close button on both the Users and Groups tabs", async () => {
-    mock(api.listUsers).mockResolvedValue([u({ id: "u1", email: "a@x.test" })]);
-    render_();
-    await screen.findByText("a@x.test");
-    expect(screen.getByRole("button", { name: /close/i })).toBeTruthy();
-    fireEvent.click(screen.getByRole("tab", { name: /groups/i }));
-    expect(screen.getByRole("button", { name: /close/i })).toBeTruthy();
-  });
-
-  it("closes on Escape and the Close button, but not on a backdrop click", async () => {
     const onClose = vi.fn();
-    mock(api.listUsers).mockResolvedValue([u({ id: "u1", email: "a@x.test" })]);
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { container } = render(
-      <QueryClientProvider client={qc}><ManageUsersModal onClose={onClose} /></QueryClientProvider>,
-    );
-    await screen.findByText("a@x.test");
+    const { container } = render_(onClose);
+    await screen.findByRole("dialog");
 
-    fireEvent.click(container.firstChild as Element); // the backdrop overlay - must NOT close
+    fireEvent.click(container.firstChild as Element);
     expect(onClose).not.toHaveBeenCalled();
 
     fireEvent.keyDown(document, { key: "Escape" });
@@ -116,98 +70,376 @@ describe("ManageUsersModal", () => {
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 
-  it("edits a user's storage quota (GB → bytes)", async () => {
-    mock(api.listUsers).mockResolvedValue([u({ id: "s1", email: "std@x.test", quotaBytes: 5 * 1024 ** 3 })]);
-    mock(api.setUserQuota).mockResolvedValue(undefined);
+  it("badges the Requests tab with the pending count, and drops the badge when there are none", async () => {
+    mock(api.listUsers).mockResolvedValue([
+      u({ id: "r1", email: "a@x.test", status: "Requested" }),
+      u({ id: "r2", email: "b@x.test", status: "Requested" }),
+      u({ id: "s1", email: "std@x.test" }),
+    ]);
+    const { unmount } = render_();
+    expect(await screen.findByRole("tab", { name: /requests\s*2/i })).toBeTruthy();
+    unmount();
+
+    mock(api.listUsers).mockResolvedValue([u({ id: "s1", email: "std@x.test" })]);
     render_();
-
-    fireEvent.click(await screen.findByRole("button", { name: /edit quota/i }));
-    const input = screen.getByLabelText(/quota for std@x.test/i);
-    fireEvent.change(input, { target: { value: "10" } });
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
-
-    await waitFor(() => expect(api.setUserQuota).toHaveBeenCalledWith("s1", 10 * 1024 ** 3));
+    const tab = await screen.findByRole("tab", { name: /requests/i });
+    expect(tab.textContent).toBe("Requests");
   });
 
-  it("refreshes the account storage query after a quota change", async () => {
-    mock(api.listUsers).mockResolvedValue([u({ id: "s1", email: "std@x.test", quotaBytes: 5 * 1024 ** 3 })]);
+  // ---- Users tab ----
+
+  it("keeps pending requests out of the user list, and shows them on Requests", async () => {
+    mock(api.listUsers).mockResolvedValue([
+      u({ id: "s1", email: "std@x.test" }),
+      u({ id: "r1", email: "want@x.test", status: "Requested" }),
+    ]);
+    render_();
+
+    await screen.findByRole("button", { name: /std@x.test/ });
+    expect(screen.queryByRole("button", { name: /want@x.test/ })).toBeNull();
+
+    await openTab(/requests/i);
+    expect(await screen.findByText("want@x.test")).toBeTruthy();
+  });
+
+  it("filters the list as you type, over name and email alike", async () => {
+    mock(api.listUsers).mockResolvedValue([
+      u({ id: "1", email: "priya@x.test", fullName: "Priya Shah" }),
+      u({ id: "2", email: "tom@x.test", fullName: "Tom Okafor" }),
+    ]);
+    render_();
+    const box = await screen.findByLabelText(/search name or email/i);
+
+    fireEvent.change(box, { target: { value: "okafor" } });
+    expect(screen.queryByRole("button", { name: /priya@x.test/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /tom@x.test/ })).toBeTruthy();
+
+    fireEvent.change(box, { target: { value: "priya@" } });
+    expect(screen.getByRole("button", { name: /priya@x.test/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /tom@x.test/ })).toBeNull();
+  });
+
+  it("counts each status on its chip and narrows to it when pressed", async () => {
+    mock(api.listUsers).mockResolvedValue([
+      u({ id: "1", email: "act@x.test" }),
+      u({ id: "2", email: "inv@x.test", status: "Invited" }),
+      u({ id: "3", email: "off@x.test", isEnabled: false }),
+      u({ id: "4", email: "req@x.test", status: "Requested" }),
+    ]);
+    render_();
+
+    // Requested is excluded from All, so the total agrees with the rows on screen.
+    const all = await screen.findByRole("button", { name: "All 3" });
+    expect(all.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Awaiting setup 1" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Disabled 1" }));
+    expect(screen.getByRole("button", { name: "Disabled 1" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: /off@x.test/ })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /act@x.test/ })).toBeNull();
+  });
+
+  it("adds a user and shows the fallback setup link when email is unconfigured", async () => {
+    mock(api.listUsers).mockResolvedValue([]);
+    mock(api.addUser).mockResolvedValue({ emailed: false, setupUrl: "http://x/setup?email=new&token=t1" });
+    render_();
+
+    fireEvent.change(await screen.findByLabelText(/new user email/i), { target: { value: "new@x.test" } });
+    fireEvent.click(screen.getByRole("button", { name: /add user/i }));
+
+    await waitFor(() => expect(api.addUser).toHaveBeenCalledWith("new@x.test", undefined));
+    expect(await screen.findByText(/setup\?email=new&token=t1/)).toBeTruthy();
+  });
+
+  it("shows a Google badge on a linked account", async () => {
+    mock(api.listUsers).mockResolvedValue([u({ id: "s1", email: "std@x.test", hasGoogle: true })]);
+    render_();
+
+    await selectUser("std@x.test");
+    expect(screen.getAllByText("Google")).toHaveLength(1);
+  });
+
+  it("has no Make Admin control - authority comes from group membership", async () => {
+    mock(api.listUsers).mockResolvedValue([u({ id: "s1", email: "std@x.test" })]);
+    render_();
+
+    await selectUser("std@x.test");
+    expect(screen.queryByRole("button", { name: /make admin/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /make standard/i })).toBeNull();
+  });
+
+  // ---- The reason the detail pane exists ----
+
+  it("says in plain language what the selected user's groups let them do", async () => {
+    mock(api.listUsers).mockResolvedValue([u({ id: "s1", email: "std@x.test", fullName: "Std User" })]);
+    mock(api.listGroups).mockResolvedValue([
+      g({ id: "g1", name: "Admins", permissions: 1, memberIds: ["s1"] }),      // manage rooms
+      g({ id: "g2", name: "Research", permissions: 8 | 16, memberIds: ["s1"] }), // formulas + people
+      g({ id: "g3", name: "Elsewhere", permissions: 4, memberIds: ["other"] }), // not theirs
+    ]);
+    render_();
+
+    await selectUser("std@x.test");
+    const line = await screen.findByText(/^Grants:/);
+    expect(line.textContent).toBe("Grants: manage rooms, manage formulas, manage the People directory.");
+    // The group they are not in must not leak into the sentence.
+    expect(line.textContent).not.toContain("platform");
+  });
+
+  it("says so when a user's groups grant nothing", async () => {
+    mock(api.listUsers).mockResolvedValue([u({ id: "s1", email: "std@x.test" })]);
+    mock(api.listGroups).mockResolvedValue([g({ id: "g1", name: "Everyone", permissions: 0, memberIds: ["s1"] })]);
+    render_();
+
+    await selectUser("std@x.test");
+    expect(await screen.findByText("No platform permissions.")).toBeTruthy();
+  });
+
+  it("lists the user's groups in the row and lets the pane remove one", async () => {
+    mock(api.listUsers).mockResolvedValue([u({ id: "s1", email: "std@x.test" })]);
+    mock(api.listGroups).mockResolvedValue([g({ id: "g1", name: "Administrators", permissions: 2, memberIds: ["s1"] })]);
+    mock(api.removeGroupMember).mockResolvedValue(undefined);
+    render_();
+
+    await selectUser("std@x.test");
+    fireEvent.click(await screen.findByRole("button", { name: /remove std@x.test from Administrators/i }));
+    await waitFor(() => expect(api.removeGroupMember).toHaveBeenCalledWith("g1", "s1"));
+  });
+
+  // ---- Quota, disable, delete ----
+
+  it("saves a quota in GB and refreshes the account menu's storage figure", async () => {
+    mock(api.listUsers).mockResolvedValue([u({ id: "s1", email: "std@x.test" })]);
     mock(api.setUserQuota).mockResolvedValue(undefined);
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const spy = vi.spyOn(qc, "invalidateQueries");
     render(<QueryClientProvider client={qc}><ManageUsersModal onClose={() => {}} /></QueryClientProvider>);
 
-    fireEvent.click(await screen.findByRole("button", { name: /edit quota/i }));
+    await selectUser("std@x.test");
     fireEvent.change(screen.getByLabelText(/quota for std@x.test/i), { target: { value: "10" } });
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
-    // The account dropdown reads ["user-storage"]; a quota change must invalidate it so the header updates.
+    await waitFor(() => expect(api.setUserQuota).toHaveBeenCalledWith("s1", 10 * 1024 ** 3));
     await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: ["user-storage"] }));
   });
 
-  it("deletes a user after confirmation", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+  it("deletes an account only after the confirm", async () => {
     mock(api.listUsers).mockResolvedValue([u({ id: "s1", email: "std@x.test" })]);
+    mock(api.deleteUser).mockResolvedValue(undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     render_();
-    fireEvent.click(await screen.findByRole("button", { name: /delete/i }));
+
+    await selectUser("std@x.test");
+    fireEvent.click(await screen.findByRole("button", { name: /delete account/i }));
     await waitFor(() => expect(api.deleteUser).toHaveBeenCalledWith("s1"));
   });
 
-  it("protects the Platform Administrator and the current user from destructive actions", async () => {
+  /// The server refuses both, and the old table simply rendered nothing where the buttons would be - which
+  /// read as a bug. The pane now says which rule applies.
+  it("offers no Disable or Delete for the Platform Administrator or yourself, and says why", async () => {
     mock(api.listUsers).mockResolvedValue([
-      u({ id: "plat", email: "plat@x.test", accountType: "PlatformAdministrator" }),
-      u({ id: "self", email: "me@x.test" }),
-      u({ id: "other", email: "other@x.test" }),
+      u({ id: "p1", email: "plat@x.test", accountType: "PlatformAdministrator" }),
+      u({ id: "m1", email: "me@x.test" }),
+      u({ id: "s1", email: "std@x.test" }),
     ]);
     render_();
-    await screen.findByText("plat@x.test");
 
-    const platRow = screen.getByText("plat@x.test").closest("tr")!;
-    const selfRow = screen.getByText("me@x.test").closest("tr")!;
-    const otherRow = screen.getByText("other@x.test").closest("tr")!;
+    await selectUser("plat@x.test");
+    expect(await screen.findByText(/Platform Administrator can't be disabled or deleted/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /delete account/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^disable$/i })).toBeNull();
 
-    expect(within(platRow).queryByRole("button", { name: /delete/i })).toBeNull();
-    expect(within(selfRow).queryByRole("button", { name: /delete/i })).toBeNull();
-    expect(within(otherRow).getByRole("button", { name: /delete/i })).toBeTruthy();
+    await selectUser("me@x.test");
+    expect(await screen.findByText(/can't disable or delete your own account/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /delete account/i })).toBeNull();
+
+    await selectUser("std@x.test");
+    expect(await screen.findByRole("button", { name: /delete account/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^disable$/i })).toBeTruthy();
   });
 
-  it("renders the users as a table with a column header row", async () => {
-    mock(api.listUsers).mockResolvedValue([u({ id: "a", email: "a@x.test" })]);
+  // ---- Requests tab ----
+
+  it("grants a request and shows the fallback link when email is unconfigured", async () => {
+    mock(api.listUsers).mockResolvedValue([u({ id: "req1", email: "want@x.test", status: "Requested" })]);
+    mock(api.grantUser).mockResolvedValue({ emailed: false, setupUrl: "http://x/setup?email=want&token=abc" });
     render_();
-    await screen.findByText("a@x.test");
-    expect(screen.getByRole("columnheader", { name: /user/i })).toBeTruthy();
-    expect(screen.getByRole("columnheader", { name: /storage/i })).toBeTruthy();
+
+    await openTab(/requests/i);
+    fireEvent.click(await screen.findByRole("button", { name: /^grant$/i }));
+
+    await waitFor(() => expect(api.grantUser).toHaveBeenCalledWith("req1"));
+    expect(await screen.findByText(/setup\?email=want&token=abc/)).toBeTruthy();
+  });
+
+  it("denies a request only after the confirm", async () => {
+    mock(api.listUsers).mockResolvedValue([u({ id: "req1", email: "want@x.test", status: "Requested" })]);
+    mock(api.denyUser).mockResolvedValue(undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render_();
+
+    await openTab(/requests/i);
+    fireEvent.click(await screen.findByRole("button", { name: /^deny$/i }));
+    await waitFor(() => expect(api.denyUser).toHaveBeenCalledWith("req1"));
+  });
+
+  it("says so when nothing is pending", async () => {
+    mock(api.listUsers).mockResolvedValue([u({ id: "s1", email: "std@x.test" })]);
+    render_();
+
+    await openTab(/requests/i);
+    expect(await screen.findByText("No pending requests.")).toBeTruthy();
+  });
+
+  // ---- Tab switching ----
+
+  it("swaps the whole body when the tab changes", async () => {
+    mock(api.listUsers).mockResolvedValue([u({ id: "s1", email: "std@x.test" })]);
+    render_();
+    await screen.findByRole("button", { name: /std@x.test/ });
+
+    await openTab(/groups/i);
+    expect(screen.getByTestId("new-group-form")).toBeTruthy();
+    expect(screen.queryByLabelText(/search name or email/i)).toBeNull();
   });
 });
 
-describe("ManageUsersModal groups", () => {
+describe("ManageUsersModal groups tab", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("shows each user's groups instead of an account type", async () => {
-    mock(api.listUsers).mockResolvedValue([u({ id: "u1", email: "a@x.test", accountType: "Administrator" })]);
-    mock(api.listGroups).mockResolvedValue([
-      { id: "g1", name: "Administrators", description: null, icon: null, color: null, permissions: 3, isSystem: false, memberIds: ["u1"] },
-      { id: "g2", name: "Engineering", description: null, icon: null, color: null, permissions: 0, isSystem: false, memberIds: [] },
-    ]);
+  const systemGroup = g({ id: "g1", name: "Platform Administrators", permissions: 7, isSystem: true, memberIds: ["u1"] });
+  const ordinary = g({ id: "g2", name: "Engineering", description: "Day-to-day admins.", permissions: 1, memberIds: ["u2"] });
+  const users = [
+    u({ id: "u1", email: "plat@x.test", fullName: "Plat Admin" }),
+    u({ id: "u2", email: "eng@x.test", fullName: "Eng Person" }),
+  ];
 
+  const openGroups = async (groups = [systemGroup, ordinary]) => {
+    mock(api.listGroups).mockResolvedValue(groups);
+    mock(api.listUsers).mockResolvedValue(users);
     render_();
+    await openTab(/groups/i);
+  };
 
-    expect(await screen.findByText("Administrators")).toBeTruthy();
-    // The raw account type must no longer be rendered: group membership is the truth now.
-    expect(screen.queryByText("Administrator")).toBeNull();
-    expect(screen.queryByText("Engineering")).toBeNull(); // not a member
+  const selectGroup = async (name: RegExp) => fireEvent.click(await screen.findByRole("button", { name }));
+
+  it("lists every group with its permission and member counts", async () => {
+    await openGroups();
+    expect(await screen.findByText("Platform Administrators")).toBeTruthy();
+    expect(screen.getByText("3 permissions · 1 member")).toBeTruthy();
+    expect(screen.getByText("1 permission · 1 member")).toBeTruthy();
   });
 
-  it("switches to the Groups tab", async () => {
-    mock(api.listUsers).mockResolvedValue([u({ id: "u1", email: "a@x.test" })]);
-    mock(api.listGroups).mockResolvedValue([
-      { id: "g2", name: "Engineering", description: null, icon: null, color: null, permissions: 1, isSystem: false, memberIds: [] },
-    ]);
+  it("shows nothing selected until a group is picked", async () => {
+    await openGroups();
+    expect(await screen.findByText(/select a group on the left/i)).toBeTruthy();
+  });
 
-    render_();
-    fireEvent.click(await screen.findByRole("tab", { name: /groups/i }));
+  /// A column headed MANAGE PLATFORM over a bare checkbox never said what it would let someone do.
+  it("gives every permission a sentence, not just a name", async () => {
+    await openGroups();
+    await selectGroup(/Engineering/);
+    expect(await screen.findByText("Platform-wide settings, model defaults, integrations, backup and restore.")).toBeTruthy();
+    expect(screen.getByText("Create shared rooms, and add or remove their members.")).toBeTruthy();
+  });
 
-    await waitFor(() => expect(screen.getByTestId("new-group-form")).toBeTruthy());
-    // The users table is gone while the Groups tab is open.
-    expect(screen.queryByText("a@x.test")).toBeNull();
+  it("toggles a permission, sending the whole group shape", async () => {
+    mock(api.updateGroup).mockResolvedValue(undefined);
+    await openGroups();
+    await selectGroup(/Engineering/);
+
+    fireEvent.click(await screen.findByTestId("perm-g2-2"));
+    await waitFor(() =>
+      expect(api.updateGroup).toHaveBeenCalledWith("g2", expect.objectContaining({ permissions: 3, name: "Engineering" })),
+    );
+  });
+
+  it("locks the system group's permissions and offers it no Edit or Delete", async () => {
+    await openGroups();
+    await selectGroup(/Platform Administrators/);
+
+    expect((await screen.findByTestId("perm-g1-4") as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByTestId("perm-g1-4") as HTMLInputElement).checked).toBe(true);
+    expect(screen.queryByTestId("delete-group-g1")).toBeNull();
+    expect(screen.queryByTestId("edit-group-g1")).toBeNull();
+    expect(screen.getByText(/this group is required/i)).toBeTruthy();
+  });
+
+  it("deletes a group after the confirm", async () => {
+    mock(api.deleteGroup).mockResolvedValue(undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await openGroups();
+    await selectGroup(/Engineering/);
+
+    fireEvent.click(await screen.findByTestId("delete-group-g2"));
+    await waitFor(() => expect(api.deleteGroup).toHaveBeenCalledWith("g2"));
+  });
+
+  it("creates a group and selects it", async () => {
+    mock(api.createGroup).mockResolvedValue(g({ id: "g3", name: "Support" }));
+    await openGroups();
+
+    fireEvent.change(await screen.findByLabelText(/new group name/i), { target: { value: "Support" } });
+    fireEvent.submit(screen.getByTestId("new-group-form"));
+
+    await waitFor(() => expect(api.createGroup).toHaveBeenCalledWith(expect.objectContaining({ name: "Support" })));
+  });
+
+  it("shows members as chips and removes one in place", async () => {
+    mock(api.removeGroupMember).mockResolvedValue(undefined);
+    await openGroups();
+    await selectGroup(/Engineering/);
+
+    expect(await screen.findByTestId("member-g2-u2")).toBeTruthy();
+    expect(screen.queryByTestId("member-g2-u1")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("member-g2-u2"));
+    await waitFor(() => expect(api.removeGroupMember).toHaveBeenCalledWith("g2", "u2"));
+  });
+
+  it("adds a member through the picker", async () => {
+    mock(api.addGroupMember).mockResolvedValue(undefined);
+    await openGroups();
+    await selectGroup(/Engineering/);
+
+    fireEvent.change(await screen.findByRole("combobox"), { target: { value: "plat" } });
+    fireEvent.click(await screen.findByRole("option", { name: /Plat Admin/ }));
+    await waitFor(() => expect(api.addGroupMember).toHaveBeenCalledWith("g2", "u1"));
+  });
+
+  it("will not let the system group lose its last member", async () => {
+    await openGroups();
+    await selectGroup(/Platform Administrators/);
+    expect(((await screen.findByTestId("member-g1-u1")) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  /// description, icon and colour have been on the Group type all along, and no screen has ever set them.
+  it("edits a group's name, description and colour in one dialog", async () => {
+    mock(api.updateGroup).mockResolvedValue(undefined);
+    await openGroups();
+    await selectGroup(/Engineering/);
+
+    fireEvent.click(await screen.findByTestId("edit-group-g2"));
+    const dialog = within(await screen.findByRole("dialog", { name: /edit group/i }));
+    fireEvent.change(dialog.getByLabelText(/^name$/i), { target: { value: "Engineering EMEA" } });
+    fireEvent.change(dialog.getByLabelText(/^description$/i), { target: { value: "Regional admins." } });
+    fireEvent.click(dialog.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(api.updateGroup).toHaveBeenCalledWith("g2", {
+        name: "Engineering EMEA",
+        description: "Regional admins.",
+        icon: null,
+        color: "#9ca3af",
+        // Untouched: saving a name must never strip the group's rights.
+        permissions: 1,
+      }),
+    );
+  });
+
+  it("shows a group's description under its name", async () => {
+    await openGroups();
+    await selectGroup(/Engineering/);
+    expect(await screen.findByText("Day-to-day admins.")).toBeTruthy();
   });
 });
