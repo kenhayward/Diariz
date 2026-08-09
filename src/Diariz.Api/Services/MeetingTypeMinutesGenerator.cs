@@ -15,7 +15,7 @@ public interface IMeetingTypeMinutesGenerator
         Guid recordingOwnerId, Guid? meetingTypeId, MeetingMinutesContext context,
         IReadOnlyList<SegmentDto> segments, IReadOnlyList<ExtractedAction> actions,
         IReadOnlyList<MeetingNoteDto> notes,
-        SummarizationRequestConfig config, int charBudget, CancellationToken ct = default);
+        SummarizationRequestConfig config, CancellationToken ct = default);
 }
 
 public sealed class MeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerator
@@ -39,8 +39,11 @@ public sealed class MeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerator
         Guid recordingOwnerId, Guid? meetingTypeId, MeetingMinutesContext context,
         IReadOnlyList<SegmentDto> segments, IReadOnlyList<ExtractedAction> actions,
         IReadOnlyList<MeetingNoteDto> notes,
-        SummarizationRequestConfig config, int charBudget, CancellationToken ct = default)
+        SummarizationRequestConfig config, CancellationToken ct = default)
     {
+        // The single platform-wide context budget, sized off the model's window - see LlmContextBudget.
+        var charBudget = config.ContextCharBudget;
+
         // A meeting type carries no prompts of its own: the document it produces is its PRIMARY FORMULA's
         // template, and the formula also declares WHAT THE MODEL SEES. The type contributes only its framing
         // (Overview). Minutes and formulas are the same thing.

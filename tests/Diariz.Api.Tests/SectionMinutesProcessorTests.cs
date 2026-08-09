@@ -58,7 +58,7 @@ public class SectionMinutesProcessorTests
     private static Task Run(DiarizDbContext db, IMeetingTypeMinutesGenerator gen, IMeetingMinutesClient combiner,
         FakeSummarizationSettingsResolver resolver, FakeHubContext hub, Section section) =>
         SectionMinutesProcessor.ProcessAsync(db, gen, combiner, resolver, hub,
-            FolderMinutesPrompt.DefaultTemplate, new SectionMinutesJob(section.Id), 16_000, 32_000, NullLogger.Instance);
+            FolderMinutesPrompt.DefaultTemplate, new SectionMinutesJob(section.Id), NullLogger.Instance);
 
     /// <summary>Folder minutes share <c>SectionSummaryProcessor.IncludedRecordingsAsync</c> with folder
     /// summaries, so they had the same bug: a folder in a SHARED room rolled up nothing, because placements

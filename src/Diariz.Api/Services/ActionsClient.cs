@@ -26,7 +26,7 @@ public class ActionsClient : IActionsClient
         SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
         DateTimeOffset? meetingDate, CancellationToken ct = default)
     {
-        var messages = ActionsPrompt.BuildMessages(template, segments, meetingDate);
+        var messages = ActionsPrompt.BuildMessages(template, segments, meetingDate, config.ContextCharBudget);
         var body = new Dictionary<string, object?>
         {
             ["model"] = config.Model,

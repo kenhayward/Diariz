@@ -18,8 +18,7 @@ public static class SectionMinutesProcessor
     public static async Task ProcessAsync(
         DiarizDbContext db, IMeetingTypeMinutesGenerator generator, IMeetingMinutesClient combiner,
         ISummarizationSettingsResolver resolver, IHubContext<TranscriptionHub> hub, string folderTemplate,
-        SectionMinutesJob job, int perRecordingCharBudget, int combineCharBudget, ILogger logger,
-        CancellationToken ct = default)
+        SectionMinutesJob job, ILogger logger, CancellationToken ct = default)
     {
         var section = await db.Sections
             .Include(s => s.Minutes)
@@ -43,7 +42,7 @@ public static class SectionMinutesProcessor
             var items = new List<(string RecordingName, string Minutes)>();
             foreach (var rec in await SectionSummaryProcessor.IncludedRecordingsAsync(db, section))
             {
-                var text = await EnsureRecordingMinutesAsync(db, generator, cfg, rec.Id, perRecordingCharBudget, ct);
+                var text = await EnsureRecordingMinutesAsync(db, generator, cfg, rec.Id, ct);
                 if (!string.IsNullOrWhiteSpace(text)) items.Add((rec.Name ?? rec.Title, text!));
             }
 
@@ -53,8 +52,9 @@ public static class SectionMinutesProcessor
 
             var folderText = items.Count == 0
                 ? ""
+                // One budget, from the resolved config - see LlmContextBudget.
                 : await combiner.GenerateAsync(cfg, FolderMinutesPrompt.BuildMessages(
-                    folderTemplate, type, TypeContent(type), items, combineCharBudget), ct);
+                    folderTemplate, type, TypeContent(type), items, cfg.ContextCharBudget), ct);
 
             minutes = await UpsertAsync(db, section);
             minutes.Model = cfg.Model;
@@ -80,7 +80,7 @@ public static class SectionMinutesProcessor
     /// the normal per-recording generator first if missing. Mirrors <see cref="MeetingMinutesProcessor"/>.</summary>
     private static async Task<string?> EnsureRecordingMinutesAsync(
         DiarizDbContext db, IMeetingTypeMinutesGenerator generator, SummarizationRequestConfig cfg,
-        Guid recordingId, int charBudget, CancellationToken ct)
+        Guid recordingId, CancellationToken ct)
     {
         var rec = await db.Recordings.FirstOrDefaultAsync(r => r.Id == recordingId, ct);
         if (rec is null) return null;
@@ -117,7 +117,7 @@ public static class SectionMinutesProcessor
             .Select(n => new MeetingNoteDto(n.Id, n.Text, n.CapturedAtMs, n.Ordinal, n.CreatedAt)).ToListAsync(ct);
 
         var markdown = await generator.GenerateAsync(
-            rec.UserId, rec.MeetingTypeId, context, segs, actions, notes, cfg, charBudget, ct);
+            rec.UserId, rec.MeetingTypeId, context, segs, actions, notes, cfg, ct);
 
         var minutes = transcription.MeetingMinutes;
         if (minutes is null)

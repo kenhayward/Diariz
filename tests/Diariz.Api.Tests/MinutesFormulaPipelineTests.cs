@@ -47,7 +47,7 @@ public class MinutesFormulaPipelineTests
     private static Task Run(DiarizDbContext db, FakeJobQueue queue, Recording rec, Transcription tr) =>
         MeetingMinutesProcessor.ProcessAsync(
             db, new FakeMeetingTypeMinutesGenerator { Result = "# Minutes" }, new FakeSummarizationSettingsResolver(),
-            new FakeHubContext(), queue, new MeetingMinutesJob(rec.Id, tr.Id), 16000, NullLogger.Instance,
+            new FakeHubContext(), queue, new MeetingMinutesJob(rec.Id, tr.Id), NullLogger.Instance,
             new CapturingWebhookPublisher(), "");
 
     /// <summary>Attach `formulas` to a meeting type and put the recording on it.</summary>

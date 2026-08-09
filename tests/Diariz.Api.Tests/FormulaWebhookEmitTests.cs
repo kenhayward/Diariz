@@ -53,7 +53,7 @@ public class FormulaWebhookEmitTests
         DiarizDbContext db, FakeChatStreamClient chat, FakeSummarizationSettingsResolver resolver,
         FakeHubContext hub, FormulaRunJob job, CapturingWebhookPublisher publisher, string publicUrl = "") =>
         FormulaRunProcessor.ProcessAsync(
-            db, chat, resolver, hub, job, 48_000, NullLogger.Instance, publisher, publicUrl);
+            db, chat, resolver, hub, job, NullLogger.Instance, publisher, publicUrl);
 
     [Fact]
     public async Task Successful_run_publishes_formula_result_completed()
@@ -226,7 +226,7 @@ public class FormulaWebhookEmitTests
         // The webhook publisher itself throws - this must not flip the just-persisted Ready result to Failed.
         await FormulaRunProcessor.ProcessAsync(
             db, chat, new FakeSummarizationSettingsResolver(), hub,
-            new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId), 48_000, NullLogger.Instance,
+            new FormulaRunJob(rec.Id, null, result.Id, formula.Id, userId), NullLogger.Instance,
             new ThrowingWebhookPublisher(), "https://app.test");
 
         var reloaded = await db.FormulaResults.FindAsync(result.Id);

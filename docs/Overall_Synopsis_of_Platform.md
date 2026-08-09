@@ -323,6 +323,21 @@ Settings), applied by the resolvers and enforced via a linked `CancellationToken
 cap (otherwise `HttpClient`'s default 100 s silently capped anything longer). The streaming chat client keeps the
 default timeout for its header phase and relies on client-disconnect for cancellation.
 
+**One context budget for every LLM call.** The resolved config also carries **`ContextCharBudget`** - the single
+upper bound on injected context shared by *every* call site (recording summary, actions, tags, minutes, the folder
+summary/minutes roll-ups, formula map **and** reduce, and the chat system prompt). `LlmContextBudget.CharsFor`
+derives it from the effective **model context window** in tokens (`UserSettings.ChatContextWindow` ?? server
+`Chat:ContextLength`, default 131,072) as `window x 60% x 4 chars/token`, with a 24,000-char floor. The 60% share
+leaves the window's remainder for the instruction template, chat history and - since it is charged against the same
+window - the model's own completion; the 4:1 char/token ratio matches `ChatContextMeter`, so the chat context dial
+and the real truncation finally agree. Each site previously carried its own unrelated constant (24,000 chars for a
+folder summary, 32,000 for folder minutes and formula reduces, 16,000 for the whole minutes context, 48,000 for
+chat), none of which tracked the configured model: on the default window that fed a 131k-token endpoint roughly 6k
+tokens of context, and because `FolderSummaryPrompt.JoinItems` drops **whole items** once its budget is spent,
+large folders silently rolled up only their first ~18 meetings. The old per-worker options
+(`SectionSummary`/`SectionMinutes`/`FormulaRun:CombineCharBudget`, `MeetingMinutes:TranscriptCharBudget`) are gone -
+`Chat:ContextLength` (env `CHAT_CONTEXT_LENGTH`) is now the only knob, and it must be set to the model's real window.
+
 - **Summarise (async).** `POST /api/recordings/{id}/summarize` sets status `Summarizing` and enqueues on a
   **second Redis stream `summarization-jobs`** (group `summarizers`). The API's **only stream consumer**,
   `SummarizationWorker` (a singleton `BackgroundService`), reads it, calls `/chat/completions`
@@ -675,7 +690,7 @@ default timeout for its header phase and relies on client-disconnect for cancell
   resolution the folder read pages use), runs the formula on each included transcript's context (the "map",
   reusing `RunOverRecordingAsync`; empty meetings skipped, and the per-meeting outputs are ephemeral - never
   persisted), then composes the **same** template over the concatenated `## {meeting}` outputs (the
-  "reduce", within a char budget, mirroring `FolderSummaryPrompt`); a single included meeting short-circuits the
+  "reduce", within the shared `ContextCharBudget`, mirroring `FolderSummaryPrompt`); a single included meeting short-circuits the
   reduce. It shares the Phase-1 async pipeline - the `FormulaRunJob` carries `SectionId` (with `RecordingId`
   null) and the `FormulaRunWorker`/`FormulaRunProcessor` flip the `SectionFormulaResult` row. Endpoints on
   **`SectionFormulaResultsController`** at `api/sections/{id}/...`: **`POST .../formulas/{formulaId}/run`**

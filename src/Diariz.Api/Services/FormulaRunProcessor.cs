@@ -20,7 +20,7 @@ public static class FormulaRunProcessor
 {
     public static async Task ProcessAsync(
         DiarizDbContext db, IChatStreamClient chat, ISummarizationSettingsResolver settings,
-        IHubContext<TranscriptionHub> hub, FormulaRunJob job, int reduceCharBudget, ILogger logger,
+        IHubContext<TranscriptionHub> hub, FormulaRunJob job, ILogger logger,
         IWebhookPublisher webhooks, string publicUrl, CancellationToken ct = default)
     {
         var cfg = await settings.ResolveAsync(job.UserId, ct);
@@ -43,7 +43,7 @@ public static class FormulaRunProcessor
             if (job.RecordingId is { } recordingId)
                 text = await RunOverRecordingAsync(db, chat, cfg, formula, recordingId, ct);
             else if (job.SectionId is { } sectionId)
-                text = await RunOverSectionAsync(db, chat, cfg, formula, sectionId, reduceCharBudget, ct);
+                text = await RunOverSectionAsync(db, chat, cfg, formula, sectionId, ct);
             else
                 throw new InvalidOperationException("A formula run must target a recording or a folder.");
 
@@ -269,7 +269,7 @@ public static class FormulaRunProcessor
     /// meeting returns its map output directly (no reduce call); zero meetings throw so the run is marked Failed.</summary>
     internal static async Task<string> RunOverSectionAsync(
         DiarizDbContext db, IChatStreamClient chat, SummarizationRequestConfig cfg,
-        Formula formula, Guid sectionId, int reduceCharBudget, CancellationToken ct)
+        Formula formula, Guid sectionId, CancellationToken ct)
     {
         var section = await db.Sections.FirstOrDefaultAsync(s => s.Id == sectionId, ct);
         if (section is null)
@@ -293,7 +293,7 @@ public static class FormulaRunProcessor
         var items = new List<(string Name, string Output)>();
         foreach (var rec in recordings)
         {
-            var context = await BuildRecordingContextAsync(db, rec.Id, formula.Context, ct: ct);
+            var context = await BuildRecordingContextAsync(db, rec.Id, formula.Context, cfg.ContextCharBudget, ct);
             if (context == FormulaContextBuilder.EmptyContextFallback) continue; // skip empty meetings - no map call.
             var fields = await BuildFieldResolverAsync(db, content, rec.Id, ct);
             var output = await ComposeAsync(chat, cfg, content, fields, context, ct);
@@ -309,7 +309,7 @@ public static class FormulaRunProcessor
         // (bounded, mirrors JoinItems). Field blocks resolve to null here - there is no single recording to
         // resolve them against - and the composer drops empty blocks, so the document's headings and boilerplate
         // are emitted exactly once, by the reduce, rather than being repeated per meeting.
-        var combined = FolderSummaryPrompt.JoinItems(items, reduceCharBudget, "output");
+        var combined = FolderSummaryPrompt.JoinItems(items, cfg.ContextCharBudget, "output");
         return await ComposeAsync(chat, cfg, content, _ => null, combined, ct);
     }
 

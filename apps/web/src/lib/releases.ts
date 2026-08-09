@@ -60,6 +60,45 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.199.0",
+    date: "2026-08-09",
+    pr: 496,
+    headline: "One context limit, sized to your model",
+    summary:
+      "Folder summaries were quietly leaving meetings out. Roll up a folder of thirty meetings and the " +
+      "result would describe perhaps eighteen of them - no warning, no gap you could see, just a summary " +
+      "that read as though the rest of the folder had not happened.\n\n" +
+      "The cause was a limit, not the model. Every place Diariz talks to your model carried its own " +
+      "hard-coded cap on how much text it would send, written years apart and never revisited: 24,000 " +
+      "characters for a folder summary, 32,000 for folder minutes and formula runs, 16,000 for everything " +
+      "a set of minutes gets to see, 48,000 for chat. None of them had any relationship to the model you " +
+      "had actually configured. On a 131,072-token endpoint the folder summary was using about 5% of what " +
+      "the model could take - and because the roll-up drops **whole meetings** once its cap is spent " +
+      "rather than trimming text, the ones past the line simply vanished.\n\n" +
+      "There is now a single limit, and it is derived from your model's context window rather than " +
+      "invented. Sixty percent of the window is spent on the meeting content; the rest is left for the " +
+      "instructions and the model's own reply, which is charged against the same window. On the default " +
+      "settings that is roughly thirteen times the old folder-summary limit, so a large folder now rolls " +
+      "up whole.\n\n" +
+      "The same limit governs chat, which fixes a second oddity: the context dial measured against your " +
+      "full window while the text was being cut at 48,000 characters, so the gauge could show plenty of " +
+      "room free at the moment chat was losing the earlier part of a transcript. Gauge and reality now " +
+      "agree.\n\n" +
+      "One number controls all of it - the model context window, set server-wide with " +
+      "`CHAT_CONTEXT_LENGTH` and overridable per user. Set it to what your model genuinely supports: too " +
+      "low and roll-ups start dropping meetings again, too high and your endpoint will reject or truncate " +
+      "the request.",
+    changed: [
+      "Every LLM call - recording summaries, action items, tags, meeting minutes, folder summary and minutes roll-ups, formula runs and chat - now derives how much context it sends from the configured model context window instead of its own hard-coded limit.",
+      "The chat context dial and the actual context limit are now the same number, so the gauge no longer shows free room while transcript text is being dropped.",
+      "The model context window (`CHAT_CONTEXT_LENGTH`, per-user overridable) is now the single setting controlling context size platform-wide; the four separate per-worker limits have been removed.",
+    ],
+    fixed: [
+      "Folder summaries and folder minutes omitted meetings from larger folders once a fixed character limit was reached, with nothing on screen to say so.",
+      "Meeting minutes were generated from at most 16,000 characters of a meeting - well under an hour of conversation - regardless of the model's capacity.",
+    ],
+  },
+  {
     version: "0.198.0",
     date: "2026-08-09",
     pr: 495,

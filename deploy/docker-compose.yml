@@ -121,6 +121,8 @@ services:
       # auto-match — conservative by default; tune per your audio (lower = stricter).
       Identification__Enabled: ${IDENTIFICATION_ENABLED:-true}
       Identification__Threshold: ${IDENTIFICATION_THRESHOLD:-0.4}
+      # Platform-wide model context window (tokens): the chat dial AND the single context budget for
+      # every LLM call (summaries, minutes, folder roll-ups, formulas, chat). See .env.example.
       Chat__ContextLength: ${CHAT_CONTEXT_LENGTH:-131072}
       Chat__ToolsEnabled: ${CHAT_TOOLS_ENABLED:-false}
       Chat__DisabledTools: ${CHAT_DISABLED_TOOLS:-}

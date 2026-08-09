@@ -18,7 +18,7 @@ public static class SectionSummaryProcessor
         DiarizDbContext db, ISummarizationClient perRecording, IMeetingMinutesClient combiner,
         ISummarizationSettingsResolver resolver, IHubContext<TranscriptionHub> hub,
         string perRecordingTemplate, string folderTemplate,
-        SectionSummaryJob job, int combineCharBudget, ILogger logger, CancellationToken ct = default)
+        SectionSummaryJob job, ILogger logger, CancellationToken ct = default)
     {
         var section = await db.Sections
             .Include(s => s.Summary)
@@ -50,7 +50,10 @@ public static class SectionSummaryProcessor
 
             var folderText = items.Count == 0
                 ? "" // empty folder / no summarisable recordings — nothing to combine.
-                : await combiner.GenerateAsync(cfg, FolderSummaryPrompt.BuildMessages(folderTemplate, items, combineCharBudget), ct);
+                // Budget comes from the resolved config (one platform-wide number sized off the model's
+                // context window), not a per-worker constant - see LlmContextBudget.
+                : await combiner.GenerateAsync(
+                    cfg, FolderSummaryPrompt.BuildMessages(folderTemplate, items, cfg.ContextCharBudget), ct);
 
             summary = await UpsertAsync(db, section);
             summary.Model = cfg.Model;

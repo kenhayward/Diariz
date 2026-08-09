@@ -96,8 +96,7 @@ public class MeetingMinutesWorker : BackgroundService
                 var webhooks = scope.ServiceProvider.GetRequiredService<IWebhookPublisher>();
                 using var jobTx = JobTelemetry.Begin("minutes");
                 await MeetingMinutesProcessor.ProcessAsync(
-                    ctx, generator, resolver, _hub, queue, job, _opts.TranscriptCharBudget, _log,
-                    webhooks, _publicUrl, ct);
+                    ctx, generator, resolver, _hub, queue, job, _log, webhooks, _publicUrl, ct);
             }
         }
         catch (Exception ex)

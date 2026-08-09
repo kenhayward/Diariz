@@ -34,6 +34,21 @@ server's endpoint and key.
 If neither you nor the server has an endpoint configured, the AI features return a clear error rather
 than failing silently.
 
+## The context window
+
+Diariz sends your meeting content to the model in one request, and every model has a limit on how much
+it can hold at once - its context window, measured in tokens. One setting tells Diariz what that limit
+is, and everything else follows from it: summaries, minutes, action items, tags, folder roll-ups,
+formula runs and chat all size what they send against the same number.
+
+A Platform Administrator sets it server-wide; you can override it for yourself on the **Assistant**
+tab in Preferences. Diariz spends about 60% of the window on meeting content and leaves the rest for
+the instructions and the model's reply, which counts against the same window.
+
+Set it to what your model genuinely supports. Too high and your endpoint will reject or silently
+truncate requests. Too low and long meetings get trimmed - and a folder roll-up will stop part-way
+through, summarising only the meetings that fit and leaving the rest out.
+
 ## Embeddings
 
 A separate embeddings endpoint powers semantic search. Configuring it turns panel search, chat, and the

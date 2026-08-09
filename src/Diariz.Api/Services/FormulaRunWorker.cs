@@ -91,7 +91,7 @@ public class FormulaRunWorker : BackgroundService
                 var webhooks = scope.ServiceProvider.GetRequiredService<IWebhookPublisher>();
                 using var jobTx = JobTelemetry.Begin("formula-run");
                 await FormulaRunProcessor.ProcessAsync(
-                    ctx, chat, resolver, _hub, job, _opts.CombineCharBudget, _log, webhooks, _publicUrl, ct);
+                    ctx, chat, resolver, _hub, job, _log, webhooks, _publicUrl, ct);
             }
         }
         catch (Exception ex)

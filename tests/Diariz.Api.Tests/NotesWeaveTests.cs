@@ -59,7 +59,7 @@ public class NotesWeaveTests
         var typeId = await SeedType(db, withNotesField: false);
         var client = new FakeMeetingMinutesClient();
 
-        await Build(db, client).GenerateAsync(Guid.NewGuid(), typeId, Context, Segments, [], [], Config, 16_000);
+        await Build(db, client).GenerateAsync(Guid.NewGuid(), typeId, Context, Segments, [], [], Config);
 
         Assert.All(client.AllMessages, msgs => Assert.DoesNotContain("NOTE-TAKER'S EMPHASIS", msgs[0].Content));
     }
@@ -73,7 +73,7 @@ public class NotesWeaveTests
         var client = new FakeMeetingMinutesClient();
 
         await Build(db, client).GenerateAsync(
-            Guid.NewGuid(), typeId, Context, Segments, [], [Note("Comp expectations", 61_000)], Config, 16_000);
+            Guid.NewGuid(), typeId, Context, Segments, [], [Note("Comp expectations", 61_000)], Config);
 
         Assert.Single(client.AllMessages); // one prompt section, no enhancer call (no notes field)
         Assert.Contains("NOTE-TAKER'S EMPHASIS", client.AllMessages[0][0].Content);
@@ -95,7 +95,7 @@ public class NotesWeaveTests
         };
 
         var md = await Build(db, client).GenerateAsync(
-            Guid.NewGuid(), typeId, Context, Segments, [], [Note("Comp expectations", 61_000)], Config, 16_000);
+            Guid.NewGuid(), typeId, Context, Segments, [], [Note("Comp expectations", 61_000)], Config);
 
         Assert.Equal(2, client.Calls); // 1 enhancer + 1 section (SingleCall default mode = 1 doc call)
         Assert.Contains("**Comp expectations**", md);
@@ -119,7 +119,7 @@ public class NotesWeaveTests
         };
 
         var md = await Build(db, client).GenerateAsync(
-            Guid.NewGuid(), typeId, Context, Segments, [], [Note("Comp expectations", 61_000)], Config, 16_000);
+            Guid.NewGuid(), typeId, Context, Segments, [], [Note("Comp expectations", 61_000)], Config);
 
         Assert.Equal(1, calls);
         Assert.Contains("**Comp expectations** *(1:01)*", md); // raw fallback, stamped
@@ -135,7 +135,7 @@ public class NotesWeaveTests
         var client = new FakeMeetingMinutesClient { Result = "Summary body." };
 
         var md = await Build(db, client).GenerateAsync(
-            Guid.NewGuid(), typeId, Context, Segments, [], [], Config, 16_000);
+            Guid.NewGuid(), typeId, Context, Segments, [], [], Config);
 
         Assert.Equal(1, client.Calls); // only the document call
         Assert.Contains(NotesComposer.NoNotes, md);
