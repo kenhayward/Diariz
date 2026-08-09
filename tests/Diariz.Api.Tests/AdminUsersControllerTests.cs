@@ -60,6 +60,25 @@ public class AdminUsersControllerTests
         Assert.Equal(Roles.Standard, list.Single(u => u.Email == "std@x.test").AccountType);
     }
 
+    /// <summary>The admin console renders each user's avatar, and most users here signed in with Google. The
+    /// picture has always been stored on the user; it was simply never projected, so every avatar in the
+    /// console fell back to initials.</summary>
+    [Fact]
+    public async Task List_ReturnsPictureUrl_ForAGoogleUser()
+    {
+        using var host = new IdentityTestHost();
+        await host.SeedRolesAsync();
+        var admin = await Seed(host, "admin@x.test", Roles.Administrator);
+        var google = await Seed(host, "goog@x.test", Roles.Standard);
+        google.PictureUrl = "https://lh3.googleusercontent.com/a/abc123";
+        await host.Users.UpdateAsync(google);
+
+        var list = await Build(host, admin.Id).List();
+
+        Assert.Equal("https://lh3.googleusercontent.com/a/abc123", list.Single(u => u.Email == "goog@x.test").PictureUrl);
+        Assert.Null(list.Single(u => u.Email == "admin@x.test").PictureUrl); // password-only: initials
+    }
+
     // ---- Add user ----
 
     [Fact]

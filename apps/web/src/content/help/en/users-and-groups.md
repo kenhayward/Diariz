@@ -5,7 +5,8 @@ group: advanced
 order: 40
 ---
 
-Open **Manage users** from the account menu. You need the **Manage users** permission to see it.
+Open **Users & access** from the account menu. You need the **Manage users** permission to see it. It has
+three tabs: **Users**, **Groups**, and **Requests**.
 
 ## Permissions come from groups
 
@@ -18,7 +19,7 @@ Permissions are re-read from the database **on every request**, not baked into t
 someone from a group and their authority is gone immediately, rather than lasting until their session
 expires.
 
-## The four platform permissions
+## The five platform permissions
 
 | Permission | What it allows |
 |---|---|
@@ -26,21 +27,30 @@ expires.
 | **Manage users** | Create, edit, enable and delete users and groups. |
 | **Manage platform** | Read and write platform settings, and run maintenance including backup and restore. |
 | **Manage formulas** | Create, edit and delete shared formulas. |
+| **Manage people** | Browse and edit the People directory - the speakers heard in meetings, not platform users. |
+
+That last one is about a different thing from the rest of this page. **People** are the voices in your
+recordings, most of whom have no account; **users** are accounts. Opting yourself out of voice-printing
+never needs this permission.
 
 Two groups are seeded on every install:
 
-- **Platform Administrators** holds all four. It is a system group: it cannot be deleted or renamed, its
+- **Platform Administrators** holds all five. It is a system group: it cannot be deleted or renamed, its
   permissions cannot be changed, and **its last member cannot be removed** - so you can never lock
   yourself out of your own platform.
-- **Administrators** holds Manage rooms, Manage users, and Manage formulas, but deliberately **not**
-  Manage platform. That keeps backup, restore, and platform settings to a smaller circle.
+- **Administrators** holds the other four, but deliberately **not** Manage platform. That keeps backup,
+  restore, and platform settings to a smaller circle.
 
 ## The Groups tab
 
-A table of groups with a checkbox per permission, a member count, and delete.
+Groups are listed on the left with their permission and member counts. Pick one and everything about it
+is on the right: what it can do, and who is in it.
 
-Create one with **New group name** and **Add group**. A new group starts with no permissions at all.
-Click the member count to open its membership, where a type-ahead adds people by name or email.
+Each permission is a tick with a sentence explaining what it actually allows, so you are not deciding
+from a column heading alone. **Edit** sets the group's name, description and colour. Members are added
+with a type-ahead over name or email and removed with the x on their chip.
+
+Create a group with **New group**. A new group starts with no permissions at all.
 
 Deleting a group does not delete anyone: its members keep their accounts and simply lose whatever that
 group granted.
@@ -59,7 +69,8 @@ The flow:
 
 1. Someone uses **Request access** on the sign-in page. Signing in with Google as an unknown user lands
    in the same place.
-2. An administrator sees them under **Access requests** and clicks **Grant** or **Deny**.
+2. An administrator sees them on the **Requests** tab, which carries a count badge while anyone is
+   waiting, and clicks **Grant** or **Deny**.
    - **Deny deletes the request outright.**
    - Grant on a **Google-linked** account goes straight to Active with no setup link needed.
    - Grant on a password account issues a one-time setup link.
@@ -74,12 +85,17 @@ sends the link.
 
 ## What else the Users tab does
 
-Each row shows the person, the groups they are in, their status, and their storage use. From there you
-can **edit their quota**, **disable or enable** the account, or **delete** it - which removes all their
-recordings.
+Each row shows the person, the groups they are in, their status, and their storage use. Search narrows
+the list by name or email, and the chips beside the search box filter by status - each carrying its own
+count, so you can see at a glance how many accounts are still waiting to be set up.
 
-Two rows are deliberately protected: you cannot act on the Platform Administrator, and you cannot act on
-yourself.
+Select anyone and the panel on the right holds everything about them. Alongside their quota, the
+**disable or enable** switch, and **Delete account** (which removes all their recordings), it answers the
+question the old table could not: a **Grants** line stating in plain words what their group memberships
+actually let them do. Change their groups there and the line updates with them.
+
+Two people are deliberately protected: the Platform Administrator, and you. Their panel says which rule
+applies instead of offering the controls.
 
 There is **no administrator password reset**. A user who has forgotten their password resets it
 themselves.

@@ -20,9 +20,12 @@ public record ConnectGoogleRequest(bool Calendar);
 public record DesktopExchangeRequest(string Code, string Verifier);
 
 // ---- Admin user management ----
+/// <summary><see cref="PictureUrl"/> is the linked Google account's avatar, so the admin console can show a
+/// face rather than initials. It is the same column the account menu already reads; it was simply never
+/// projected here.</summary>
 public record AdminUserDto(
     Guid Id, string Email, string? FullName, string AccountType, UserStatus Status, bool IsEnabled,
-    long QuotaBytes, long UsedBytes, bool HasGoogle = false);
+    long QuotaBytes, long UsedBytes, bool HasGoogle = false, string? PictureUrl = null);
 public record AddUserRequest(string Email, string? FullName = null);
 public record SetQuotaRequest(long QuotaBytes);
 public record SetRoleRequest(string Role);
