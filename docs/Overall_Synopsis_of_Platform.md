@@ -1511,6 +1511,15 @@ into it with no URL or per-user setup at all.
     `PUT /api/recordings/{id}/name`). Setting `Name` is the load-bearing half: `SummarizationProcessor` auto-names
     any recording whose `Name` is blank, so leaving it unset would have the model rename the meeting away from what
     the invite called it.
+  - **Linking, at record time.** The upload is followed by `PUT /api/recordings/{id}/calendar-link` with the event's
+    id and `calendarId` and **`manual: true`**. Everywhere else the link is *inferred* - `PickBest` scores the
+    time-overlapping candidates, and the web app auto-saves the winner (`manual: false`) when the recording is first
+    opened. Here the event id is known for certain, so the link is exact, lands immediately rather than on first
+    view, and pulls the event's prep notes onto the recording through `LinkCalendar`'s `MeetingNoteAdoption` call.
+    `manual: true` is deliberate: it is the user's own choice of meeting, and it is what stops the auto-matcher
+    replacing it later - a take started on Join very often overlaps the meetings either side of it. The call is
+    guarded like the rename (the audio is already uploaded; no calendar connected, or a since-deleted event, must
+    never read as a lost recording - `LinkCalendar` 400s in both cases, and the meeting stays linkable by hand).
   - **Ending by itself**, when the user has opted in on Preferences → Recordings (`UserSettings.CalendarAutoStop*`;
     off by default, and applying **only** to a calendar-started take - the Record button is untouched). Two
     independent conditions, whichever comes first: an absolute stop at **invite end + N minutes** (folded into the

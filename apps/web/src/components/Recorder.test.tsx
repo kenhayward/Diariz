@@ -5,7 +5,10 @@ import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vite
 const TOKEN = `h.${btoa(JSON.stringify({ sub: "u1" }))}.s`;
 
 vi.mock("../lib/api", () => ({
-  api: { upload: vi.fn(), createNotes: vi.fn(), createScreenshot: vi.fn(), renameRecording: vi.fn() },
+  api: {
+    upload: vi.fn(), createNotes: vi.fn(), createScreenshot: vi.fn(),
+    renameRecording: vi.fn(), putCalendarLink: vi.fn(),
+  },
   apiErrorMessage: (_e: unknown, fb: string) => fb,
   getToken: () => TOKEN,
 }));
@@ -1386,6 +1389,7 @@ describe("recording started from a calendar event", () => {
     id: "evt-1",
     summary: "Quarterly review with Acme",
     endsAt: "2026-08-09T11:00:00.000Z",
+    calendarId: "work@example.com",
   };
 
   beforeEach(() => {
@@ -1398,6 +1402,7 @@ describe("recording started from a calendar event", () => {
     (getStream as Mock).mockResolvedValue(fakeSession);
     (api.upload as Mock).mockResolvedValue({ id: "rec-new" });
     (api.renameRecording as Mock).mockResolvedValue(undefined);
+    (api.putCalendarLink as Mock).mockResolvedValue({});
   });
 
   /// Drive the same channel the Join button uses.
@@ -1419,6 +1424,45 @@ describe("recording started from a calendar event", () => {
     // ...and the NAME is set too: the summariser auto-names a recording whose name is blank, so leaving it
     // unset would let the model rename the meeting away from what the invite called it.
     await waitFor(() => expect(api.renameRecording).toHaveBeenCalledWith("rec-new", "Quarterly review with Acme"));
+  });
+
+  it("links the recording to the event it was started from, as a deliberate choice", async () => {
+    // The event id is known at record time, so the link is certain rather than inferred from time overlap.
+    // Marked manual so the auto-matcher can never replace it with an adjacent meeting.
+    render(<Recorder onUploaded={() => {}} />);
+    await screen.findByRole("button", { name: /record/i });
+
+    await joinAndRecord();
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() =>
+      expect(api.putCalendarLink).toHaveBeenCalledWith("rec-new", "evt-1", true, "work@example.com"),
+    );
+  });
+
+  it("still saves the recording when linking fails", async () => {
+    // No calendar connected, the event since deleted, a flaky call - none of that may look like a lost
+    // recording. The audio is already uploaded by this point.
+    (api.putCalendarLink as Mock).mockRejectedValue(new Error("no calendar connected"));
+    const onUploaded = vi.fn();
+    render(<Recorder onUploaded={onUploaded} />);
+    await screen.findByRole("button", { name: /record/i });
+
+    await joinAndRecord();
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(onUploaded).toHaveBeenCalled());
+    expect(screen.queryByRole("button", { name: /upload now/i })).toBeNull();
+  });
+
+  it("does not link an ordinary Record-button take", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+    expect(api.putCalendarLink).not.toHaveBeenCalled();
   });
 
   it("keeps the generated title for an ordinary Record-button take", async () => {

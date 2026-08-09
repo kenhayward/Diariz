@@ -51,7 +51,12 @@ export default function CalendarEventDetail() {
     if (!joinUrl || !event) return;
     window.open(joinUrl, "_blank", "noopener,noreferrer");
     requestRecording({
-      calendarEvent: { id: event.id, summary: event.summary, endsAt: event.allDay ? null : event.end },
+      calendarEvent: {
+        id: event.id,
+        summary: event.summary,
+        endsAt: event.allDay ? null : event.end,
+        calendarId: event.calendarId ?? null,
+      },
     });
   }
 

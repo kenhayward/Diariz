@@ -909,7 +909,8 @@ export default function Recorder({
       : t("recTitlePrefixMic");
     // Started from a calendar event: the invite's subject names the recording, so the library reads as the
     // meetings you attended rather than "Microphone recording 09/08/2026, 14:32".
-    const inviteName = calendarEventRef.current?.summary?.trim() || null;
+    const calendarEvent = calendarEventRef.current;
+    const inviteName = calendarEvent?.summary?.trim() || null;
     const title = inviteName ?? `${prefix} ${new Date().toLocaleString()}`;
     // The wall-clock span. endedAt is "now" because upload() runs from onstop; it is sent separately from
     // durationMs because durationMs excludes paused time, so it cannot reconstruct when the take actually ended.
@@ -943,6 +944,21 @@ export default function Recorder({
           await api.renameRecording(created.id, inviteName);
         } catch (e) {
           console.error("Naming the recording after the calendar event failed:", e);
+        }
+      }
+      // Link it to the meeting it was recorded from. Everywhere else this link is *inferred*, by picking the
+      // best time-overlapping event when the recording is first opened; here the event id is known for
+      // certain, so the link is exact and lands immediately rather than on first view. Marked `manual` for the
+      // same reason: this is the user's own choice of meeting, and the auto-matcher must never replace it with
+      // an adjacent one - a take started on Join very often overlaps the meeting either side of it. Linking
+      // also adopts any prep notes written on the event. Guarded like the rename: the audio is already safely
+      // uploaded, and a missing calendar connection or a since-deleted event must never read as a lost
+      // recording (the meeting can still be linked by hand afterwards).
+      if (calendarEvent) {
+        try {
+          await api.putCalendarLink(created.id, calendarEvent.id, true, calendarEvent.calendarId);
+        } catch (e) {
+          console.error("Linking the recording to its calendar event failed:", e);
         }
       }
       // Attach any live notes / screenshots to the new recording (failure keeps them durable + shows the

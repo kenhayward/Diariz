@@ -34,6 +34,10 @@ Open a meeting on the Calendar tab and press **Join meeting**. The meeting opens
 in one step, and the recording is named after the invite rather than the time of day. That name sticks:
 nothing renames it for you later.
 
+The recording is also linked to that meeting from the outset, so the invite's details are on it as soon
+as it appears, and any prep notes you wrote on the event move across to it. Recordings you start any
+other way are matched to a meeting by time afterwards, which is a good guess but still a guess.
+
 You can also let such a recording end by itself. In **Settings -> Recordings**, under **Recording from
 a Calendar Event**, turn on **End recording automatically** and choose either or both conditions:
 

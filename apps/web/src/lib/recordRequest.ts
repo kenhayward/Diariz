@@ -19,6 +19,9 @@ export interface CalendarEventContext {
   /// The invite's end time (ISO). Null for an event without a usable one (e.g. all-day), which simply means
   /// no calendar-driven auto-stop.
   endsAt: string | null;
+  /// Which calendar the event lives on. Passed straight through when linking so the server targets the right
+  /// one (a user's meetings span primary, team, subscribed and mirrored calendars) rather than searching.
+  calendarId: string | null;
 }
 
 export interface RecordingRequest {
