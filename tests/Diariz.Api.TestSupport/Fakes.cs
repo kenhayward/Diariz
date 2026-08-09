@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using Diariz.Api.Configuration;
 using Diariz.Api.Contracts;
 using Diariz.Api.Hubs;
 using Diariz.Api.Services;
@@ -70,8 +71,13 @@ public sealed class FixedPlatformSettings(Diariz.Domain.DiarizDbContext db) : IP
 /// <summary>Returns a fixed summarisation config and records the resolved user id.</summary>
 public sealed class FakeSummarizationSettingsResolver : ISummarizationSettingsResolver
 {
+    /// <summary>Defaults to the budget a real resolver produces for the default context window, so tests
+    /// exercise production sizing rather than the record's conservative floor.</summary>
     public SummarizationRequestConfig Config { get; set; } =
-        new("https://llm.test/v1", "sk-test", "test-model", 60);
+        new("https://llm.test/v1", "sk-test", "test-model", 60)
+        {
+            ContextCharBudget = LlmContextBudget.CharsFor(new ChatOptions().ContextLength),
+        };
     public Guid? LastUserId { get; private set; }
 
     public Task<SummarizationRequestConfig> ResolveAsync(Guid userId, CancellationToken ct = default)
@@ -162,7 +168,7 @@ public sealed class FakeMeetingTypeMinutesGenerator : IMeetingTypeMinutesGenerat
         Guid recordingOwnerId, Guid? meetingTypeId, MeetingMinutesContext context,
         IReadOnlyList<SegmentDto> segments, IReadOnlyList<ExtractedAction> actions,
         IReadOnlyList<MeetingNoteDto> notes,
-        SummarizationRequestConfig config, int charBudget, CancellationToken ct = default)
+        SummarizationRequestConfig config, CancellationToken ct = default)
     {
         Calls++;
         LastOwnerId = recordingOwnerId;

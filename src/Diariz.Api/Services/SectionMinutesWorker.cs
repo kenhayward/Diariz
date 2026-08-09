@@ -95,7 +95,7 @@ public class SectionMinutesWorker : BackgroundService
                 using var jobTx = JobTelemetry.Begin("section-minutes");
                 await SectionMinutesProcessor.ProcessAsync(
                     ctx, generator, combiner, resolver, _hub, folderTemplate,
-                    job, _minutesOpts.TranscriptCharBudget, _opts.CombineCharBudget, _log, ct);
+                    job, _log, ct);
             }
         }
         catch (Exception ex)

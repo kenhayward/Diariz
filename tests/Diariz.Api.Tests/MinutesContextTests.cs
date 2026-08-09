@@ -58,7 +58,7 @@ public class MinutesContextTests
         var client = new FakeMeetingMinutesClient();
         var ctx = new MeetingMinutesContext(rec.Id, DateTimeOffset.UtcNow, "R", ["Alice"], 1000);
 
-        await Build(db, client).GenerateAsync(rec.UserId, type.Id, ctx, [], [], [], Config, 16_000);
+        await Build(db, client).GenerateAsync(rec.UserId, type.Id, ctx, [], [], [], Config);
 
         return client.LastMessages![1].Content;
     }

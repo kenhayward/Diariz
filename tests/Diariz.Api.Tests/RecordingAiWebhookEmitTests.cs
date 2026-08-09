@@ -129,7 +129,7 @@ public class RecordingAiWebhookEmitTests
         await MeetingMinutesProcessor.ProcessAsync(
             db, new FakeMeetingTypeMinutesGenerator { Result = "# Cadence Call\n\nMinutes." },
             new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
-            new MeetingMinutesJob(rec.Id, tr.Id), charBudget: 16000, NullLogger.Instance, publisher, "https://app.test");
+            new MeetingMinutesJob(rec.Id, tr.Id), NullLogger.Instance, publisher, "https://app.test");
 
         var published = Assert.Single(publisher.Published);
         Assert.Equal(WebhookEventTypes.RecordingMinutesReady, published.EventType);
@@ -155,7 +155,7 @@ public class RecordingAiWebhookEmitTests
         await MeetingMinutesProcessor.ProcessAsync(
             db, new FakeMeetingTypeMinutesGenerator { ThrowOnCall = new InvalidOperationException("LLM down") },
             new FakeSummarizationSettingsResolver(), new FakeHubContext(), new FakeJobQueue(),
-            new MeetingMinutesJob(rec.Id, tr.Id), 16000, NullLogger.Instance, publisher, "https://app.test");
+            new MeetingMinutesJob(rec.Id, tr.Id), NullLogger.Instance, publisher, "https://app.test");
 
         Assert.Empty(publisher.Published);
     }

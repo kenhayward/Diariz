@@ -143,9 +143,12 @@ public class ChatController : ControllerBase
         // the send_email tool always delivers to).
         var me = await _db.Users.Where(u => u.Id == UserId)
             .Select(u => new { u.FullName, u.Email }).FirstOrDefaultAsync(ct);
+        // Budget the injected context off the user's actual model window (the same number the context dial
+        // reports against). It used to be a flat 48,000-char constant, so chat silently dropped transcript
+        // text at ~12k tokens while the gauge still showed plenty of a 131k window free.
         var system = ChatContextBuilder.BuildSystemPrompt(
             contexts, req.AttachmentName, req.AttachmentText, documents,
-            ChatContextBuilder.DefaultCharBudget, me?.FullName, me?.Email, DateTimeOffset.UtcNow);
+            cfg.ContextCharBudget, me?.FullName, me?.Email, DateTimeOffset.UtcNow);
         if (toolCfg.ActiveTools.Count > 0)
         {
             system += "\n\n" + ToolSystemInstruction;

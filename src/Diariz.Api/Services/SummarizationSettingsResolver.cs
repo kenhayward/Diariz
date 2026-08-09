@@ -15,6 +15,12 @@ public record SummarizationRequestConfig(string ApiBase, string ApiKey, string M
     /// <summary>The <c>reasoning_effort</c> to send on requests, or null to omit the field entirely (the
     /// resolver leaves it null when reasoning is off, so clients never send it to non-reasoning endpoints).</summary>
     public string? ReasoningEffort { get; init; }
+
+    /// <summary>Characters of context this request may inject - the <b>single</b> budget shared by every LLM
+    /// call site, derived by the resolver from the user's effective model context window. It rides on this
+    /// record because this record already reaches every client, prompt builder and worker. The default keeps
+    /// hand-constructed configs (tests, fakes) at the floor rather than at zero.</summary>
+    public int ContextCharBudget { get; init; } = LlmContextBudget.MinimumChars;
 }
 
 public interface ISummarizationSettingsResolver
@@ -27,13 +33,18 @@ public class SummarizationSettingsResolver : ISummarizationSettingsResolver
     private readonly DiarizDbContext _db;
     private readonly SummarizationOptions _opts;
     private readonly IApiKeyProtector _protector;
+    private readonly ChatOptions _chat;
 
+    /// <param name="chat">Supplies the server-wide model context window. Optional so the many hand-built
+    /// resolvers in the test suite keep compiling; DI always supplies it.</param>
     public SummarizationSettingsResolver(
-        DiarizDbContext db, IOptions<SummarizationOptions> opts, IApiKeyProtector protector)
+        DiarizDbContext db, IOptions<SummarizationOptions> opts, IApiKeyProtector protector,
+        IOptions<ChatOptions>? chat = null)
     {
         _db = db;
         _opts = opts.Value;
         _protector = protector;
+        _chat = chat?.Value ?? new ChatOptions();
     }
 
     public async Task<SummarizationRequestConfig> ResolveAsync(Guid userId, CancellationToken ct = default)
@@ -57,6 +68,11 @@ public class SummarizationSettingsResolver : ISummarizationSettingsResolver
             TimeoutSeconds: ps?.LlmTimeoutSeconds ?? _opts.TimeoutSeconds)
         {
             ReasoningEffort = effort,
+            // One budget for every LLM call, sized off the model window the user actually points at. The
+            // per-user override is the same field the chat context dial reads, so the gauge and the real
+            // truncation finally agree.
+            ContextCharBudget = LlmContextBudget.CharsFor(
+                s?.ChatContextWindow is > 0 ? s.ChatContextWindow.Value : _chat.ContextLength),
         };
     }
 

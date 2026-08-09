@@ -56,7 +56,35 @@ public class SectionSummaryProcessorTests
         FakeSummarizationSettingsResolver resolver, FakeHubContext hub, Section section) =>
         SectionSummaryProcessor.ProcessAsync(db, perRec, combiner, resolver, hub,
             SummarizationPrompt.DefaultTemplate, FolderSummaryPrompt.DefaultTemplate,
-            new SectionSummaryJob(section.Id), 24_000, NullLogger.Instance);
+            new SectionSummaryJob(section.Id), NullLogger.Instance);
+
+    /// <summary>A large folder must roll up EVERY meeting, not the first ~18 that fit an arbitrary constant.
+    /// The reduce step drops whole items once its char budget is spent (<see cref="FolderSummaryPrompt.JoinItems"/>),
+    /// and that budget used to be a hard-coded 24,000 chars with no relationship to the model's context window -
+    /// so a folder of 30 meetings quietly lost a third of them, with only an in-prompt note to say so. The budget
+    /// now comes from the resolved config, sized off the configured window.</summary>
+    [Fact]
+    public async Task Large_folder_rolls_up_every_meeting_without_omitting_any()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        var section = await SeedSection(db, userId);
+
+        // 30 meetings x ~1,500-char summaries = ~45,000 chars, comfortably past the old 24,000 cap.
+        const int meetings = 30;
+        for (var i = 0; i < meetings; i++)
+            await SeedRecording(db, userId, section.Id, name: $"Meeting {i:00}",
+                summaryText: $"Summary {i:00}. " + new string('x', 1_500));
+
+        var combiner = new FakeMeetingMinutesClient();
+        await Run(db, new FakeSummarizationClient(), combiner,
+            new FakeSummarizationSettingsResolver(), new FakeHubContext(), section);
+
+        var prompt = combiner.LastMessages![1].Content;
+        for (var i = 0; i < meetings; i++)
+            Assert.Contains($"Summary {i:00}.", prompt);
+        Assert.DoesNotContain("omitted to fit the length limit", prompt);
+    }
 
     /// <summary>Three-level folder chain (Customers > Acme > Falcon) in the user's real personal room, with a
     /// summarisable recording filed two levels down under Falcon. Proves <c>IncludedRecordingsAsync</c> walks

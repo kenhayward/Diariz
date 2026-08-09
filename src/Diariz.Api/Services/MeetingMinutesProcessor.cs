@@ -22,7 +22,7 @@ public static class MeetingMinutesProcessor
 {
     public static async Task ProcessAsync(
         DiarizDbContext db, IMeetingTypeMinutesGenerator generator, ISummarizationSettingsResolver resolver,
-        IHubContext<TranscriptionHub> hub, IJobQueue queue, MeetingMinutesJob job, int charBudget, ILogger logger,
+        IHubContext<TranscriptionHub> hub, IJobQueue queue, MeetingMinutesJob job, ILogger logger,
         IWebhookPublisher webhooks, string publicUrl,
         CancellationToken ct = default)
     {
@@ -81,7 +81,7 @@ public static class MeetingMinutesProcessor
             // Generate from the recording's chosen meeting type (or the General default), honouring the
             // platform-wide generation mode.
             var markdown = await generator.GenerateAsync(
-                rec.UserId, rec.MeetingTypeId, context, segs, actions, notes, cfg, charBudget, ct);
+                rec.UserId, rec.MeetingTypeId, context, segs, actions, notes, cfg, ct);
 
             var minutes = transcription.MeetingMinutes;
             if (minutes is null)

@@ -93,7 +93,7 @@ public class SectionSummaryWorker : BackgroundService
                 using var jobTx = JobTelemetry.Begin("section-summary");
                 await SectionSummaryProcessor.ProcessAsync(
                     ctx, perRecording, combiner, resolver, _hub, perRecTemplate, folderTemplate,
-                    job, _opts.CombineCharBudget, _log, ct);
+                    job, _log, ct);
             }
         }
         catch (Exception ex)

@@ -25,7 +25,7 @@ public class SummarizationClient : ISummarizationClient
         SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, bool needName, string template,
         CancellationToken ct = default)
     {
-        var messages = SummarizationPrompt.BuildMessages(template, segments, needName);
+        var messages = SummarizationPrompt.BuildMessages(template, segments, needName, config.ContextCharBudget);
         var body = new Dictionary<string, object?>
         {
             ["model"] = config.Model,

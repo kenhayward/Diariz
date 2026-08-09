@@ -26,7 +26,7 @@ public class TagsClient : ITagsClient
         SummarizationRequestConfig config, IReadOnlyList<SegmentDto> segments, string template,
         CancellationToken ct = default)
     {
-        var messages = TagsPrompt.BuildMessages(template, segments);
+        var messages = TagsPrompt.BuildMessages(template, segments, config.ContextCharBudget);
         var body = new Dictionary<string, object?>
         {
             ["model"] = config.Model,

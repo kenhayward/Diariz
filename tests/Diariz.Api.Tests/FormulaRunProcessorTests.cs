@@ -52,7 +52,7 @@ public class FormulaRunProcessorTests
         DiarizDbContext db, FakeChatStreamClient chat, FakeSummarizationSettingsResolver resolver,
         FakeHubContext hub, FormulaRunJob job) =>
         FormulaRunProcessor.ProcessAsync(
-            db, chat, resolver, hub, job, 48_000, NullLogger.Instance, new CapturingWebhookPublisher(), "");
+            db, chat, resolver, hub, job, NullLogger.Instance, new CapturingWebhookPublisher(), "");
 
     // ---- Section (folder) map-reduce path ----
 

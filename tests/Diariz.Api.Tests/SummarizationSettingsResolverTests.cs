@@ -182,4 +182,50 @@ public class SummarizationSettingsResolverTests
 
         Assert.Null((await resolver.ResolveAsync(userId)).ReasoningEffort);
     }
+
+    // ---- Context budget (the single limit every LLM call site derives from) ----
+
+    [Fact]
+    public async Task ContextBudget_DefaultsToTheServerContextWindow()
+    {
+        using var db = TestDb.Create();
+        var resolver = new SummarizationSettingsResolver(
+            db, Options.Create(Server), new FakeApiKeyProtector(),
+            Options.Create(new ChatOptions { ContextLength = 131_072 }));
+
+        Assert.Equal(
+            LlmContextBudget.CharsFor(131_072),
+            (await resolver.ResolveAsync(Guid.NewGuid())).ContextCharBudget);
+    }
+
+    [Fact]
+    public async Task ContextBudget_UserWindow_OverridesServer()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        db.UserSettings.Add(new UserSettings { UserId = userId, ChatContextWindow = 32_000 });
+        await db.SaveChangesAsync();
+
+        var resolver = new SummarizationSettingsResolver(
+            db, Options.Create(Server), new FakeApiKeyProtector(),
+            Options.Create(new ChatOptions { ContextLength = 131_072 }));
+
+        Assert.Equal(
+            LlmContextBudget.CharsFor(32_000),
+            (await resolver.ResolveAsync(userId)).ContextCharBudget);
+    }
+
+    [Fact]
+    public async Task ContextBudget_IsFarLargerThanTheOldHardCodedFolderBudget()
+    {
+        // Regression guard for the reported bug: a folder summary used to be capped at 24,000 chars, which
+        // dropped whole meetings out of larger folders. Against the default window it must now be several
+        // times that - if this ever drops back, folder roll-ups start silently omitting meetings again.
+        using var db = TestDb.Create();
+        var resolver = new SummarizationSettingsResolver(
+            db, Options.Create(Server), new FakeApiKeyProtector(),
+            Options.Create(new ChatOptions()));
+
+        Assert.True((await resolver.ResolveAsync(Guid.NewGuid())).ContextCharBudget > 200_000);
+    }
 }
