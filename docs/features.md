@@ -22,6 +22,23 @@ item. Or **upload existing audio files** to transcribe (WAV, MP3, FLAC, Ogg/Opus
 Upload button or by **dragging several onto the recordings list**, with per-file status. Dropped files land
 in **the folder the list is showing** - where you dropped them beats the placement preference, which decides
 for the Upload button (and for a new recording) instead.
+- **Record a meeting straight from your calendar.** Opening a calendar event gives you **Join meeting**, which
+opens the meeting link and starts recording in one click. The recording is **named after the invite**, so your
+library reads as the meetings you attended rather than a list of timestamps - and the name sticks, rather than
+being replaced later by an AI-generated one. It is also **linked to that meeting straight away**: everywhere else
+Diariz infers the link by finding the calendar entry that best overlaps the recording, and only when you first
+open it, but starting from the event means there is nothing to infer - the invite's details are on the recording
+the moment it appears, any **prep notes** you wrote on the event come across with it, and because you picked the
+meeting yourself the automatic matcher will not later swap it for an adjacent one.
+Under **Preferences → Recordings → Recording from a Calendar Event**
+you can also let such a recording **end by itself** (off by default): it stops a chosen number of **minutes after
+the meeting was scheduled to finish** - catching the wrap-up rather than cutting off on the hour - and/or after a
+chosen run of **silence**, for when the meeting breaks up early. Silence only counts once something has been
+heard, so joining before anyone speaks never cuts the recording short, and pausing does not count against it.
+Both settings apply **only** to a recording started from a calendar event; one started with the Record button
+runs until you stop it, exactly as before. And whatever those settings say, **joining a second meeting while
+the first is still recording** finishes the first properly - it uploads and transcribes on its own - before the
+new one begins.
 - **Transcribe + diarize** server-side with WhisperX (large-v3, word-level timestamps) and pyannote 3.1,
 producing speaker-labelled, timestamped segments you can rename, edit, and play back (per segment, per speaker,
 or the whole recording). A **Speakers** panel lists each speaker with their segment count and **total talk time**,

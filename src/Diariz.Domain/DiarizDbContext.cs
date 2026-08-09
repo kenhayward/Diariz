@@ -556,6 +556,14 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.Property(s => s.GoogleCalendarGranted).HasDefaultValue(false);
             e.Property(s => s.Theme).HasDefaultValue(ThemePreference.Auto);
             e.Property(s => s.RecordingPlacementMode).HasDefaultValue(RecordingPlacementMode.SelectedFolder);
+            // Column defaults, not just C# initialisers: these columns are added to a table that already has
+            // rows, and an int column defaulting to 0 would mean "stop the moment recording starts" / "end on
+            // zero seconds of silence" for every existing user.
+            e.Property(s => s.CalendarAutoStopEnabled).HasDefaultValue(false);
+            e.Property(s => s.CalendarAutoStopAfterMinutes)
+                .HasDefaultValue(Entities.UserSettings.DefaultCalendarAutoStopAfterMinutes);
+            e.Property(s => s.CalendarSilenceStopSeconds)
+                .HasDefaultValue(Entities.UserSettings.DefaultCalendarSilenceStopSeconds);
             e.Property(s => s.JobTitle).HasMaxLength(256);
             e.Property(s => s.CompanyName).HasMaxLength(256);
             e.Property(s => s.LinkedIn).HasMaxLength(256);

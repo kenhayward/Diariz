@@ -47,6 +47,8 @@ public class UserSettingsController : ControllerBase
         "Each setting comes back **alongside the server default** it falls back to, so a client can show " +
         "\"using the platform default\" instead of an empty box - your value is an override, not a " +
         "requirement.\n\n" +
+        "Also included: how a recording started from a calendar event should end - whether it stops by " +
+        "itself, how long it keeps going past the invite's end time, and how much silence ends it early.\n\n" +
         "**Your API key is never returned.** Only `hasApiKey` says whether one is stored.")]
     public async Task<UserSettingsDto> Get()
     {
@@ -72,7 +74,12 @@ public class UserSettingsController : ControllerBase
             PlacementMode: s?.RecordingPlacementMode ?? RecordingPlacementMode.SelectedFolder,
             PlacementSectionId: s?.RecordingPlacementSectionId,
             DictationServerAvailable: _dictationDefaults.Enabled,
-            OutlookSyncEnabled: s?.OutlookSyncEnabled ?? false);
+            OutlookSyncEnabled: s?.OutlookSyncEnabled ?? false,
+            CalendarAutoStopEnabled: s?.CalendarAutoStopEnabled ?? false,
+            CalendarAutoStopAfterMinutes:
+                s?.CalendarAutoStopAfterMinutes ?? UserSettings.DefaultCalendarAutoStopAfterMinutes,
+            CalendarSilenceStopSeconds:
+                s?.CalendarSilenceStopSeconds ?? UserSettings.DefaultCalendarSilenceStopSeconds);
     }
 
     private static string? NullIfBlank(string? v) => string.IsNullOrWhiteSpace(v) ? null : v;
@@ -89,6 +96,9 @@ public class UserSettingsController : ControllerBase
         "For the context window a value of zero or less clears the override rather than setting it. Choosing " +
         "a placement mode other than a specific folder clears the stored folder, so a stale one cannot " +
         "resurface if you switch back.\n\n" +
+        "The two calendar-recording durations behave differently again: a value of zero or less **resets " +
+        "them to the default** rather than clearing or storing it, since a zero would stop a recording the " +
+        "moment it started.\n\n" +
         "`outlookSyncEnabled` is the one field with a side effect. Setting it **false erases**: every connected " +
         "device is removed along with every meeting mirrored from it. It is a privacy switch, so it clears what " +
         "was gathered rather than only stopping future syncs - omit the field if you just want to leave it as " +
@@ -151,6 +161,17 @@ public class UserSettingsController : ControllerBase
                 _db.OutlookCalendarSources.RemoveRange(devices);
             }
         }
+
+        // Recording from a calendar event. The two durations are clamped rather than trusted: a zero or
+        // negative wait would stop the take the instant it began, and a zero silence window would end it
+        // before anyone spoke, so a nonsensical value resets to the default instead of persisting a trap.
+        if (req.CalendarAutoStopEnabled is { } calendarAutoStop) s.CalendarAutoStopEnabled = calendarAutoStop;
+        if (req.CalendarAutoStopAfterMinutes is { } after)
+            s.CalendarAutoStopAfterMinutes =
+                after > 0 ? after : UserSettings.DefaultCalendarAutoStopAfterMinutes;
+        if (req.CalendarSilenceStopSeconds is { } silence)
+            s.CalendarSilenceStopSeconds =
+                silence > 0 ? silence : UserSettings.DefaultCalendarSilenceStopSeconds;
 
         await _db.SaveChangesAsync();
         return NoContent();

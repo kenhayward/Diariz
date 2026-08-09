@@ -43,10 +43,21 @@ export default function CalendarEventDetail() {
   /// The window is opened first and synchronously inside the click handler: browsers only allow a popup that
   /// is a direct result of a user gesture, so awaiting anything before it would get it blocked. Recording is
   /// requested after, with whatever audio source the user has already selected.
+  ///
+  /// The event travels with the request so the recorder can name the take after the invite and, when the
+  /// user has asked for it, end the take by itself once the meeting is over. If another recording is already
+  /// running the recorder stops and uploads that one first - joining a second meeting says the first is done.
   function joinAndRecord() {
-    if (!joinUrl) return;
+    if (!joinUrl || !event) return;
     window.open(joinUrl, "_blank", "noopener,noreferrer");
-    requestRecording();
+    requestRecording({
+      calendarEvent: {
+        id: event.id,
+        summary: event.summary,
+        endsAt: event.allDay ? null : event.end,
+        calendarId: event.calendarId ?? null,
+      },
+    });
   }
 
   // Pre-meeting notes anchored to this event (no recording-clock stamps; no jump target yet).

@@ -25,7 +25,10 @@ import {
   type SourceSelection,
 } from "../lib/audioDevices";
 import { connectTrayRecorder, type RecorderState, type TrayBridge } from "../lib/trayRecorder";
-import { onRecordingRequested } from "../lib/recordRequest";
+import { onRecordingRequested, type CalendarEventContext, type RecordingRequest } from "../lib/recordRequest";
+import { resolveCalendarStopAt, earlierStop } from "../lib/calendarRecording";
+import { startSilenceWatcher, type SilenceWatcher } from "../lib/silenceWatcher";
+import { useCalendarRecordingSettings } from "../lib/calendarRecordingSettings";
 import { useStatus } from "../lib/status";
 import { useRoom } from "../lib/rooms";
 import { RoomPermission } from "../lib/types";
@@ -300,6 +303,22 @@ export default function Recorder({
   // The coarse source actually being recorded (mic vs system); the tray only speaks in these terms,
   // and the upload title/enum needs it, so we can't rely on `selection` state having flushed.
   const activeSourceRef = useRef<AudioSourceKind>("mic");
+  // The calendar event this take was started from, when it was. Read inside upload() (which runs from
+  // onstop, long after any state would have flushed) to name the recording after the invite.
+  const calendarEventRef = useRef<CalendarEventContext | null>(null);
+  // Ends the take after N seconds of silence, for a calendar-started recording with that setting on. Null
+  // whenever the rule doesn't apply. Owns its own AudioContext so it doesn't depend on the meter being
+  // mounted - see silenceWatcher.ts.
+  const silenceRef = useRef<SilenceWatcher | null>(null);
+  // The in-flight upload of the PREVIOUS take, so a start that replaces a running recording can wait for it.
+  // upload() reads pendingRoomRef/pendingSectionRef and the live notes/screenshots AFTER its first await, so
+  // starting a new take underneath it would file the finished recording into the new take's folder and steal
+  // its notes. Joining a second meeting while the first is recording is exactly that race.
+  //
+  // The promise is created in stop() rather than in onstop because `MediaRecorder.onstop` is dispatched on a
+  // later task: by the time stop() returns there is nothing to await yet, and the replacement would sail past.
+  const pendingUploadRef = useRef<Promise<void> | null>(null);
+  const uploadDoneRef = useRef<(() => void) | null>(null);
   // Reports phase changes to the Electron tray; a no-op in a plain browser.
   const reportRef = useRef<(s: RecorderState) => void>(() => {});
 
@@ -474,6 +493,10 @@ export default function Recorder({
     () => () => {
       if (timerRef.current) window.clearInterval(timerRef.current);
       if (scheduleTimerRef.current) window.clearInterval(scheduleTimerRef.current);
+      // Same reasoning for the silence watcher: its interval and AudioContext would otherwise outlive the
+      // component and, in jsdom, fire against a torn-down window.
+      silenceRef.current?.stop();
+      silenceRef.current = null;
     },
     [],
   );
@@ -685,7 +708,13 @@ export default function Recorder({
   // `trayKind` is set only when the Electron tray drives us (it speaks coarse mic/system); the on-screen
   // button passes nothing and records the current `selection`. A tray "mic" maps to the current specific
   // mic (or default), "system" to loopback.
-  async function start(trayKind?: AudioSourceKind) {
+  async function start(trayKind?: AudioSourceKind, calendarEvent?: CalendarEventContext | null) {
+    // Replacing a recording that is already running (you joined a second meeting while the first was still
+    // being recorded). End the first properly - it uploads and transcribes on its own, exactly as if you had
+    // pressed Stop - and wait for that upload to settle before touching any of the refs it reads.
+    if (recordingRef.current) stop();
+    if (pendingUploadRef.current) await pendingUploadRef.current;
+
     // Resolve which mic (if any) and whether to add system audio, from a tray command or the on-screen
     // controls. A tray "mic" with the current "No microphone" selection falls back to the default mic.
     let micSel: SourceSelection;
@@ -742,15 +771,42 @@ export default function Recorder({
         sessionRef.current?.stop();
         sessionRef.current = null;
         streamRef.current = null;
-        void upload();
+        // Settle the promise stop() handed out, whether the upload succeeded or failed - a replacement take
+        // must not be blocked forever by a failed one (the audio is stashed for recovery either way).
+        void upload().finally(() => {
+          uploadDoneRef.current?.();
+          uploadDoneRef.current = null;
+          pendingUploadRef.current = null;
+        });
       };
       recorder.start();
       recorderRef.current = recorder;
       activeSourceRef.current = coarse;
+      // Always assign, so a plain Record-button take can never inherit the last meeting's name.
+      calendarEventRef.current = calendarEvent ?? null;
       timingRef.current = timing.start(Date.now());
       startedAtRef.current = Date.now();
       // Re-anchor a relative auto-stop to record-start, so "in N minutes" means N minutes of recording.
       applySchedule(autoStopChoice, autoStopTime, Date.now());
+      // Started from a calendar event: the meeting's own end time is a second, independent answer to "when
+      // does this finish". Whichever comes first wins, so the user's own auto-stop choice is never overridden
+      // into running longer than they asked.
+      if (calendarEvent) {
+        const calendarStop = resolveCalendarStopAt(calendarEvent.endsAt, calendarSettingsRef.current, Date.now());
+        if (calendarStop !== null) {
+          const combined = earlierStop(scheduledStopRef.current, calendarStop);
+          scheduledStopRef.current = combined;
+          setScheduledStopAt(combined);
+        }
+        // The other end condition: the meeting broke up early and nobody is talking any more.
+        if (calendarSettingsRef.current.enabled) {
+          silenceRef.current = startSilenceWatcher(
+            session.stream,
+            calendarSettingsRef.current.silenceSeconds * 1000,
+            () => stop(),
+          );
+        }
+      }
       setElapsed(0);
       startTicker();
       startScheduleWatcher();
@@ -793,6 +849,9 @@ export default function Recorder({
     setElapsed(timing.elapsedMs(timingRef.current, Date.now()));
     setCaptureEnabled(false);
     setSilent(false);
+    // Pausing disables the capture track, so the analyser reads pure silence. Without this, pausing for a
+    // break would look exactly like the meeting breaking up and end the recording.
+    silenceRef.current?.setPaused(true);
     setPaused(true);
   }
 
@@ -803,6 +862,7 @@ export default function Recorder({
     rec.resume();
     timingRef.current = timing.resume(timingRef.current, Date.now());
     startTicker();
+    silenceRef.current?.setPaused(false);
     setPaused(false);
   }
 
@@ -821,6 +881,15 @@ export default function Recorder({
     // Reset any open hub popover (the notes popover only lives while recording) so the next recording's
     // auto-open toggle starts from a clean "nothing open" state.
     hub.close();
+    silenceRef.current?.stop();
+    silenceRef.current = null;
+    // Publish the "this take is finished with" promise BEFORE asking the recorder to stop: onstop lands on a
+    // later task, so a replacement start() that ran in between would otherwise find nothing to wait for.
+    if (recorderRef.current) {
+      pendingUploadRef.current = new Promise<void>((resolve) => {
+        uploadDoneRef.current = resolve;
+      });
+    }
     recorderRef.current?.stop();
   }
 
@@ -838,7 +907,11 @@ export default function Recorder({
       source === "Combined" ? t("recTitlePrefixBoth")
       : source === "System" ? t("recTitlePrefixSystem")
       : t("recTitlePrefixMic");
-    const title = `${prefix} ${new Date().toLocaleString()}`;
+    // Started from a calendar event: the invite's subject names the recording, so the library reads as the
+    // meetings you attended rather than "Microphone recording 09/08/2026, 14:32".
+    const calendarEvent = calendarEventRef.current;
+    const inviteName = calendarEvent?.summary?.trim() || null;
+    const title = inviteName ?? `${prefix} ${new Date().toLocaleString()}`;
     // The wall-clock span. endedAt is "now" because upload() runs from onstop; it is sent separately from
     // durationMs because durationMs excludes paused time, so it cannot reconstruct when the take actually ended.
     const startedAt = startedAtRef.current ?? undefined;
@@ -862,6 +935,32 @@ export default function Recorder({
       );
       if (userId) await clearPendingRecording(userId);
       setPending(null);
+      // Pin the invite's subject as the recording's NAME, not just its title. The summariser auto-names a
+      // recording whose Name is blank, so leaving it unset would have the model rename the meeting away from
+      // what the invite called it. Guarded like the attachments below: the audio is already safely uploaded,
+      // and a failed rename must never be reported as a failed recording (it just keeps the title).
+      if (inviteName) {
+        try {
+          await api.renameRecording(created.id, inviteName);
+        } catch (e) {
+          console.error("Naming the recording after the calendar event failed:", e);
+        }
+      }
+      // Link it to the meeting it was recorded from. Everywhere else this link is *inferred*, by picking the
+      // best time-overlapping event when the recording is first opened; here the event id is known for
+      // certain, so the link is exact and lands immediately rather than on first view. Marked `manual` for the
+      // same reason: this is the user's own choice of meeting, and the auto-matcher must never replace it with
+      // an adjacent one - a take started on Join very often overlaps the meeting either side of it. Linking
+      // also adopts any prep notes written on the event. Guarded like the rename: the audio is already safely
+      // uploaded, and a missing calendar connection or a since-deleted event must never read as a lost
+      // recording (the meeting can still be linked by hand afterwards).
+      if (calendarEvent) {
+        try {
+          await api.putCalendarLink(created.id, calendarEvent.id, true, calendarEvent.calendarId);
+        } catch (e) {
+          console.error("Linking the recording to its calendar event failed:", e);
+        }
+      }
       // Attach any live notes / screenshots to the new recording (failure keeps them durable + shows the
       // retry banner; a screenshot failure never fails the audio upload itself, which already succeeded).
       // Each is guarded independently, in its own try/catch, rather than sharing this function's outer
@@ -963,6 +1062,11 @@ export default function Recorder({
   // Recording (and uploading a file) requires CreateRecording in the current room. Always true in a personal
   // room; the gate becomes real once you can be a low-privilege member of a shared room.
   const { can, recordingSectionId, currentRoom } = useRoom();
+  // Held in a ref as well: start() may run from a tray command or a cross-page request, where the latest
+  // render's value is what matters rather than whatever was captured when the handler was subscribed.
+  const calendarSettings = useCalendarRecordingSettings();
+  const calendarSettingsRef = useRef(calendarSettings);
+  calendarSettingsRef.current = calendarSettings;
   const canRecord = can(RoomPermission.CreateRecording);
   // The folder + room a take should land in, snapshotted when Record is pressed (the user may navigate away
   // before Stop, so we can't read them live at upload time). Recording into a shared room shares it there and
@@ -999,9 +1103,12 @@ export default function Recorder({
   }, []);
 
   // Somewhere else in the app asking us to record - today, the Join-the-meeting button on a calendar event.
-  // Started with no argument, so it uses whatever audio source the user has already chosen on screen rather
-  // than second-guessing them from a different page.
-  useEffect(() => onRecordingRequested(() => void startFn.current()), []);
+  // No audio source is passed, so it uses whatever the user has already chosen on screen rather than
+  // second-guessing them from a different page; the request carries only the meeting's own details.
+  useEffect(
+    () => onRecordingRequested((request: RecordingRequest) => void startFn.current(undefined, request.calendarEvent)),
+    [],
+  );
 
   const secs = Math.floor(elapsed / 1000);
   const mmss = `${String(Math.floor(secs / 60)).padStart(2, "0")}:${String(secs % 60).padStart(2, "0")}`;

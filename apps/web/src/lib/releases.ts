@@ -15,6 +15,7 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | Feature | Description |
 | --- | --- |
 | **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume), system audio, or both mixed together on one device - system audio works in Chromium browsers ("Share audio") and seamlessly in the desktop app; schedule a recording to auto-stop at a set time or after 15/30/60 minutes; or upload files (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A) - dropped onto the list they land in the folder you dropped them on, and everything else follows your placement preference. |
+| **Record a calendar meeting** | Join a meeting from your calendar and it records in one click, named after the invite rather than the clock and linked to that meeting from the start (bringing any prep notes with it). Optionally let it end itself - a set number of minutes after the meeting was due to finish, or after a run of silence once everyone has left - and joining a second meeting finishes and files the first automatically. |
 | **Transcribe & diarize** | Server-side WhisperX (word-level timestamps) with pyannote speaker diarization; speaker-labelled, editable, playable segments you can re-transcribe any time. |
 | **Recording hub** | Every meeting opens on a hub: a summary card (meeting type, key facts, the summary inline) over tiles for transcript, actions, speakers, notes, files, and formulas - each showing its count and a preview, with new-note / add-file / run-formula available in place. The transcript embeds a conversation-flow player showing who spoke when, which doubles as the scrubber. |
 | **People and speaker identification** | One shared directory of the people in your meetings, where a voiceprint is optional - someone can be listed with no biometric held, or opt out, which erases theirs. Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). Assign a speaker from the Speakers tab or straight from the label on any transcript row, as you read or listen. A **People** directory opens over whatever you are reading; it lists everyone one to a line, searchable by name, email or company; a person carries a job title, company, email, phone and an internal/external marker, and likely duplicates are pointed out for you to merge. The Speakers tab shows an identified speaker's title and company inline, with a contact card (email and phone as links) above their segments and a pencil to edit that person in place. Browsing the directory needs the Manage people permission; opting yourself out, and searching to name a speaker, never do. |
@@ -59,6 +60,51 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.200.0",
+    date: "2026-08-09",
+    pr: 497,
+    headline: "Recording a meeting from your calendar",
+    summary:
+      "Joining a meeting from the calendar has been able to start a recording for a while, but the result " +
+      "did not know anything about the meeting it was recording. It was named after the clock, it ran until " +
+      "you remembered to stop it, and starting a second one quietly abandoned the first.\n\n" +
+      "**The recording is now named after the invite.** Not just at first, either - the name is pinned, so " +
+      "the summariser leaves it alone instead of renaming your meeting to something of its own devising. " +
+      "The library reads as the meetings you actually attended.\n\n" +
+      "**And it is linked to that meeting immediately.** Diariz could already work out which meeting a " +
+      "recording belonged to, but it guessed, by looking for the calendar entry that best overlapped it, " +
+      "and only when you first opened the recording. Starting from the event means there is nothing to " +
+      "guess: the link is exact, it is there the moment the recording appears, and any prep notes you " +
+      "wrote on the invite come across with it. Because you chose the meeting yourself, the automatic " +
+      "matcher will not later swap it for the one either side of it.\n\n" +
+      "**It can also end itself.** New settings under Preferences, Recordings, in a section called " +
+      "Recording from a Calendar Event. Turn on **End recording automatically** and a calendar-started " +
+      "recording stops on its own: a set number of minutes after the meeting was scheduled to finish " +
+      "(3 by default, so the wrap-up after the hour is still captured), or after a run of silence once " +
+      "everyone has left (30 seconds by default). Whichever comes first.\n\n" +
+      "The silence rule is careful about the obvious trap: it only starts counting **once something has " +
+      "been heard**, so joining a call before anyone speaks never cuts the recording short, and pausing " +
+      "does not count against it either. If you have set your own auto-stop for the session, whichever " +
+      "stop is sooner still wins - the meeting's end time never extends a recording past what you asked " +
+      "for.\n\n" +
+      "All of that is off by default, and applies **only** to a recording started from a calendar event. " +
+      "One you start with the Record button behaves exactly as it did.\n\n" +
+      "One thing changes regardless of the settings: **joining a second meeting while the first is still " +
+      "recording now finishes the first properly**. It stops, uploads and transcribes on its own before the " +
+      "new recording begins, rather than being discarded or, worse, filed into the wrong folder.",
+    added: [
+      "A \"Recording from a Calendar Event\" section in Preferences, Recordings: end the recording automatically (off by default), how many minutes to keep going past the meeting's end (3), and how much silence ends it early (30 seconds).",
+      "A recording started by joining a meeting from your calendar is named after the invite, and keeps that name.",
+      "It is also linked to that meeting straight away, so the invite details are on the recording the moment it appears - and any prep notes you wrote on the event come with it.",
+    ],
+    changed: [
+      "Joining a meeting while another recording is in progress stops that recording and starts its transcription first, then begins the new one. This happens whatever the settings above say.",
+    ],
+    fixed: [
+      "Starting a recording while a previous one was still uploading could file the finished recording into the new recording's folder and take its notes and screenshots with it.",
+    ],
+  },
   {
     version: "0.199.0",
     date: "2026-08-09",

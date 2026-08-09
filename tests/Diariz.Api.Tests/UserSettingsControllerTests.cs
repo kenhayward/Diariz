@@ -380,4 +380,69 @@ public class UserSettingsControllerTests
         var left = Assert.Single(db.OutlookCalendarSources);
         Assert.Equal(theirs, left.UserId);
     }
+
+    // ---- Recording from a calendar event ----
+
+    [Fact]
+    public async Task Get_NoSettings_ReturnsCalendarRecordingDefaults()
+    {
+        using var db = TestDb.Create();
+        var dto = await Build(db, Guid.NewGuid()).Get();
+
+        Assert.False(dto.CalendarAutoStopEnabled); // off unless the user asks for it
+        Assert.Equal(3, dto.CalendarAutoStopAfterMinutes);
+        Assert.Equal(30, dto.CalendarSilenceStopSeconds);
+    }
+
+    [Fact]
+    public async Task Put_CalendarRecordingPreferences_RoundTrip()
+    {
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(null, null, null,
+            CalendarAutoStopEnabled: true, CalendarAutoStopAfterMinutes: 10,
+            CalendarSilenceStopSeconds: 90));
+
+        var dto = await Build(db, userId).Get();
+        Assert.True(dto.CalendarAutoStopEnabled);
+        Assert.Equal(10, dto.CalendarAutoStopAfterMinutes);
+        Assert.Equal(90, dto.CalendarSilenceStopSeconds);
+    }
+
+    [Fact]
+    public async Task Put_OtherTabsSave_LeavesCalendarRecordingPreferencesUnchanged()
+    {
+        // Same tri-state contract as every other field: a tab that doesn't own these omits them.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(null, null, null,
+            CalendarAutoStopEnabled: true, CalendarAutoStopAfterMinutes: 7, CalendarSilenceStopSeconds: 45));
+
+        await Build(db, userId).Update(new UpdateUserSettingsRequest("https://x/v1", "m", "sk-x"));
+
+        var dto = await Build(db, userId).Get();
+        Assert.True(dto.CalendarAutoStopEnabled);
+        Assert.Equal(7, dto.CalendarAutoStopAfterMinutes);
+        Assert.Equal(45, dto.CalendarSilenceStopSeconds);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public async Task Put_NonPositiveDurations_FallBackToTheDefaults(int bad)
+    {
+        // A zero or negative wait would stop the recording the instant it started, and a zero silence window
+        // would stop it before anyone spoke. Clamp to the defaults rather than persisting a trap.
+        using var db = TestDb.Create();
+        var userId = Guid.NewGuid();
+
+        await Build(db, userId).Update(new UpdateUserSettingsRequest(null, null, null,
+            CalendarAutoStopEnabled: true, CalendarAutoStopAfterMinutes: bad,
+            CalendarSilenceStopSeconds: bad));
+
+        var dto = await Build(db, userId).Get();
+        Assert.Equal(3, dto.CalendarAutoStopAfterMinutes);
+        Assert.Equal(30, dto.CalendarSilenceStopSeconds);
+    }
 }
