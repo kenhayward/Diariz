@@ -1801,6 +1801,21 @@ namespace Diariz.Domain.Migrations
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("CalendarAutoStopAfterMinutes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(3);
+
+                    b.Property<bool>("CalendarAutoStopEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("CalendarSilenceStopSeconds")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(30);
+
                     b.Property<int?>("ChatContextWindow")
                         .HasColumnType("integer");
 

@@ -506,6 +506,13 @@ export interface UserSettings {
   dictationServerAvailable: boolean;
   /// Whether the user has opted in to mirroring a desktop Outlook calendar. Off by default.
   outlookSyncEnabled: boolean;
+  /// Whether a recording started from a calendar event ends by itself. Off by default; the two settings
+  /// below are its conditions and are inert while it is false.
+  calendarAutoStopEnabled: boolean;
+  /// Minutes to keep recording past the invite's end time.
+  calendarAutoStopAfterMinutes: number;
+  /// Seconds of continuous silence that also ends such a recording.
+  calendarSilenceStopSeconds: number;
 }
 
 /// Where a new recording lands in the user's Personal room. Mirrors the server enum names.
@@ -924,6 +931,12 @@ export interface UpdateUserSettings {
   /// The desktop Outlook opt-in; omit to leave unchanged. Setting it false also **erases** every connected
   /// device and the meetings mirrored from them - it is a privacy switch, not a pause.
   outlookSyncEnabled?: boolean;
+  /// Whether a recording started from a calendar event ends by itself; omit to leave unchanged.
+  calendarAutoStopEnabled?: boolean;
+  /// Minutes past the invite's end; omit to leave unchanged. A non-positive value resets to the default.
+  calendarAutoStopAfterMinutes?: number;
+  /// Seconds of silence that ends the recording; omit to leave unchanged. Non-positive resets to the default.
+  calendarSilenceStopSeconds?: number;
 }
 
 // ---- Chat ----

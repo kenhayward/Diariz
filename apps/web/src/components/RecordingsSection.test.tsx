@@ -17,6 +17,7 @@ const settings = {
   toolsEnabled: false, defaultToolsEnabled: false, tools: [],
   reasoningEnabled: false, reasoningEffort: "medium", defaultReasoningEnabled: false, defaultReasoningEffort: "medium",
   placementMode: "SelectedFolder", placementSectionId: null,
+  calendarAutoStopEnabled: false, calendarAutoStopAfterMinutes: 3, calendarSilenceStopSeconds: 30,
 };
 
 function renderSection() {
@@ -65,7 +66,10 @@ describe("RecordingsSection", () => {
 
     await waitFor(() => expect(api.updateUserSettings).toHaveBeenCalled());
     const arg = (api.updateUserSettings as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(arg).toEqual({ placementMode: "SpecificFolder", placementSectionId: "sec-1" });
+    expect(arg).toEqual({
+      placementMode: "SpecificFolder", placementSectionId: "sec-1",
+      calendarAutoStopEnabled: false, calendarAutoStopAfterMinutes: 3, calendarSilenceStopSeconds: 30,
+    });
     expect(arg).not.toHaveProperty("apiBase");
     expect(arg).not.toHaveProperty("toolsEnabled");
   });
@@ -83,7 +87,7 @@ describe("RecordingsSection", () => {
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(() =>
-      expect(api.updateUserSettings).toHaveBeenCalledWith({ placementMode: "SpecificFolder", placementSectionId: null }),
+      expect(api.updateUserSettings).toHaveBeenCalledWith({ placementMode: "SpecificFolder", placementSectionId: null, calendarAutoStopEnabled: false, calendarAutoStopAfterMinutes: 3, calendarSilenceStopSeconds: 30 }),
     );
   });
 
@@ -96,7 +100,7 @@ describe("RecordingsSection", () => {
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(() =>
-      expect(api.updateUserSettings).toHaveBeenCalledWith({ placementMode: "Ungrouped", placementSectionId: null }),
+      expect(api.updateUserSettings).toHaveBeenCalledWith({ placementMode: "Ungrouped", placementSectionId: null, calendarAutoStopEnabled: false, calendarAutoStopAfterMinutes: 3, calendarSilenceStopSeconds: 30 }),
     );
   });
 
@@ -153,7 +157,83 @@ describe("RecordingsSection", () => {
     await user.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(() =>
-      expect(api.updateUserSettings).toHaveBeenCalledWith({ placementMode: "SpecificFolder", placementSectionId: "sec-1" }),
+      expect(api.updateUserSettings).toHaveBeenCalledWith({ placementMode: "SpecificFolder", placementSectionId: "sec-1", calendarAutoStopEnabled: false, calendarAutoStopAfterMinutes: 3, calendarSilenceStopSeconds: 30 }),
     );
+  });
+
+  // ---- Recording from a calendar event ----
+
+  describe("recording from a calendar event", () => {
+    const autoStop = () => screen.getByRole("checkbox", { name: /end recording automatically/i });
+    const afterMinutes = () => screen.getByLabelText(/minutes after the meeting ends/i) as HTMLInputElement;
+    const silenceSeconds = () => screen.getByLabelText(/seconds of silence/i) as HTMLInputElement;
+
+    it("shows the section with auto-stop off and both conditions at their defaults", async () => {
+      renderSection();
+      await screen.findByText("Recording from a Calendar Event");
+
+      expect((autoStop() as HTMLInputElement).checked).toBe(false);
+      expect(afterMinutes().value).toBe("3");
+      expect(silenceSeconds().value).toBe("30");
+    });
+
+    it("disables both conditions until auto-stop is turned on", async () => {
+      renderSection();
+      await screen.findByText("Recording from a Calendar Event");
+
+      // The conditions are meaningless on their own - they say HOW it stops, not WHETHER.
+      expect(afterMinutes().disabled).toBe(true);
+      expect(silenceSeconds().disabled).toBe(true);
+
+      fireEvent.click(autoStop());
+      expect(afterMinutes().disabled).toBe(false);
+      expect(silenceSeconds().disabled).toBe(false);
+    });
+
+    it("saves the three settings alongside the placement", async () => {
+      renderSection();
+      await screen.findByText("Recording from a Calendar Event");
+
+      fireEvent.click(autoStop());
+      fireEvent.change(afterMinutes(), { target: { value: "10" } });
+      fireEvent.change(silenceSeconds(), { target: { value: "90" } });
+      fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+      await waitFor(() => expect(api.updateUserSettings).toHaveBeenCalled());
+      expect((api.updateUserSettings as ReturnType<typeof vi.fn>).mock.calls[0][0]).toEqual({
+        placementMode: "SelectedFolder", placementSectionId: null,
+        calendarAutoStopEnabled: true, calendarAutoStopAfterMinutes: 10, calendarSilenceStopSeconds: 90,
+      });
+    });
+
+    it("seeds the controls from saved settings (round-trip)", async () => {
+      (api.getUserSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ...settings, calendarAutoStopEnabled: true, calendarAutoStopAfterMinutes: 7,
+        calendarSilenceStopSeconds: 45,
+      });
+      renderSection();
+      await screen.findByText("Recording from a Calendar Event");
+
+      expect((autoStop() as HTMLInputElement).checked).toBe(true);
+      expect(afterMinutes().value).toBe("7");
+      expect(silenceSeconds().value).toBe("45");
+      expect(afterMinutes().disabled).toBe(false);
+    });
+
+    it("sends the defaults rather than a blanked or zero duration", async () => {
+      // Clearing a number input yields "" - saving that as 0 would stop a recording the instant it began.
+      renderSection();
+      await screen.findByText("Recording from a Calendar Event");
+
+      fireEvent.click(autoStop());
+      fireEvent.change(afterMinutes(), { target: { value: "" } });
+      fireEvent.change(silenceSeconds(), { target: { value: "0" } });
+      fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+      await waitFor(() => expect(api.updateUserSettings).toHaveBeenCalled());
+      const arg = (api.updateUserSettings as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(arg.calendarAutoStopAfterMinutes).toBe(3);
+      expect(arg.calendarSilenceStopSeconds).toBe(30);
+    });
   });
 });

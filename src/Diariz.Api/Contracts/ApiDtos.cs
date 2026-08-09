@@ -586,7 +586,14 @@ public record UserSettingsDto(
     bool DictationServerAvailable,
     /// <summary>Whether the user has opted in to mirroring a desktop Outlook calendar. Off by default; turning
     /// it off erases every device and its stored meetings.</summary>
-    bool OutlookSyncEnabled = false);
+    bool OutlookSyncEnabled = false,
+    /// <summary>Whether a recording started from a calendar event ends by itself. Off by default; the two
+    /// fields below are its conditions and are inert while it is false.</summary>
+    bool CalendarAutoStopEnabled = false,
+    /// <summary>Minutes to keep recording past the invite's end time.</summary>
+    int CalendarAutoStopAfterMinutes = UserSettings.DefaultCalendarAutoStopAfterMinutes,
+    /// <summary>Seconds of continuous silence that also ends such a recording.</summary>
+    int CalendarSilenceStopSeconds = UserSettings.DefaultCalendarSilenceStopSeconds);
 
 /// <summary>A chat tool's state for the settings panel: whether it is on for this user
 /// (<paramref name="Enabled"/>) and its server-side default.</summary>
@@ -611,7 +618,15 @@ public record UpdateUserSettingsRequest(
     /// <summary>The desktop Outlook sync opt-in. Null leaves it unchanged. Setting it <c>false</c> also
     /// <b>purges</b> every connected device and, by cascade, every meeting mirrored from them - the switch
     /// erases rather than merely stopping future syncs.</summary>
-    bool? OutlookSyncEnabled = null);
+    bool? OutlookSyncEnabled = null,
+    /// <summary>Whether a recording started from a calendar event ends by itself. Null leaves it unchanged.</summary>
+    bool? CalendarAutoStopEnabled = null,
+    /// <summary>Minutes to keep recording past the invite's end. Null leaves it unchanged; a non-positive
+    /// value resets to the default rather than persisting a stop-immediately trap.</summary>
+    int? CalendarAutoStopAfterMinutes = null,
+    /// <summary>Seconds of continuous silence that ends such a recording. Null leaves it unchanged; a
+    /// non-positive value resets to the default.</summary>
+    int? CalendarSilenceStopSeconds = null);
 
 // ---- MCP access tokens ----
 /// <summary>A stored MCP token, listed in Preferences. The secret is never returned — only a short display

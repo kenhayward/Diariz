@@ -28,6 +28,31 @@ did not share it, the recording falls back to microphone-only rather than failin
   recording stops and starts transcribing on its own, so you can walk away.
 - The gear popover tunes capture: echo cancellation, noise suppression, auto gain, and mono.
 
+## Recording a meeting from your calendar
+
+Open a meeting on the Calendar tab and press **Join meeting**. The meeting opens and recording starts
+in one step, and the recording is named after the invite rather than the time of day. That name sticks:
+nothing renames it for you later.
+
+You can also let such a recording end by itself. In **Settings -> Recordings**, under **Recording from
+a Calendar Event**, turn on **End recording automatically** and choose either or both conditions:
+
+- **Minutes after the meeting ends.** Three by default, so the conversation that carries on past the
+  hour is still captured.
+- **Seconds of silence.** Thirty by default, for when the meeting breaks up early.
+
+Whichever happens first ends the recording, which then transcribes as normal. Silence is only counted
+once something has been heard, so joining a call before anyone speaks will not cut your recording
+short, and time spent paused does not count either.
+
+These settings apply only to a recording started from a calendar event. One you start with the Record
+button runs until you press Stop, and if you have set an auto-stop for the session yourself, whichever
+stop comes first is the one that applies.
+
+If you join a second meeting while a recording is still running, that first recording is stopped and
+sent off to transcribe before the new one starts. This happens whether or not you turned any of the
+above on - nothing is lost by moving straight from one meeting to the next.
+
 ## Taking notes as you go
 
 The notes popover lets you jot lines while recording. Each line is stamped with the second you wrote

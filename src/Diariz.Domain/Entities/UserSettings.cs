@@ -84,4 +84,25 @@ public class UserSettings
     /// <summary>The fixed folder for <see cref="RecordingPlacementMode.SpecificFolder"/>. Null in the other
     /// modes (and null = Ungrouped even in SpecificFolder mode, if the chosen folder was later deleted).</summary>
     public Guid? RecordingPlacementSectionId { get; set; }
+
+    // ---- Recording started from a calendar event ----
+    // These apply only to a take started by Join-and-record on a calendar event, where the meeting's end time
+    // is known. A recording started from the Record button is unaffected.
+
+    /// <summary>Whether such a recording ends by itself, rather than running until the user presses Stop.
+    /// Off by default - stopping is the user's business unless they opt in. The two settings below are the
+    /// conditions, and are inert while this is false.</summary>
+    public bool CalendarAutoStopEnabled { get; set; }
+
+    /// <summary>Minutes to keep recording past the invite's end time (default 3), so the wrap-up after a
+    /// meeting nominally finishes is still captured.</summary>
+    public int CalendarAutoStopAfterMinutes { get; set; } = DefaultCalendarAutoStopAfterMinutes;
+
+    /// <summary>Seconds of continuous near-silence that also ends the recording (default 30) - the meeting
+    /// broke up early. Only counts once something has been heard, so a recording started before anyone
+    /// speaks is never killed at the outset.</summary>
+    public int CalendarSilenceStopSeconds { get; set; } = DefaultCalendarSilenceStopSeconds;
+
+    public const int DefaultCalendarAutoStopAfterMinutes = 3;
+    public const int DefaultCalendarSilenceStopSeconds = 30;
 }

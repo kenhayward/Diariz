@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vite
 const TOKEN = `h.${btoa(JSON.stringify({ sub: "u1" }))}.s`;
 
 vi.mock("../lib/api", () => ({
-  api: { upload: vi.fn(), createNotes: vi.fn(), createScreenshot: vi.fn() },
+  api: { upload: vi.fn(), createNotes: vi.fn(), createScreenshot: vi.fn(), renameRecording: vi.fn() },
   apiErrorMessage: (_e: unknown, fb: string) => fb,
   getToken: () => TOKEN,
 }));
@@ -41,6 +41,23 @@ vi.mock("../lib/rooms", () => ({
     isLoading: false,
   }),
 }));
+// The recorder is rendered bare (no QueryClientProvider), so its settings hook is mocked rather than its
+// underlying query. Tests that care flip `calendarSettings` before rendering.
+const calendarSettings = { enabled: false, afterMinutes: 3, silenceSeconds: 30 };
+vi.mock("../lib/calendarRecordingSettings", () => ({
+  useCalendarRecordingSettings: () => calendarSettings,
+}));
+const silenceWatcher = {
+  setPaused: vi.fn(),
+  stop: vi.fn(),
+  onSilent: null as (() => void) | null,
+};
+vi.mock("../lib/silenceWatcher", () => ({
+  startSilenceWatcher: vi.fn((_stream: MediaStream, _thresholdMs: number, onSilent: () => void) => {
+    silenceWatcher.onSilent = onSilent;
+    return silenceWatcher;
+  }),
+}));
 vi.mock("../lib/audioSource", () => ({
   getStream: vi.fn(),
   getCombinedStream: vi.fn(),
@@ -72,6 +89,8 @@ import {
 } from "../lib/pendingScreenshots";
 import type { PendingShot } from "../lib/pendingScreenshots";
 import Recorder, { MAX_LIVE_SCREENSHOTS } from "./Recorder";
+import { requestRecording } from "../lib/recordRequest";
+import { startSilenceWatcher } from "../lib/silenceWatcher";
 
 // jsdom has no MediaRecorder; a minimal stub lets start() run without capturing real audio.
 class FakeMediaRecorder {
@@ -1357,5 +1376,167 @@ describe("screenshot attach progress feedback", () => {
 
     await waitFor(() => expect(api.upload).toHaveBeenCalled());
     expect(api.createScreenshot).not.toHaveBeenCalled();
+  });
+});
+
+// ---- Recording started from a calendar event ----
+
+describe("recording started from a calendar event", () => {
+  const EVENT = {
+    id: "evt-1",
+    summary: "Quarterly review with Acme",
+    endsAt: "2026-08-09T11:00:00.000Z",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    calendarSettings.enabled = false;
+    calendarSettings.afterMinutes = 3;
+    calendarSettings.silenceSeconds = 30;
+    silenceWatcher.onSilent = null;
+    (getStream as Mock).mockResolvedValue(fakeSession);
+    (api.upload as Mock).mockResolvedValue({ id: "rec-new" });
+    (api.renameRecording as Mock).mockResolvedValue(undefined);
+  });
+
+  /// Drive the same channel the Join button uses.
+  async function joinAndRecord(event: typeof EVENT | undefined = EVENT) {
+    requestRecording(event ? { calendarEvent: event } : {});
+    await screen.findByRole("button", { name: /^stop$/i });
+  }
+
+  it("names the recording after the invite, and pins it so the summariser cannot rename it", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    await screen.findByRole("button", { name: /record/i });
+
+    await joinAndRecord();
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+    // The title carries the invite subject instead of "Microphone <timestamp>"...
+    expect((api.upload as Mock).mock.calls[0][1]).toBe("Quarterly review with Acme");
+    // ...and the NAME is set too: the summariser auto-names a recording whose name is blank, so leaving it
+    // unset would let the model rename the meeting away from what the invite called it.
+    await waitFor(() => expect(api.renameRecording).toHaveBeenCalledWith("rec-new", "Quarterly review with Acme"));
+  });
+
+  it("keeps the generated title for an ordinary Record-button take", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+    expect((api.upload as Mock).mock.calls[0][1]).not.toBe("Quarterly review with Acme");
+    expect(api.renameRecording).not.toHaveBeenCalled();
+  });
+
+  it("does not carry the last meeting's name onto the next manual recording", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    await screen.findByRole("button", { name: /record/i });
+
+    await joinAndRecord();
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+    await waitFor(() => expect(api.upload).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalledTimes(2));
+    expect((api.upload as Mock).mock.calls[1][1]).not.toBe("Quarterly review with Acme");
+  });
+
+  it("arms no silence watcher while auto-stop is off", async () => {
+    render(<Recorder onUploaded={() => {}} />);
+    await screen.findByRole("button", { name: /record/i });
+
+    await joinAndRecord();
+
+    expect(startSilenceWatcher).not.toHaveBeenCalled();
+  });
+
+  it("stops the recording after the configured run of silence", async () => {
+    calendarSettings.enabled = true;
+    calendarSettings.silenceSeconds = 45;
+    render(<Recorder onUploaded={() => {}} />);
+    await screen.findByRole("button", { name: /record/i });
+
+    await joinAndRecord();
+
+    // Armed with the user's threshold, in milliseconds.
+    expect(startSilenceWatcher).toHaveBeenCalledWith(fakeStream, 45_000, expect.any(Function));
+
+    // The meeting breaks up: the watcher fires, and the recording ends and uploads like any other.
+    act(() => silenceWatcher.onSilent!());
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+    expect(await screen.findByRole("button", { name: /record/i })).toBeTruthy();
+  });
+
+  it("suspends silence counting while paused, and resumes with it", async () => {
+    // Pausing disables the capture track, so the analyser reads pure silence - counting through a break
+    // would end the recording the user deliberately paused.
+    calendarSettings.enabled = true;
+    render(<Recorder onUploaded={() => {}} />);
+    await screen.findByRole("button", { name: /record/i });
+    await joinAndRecord();
+
+    fireEvent.click(screen.getByRole("button", { name: /pause/i }));
+    expect(silenceWatcher.setPaused).toHaveBeenCalledWith(true);
+
+    fireEvent.click(screen.getByRole("button", { name: /resume/i }));
+    expect(silenceWatcher.setPaused).toHaveBeenCalledWith(false);
+  });
+
+  it("tears the silence watcher down when the recording stops", async () => {
+    calendarSettings.enabled = true;
+    render(<Recorder onUploaded={() => {}} />);
+    await screen.findByRole("button", { name: /record/i });
+    await joinAndRecord();
+
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+    await waitFor(() => expect(silenceWatcher.stop).toHaveBeenCalled());
+  });
+
+  it("replaces a running recording: the first take is uploaded on its own before the second begins", async () => {
+    // Joining a second meeting while the first is still recording. The first must complete its own pipeline
+    // (upload + transcription), not be discarded, and must not be filed under the second take's context.
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+
+    await joinAndRecord();
+
+    // Exactly one upload so far - the first take - and the recorder is running again for the second.
+    await waitFor(() => expect(api.upload).toHaveBeenCalledTimes(1));
+    expect((api.upload as Mock).mock.calls[0][1]).not.toBe("Quarterly review with Acme");
+    expect(screen.getByRole("button", { name: /^stop$/i })).toBeTruthy();
+
+    // The second take is the meeting, and uploads separately.
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+    await waitFor(() => expect(api.upload).toHaveBeenCalledTimes(2));
+    expect((api.upload as Mock).mock.calls[1][1]).toBe("Quarterly review with Acme");
+  });
+
+  it("does not start the replacement until the outgoing upload has settled", async () => {
+    // upload() reads the room/folder refs after its first await, so a replacement that started underneath it
+    // would file the finished recording into the NEW take's folder.
+    let release!: (v: unknown) => void;
+    (api.upload as Mock).mockImplementationOnce(
+      () => new Promise((resolve) => { release = resolve; }),
+    );
+    render(<Recorder onUploaded={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /record/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+
+    requestRecording({ calendarEvent: EVENT });
+    await waitFor(() => expect(api.upload).toHaveBeenCalledTimes(1));
+
+    // The first upload is still in flight, so the second recording has NOT begun.
+    expect(getStream).toHaveBeenCalledTimes(1);
+
+    release({ id: "rec-first" });
+    await waitFor(() => expect(getStream).toHaveBeenCalledTimes(2));
   });
 });

@@ -1503,6 +1503,31 @@ into it with no URL or per-user setup at all.
   appear with no clicks); the recording Overview renders the meeting's full details (`CalendarEventDetails`, fetched
   live, falling back to the snapshot) with **Change meeting** (a browse-events modal - date-range + title filter,
   `CalendarLinkModal`) and **Unlink** actions. A manually-linked event is never overwritten by the auto-match.
+- **Recording started from a calendar event (Join and record).** The Join button on `CalendarEventDetail` opens the
+  meeting URL and asks the recorder to start, over the one-line `lib/recordRequest.ts` channel (the recorder is
+  mounted once in the top bar; a plain subscription keeps the page ignorant of where it is). The request now carries
+  a **`CalendarEventContext`** - `{ id, summary, endsAt }` - which is what makes the take *about* the meeting:
+  - **Naming.** The invite's subject becomes the upload's `Title` **and** is pinned as `Recording.Name` (a follow-up
+    `PUT /api/recordings/{id}/name`). Setting `Name` is the load-bearing half: `SummarizationProcessor` auto-names
+    any recording whose `Name` is blank, so leaving it unset would have the model rename the meeting away from what
+    the invite called it.
+  - **Ending by itself**, when the user has opted in on Preferences → Recordings (`UserSettings.CalendarAutoStop*`;
+    off by default, and applying **only** to a calendar-started take - the Record button is untouched). Two
+    independent conditions, whichever comes first: an absolute stop at **invite end + N minutes** (folded into the
+    recorder's existing schedule watcher via `earlierStop`, so the user's own auto-stop choice still wins if it is
+    sooner, and `resolveCalendarStopAt` never returns a time already past - joining a meeting after its scheduled
+    end would otherwise stop the take on the watcher's first tick), and **N seconds of continuous silence**
+    (`lib/silenceWatcher.ts`). The silence rule only arms **after sound has been heard** (`calendarRecording.ts`
+    keeps `heardSound`), so a take started before anyone speaks is never killed at the outset, and it is suspended
+    while the recording is paused - pausing disables the capture track, which reads as pure silence. The watcher
+    owns its own `AudioContext` rather than reusing `HubLevelMeter`'s, whose lifetime follows what popover the user
+    has open.
+  - **Replacing a running take.** Joining a second meeting while the first is still recording stops the first,
+    which uploads and transcribes on its own, and only then starts the second - this happens **regardless** of the
+    settings above. `start()` awaits the outgoing upload before touching any shared state, because `upload()` reads
+    `pendingRoomRef`/`pendingSectionRef` and the live notes/screenshots **after** its first `await`; without the
+    wait the finished recording would be filed into the new take's folder and lose its notes. The promise is
+    published in `stop()`, not in `onstop`, since `MediaRecorder.onstop` lands on a later task.
 - **Calendar-tab event overlay (Phase 2 feature):** the recordings **Calendar tab** (`nav/CalendarTab.tsx`)
   overlays the month's meetings from **every** source. The web app fetches
   **`GET /api/calendar/events?timeMin&timeMax`** (`CalendarController` → `ICalendarAggregator`, range-capped
