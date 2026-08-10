@@ -12,8 +12,11 @@ import DetailHeader from "../components/detail/DetailHeader";
 import RecordingHub from "../components/detail/RecordingHub";
 import MeetingCard from "../components/detail/MeetingCard";
 import ConversationFlowPlayer from "../components/detail/ConversationFlowPlayer";
+import CalendarEventDetails from "../components/CalendarEventDetails";
+import SeriesRecordings from "../components/SeriesRecordings";
 import {
   ActionsGlyph,
+  CalendarIcon,
   FilesGlyph,
   FormulasGlyph,
   MinutesGlyph,
@@ -1577,6 +1580,35 @@ export default function RecordingDetail() {
         />
       ),
     },
+    // The meeting this recording came from. Spread conditionally rather than rendered empty: a recording with
+    // no link must not offer a section at all, so that a persisted "meeting" key falls through to the hub.
+    // Calendar is personal-only, so it is absent in a shared room for the same reason the card is.
+    ...(rec.calendarLink && !inSharedRoom
+      ? [
+          {
+            key: "meeting" as const,
+            label: t("workspace:detailSectionMeeting"),
+            icon: <CalendarIcon size={15} />,
+            content: (
+              <div className="space-y-3">
+                <CalendarEventDetails
+                  showTitle
+                  event={
+                    linkedEvent ?? {
+                      id: rec.calendarLink.eventId,
+                      summary: rec.calendarLink.summary,
+                      start: rec.calendarLink.start,
+                      end: rec.calendarLink.end,
+                      htmlLink: rec.calendarLink.htmlLink,
+                    }
+                  }
+                />
+                {linkedEvent?.recurring && <SeriesRecordings eventId={rec.calendarLink.eventId} />}
+              </div>
+            ),
+          },
+        ]
+      : []),
   ];
 
   return (
