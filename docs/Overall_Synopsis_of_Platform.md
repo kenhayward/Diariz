@@ -1519,7 +1519,7 @@ into it with no URL or per-user setup at all.
   `CalendarLinkModal`) and **Unlink** actions. A manually-linked event is never overwritten by the auto-match.
 - **Recording started from a calendar event (Join and record).** The Join button on `CalendarEventDetail` opens the
   meeting URL and asks the recorder to start, over the one-line `lib/recordRequest.ts` channel (the recorder is
-  mounted once in the top bar; a plain subscription keeps the page ignorant of where it is). The request now carries
+  mounted once in the capture bar; a plain subscription keeps the page ignorant of where it is). The request now carries
   a **`CalendarEventContext`** - `{ id, summary, endsAt }` - which is what makes the take *about* the meeting:
   - **Naming.** The invite's subject becomes the upload's `Title` **and** is pinned as `Recording.Name` (a follow-up
     `PUT /api/recordings/{id}/name`). Setting `Name` is the load-bearing half: `SummarizationProcessor` auto-names

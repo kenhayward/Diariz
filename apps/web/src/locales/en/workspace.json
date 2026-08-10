@@ -533,6 +533,7 @@
   "panelChat": "Chat",
   "resizeRecordings": "Resize recordings panel",
   "resizeChat": "Resize chat panel",
+  "panelTabsLabel": "Recordings panel tabs",
   "collapsePanel": "Collapse {{title}} panel",
   "expandPanel": "Expand {{label}} panel",
   "meetingType": "Meeting type",

@@ -144,6 +144,15 @@ describe("UserMenu", () => {
     expect(screen.getByRole("dialog").className).toContain("z-50");
   });
 
+  // Workspace.test.tsx only checks its own hardcoded stub (`vi.mock("./UserMenu", ...)`, which always
+  // renders `data-tour="account"` regardless of the real component), so a regression here - the tour anchor
+  // being dropped from the real trigger - would slip through the whole suite unnoticed. This is the one
+  // test that renders the real component and checks it.
+  it("carries the account tour anchor on its trigger", () => {
+    renderMenu();
+    expect(screen.getByRole("button", { name: /account/i }).getAttribute("data-tour")).toBe("account");
+  });
+
   it("Sign Out calls logout", () => {
     renderMenu();
     fireEvent.click(screen.getByRole("button", { name: /account/i }));

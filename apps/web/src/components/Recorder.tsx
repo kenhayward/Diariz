@@ -1120,7 +1120,7 @@ export default function Recorder({
         })
       : null;
 
-  // Errors, warnings and hints go to the app-wide status bar rather than inline: the TopBar is a
+  // Errors, warnings and hints go to the app-wide status bar rather than inline: the capture bar is a
   // fixed-height header, so an extra line here pushed the whole bar off screen. One message at a time,
   // most severe first; the tones keep the colours these lines had inline (red / amber / grey).
   const { setStatus } = useStatus();
@@ -1297,8 +1297,8 @@ export default function Recorder({
         )}
       </div>
 
-      {/* Recovery banners float below the bar in a popover. They must stay out of the TopBar's flow: it is
-          a fixed-height header, so an in-flow banner grows it and pushes the page down. */}
+      {/* Recovery banners float below the bar in a popover. They must stay out of the capture bar's flow: it
+          is a fixed-height bar, so an in-flow banner grows it and pushes the page down. */}
       {!recording && (pending || notesAttach || shotsAttach) && (
         <div
           data-testid="recorder-popover"

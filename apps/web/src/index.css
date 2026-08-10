@@ -9,7 +9,6 @@
   /* Top-bar "command hub" token layer. Light values here; dark overrides under `.dark` below.
      Blue/red accents and the meter gradient are theme-neutral and carry over from these defaults. */
   --hub-bar-bg: #ffffff;
-  --hub-bar-border-top: rgba(47, 107, 237, 0.2);
   --hub-bar-border-bottom: rgba(15, 23, 42, 0.08);
   --hub-surface: #f1f5f9;
   --hub-surface-hover: rgba(15, 23, 42, 0.05);
@@ -18,7 +17,6 @@
   --hub-popover-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
   --hub-border: rgba(15, 23, 42, 0.1);
   --hub-border-hover: rgba(47, 107, 237, 0.45);
-  --hub-avatar-border: rgba(15, 23, 42, 0.12);
   --hub-text: #0f172a;
   --hub-text-2: #334155;
   --hub-muted: #64748b;
@@ -42,7 +40,6 @@
 
 .dark {
   --hub-bar-bg: #0a1120;
-  --hub-bar-border-top: rgba(120, 150, 220, 0.18);
   --hub-bar-border-bottom: rgba(255, 255, 255, 0.05);
   --hub-surface: #131d31;
   --hub-surface-hover: rgba(255, 255, 255, 0.06);
@@ -51,7 +48,6 @@
   --hub-popover-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
   --hub-border: rgba(255, 255, 255, 0.1);
   --hub-border-hover: rgba(120, 150, 220, 0.5);
-  --hub-avatar-border: rgba(255, 255, 255, 0.14);
   --hub-text: #eef2f8;
   --hub-text-2: #c7d0e0;
   --hub-muted: #7c8aa3;

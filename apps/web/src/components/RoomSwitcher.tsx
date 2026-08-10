@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useRoom } from "../lib/rooms";
@@ -9,18 +9,31 @@ import RoomBadge from "./RoomBadge";
 import ManageRoomsModal from "./ManageRoomsModal";
 import { HomeIcon } from "./icons";
 
-/// A small icon for a room: the signed-in user's avatar for their Personal room, else the shared room's chosen
-/// icon (or a colour swatch with its first letter when none was picked).
-function RoomIcon({ room, size = "sm" }: { room: RoomListItem; size?: "xs" | "sm" }) {
+/// A small icon for a room, used in the switcher's menu: the signed-in user's avatar for their Personal
+/// room, else the shared room's chosen icon (or a colour swatch with its first letter when none was picked).
+function RoomIcon({ room }: { room: RoomListItem }) {
   const { initials, pictureUrl } = useAuth();
-  if (room.isPersonal) return <Avatar initials={initials} pictureUrl={pictureUrl} size={size} />;
-  return <RoomBadge icon={room.icon} color={room.color} name={room.name} size={size} />;
+  if (room.isPersonal) return <Avatar initials={initials} pictureUrl={pictureUrl} size="sm" />;
+  return <RoomBadge icon={room.icon} color={room.color} name={room.name} size="sm" />;
 }
 
-/// The left-panel header: a room switcher (current room's icon + name, a dropdown of the rooms the user belongs
-/// to, personal first) plus the panel collapse control. Replaces the old static "Meetings" header. With one
-/// room today the dropdown has a single entry; it becomes load-bearing once shared rooms arrive.
-export default function RoomSwitcher({ onCollapse, chevron }: { onCollapse: () => void; chevron: string }) {
+/// The left-panel header row: an optional leading slot (the account menu), a room switcher (the current
+/// room's name, and a dropdown of the rooms the user belongs to, personal first) and the panel collapse
+/// control. The slot is a prop rather than an import so this component stays free of the account menu's
+/// dependencies.
+///
+/// The trigger deliberately shows the name alone. The account pill sits immediately to its left, and for a
+/// personal room both would render the same signed-in user's avatar - two identical faces side by side. The
+/// menu still carries an icon per row, which is where telling one room from another actually matters.
+export default function RoomSwitcher({
+  onCollapse,
+  chevron,
+  leading,
+}: {
+  onCollapse: () => void;
+  chevron: string;
+  leading?: ReactNode;
+}) {
   const { t } = useTranslation("workspace");
   const { rooms, currentRoom } = useRoom();
   const { permissions } = useAuth();
@@ -51,7 +64,8 @@ export default function RoomSwitcher({ onCollapse, chevron }: { onCollapse: () =
   }
 
   return (
-    <div className="flex h-9 shrink-0 items-center justify-between gap-1 border-b px-2 dark:border-gray-700">
+    <div className="flex h-9 shrink-0 items-center justify-between gap-1.5 border-b px-2 dark:border-gray-700">
+      {leading}
       <div className="relative min-w-0 flex-1" ref={ref}>
         <button
           type="button"
@@ -61,7 +75,6 @@ export default function RoomSwitcher({ onCollapse, chevron }: { onCollapse: () =
           onClick={() => setOpen((v) => !v)}
           className="flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5 hover:bg-gray-100 dark:hover:bg-gray-800"
         >
-          {currentRoom && <RoomIcon room={currentRoom} size="xs" />}
           <span className="min-w-0 flex-1 truncate text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
             {currentRoom?.name ?? ""}
           </span>

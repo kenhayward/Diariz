@@ -60,10 +60,10 @@ function MenuRow({
 }
 
 /**
- * The command-hub account menu: a 46px avatar button that toggles a 308px account popover (header, usage
- * stats, menu rows, Sign out). The avatar shares the hub's single-open popover state (`useHubPopover`, id
- * "acct") so opening it closes the recorder popovers and vice-versa; `HubPopover` owns the backdrop +
- * Escape. Behaviour, gating and data are unchanged from the old dropdown - this is a restyle.
+ * The account menu: a small avatar pill in the left panel's room row that toggles a 308px account popover
+ * (header, usage stats, menu rows, Sign out). The pill shares the hub's single-open popover state
+ * (`useHubPopover`, id "acct") so opening it closes the recorder's popovers and vice-versa - the shared
+ * provider lives in `WorkspaceLayout`, above both; `HubPopover` owns the backdrop + Escape.
  */
 export default function UserMenu() {
   const { t } = useTranslation("account");
@@ -90,6 +90,8 @@ export default function UserMenu() {
 
   return (
     <div className="relative">
+      {/* The nav-row account pill: a 24px avatar plus its own caret. Its hover treatment is separate from
+          the room switcher's next to it - one shared hover across both would read as a single button. */}
       <button
         type="button"
         aria-label="Account"
@@ -97,24 +99,15 @@ export default function UserMenu() {
         aria-expanded={open}
         data-tour="account"
         onClick={() => toggle("acct")}
-        style={{
-          padding: 0,
-          borderRadius: "50%",
-          border: "2px solid var(--hub-avatar-border)",
-          overflow: "hidden",
-          display: "grid",
-          placeItems: "center",
-          lineHeight: 0,
-          cursor: "pointer",
-          background: "transparent",
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--hub-border-hover)")}
-        onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--hub-avatar-border)")}
+        className="flex shrink-0 items-center gap-[3px] rounded-full border border-gray-200 bg-gray-100 py-0.5 pl-0.5 pr-1 hover:border-gray-300 dark:border-gray-700 dark:bg-white/[0.06] dark:hover:border-gray-600"
       >
-        <Avatar initials={initials} pictureUrl={pictureUrl} size="md" />
+        <Avatar initials={initials} pictureUrl={pictureUrl} size="xs" />
+        <span aria-hidden="true" className="text-[9px] text-gray-400">
+          ▾
+        </span>
       </button>
 
-      <HubPopover open={open} onClose={close} width={308} anchorClassName="right-0" ariaLabel="Account">
+      <HubPopover open={open} onClose={close} width={308} anchorClassName="left-0" ariaLabel="Account">
         <div style={{ overflow: "hidden", borderRadius: 14 }}>
           {/* Header: avatar + name + email. */}
           <div

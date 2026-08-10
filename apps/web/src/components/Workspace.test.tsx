@@ -5,6 +5,13 @@ import { vi } from "vitest";
 
 vi.mock("./RecordingsPanel", () => ({ default: () => <div>LIST</div> }));
 vi.mock("./ChatPanel", () => ({ default: () => <div>CHAT</div> }));
+vi.mock("./hub/CaptureBar", () => ({
+  default: () => <div data-tour="capture">CAPTURE</div>,
+}));
+// The account menu is a real component with react-query + auth dependencies; this test is about the shell.
+vi.mock("./UserMenu", () => ({
+  default: () => <button data-tour="account" type="button">ACCOUNT</button>,
+}));
 
 // The left-panel header is now the RoomSwitcher, which reads the current room and the signed-in user's avatar.
 const room = { id: "p1", name: "Personal", kind: 0, icon: null, color: null, isPersonal: true, permissions: 63 };
@@ -14,6 +21,7 @@ vi.mock("../auth", () => ({
 }));
 
 import Workspace from "./Workspace";
+import { TOUR_STEPS } from "../lib/onboarding";
 
 function renderWorkspace(initial = "/") {
   return render(
@@ -49,6 +57,17 @@ describe("Workspace", () => {
     expect(screen.getByText("CHAT").closest(".hidden")).toBeTruthy();
   });
 
+  it("puts the account menu in the left panel's room row, next to the room switcher", () => {
+    renderWorkspace();
+    const account = screen.getByRole("button", { name: "ACCOUNT" });
+    const collapse = screen.getByRole("button", { name: /collapse personal panel/i });
+    // Proves the `leading` slot lands inside RoomSwitcher's row (the same row the collapse control ends) -
+    // not that the two triggers are literal siblings in the real tree. That only holds here because this
+    // stub is a bare <button>; the real UserMenu (UserMenu.tsx) wraps its trigger in its own
+    // `<div className="relative">`, so in production the button's actual parent is that wrapper, not the row.
+    expect(account.parentElement).toBe(collapse.parentElement);
+  });
+
   it("collapses the left panel and persists the choice", () => {
     renderWorkspace();
     fireEvent.click(screen.getByRole("button", { name: /collapse personal panel/i }));
@@ -66,6 +85,33 @@ describe("Workspace", () => {
   it("renders the routed detail in the middle panel", () => {
     renderWorkspace("/recordings/rec-1");
     expect(screen.getByText("DETAIL")).toBeTruthy();
+  });
+
+  // The bar spans the routed content only: it shares a column with <main>, and the chat rail is outside
+  // that column so the bar never runs over it.
+  it("renders the capture bar above the routed content, inside the content column", () => {
+    renderWorkspace("/recordings/rec-1");
+    const bar = screen.getByText("CAPTURE");
+    const main = document.querySelector("main")!;
+    expect(bar.parentElement).toBe(main.parentElement);
+    expect(bar.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("keeps the chat rail out of the capture bar's column", () => {
+    renderWorkspace();
+    const column = screen.getByText("CAPTURE").parentElement!;
+    const rail = screen.getByRole("button", { name: /expand chat panel/i });
+    expect(column.contains(rail)).toBe(false);
+  });
+
+  // The tour spotlights each step's region by attribute, and every step's region lives in the workspace.
+  // The capture cluster moved into the capture bar and the account pill into the room row; if either
+  // anchor were dropped in the move, the tour would dim the app with nothing lit.
+  it("renders a region for every tour step", () => {
+    renderWorkspace("/recordings/rec-1");
+    for (const step of TOUR_STEPS) {
+      expect(document.querySelector(`[data-tour="${step.target}"]`)).toBeTruthy();
+    }
   });
 
   it("drag-resizes the right panel and persists the width", () => {

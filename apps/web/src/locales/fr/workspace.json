@@ -533,6 +533,7 @@
   "panelChat": "Chat",
   "resizeRecordings": "Redimensionner le panneau des enregistrements",
   "resizeChat": "Redimensionner le panneau de chat",
+  "panelTabsLabel": "Onglets du panneau des enregistrements",
   "collapsePanel": "Réduire le panneau {{title}}",
   "expandPanel": "Développer le panneau {{label}}",
   "meetingType": "Type de réunion",

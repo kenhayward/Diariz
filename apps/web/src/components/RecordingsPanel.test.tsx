@@ -175,13 +175,10 @@ function renderCollapsible() {
   return seen;
 }
 
-/// Open a recording row's kebab. Its aria-label is "Actions" (KebabMenu's default) which now also matches
-/// the "Actions" tab button — disambiguate by the kebab's aria-haspopup="menu".
+/// Open a recording row's kebab. Its aria-label is "Actions" (KebabMenu's default); the "Actions" panel
+/// tab is a `role="tab"`, so a button-role query no longer collides with it.
 function openKebab() {
-  const btn = screen
-    .getAllByRole("button", { name: /actions/i })
-    .find((b) => b.getAttribute("aria-haspopup") === "menu");
-  fireEvent.click(btn!);
+  fireEvent.click(screen.getByRole("button", { name: /actions/i }));
 }
 
 describe("RecordingsPanel", () => {
@@ -196,6 +193,36 @@ describe("RecordingsPanel", () => {
     (api.deleteRecording as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
   });
 
+  // The strip is a row across the top of the panel now: toolbar, tabs, then the tab's own body (which for
+  // List starts with the search field). Order, not just presence - a strip rendered below the search would
+  // still satisfy a "renders the tabs" assertion.
+  it("renders the tab strip above the search field", async () => {
+    renderList();
+    await screen.findByText("Weekly Standup");
+    const strip = screen.getByRole("tablist");
+    const search = screen.getByPlaceholderText(/search/i);
+    expect(strip.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  // The strip's tabs are role="tab" inside a role="tablist", which requires a role="tabpanel" for the
+  // pattern to make sense - without it, activating a tab announces a selection change with nothing for a
+  // screen-reader user to move to. Checks the wiring both directions: the active tab's aria-controls
+  // resolves to the panel's id, and the panel's aria-labelledby resolves back to the active tab.
+  it("wires the active tab to the tab body via role=tabpanel + aria-controls/aria-labelledby", async () => {
+    renderList();
+    await screen.findByText("Weekly Standup");
+
+    const listTab = screen.getByRole("tab", { name: "List" });
+    const panel = screen.getByRole("tabpanel");
+    expect(panel.id).toBe(listTab.getAttribute("aria-controls"));
+    expect(panel.getAttribute("aria-labelledby")).toBe(listTab.id);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
+    const calendarTab = screen.getByRole("tab", { name: "Calendar" });
+    expect(panel.getAttribute("aria-labelledby")).toBe(calendarTab.id);
+    expect(panel.id).toBe(calendarTab.getAttribute("aria-controls"));
+  });
+
   it("browses the current room: fetches its recordings and keeps Actions/Tags (room-scoped) in a shared room", async () => {
     roomStub.currentRoom = { id: "eng-room", isPersonal: false };
     renderList();
@@ -204,8 +231,8 @@ describe("RecordingsPanel", () => {
     // The list is fetched for the shared room.
     expect(api.listRecordings).toHaveBeenCalledWith("eng-room");
     // Actions + Tags now show in a shared room too, scoped to that room's shared recordings.
-    expect(screen.getByRole("button", { name: /^tags$/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Actions", pressed: false })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Tags" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Actions" })).toBeTruthy();
   });
 
   it("shows New section in a shared room when the caller can manage its contents, hides it otherwise", async () => {
@@ -235,10 +262,10 @@ describe("RecordingsPanel", () => {
     renderList();
     await screen.findByText("Weekly Standup");
 
-    fireEvent.click(screen.getByRole("button", { name: "Actions", pressed: false }));
+    fireEvent.click(screen.getByRole("tab", { name: "Actions" }));
     await waitFor(() => expect(api.listAllActions).toHaveBeenCalledWith("eng-room"));
 
-    fireEvent.click(screen.getByRole("button", { name: /^tags$/i }));
+    fireEvent.click(screen.getByRole("tab", { name: "Tags" }));
     await waitFor(() => expect(api.listTags).toHaveBeenCalledWith("eng-room"));
   });
 
@@ -247,7 +274,7 @@ describe("RecordingsPanel", () => {
     renderList();
     await screen.findByText("Weekly Standup");
 
-    fireEvent.click(screen.getByRole("button", { name: "Actions", pressed: false }));
+    fireEvent.click(screen.getByRole("tab", { name: "Actions" }));
     await waitFor(() => expect(api.listAllActions).toHaveBeenCalledWith(undefined));
   });
 
@@ -961,8 +988,8 @@ describe("RecordingsPanel", () => {
     ]);
     renderList();
     await screen.findByText("Weekly Standup"); // wait for the panel to finish loading (past the spinner)
-    // Switch to the Actions tab (the vertical tab carries aria-pressed; the row kebab is also "Actions").
-    fireEvent.click(screen.getByRole("button", { name: "Actions", pressed: false }));
+    // Switch to the Actions tab (a role="tab"; the row kebab is a button also labelled "Actions").
+    fireEvent.click(screen.getByRole("tab", { name: "Actions" }));
     expect(await screen.findByText("Send the report")).toBeTruthy();
 
     // Not in select mode: clicking the row (its recording name, not the title link) selects that one action.
@@ -975,7 +1002,7 @@ describe("RecordingsPanel", () => {
     (api.listAllActions as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     renderList();
     await screen.findByText("Weekly Standup");
-    fireEvent.click(screen.getByRole("button", { name: "Actions", pressed: false }));
+    fireEvent.click(screen.getByRole("tab", { name: "Actions" }));
     expect(await screen.findByText(/no action items yet/i)).toBeTruthy();
   });
 
@@ -1172,7 +1199,7 @@ describe("RecordingsPanel", () => {
     renderList();
     await screen.findByText("Weekly Standup");
 
-    fireEvent.click(screen.getByRole("button", { name: /calendar/i }));
+    fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
     // The month heading (a calendar-only element) appears; the prev/next nav is present.
     expect(screen.getByRole("button", { name: /next month/i })).toBeTruthy();
   });
