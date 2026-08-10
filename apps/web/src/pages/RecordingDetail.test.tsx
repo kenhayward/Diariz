@@ -281,7 +281,7 @@ describe("RecordingDetail", () => {
     (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true });
     (api.getCalendarEvent as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt,
-      htmlLink: "https://cal/evt1", location: null, description: null, organizer: null, attendees: [],
+      htmlLink: "https://cal/evt1", location: "Room 4", description: null, organizer: null, attendees: [],
     });
     // The meeting card gains a click target into this section only in Task 3, so there is no UI route
     // into it from this test file yet - seed the persisted section key instead of clicking through.
@@ -293,6 +293,7 @@ describe("RecordingDetail", () => {
 
     expect(await screen.findByRole("navigation", { name: "Calendar Event" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Overview" })).toBeTruthy();
+    expect(await screen.findByText("Room 4")).toBeTruthy(); // the invite itself rendered in the new section
   });
 
   it("has no Calendar Event section when nothing is linked", async () => {
