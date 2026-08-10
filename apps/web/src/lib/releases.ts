@@ -64,7 +64,7 @@ export const RELEASES: Release[] = [
   {
     version: "0.203.0",
     date: "2026-08-10",
-    pr: 502, // TODO: confirm once the PR is open - Dependabot PRs and issues share the sequence
+    pr: 502,
     headline: "A clearer day count, and the invite one click away",
     summary:
       "The calendar day heading now counts every event on the day, including the ones you have already " +
