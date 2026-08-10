@@ -2,8 +2,10 @@ import { useTranslation } from "react-i18next";
 import type { PanelTab } from "../../lib/panelTab";
 
 /// Horizontal List / Calendar / Actions / Tags tabs, between the list toolbar and the active tab's body.
-/// Styling is deliberately identical to DetailTabs' strip so the app has one horizontal-tab language;
-/// keep the two in step if either changes.
+/// The active/inactive ink is byte-identical to DetailTabs' strip so the two read as one tab language;
+/// the metrics are deliberately tighter (12.5px labels, no wrap) because four tabs have to fit across a
+/// 288px panel, where DetailTabs' text-sm + flex-wrap would wrap. Keep the ink treatment in step with
+/// DetailTabs; the metrics are this strip's own.
 function TabStrip({
   tab,
   onSelect,
