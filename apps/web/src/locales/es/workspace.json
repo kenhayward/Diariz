@@ -639,7 +639,7 @@
   "recStoppedCalendar": "Grabación detenida - la reunión ha terminado.",
   "recStoppedSilence": "Grabación detenida - se hizo el silencio.",
   "extendPromptText": "Esta reunión debía terminar, pero todavía se está hablando.",
-  "extendKeep": "Seguir grabando",
+  "extendKeep": "Ampliar esta reunión",
   "extendStopNow": "Detener ahora",
   "extendEndingIn": "Termina en {{seconds}} s",
   "extendNotifyTitle": "¿Seguir grabando?"

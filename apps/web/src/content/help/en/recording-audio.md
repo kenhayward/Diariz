@@ -52,10 +52,11 @@ Whichever happens first ends the recording, which then transcribes as normal. Si
 once something has been heard, so joining a call before anyone speaks will not cut your recording
 short, and time spent paused does not count either.
 
-If people are still talking when the meeting's scheduled end arrives, Diariz asks whether to **keep
-recording** instead of ending outright - you also get a desktop notification, in case you are looking
-at the meeting itself rather than Diariz. Answer Keep recording and it waits longer each time you say
-yes (the wait doubles, so 3, 6, 12, 24 minutes by default), so a long overrun stops interrupting you.
+If people are still talking when the meeting's scheduled end arrives, Diariz asks whether to **Extend
+this meeting** instead of ending outright - you also get a desktop notification, in case you are
+looking at the meeting itself rather than Diariz. Answer Extend this meeting and it waits longer each
+time you say yes (the wait doubles, so 3, 6, 12, 24 minutes by default), so a long overrun stops
+interrupting you.
 Leave the prompt unanswered and the recording simply keeps going too, ending once the room actually
 goes quiet under the silence setting above.
 

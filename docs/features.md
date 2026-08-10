@@ -39,10 +39,10 @@ Both settings apply **only** to a recording started from a calendar event; one s
 runs until you stop it, exactly as before. And whatever those settings say, **joining a second meeting while
 the first is still recording** finishes the first properly - it uploads and transcribes on its own - before the
 new one begins. If people are still talking when the meeting's scheduled end arrives, Diariz asks whether to
-**keep recording** instead of cutting the meeting off outright; leaving it unanswered keeps recording, and the
-silence rule above ends the take once the room empties. Each **Keep recording** doubles the next wait (3, 6, 12,
-24 minutes), so a long overrun stops nagging you, and the prompt raises a desktop notification too, since you
-are usually looking at the meeting app rather than Diariz. A recording that ends on its own now always says
+**Extend this meeting** instead of cutting it off outright; leaving it unanswered keeps recording, and the
+silence rule above ends the take once the room empties. Each **Extend this meeting** doubles the next wait (3,
+6, 12, 24 minutes), so a long overrun stops nagging you, and the prompt raises a desktop notification too, since
+you are usually looking at the meeting app rather than Diariz. A recording that ends on its own now always says
 **why** - the scheduled auto-stop time, the meeting's end, or silence - whichever rule actually triggered it; a
 Stop you press yourself stays silent.
 - **Transcribe + diarize** server-side with WhisperX (large-v3, word-level timestamps) and pyannote 3.1,

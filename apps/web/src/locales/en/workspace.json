@@ -639,7 +639,7 @@
   "recStoppedCalendar": "Recording stopped - the meeting has ended.",
   "recStoppedSilence": "Recording stopped - the meeting went quiet.",
   "extendPromptText": "This meeting was due to end, but people are still talking.",
-  "extendKeep": "Keep recording",
+  "extendKeep": "Extend this meeting",
   "extendStopNow": "Stop now",
   "extendEndingIn": "Ending in {{seconds}}s",
   "extendNotifyTitle": "Still recording?"

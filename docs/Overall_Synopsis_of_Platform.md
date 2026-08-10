@@ -1549,10 +1549,10 @@ into it with no URL or per-user setup at all.
     `shouldPromptExtend` (`lib/calendarRecording.ts`) asks whether to prompt rather than just ending: it is the
     exact complement of the silence rule above, over the **same window** (`CalendarSilenceStopSeconds`), so the
     prompt and the silence rule share one definition of "the meeting is over" instead of two numbers that could
-    disagree. When it fires, the recorder shows **Keep recording / Stop now** and raises an OS notification (the
-    user is normally looking at Teams or Zoom, not Diariz). Left unanswered, the take simply keeps recording and
-    the ordinary silence rule ends it once the room actually empties. Each **Keep recording** calls
-    `extendedStopAt`, which **doubles** the next wait off the user's own `CalendarAutoStopAfterMinutes` (3, 6, 12,
+    disagree. When it fires, the recorder shows **Extend this meeting / Stop now** and raises an OS notification
+    (the user is normally looking at Teams or Zoom, not Diariz). Left unanswered, the take simply keeps
+    recording and the ordinary silence rule ends it once the room actually empties. Each **Extend this meeting**
+    calls `extendedStopAt`, which **doubles** the next wait off the user's own `CalendarAutoStopAfterMinutes` (3, 6, 12,
     24 minutes by default) so a meeting that overruns by a long way stops re-prompting every few minutes. Whatever
     ends a take on its own - the schedule, the calendar's end, or silence - `stop(reason?: StopReason)` now
     surfaces **which rule did it** as a toast, so a self-ended recording never reads as a mystery; a user-pressed
@@ -1634,7 +1634,11 @@ into it with no URL or per-user setup at all.
     being re-derived from the live calendar on each read: the Outlook mirror is a **rolling window** (see below),
     so an occurrence linked last month has already been swept out of it, and a live join would silently return no
     series for exactly the history the endpoint below exists to show. The UI shows a **Repeats** badge on a
-    recurring event; `SeriesId` itself is deliberately not serialised to the browser.
+    recurring event; `SeriesId` **is** returned to the browser like any other `CalendarEvent` field (no
+    `[JsonIgnore]`, no custom serializer - it is the user's own calendar data, and it is what the n8n node and
+    MCP legitimately need). The **web client** just does not model it: `lib/types.ts`'s `CalendarEvent` carries
+    only `recurring?: boolean`, because the sibling lookup below is resolved server-side from the event id, so
+    the browser never needs to hold the opaque series key itself.
 - **`GET /api/calendar/events/{eventId}/recordings` - a recurring meeting's history (`CalendarController`).** For
   an event that carries a `SeriesId`, the caller's **other recordings of that same series**, newest occurrence
   first, capped at 10, never including the occurrence asked about - matched on `RecordingCalendarLink.SeriesId`

@@ -283,8 +283,8 @@ export default function Recorder({
     extendAskRef.current = next;
     setExtendAsk(next);
   }
-  // How many times the user has said "keep recording" on THIS take. Each extension lasts twice as long as the
-  // last, so a meeting that overruns badly is not a stream of prompts (see extendedStopAt).
+  // How many times the user has said "Extend this meeting" on THIS take. Each extension lasts twice as long as
+  // the last, so a meeting that overruns badly is not a stream of prompts (see extendedStopAt).
   const extensionsRef = useRef(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -582,7 +582,7 @@ export default function Recorder({
     void notify(t("extendNotifyTitle"), t("extendPromptText"));
   }
 
-  /// "Keep recording": push the calendar's target out by the same overrun allowance the user already
+  /// "Extend this meeting": push the calendar's target out by the same overrun allowance the user already
   /// configured, and put the question away. Their own auto-stop is untouched - it still wins if it is sooner.
   function keepRecording() {
     calendarStopRef.current = extendedStopAt(

@@ -1789,11 +1789,11 @@ describe("extending a meeting that overruns", () => {
     expect(api.upload).toHaveBeenCalledTimes(1);
   });
 
-  it("Keep recording pushes the stop out by the overrun allowance instead of ending", async () => {
+  it("Extend this meeting pushes the stop out by the overrun allowance instead of ending", async () => {
     await joinUnderFakeTimers();
     await tick(3 * 60_000 + 1_500);
 
-    fireEvent.click(screen.getByRole("button", { name: /keep recording/i }));
+    fireEvent.click(screen.getByRole("button", { name: /extend this meeting/i }));
     expect(screen.queryByTestId("extend-prompt")).toBeNull();
 
     // Not asked again before the fresh three minutes are up...
@@ -1917,12 +1917,12 @@ describe("extending a meeting that overruns", () => {
   it("backs off: the second extension lasts twice as long as the first", async () => {
     await joinUnderFakeTimers();
     await tick(3 * 60_000 + 1_500);
-    fireEvent.click(screen.getByRole("button", { name: /keep recording/i }));
+    fireEvent.click(screen.getByRole("button", { name: /extend this meeting/i }));
 
     // First extension: the user's own three minutes.
     await tick(3 * 60_000 + 1_500);
     expect(screen.getByTestId("extend-prompt")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /keep recording/i }));
+    fireEvent.click(screen.getByRole("button", { name: /extend this meeting/i }));
 
     // Second: six, not three - so a half-hour overrun is a couple of prompts, not ten.
     await tick(3 * 60_000 + 1_500);
@@ -1937,7 +1937,7 @@ describe("extending a meeting that overruns", () => {
     // minutes before its FIRST extension expired - so this has to extend on the second take to see it.
     await joinUnderFakeTimers();
     await tick(3 * 60_000 + 1_500);
-    fireEvent.click(screen.getByRole("button", { name: /keep recording/i }));
+    fireEvent.click(screen.getByRole("button", { name: /extend this meeting/i }));
     fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
     await tick(1_000);
 
@@ -1946,7 +1946,7 @@ describe("extending a meeting that overruns", () => {
       await vi.runOnlyPendingTimersAsync();
     });
     await tick(3 * 60_000 + 1_500);
-    fireEvent.click(screen.getByRole("button", { name: /keep recording/i }));
+    fireEvent.click(screen.getByRole("button", { name: /extend this meeting/i }));
 
     // Three minutes, the user's own allowance - not the six a leaked count would give.
     await tick(3 * 60_000 + 1_500);

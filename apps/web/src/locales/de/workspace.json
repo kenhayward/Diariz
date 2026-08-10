@@ -639,7 +639,7 @@
   "recStoppedCalendar": "Aufnahme beendet - der Termin ist vorbei.",
   "recStoppedSilence": "Aufnahme beendet - es war nichts mehr zu hören.",
   "extendPromptText": "Dieser Termin sollte enden, aber es wird noch gesprochen.",
-  "extendKeep": "Weiter aufnehmen",
+  "extendKeep": "Termin verlängern",
   "extendStopNow": "Jetzt beenden",
   "extendEndingIn": "Endet in {{seconds}} s",
   "extendNotifyTitle": "Weiter aufnehmen?"
