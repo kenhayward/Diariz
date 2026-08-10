@@ -222,10 +222,13 @@ public static class Program
         };
     }
 
-    /// <summary>The per-occurrence Global Object ID - the same value EWS returns as <c>calendar:UID</c>. Stable
-    /// across moves between folders and stores, and distinct per instance of a series (Outlook stamps the
-    /// occurrence date into it), which is why it beats EntryID (unstable) and CleanGlobalObjectId (one value for
-    /// the whole series). Locally-created appointments sometimes have none, hence the EntryID fallback.</summary>
+    /// <summary>The Global Object ID - the same value EWS returns as <c>calendar:UID</c>. Stable across moves
+    /// between folders and stores, which is why it beats EntryID (unstable).
+    /// <para>It is per-series, not per-occurrence. Outlook was expected to stamp the occurrence date into it;
+    /// against a real calendar it does not (87 occurrences returned 24 ids). So the desktop qualifies a
+    /// recurring occurrence as <c>{globalId}#{occurrenceStart}</c> before pushing - see
+    /// <c>apps/desktop/src/outlookSync.js</c>. Locally-created appointments sometimes have none, hence the
+    /// EntryID fallback.</para></summary>
     private static string Uid(object item)
     {
         var global = TryStr(() => Get(item, "GlobalAppointmentID") as string);

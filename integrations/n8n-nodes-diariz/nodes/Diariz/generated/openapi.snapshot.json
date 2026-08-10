@@ -372,6 +372,16 @@
               }
             ]
           },
+          "recurring": {
+            "default": false,
+            "type": "boolean"
+          },
+          "seriesId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "start": {
             "format": "date-time",
             "type": "string"

@@ -73,6 +73,17 @@ public sealed class OutlookCalendarStore : IOutlookCalendarStore
     public Task<bool> HasEnabledSourceAsync(Guid userId, CancellationToken ct = default) =>
         _db.OutlookCalendarSources.AnyAsync(s => s.UserId == userId && s.Enabled, ct);
 
+    /// <summary>The series key for a recurring occurrence: the desktop stores a recurring uid as
+    /// <c>{seriesId}#{occurrenceStart}</c> (outlookSync.js), because Outlook returns one
+    /// <c>GlobalAppointmentID</c> for the whole series rather than one per instance. Only ever called for a
+    /// recurring row: <c>dedupeUids</c> gives a colliding <b>non</b>-recurring event the same suffix, so the
+    /// separator alone does not mean "this repeats".</summary>
+    private static string SeriesUid(string uid)
+    {
+        var hash = uid.IndexOf('#');
+        return hash < 0 ? uid : uid[..hash];
+    }
+
     private static CalendarEvent Project(Domain.Entities.OutlookCalendarEvent e, string? calendarName, string? color)
     {
         var (start, end) = Times(e);
@@ -81,6 +92,8 @@ public sealed class OutlookCalendarStore : IOutlookCalendarStore
         var organizer = e.OrganizerEmail is null && e.OrganizerName is null
             ? null
             : new CalendarAttendee(e.OrganizerEmail, e.OrganizerName, null, Organizer: true);
+
+        var recurring = e.IsRecurring;
 
         return new CalendarEvent(
             OutlookEventId.EventKey(e.Id),
@@ -97,7 +110,9 @@ public sealed class OutlookCalendarStore : IOutlookCalendarStore
             OutlookEventId.CalendarKey(e.SourceId),
             calendarName,
             color,
-            e.AllDay);
+            e.AllDay,
+            recurring,
+            recurring ? SeriesUid(e.Uid) : null);
     }
 
     /// <summary>An all-day entry's display truth is its <b>local</b> date string, parsed exactly as the Google

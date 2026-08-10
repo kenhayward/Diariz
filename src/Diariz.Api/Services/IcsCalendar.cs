@@ -51,8 +51,11 @@ public static class IcsCalendar
                 // A date-only DTSTART (`DTSTART;VALUE=DATE:20260212`) is an all-day entry, not a timed meeting.
                 var allDay = !occ.Period.StartTime.HasTime;
 
+                var recurring = source.RecurrenceRule is not null;
+                var uid = ResolveUid(source, startAt);
+
                 results.Add(new CalendarEvent(
-                    Id: MakeId(source, startAt),
+                    Id: MakeId(uid, recurring, startAt),
                     Summary: NullIfBlank(source.Summary),
                     Start: startAt,
                     End: endAt,
@@ -64,7 +67,9 @@ public static class IcsCalendar
                     CalendarId: calendarId,
                     CalendarName: calendarName,
                     Color: color,
-                    AllDay: allDay));
+                    AllDay: allDay,
+                    Recurring: recurring,
+                    SeriesId: recurring ? uid : null));
             }
         }
         catch
@@ -83,16 +88,15 @@ public static class IcsCalendar
         ParseEvents(icsText, windowStart, windowEnd, sourceId, calendarName, color)
             .FirstOrDefault(e => e.Id == eventId);
 
+    /// <summary>The event's UID, or a start-derived stand-in for a feed that omits one. Shared by the
+    /// instance id and the series key so the two can never disagree about what the series is.</summary>
+    private static string ResolveUid(IcalEvent source, DateTimeOffset startAt) =>
+        string.IsNullOrWhiteSpace(source.Uid) ? $"noid-{startAt.UtcDateTime:yyyyMMddTHHmmssZ}" : source.Uid;
+
     /// <summary>A stable per-instance id: the raw UID for a one-off, UID + occurrence timestamp for a recurring
     /// series (so each instance is addressable), mirroring Google's expanded-instance ids.</summary>
-    private static string MakeId(IcalEvent source, DateTimeOffset startAt)
-    {
-        var uid = string.IsNullOrWhiteSpace(source.Uid)
-            ? $"noid-{startAt.UtcDateTime:yyyyMMddTHHmmssZ}"
-            : source.Uid;
-        var recurring = source.RecurrenceRule is not null;
-        return recurring ? $"{uid}_{startAt.UtcDateTime:yyyyMMddTHHmmssZ}" : uid;
-    }
+    private static string MakeId(string uid, bool recurring, DateTimeOffset startAt) =>
+        recurring ? $"{uid}_{startAt.UtcDateTime:yyyyMMddTHHmmssZ}" : uid;
 
     private static string? NullIfBlank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
 }

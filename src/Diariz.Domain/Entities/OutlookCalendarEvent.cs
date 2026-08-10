@@ -22,11 +22,15 @@ public class OutlookCalendarEvent
     public Guid UserId { get; set; }
     public ApplicationUser? User { get; set; }
 
-    /// <summary>Outlook's <c>GlobalAppointmentID</c> - the per-occurrence Global Object ID, the same value EWS
-    /// returns as <c>calendar:UID</c>. Stable across moves between folders and stores, and distinct per
-    /// instance of a recurring series (Outlook stamps the occurrence date into it), which is why it beats
-    /// <c>EntryID</c> (unstable) and <c>CleanGlobalObjectId</c> (identical for the whole series). Falls back to
-    /// <c>entry:{sha1(EntryID)}</c> for local appointments that carry no Global Object ID.</summary>
+    /// <summary>Outlook's <c>GlobalAppointmentID</c> - the Global Object ID, the same value EWS returns as
+    /// <c>calendar:UID</c>. Stable across moves between folders and stores, which is why it beats
+    /// <c>EntryID</c> (unstable).
+    /// <para><b>It is per-series, not per-occurrence.</b> Outlook was expected to stamp the occurrence date
+    /// into it; against a real calendar it does not (87 occurrences returned 24 ids). So the desktop qualifies
+    /// a recurring occurrence as <c>{globalId}#{occurrenceStart}</c> before pushing - see
+    /// <c>apps/desktop/src/outlookSync.js</c>. The part before the <c>#</c> is therefore the <b>series</b> key,
+    /// which is what <c>OutlookCalendarStore</c> projects as <c>CalendarEvent.SeriesId</c>. Falls back to
+    /// <c>entry:{sha1(EntryID)}</c> for local appointments that carry no Global Object ID.</para></summary>
     public string Uid { get; set; } = string.Empty;
 
     public string? Subject { get; set; }
