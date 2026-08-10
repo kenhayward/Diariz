@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useRoom } from "../lib/rooms";
@@ -17,10 +17,18 @@ function RoomIcon({ room, size = "sm" }: { room: RoomListItem; size?: "xs" | "sm
   return <RoomBadge icon={room.icon} color={room.color} name={room.name} size={size} />;
 }
 
-/// The left-panel header: a room switcher (current room's icon + name, a dropdown of the rooms the user belongs
-/// to, personal first) plus the panel collapse control. Replaces the old static "Meetings" header. With one
-/// room today the dropdown has a single entry; it becomes load-bearing once shared rooms arrive.
-export default function RoomSwitcher({ onCollapse, chevron }: { onCollapse: () => void; chevron: string }) {
+/// The left-panel header row: an optional leading slot (the account menu), a room switcher (current room's
+/// icon + name, a dropdown of the rooms the user belongs to, personal first) and the panel collapse control.
+/// The slot is a prop rather than an import so this component stays free of the account menu's dependencies.
+export default function RoomSwitcher({
+  onCollapse,
+  chevron,
+  leading,
+}: {
+  onCollapse: () => void;
+  chevron: string;
+  leading?: ReactNode;
+}) {
   const { t } = useTranslation("workspace");
   const { rooms, currentRoom } = useRoom();
   const { permissions } = useAuth();
@@ -51,7 +59,8 @@ export default function RoomSwitcher({ onCollapse, chevron }: { onCollapse: () =
   }
 
   return (
-    <div className="flex h-9 shrink-0 items-center justify-between gap-1 border-b px-2 dark:border-gray-700">
+    <div className="flex h-9 shrink-0 items-center justify-between gap-1.5 border-b px-2 dark:border-gray-700">
+      {leading}
       <div className="relative min-w-0 flex-1" ref={ref}>
         <button
           type="button"

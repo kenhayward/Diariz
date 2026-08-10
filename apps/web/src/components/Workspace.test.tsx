@@ -5,6 +5,10 @@ import { vi } from "vitest";
 
 vi.mock("./RecordingsPanel", () => ({ default: () => <div>LIST</div> }));
 vi.mock("./ChatPanel", () => ({ default: () => <div>CHAT</div> }));
+// The account menu is a real component with react-query + auth dependencies; this test is about the shell.
+vi.mock("./UserMenu", () => ({
+  default: () => <button data-tour="account" type="button">ACCOUNT</button>,
+}));
 
 // The left-panel header is now the RoomSwitcher, which reads the current room and the signed-in user's avatar.
 const room = { id: "p1", name: "Personal", kind: 0, icon: null, color: null, isPersonal: true, permissions: 63 };
@@ -47,6 +51,14 @@ describe("Workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: /collapse chat panel/i }));
     expect(screen.getByText("CHAT")).toBeTruthy();
     expect(screen.getByText("CHAT").closest(".hidden")).toBeTruthy();
+  });
+
+  it("puts the account menu in the left panel's room row, next to the room switcher", () => {
+    renderWorkspace();
+    const account = screen.getByRole("button", { name: "ACCOUNT" });
+    const collapse = screen.getByRole("button", { name: /collapse personal panel/i });
+    // Same row: the collapse chevron is the row's last control, so they share a parent element.
+    expect(account.parentElement).toBe(collapse.parentElement);
   });
 
   it("collapses the left panel and persists the choice", () => {

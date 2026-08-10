@@ -47,6 +47,19 @@ describe("RoomSwitcher", () => {
     expect(items[1].textContent).toContain("Engineering");
   });
 
+  // The account menu now lives at the left of this row. The switcher does not own it - it takes it as a
+  // slot - so the two triggers stay separately labelled and separately hoverable.
+  it("renders a leading slot before the room trigger", () => {
+    render(
+      <RoomSwitcher onCollapse={() => {}} chevron="◀" leading={<button type="button">ACCOUNT</button>} />,
+    );
+    const slot = screen.getByText("ACCOUNT");
+    const roomTrigger = screen.getByRole("button", { name: /switch room/i });
+    expect(slot).toBeTruthy();
+    // Precedes the room trigger in document order.
+    expect(slot.compareDocumentPosition(roomTrigger) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("navigates to a room when a different one is picked, and not when the current one is picked", () => {
     renderSwitcher();
     fireEvent.click(screen.getByRole("button", { name: /switch room/i }));

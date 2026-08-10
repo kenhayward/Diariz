@@ -8,13 +8,6 @@ import TopBar from "../TopBar";
 vi.mock("../Recorder", () => ({
   default: () => <div data-testid="recorder-stub">recorder</div>,
 }));
-vi.mock("../UserMenu", () => ({
-  default: () => (
-    <button data-tour="account" data-testid="usermenu-stub">
-      account
-    </button>
-  ),
-}));
 vi.mock("../ThemeSync", () => ({
   default: () => null,
 }));
@@ -50,8 +43,9 @@ describe("TopBar frame", () => {
     expect(cluster?.querySelector('[data-testid="recorder-stub"]')).toBeTruthy();
   });
 
-  it("mounts the account avatar (UserMenu)", () => {
+  // The account menu moved into the left panel's room row - the bar must not carry a second copy.
+  it("does not mount the account avatar", () => {
     const { container } = renderBar();
-    expect(container.querySelector('[data-tour="account"]')).toBeTruthy();
+    expect(container.querySelector('[data-tour="account"]')).toBeNull();
   });
 });

@@ -5,6 +5,7 @@ import RouteErrorBoundary from "./RouteErrorBoundary";
 import RecordingsPanel from "./RecordingsPanel";
 import ChatPanel from "./ChatPanel";
 import RoomSwitcher from "./RoomSwitcher";
+import UserMenu from "./UserMenu";
 import { SelectionProvider } from "../lib/selection";
 import { MoveClipboardProvider } from "../lib/moveClipboard";
 import { useRoom } from "../lib/rooms";
@@ -79,7 +80,7 @@ export default function Workspace() {
             {/* A crash in the sidebar is contained here, so the detail panel (e.g. an opened folder) still
                 renders instead of the whole app going blank (#289). */}
             <RouteErrorBoundary>
-              <RoomSwitcher onCollapse={() => setLeftOpen(false)} chevron="◀" />
+              <RoomSwitcher onCollapse={() => setLeftOpen(false)} chevron="◀" leading={<UserMenu />} />
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <RecordingsPanel />
               </div>

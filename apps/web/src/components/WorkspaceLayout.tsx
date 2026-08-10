@@ -2,7 +2,9 @@ import TopBar from "./TopBar";
 import Workspace from "./Workspace";
 import TourOverlay from "./TourOverlay";
 import StatusBar from "./StatusBar";
+import ThemeSync from "./ThemeSync";
 import OutlookSyncBridge from "./OutlookSyncBridge";
+import { HubPopoverProvider } from "./hub/hubPopovers";
 import { UploadProvider } from "../lib/uploadContext";
 import { TourProvider } from "../lib/tour";
 import { StatusProvider } from "../lib/status";
@@ -23,11 +25,18 @@ export default function WorkspaceLayout() {
             <ToastProvider>
               <div className="flex h-screen flex-col bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100">
                 <TopBar />
-                <Workspace />
+                {/* One popover open at a time across the recorder cluster and the account menu. They sit in
+                    different subtrees now (the capture bar and the left panel's room row), so the context
+                    has to span the whole workspace rather than one bar. */}
+                <HubPopoverProvider>
+                  <Workspace />
+                </HubPopoverProvider>
                 <StatusBar />
                 {/* Renders nothing. Mounted here rather than in Preferences because a sync fires on launch
                     and from the tray, neither of which opens the settings window. A no-op in a browser. */}
                 <OutlookSyncBridge />
+                {/* Renders nothing: reconciles the server-persisted theme once signed in. */}
+                <ThemeSync />
               </div>
               <TourOverlay />
             </ToastProvider>
