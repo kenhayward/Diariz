@@ -257,8 +257,13 @@ wherever a calendar stop exists the watcher exists too.
 
 ### The prompt
 
-A persistent bar next to the recorder - not a toast, which auto-dismisses after 4s, and not
-a modal, which steals focus mid-meeting. Two actions:
+A persistent panel **floating below the record controls**, in the recorder's `relative`
+root - the same treatment the unsaved-recording and attach-retry banners already get, and
+for the same recorded reason: `Recorder.tsx:1123` and `:1300` both note that the capture bar
+is fixed-height, so anything added to its flow grows the bar and pushes the page down. That
+is also why the status bar is not an option here: `setStatus` takes text and a tone, with no
+room for the two buttons this needs. Not a toast (auto-dismisses after 4s) and not a modal
+(steals focus mid-meeting). Two actions:
 
 - **Keep recording** - pushes `calendarStopRef` out by the user's existing "minutes after
   end" value (`CalendarRecordingSettings.afterMinutes`, default 3) via a new pure
