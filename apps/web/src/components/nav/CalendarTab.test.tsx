@@ -198,23 +198,65 @@ describe("CalendarTab", () => {
     expect(screen.queryByRole("button", { name: /sync outlook/i })).toBeNull();
   });
 
-  it("syncs Outlook and refreshes the month on the desktop when opted in", async () => {
-    (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: true });
+  /// A desktop shell whose sync phase the test drives. The real shell pushes state changes and replays
+  /// nothing on subscribe, so `emit` is the only way the tab learns a sync started or finished.
+  function fakeShell() {
+    const listeners: ((s: { phase: string }) => void)[] = [];
     const syncOutlookNow = vi.fn().mockResolvedValue({ started: true });
     (window as { diariz?: unknown }).diariz = {
       canSyncOutlook: true,
       outlookAvailable: vi.fn().mockResolvedValue(true),
-      onOutlookState: vi.fn().mockReturnValue(() => {}),
       syncOutlookNow,
+      onOutlookState: (cb: (s: { phase: string }) => void) => {
+        listeners.push(cb);
+        return () => listeners.splice(listeners.indexOf(cb), 1);
+      },
     };
+    const emit = (phase: string) => act(() => listeners.forEach((cb) => cb({ phase })));
+    return { syncOutlookNow, emit };
+  }
+
+  /// Long enough for a refetch triggered by the click itself to have landed, so the "not yet" assertion
+  /// below is about the trigger and not about how quickly the test looked.
+  const settle = () => act(() => new Promise((r) => setTimeout(r, 20)));
+
+  it("refreshes the day's events when an Outlook sync finishes, not when it starts", async () => {
+    (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: true });
+    const { syncOutlookNow, emit } = fakeShell();
     renderTab();
 
     const button = await screen.findByRole("button", { name: /sync outlook/i });
+    await waitFor(() => expect(api.getCalendarEvents).toHaveBeenCalled());
     (api.getCalendarEvents as Mock).mockClear();
-    fireEvent.click(button);
 
+    fireEvent.click(button);
     await waitFor(() => expect(syncOutlookNow).toHaveBeenCalled());
-    // A started sync refetches the month, which is what makes the new meetings appear without another click.
+
+    // Mid-sync the server does not have the new meetings yet, so refetching here would only redraw the
+    // ones already on screen - and leave the day stale once the upload actually lands.
+    emit("reading");
+    emit("pushing");
+    await settle();
+    expect(api.getCalendarEvents).not.toHaveBeenCalled();
+
+    // The shell drops back to idle only once the renderer has POSTed the harvested window, so this is the
+    // first moment the new meetings exist to be fetched.
+    emit("idle");
+    await waitFor(() => expect(api.getCalendarEvents).toHaveBeenCalled());
+  });
+
+  // The tray and the launch sync run without anyone touching this tab. They finish the same way, so the day
+  // should fill in on its own rather than waiting for a Refresh click.
+  it("refreshes after a sync it did not start", async () => {
+    (api.getUserSettings as Mock).mockResolvedValue({ outlookSyncEnabled: true });
+    const { emit } = fakeShell();
+    renderTab();
+
+    await waitFor(() => expect(api.getCalendarEvents).toHaveBeenCalled());
+    (api.getCalendarEvents as Mock).mockClear();
+
+    emit("reading");
+    emit("idle");
     await waitFor(() => expect(api.getCalendarEvents).toHaveBeenCalled());
   });
 });
