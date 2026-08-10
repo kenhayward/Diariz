@@ -1545,6 +1545,18 @@ into it with no URL or per-user setup at all.
     while the recording is paused - pausing disables the capture track, which reads as pure silence. The watcher
     owns its own `AudioContext` rather than reusing `HubLevelMeter`'s, whose lifetime follows what popover the user
     has open.
+  - **Extending past the meeting's end, if people are still talking.** At the calendar stop time,
+    `shouldPromptExtend` (`lib/calendarRecording.ts`) asks whether to prompt rather than just ending: it is the
+    exact complement of the silence rule above, over the **same window** (`CalendarSilenceStopSeconds`), so the
+    prompt and the silence rule share one definition of "the meeting is over" instead of two numbers that could
+    disagree. When it fires, the recorder shows **Keep recording / Stop now** and raises an OS notification (the
+    user is normally looking at Teams or Zoom, not Diariz). Left unanswered, the take simply keeps recording and
+    the ordinary silence rule ends it once the room actually empties. Each **Keep recording** calls
+    `extendedStopAt`, which **doubles** the next wait off the user's own `CalendarAutoStopAfterMinutes` (3, 6, 12,
+    24 minutes by default) so a meeting that overruns by a long way stops re-prompting every few minutes. Whatever
+    ends a take on its own - the schedule, the calendar's end, or silence - `stop(reason?: StopReason)` now
+    surfaces **which rule did it** as a toast, so a self-ended recording never reads as a mystery; a user-pressed
+    Stop passes no reason and stays silent.
   - **Replacing a running take.** Joining a second meeting while the first is still recording stops the first,
     which uploads and transcribes on its own, and only then starts the second - this happens **regardless** of the
     settings above. `start()` awaits the outgoing upload before touching any shared state, because `upload()` reads
@@ -1614,6 +1626,23 @@ into it with no URL or per-user setup at all.
     "reconnect Calendar in Preferences" **only when Google is the user's sole calendar**; with a feed or an
     Outlook device also connected, those legitimately answer and an error would be wrong. Everything else
     degrades quietly, because a revoked Google token is the one calendar failure a user can actually fix.
+  - **Recurring events (`Recurring`/`SeriesId`).** `CalendarEvent` also carries whether an occurrence belongs to
+    a repeating series and which one - computed per source, keyed differently, and never compared across
+    sources: Google's master event id (the shared prefix an expanded occurrence's own id gets), an `.ics` UID
+    (the same convention), and for Outlook the mirrored event's `Uid` up to its `#{start}` occurrence suffix.
+    `RecordingCalendarLink.SeriesId` **copies** whichever value was current when the link was made rather than
+    being re-derived from the live calendar on each read: the Outlook mirror is a **rolling window** (see below),
+    so an occurrence linked last month has already been swept out of it, and a live join would silently return no
+    series for exactly the history the endpoint below exists to show. The UI shows a **Repeats** badge on a
+    recurring event; `SeriesId` itself is deliberately not serialised to the browser.
+- **`GET /api/calendar/events/{eventId}/recordings` - a recurring meeting's history (`CalendarController`).** For
+  an event that carries a `SeriesId`, the caller's **other recordings of that same series**, newest occurrence
+  first, capped at 10, never including the occurrence asked about - matched on `RecordingCalendarLink.SeriesId`
+  (owner-scoped by `Recording.UserId`) rather than re-derived from the calendar, for the rolling-window reason
+  above. Returns `[]` for a non-recurring event or a series never recorded before (not an error); 404 when the
+  event itself is gone. Returns `SeriesRecordingDto(Id, Title, Name, StartsAt, EndsAt)`. Powers the **"Earlier
+  recordings of this meeting"** list on both the calendar event page and the recording Overview's linked-meeting
+  card (`components/detail/MeetingCard.tsx`).
 - **Desktop Outlook mirror (Phase 4 feature - storage layer):** a third calendar source, and the only one that
   **inverts the fetch model**. Google and `.ics` live on the internet, so the API pulls them live at read time
   and stores nothing (an invariant `RecordingCalendarLink`'s doc comment calls out explicitly). A classic

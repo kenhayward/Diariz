@@ -42,6 +42,10 @@ ahead.
 
 A meeting you cancel or delete in Outlook disappears from Diariz on the next sync.
 
+A meeting that repeats is marked with a **Repeats** badge, and opening it (or a recording linked to it)
+shows your earlier recordings of that same series, newest first, so you can jump straight back to the
+last one.
+
 ## Each PC is separate
 
 Every machine you use appears on its own in the Desktop Outlook card, showing its mailbox, how many meetings it

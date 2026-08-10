@@ -28,6 +28,9 @@ did not share it, the recording falls back to microphone-only rather than failin
   recording stops and starts transcribing on its own, so you can walk away.
 - The gear popover tunes capture: echo cancellation, noise suppression, auto gain, and mono.
 
+A recording that ends by itself always tells you why - the auto-stop time was reached, the meeting
+ended, or the room went quiet (see below). Pressing Stop yourself stays silent, as you would expect.
+
 ## Recording a meeting from your calendar
 
 Open a meeting on the Calendar tab and press **Join meeting**. The meeting opens and recording starts
@@ -49,6 +52,13 @@ Whichever happens first ends the recording, which then transcribes as normal. Si
 once something has been heard, so joining a call before anyone speaks will not cut your recording
 short, and time spent paused does not count either.
 
+If people are still talking when the meeting's scheduled end arrives, Diariz asks whether to **keep
+recording** instead of ending outright - you also get a desktop notification, in case you are looking
+at the meeting itself rather than Diariz. Answer Keep recording and it waits longer each time you say
+yes (the wait doubles, so 3, 6, 12, 24 minutes by default), so a long overrun stops interrupting you.
+Leave the prompt unanswered and the recording simply keeps going too, ending once the room actually
+goes quiet under the silence setting above.
+
 These settings apply only to a recording started from a calendar event. One you start with the Record
 button runs until you press Stop, and if you have set an auto-stop for the session yourself, whichever
 stop comes first is the one that applies.
@@ -56,6 +66,15 @@ stop comes first is the one that applies.
 If you join a second meeting while a recording is still running, that first recording is stopped and
 sent off to transcribe before the new one starts. This happens whether or not you turned any of the
 above on - nothing is lost by moving straight from one meeting to the next.
+
+### Repeating meetings
+
+If a meeting repeats - a weekly stand-up, say - Diariz marks it with a **Repeats** badge wherever it
+shows up: the Calendar tab, the meeting's own page, and a recording linked to it. Open the meeting or a
+linked recording and you will also see **Earlier recordings of this meeting** - your last few
+recordings of that same series, newest first, so you can jump straight back to what was said last time
+instead of hunting through your folders. This works for a repeating event from any calendar source you
+have connected - Google, a subscribed .ics feed, or your synced Outlook calendar.
 
 ## Taking notes as you go
 
