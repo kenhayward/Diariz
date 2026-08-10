@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
@@ -9,6 +9,7 @@ import {
   onOutlookState,
   outlookAvailable as checkOutlookAvailable,
   syncOutlookNow,
+  type OutlookShellState,
 } from "../../lib/outlookSync";
 import MonthCalendar from "../MonthCalendar";
 import DayGrid from "./DayGrid";
@@ -71,6 +72,7 @@ export default function CalendarTab({
   // a sync runs. All three are inert in a browser, so this costs nothing off the desktop.
   const [outlookAvailable, setOutlookAvailable] = useState(false);
   const [outlookSyncing, setOutlookSyncing] = useState(false);
+  const outlookPhase = useRef<OutlookShellState["phase"]>("idle");
   const outlookOptedIn = outlookAvailable && settings?.outlookSyncEnabled === true;
 
   useEffect(() => {
@@ -83,14 +85,22 @@ export default function CalendarTab({
     };
   }, []);
 
-  useEffect(() => onOutlookState((s) => setOutlookSyncing(s.phase !== "idle")), []);
-
-  async function syncOutlook() {
-    const { started } = await syncOutlookNow();
-    // A refusal (cooldown, busy) needs no message here - Preferences is where the detail lives. Refreshing on
-    // a started sync is what makes the new meetings appear without the user doing anything else.
-    if (started) void qc.invalidateQueries({ queryKey: ["calendar-events", month.year, month.month] });
-  }
+  // The shell's phase drives the button's label and, on the way back down, the refresh. A sync that has
+  // *finished* is one whose meetings the server actually has: the shell only returns to idle once the renderer
+  // has POSTed the harvested window. Refreshing when one starts - which is what this used to do - refetched the
+  // meetings already on screen and left the new ones invisible until the user pressed Refresh events.
+  // Any completed sync counts, not only one from this button: the tray and the launch sync fill the day in too.
+  // The phase lives in a ref so changing month mid-sync (which resubscribes) cannot lose the transition.
+  useEffect(
+    () =>
+      onOutlookState((s) => {
+        const finished = outlookPhase.current !== "idle" && s.phase === "idle";
+        outlookPhase.current = s.phase;
+        setOutlookSyncing(s.phase !== "idle");
+        if (finished) void qc.invalidateQueries({ queryKey: ["calendar-events", month.year, month.month] });
+      }),
+    [qc, month.year, month.month],
+  );
   // Memoised, not `isPersonalRoom ? calendarEvents : []`: a fresh [] every render defeated the eventKeys
   // memo on the next line, and dayItems below it, for every shared-room render.
   const events = useMemo(() => (isPersonalRoom ? calendarEvents : []), [isPersonalRoom, calendarEvents]);
@@ -131,7 +141,8 @@ export default function CalendarTab({
             {shellCanSyncOutlook() && outlookOptedIn && (
               <button
                 type="button"
-                onClick={() => void syncOutlook()}
+                // A refusal (cooldown, busy) needs no message here - Preferences is where that detail lives.
+                onClick={() => void syncOutlookNow()}
                 disabled={outlookSyncing}
                 className="text-[10px] text-gray-400 hover:text-gray-600 disabled:opacity-50 dark:text-gray-500 dark:hover:text-gray-300"
               >

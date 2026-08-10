@@ -61,6 +61,24 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.200.1",
+    date: "2026-08-10",
+    pr: 498,
+    headline: "Sync Outlook now fills the day in when it finishes",
+    summary:
+      "On the desktop app, the Calendar tab has a **Sync Outlook** link next to Refresh events, for when you " +
+      "notice a meeting missing and want it now. It refreshed the day at the wrong moment: the instant you " +
+      "clicked, before your Outlook calendar had actually been read and uploaded. So it redrew the meetings " +
+      "you already had, and the new ones stayed invisible until you pressed Refresh events yourself.\n\n" +
+      "The day now refreshes when the sync **finishes** - the point the newly mirrored meetings exist to be " +
+      "shown. That applies to every sync, not just the one you started here: the sync that runs when the " +
+      "desktop app launches, and one started from the tray, now fill the open day in on their own.",
+    fixed: [
+      "Calendar tab: Sync Outlook refreshes the selected day when the sync completes, instead of the moment it starts.",
+      "Calendar tab: a sync started from the tray or on desktop launch now refreshes the open day too.",
+    ],
+  },
+  {
     version: "0.200.0",
     date: "2026-08-09",
     pr: 497,
