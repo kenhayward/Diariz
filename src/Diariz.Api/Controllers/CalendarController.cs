@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using Diariz.Api.Contracts;
 using Diariz.Api.Services;
+using Diariz.Domain;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Diariz.Api.Controllers;
 
@@ -23,15 +25,18 @@ public class CalendarController : ControllerBase
     private readonly IGoogleCalendarClient _calendar;
     private readonly ICalendarAggregator _calendars;
     private readonly IGoogleCalendarSelectionStore _selection;
+    private readonly DiarizDbContext _db;
 
     public CalendarController(
-        IGoogleCalendarClient calendar, ICalendarAggregator calendars, IGoogleCalendarSelectionStore selection)
+        IGoogleCalendarClient calendar, ICalendarAggregator calendars, IGoogleCalendarSelectionStore selection,
+        DiarizDbContext db)
     {
         // The Google client is still needed directly for the calendar *picker* below, which is Google-specific;
         // everything event-shaped goes through the aggregator.
         _calendar = calendar;
         _calendars = calendars;
         _selection = selection;
+        _db = db;
     }
 
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
@@ -74,6 +79,42 @@ public class CalendarController : ControllerBase
         var ev = await _calendars.GetEventAsync(UserId, eventId, ct);
         if (ev is null) return NotFound();
         return Ok(ev);
+    }
+
+    /// <summary>The caller's other recordings of the same recurring meeting, newest occurrence first.
+    /// <para>Matched on the series key stored on the link when it was made, not by re-deriving it from the
+    /// calendar: an Outlook occurrence from last month has already been swept out of the mirror's rolling
+    /// window, so anything that consulted the calendar would return nothing for exactly the history this
+    /// shows.</para></summary>
+    [HttpGet("events/{eventId}/recordings")]
+    [EndpointSummary("List your other recordings of a recurring meeting")]
+    [EndpointDescription(
+        "For an event that is part of a **repeating series**, the other recordings you have made of that same " +
+        "series - so you can jump straight to what was said at the last one.\n\n" +
+        "Newest first, capped at 10, and never including the occurrence you asked about. An event that does " +
+        "not repeat, or one whose series you have never recorded before, returns an **empty list** rather " +
+        "than an error.\n\n" +
+        "Only your own recordings are ever returned. 404 when the event is gone or its calendar is not connected.")]
+    public async Task<ActionResult<IReadOnlyList<SeriesRecordingDto>>> SeriesRecordings(
+        string eventId, CancellationToken ct)
+    {
+        var ev = await _calendars.GetEventAsync(UserId, eventId, ct);
+        if (ev is null) return NotFound();
+
+        // Held in locals: a captured property access on the record does not translate to SQL.
+        var seriesId = ev.SeriesId;
+        if (seriesId is null) return Ok(Array.Empty<SeriesRecordingDto>());
+        var currentId = ev.Id;
+
+        var rows = await _db.RecordingCalendarLinks
+            .Where(l => l.SeriesId == seriesId && l.EventId != currentId && l.Recording!.UserId == UserId)
+            .OrderByDescending(l => l.StartsAt)
+            .Take(10)
+            .Select(l => new SeriesRecordingDto(
+                l.RecordingId, l.Recording!.Title, l.Recording.Name, l.StartsAt, l.EndsAt))
+            .ToListAsync(ct);
+
+        return Ok(rows);
     }
 
     /// <summary>The user's Google calendars for the Preferences picker, each flagged with the user's effective

@@ -3789,6 +3789,39 @@
         ],
         "type": "object"
       },
+      "SeriesRecordingDto": {
+        "properties": {
+          "endsAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "startsAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "name",
+          "startsAt",
+          "endsAt"
+        ],
+        "type": "object"
+      },
       "SetAudioProtectionRequest": {
         "properties": {
           "protected": {
@@ -5995,6 +6028,56 @@
           }
         },
         "summary": "Get one calendar event",
+        "tags": [
+          "Calendar"
+        ]
+      }
+    },
+    "/api/calendar/events/{eventId}/recordings": {
+      "get": {
+        "description": "For an event that is part of a **repeating series**, the other recordings you have made of that same series - so you can jump straight to what was said at the last one.\n\nNewest first, capped at 10, and never including the occurrence you asked about. An event that does not repeat, or one whose series you have never recorded before, returns an **empty list** rather than an error.\n\nOnly your own recordings are ever returned. 404 when the event is gone or its calendar is not connected.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eventId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SeriesRecordingDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SeriesRecordingDto"
+                  },
+                  "type": "array"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SeriesRecordingDto"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "List your other recordings of a recurring meeting",
         "tags": [
           "Calendar"
         ]
