@@ -275,13 +275,17 @@ export default function Recorder({
   // the silence rule off, which is the one case where an unanswered prompt has no floor under it.
   const [extendAsk, setExtendAsk] = useState<{ deadlineAt: number | null } | null>(null);
   // Mirrored for the schedule interval, which closes over its first render and would otherwise never see the
-  // prompt appear - and would re-fire it every second. Written through `setAsk` so the two can never drift.
+  // prompt appear - and would re-fire it every second. `setAsk` is the ONLY writer of either, deliberately:
+  // its write is synchronous and does not depend on when React commits, whereas mirroring during render
+  // would also be written by a render that is thrown away.
   const extendAskRef = useRef<{ deadlineAt: number | null } | null>(null);
-  extendAskRef.current = extendAsk;
   function setAsk(next: { deadlineAt: number | null } | null) {
     extendAskRef.current = next;
     setExtendAsk(next);
   }
+  // How many times the user has said "keep recording" on THIS take. Each extension lasts twice as long as the
+  // last, so a meeting that overruns badly is not a stream of prompts (see extendedStopAt).
+  const extensionsRef = useRef(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // A non-fatal notice (e.g. we fell back to mic-only because system audio wasn't shared).
@@ -551,16 +555,29 @@ export default function Recorder({
   /// The calendar's stop time has arrived. If nobody is talking there is nothing to ask about, so the take
   /// ends exactly as it did before; if they are, hold off and ask.
   function askToExtend(nowMs: number) {
-    const silence = silenceRef.current?.state();
-    if (!silence || !shouldPromptExtend(silence, RECENT_SOUND_MS)) {
+    // A paused recording has nobody to ask. `pause()` freezes the silence watcher (the disabled track reads
+    // as pure silence), so its last reading is stale - and the floor that makes an unanswered prompt safe is
+    // frozen with it, so a prompt raised here would never be answered and the take would never end. The
+    // schedule watcher deliberately runs through a pause, and before this feature a paused calendar take
+    // stopped and uploaded on time; it still does.
+    const paused = recorderRef.current?.state === "paused";
+    const silence = paused ? undefined : silenceRef.current?.state();
+    // The user's own silence rule IS the window: at this moment either it already considers the meeting over
+    // (so there is nobody to ask) or it does not (so ask). Any fixed window would leave a band of quiet where
+    // the take is ended silently while the user's own rule still thinks the meeting is running.
+    const seconds = calendarSettingsRef.current.silenceSeconds;
+    const recentMs = Number.isFinite(seconds) ? seconds * 1000 : RECENT_SOUND_MS;
+    if (!silence || !shouldPromptExtend(silence, recentMs)) {
       stop("calendar");
       return;
     }
     // Unanswered, the recording keeps going and the silence rule ends it when the room empties. With silence
     // turned off there is no such floor, so the prompt gets a deadline of its own rather than recording until
     // the browser is closed.
-    const seconds = calendarSettingsRef.current.silenceSeconds;
-    const deadlineAt = seconds > 0 ? null : extendedStopAt(nowMs, calendarSettingsRef.current.afterMinutes);
+    const deadlineAt =
+      seconds > 0
+        ? null
+        : extendedStopAt(nowMs, calendarSettingsRef.current.afterMinutes, extensionsRef.current);
     setAsk({ deadlineAt });
     void notify(t("extendNotifyTitle"), t("extendPromptText"));
   }
@@ -568,7 +585,12 @@ export default function Recorder({
   /// "Keep recording": push the calendar's target out by the same overrun allowance the user already
   /// configured, and put the question away. Their own auto-stop is untouched - it still wins if it is sooner.
   function keepRecording() {
-    calendarStopRef.current = extendedStopAt(Date.now(), calendarSettingsRef.current.afterMinutes);
+    calendarStopRef.current = extendedStopAt(
+      Date.now(),
+      calendarSettingsRef.current.afterMinutes,
+      extensionsRef.current,
+    );
+    extensionsRef.current += 1;
     setScheduledStopAt(earlierStop(scheduledStopRef.current, calendarStopRef.current));
     setAsk(null);
   }
@@ -875,8 +897,11 @@ export default function Recorder({
       recorder.start();
       recorderRef.current = recorder;
       activeSourceRef.current = coarse;
-      // Always assign, so a plain Record-button take can never inherit the last meeting's name.
+      // Always assign, so a plain Record-button take can never inherit the last meeting's name - and for the
+      // same reason, always clear the meeting's stop target and its extension count.
       calendarEventRef.current = calendarEvent ?? null;
+      calendarStopRef.current = null;
+      extensionsRef.current = 0;
       timingRef.current = timing.start(Date.now());
       startedAtRef.current = Date.now();
       // Re-anchor a relative auto-stop to record-start, so "in N minutes" means N minutes of recording.

@@ -1697,9 +1697,11 @@ describe("extending a meeting that overruns", () => {
   });
 
   /// Everything here is wall-clock driven, so the whole block runs on fake timers. Mount, flush the mount
-  /// effects, then drive the same channel the calendar's Join button uses.
+  /// effects, then drive the same channel the calendar's Join button uses. The clock is pinned to a whole
+  /// minute so the "stops at HH:MM" assertions below cannot straddle a minute boundary.
   async function joinUnderFakeTimers(withToast = false) {
     vi.useFakeTimers();
+    vi.setSystemTime(Date.parse("2026-08-10T09:00:00.000Z"));
     const ui = <Recorder onUploaded={() => {}} />;
     render(withToast ? <ToastProvider>{ui}</ToastProvider> : ui);
     await act(async () => {
@@ -1871,5 +1873,130 @@ describe("extending a meeting that overruns", () => {
     await tick(1_000);
 
     expect(screen.queryByTestId("extend-prompt")).toBeNull();
+  });
+
+  it("ends a paused recording on time rather than asking - a paused room has nobody in it", async () => {
+    // Pausing freezes the silence watcher (it would otherwise read the disabled track as silence), so its
+    // last reading is stale speech. Asking on that would show a prompt with no floor under it - the silence
+    // rule is paused too - and the take would never end. Before this feature it stopped and uploaded on
+    // time, and it still must.
+    await joinUnderFakeTimers();
+    await tick(30_000);
+    fireEvent.click(screen.getByRole("button", { name: /^pause$/i }));
+
+    await tick(3 * 60_000 + 1_500);
+
+    expect(screen.queryByTestId("extend-prompt")).toBeNull();
+    expect(api.upload).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the user's own silence setting as the window, not a fixed one", async () => {
+    // 20 seconds of quiet with a 30-second silence rule: that rule still considers the meeting running, so
+    // the take must not be ended silently behind its back. A fixed 10-second window would stop here.
+    calendarSettings.silenceSeconds = 30;
+    silenceState = { heardSound: true, silentMs: 20_000 };
+    await joinUnderFakeTimers();
+
+    await tick(3 * 60_000 + 1_500);
+
+    expect(screen.getByTestId("extend-prompt")).toBeTruthy();
+    expect(api.upload).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the built-in window when the silence setting is not a usable number", async () => {
+    // A malformed settings payload must not make the comparison NaN, which would refuse to ask at all.
+    calendarSettings.silenceSeconds = Number.NaN;
+    silenceState = { heardSound: true, silentMs: 2_000 };
+    await joinUnderFakeTimers();
+
+    await tick(3 * 60_000 + 1_500);
+
+    expect(screen.getByTestId("extend-prompt")).toBeTruthy();
+  });
+
+  it("backs off: the second extension lasts twice as long as the first", async () => {
+    await joinUnderFakeTimers();
+    await tick(3 * 60_000 + 1_500);
+    fireEvent.click(screen.getByRole("button", { name: /keep recording/i }));
+
+    // First extension: the user's own three minutes.
+    await tick(3 * 60_000 + 1_500);
+    expect(screen.getByTestId("extend-prompt")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /keep recording/i }));
+
+    // Second: six, not three - so a half-hour overrun is a couple of prompts, not ten.
+    await tick(3 * 60_000 + 1_500);
+    expect(screen.queryByTestId("extend-prompt")).toBeNull();
+    await tick(3 * 60_000);
+    expect(screen.getByTestId("extend-prompt")).toBeTruthy();
+    expect(api.upload).not.toHaveBeenCalled();
+  });
+
+  it("starts each take's back-off from scratch", async () => {
+    // The count is per take. Left running, a second meeting would inherit the first's back-off and go six
+    // minutes before its FIRST extension expired - so this has to extend on the second take to see it.
+    await joinUnderFakeTimers();
+    await tick(3 * 60_000 + 1_500);
+    fireEvent.click(screen.getByRole("button", { name: /keep recording/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+    await tick(1_000);
+
+    requestRecording({ calendarEvent: EVENT });
+    await act(async () => {
+      await vi.runOnlyPendingTimersAsync();
+    });
+    await tick(3 * 60_000 + 1_500);
+    fireEvent.click(screen.getByRole("button", { name: /keep recording/i }));
+
+    // Three minutes, the user's own allowance - not the six a leaked count would give.
+    await tick(3 * 60_000 + 1_500);
+    expect(screen.getByTestId("extend-prompt")).toBeTruthy();
+  });
+
+  it("does not carry a calendar stop onto the next plain Record-button take", async () => {
+    await joinUnderFakeTimers();
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+    await tick(1_000);
+
+    fireEvent.click(screen.getByLabelText(/^record$/i));
+    await act(async () => {
+      await vi.runOnlyPendingTimersAsync();
+    });
+
+    // An ordinary take has no meeting to end, so nothing may stop it but the user.
+    await tick(10 * 60_000);
+    expect(screen.queryByTestId("extend-prompt")).toBeNull();
+    expect(api.upload).toHaveBeenCalledTimes(1); // the calendar take only
+  });
+
+  it("lets the silence rule end an unanswered prompt - the floor that makes no countdown safe", async () => {
+    await joinUnderFakeTimers(true);
+    await tick(3 * 60_000 + 1_500);
+    expect(screen.getByTestId("extend-prompt")).toBeTruthy();
+
+    // Everyone leaves. The watcher fires on its own threshold and the take ends, saying why.
+    await act(() => {
+      silenceWatcher.onSilent!();
+    });
+    await tick(1_000);
+
+    expect(api.upload).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId("extend-prompt")).toBeNull();
+    expect(screen.getByText("Recording stopped - the meeting went quiet.")).toBeTruthy();
+  });
+
+  it("keeps showing the calendar's stop time when the user changes their own auto-stop mid-meeting", async () => {
+    // The display shows whichever target comes first. Overwriting it with the user's own choice alone would
+    // claim the recording runs fifteen minutes when the meeting ends it in three.
+    await joinUnderFakeTimers();
+    const calendarStop = new Date(Date.now() + 3 * 60_000).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^auto-stop$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /stop in 15 minutes/i }));
+
+    expect(screen.getByText(`stops at ${calendarStop}`)).toBeTruthy();
   });
 });
