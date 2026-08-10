@@ -30,6 +30,7 @@ import { resolveCalendarStopAt, earlierStop } from "../lib/calendarRecording";
 import { startSilenceWatcher, type SilenceWatcher } from "../lib/silenceWatcher";
 import { useCalendarRecordingSettings } from "../lib/calendarRecordingSettings";
 import { useStatus } from "../lib/status";
+import { useToast } from "../lib/toast";
 import { useRoom } from "../lib/rooms";
 import { RoomPermission } from "../lib/types";
 import type { StatusTone } from "../lib/statusBar";
@@ -193,6 +194,16 @@ function loadSavedConstraints(): AudioConstraints {
     return DEFAULT_CONSTRAINTS;
   }
 }
+
+/// Why a recording ended. Absent means the user pressed Stop, which needs no announcement - they know.
+type StopReason = "schedule" | "calendar" | "silence";
+
+/// Kept as a literal map rather than a template key, so every key is greppable in the catalogues.
+const STOP_TOAST: Record<StopReason, string> = {
+  schedule: "recStoppedSchedule",
+  calendar: "recStoppedCalendar",
+  silence: "recStoppedSilence",
+};
 
 export default function Recorder({
   onUploaded,
@@ -476,7 +487,7 @@ export default function Recorder({
   function startScheduleWatcher() {
     if (scheduleTimerRef.current) window.clearInterval(scheduleTimerRef.current);
     scheduleTimerRef.current = window.setInterval(() => {
-      if (schedule.shouldStop(scheduledStopRef.current, Date.now())) stop();
+      if (schedule.shouldStop(scheduledStopRef.current, Date.now())) stop("schedule");
     }, 1000);
   }
 
@@ -803,7 +814,7 @@ export default function Recorder({
           silenceRef.current = startSilenceWatcher(
             session.stream,
             calendarSettingsRef.current.silenceSeconds * 1000,
-            () => stop(),
+            () => stop("silence"),
           );
         }
       }
@@ -866,7 +877,7 @@ export default function Recorder({
     setPaused(false);
   }
 
-  function stop() {
+  function stop(reason?: StopReason) {
     stopTicker();
     stopScheduleWatcher();
     // Fold any running segment so the uploaded duration is final and paused-free.
@@ -891,6 +902,10 @@ export default function Recorder({
       });
     }
     recorderRef.current?.stop();
+    // An automatic ending is the only one worth announcing: the user did not do it and would otherwise find
+    // the recorder idle with no explanation. A replacing start() passes no reason either - that is a handover,
+    // and the new recording is its own feedback.
+    if (reason) showToast(t(STOP_TOAST[reason]));
   }
 
   async function upload() {
@@ -1124,6 +1139,7 @@ export default function Recorder({
   // fixed-height header, so an extra line here pushed the whole bar off screen. One message at a time,
   // most severe first; the tones keep the colours these lines had inline (red / amber / grey).
   const { setStatus } = useStatus();
+  const { showToast } = useToast();
   const statusText = error ?? notice ?? null;
   const statusTone: StatusTone = error ? "error" : "progress";
   const hint =
@@ -1209,7 +1225,10 @@ export default function Recorder({
           onStart={() => start()}
           onPause={pause}
           onResume={resume}
-          onStop={stop}
+          // Wrapped rather than passed bare: onStop now takes an optional StopReason, and passing the
+          // function reference directly would let RecordHero's onClick hand it the click event as that
+          // argument. A user-pressed stop is deliberately reason-less - they know why it stopped.
+          onStop={() => stop()}
           onSilentChange={setSilent}
         />
 

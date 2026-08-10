@@ -94,6 +94,7 @@ import type { PendingShot } from "../lib/pendingScreenshots";
 import Recorder, { MAX_LIVE_SCREENSHOTS } from "./Recorder";
 import { requestRecording } from "../lib/recordRequest";
 import { startSilenceWatcher } from "../lib/silenceWatcher";
+import { ToastProvider } from "../lib/toast";
 
 // jsdom has no MediaRecorder; a minimal stub lets start() run without capturing real audio.
 class FakeMediaRecorder {
@@ -318,6 +319,28 @@ describe("Recorder transport controls", () => {
     // Unmount must clear the running intervals (nothing else clears an interval on unmount).
     expect(clearSpy).toHaveBeenCalled();
     clearSpy.mockRestore();
+  });
+
+  it("shows no toast when the user presses Stop themselves", async () => {
+    // Regression guard: stop() now takes an optional StopReason, and RecordHero's Stop button ultimately
+    // wires straight into a native onClick. If Recorder ever passed the bare `stop` function reference as
+    // that handler again, the click's SyntheticEvent would land in the `reason` parameter and this test
+    // would catch the resulting (bogus) toast - a manual stop is deliberately reason-less, the user knows.
+    (api.upload as Mock).mockResolvedValue({ id: "r1" });
+    render(
+      <ToastProvider>
+        <Recorder onUploaded={() => {}} />
+      </ToastProvider>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /^record$/i }));
+    await screen.findByRole("button", { name: /^stop$/i });
+
+    fireEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+    // Assert against the toast region directly (not just a text match): a garbled StopReason still raises
+    // a toast, just with an empty/untranslated body, which a text-content assertion alone would miss.
+    expect(document.querySelector('[role="status"]')?.children.length).toBe(0);
   });
 
   it("disables Record and Upload without CreateRecording, explaining why", async () => {
@@ -829,6 +852,38 @@ describe("Recorder auto-stop", () => {
         await vi.advanceTimersByTimeAsync(11 * 60_000);
       });
       expect(api.upload).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("announces the auto-stop with a toast naming the schedule rule", async () => {
+    vi.useFakeTimers();
+    try {
+      (getStream as Mock).mockResolvedValue(fakeSession);
+      (api.upload as Mock).mockResolvedValue({ id: "r1" });
+      render(
+        <ToastProvider>
+          <Recorder onUploaded={() => {}} />
+        </ToastProvider>,
+      );
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      chooseAutoStop(/stop in 15 minutes/i);
+      fireEvent.click(screen.getByLabelText(/^record$/i));
+      await act(async () => {
+        await vi.runOnlyPendingTimersAsync();
+      });
+
+      // Cross the 15-minute mark: the schedule watcher stops the recording on its own - nobody pressed
+      // Stop - so it must say why.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15 * 60_000 + 500);
+      });
+
+      expect(screen.getByText("Recording stopped - your auto-stop time was reached.")).toBeTruthy();
     } finally {
       vi.useRealTimers();
     }
@@ -1516,6 +1571,25 @@ describe("recording started from a calendar event", () => {
     act(() => silenceWatcher.onSilent!());
     await waitFor(() => expect(api.upload).toHaveBeenCalled());
     expect(await screen.findByRole("button", { name: /record/i })).toBeTruthy();
+  });
+
+  it("announces the silence auto-stop with a toast naming the rule", async () => {
+    calendarSettings.enabled = true;
+    calendarSettings.silenceSeconds = 45;
+    render(
+      <ToastProvider>
+        <Recorder onUploaded={() => {}} />
+      </ToastProvider>,
+    );
+    await screen.findByRole("button", { name: /record/i });
+
+    await joinAndRecord();
+
+    // Nobody pressed Stop - the meeting just went quiet - so the toast must say so.
+    act(() => silenceWatcher.onSilent!());
+    await waitFor(() => expect(api.upload).toHaveBeenCalled());
+
+    expect(await screen.findByText("Recording stopped - the meeting went quiet.")).toBeTruthy();
   });
 
   it("suspends silence counting while paused, and resumes with it", async () => {

@@ -634,5 +634,8 @@
   "calSyncOutlook": "Sync Outlook",
   "calSyncingOutlook": "Syncing Outlook...",
   "calJoinMeeting": "Join the Meeting",
-  "calNoMeetingLink": "This invite has no meeting link."
+  "calNoMeetingLink": "This invite has no meeting link.",
+  "recStoppedSchedule": "Recording stopped - your auto-stop time was reached.",
+  "recStoppedCalendar": "Recording stopped - the meeting has ended.",
+  "recStoppedSilence": "Recording stopped - the meeting went quiet."
 }
