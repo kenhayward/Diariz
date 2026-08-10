@@ -61,6 +61,34 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.200.2",
+    date: "2026-08-10",
+    pr: 499,
+    headline: "The desktop \"Change capture area\" button no longer looks dead",
+    summary:
+      "In the desktop app, clicking **Change capture area** while recording often seemed to do nothing - the " +
+      "button highlighted when you hovered it, but clicking gave no reaction at all.\n\n" +
+      "The button was working. The area picker was simply taking between 0.4 and 0.75 of a second to appear, " +
+      "and showed nothing whatsoever in the meantime. The picker puts a full-screen overlay on every monitor, " +
+      "and each one was being built from scratch on the spot - on a three-monitor machine that is three " +
+      "windows to create and draw before any of them can be shown. For that half-second the app window still " +
+      "responded normally, which is exactly why hovering worked and clicking appeared to be ignored.\n\n" +
+      "Worse, clicking a second time made it look permanently broken. A second click during the gap did " +
+      "nothing visible, and a second click landing just as the overlay arrived was read by the overlay itself " +
+      "as \"capture this whole screen\" - so the picker chose a monitor and vanished before you ever saw it, " +
+      "and you never got the chance to drag out a region.\n\n" +
+      "The overlays are now prepared in the background the moment a recording starts and reused for every " +
+      "pick, so the picker appears in about 40 milliseconds - effectively instantly. Nothing about choosing " +
+      "an area changes; it just responds when you click it. Plugging in, unplugging, or changing the " +
+      "resolution of a monitor mid-meeting is handled too, so every screen stays pickable.\n\n" +
+      "This needs the new desktop app to take effect.",
+    fixed: [
+      "The desktop \"Change capture area\" button now opens the picker in about 40ms instead of 400-750ms, so it no longer reads as an unresponsive button.",
+      "A second click while the picker was still opening could be consumed by the overlay as a whole-screen selection, so the picker closed before it was ever seen. The picker is now up before a second click is possible.",
+      "Monitors added, removed, or re-resolutioned during a recording now keep a working capture overlay instead of leaving a screen unpickable.",
+    ],
+  },
+  {
     version: "0.200.1",
     date: "2026-08-10",
     pr: 498,

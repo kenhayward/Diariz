@@ -91,4 +91,12 @@
     done = true;
     window.picker.cancel();
   });
+
+  // This overlay outlives a single pick: main pre-warms it and hides it between picks
+  // rather than rebuilding it (a rebuild costs 400-750ms of dead, feedback-free time -
+  // see pickerPool.js). Arm it again for the next one.
+  window.picker.onReset(() => {
+    resetDrag();
+    done = false;
+  });
 </script>
