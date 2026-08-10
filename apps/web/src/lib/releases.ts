@@ -66,12 +66,13 @@ export const RELEASES: Release[] = [
     pr: 500,
     headline: "The meetings list now runs to the top of the window",
     summary:
-      "The brand bar across the top of the app is gone - the browser tab already carries the icon and the name, so it was spending 80 pixels on saying it twice. The meetings panel now starts at the top of the window, and the record controls sit in their own bar above whatever you have open, so they no longer stretch across the whole app. The account menu moved to the small avatar at the top left of the meetings panel, next to the room name. The panel's List, Calendar, Actions and Tags tabs are laid out along the top of the panel instead of sideways down its left edge, which reads more easily and gives the folder list the full width of the panel.",
+      "The brand bar across the top of the app is gone - the icon and name are already shown elsewhere (the browser tab, or the window title in the desktop app), so it was spending 80 pixels saying it twice. The meetings panel now starts at the top of the window, and the record controls sit in their own bar above whatever you have open, so they no longer stretch across the whole app. The account menu moved to the small avatar at the top left of the meetings panel, next to the room name. The panel's List, Calendar, Actions and Tags tabs are laid out along the top of the panel instead of sideways down its left edge, which reads more easily and gives the folder list the full width of the panel.",
     changed: [
       "Removed the brand header; the meetings panel and the capture bar now start at the top of the window.",
       "The record controls sit above the open recording rather than spanning the whole app.",
       "The account menu is now the avatar at the top left of the meetings panel; the room name beside it still switches rooms.",
       "The panel's List / Calendar / Actions / Tags tabs are horizontal, matching the tabs on a recording, and the folder list gets the full panel width.",
+      "The header's logo used to link back to the top of the workspace (an unselected recording); that link went with the header - use the browser's Back button to return there instead.",
     ],
   },
   {

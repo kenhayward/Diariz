@@ -22,7 +22,12 @@ export default function CaptureBar() {
     >
       <div style={{ flex: 1 }} />
 
-      <div data-tour="capture">
+      {/* min-w-0 overrides the flex item's default automatic minimum size (its content's min-content
+          width), which is what lets this cluster shrink instead of spilling out of the content column when
+          the column is narrower than the cluster's natural width (see AudioSourceChip / RecordHero, whose
+          labels truncate for the same reason). Do not add overflow-hidden here - the recorder's popovers
+          are absolute children of its own relative root and would be clipped. */}
+      <div data-tour="capture" className="min-w-0">
         <Recorder compact onUploaded={() => qc.invalidateQueries({ queryKey: ["recordings"] })} />
       </div>
 

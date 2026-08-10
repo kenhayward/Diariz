@@ -204,6 +204,25 @@ describe("RecordingsPanel", () => {
     expect(strip.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  // The strip's tabs are role="tab" inside a role="tablist", which requires a role="tabpanel" for the
+  // pattern to make sense - without it, activating a tab announces a selection change with nothing for a
+  // screen-reader user to move to. Checks the wiring both directions: the active tab's aria-controls
+  // resolves to the panel's id, and the panel's aria-labelledby resolves back to the active tab.
+  it("wires the active tab to the tab body via role=tabpanel + aria-controls/aria-labelledby", async () => {
+    renderList();
+    await screen.findByText("Weekly Standup");
+
+    const listTab = screen.getByRole("tab", { name: "List" });
+    const panel = screen.getByRole("tabpanel");
+    expect(panel.id).toBe(listTab.getAttribute("aria-controls"));
+    expect(panel.getAttribute("aria-labelledby")).toBe(listTab.id);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
+    const calendarTab = screen.getByRole("tab", { name: "Calendar" });
+    expect(panel.getAttribute("aria-labelledby")).toBe(calendarTab.id);
+    expect(panel.id).toBe(calendarTab.getAttribute("aria-controls"));
+  });
+
   it("browses the current room: fetches its recordings and keeps Actions/Tags (room-scoped) in a shared room", async () => {
     roomStub.currentRoom = { id: "eng-room", isPersonal: false };
     renderList();

@@ -41,4 +41,16 @@ describe("CaptureBar", () => {
     expect(bar.style.borderBottom).toContain("var(--hub-bar-border-bottom)");
     expect(bar.style.borderTop).toBe("");
   });
+
+  // The column this bar renders in can be much narrower than the window (window - left panel - chat
+  // panel), which the recorder cluster's own content easily exceeds. min-w-0 overrides the flex item's
+  // default automatic minimum size (its content's min-content width) so the cluster can shrink instead of
+  // spilling out of the column. jsdom has no layout engine, so this only proves the shrink-enabling class
+  // is present - it does not prove the layout actually fits at any given width. That needs a manual check
+  // (1280px window, chat panel dragged toward its max) - see the PR/report for that result.
+  it("lets the capture cluster shrink instead of forcing its content width", () => {
+    const { container } = renderBar();
+    const cluster = container.querySelector('[data-tour="capture"]');
+    expect(cluster?.className).toContain("min-w-0");
+  });
 });

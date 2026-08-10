@@ -61,7 +61,10 @@ describe("Workspace", () => {
     renderWorkspace();
     const account = screen.getByRole("button", { name: "ACCOUNT" });
     const collapse = screen.getByRole("button", { name: /collapse personal panel/i });
-    // Same row: the collapse chevron is the row's last control, so they share a parent element.
+    // Proves the `leading` slot lands inside RoomSwitcher's row (the same row the collapse control ends) -
+    // not that the two triggers are literal siblings in the real tree. That only holds here because this
+    // stub is a bare <button>; the real UserMenu (UserMenu.tsx) wraps its trigger in its own
+    // `<div className="relative">`, so in production the button's actual parent is that wrapper, not the row.
     expect(account.parentElement).toBe(collapse.parentElement);
   });
 

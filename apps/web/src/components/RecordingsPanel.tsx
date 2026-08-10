@@ -18,7 +18,7 @@ import ClipboardBar from "./nav/ClipboardBar";
 import SectionRow from "./nav/SectionRow";
 import SearchBar from "./nav/SearchBar";
 import { RecordingRow } from "./nav/RecordingRow";
-import TabStrip from "./nav/TabStrip";
+import TabStrip, { TABPANEL_ID, tabId } from "./nav/TabStrip";
 import ListToolbar from "./nav/ListToolbar";
 import UploadStatusList from "./nav/UploadStatusList";
 import GroupSelectCheckbox from "./nav/GroupSelectCheckbox";
@@ -270,7 +270,12 @@ export default function RecordingsPanel() {
         />
       )}
       <TabStrip tab={tab} onSelect={selectTab} />
-      <div className="flex min-h-0 flex-1">
+      <div
+        id={TABPANEL_ID}
+        role="tabpanel"
+        aria-labelledby={tabId(tab)}
+        className="flex min-h-0 flex-1"
+      >
         {tab === "list" ? (
           // min-w-0 lets this flex child shrink to the panel width so long recording names truncate
           // instead of forcing the column wider than the panel.

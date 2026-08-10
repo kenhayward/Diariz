@@ -533,6 +533,7 @@
   "panelChat": "Chat",
   "resizeRecordings": "Größe des Aufnahmen-Panels ändern",
   "resizeChat": "Größe des Chat-Panels ändern",
+  "panelTabsLabel": "Registerkarten des Aufnahmen-Panels",
   "collapsePanel": "Panel {{title}} einklappen",
   "expandPanel": "Panel {{label}} ausklappen",
   "meetingType": "Besprechungstyp",

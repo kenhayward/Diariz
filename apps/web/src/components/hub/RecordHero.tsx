@@ -229,10 +229,12 @@ export default function RecordHero({
       >
         <span style={{ width: 13, height: 13, borderRadius: "50%", background: "#fff" }} />
       </span>
-      {/* The "Start recording" label collapses at narrow widths, leaving just the red circle button; the
-          button's aria-label keeps the accessible name "Record" in every layout. */}
+      {/* The "Start recording" label collapses at narrow *window* widths, leaving just the red circle
+          button - but that alone doesn't help when the window is wide and only the capture bar's column is
+          narrow: min-w-0 + truncate let the label shrink and ellipsize instead of forcing the pill wider
+          than the column. The button's aria-label keeps the accessible name "Record" in every layout. */}
       <span
-        className="hidden md:inline"
+        className="hidden min-w-0 truncate md:inline"
         style={{
           fontFamily: "system-ui",
           fontWeight: 600,

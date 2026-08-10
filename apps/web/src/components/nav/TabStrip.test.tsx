@@ -1,8 +1,28 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
-import TabStrip from "./TabStrip";
+import TabStrip, { TABPANEL_ID, tabId } from "./TabStrip";
 
 describe("TabStrip", () => {
+  // The tablist previously had no accessible name at all - a screen-reader user landed on an unnamed group
+  // of four tabs with no context for what they switch.
+  it("names the tablist", () => {
+    render(<TabStrip tab="list" onSelect={() => {}} />);
+    expect(screen.getByRole("tablist").getAttribute("aria-label")).toBeTruthy();
+  });
+
+  // Each tab needs a stable id + aria-controls pointing at the (single, swapped-in-place) tab body, so the
+  // body can point aria-labelledby back at whichever tab is active. Without this, activating a tab announces
+  // a selection change with no panel for the pattern to actually connect to.
+  it("wires every tab to the shared tabpanel id via aria-controls, with a stable per-tab id", () => {
+    render(<TabStrip tab="list" onSelect={() => {}} />);
+    for (const key of ["list", "calendar", "actions", "tags"] as const) {
+      const label = { list: "List", calendar: "Calendar", actions: "Actions", tags: "Tags" }[key];
+      const el = screen.getByRole("tab", { name: label });
+      expect(el.id).toBe(tabId(key));
+      expect(el.getAttribute("aria-controls")).toBe(TABPANEL_ID);
+    }
+  });
+
   it("renders the four panel tabs in a tablist", () => {
     render(<TabStrip tab="list" onSelect={() => {}} />);
     expect(screen.getByRole("tablist")).toBeTruthy();
