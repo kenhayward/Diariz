@@ -766,6 +766,10 @@ export interface CalendarEvent {
   /// than placing them on it. Null/absent on older payloads, where `dayItemSpan` falls back to a
   /// midnight-to-midnight heuristic.
   allDay?: boolean;
+  /// One occurrence of a repeating series. Reported for Google, `.ics` and mirrored Outlook alike. The series
+  /// *key* is deliberately not sent: the browser never needs it, because the sibling lookup is resolved
+  /// server-side from the event id (`getSeriesRecordings`).
+  recurring?: boolean;
 }
 
 /// A Google Calendar meeting matched to a recording by time overlap (same shape as an event).

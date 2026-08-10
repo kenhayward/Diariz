@@ -67,6 +67,7 @@
   "calWhen": "When",
   "calWhere": "Where",
   "calOrganizer": "Organiser",
+  "calRecurring": "Repeats",
   "calAttendees": "Attendees",
   "calDescription": "Description",
   "calOpenInGoogle": "Open in Google Calendar",
