@@ -755,6 +755,19 @@ target (`{ displayId, selection }`) is cached in memory and reused for every lat
 recording, and is cleared on every transition into "recording" so a stale rectangle from a previous monitor
 layout can never silently capture the wrong thing. A tray/recorder "Change capture area" action
 (`screenshot:change-area`) forgets the cached target and reopens the picker mid-meeting.
+
+**The overlays are pre-warmed, not built per pick.** Building them on demand measured at **400-750ms** on a
+three-display machine (each overlay is its own sandboxed renderer and must paint before `ready-to-show`
+allows showing it) - half a second in which nothing is on screen while the app window still takes input, so
+the button read as dead, and an impatient second click was either swallowed by the re-surface path or landed
+on the overlay as it appeared, where a sub-6px press-release means "whole screen". So main keeps a **pool**
+of hidden, already-painted overlays for exactly as long as `canCapture(recorder)` holds (built when a
+recording starts, destroyed when it ends), and a pick is just `show()` - **~40ms**. `pickerPool.js` holds the
+pure reconciliation (which displays need an overlay built, dropped, or re-fitted); main re-runs it on
+`display-added`/`display-removed`/`display-metrics-changed` so a monitor plugged in or re-resolutioned
+mid-meeting can't leave a screen unpickable or an overlay over stale geometry. Because an overlay now
+outlives a single pick, main sends it **`picker:reset`** when putting it away - without that, its one-shot
+choose/cancel guard would make every pick after the first inert.
 **Whether an area is set is mirrored to the renderer** (`screenshot:has-area` for the starting value,
 `screenshot:area-changed` for every later change - every write goes through main's `setCaptureTarget`), and
 the web app **disables its capture buttons until there is one**: capturing with no area opens the picker,
@@ -787,6 +800,7 @@ the web app):
 | `screenshot:captured` | main → renderer (event) | `{ full, thumb, width, height }` (PNG/JPEG bytes as `Uint8Array`) |
 | `picker:choose` | picker window → main (send) | the user's selection (`{ displayId, selection }` or a whole-monitor pick) |
 | `picker:cancel` | picker window → main (send) | none - the overlay was dismissed (Escape) without a choice |
+| `picker:reset` | main → picker window (event) | none - the overlay has been put away; clear its one-shot choose/cancel guard so the pooled window can serve the next pick |
 | `hotkey:load` | hotkey window → main (invoke) | none → returns the stored accelerator (or the default) |
 | `hotkey:save` | hotkey window → main (invoke) | a candidate accelerator → `{ ok, error? }`; only saves one that is both well-formed and provably registrable |
 

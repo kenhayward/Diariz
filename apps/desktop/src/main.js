@@ -23,6 +23,7 @@ const { trayRecorderItems, trayTooltip, notificationFor } = require("./recorderS
 const { updateRestartItem, notificationForUpdate, isNewerVersion } = require("./updateState");
 const { buildStartUrl, codeFromArgv, notificationForAuthError } = require("./desktopAuth");
 const { cropRectFor, resizeDims, clampRect } = require("./captureTarget");
+const { reconcilePool } = require("./pickerPool");
 const {
   SYNC_DEFAULTS,
   windowFor,
@@ -264,6 +265,7 @@ function applyRecorderState(next) {
 
   if (next.phase === "error") recorder.phase = "idle";
   applyShortcut();
+  syncPickerWarmth();
   refreshTray();
 }
 
@@ -272,8 +274,9 @@ function setRecorderReady(ready) {
   recorder.ready = ready;
   // `ready` flipping false (reload, window close) must drop a held shortcut immediately -
   // `recorder.phase` alone goes stale here, so re-evaluate the gate now, not just on the
-  // next phase report.
+  // next phase report. The overlay pool follows the same gate.
   applyShortcut();
+  syncPickerWarmth();
   refreshTray();
 }
 
@@ -598,8 +601,16 @@ const THUMB_LONG_EDGE = 320;
 // Cleared on every transition into "recording" so each meeting picks fresh (a stale
 // rectangle from a previous monitor layout would silently capture the wrong thing).
 let captureTarget = null;
-// Open picker windows, keyed by display id, plus the promise waiting on a choice.
+// The picker overlays, keyed by display id. These are PRE-WARMED while a recording is
+// running (syncPickerWarmth) and reused for every pick, because building them on demand
+// measured at 400-750ms on a three-display machine - half a second in which nothing is on
+// screen and the app window still takes input, so the button reads as dead and an
+// impatient second click gets eaten by the overlay the moment it lands. See pickerPool.js.
 let pickerWindows = new Map();
+// Display ids whose overlay has painted at least once, so `show()` puts something visible
+// on screen rather than an empty transparent window. A cold pool (warm-up never ran, or a
+// display appeared just now) waits for `ready-to-show` instead.
+let pickerReady = new Set();
 let pickerResolve = null;
 // The in-flight picker promise, if any. Guards against re-entrancy: a held-down global
 // hotkey auto-repeats, and the tray click is also reachable while a picker is already
@@ -626,12 +637,128 @@ function setCaptureTarget(next) {
   }
 }
 
-function closePickers() {
-  for (const win of pickerWindows.values()) if (!win.isDestroyed()) win.destroy();
-  pickerWindows = new Map();
+function livePickers() {
+  return [...pickerWindows.values()].filter((win) => !win.isDestroyed());
 }
 
-/// Show a full-screen overlay on every display and resolve with the chosen target
+/// One hidden, pre-loaded overlay for `display`. Never shown here - warming it is the
+/// whole point, so the pick itself is only a show().
+function createPickerWindow(display) {
+  const win = new BrowserWindow({
+    x: display.bounds.x,
+    y: display.bounds.y,
+    width: display.bounds.width,
+    height: display.bounds.height,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    movable: false,
+    fullscreenable: false,
+    focusable: true,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "picker-preload.js"),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+    },
+  });
+  win.once("ready-to-show", () => pickerReady.add(display.id));
+  // Self-heal: if this overlay never manages to show anything (picker.html fails to
+  // load), drop it rather than leaving a dead window around forever. The next reconcile
+  // builds a fresh one.
+  win.webContents.on("did-fail-load", () => {
+    if (!win.isDestroyed()) win.destroy();
+  });
+  win.on("closed", () => {
+    pickerReady.delete(display.id);
+    if (pickerWindows.get(display.id) === win) pickerWindows.delete(display.id);
+    // A pick in flight with no overlay left to make it can never settle on its own, and
+    // a pending picker wedges every later capture attempt - resolve it as cancelled.
+    if (pickerResolve && livePickers().length === 0) settlePicker(null);
+  });
+  win.setAlwaysOnTop(true, "screen-saver");
+  win.loadFile(path.join(__dirname, "picker.html"));
+  return win;
+}
+
+/// Bring the pool in line with the displays that exist right now: build overlays for new
+/// displays, drop the ones whose display has gone, and re-fit the survivors (a resolution
+/// or arrangement change moves a display's bounds without changing its id). Idempotent and
+/// cheap when nothing changed - a kept overlay holds on to its already-painted renderer,
+/// which is what makes the next pick instant.
+function reconcilePickers() {
+  const displays = screen.getAllDisplays();
+  const { create, destroy, keep } = reconcilePool([...pickerWindows.keys()], displays.map((d) => d.id));
+  for (const id of destroy) {
+    const win = pickerWindows.get(id);
+    pickerWindows.delete(id);
+    pickerReady.delete(id);
+    if (win && !win.isDestroyed()) win.destroy();
+  }
+  for (const id of keep) {
+    const win = pickerWindows.get(id);
+    const display = displays.find((d) => d.id === id);
+    if (win && !win.isDestroyed() && display) win.setBounds(display.bounds);
+  }
+  for (const id of create) {
+    const display = displays.find((d) => d.id === id);
+    if (display) pickerWindows.set(id, createPickerWindow(display));
+  }
+}
+
+/// Build the overlays ahead of the first pick. Failure is not fatal: `openPicker`
+/// reconciles again, so a failed warm-up costs latency, not the feature.
+function warmPickers() {
+  try {
+    reconcilePickers();
+  } catch {
+    // e.g. screen.getAllDisplays() during a display transition - retried on the next open
+  }
+}
+
+/// Put every overlay away and re-arm it for the next pick. Replaces destroying them: the
+/// painted renderers are exactly what we are keeping.
+function hidePickers() {
+  for (const win of pickerWindows.values()) {
+    if (win.isDestroyed()) continue;
+    win.hide();
+    win.webContents.send("picker:reset");
+  }
+}
+
+/// Drop the pool entirely - capture is over, so three idle renderers should not outlive it.
+function teardownPickers() {
+  dismissPickerIfOpen();
+  for (const win of pickerWindows.values()) if (!win.isDestroyed()) win.destroy();
+  pickerWindows = new Map();
+  pickerReady = new Set();
+}
+
+/// The overlays exist exactly while a capture could be asked for. Driven off the same
+/// `canCapture` gate as the hotkey and the tray items so they can't disagree.
+function syncPickerWarmth() {
+  if (canCapture(recorder)) warmPickers();
+  else teardownPickers();
+}
+
+/// Show `win` over its display. The cursor's display is shown focused because the
+/// overlay's only cancel path is an Escape keydown handler inside its own window, so one
+/// of them MUST hold OS keyboard focus; the rest come up inactive so they can't steal it.
+function showPicker(win, displayId, cursorDisplayId) {
+  if (win.isDestroyed()) return;
+  win.setAlwaysOnTop(true, "screen-saver");
+  if (displayId === cursorDisplayId) {
+    win.show();
+    win.focus();
+  } else {
+    win.showInactive();
+  }
+}
+
+/// Show the overlay on every display and resolve with the chosen target
 /// ({ displayId, selection }) or null if the user cancelled. If a picker is already
 /// showing, returns its existing promise instead of starting a second one.
 function openPicker() {
@@ -640,80 +767,34 @@ function openPicker() {
     // promise: from the app the click looked like nothing happened, and if the overlay had slipped behind
     // another window there was no way left to reach it - both capture buttons appeared dead until the
     // recording ended.
-    for (const win of pickerWindows.values()) {
-      if (win.isDestroyed()) continue;
-      win.setAlwaysOnTop(true, "screen-saver");
-      win.show();
-    }
     const cursorDisplay = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-    const onCursor = pickerWindows.get(cursorDisplay.id);
-    if (onCursor && !onCursor.isDestroyed()) onCursor.focus(); // Escape must reach an overlay
+    for (const [id, win] of pickerWindows) showPicker(win, id, cursorDisplay.id);
     return pickerPromise;
   }
-  closePickers(); // defensive: clear any stray windows from a picker that didn't settle cleanly
   const attempt = new Promise((resolve, reject) => {
     try {
       pickerResolve = resolve;
-      // The overlay's only cancel path is an Escape keydown handler inside its own
-      // window, so one of the overlays MUST hold OS keyboard focus once shown - pick
-      // the display the cursor is already on so Escape reaches it immediately.
+      reconcilePickers(); // also builds the pool when warm-up never ran
       const cursorDisplay = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
-      for (const display of screen.getAllDisplays()) {
-        const isCursorDisplay = display.id === cursorDisplay.id;
-        const win = new BrowserWindow({
-          x: display.bounds.x,
-          y: display.bounds.y,
-          width: display.bounds.width,
-          height: display.bounds.height,
-          frame: false,
-          transparent: true,
-          alwaysOnTop: true,
-          skipTaskbar: true,
-          resizable: false,
-          movable: false,
-          fullscreenable: false,
-          focusable: true,
-          show: false,
-          webPreferences: {
-            preload: path.join(__dirname, "picker-preload.js"),
-            contextIsolation: true,
-            sandbox: true,
-            nodeIntegration: false,
-          },
-        });
-        // Focusing synchronously right after creation can be dropped if the native
-        // window isn't realized yet, leaving Escape unreachable. Wait for
-        // ready-to-show, then show the cursor's display active (and focused) and the
-        // rest inactive, so nothing steals foreground focus from the intended overlay.
-        win.once("ready-to-show", () => {
-          if (isCursorDisplay) {
-            win.show();
-            win.focus();
-          } else {
-            win.showInactive();
-          }
-        });
-        // Self-heal: if this overlay never manages to show anything (picker.html fails
-        // to load), close it rather than leaving a dead window around forever. Once
-        // every picker window has been destroyed - by this, by the user closing them,
-        // or by settlePicker itself - resolve with null instead of hanging, so a picker
-        // that never settles can't wedge every future capture attempt.
-        win.webContents.on("did-fail-load", () => {
-          if (!win.isDestroyed()) win.destroy();
-        });
-        win.on("closed", () => {
-          pickerWindows.delete(display.id);
-          if (pickerResolve && pickerWindows.size === 0) settlePicker(null);
-        });
-        win.setAlwaysOnTop(true, "screen-saver");
-        win.loadFile(path.join(__dirname, "picker.html"));
-        pickerWindows.set(display.id, win);
+      for (const [id, win] of pickerWindows) {
+        if (pickerReady.has(id)) showPicker(win, id, cursorDisplay.id);
+        // Cold overlay (the pool was just built): it would show as an empty transparent
+        // window, so wait for its first paint. The guard drops a paint that lands after
+        // the pick already settled, which would otherwise re-show a put-away overlay.
+        else win.once("ready-to-show", () => pickerResolve && showPicker(win, id, cursorDisplay.id));
       }
+      if (livePickers().length === 0) throw new Error("no capture-area overlay could be opened");
     } catch (err) {
       reject(err);
     }
   });
-  // If the executor above threw (e.g. screen.getCursorScreenPoint()/new BrowserWindow
+  // The executor can settle the pick synchronously - reconciling against a machine that
+  // reports no displays destroys the last overlay, and the `closed` handler cancels the
+  // pick rather than let it hang. settlePicker has then already cleared the guard, so
+  // arming it below would leave a truthy pickerPromise that nothing can ever settle,
+  // wedging every later capture attempt. Only arm a pick that is still in flight.
+  if (!pickerResolve) return attempt;
+  // If the executor threw instead (e.g. screen.getCursorScreenPoint()/new BrowserWindow
   // failing), clear the guard so the NEXT attempt gets a fresh picker instead of reusing
   // a promise that is rejected forever.
   pickerPromise = attempt.catch((err) => {
@@ -728,7 +809,7 @@ function settlePicker(value) {
   const resolve = pickerResolve;
   pickerResolve = null;
   pickerPromise = null;
-  closePickers();
+  hidePickers();
   if (resolve) resolve(value);
 }
 
@@ -1132,6 +1213,14 @@ if (!app.requestSingleInstanceLock()) {
     if (targetUrl()) createMainWindow(targetUrl());
     else showSetupWindow();
 
+    // The pre-warmed capture overlays are sized and positioned per display, so a monitor
+    // plugged in, unplugged, or re-resolutioned mid-recording has to re-fit them - a stale
+    // pool would leave a screen unpickable or float an overlay over the wrong geometry.
+    // (`screen` is only usable once the app is ready, hence registering here.)
+    for (const event of ["display-added", "display-removed", "display-metrics-changed"]) {
+      screen.on(event, () => syncPickerWarmth());
+    }
+
     setupAutoUpdater();
     void handleAuthDeepLink(process.argv); // cold start launched by a deep link
     app.on("activate", () => showMainWindow());
@@ -1142,10 +1231,10 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   // The shortcut is scoped to a recording; make sure it never outlives the app either.
-  // Any open picker overlay is symmetric cleanup - don't leave it running past quit.
+  // The picker overlays are symmetric cleanup - don't leave them running past quit.
   app.on("will-quit", () => {
     globalShortcut.unregisterAll();
-    closePickers();
+    teardownPickers();
   });
 
   // Tray-resident: keep running when all windows are closed/hidden.
