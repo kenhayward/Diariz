@@ -24,11 +24,11 @@ export default function WorkspaceLayout() {
           <TourProvider>
             <ToastProvider>
               <div className="flex h-screen flex-col bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100">
-                <TopBar />
-                {/* One popover open at a time across the recorder cluster and the account menu. They sit in
-                    different subtrees now (the capture bar and the left panel's room row), so the context
-                    has to span the whole workspace rather than one bar. */}
+                {/* One popover open at a time across the recorder cluster (still in TopBar) and the account
+                    menu (now in the left panel's room row inside Workspace). They are different subtrees, so
+                    the provider has to wrap both siblings here rather than live inside just one of them. */}
                 <HubPopoverProvider>
+                  <TopBar />
                   <Workspace />
                 </HubPopoverProvider>
                 <StatusBar />

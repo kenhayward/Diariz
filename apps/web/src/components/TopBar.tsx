@@ -3,8 +3,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import Recorder from "./Recorder";
 
 /// Persistent "command hub" bar: brand on the left, the record cluster centered by two flex spacers.
-/// The account avatar has moved into the left panel's room row; the shared popover context now lives in
-/// WorkspaceLayout so it can span both.
+/// The account avatar has moved into the left panel's room row; `WorkspaceLayout` wraps this bar and the
+/// workspace in one shared popover provider so the recorder's popovers and the account menu still enforce
+/// one-open-at-a-time across that split.
 export default function TopBar() {
   const qc = useQueryClient();
   return (

@@ -62,8 +62,8 @@ function MenuRow({
 /**
  * The account menu: a small avatar pill in the left panel's room row that toggles a 308px account popover
  * (header, usage stats, menu rows, Sign out). The pill shares the hub's single-open popover state
- * (`useHubPopover`, id "acct") so opening it closes the recorder popovers in the capture bar and
- * vice-versa; `HubPopover` owns the backdrop + Escape.
+ * (`useHubPopover`, id "acct") so opening it closes the recorder's popovers and vice-versa - the shared
+ * provider lives in `WorkspaceLayout`, above both; `HubPopover` owns the backdrop + Escape.
  */
 export default function UserMenu() {
   const { t } = useTranslation("account");
