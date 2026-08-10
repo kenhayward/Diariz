@@ -26,10 +26,12 @@ that section with a breadcrumb back to the hub, and Diariz remembers which secti
 
 ## The meeting card
 
-If the recording is linked to a calendar meeting, a card below the tiles shows its time, location,
-organiser, and description, with **Change** and **Unlink** actions. If it is not linked yet but your
-calendar suggests a match, the suggestion appears ready to accept in one click. The card is hidden
-when there is nothing to show.
+If the recording is linked to a calendar meeting, a card below the tiles shows a short summary -
+title, time, location, and attendee count - with **Change** and **Unlink** actions. Click the summary
+to open the full invite (organiser, description, and, for a repeating meeting, your earlier recordings
+of the same series) as a **Calendar Event** section, the same way you open Notes or Actions. If the
+meeting is not linked yet but your calendar suggests a match, the suggestion appears ready to accept
+in one click. The card is hidden when there is nothing to show.
 
 Only timed meetings are matched. An all-day entry - a holiday, a birthday, an out-of-office day -
 covers the whole day, so it is never suggested and never linked for you automatically. You can still

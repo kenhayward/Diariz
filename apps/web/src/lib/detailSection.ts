@@ -13,7 +13,8 @@ export type SectionKey =
   | "notes"
   | "speakers"
   | "files"
-  | "formulas";
+  | "formulas"
+  | "meeting";
 
 export const DETAIL_SECTION_KEY = "diariz.detailSection";
 
@@ -26,6 +27,7 @@ const SECTIONS: readonly SectionKey[] = [
   "speakers",
   "files",
   "formulas",
+  "meeting",
 ];
 
 /// The tab strip persisted two keys that are no longer sections: `overview` became the hub, and

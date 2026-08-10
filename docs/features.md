@@ -70,9 +70,12 @@ Formulas, each showing its **real count and a preview of what's inside** (the fi
 the attached files, the formula runs), so you can see what a meeting holds without opening anything. Notes,
 Files, and Formulas can be **added or run straight from their tile**. Clicking a tile drills into that section
 with a **breadcrumb** back to the hub, and the section you were last in is remembered. A **meeting card** below
-the tiles shows the calendar meeting the recording came from (time, location, organiser, description) with
-**Change** / **Unlink**, or — when it isn't linked yet — the meeting your calendar **suggests** it came from,
-ready to accept in one click. It only appears when there is something to show.
+the tiles is a summary of the calendar meeting the recording came from - title, time, location and attendee
+count - with **Change** / **Unlink**; clicking the summary opens the full invite (organiser, description,
+attendees, and, for a repeating meeting, the earlier recordings of the series) as a **Calendar Event** section,
+the same way you open Notes or Actions. When it isn't linked yet, the card instead shows the meeting your
+calendar **suggests** it came from, ready to accept in one click. It only appears when there is something to
+show.
 - **Notes & enhanced notes.** Take your own note lines for a meeting — sparse trigger phrases, questions,
 observations. A **live notes panel** while recording stamps each line at the second you wrote it (crash-safe,
 lands on the recording's **Notes** tab after upload); you can also jot **prep notes on an upcoming Google Calendar
@@ -459,10 +462,11 @@ OAuth client. It works in the web app and in the **desktop app** (the desktop cl
 system browser and returns you to the app, since Google blocks sign-in inside embedded windows). A Google-linked user can opt in
 (Preferences → Calendars) to let Diariz **read their Google Calendar** (read-only) so a recording is **linked to
 the meeting it belongs to** (auto-saved on open, or picked by hand when the times don't line up), its Overview
-shows the meeting's **full details** (time, location, organiser, attendees, description) with any **URLs in the
-location/description rendered as clickable links** (so you can join a Zoom/Meet call straight from the app), and the **Calendar
+shows a meeting-card summary (title, time, location, attendee count) that opens the meeting's **full details**
+(organiser, attendees, description) as a **Calendar Event** section, with any **URLs in the location/description
+rendered as clickable links** (so you can join a Zoom/Meet call straight from the app), and the **Calendar
 tab overlays their meetings** (a linked recording and its meeting show as one block; a meeting with no recording
-opens a preview you can link a recording to) — a revocable grant. They can also **choose which of their Google
+opens a preview you can link a recording to) - a revocable grant. They can also **choose which of their Google
 calendars** to consider (Preferences → Calendars); only the selected calendars are used for matching and
 shown on the Calendar tab.
 - **The Calendar tab's day view is a time grid**: pick a day in the month grid and it is laid out on an hour

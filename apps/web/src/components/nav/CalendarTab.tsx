@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { useDragAutoScroll } from "../../lib/dragAutoScroll";
-import { recordingDayKeys, dayKey, eventDayKeys, visibleGridRange, dayItems, type DayItem } from "../../lib/calendar";
+import { recordingDayKeys, dayKey, eventDayKeys, visibleGridRange, dayItems, dayEventCount, type DayItem } from "../../lib/calendar";
 import {
   canSyncOutlook as shellCanSyncOutlook,
   onOutlookState,
@@ -109,6 +109,12 @@ export default function CalendarTab({
     () => (selectedDay ? dayItems(recordings, events, selectedDay) : []),
     [recordings, events, selectedDay],
   );
+  // Counted from the events themselves, not from `selectedItems`: that list drops a linked event because its
+  // recording row represents it, which would make the heading report one meeting on a day that had six.
+  const selectedEventCount = useMemo(
+    () => (selectedDay ? dayEventCount(events, selectedDay) : 0),
+    [events, selectedDay],
+  );
   function stepMonth(delta: number) {
     setMonth((m) => {
       const d = new Date(m.year, m.month + delta, 1);
@@ -162,7 +168,7 @@ export default function CalendarTab({
       </div>
       {selectedDay && (
         <>
-          <DayHeading dayKey={selectedDay} items={selectedItems} locale={i18n.language} />
+          <DayHeading dayKey={selectedDay} items={selectedItems} eventCount={selectedEventCount} locale={i18n.language} />
           <DayGrid
             items={selectedItems}
             dayKey={selectedDay}
@@ -177,16 +183,27 @@ export default function CalendarTab({
 }
 
 /// The day's date and what is on it, pinned above the grid so it does not scroll away with the hours.
-function DayHeading({ dayKey: key, items, locale }: { dayKey: string; items: DayItem[]; locale: string }) {
+function DayHeading({
+  dayKey: key,
+  items,
+  eventCount,
+  locale,
+}: {
+  dayKey: string;
+  items: DayItem[];
+  /// Every event on this day, including those drawn as their recording. Passed in rather than derived from
+  /// `items`, which cannot see them.
+  eventCount: number;
+  locale: string;
+}) {
   const { t } = useTranslation("workspace");
   const [y, m, d] = key.split("-").map(Number);
   // Built from parts, never `new Date("2026-08-08")`: the string form is parsed as UTC midnight, which
   // renders the *previous* day anywhere west of Greenwich.
   const date = new Date(y, m - 1, d);
   const recordings = items.filter((i) => i.type === "recording").length;
-  const events = items.length - recordings;
   const counts = [
-    events > 0 ? t("calDayEventCount", { count: events }) : null,
+    eventCount > 0 ? t("calDayEventCount", { count: eventCount }) : null,
     recordings > 0 ? t("calDayRecordingCount", { count: recordings }) : null,
   ].filter(Boolean).join(" · ");
 

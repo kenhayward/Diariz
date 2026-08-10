@@ -253,7 +253,7 @@ describe("RecordingDetail", () => {
     await waitFor(() => expect(api.putCalendarLink).toHaveBeenCalledWith("rec-123", "evt1", false, "team@g"));
   });
 
-  it("shows the linked meeting's full details and manage actions on the Overview", async () => {
+  it("shows the linked meeting's summary and manage actions on the Overview", async () => {
     (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true });
     (api.getCalendarEvent as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt,
@@ -267,14 +267,43 @@ describe("RecordingDetail", () => {
     });
     await loaded();
 
-    const link = await screen.findByRole("link", { name: "Quarterly Planning" });
-    expect(link.getAttribute("href")).toBe("https://cal/evt1");
+    // The card is a summary now, not the full invite - just a button into the Calendar Event section.
+    expect(await screen.findByRole("button", { name: /Quarterly Planning/ })).toBeTruthy();
     expect(await screen.findByText("Room 4")).toBeTruthy(); // live details rendered
     expect(api.getCalendarEvent).toHaveBeenCalledWith("evt1");
     expect(screen.getByRole("button", { name: /change meeting/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /unlink meeting/i })).toBeTruthy();
     // Already linked → the auto-save must not fire.
     expect(api.putCalendarLink).not.toHaveBeenCalled();
+  });
+
+  it("offers a Calendar Event section when the recording has a linked meeting", async () => {
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true });
+    (api.getCalendarEvent as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt,
+      htmlLink: "https://cal/evt1", location: "Room 4", description: null, organizer: null, attendees: [],
+    });
+    // The meeting card gains a click target into this section only in Task 3, so there is no UI route
+    // into it from this test file yet - seed the persisted section key instead of clicking through.
+    localStorage.setItem("diariz.detailSection", "meeting");
+    renderPage({
+      ...base,
+      calendarLink: { eventId: "evt1", calendarId: "primary", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt, htmlLink: "https://cal/evt1", linkedManually: false },
+    });
+
+    expect(await screen.findByRole("navigation", { name: "Calendar Event" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Overview" })).toBeTruthy();
+    expect(await screen.findByText("Room 4")).toBeTruthy(); // the invite itself rendered in the new section
+  });
+
+  it("has no Calendar Event section when nothing is linked", async () => {
+    (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true });
+    // Same seeding as above; a recording with no linked meeting must fall back to the hub anyway.
+    localStorage.setItem("diariz.detailSection", "meeting");
+    renderPage(base); // base.calendarLink is null
+
+    expect(await screen.findByText("Meeting")).toBeTruthy(); // the card is still there, unlinked
+    expect(screen.queryByRole("navigation", { name: "Calendar Event" })).toBeNull();
   });
 
   it("hides the linked meeting on the Overview while viewing in a shared room (calendar is personal-only)", async () => {
@@ -286,7 +315,7 @@ describe("RecordingDetail", () => {
     });
     await loaded();
 
-    expect(screen.queryByRole("link", { name: "Quarterly Planning" })).toBeNull(); // block hidden
+    expect(screen.queryByRole("button", { name: /Quarterly Planning/ })).toBeNull(); // block hidden
     expect(screen.queryByRole("button", { name: /change meeting/i })).toBeNull();
     expect(api.getCalendarEvent).not.toHaveBeenCalled(); // no calendar fetch in a shared room
   });

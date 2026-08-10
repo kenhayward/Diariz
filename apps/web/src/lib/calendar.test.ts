@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   dayKey, isoToDayKey, buildMonthGrid, recordingDayKeys, recordingsForDay,
-  eventDayKeys, visibleGridRange, dayItems, recordingSpan, dayItemSpan,
+  eventDayKeys, visibleGridRange, dayItems, recordingSpan, dayItemSpan, dayEventCount,
 } from "./calendar";
 import type { CalendarEvent, RecordingSummary } from "./types";
 
@@ -277,5 +277,27 @@ describe("dayItemSpan", () => {
   it("never marks a recording all-day", () => {
     expect(spanOf(recWith({ startedAt: new Date(2026, 6, 2).toISOString(), durationMs: 0 }), "2026-07-02").allDay)
       .toBe(false);
+  });
+});
+
+describe("dayEventCount", () => {
+  // Built from local Date parts, like every other spans-midnight fixture in this file (see `dayItemSpan`
+  // above) - not UTC-instant strings. `eventDayKeys` walks *local* midnights, so a UTC string only lands on
+  // the day a test expects for a narrow band of runner offsets; local-component construction gives the same
+  // wall-clock time (and so the same local day) on every machine.
+  it("counts an event on the day", () => {
+    const events = [ev("a", new Date(2026, 7, 10, 9, 0), new Date(2026, 7, 10, 10, 0))];
+    expect(dayEventCount(events, "2026-08-10")).toBe(1);
+  });
+
+  it("counts an event on every day it spans, matching how the grid draws it", () => {
+    const events = [ev("overnight", new Date(2026, 7, 10, 22, 0), new Date(2026, 7, 11, 1, 0))];
+    expect(dayEventCount(events, "2026-08-10")).toBe(1);
+    expect(dayEventCount(events, "2026-08-11")).toBe(1);
+  });
+
+  it("counts nothing on an unrelated day", () => {
+    const events = [ev("a", new Date(2026, 7, 10, 9, 0), new Date(2026, 7, 10, 10, 0))];
+    expect(dayEventCount(events, "2026-08-12")).toBe(0);
   });
 });

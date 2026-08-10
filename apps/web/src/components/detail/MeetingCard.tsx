@@ -1,7 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { CalendarEvent, CalendarLink } from "../../lib/types";
-import CalendarEventDetails from "../CalendarEventDetails";
-import SeriesRecordings from "../SeriesRecordings";
+import { formatLongDate, formatTimeHm } from "../../lib/format";
 import { CalendarIcon } from "./SectionIcons";
 
 /// The hub's calendar card: the meeting this recording came from.
@@ -10,10 +9,11 @@ import { CalendarIcon } from "./SectionIcons";
 /// line, or an invite in a plain box - which read as leftovers below the tiles rather than part of the hub.
 /// It now wears the same chrome as the tiles, so the hub is a grid of cards all the way down.
 ///
-/// It is not a tile: there is no Meeting section to drill into, and a linked invite (title, time, location,
-/// organiser, description) is far too tall for a tile, so it spans the hub's full width beneath the grid.
+/// It is not a tile: there is no Meeting section on the tab strip. Instead, a linked invite renders as a
+/// clickable summary that opens the Calendar Event section, so the full invite (organiser, description,
+/// recurring series) lives there instead of stacked on the hub.
 ///
-/// Three states: linked (the invite + change/unlink), unlinked with a suggestion from the calendar (accept it,
+/// Three states: linked (the summary + change/unlink), unlinked with a suggestion from the calendar (accept it,
 /// or pick another), and unlinked with none (just pick one). Calendar is personal-only, so the caller hides
 /// this entirely inside a shared room.
 export default function MeetingCard({
@@ -24,6 +24,7 @@ export default function MeetingCard({
   onLink,
   onAcceptSuggestion,
   onUnlink,
+  onOpen,
 }: {
   calendarLink: CalendarLink | null;
   /// The live event, which may still be loading - fall back to the snapshot stored on the link.
@@ -33,8 +34,10 @@ export default function MeetingCard({
   onLink: () => void;
   onAcceptSuggestion: () => void;
   onUnlink: () => void;
+  /// Open the recording's Calendar Event section. The card is a summary; the invite itself lives there.
+  onOpen: () => void;
 }) {
-  const { t } = useTranslation("workspace");
+  const { t, i18n } = useTranslation("workspace");
 
   // Nothing linked and no calendar to link from: there is nothing to say, so don't leave an empty card.
   // (A linked meeting still shows even if the calendar was since disconnected - the snapshot outlives it.)
@@ -78,21 +81,15 @@ export default function MeetingCard({
 
       <div className="mt-3">
         {linked ? (
-          <>
-            <CalendarEventDetails
-              showTitle
-              event={
-                linkedEvent ?? {
-                  id: calendarLink.eventId,
-                  summary: calendarLink.summary,
-                  start: calendarLink.start,
-                  end: calendarLink.end,
-                  htmlLink: calendarLink.htmlLink,
-                }
-              }
-            />
-            {linkedEvent?.recurring && <SeriesRecordings eventId={calendarLink.eventId} />}
-          </>
+          <MeetingSummary
+            title={(linkedEvent?.summary ?? calendarLink.summary) || t("meetingUntitled")}
+            start={linkedEvent?.start ?? calendarLink.start}
+            end={linkedEvent?.end ?? calendarLink.end}
+            location={linkedEvent?.location ?? null}
+            attendees={linkedEvent?.attendees?.length ?? 0}
+            locale={i18n.language}
+            onOpen={onOpen}
+          />
         ) : suggestion ? (
           <p className="text-xs text-gray-700 dark:text-gray-300">
             <span className="text-gray-500 dark:text-gray-400">{t("calSuggestedMeeting")}: </span>
@@ -103,6 +100,56 @@ export default function MeetingCard({
         )}
       </div>
     </section>
+  );
+}
+
+/// The linked meeting in brief, and the way into the Calendar Event section.
+///
+/// Only the summary is the click target, not the whole card: "Change meeting" and "Unlink meeting" live in
+/// the header, and wrapping them in a click target would need stopPropagation on both - a trap that breaks
+/// silently the next time someone adds a third action.
+///
+/// Location and the attendee count come from the live event only. Until it resolves - and forever, for an
+/// event since deleted - the card falls back to the snapshot stored on the link, which carries just the
+/// title and the times, so those two lines simply do not appear.
+function MeetingSummary({
+  title,
+  start,
+  end,
+  location,
+  attendees,
+  locale,
+  onOpen,
+}: {
+  title: string;
+  start: string;
+  end: string;
+  location: string | null;
+  attendees: number;
+  locale: string;
+  onOpen: () => void;
+}) {
+  const { t } = useTranslation("workspace");
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={t("hubMeetingOpen", { name: title })}
+      className="w-full rounded-xl border border-gray-200 px-3 py-2 text-left hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50"
+    >
+      <span className="block truncate text-sm font-medium text-indigo-600 dark:text-indigo-400">{title}</span>
+      <span className="mt-0.5 block text-xs text-gray-600 dark:text-gray-400">
+        {formatLongDate(start, locale)} · {formatTimeHm(start)} - {formatTimeHm(end)}
+      </span>
+      {location && (
+        <span className="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-500">{location}</span>
+      )}
+      {attendees > 0 && (
+        <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-500">
+          {t("calAttendeeCount", { count: attendees })}
+        </span>
+      )}
+    </button>
   );
 }
 

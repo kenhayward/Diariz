@@ -62,6 +62,25 @@ export interface Release {
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
   {
+    version: "0.203.0",
+    date: "2026-08-10",
+    pr: 502,
+    headline: "A clearer day count, and the invite one click away",
+    summary:
+      "The calendar day heading now counts every event on the day, including the ones you have already " +
+      "recorded - previously a day of six meetings, five of them recorded, reported one event. And a " +
+      "recording's linked meeting is now a short summary you click through to, opening the full invite as a " +
+      "Calendar Event section of the recording, the same way you open Notes or Actions. The recordings page " +
+      "no longer carries the whole invite.",
+    added: [
+      "A Calendar Event section on a recording with a linked meeting, holding the full invite.",
+    ],
+    changed: [
+      "The calendar day heading counts every event on the day, not only those without a recording.",
+      "The linked meeting on a recording is now a summary - title, time, location and attendee count - that opens the full invite.",
+    ],
+  },
+  {
     version: "0.202.0",
     date: "2026-08-10",
     pr: 501,

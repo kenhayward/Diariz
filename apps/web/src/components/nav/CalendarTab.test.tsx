@@ -275,6 +275,21 @@ describe("CalendarTab", () => {
     expect(await screen.findByText(/2 events/)).toBeTruthy();
     expect(screen.queryByText(/meeting/i)).toBeNull();
   });
+
+  // The grid draws a linked event as its recording row, not as an event chip - but it is still an event on
+  // the calendar that day, and a heading that says "1 event" when six meetings happened is simply wrong.
+  it("counts every event on the day, including ones that already have a recording", async () => {
+    const today = new Date();
+    const at = (h: number) => new Date(today.getFullYear(), today.getMonth(), today.getDate(), h).toISOString();
+    vi.mocked(api.getCalendarEvents).mockResolvedValue([
+      { id: "linked", summary: "Standup", start: at(9), end: at(10), htmlLink: null },
+      { id: "loose", summary: "Review", start: at(11), end: at(12), htmlLink: null },
+    ]);
+
+    renderTab([{ ...rec, calendarEventId: "linked" }]);
+
+    expect(await screen.findByText(/2 events/)).toBeTruthy();
+  });
 });
 
 // ---- the day view: a time grid, not a list ----
