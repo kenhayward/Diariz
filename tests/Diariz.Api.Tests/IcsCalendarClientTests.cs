@@ -37,6 +37,20 @@ public class IcsCalendarClientTests
         END:VCALENDAR
         """;
 
+    private const string StandupIcs = """
+        BEGIN:VCALENDAR
+        VERSION:2.0
+        PRODID:-//Test//EN
+        BEGIN:VEVENT
+        UID:standup@test
+        SUMMARY:Standup
+        DTSTART:20260210T090000Z
+        DTEND:20260210T093000Z
+        RRULE:FREQ=WEEKLY;COUNT=3
+        END:VEVENT
+        END:VCALENDAR
+        """;
+
     private static readonly DateTimeOffset Min = new(2026, 2, 8, 0, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset Max = new(2026, 2, 15, 0, 0, 0, TimeSpan.Zero);
 
@@ -92,6 +106,33 @@ public class IcsCalendarClientTests
         Assert.Contains(events, e => e.Summary == "Ops review" && e.Color == "#33B679");
         // Ordered by start.
         Assert.Equal("Team sync", events[0].Summary);
+    }
+
+    [Fact]
+    public async Task ListEventsAsync_PrefixesSeriesIdToMatchTheInstanceId()
+    {
+        using var db = TestDb.Create();
+        var user = Guid.NewGuid();
+        var team = Feed(user, "Team", "https://team.example.com/team.ics");
+        db.IcsCalendarSources.Add(team);
+        await db.SaveChangesAsync();
+
+        var handler = new RouteHandler(_ => (HttpStatusCode.OK, StandupIcs));
+        var client = new IcsCalendarClient(new StubFactory(handler), db, NullLogger<IcsCalendarClient>.Instance, Dns());
+
+        var events = await client.ListEventsAsync(user, Min, Max);
+
+        Assert.NotEmpty(events);
+        Assert.All(events, e =>
+        {
+            Assert.True(e.Recurring);
+            Assert.NotNull(e.SeriesId);
+            // The migration derives SeriesId by stripping the trailing "_yyyyMMddTHHmmssZ" occurrence stamp off
+            // EventId - so the client must produce a SeriesId that is exactly that prefix of Id, not merely a
+            // feed-namespaced value that happens to look similar.
+            Assert.Matches(@"^ics:.+:standup@test$", e.SeriesId!);
+            Assert.StartsWith(e.SeriesId + "_", e.Id);
+        });
     }
 
     [Fact]

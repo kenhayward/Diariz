@@ -202,6 +202,7 @@ public class DiarizDbContext(DbContextOptions<DiarizDbContext> options)
             e.HasKey(l => l.RecordingId);
             e.Property(l => l.EventId).HasMaxLength(1024);
             e.Property(l => l.CalendarId).HasMaxLength(1024);
+            e.Property(l => l.SeriesId).HasMaxLength(1024);
             e.Property(l => l.Summary).HasMaxLength(1024);
             e.Property(l => l.HtmlLink).HasMaxLength(2048);
             e.Property(l => l.Color).HasMaxLength(32);

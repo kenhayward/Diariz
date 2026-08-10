@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
 import DetailTabs, { type DetailTab } from "../components/DetailTabs";
 import CalendarEventDetails from "../components/CalendarEventDetails";
+import SeriesRecordings from "../components/SeriesRecordings";
 import LinkRecordingModal from "../components/LinkRecordingModal";
 import NotesSection from "../components/NotesSection";
 import { useRoomBasePath } from "../lib/rooms";
@@ -95,6 +96,7 @@ export default function CalendarEventDetail() {
       content: (
         <div className="px-4 pb-4">
           <CalendarEventDetails event={event} />
+          <SeriesRecordings eventId={event.id} />
           <div className="mt-4 border-t pt-3 dark:border-gray-700">
             <h3 className="mb-1 text-sm font-medium text-gray-700 dark:text-gray-200">{t("eventNotesTitle")}</h3>
             <p className="mb-2 text-xs text-gray-400 dark:text-gray-500">{t("eventNotesHint")}</p>

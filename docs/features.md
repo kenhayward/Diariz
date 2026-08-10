@@ -38,7 +38,13 @@ heard, so joining before anyone speaks never cuts the recording short, and pausi
 Both settings apply **only** to a recording started from a calendar event; one started with the Record button
 runs until you stop it, exactly as before. And whatever those settings say, **joining a second meeting while
 the first is still recording** finishes the first properly - it uploads and transcribes on its own - before the
-new one begins.
+new one begins. If people are still talking when the meeting's scheduled end arrives, Diariz asks whether to
+**Extend this meeting** instead of cutting it off outright; leaving it unanswered keeps recording, and the
+silence rule above ends the take once the room empties. Each **Extend this meeting** doubles the next wait (3,
+6, 12, 24 minutes), so a long overrun stops nagging you, and the prompt raises a desktop notification too, since
+you are usually looking at the meeting app rather than Diariz. A recording that ends on its own now always says
+**why** - the scheduled auto-stop time, the meeting's end, or silence - whichever rule actually triggered it; a
+Stop you press yourself stays silent.
 - **Transcribe + diarize** server-side with WhisperX (large-v3, word-level timestamps) and pyannote 3.1,
 producing speaker-labelled, timestamped segments you can rename, edit, and play back (per segment, per speaker,
 or the whole recording). A **Speakers** panel lists each speaker with their segment count and **total talk time**,
@@ -491,6 +497,10 @@ Diariz never closes an Outlook you had open, though COM will start Outlook if it
 is named specifically — Outlook not installed, Outlook busy, access blocked, or **the new Outlook, which does
 not expose a calendar to other apps at all** — and recorded against that machine so it is visible from
 elsewhere. Requires **classic Outlook for Windows**.
+- **Recurring meetings are marked.** A calendar event that repeats - from Google, an `.ics` feed, or the
+mirrored Outlook calendar - carries a **Repeats** badge, and both the event and a recording linked to it list
+your **earlier recordings of the same meeting** (up to 10, newest first), so you can jump straight back to the
+last one instead of hunting for it in the folder tree.
 - **Global AI timeout** (Platform Administrator, Settings → Model Settings): one platform-wide per-request
 timeout in seconds (default 120) applied to every AI call - summaries, minutes, actions, tags, and embeddings.
 Raise it for slow local models; the configured value is the single authority (no hidden HTTP cap).

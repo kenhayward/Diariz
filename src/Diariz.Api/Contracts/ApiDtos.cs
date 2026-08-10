@@ -159,6 +159,11 @@ public record CalendarLinkDto(
     string EventId, string CalendarId, string? Summary, DateTimeOffset Start, DateTimeOffset End,
     string? HtmlLink, bool LinkedManually, string? Color = null);
 
+/// <summary>One earlier recording of the same recurring meeting. The times are the <b>occurrence's</b>, taken
+/// from the link snapshot rather than the recording, so the list reads as a calendar history ("Tue 3 Jun")
+/// rather than as upload timestamps.</summary>
+public record SeriesRecordingDto(Guid Id, string Title, string? Name, DateTimeOffset StartsAt, DateTimeOffset EndsAt);
+
 /// <summary>Link a recording to a calendar event. <paramref name="Manual"/> = the user picked it by hand
 /// (vs. the auto-saved best time-overlap match). <paramref name="CalendarId"/> is optional - when omitted the
 /// server finds which calendar the event is on.</summary>

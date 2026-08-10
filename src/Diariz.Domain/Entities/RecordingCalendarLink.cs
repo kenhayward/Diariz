@@ -19,6 +19,15 @@ public class RecordingCalendarLink
     /// "primary".</summary>
     public string CalendarId { get; set; } = "primary";
 
+    /// <summary>The recurring series this occurrence belongs to, or null for a one-off (and for links made
+    /// before this column existed whose id shape could not be read). Keyed per source - a Google master id, an
+    /// <c>.ics</c> UID, an Outlook Global Object ID - so it is only ever compared with another link's, never
+    /// interpreted.
+    /// <para>Stored rather than derived on read because Outlook's mirror is a rolling window: a join to
+    /// <c>OutlookCalendarEvents</c> would find nothing for last month's occurrence, which is precisely the
+    /// history the series list exists to show.</para></summary>
+    public string? SeriesId { get; set; }
+
     /// <summary>The calendar's Google background colour (hex), snapshotted so the linked icon can be coloured
     /// without a live call. Null = unknown.</summary>
     public string? Color { get; set; }

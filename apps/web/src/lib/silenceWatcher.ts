@@ -13,6 +13,9 @@ export interface SilenceWatcher {
   /// Stop counting while the recording is paused. Pausing disables the capture track, so the analyser reads
   /// pure silence - without this, pausing a meeting for five minutes would end the recording.
   setPaused(paused: boolean): void;
+  /// The current silence run, so a caller can ask whether anyone is talking *now* rather than only being told
+  /// when the run reaches its threshold. Read by the extend prompt.
+  state(): SilenceState;
   /// Tear down the analyser and context. Safe to call more than once.
   stop(): void;
 }
@@ -28,13 +31,17 @@ type AudioContextCtor = typeof AudioContext;
  * Watch `stream` and call `onSilent` once it has been continuously near-silent for `thresholdMs`, having
  * first heard something. Fires at most once. Returns null when Web Audio is unavailable (jsdom, older
  * browsers), which means the take simply has no silence auto-stop rather than failing to record.
+ *
+ * A non-positive `thresholdMs` means "never auto-stop", not "stop looking": `shouldStopForSilence` already
+ * refuses to fire on one, and that user is precisely the one whose extend prompt has no silence floor under
+ * it - so the room still has to be observable through `state()`. Watching costs one analyser read every
+ * half-second.
  */
 export function startSilenceWatcher(
   stream: MediaStream,
   thresholdMs: number,
   onSilent: () => void,
 ): SilenceWatcher | null {
-  if (thresholdMs <= 0) return null;
   const w = window as unknown as { AudioContext?: AudioContextCtor; webkitAudioContext?: AudioContextCtor };
   const Ctx = w.AudioContext ?? w.webkitAudioContext;
   if (!Ctx) return null;
@@ -85,6 +92,7 @@ export function startSilenceWatcher(
     setPaused(next: boolean) {
       paused = next;
     },
+    state: () => state,
     stop: teardown,
   };
 }

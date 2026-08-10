@@ -115,4 +115,64 @@ public class IcsCalendarTests
         Assert.Equal(coffee.Id, found!.Id);
         Assert.Equal(coffee.Start, found.Start);
     }
+
+    // ---- Recurrence ----
+
+    /// <summary>A feed's recurring series: every expanded instance reports the series, keyed by the raw UID -
+    /// which is exactly the prefix of the instance id, so the two cannot disagree.</summary>
+    [Fact]
+    public void ParseEvents_ReportsTheSeriesForARecurringEvent()
+    {
+        var ics = """
+        BEGIN:VCALENDAR
+        VERSION:2.0
+        BEGIN:VEVENT
+        UID:standup@x.test
+        DTSTART:20260810T090000Z
+        DTEND:20260810T093000Z
+        RRULE:FREQ=WEEKLY;COUNT=3
+        SUMMARY:Standup
+        END:VEVENT
+        END:VCALENDAR
+        """;
+        var events = IcsCalendar.ParseEvents(
+            ics,
+            DateTimeOffset.Parse("2026-08-01T00:00:00Z"),
+            DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
+            "src1", "Feed", "#123456");
+
+        Assert.NotEmpty(events);
+        Assert.All(events, e =>
+        {
+            Assert.True(e.Recurring);
+            Assert.Equal("standup@x.test", e.SeriesId);
+            Assert.StartsWith("standup@x.test_", e.Id);
+        });
+    }
+
+    /// <summary>A one-off in the same feed is not a series, and its id stays the bare UID.</summary>
+    [Fact]
+    public void ParseEvents_LeavesAOneOffNonRecurring()
+    {
+        var ics = """
+        BEGIN:VCALENDAR
+        VERSION:2.0
+        BEGIN:VEVENT
+        UID:oneoff@x.test
+        DTSTART:20260810T140000Z
+        DTEND:20260810T150000Z
+        SUMMARY:Review
+        END:VEVENT
+        END:VCALENDAR
+        """;
+        var ev = Assert.Single(IcsCalendar.ParseEvents(
+            ics,
+            DateTimeOffset.Parse("2026-08-01T00:00:00Z"),
+            DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
+            "src1", "Feed", null));
+
+        Assert.False(ev.Recurring);
+        Assert.Null(ev.SeriesId);
+        Assert.Equal("oneoff@x.test", ev.Id);
+    }
 }

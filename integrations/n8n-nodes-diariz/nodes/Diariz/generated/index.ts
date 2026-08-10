@@ -257,6 +257,19 @@ const GENERATED: GeneratedResource[] = [
         "queryParams": [],
         "hasBody": false,
         "returnsArray": true
+      },
+      {
+        "value": "listYourOtherRecordingsOfARecurringMeeting",
+        "displayName": "List your other recordings of a recurring meeting",
+        "description": "For an event that is part of a repeating series, the other recordings you have made of that same series - so you can jump straight to what was said at the last one.",
+        "method": "GET",
+        "path": "/api/calendar/events/{eventId}/recordings",
+        "pathParams": [
+          "eventId"
+        ],
+        "queryParams": [],
+        "hasBody": false,
+        "returnsArray": true
       }
     ]
   },

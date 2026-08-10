@@ -184,9 +184,9 @@ function DayHeading({ dayKey: key, items, locale }: { dayKey: string; items: Day
   // renders the *previous* day anywhere west of Greenwich.
   const date = new Date(y, m - 1, d);
   const recordings = items.filter((i) => i.type === "recording").length;
-  const meetings = items.length - recordings;
+  const events = items.length - recordings;
   const counts = [
-    meetings > 0 ? t("calDayMeetingCount", { count: meetings }) : null,
+    events > 0 ? t("calDayEventCount", { count: events }) : null,
     recordings > 0 ? t("calDayRecordingCount", { count: recordings }) : null,
   ].filter(Boolean).join(" · ");
 

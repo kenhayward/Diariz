@@ -4,6 +4,8 @@ import {
   earlierStop,
   nextSilenceState,
   shouldStopForSilence,
+  shouldPromptExtend,
+  extendedStopAt,
   idleSilence,
   type CalendarRecordingSettings,
 } from "./calendarRecording";
@@ -103,5 +105,84 @@ describe("silence tracking", () => {
     s = nextSilenceState(s, QUIET, 60_000);
     expect(shouldStopForSilence(s, 0)).toBe(false);
     expect(shouldStopForSilence(s, -1)).toBe(false);
+  });
+});
+
+// The window here is the user's own `silenceSeconds`, so these read as the exact complement of
+// shouldStopForSilence above: at the calendar's stop time, either that rule already considers the meeting
+// over (stop, no prompt) or it does not (prompt).
+describe("shouldPromptExtend", () => {
+  const LOUD = 0.5;
+  const QUIET = 0;
+
+  it("asks when someone has spoken recently", () => {
+    let s = nextSilenceState(idleSilence(), LOUD, 1000);
+    s = nextSilenceState(s, QUIET, 2_000);
+    expect(shouldPromptExtend(s, 10_000)).toBe(true);
+  });
+
+  it("does not ask once the room has been quiet for a while - there is nobody to answer", () => {
+    let s = nextSilenceState(idleSilence(), LOUD, 1000);
+    s = nextSilenceState(s, QUIET, 30_000);
+    expect(shouldPromptExtend(s, 10_000)).toBe(false);
+  });
+
+  it("does not ask when nothing has ever been heard (joined early, meeting never happened)", () => {
+    let s = idleSilence();
+    for (let i = 0; i < 10; i++) s = nextSilenceState(s, QUIET, 1000);
+    expect(shouldPromptExtend(s, 10_000)).toBe(false);
+  });
+
+  it("treats the threshold as exclusive, matching shouldStopForSilence's inclusive one", () => {
+    let s = nextSilenceState(idleSilence(), LOUD, 1000);
+    s = nextSilenceState(s, QUIET, 10_000);
+    expect(shouldPromptExtend(s, 10_000)).toBe(false);
+  });
+
+  it("always asks on a non-positive window - that user has no silence rule to end the take for them", () => {
+    // The mirror of shouldStopForSilence's "never stops on a non-positive threshold". Reading this as
+    // `silentMs < 0` (never true) would silently refuse to ask exactly the user who most needs asking.
+    let s = nextSilenceState(idleSilence(), LOUD, 1000);
+    s = nextSilenceState(s, QUIET, 60 * 60_000);
+    expect(shouldPromptExtend(s, 0)).toBe(true);
+    expect(shouldPromptExtend(s, -1)).toBe(true);
+  });
+
+  it("still never asks when nothing was ever heard, whatever the window", () => {
+    const s = idleSilence();
+    expect(shouldPromptExtend(s, 0)).toBe(false);
+    expect(shouldPromptExtend(s, 30_000)).toBe(false);
+  });
+});
+
+describe("extendedStopAt", () => {
+  const now = Date.parse("2026-08-10T09:00:00Z");
+
+  it("adds the user's own overrun allowance", () => {
+    expect(extendedStopAt(now, 5)).toBe(now + 5 * MIN);
+  });
+
+  it("falls back to the default rather than re-asking instantly", () => {
+    expect(extendedStopAt(now, 0)).toBe(now + 3 * MIN);
+    expect(extendedStopAt(now, -9)).toBe(now + 3 * MIN);
+  });
+
+  it("doubles each further extension, so a long overrun is not a stream of prompts", () => {
+    // Ten prompts and ten OS notifications across a half-hour overrun is worse than the problem. 3, 6,
+    // 12, 24: the user who keeps saying yes is asked progressively less often.
+    expect(extendedStopAt(now, 3, 0)).toBe(now + 3 * MIN);
+    expect(extendedStopAt(now, 3, 1)).toBe(now + 6 * MIN);
+    expect(extendedStopAt(now, 3, 2)).toBe(now + 12 * MIN);
+    expect(extendedStopAt(now, 3, 3)).toBe(now + 24 * MIN);
+  });
+
+  it("backs off from the default too, when the allowance itself is unusable", () => {
+    expect(extendedStopAt(now, 0, 2)).toBe(now + 12 * MIN);
+    expect(extendedStopAt(now, -9, 1)).toBe(now + 6 * MIN);
+  });
+
+  it("treats a missing or negative count as the first extension", () => {
+    expect(extendedStopAt(now, 3)).toBe(now + 3 * MIN);
+    expect(extendedStopAt(now, 3, -2)).toBe(now + 3 * MIN);
   });
 });

@@ -100,6 +100,7 @@ details both stores. For how it all fits together see [`Overall_Synopsis_of_Plat
 | `AddRecordingStartedAt` | `Recordings.StartedAt` / `Recordings.EndedAt` (timestamptz null) plus index `(UserId, StartedAt)` - the recording's true wall-clock span, so calendar matching stops spanning from upload time (which made a recorded meeting's window a full recording-length late, so it overlapped nothing). **Backfills** `StartedAt = CreatedAt - DurationMs` for existing rows where `Source <> 2` (not an upload, whose `CreatedAt` says nothing about when the audio was recorded) and `DurationMs > 0`; `EndedAt` is left null on backfilled rows so `recEnd` falls back to exactly the pre-migration value rather than a guess. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddOutlookCalendarSync` | `OutlookCalendarSources` (one per user+device, unique `(UserId, DeviceId)`, cascade on user delete) and `OutlookCalendarEvents` (flattened occurrences; deterministic uuid PK, unique `(SourceId, Uid)`, indexes `(UserId, StartsAt)` and `(SourceId, StartsAt)`, `AttendeesJson` as **jsonb**, cascade from both the source and the user), plus `UserSettings.OutlookSyncEnabled` (boolean NOT NULL DEFAULT false - the privacy opt-in). Two new tables and one defaulted column: additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 | `AddCalendarRecordingPreferences` | `UserSettings.CalendarAutoStopEnabled` (boolean NOT NULL DEFAULT false) + `CalendarAutoStopAfterMinutes` (int NOT NULL **DEFAULT 3**) + `CalendarSilenceStopSeconds` (int NOT NULL **DEFAULT 30**) - how a recording started by joining a meeting from the calendar should end. The two int defaults are set in the **column**, not just the C# initialiser: these columns land on a table that already has rows, and EF's usual `defaultValue: 0` would have meant "stop the moment recording starts" / "end on zero seconds of silence" for every existing user. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
+| `AddCalendarSeriesId` | `RecordingCalendarLinks.SeriesId` (varchar(1024) null) - which recurring series a linked event belongs to, so a recording's earlier occurrences of the same meeting can be listed. **Backfills** existing Google/`.ics` links by stripping the `_{yyyyMMddTHHmmssZ}` occurrence suffix off `EventId`, and existing Outlook links (`EventId` = `outlook:{id}`) by joining `OutlookCalendarEvents` on that id and taking the `#`-prefix of its `Uid`; links the backfill cannot resolve are left null. Additive, forward-restore-safe (no `MaintenanceController.CurrentFormat` bump) |
 
 ### Entity-relationship overview
 
@@ -475,14 +476,14 @@ CRUD + in-place Markdown edit live in `SectionAttachmentsController` at route
 `api/sections/{id}/folder-attachments`.
 
 #### `RecordingCalendarLinks`
-The Google Calendar event a recording belongs to (1:1 with `Recording`, shared primary key). A lightweight
-**snapshot** for cheap list/Calendar-tab rendering; the rich invite details (attendees, description, location,
-organiser) are fetched live from Google by `EventId`, never stored.
+The calendar event a recording belongs to (1:1 with `Recording`, shared primary key) - Google, an `.ics` feed,
+or the mirrored Outlook calendar. A lightweight **snapshot** for cheap list/Calendar-tab rendering; the rich
+invite details (attendees, description, location, organiser) are fetched live by `EventId`, never stored.
 
 | Column | Type | Notes |
 |---|---|---|
 | `RecordingId` | uuid PK / FK → Recordings | shared PK; **cascade** delete with the recording |
-| `EventId` | varchar(1024) | Google Calendar event id |
+| `EventId` | varchar(1024) | calendar event id (Google id, `.ics` UID, or `outlook:{OutlookCalendarEvents.Id}`) |
 | `CalendarId` | varchar(1024) | which calendar the event is on (`primary` or a secondary/shared/subscribed id); existing rows backfilled to `primary` |
 | `Color` | varchar(32) null | the calendar's Google background colour (hex) snapshot, for tinting the linked icon |
 | `Summary` | varchar(1024) null | event title snapshot |
@@ -490,6 +491,7 @@ organiser) are fetched live from Google by `EventId`, never stored.
 | `HtmlLink` | varchar(2048) null | Google Calendar deep link |
 | `LinkedManually` | bool | user picked it by hand (vs. auto-saved best time-overlap match) |
 | `SyncedAt` | timestamptz | when the snapshot was last written |
+| `SeriesId` | varchar(1024) null | the recurring series this event belongs to, or null for a one-off event. **Stored, not derived**: for Google/`.ics` it is the master event id (the shared prefix of an expanded occurrence's id); for Outlook it is the mirrored event's `Uid` prefix, but the Outlook mirror is a **rolling window** (see `OutlookCalendarEvents` below) that only ever holds the current sync range - deriving the series by joining to it would lose exactly the older-meeting history this column exists to show. Backfilled by `AddCalendarSeriesId` for existing links; written on every new link thereafter |
 
 #### `IcsCalendarSources`
 Per-user external iCalendar (`.ics`) feed subscriptions - public team/shared calendars or any ICS URL not

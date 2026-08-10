@@ -26,10 +26,17 @@ import {
 } from "../lib/audioDevices";
 import { connectTrayRecorder, type RecorderState, type TrayBridge } from "../lib/trayRecorder";
 import { onRecordingRequested, type CalendarEventContext, type RecordingRequest } from "../lib/recordRequest";
-import { resolveCalendarStopAt, earlierStop } from "../lib/calendarRecording";
+import {
+  resolveCalendarStopAt,
+  earlierStop,
+  shouldPromptExtend,
+  extendedStopAt,
+  RECENT_SOUND_MS,
+} from "../lib/calendarRecording";
 import { startSilenceWatcher, type SilenceWatcher } from "../lib/silenceWatcher";
 import { useCalendarRecordingSettings } from "../lib/calendarRecordingSettings";
 import { useStatus } from "../lib/status";
+import { useToast } from "../lib/toast";
 import { useRoom } from "../lib/rooms";
 import { RoomPermission } from "../lib/types";
 import type { StatusTone } from "../lib/statusBar";
@@ -194,6 +201,35 @@ function loadSavedConstraints(): AudioConstraints {
   }
 }
 
+/// Why a recording ended. Absent means the user pressed Stop, which needs no announcement - they know.
+type StopReason = "schedule" | "calendar" | "silence";
+
+/// Kept as a literal map rather than a template key, so every key is greppable in the catalogues.
+const STOP_TOAST: Record<StopReason, string> = {
+  schedule: "recStoppedSchedule",
+  calendar: "recStoppedCalendar",
+  silence: "recStoppedSilence",
+};
+
+/// Raise an OS notification for the extend prompt.
+///
+/// Works in both a browser and the Electron shell with no main-process involvement: the SPA has no CSP,
+/// `apps/desktop` sets no permission request handler (so Electron grants by default), and `setAppUserModelId`
+/// is already set on win32, which is what Windows requires for a renderer notification to appear.
+///
+/// Permission is asked for here, at the first moment it is actually needed, rather than on load - and a
+/// refusal degrades silently to the in-app prompt, which is always shown regardless.
+async function notify(title: string, body: string) {
+  try {
+    if (typeof Notification === "undefined") return;
+    const permission =
+      Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
+    if (permission === "granted") new Notification(title, { body });
+  } catch {
+    /* notifications unavailable - the in-app prompt still stands */
+  }
+}
+
 export default function Recorder({
   onUploaded,
   compact = false,
@@ -229,6 +265,27 @@ export default function Recorder({
   const [autoStopTime, setAutoStopTime] = useState(""); // HH:MM for the "at" option
   const scheduledStopRef = useRef<number | null>(null); // resolved absolute target, read by the ticker
   const [scheduledStopAt, setScheduledStopAt] = useState<number | null>(null); // mirror for display
+  // The calendar event's own end (+ the user's overrun allowance), kept SEPARATE from the user's auto-stop
+  // above even though the display shows whichever comes first. They behave differently when they fire: the
+  // user's own auto-stop is a hard stop they asked for, while the calendar's only ends a meeting that has
+  // actually finished - so the watcher has to be able to tell them apart. Merging them (which is what this
+  // used to do) makes that impossible.
+  const calendarStopRef = useRef<number | null>(null);
+  // The live "your meeting was due to end" question. `deadlineAt` is non-null only when the user has turned
+  // the silence rule off, which is the one case where an unanswered prompt has no floor under it.
+  const [extendAsk, setExtendAsk] = useState<{ deadlineAt: number | null } | null>(null);
+  // Mirrored for the schedule interval, which closes over its first render and would otherwise never see the
+  // prompt appear - and would re-fire it every second. `setAsk` is the ONLY writer of either, deliberately:
+  // its write is synchronous and does not depend on when React commits, whereas mirroring during render
+  // would also be written by a render that is thrown away.
+  const extendAskRef = useRef<{ deadlineAt: number | null } | null>(null);
+  function setAsk(next: { deadlineAt: number | null } | null) {
+    extendAskRef.current = next;
+    setExtendAsk(next);
+  }
+  // How many times the user has said "Extend this meeting" on THIS take. Each extension lasts twice as long as
+  // the last, so a meeting that overruns badly is not a stream of prompts (see extendedStopAt).
+  const extensionsRef = useRef(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // A non-fatal notice (e.g. we fell back to mic-only because system audio wasn't shared).
@@ -414,7 +471,9 @@ export default function Recorder({
   const applySchedule = useCallback((choice: AutoStopChoice, time: string, anchorMs: number) => {
     const at = schedule.resolveStopAt(choice, time, anchorMs, Date.now());
     scheduledStopRef.current = at;
-    setScheduledStopAt(at);
+    // The display shows whichever target comes first, so changing the user's own auto-stop mid-recording
+    // must not wipe the calendar's target off it.
+    setScheduledStopAt(earlierStop(at, calendarStopRef.current));
   }, []);
 
   // On change (persist + re-resolve). Anchor = now when changed here; a relative choice set before Record
@@ -476,8 +535,64 @@ export default function Recorder({
   function startScheduleWatcher() {
     if (scheduleTimerRef.current) window.clearInterval(scheduleTimerRef.current);
     scheduleTimerRef.current = window.setInterval(() => {
-      if (schedule.shouldStop(scheduledStopRef.current, Date.now())) stop();
+      const now = Date.now();
+      // The user's own auto-stop is a hard stop: they asked for it, so it is never negotiated.
+      if (schedule.shouldStop(scheduledStopRef.current, now)) {
+        stop("schedule");
+        return;
+      }
+      // The prompt's own deadline, which only exists when the silence rule is off (see askToExtend).
+      const ask = extendAskRef.current;
+      if (ask?.deadlineAt != null && now >= ask.deadlineAt) {
+        stop("calendar");
+        return;
+      }
+      if (ask) return; // already asking - do not re-fire on every tick
+      if (schedule.shouldStop(calendarStopRef.current, now)) askToExtend(now);
     }, 1000);
+  }
+
+  /// The calendar's stop time has arrived. If nobody is talking there is nothing to ask about, so the take
+  /// ends exactly as it did before; if they are, hold off and ask.
+  function askToExtend(nowMs: number) {
+    // A paused recording has nobody to ask. `pause()` freezes the silence watcher (the disabled track reads
+    // as pure silence), so its last reading is stale - and the floor that makes an unanswered prompt safe is
+    // frozen with it, so a prompt raised here would never be answered and the take would never end. The
+    // schedule watcher deliberately runs through a pause, and before this feature a paused calendar take
+    // stopped and uploaded on time; it still does.
+    const paused = recorderRef.current?.state === "paused";
+    const silence = paused ? undefined : silenceRef.current?.state();
+    // The user's own silence rule IS the window: at this moment either it already considers the meeting over
+    // (so there is nobody to ask) or it does not (so ask). Any fixed window would leave a band of quiet where
+    // the take is ended silently while the user's own rule still thinks the meeting is running.
+    const seconds = calendarSettingsRef.current.silenceSeconds;
+    const recentMs = Number.isFinite(seconds) ? seconds * 1000 : RECENT_SOUND_MS;
+    if (!silence || !shouldPromptExtend(silence, recentMs)) {
+      stop("calendar");
+      return;
+    }
+    // Unanswered, the recording keeps going and the silence rule ends it when the room empties. With silence
+    // turned off there is no such floor, so the prompt gets a deadline of its own rather than recording until
+    // the browser is closed.
+    const deadlineAt =
+      seconds > 0
+        ? null
+        : extendedStopAt(nowMs, calendarSettingsRef.current.afterMinutes, extensionsRef.current);
+    setAsk({ deadlineAt });
+    void notify(t("extendNotifyTitle"), t("extendPromptText"));
+  }
+
+  /// "Extend this meeting": push the calendar's target out by the same overrun allowance the user already
+  /// configured, and put the question away. Their own auto-stop is untouched - it still wins if it is sooner.
+  function keepRecording() {
+    calendarStopRef.current = extendedStopAt(
+      Date.now(),
+      calendarSettingsRef.current.afterMinutes,
+      extensionsRef.current,
+    );
+    extensionsRef.current += 1;
+    setScheduledStopAt(earlierStop(scheduledStopRef.current, calendarStopRef.current));
+    setAsk(null);
   }
 
   function stopScheduleWatcher() {
@@ -782,8 +897,11 @@ export default function Recorder({
       recorder.start();
       recorderRef.current = recorder;
       activeSourceRef.current = coarse;
-      // Always assign, so a plain Record-button take can never inherit the last meeting's name.
+      // Always assign, so a plain Record-button take can never inherit the last meeting's name - and for the
+      // same reason, always clear the meeting's stop target and its extension count.
       calendarEventRef.current = calendarEvent ?? null;
+      calendarStopRef.current = null;
+      extensionsRef.current = 0;
       timingRef.current = timing.start(Date.now());
       startedAtRef.current = Date.now();
       // Re-anchor a relative auto-stop to record-start, so "in N minutes" means N minutes of recording.
@@ -793,17 +911,15 @@ export default function Recorder({
       // into running longer than they asked.
       if (calendarEvent) {
         const calendarStop = resolveCalendarStopAt(calendarEvent.endsAt, calendarSettingsRef.current, Date.now());
-        if (calendarStop !== null) {
-          const combined = earlierStop(scheduledStopRef.current, calendarStop);
-          scheduledStopRef.current = combined;
-          setScheduledStopAt(combined);
-        }
+        calendarStopRef.current = calendarStop;
+        // The display still shows whichever target comes first, so nothing changes on screen.
+        setScheduledStopAt(earlierStop(scheduledStopRef.current, calendarStop));
         // The other end condition: the meeting broke up early and nobody is talking any more.
         if (calendarSettingsRef.current.enabled) {
           silenceRef.current = startSilenceWatcher(
             session.stream,
             calendarSettingsRef.current.silenceSeconds * 1000,
-            () => stop(),
+            () => stop("silence"),
           );
         }
       }
@@ -866,14 +982,17 @@ export default function Recorder({
     setPaused(false);
   }
 
-  function stop() {
+  function stop(reason?: StopReason) {
     stopTicker();
     stopScheduleWatcher();
     // Fold any running segment so the uploaded duration is final and paused-free.
     timingRef.current = timing.pause(timingRef.current, Date.now());
-    // Clear the resolved auto-stop target so a finished schedule can't re-fire and the display clears.
+    // Clear the resolved auto-stop targets so a finished schedule can't re-fire and the display clears - both
+    // of them, and the pending extend question with them, so the next take can never inherit any of it.
     scheduledStopRef.current = null;
+    calendarStopRef.current = null;
     setScheduledStopAt(null);
+    setAsk(null);
     recordingRef.current = false;
     setRecording(false);
     setPaused(false);
@@ -891,6 +1010,10 @@ export default function Recorder({
       });
     }
     recorderRef.current?.stop();
+    // An automatic ending is the only one worth announcing: the user did not do it and would otherwise find
+    // the recorder idle with no explanation. A replacing start() passes no reason either - that is a handover,
+    // and the new recording is its own feedback.
+    if (reason) showToast(t(STOP_TOAST[reason]));
   }
 
   async function upload() {
@@ -1124,6 +1247,7 @@ export default function Recorder({
   // fixed-height header, so an extra line here pushed the whole bar off screen. One message at a time,
   // most severe first; the tones keep the colours these lines had inline (red / amber / grey).
   const { setStatus } = useStatus();
+  const { showToast } = useToast();
   const statusText = error ?? notice ?? null;
   const statusTone: StatusTone = error ? "error" : "progress";
   const hint =
@@ -1209,7 +1333,10 @@ export default function Recorder({
           onStart={() => start()}
           onPause={pause}
           onResume={resume}
-          onStop={stop}
+          // Wrapped rather than passed bare: onStop now takes an optional StopReason, and passing the
+          // function reference directly would let RecordHero's onClick hand it the click event as that
+          // argument. A user-pressed stop is deliberately reason-less - they know why it stopped.
+          onStop={() => stop()}
           onSilentChange={setSilent}
         />
 
@@ -1296,6 +1423,45 @@ export default function Recorder({
           </div>
         )}
       </div>
+
+      {/* The meeting overran. Floated below the bar for the same reason the recovery banners are: the capture
+          bar is fixed height, so an in-flow panel grows it and pushes the page down. Deliberately its own
+          absolutely-positioned block rather than a fourth banner inside the one below: that block is gated on
+          `!recording` and this only ever shows *while* recording, so the two can never collide. */}
+      {extendAsk && (
+        <div
+          data-testid="extend-prompt"
+          className="absolute left-1/2 top-full z-40 mt-1 w-[28rem] max-w-[calc(100vw-2rem)] -translate-x-1/2"
+        >
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm text-blue-900 shadow-xl dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-100">
+            <span>{t("extendPromptText")}</span>
+            {extendAsk.deadlineAt != null && (
+              <span className="text-xs text-blue-700 dark:text-blue-300">
+                {t("extendEndingIn", { seconds: Math.max(0, Math.ceil((extendAsk.deadlineAt - Date.now()) / 1000)) })}
+              </span>
+            )}
+            <div className="ml-auto flex gap-2">
+              <button
+                type="button"
+                onClick={keepRecording}
+                className="rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-700"
+              >
+                {t("extendKeep")}
+              </button>
+              <button
+                type="button"
+                /* A user pressing Stop needs no toast telling them the meeting is over - they just said so.
+                   Wrapped rather than passed bare: `stop` takes an optional StopReason, and the bare reference
+                   would take the click's SyntheticEvent as that argument. */
+                onClick={() => stop()}
+                className="rounded border border-blue-400 px-2 py-1 text-xs dark:border-blue-700"
+              >
+                {t("extendStopNow")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Recovery banners float below the bar in a popover. They must stay out of the capture bar's flow: it
           is a fixed-height bar, so an in-flow banner grows it and pushes the page down. */}

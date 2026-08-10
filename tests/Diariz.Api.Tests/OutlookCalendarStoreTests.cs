@@ -193,4 +193,52 @@ public class OutlookCalendarStoreTests
         await db.SaveChangesAsync();
         Assert.False(await store.HasEnabledSourceAsync(userId));
     }
+
+    // ---- Recurrence ----
+
+    /// <summary>Outlook returns one GlobalAppointmentID for a whole series, so the desktop qualifies a
+    /// recurring occurrence's uid as `{series}#{start}` (outlookSync.js). The part before the '#' is the
+    /// series key - which is why Outlook needs no new field to support series history.</summary>
+    [Fact]
+    public async Task GetEvent_ReportsTheSeriesForARecurringOccurrence()
+    {
+        using var db = TestDb.Create();
+        var (src, userId) = await SeedSource(db);
+        var ev = Timed(src, "040000008200E00074C5B7101A82E008#2026-08-10T09:00:00Z",
+            DateTimeOffset.Parse("2026-08-10T09:00:00Z"), DateTimeOffset.Parse("2026-08-10T09:30:00Z"));
+        ev.IsRecurring = true;
+        db.OutlookCalendarEvents.Add(ev);
+        await db.SaveChangesAsync();
+        var rowId = ev.Id;
+
+        var store = new OutlookCalendarStore(db);
+        var got = await store.GetEventAsync(userId, OutlookEventId.EventKey(rowId));
+
+        Assert.NotNull(got);
+        Assert.True(got!.Recurring);
+        Assert.Equal("040000008200E00074C5B7101A82E008", got.SeriesId);
+    }
+
+    /// <summary>dedupeUids appends the same '#{start}' suffix to a NON-recurring event when two share a uid,
+    /// so the separator alone must never be read as "this recurs" - or two unrelated one-offs that happened
+    /// to collide would be presented to the user as the same recurring meeting.</summary>
+    [Fact]
+    public async Task GetEvent_DoesNotSplitANonRecurringUidThatContainsAHash()
+    {
+        using var db = TestDb.Create();
+        var (src, userId) = await SeedSource(db);
+        var ev = Timed(src, "collided-uid#2026-08-10T09:00:00Z",
+            DateTimeOffset.Parse("2026-08-10T09:00:00Z"), DateTimeOffset.Parse("2026-08-10T09:30:00Z"));
+        ev.IsRecurring = false;
+        db.OutlookCalendarEvents.Add(ev);
+        await db.SaveChangesAsync();
+        var rowId = ev.Id;
+
+        var store = new OutlookCalendarStore(db);
+        var got = await store.GetEventAsync(userId, OutlookEventId.EventKey(rowId));
+
+        Assert.NotNull(got);
+        Assert.False(got!.Recurring);
+        Assert.Null(got.SeriesId);
+    }
 }

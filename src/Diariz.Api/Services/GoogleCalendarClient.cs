@@ -18,12 +18,16 @@ public record CalendarAttendee(string? Email, string? DisplayName, string? Respo
 /// <para>Despite the name, this is the shared projection for <b>every</b> calendar source - Google, subscribed
 /// <c>.ics</c> feeds, and mirrored desktop Outlook - so nothing downstream has to know where an event came
 /// from. <see cref="CalendarId"/> carries the source's scheme (<c>ics:</c>, <c>outlook:</c>, or a bare Google
-/// calendar id), which is what <see cref="ICalendarAggregator.GetEventAsync"/> routes on.</para></summary>
+/// calendar id), which is what <see cref="ICalendarAggregator.GetEventAsync"/> routes on.</para>
+/// <see cref="Recurring"/>/<see cref="SeriesId"/> mark an occurrence of a repeating series and identify
+/// which series, keyed differently per source (Google's master id, an <c>.ics</c> UID, an Outlook Global
+/// Object ID) but never compared across them.</summary>
 public record CalendarEvent(
     string Id, string? Summary, DateTimeOffset Start, DateTimeOffset End, string? HtmlLink,
     string? Description = null, string? Location = null,
     CalendarAttendee? Organizer = null, IReadOnlyList<CalendarAttendee>? Attendees = null,
-    string? CalendarId = null, string? CalendarName = null, string? Color = null, bool AllDay = false);
+    string? CalendarId = null, string? CalendarName = null, string? Color = null, bool AllDay = false,
+    bool Recurring = false, string? SeriesId = null);
 
 /// <summary>One of the user's calendars from their calendarList (primary, secondary, shared/team, or a
 /// subscribed feed). <see cref="BackgroundColor"/>/<see cref="ForegroundColor"/> are Google's hex colours.</summary>
@@ -265,6 +269,10 @@ public class GoogleCalendarClient : IGoogleCalendarClient
         var description = item.TryGetProperty("description", out var d) ? d.GetString() : null;
         var location = item.TryGetProperty("location", out var l) ? l.GetString() : null;
 
+        // Instances are expanded server-side (singleEvents=true), and Google stamps each one with the
+        // master's id. Its presence IS the "this recurs" signal - there is no separate flag.
+        var recurringEventId = item.TryGetProperty("recurringEventId", out var re) ? re.GetString() : null;
+
         var organizer = item.TryGetProperty("organizer", out var org) && org.ValueKind == JsonValueKind.Object
             ? ReadAttendee(org)
             : null;
@@ -275,7 +283,8 @@ public class GoogleCalendarClient : IGoogleCalendarClient
                 if (a.ValueKind == JsonValueKind.Object)
                     attendees.Add(ReadAttendee(a));
 
-        return new CalendarEvent(id, summary, start, end, htmlLink, description, location, organizer, attendees, AllDay: allDay);
+        return new CalendarEvent(id, summary, start, end, htmlLink, description, location, organizer, attendees,
+            AllDay: allDay, Recurring: recurringEventId is not null, SeriesId: recurringEventId);
     }
 
     private static CalendarAttendee ReadAttendee(JsonElement a) => new(

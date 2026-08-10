@@ -60,7 +60,11 @@ public sealed class IcsCalendarClient : IIcsCalendarClient
             {
                 var text = await FetchAsync(feed.Url, ct);
                 var events = IcsCalendar.ParseEvents(text, timeMin, timeMax, feed.Id.ToString(), feed.Name, feed.Color)
-                    .Select(e => e with { Id = $"ics:{feed.Id}:{e.Id}" })
+                    .Select(e => e with
+                    {
+                        Id = $"ics:{feed.Id}:{e.Id}",
+                        SeriesId = e.SeriesId is null ? null : $"ics:{feed.Id}:{e.SeriesId}",
+                    })
                     .ToList();
                 return (feed, events, error: (string?)null);
             }

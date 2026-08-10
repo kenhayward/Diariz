@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 
@@ -309,5 +310,47 @@ public class GoogleCalendarClientTests
     {
         Assert.Empty(GoogleCalendarClient.ParseCalendarList("{}"));
         Assert.Empty(GoogleCalendarClient.ParseCalendarList("{ \"items\": [] }"));
+    }
+
+    // ---- Recurrence ----
+
+    /// <summary>Google expands a series into instances (singleEvents=true) and stamps each one with the
+    /// master's id in <c>recurringEventId</c>. That is the series key, and it was being dropped.</summary>
+    [Fact]
+    public void ParseEvent_ReadsRecurringEventIdAsTheSeriesKey()
+    {
+        var json = """
+        {
+          "id": "abc_20260810T090000Z",
+          "recurringEventId": "abc",
+          "summary": "Weekly standup",
+          "start": { "dateTime": "2026-08-10T09:00:00Z" },
+          "end":   { "dateTime": "2026-08-10T09:30:00Z" }
+        }
+        """;
+        var ev = GoogleCalendarClient.ParseEvent(JsonDocument.Parse(json).RootElement);
+
+        Assert.NotNull(ev);
+        Assert.True(ev!.Recurring);
+        Assert.Equal("abc", ev.SeriesId);
+    }
+
+    /// <summary>A one-off carries no <c>recurringEventId</c>, and must not be reported as a series.</summary>
+    [Fact]
+    public void ParseEvent_LeavesAOneOffNonRecurring()
+    {
+        var json = """
+        {
+          "id": "xyz",
+          "summary": "Coffee",
+          "start": { "dateTime": "2026-08-10T09:00:00Z" },
+          "end":   { "dateTime": "2026-08-10T09:30:00Z" }
+        }
+        """;
+        var ev = GoogleCalendarClient.ParseEvent(JsonDocument.Parse(json).RootElement);
+
+        Assert.NotNull(ev);
+        Assert.False(ev!.Recurring);
+        Assert.Null(ev.SeriesId);
     }
 }

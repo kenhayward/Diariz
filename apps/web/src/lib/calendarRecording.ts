@@ -80,3 +80,41 @@ export function nextSilenceState(prev: SilenceState, level: number, dtMs: number
 export function shouldStopForSilence(state: SilenceState, thresholdMs: number): boolean {
   return thresholdMs > 0 && state.heardSound && state.silentMs >= thresholdMs;
 }
+
+/// Fallback window for "is anyone still talking", used only when the user's `silenceSeconds` is not a usable
+/// number at all (a malformed settings payload). The window is normally that setting itself - see
+/// `shouldPromptExtend` - so there is one number to understand rather than two.
+export const RECENT_SOUND_MS = 10_000;
+
+/**
+ * Whether to ask before ending a calendar-started recording, rather than just ending it.
+ *
+ * The point is that an overrunning meeting keeps its ending. If the room has already gone quiet there is
+ * nobody to ask and nothing left to capture, so the recording simply stops.
+ *
+ * This is the exact complement of `shouldStopForSilence` over the same window, deliberately: at the calendar's
+ * stop time either the user's own silence rule already considers the meeting over - in which case ask nobody
+ * and stop - or it does not, in which case ask. Any other window would leave a band of quiet where the take is
+ * ended silently while the user's own rule still thinks the meeting is running. A non-positive `recentMs`
+ * therefore means "always ask", mirroring "never stops": that user has no silence rule to end the take for
+ * them, so they are the one who most needs to be asked. `heardSound` carries the same guard it does everywhere
+ * else in this file: a take started before anyone speaks has not gone quiet, it has not started.
+ */
+export function shouldPromptExtend(state: SilenceState, recentMs: number): boolean {
+  return state.heardSound && (recentMs <= 0 || state.silentMs < recentMs);
+}
+
+/**
+ * The new stop target after the user says to keep going: the overrun allowance they already configured for
+ * "record N minutes past the end", doubled once per extension already granted for this take.
+ *
+ * The doubling is why `extensionCount` exists. A flat allowance asks again every N minutes, so a meeting that
+ * overruns by half an hour raises ten prompts and ten OS notifications - worse than the problem it solves.
+ * Backing off means the user who keeps saying yes is asked progressively less often, while the first question
+ * still comes at the time they chose. A non-positive allowance falls back to the default exactly as
+ * `resolveCalendarStopAt` does; a missing or negative count is simply the first extension.
+ */
+export function extendedStopAt(nowMs: number, afterMinutes: number, extensionCount = 0): number {
+  const minutes = afterMinutes > 0 ? afterMinutes : DEFAULT_AFTER_MINUTES;
+  return nowMs + minutes * 2 ** Math.max(0, extensionCount) * 60_000;
+}

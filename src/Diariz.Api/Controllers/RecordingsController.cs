@@ -861,6 +861,9 @@ public class RecordingsController : ControllerBase
         // Which calendar the event is on - taken from the found event (authoritative), else the request's hint,
         // else primary. Lets the live re-fetch/preview target the right calendar.
         link.CalendarId = ev.CalendarId ?? req.CalendarId ?? "primary";
+        // The recurring series, when the source knows of one. This is the ONLY production site that builds a
+        // link, so both the manual pick and the recorder's auto-link are covered by this one assignment.
+        link.SeriesId = ev.SeriesId;
         link.Color = ev.Color;
         link.Summary = ev.Summary;
         // Google returns the event's local UTC offset (e.g. 09:00+01:00); Npgsql rejects a non-zero-offset

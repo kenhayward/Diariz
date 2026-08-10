@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import type { ReactNode } from "react";
 import { useHubPopover } from "./hub/hubPopovers";
+import { useToast } from "../lib/toast";
 
 // WorkspaceLayout pulls in a stack of providers/side-effect components that have nothing to do with the
 // popover wiring under test; stub them so this stays a focused wiring test, matching the pattern other
@@ -22,9 +23,10 @@ vi.mock("../lib/status", () => ({
 vi.mock("../lib/rooms", () => ({
   RoomProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
-vi.mock("../lib/toast", () => ({
-  ToastProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
-}));
+// ../lib/toast is deliberately NOT mocked here (unlike the providers above): the whole point of the
+// toast-provider-position test below is to exercise the REAL ToastProvider/useToast wired through the
+// REAL WorkspaceLayout, so a consumer outside the provider is caught instead of silently swallowed by a
+// no-op stand-in (see toast.tsx's no-provider fallback).
 
 // Both popover consumers now live inside Workspace itself: the capture bar's recorder cluster and the
 // room row's account menu. Stand in for Workspace with a probe that calls useHubPopover() twice - once per
@@ -37,6 +39,10 @@ vi.mock("./Workspace", () => ({
   default: function WorkspaceProbe() {
     const capture = useHubPopover();
     const account = useHubPopover();
+    // toast.tsx's context defaults to a silent no-op, so a consumer outside the provider does not throw and
+    // does not fail typecheck - it just never shows anything. The recorder lives inside <Workspace />, so this
+    // renders the REAL layout and raises a toast from that position.
+    const { showToast } = useToast();
     return (
       <div>
         <button type="button" onClick={() => capture.toggle("source")}>
@@ -47,6 +53,7 @@ vi.mock("./Workspace", () => ({
           account-toggle-acct
         </button>
         <span data-testid="capture-sees-acct">{String(capture.isOpen("acct"))}</span>
+        <button onClick={() => showToast("recording stopped")}>raise-toast</button>
       </div>
     );
   },
@@ -69,5 +76,16 @@ describe("WorkspaceLayout popover wiring", () => {
     fireEvent.click(screen.getByRole("button", { name: "account-toggle-acct" }));
     expect(screen.getByTestId("capture-sees-acct").textContent).toBe("true");
     expect(screen.getByTestId("account-sees-source").textContent).toBe("false");
+  });
+
+  // toast.tsx's context defaults to a silent no-op, so a consumer outside the provider does not throw and
+  // does not fail typecheck - it just never shows anything. The recorder lives inside <Workspace />, so this
+  // renders the REAL layout and raises a toast from that position.
+  it("puts the toast provider above the workspace, where the recorder lives", async () => {
+    render(<WorkspaceLayout />);
+
+    fireEvent.click(screen.getByText("raise-toast"));
+
+    expect(await screen.findByText("recording stopped")).toBeTruthy();
   });
 });

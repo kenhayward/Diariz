@@ -15,7 +15,8 @@ Diariz turns your meetings into searchable, speaker-labelled transcripts, then s
 | Feature | Description |
 | --- | --- |
 | **Capture** | Record from your mic (device picker, capture tuning, live level meter, pause/resume), system audio, or both mixed together on one device - system audio works in Chromium browsers ("Share audio") and seamlessly in the desktop app; schedule a recording to auto-stop at a set time or after 15/30/60 minutes; or upload files (WAV, MP3, FLAC, Ogg/Opus, WebM, M4A) - dropped onto the list they land in the folder you dropped them on, and everything else follows your placement preference. |
-| **Record a calendar meeting** | Join a meeting from your calendar and it records in one click, named after the invite rather than the clock and linked to that meeting from the start (bringing any prep notes with it). Optionally let it end itself - a set number of minutes after the meeting was due to finish, or after a run of silence once everyone has left - and joining a second meeting finishes and files the first automatically. |
+| **Record a calendar meeting** | Join a meeting from your calendar and it records in one click, named after the invite rather than the clock and linked to that meeting from the start (bringing any prep notes with it). Optionally let it end itself - a set number of minutes after the meeting was due to finish, or after a run of silence once everyone has left; if people are still talking when the meeting's scheduled end arrives it asks whether to keep recording instead of cutting you off, doubling the wait each time you say yes, and always tells you why once a recording does end on its own. Joining a second meeting finishes and files the first automatically. |
+| **Recurring meetings** | A calendar event that repeats is marked with a **Repeats** badge, and both the event and a linked recording list your earlier recordings of the same meeting so you can jump straight back. |
 | **Transcribe & diarize** | Server-side WhisperX (word-level timestamps) with pyannote speaker diarization; speaker-labelled, editable, playable segments you can re-transcribe any time. |
 | **Recording hub** | Every meeting opens on a hub: a summary card (meeting type, key facts, the summary inline) over tiles for transcript, actions, speakers, notes, files, and formulas - each showing its count and a preview, with new-note / add-file / run-formula available in place. The transcript embeds a conversation-flow player showing who spoke when, which doubles as the scrubber. |
 | **People and speaker identification** | One shared directory of the people in your meetings, where a voiceprint is optional - someone can be listed with no biometric held, or opt out, which erases theirs. Enrol a voice once and Diariz recognises it across later recordings (SpeechBrain voiceprints); rename, merge, and erase them (biometric data). Assign a speaker from the Speakers tab or straight from the label on any transcript row, as you read or listen. A **People** directory opens over whatever you are reading; it lists everyone one to a line, searchable by name, email or company; a person carries a job title, company, email, phone and an internal/external marker, and likely duplicates are pointed out for you to merge. The Speakers tab shows an identified speaker's title and company inline, with a contact card (email and phone as links) above their segments and a pencil to edit that person in place. Browsing the directory needs the Manage people permission; opting yourself out, and searching to name a speaker, never do. |
@@ -60,6 +61,27 @@ export interface Release {
 
 /// Newest first. RELEASES[0].version must match version.json (asserted in releases.test.ts).
 export const RELEASES: Release[] = [
+  {
+    version: "0.202.0",
+    date: "2026-08-10",
+    pr: 501,
+    headline: "Calendar events that repeat, and meetings that overrun",
+    summary:
+      "Recordings now tell you when they have ended by themselves and why. A calendar event that repeats is " +
+      "marked as such, and shows what you recorded of the same meeting before, so you can jump back to the " +
+      "last one. The attendee list starts collapsed. And when a recording started from an invite reaches the " +
+      "end of the meeting while people are still talking, it asks whether to keep going instead of cutting " +
+      "you off - if nobody answers it keeps recording, and stops on its own once the room empties.",
+    added: [
+      "Repeating calendar events are marked, with a list of your earlier recordings of the same meeting.",
+      "An \"Extend this meeting\" prompt when a calendar recording reaches its end while people are still talking.",
+      "A notification when a recording stops by itself, saying which rule ended it.",
+    ],
+    changed: [
+      "The attendee list on a calendar event starts collapsed, with the count still shown.",
+      "The calendar day heading counts \"events\" rather than \"meetings\".",
+    ],
+  },
   {
     version: "0.201.0",
     date: "2026-08-10",

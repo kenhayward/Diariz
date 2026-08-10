@@ -3,6 +3,7 @@ using Diariz.Api.Controllers;
 using Diariz.Api.Services;
 using Diariz.Api.Tests.Infrastructure;
 using Diariz.Domain;
+using Diariz.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Diariz.Api.Tests;
@@ -50,13 +51,18 @@ public class CalendarControllerTests
     /// but its behaviour is still this controller's contract.</summary>
     private static CalendarController Build(
         FakeCalendarClient cal, Guid userId, FakeIcsClient? ics = null, IGoogleCalendarSelectionStore? selection = null,
-        IOutlookCalendarStore? outlook = null) =>
-        new(cal,
+        IOutlookCalendarStore? outlook = null, DiarizDbContext? db = null)
+    {
+        db ??= TestDb.Create();
+        return new CalendarController(
+            cal,
             new CalendarAggregator(cal, ics ?? new FakeIcsClient(), outlook ?? new NoOutlookDevices(), TestDb.Create()),
-            selection ?? new GoogleCalendarSelectionStore(TestDb.Create()))
+            selection ?? new GoogleCalendarSelectionStore(TestDb.Create()),
+            db)
         {
             ControllerContext = Http.Context(userId),
         };
+    }
 
     private static readonly DateTimeOffset Min = DateTimeOffset.Parse("2026-07-01T00:00:00Z");
     private static readonly DateTimeOffset Max = DateTimeOffset.Parse("2026-08-01T00:00:00Z");
@@ -224,4 +230,81 @@ public class CalendarControllerTests
         Assert.False(items.Single(i => i.Id == "shown").Selected); // was Google-visible; now excluded by the explicit set
         Assert.False(items.Single(i => i.Id == "hidden").Selected);
     }
+
+    // ---- Series recordings ----
+
+    /// <summary>The other recordings of the same recurring meeting: found by the stored series key, scoped to
+    /// the caller, and never including the occurrence being viewed.</summary>
+    [Fact]
+    public async Task SeriesRecordings_ReturnsTheOwnersOtherRecordingsOfTheSameSeries()
+    {
+        var me = Guid.NewGuid();
+        var someoneElse = Guid.NewGuid();
+        var db = TestDb.Create();
+
+        var mine = new Recording { Id = Guid.NewGuid(), UserId = me, Title = "Standup 3 Aug" };
+        var current = new Recording { Id = Guid.NewGuid(), UserId = me, Title = "Standup 10 Aug" };
+        var theirs = new Recording { Id = Guid.NewGuid(), UserId = someoneElse, Title = "Their standup" };
+        var otherSeries = new Recording { Id = Guid.NewGuid(), UserId = me, Title = "Retro" };
+        db.AddRange(mine, current, theirs, otherSeries);
+        db.AddRange(
+            Link(mine.Id, "abc_20260803T090000Z", "abc", "2026-08-03T09:00:00Z"),
+            Link(current.Id, "abc_20260810T090000Z", "abc", "2026-08-10T09:00:00Z"),
+            Link(theirs.Id, "abc_20260727T090000Z", "abc", "2026-07-27T09:00:00Z"),
+            Link(otherSeries.Id, "zzz_20260803T140000Z", "zzz", "2026-08-03T14:00:00Z"));
+        await db.SaveChangesAsync();
+
+        var cal = new FakeCalendarClient
+        {
+            Event = new CalendarEvent("abc_20260810T090000Z", "Standup",
+                DateTimeOffset.Parse("2026-08-10T09:00:00Z"), DateTimeOffset.Parse("2026-08-10T09:30:00Z"), null,
+                Recurring: true, SeriesId: "abc"),
+        };
+
+        var result = await Build(cal, me, db: db).SeriesRecordings("abc_20260810T090000Z", default);
+
+        var rows = Assert.IsAssignableFrom<IReadOnlyList<SeriesRecordingDto>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+        var only = Assert.Single(rows);
+        Assert.Equal(mine.Id, only.Id);
+    }
+
+    /// <summary>A one-off has no series, so the answer is an empty list rather than a 404: the client renders
+    /// one shape either way.</summary>
+    [Fact]
+    public async Task SeriesRecordings_ReturnsEmptyForANonRecurringEvent()
+    {
+        var cal = new FakeCalendarClient
+        {
+            Event = new CalendarEvent("plain", "Coffee",
+                DateTimeOffset.Parse("2026-08-10T09:00:00Z"), DateTimeOffset.Parse("2026-08-10T09:30:00Z"), null),
+        };
+
+        var result = await Build(cal, Guid.NewGuid()).SeriesRecordings("plain", default);
+
+        var rows = Assert.IsAssignableFrom<IReadOnlyList<SeriesRecordingDto>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Empty(rows);
+    }
+
+    /// <summary>An id that resolves to nothing is a 404, matching the single-event endpoint beside it.</summary>
+    [Fact]
+    public async Task SeriesRecordings_404sWhenTheEventIsGone()
+    {
+        var result = await Build(new FakeCalendarClient { Event = null }, Guid.NewGuid())
+            .SeriesRecordings("missing", default);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    private static RecordingCalendarLink Link(Guid recordingId, string eventId, string seriesId, string startsAt) =>
+        new()
+        {
+            RecordingId = recordingId,
+            EventId = eventId,
+            CalendarId = "primary",
+            SeriesId = seriesId,
+            StartsAt = DateTimeOffset.Parse(startsAt),
+            EndsAt = DateTimeOffset.Parse(startsAt).AddMinutes(30),
+        };
 }
