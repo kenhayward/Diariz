@@ -80,3 +80,29 @@ export function nextSilenceState(prev: SilenceState, level: number, dtMs: number
 export function shouldStopForSilence(state: SilenceState, thresholdMs: number): boolean {
   return thresholdMs > 0 && state.heardSound && state.silentMs >= thresholdMs;
 }
+
+/// How recently sound must have been heard for the meeting to count as still running. Deliberately short: the
+/// question is "is anyone talking right now", not "has this meeting been lively", and a natural pause between
+/// speakers is a few seconds at most.
+export const RECENT_SOUND_MS = 10_000;
+
+/**
+ * Whether to ask before ending a calendar-started recording, rather than just ending it.
+ *
+ * The point is that an overrunning meeting keeps its ending. If the room has already gone quiet there is
+ * nobody to ask and nothing left to capture, so the recording simply stops - the same answer as the silence
+ * rule, arrived at a different way. `heardSound` carries the same guard it does everywhere else in this file:
+ * a take started before anyone speaks has not gone quiet, it has not started.
+ */
+export function shouldPromptExtend(state: SilenceState, recentMs: number): boolean {
+  return state.heardSound && state.silentMs < recentMs;
+}
+
+/// The new stop target after the user says to keep going: the same overrun allowance they already configured
+/// for "record N minutes past the end", so there is one number to understand rather than two. A non-positive
+/// value falls back to the default exactly as `resolveCalendarStopAt` does - asking again instantly would be a
+/// far worse answer.
+export function extendedStopAt(nowMs: number, afterMinutes: number): number {
+  const minutes = afterMinutes > 0 ? afterMinutes : DEFAULT_AFTER_MINUTES;
+  return nowMs + minutes * 60_000;
+}

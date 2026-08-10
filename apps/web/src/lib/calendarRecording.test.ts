@@ -4,6 +4,8 @@ import {
   earlierStop,
   nextSilenceState,
   shouldStopForSilence,
+  shouldPromptExtend,
+  extendedStopAt,
   idleSilence,
   type CalendarRecordingSettings,
 } from "./calendarRecording";
@@ -103,5 +105,47 @@ describe("silence tracking", () => {
     s = nextSilenceState(s, QUIET, 60_000);
     expect(shouldStopForSilence(s, 0)).toBe(false);
     expect(shouldStopForSilence(s, -1)).toBe(false);
+  });
+});
+
+describe("shouldPromptExtend", () => {
+  const LOUD = 0.5;
+  const QUIET = 0;
+
+  it("asks when someone has spoken recently", () => {
+    let s = nextSilenceState(idleSilence(), LOUD, 1000);
+    s = nextSilenceState(s, QUIET, 2_000);
+    expect(shouldPromptExtend(s, 10_000)).toBe(true);
+  });
+
+  it("does not ask once the room has been quiet for a while - there is nobody to answer", () => {
+    let s = nextSilenceState(idleSilence(), LOUD, 1000);
+    s = nextSilenceState(s, QUIET, 30_000);
+    expect(shouldPromptExtend(s, 10_000)).toBe(false);
+  });
+
+  it("does not ask when nothing has ever been heard (joined early, meeting never happened)", () => {
+    let s = idleSilence();
+    for (let i = 0; i < 10; i++) s = nextSilenceState(s, QUIET, 1000);
+    expect(shouldPromptExtend(s, 10_000)).toBe(false);
+  });
+
+  it("treats the threshold as exclusive, matching shouldStopForSilence's inclusive one", () => {
+    let s = nextSilenceState(idleSilence(), LOUD, 1000);
+    s = nextSilenceState(s, QUIET, 10_000);
+    expect(shouldPromptExtend(s, 10_000)).toBe(false);
+  });
+});
+
+describe("extendedStopAt", () => {
+  const now = Date.parse("2026-08-10T09:00:00Z");
+
+  it("adds the user's own overrun allowance", () => {
+    expect(extendedStopAt(now, 5)).toBe(now + 5 * MIN);
+  });
+
+  it("falls back to the default rather than re-asking instantly", () => {
+    expect(extendedStopAt(now, 0)).toBe(now + 3 * MIN);
+    expect(extendedStopAt(now, -9)).toBe(now + 3 * MIN);
   });
 });

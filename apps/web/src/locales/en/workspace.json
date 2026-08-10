@@ -637,5 +637,10 @@
   "calNoMeetingLink": "This invite has no meeting link.",
   "recStoppedSchedule": "Recording stopped - your auto-stop time was reached.",
   "recStoppedCalendar": "Recording stopped - the meeting has ended.",
-  "recStoppedSilence": "Recording stopped - the meeting went quiet."
+  "recStoppedSilence": "Recording stopped - the meeting went quiet.",
+  "extendPromptText": "This meeting was due to end, but people are still talking.",
+  "extendKeep": "Keep recording",
+  "extendStopNow": "Stop now",
+  "extendEndingIn": "Ending in {{seconds}}s",
+  "extendNotifyTitle": "Still recording?"
 }

@@ -637,5 +637,10 @@
   "calNoMeetingLink": "Cette invitation ne contient aucun lien de reunion.",
   "recStoppedSchedule": "Enregistrement arrêté - l'heure d'arrêt automatique est atteinte.",
   "recStoppedCalendar": "Enregistrement arrêté - la réunion est terminée.",
-  "recStoppedSilence": "Enregistrement arrêté - plus personne ne parlait."
+  "recStoppedSilence": "Enregistrement arrêté - plus personne ne parlait.",
+  "extendPromptText": "Cette réunion devait se terminer, mais la discussion continue.",
+  "extendKeep": "Continuer l'enregistrement",
+  "extendStopNow": "Arrêter maintenant",
+  "extendEndingIn": "Fin dans {{seconds}} s",
+  "extendNotifyTitle": "Continuer l'enregistrement ?"
 }
