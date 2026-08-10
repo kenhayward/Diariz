@@ -259,6 +259,22 @@ describe("CalendarTab", () => {
     emit("idle");
     await waitFor(() => expect(api.getCalendarEvents).toHaveBeenCalled());
   });
+
+  // The day heading counts calendar *events* - holidays, birthdays and out-of-office days are all in here,
+  // and none of them is a meeting.
+  it("counts the day's items as events, not meetings", async () => {
+    const today = new Date();
+    const at = (h: number) => new Date(today.getFullYear(), today.getMonth(), today.getDate(), h).toISOString();
+    vi.mocked(api.getCalendarEvents).mockResolvedValue([
+      { id: "ev1", summary: "Standup", start: at(9), end: at(10), htmlLink: null },
+      { id: "ev2", summary: "Review", start: at(11), end: at(12), htmlLink: null },
+    ]);
+
+    renderTab();
+
+    expect(await screen.findByText(/2 events/)).toBeTruthy();
+    expect(screen.queryByText(/meeting/i)).toBeNull();
+  });
 });
 
 // ---- the day view: a time grid, not a list ----
@@ -354,7 +370,7 @@ describe("CalendarTab day grid", () => {
     ]);
     renderTab();
 
-    expect(await screen.findByText(/2 meetings/)).toBeTruthy();
+    expect(await screen.findByText(/2 events/)).toBeTruthy();
     expect(screen.getByText(/1 recording/)).toBeTruthy();
   });
 
