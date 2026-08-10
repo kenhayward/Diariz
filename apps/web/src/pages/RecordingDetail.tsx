@@ -1174,6 +1174,7 @@ export default function RecordingDetail() {
       onLink={() => setLinkModalOpen(true)}
       onAcceptSuggestion={acceptSuggestion}
       onUnlink={unlinkMeeting}
+      onOpen={() => selectTab("meeting")}
     />
   ) : null;
 

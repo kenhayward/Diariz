@@ -253,7 +253,7 @@ describe("RecordingDetail", () => {
     await waitFor(() => expect(api.putCalendarLink).toHaveBeenCalledWith("rec-123", "evt1", false, "team@g"));
   });
 
-  it("shows the linked meeting's full details and manage actions on the Overview", async () => {
+  it("shows the linked meeting's summary and manage actions on the Overview", async () => {
     (api.getProfile as ReturnType<typeof vi.fn>).mockResolvedValue({ googleCalendar: true });
     (api.getCalendarEvent as ReturnType<typeof vi.fn>).mockResolvedValue({
       id: "evt1", summary: "Quarterly Planning", start: base.createdAt, end: base.createdAt,
@@ -267,8 +267,8 @@ describe("RecordingDetail", () => {
     });
     await loaded();
 
-    const link = await screen.findByRole("link", { name: "Quarterly Planning" });
-    expect(link.getAttribute("href")).toBe("https://cal/evt1");
+    // The card is a summary now, not the full invite - just a button into the Calendar Event section.
+    expect(await screen.findByRole("button", { name: /Quarterly Planning/ })).toBeTruthy();
     expect(await screen.findByText("Room 4")).toBeTruthy(); // live details rendered
     expect(api.getCalendarEvent).toHaveBeenCalledWith("evt1");
     expect(screen.getByRole("button", { name: /change meeting/i })).toBeTruthy();
@@ -314,7 +314,7 @@ describe("RecordingDetail", () => {
     });
     await loaded();
 
-    expect(screen.queryByRole("link", { name: "Quarterly Planning" })).toBeNull(); // block hidden
+    expect(screen.queryByRole("button", { name: /Quarterly Planning/ })).toBeNull(); // block hidden
     expect(screen.queryByRole("button", { name: /change meeting/i })).toBeNull();
     expect(api.getCalendarEvent).not.toHaveBeenCalled(); // no calendar fetch in a shared room
   });
