@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   dayKey, isoToDayKey, buildMonthGrid, recordingDayKeys, recordingsForDay,
-  eventDayKeys, visibleGridRange, dayItems, recordingSpan, dayItemSpan,
+  eventDayKeys, visibleGridRange, dayItems, recordingSpan, dayItemSpan, dayEventCount,
 } from "./calendar";
 import type { CalendarEvent, RecordingSummary } from "./types";
 
@@ -277,5 +277,26 @@ describe("dayItemSpan", () => {
   it("never marks a recording all-day", () => {
     expect(spanOf(recWith({ startedAt: new Date(2026, 6, 2).toISOString(), durationMs: 0 }), "2026-07-02").allDay)
       .toBe(false);
+  });
+});
+
+describe("dayEventCount", () => {
+  const ev = (id: string, start: string, end: string) =>
+    ({ id, summary: id, start, end, htmlLink: null }) as CalendarEvent;
+
+  it("counts an event on the day", () => {
+    const events = [ev("a", "2026-08-10T09:00:00Z", "2026-08-10T10:00:00Z")];
+    expect(dayEventCount(events, "2026-08-10")).toBe(1);
+  });
+
+  it("counts an event on every day it spans, matching how the grid draws it", () => {
+    const events = [ev("overnight", "2026-08-10T22:00:00Z", "2026-08-11T01:00:00Z")];
+    expect(dayEventCount(events, "2026-08-10")).toBe(1);
+    expect(dayEventCount(events, "2026-08-11")).toBe(1);
+  });
+
+  it("counts nothing on an unrelated day", () => {
+    const events = [ev("a", "2026-08-10T09:00:00Z", "2026-08-10T10:00:00Z")];
+    expect(dayEventCount(events, "2026-08-12")).toBe(0);
   });
 });

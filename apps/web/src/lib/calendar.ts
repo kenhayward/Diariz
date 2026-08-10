@@ -178,6 +178,22 @@ export function dayItems(recordings: RecordingSummary[], events: CalendarEvent[]
   return items.sort((a, b) => a.time - b.time);
 }
 
+/**
+ * How many calendar events cover `key`, **including** those a recording is already linked to.
+ *
+ * Deliberately not derived from `dayItems`. That function drops a linked event, because in the grid its
+ * recording row stands in for it - correct for drawing, wrong for counting: a day of six meetings, five of
+ * them recorded, would report one event. This uses the same day-matching predicate `dayItems` uses, so an
+ * event spilling across midnight is counted on every day it is drawn on, and nothing else.
+ *
+ * Kept independent of the recording count rather than phrased as a subset ("6 events, 5 recorded") because a
+ * recording need not belong to any event at all - an ad-hoc take from the Record button has no calendar link,
+ * and would vanish from a subset phrasing.
+ */
+export function dayEventCount(events: CalendarEvent[], key: string): number {
+  return events.filter((e) => eventDayKeys([e]).has(key)).length;
+}
+
 /// Localized weekday initials (Mon-first) for the column headers.
 export function weekdayLabels(locale: string): string[] {
   const fmt = new Intl.DateTimeFormat(locale, { weekday: "short" });
