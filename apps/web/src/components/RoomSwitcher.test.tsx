@@ -73,12 +73,34 @@ describe("RoomSwitcher", () => {
     expect(navigate).toHaveBeenCalledTimes(1); // picking the current room does not navigate
   });
 
-  it("shows a shared room's chosen icon on the trigger, not just its first letter", () => {
+  // The account menu now sits immediately to the left of this trigger, and for a personal room both would
+  // render the same signed-in user's avatar - two identical faces side by side. The row carries the icon
+  // once, in the account pill; the trigger is the room's name alone.
+  it("shows no room icon on the trigger", () => {
     const withIcon: RoomListItem = { ...shared, icon: "star", name: "Engineering" };
     roomsValue = { rooms: [personal, withIcon], currentRoom: withIcon };
     renderSwitcher();
-    // The trigger renders the room badge; with an icon set that badge is an SVG glyph.
-    expect(screen.getByRole("button", { name: /switch room/i }).querySelector("svg")).toBeTruthy();
+    const trigger = screen.getByRole("button", { name: /switch room/i });
+    // A shared room's badge is an SVG glyph and a personal room's avatar is an <img> or an initials bubble;
+    // none of them belong on the trigger.
+    expect(trigger.querySelector("svg")).toBeNull();
+    expect(trigger.querySelector("img")).toBeNull();
+
+    roomsValue = { rooms: [personal], currentRoom: personal };
+    renderSwitcher();
+    const personalTrigger = screen.getAllByRole("button", { name: /switch room/i })[1];
+    expect(personalTrigger.textContent).toBe("Ada Lovelace▾"); // the name and its caret, no initials bubble
+  });
+
+  // ...but the menu still needs them: that is where you tell one room from another.
+  it("keeps each room's icon in the open menu", () => {
+    const withIcon: RoomListItem = { ...shared, icon: "star", name: "Engineering" };
+    roomsValue = { rooms: [personal, withIcon], currentRoom: personal };
+    renderSwitcher();
+    fireEvent.click(screen.getByRole("button", { name: /switch room/i }));
+    const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
+    expect(items[0].textContent).toContain("AL"); // personal: the user's initials bubble
+    expect(items[1].querySelector("svg")).toBeTruthy(); // shared: its chosen glyph
   });
 
   it("hides Manage Rooms from users without manageRooms", () => {

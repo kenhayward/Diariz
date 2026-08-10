@@ -9,17 +9,22 @@ import RoomBadge from "./RoomBadge";
 import ManageRoomsModal from "./ManageRoomsModal";
 import { HomeIcon } from "./icons";
 
-/// A small icon for a room: the signed-in user's avatar for their Personal room, else the shared room's chosen
-/// icon (or a colour swatch with its first letter when none was picked).
-function RoomIcon({ room, size = "sm" }: { room: RoomListItem; size?: "xs" | "sm" }) {
+/// A small icon for a room, used in the switcher's menu: the signed-in user's avatar for their Personal
+/// room, else the shared room's chosen icon (or a colour swatch with its first letter when none was picked).
+function RoomIcon({ room }: { room: RoomListItem }) {
   const { initials, pictureUrl } = useAuth();
-  if (room.isPersonal) return <Avatar initials={initials} pictureUrl={pictureUrl} size={size} />;
-  return <RoomBadge icon={room.icon} color={room.color} name={room.name} size={size} />;
+  if (room.isPersonal) return <Avatar initials={initials} pictureUrl={pictureUrl} size="sm" />;
+  return <RoomBadge icon={room.icon} color={room.color} name={room.name} size="sm" />;
 }
 
-/// The left-panel header row: an optional leading slot (the account menu), a room switcher (current room's
-/// icon + name, a dropdown of the rooms the user belongs to, personal first) and the panel collapse control.
-/// The slot is a prop rather than an import so this component stays free of the account menu's dependencies.
+/// The left-panel header row: an optional leading slot (the account menu), a room switcher (the current
+/// room's name, and a dropdown of the rooms the user belongs to, personal first) and the panel collapse
+/// control. The slot is a prop rather than an import so this component stays free of the account menu's
+/// dependencies.
+///
+/// The trigger deliberately shows the name alone. The account pill sits immediately to its left, and for a
+/// personal room both would render the same signed-in user's avatar - two identical faces side by side. The
+/// menu still carries an icon per row, which is where telling one room from another actually matters.
 export default function RoomSwitcher({
   onCollapse,
   chevron,
@@ -70,7 +75,6 @@ export default function RoomSwitcher({
           onClick={() => setOpen((v) => !v)}
           className="flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5 hover:bg-gray-100 dark:hover:bg-gray-800"
         >
-          {currentRoom && <RoomIcon room={currentRoom} size="xs" />}
           <span className="min-w-0 flex-1 truncate text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
             {currentRoom?.name ?? ""}
           </span>

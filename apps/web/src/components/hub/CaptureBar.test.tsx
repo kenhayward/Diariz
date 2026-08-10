@@ -32,12 +32,16 @@ describe("CaptureBar", () => {
     expect(queryByText("Diariz")).toBeNull();
   });
 
-  // 73px + the 1px bottom border = 74px = the left panel's first two rows. There is no window edge above
-  // the bar any more, so the old 2px top border goes with the header.
-  it("is 73px tall with a bottom border and no top border", () => {
+  // 72px = the left panel's first two rows, so the bar's lower edge lands on the panel's second divider.
+  // 36 + 36, not 37 + 37: Tailwind's preflight makes every element border-box, so a row's h-9 already
+  // contains its 1px border-b. This bar is border-box too, so its own bottom border is inside the 72.
+  // jsdom has no layout engine, so this pins the number the browser measurement established rather than
+  // recomputing the alignment - if the panel's row heights change, re-measure and change both together.
+  // There is no window edge above the bar any more, so the old 2px top border goes with the header.
+  it("is 72px tall with a bottom border and no top border", () => {
     const { container } = renderBar();
     const bar = container.firstElementChild as HTMLElement;
-    expect(bar.style.height).toBe("73px");
+    expect(bar.style.height).toBe("72px");
     expect(bar.style.borderBottom).toContain("var(--hub-bar-border-bottom)");
     expect(bar.style.borderTop).toBe("");
   });

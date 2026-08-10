@@ -9,18 +9,20 @@ import RecordHero from "./RecordHero";
 // ----------------------------------------------------------------------------------------------------
 // jsdom has no real layout engine, so a width-driven media query can't be exercised meaningfully here.
 // Instead we assert the responsive utility classes are present on the collapsible text labels: the
-// "Audio source" chip text and the idle record hero label both hide at narrow widths (mic icon / red
-// circle stay), which is what the spec's "drop the text label" behaviour needs. Narrow-width rendering
+// "Audio source" chip text and the idle record hero label both hide when the capture bar is narrow (mic
+// icon / red circle stay), which is what the spec's "drop the text label" behaviour needs. The gate is a
+// container query against the bar (`@xl:`), not a viewport breakpoint, because the bar spans
+// `window - left panel - chat panel` and a wide window can still leave a narrow bar. Narrow rendering
 // itself is verified visually.
 describe("hub responsive labels", () => {
-  it("hides the Audio source chip text at narrow widths (keeps it from md up)", () => {
+  it("hides the Audio source chip text until the capture bar is wide enough", () => {
     render(<AudioSourceChip systemAudio={false} expanded={false} onClick={() => {}} />);
     const label = screen.getByText("Audio source");
     expect(label.className).toContain("hidden");
-    expect(label.className).toContain("md:inline");
+    expect(label.className).toContain("@xl:inline");
   });
 
-  it("hides the idle record hero label at narrow widths (keeps it from md up)", () => {
+  it("hides the idle record hero label until the capture bar is wide enough", () => {
     render(
       <RecordHero
         recording={false}
@@ -39,7 +41,7 @@ describe("hub responsive labels", () => {
     );
     const label = screen.getByText("Start recording");
     expect(label.className).toContain("hidden");
-    expect(label.className).toContain("md:inline");
+    expect(label.className).toContain("@xl:inline");
   });
 });
 

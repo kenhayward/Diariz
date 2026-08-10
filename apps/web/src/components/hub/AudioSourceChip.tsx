@@ -63,14 +63,14 @@ export default function AudioSourceChip({
       }}
     >
       <IconMic />
-      {/* The text label collapses at narrow *window* widths - but "md:inline" alone doesn't help when the
-          window is wide and only the capture bar's column is narrow (its width is `window - left panel -
-          chat panel`, not tied to any breakpoint): min-w-0 + truncate let the label shrink and ellipsize
-          instead of forcing the button (and the cluster around it) wider than the column. The mic icon
-          (+ "+System" pill + chevron) still carry the chip at any width; the button's aria-label keeps the
-          accessible name "Audio source" in every layout. */}
+      {/* The text label collapses when there is no room for it. The measure is the *capture bar's* width,
+          not the window's: the bar spans `window - left panel - chat panel`, so a wide window with the chat
+          panel dragged out leaves a narrow bar, and a viewport breakpoint (`md:`) would keep the label
+          showing while the cluster spilled over the chat panel. `@xl` asks the bar (its `@container`)
+          instead. The mic icon (+ "+System" pill + chevron) still carry the chip at any width, and the
+          button's aria-label keeps the accessible name "Audio source" in every layout. */}
       <span
-        className="hidden min-w-0 truncate md:inline"
+        className="hidden min-w-0 truncate @xl:inline"
         style={{ fontFamily: "system-ui", fontWeight: 500, fontSize: 14.5, color: "var(--hub-text)" }}
       >
         {t("audioSourceChip")}

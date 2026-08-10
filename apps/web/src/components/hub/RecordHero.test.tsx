@@ -4,12 +4,13 @@ import RecordHero from "./RecordHero";
 
 const noop = () => {};
 
-// Same shrink concern as AudioSourceChip.test.tsx: the idle pill's "Start recording" text is only
-// conditionally hidden by *window* width (hidden md:inline), which does not help when the window is wide
-// but the capture bar's column is narrow - so the label must be able to truncate instead of forcing the
-// pill's width. jsdom has no layout engine, so this only proves the truncation classes are present.
+// Same concern as AudioSourceChip.test.tsx: the idle pill's "Start recording" text must be gated on the
+// capture bar's own width (a container query against CaptureBar's `@container`), not the window's - the
+// bar spans `window - left panel - chat panel`, so a `md:` media query keeps the label showing on a wide
+// window while the cluster spills over the chat panel. jsdom has no layout engine, so this only proves the
+// gating classes are present; the fit itself was verified in the browser.
 describe("RecordHero", () => {
-  it("lets the idle label truncate rather than force the pill's width", () => {
+  it("gates the idle label on the capture bar's width, not the window's", () => {
     render(
       <RecordHero
         recording={false}
@@ -30,6 +31,7 @@ describe("RecordHero", () => {
     expect(label.className).toContain("min-w-0");
     expect(label.className).toContain("truncate");
     expect(label.className).toContain("hidden");
-    expect(label.className).toContain("md:inline");
+    expect(label.className).toContain("@xl:inline");
+    expect(label.className).not.toContain("md:inline");
   });
 });
