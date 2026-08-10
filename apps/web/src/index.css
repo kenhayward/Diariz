@@ -9,7 +9,6 @@
   /* Top-bar "command hub" token layer. Light values here; dark overrides under `.dark` below.
      Blue/red accents and the meter gradient are theme-neutral and carry over from these defaults. */
   --hub-bar-bg: #ffffff;
-  --hub-bar-border-top: rgba(47, 107, 237, 0.2);
   --hub-bar-border-bottom: rgba(15, 23, 42, 0.08);
   --hub-surface: #f1f5f9;
   --hub-surface-hover: rgba(15, 23, 42, 0.05);
@@ -42,7 +41,6 @@
 
 .dark {
   --hub-bar-bg: #0a1120;
-  --hub-bar-border-top: rgba(120, 150, 220, 0.18);
   --hub-bar-border-bottom: rgba(255, 255, 255, 0.05);
   --hub-surface: #131d31;
   --hub-surface-hover: rgba(255, 255, 255, 0.06);

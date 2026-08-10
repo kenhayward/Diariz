@@ -5,7 +5,7 @@ import { useHubPopover } from "./hub/hubPopovers";
 
 // WorkspaceLayout pulls in a stack of providers/side-effect components that have nothing to do with the
 // popover wiring under test; stub them so this stays a focused wiring test, matching the pattern other
-// shell tests use (TopBar.test.tsx stubs Recorder, Workspace.test.tsx stubs the panels).
+// shell tests use (CaptureBar.test.tsx stubs Recorder, Workspace.test.tsx stubs the panels).
 vi.mock("./TourOverlay", () => ({ default: () => null }));
 vi.mock("./StatusBar", () => ({ default: () => null }));
 vi.mock("./ThemeSync", () => ({ default: () => null }));
@@ -26,33 +26,27 @@ vi.mock("../lib/toast", () => ({
   ToastProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
-// TopBar and Workspace stand in for the real components, each a probe calling useHubPopover() itself - the
-// same way the real Recorder (inside TopBar) and UserMenu (inside Workspace) do. A stub that just renders
-// static markup can't catch what this test exists to catch: whether the *provider WorkspaceLayout renders*
-// actually reaches both subtrees, or whether one of them silently falls back to its own local state because
-// it sits outside the provider (see hub/hubPopovers.tsx's no-provider fallback).
-vi.mock("./TopBar", () => ({
-  default: function TopBarProbe() {
-    const { toggle, isOpen } = useHubPopover();
-    return (
-      <div>
-        <button type="button" onClick={() => toggle("source")}>
-          topbar-toggle-source
-        </button>
-        <span data-testid="topbar-sees-acct">{String(isOpen("acct"))}</span>
-      </div>
-    );
-  },
-}));
+// Both popover consumers now live inside Workspace itself: the capture bar's recorder cluster and the
+// room row's account menu. Stand in for Workspace with a probe that calls useHubPopover() twice - once per
+// consumer role - the same way the real CaptureBar (recorder, via Recorder) and UserMenu (account row) each
+// call it independently deep in Workspace's real tree. A stub that renders static markup can't catch what
+// this test exists to catch: whether the *provider WorkspaceLayout renders* actually reaches this subtree,
+// or whether a consumer silently falls back to its own local state because Workspace (or part of it) sits
+// outside the provider (see hub/hubPopovers.tsx's no-provider fallback - it is per call-site, not shared).
 vi.mock("./Workspace", () => ({
   default: function WorkspaceProbe() {
-    const { toggle, isOpen } = useHubPopover();
+    const capture = useHubPopover();
+    const account = useHubPopover();
     return (
       <div>
-        <button type="button" onClick={() => toggle("acct")}>
-          workspace-toggle-acct
+        <button type="button" onClick={() => capture.toggle("source")}>
+          capture-toggle-source
         </button>
-        <span data-testid="workspace-sees-source">{String(isOpen("source"))}</span>
+        <span data-testid="account-sees-source">{String(account.isOpen("source"))}</span>
+        <button type="button" onClick={() => account.toggle("acct")}>
+          account-toggle-acct
+        </button>
+        <span data-testid="capture-sees-acct">{String(capture.isOpen("acct"))}</span>
       </div>
     );
   },
@@ -61,19 +55,19 @@ vi.mock("./Workspace", () => ({
 import WorkspaceLayout from "./WorkspaceLayout";
 
 describe("WorkspaceLayout popover wiring", () => {
-  // The one requirement the hoist out of TopBar exists to preserve: the recorder cluster (in TopBar today,
-  // moving into a capture bar inside Workspace in a later step) and the account menu (in Workspace's room
-  // row) must share ONE popover-open state, even though they live in different subtrees of WorkspaceLayout.
-  it("shares one HubPopoverProvider between TopBar and Workspace", () => {
+  // The one requirement HubPopoverProvider exists to preserve, post-header-removal: the capture bar's
+  // recorder cluster and the account menu - both now inside Workspace - must share ONE popover-open state,
+  // fed by the provider WorkspaceLayout wraps around Workspace.
+  it("shares one HubPopoverProvider across the workspace's popover consumers", () => {
     render(<WorkspaceLayout />);
 
-    // Toggling "source" from the TopBar probe must be visible to the Workspace probe.
-    fireEvent.click(screen.getByRole("button", { name: "topbar-toggle-source" }));
-    expect(screen.getByTestId("workspace-sees-source").textContent).toBe("true");
+    // Toggling "source" from the capture-role probe must be visible to the account-role probe.
+    fireEvent.click(screen.getByRole("button", { name: "capture-toggle-source" }));
+    expect(screen.getByTestId("account-sees-source").textContent).toBe("true");
 
-    // Toggling "acct" from the Workspace probe closes "source" and is visible back on the TopBar probe.
-    fireEvent.click(screen.getByRole("button", { name: "workspace-toggle-acct" }));
-    expect(screen.getByTestId("topbar-sees-acct").textContent).toBe("true");
-    expect(screen.getByTestId("workspace-sees-source").textContent).toBe("false");
+    // Toggling "acct" from the account-role probe closes "source" and is visible back on the capture probe.
+    fireEvent.click(screen.getByRole("button", { name: "account-toggle-acct" }));
+    expect(screen.getByTestId("capture-sees-acct").textContent).toBe("true");
+    expect(screen.getByTestId("account-sees-source").textContent).toBe("false");
   });
 });

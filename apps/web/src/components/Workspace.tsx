@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Outlet } from "react-router-dom";
 import RouteErrorBoundary from "./RouteErrorBoundary";
+import CaptureBar from "./hub/CaptureBar";
 import RecordingsPanel from "./RecordingsPanel";
 import ChatPanel from "./ChatPanel";
 import RoomSwitcher from "./RoomSwitcher";
@@ -98,14 +99,22 @@ export default function Workspace() {
         <CollapsedRail label={currentRoom?.name ?? t("panelMeetings")} onExpand={() => setLeftOpen(true)} chevron="▶" tour="recordings" />
       )}
 
-      <main data-tour="detail" className="min-w-0 flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950">
-        <div className="p-6">
-          {/* Contain a routed-page crash so it shows a message instead of blanking the whole app (#289). */}
-          <RouteErrorBoundary>
-            <Outlet />
-          </RouteErrorBoundary>
-        </div>
-      </main>
+      {/* The content column: the capture bar over the routed content. The chat rail is a sibling of this
+          column, not a child, so the bar stops at the content's right edge. */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <CaptureBar />
+        <main
+          data-tour="detail"
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950"
+        >
+          <div className="p-6">
+            {/* Contain a routed-page crash so it shows a message instead of blanking the whole app (#289). */}
+            <RouteErrorBoundary>
+              <Outlet />
+            </RouteErrorBoundary>
+          </div>
+        </main>
+      </div>
 
       {/* The chat panel stays mounted even when collapsed (hidden via CSS) so its conversation
           state survives collapse/expand. The rail is shown alongside when collapsed. */}

@@ -5,6 +5,9 @@ import { vi } from "vitest";
 
 vi.mock("./RecordingsPanel", () => ({ default: () => <div>LIST</div> }));
 vi.mock("./ChatPanel", () => ({ default: () => <div>CHAT</div> }));
+vi.mock("./hub/CaptureBar", () => ({
+  default: () => <div data-tour="capture">CAPTURE</div>,
+}));
 // The account menu is a real component with react-query + auth dependencies; this test is about the shell.
 vi.mock("./UserMenu", () => ({
   default: () => <button data-tour="account" type="button">ACCOUNT</button>,
@@ -78,6 +81,23 @@ describe("Workspace", () => {
   it("renders the routed detail in the middle panel", () => {
     renderWorkspace("/recordings/rec-1");
     expect(screen.getByText("DETAIL")).toBeTruthy();
+  });
+
+  // The bar spans the routed content only: it shares a column with <main>, and the chat rail is outside
+  // that column so the bar never runs over it.
+  it("renders the capture bar above the routed content, inside the content column", () => {
+    renderWorkspace("/recordings/rec-1");
+    const bar = screen.getByText("CAPTURE");
+    const main = document.querySelector("main")!;
+    expect(bar.parentElement).toBe(main.parentElement);
+    expect(bar.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("keeps the chat rail out of the capture bar's column", () => {
+    renderWorkspace();
+    const column = screen.getByText("CAPTURE").parentElement!;
+    const rail = screen.getByRole("button", { name: /expand chat panel/i });
+    expect(column.contains(rail)).toBe(false);
   });
 
   it("drag-resizes the right panel and persists the width", () => {

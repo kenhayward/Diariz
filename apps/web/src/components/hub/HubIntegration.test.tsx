@@ -143,8 +143,8 @@ class FakeMediaRecorder {
 const fakeStream = { getTracks: () => [], getAudioTracks: () => [], getVideoTracks: () => [] };
 const fakeSession = { stream: fakeStream, stop: () => {} };
 
-// The full command hub: the recorder cluster and the account avatar under one shared popover context -
-// the same wiring TopBar uses (minus the pure frame markup, which TopBar.test covers).
+// The full command hub: the capture bar's recorder cluster and the left panel's account pill under one
+// shared popover context - the same wiring WorkspaceLayout provides.
 function renderHub() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -160,7 +160,7 @@ function renderHub() {
   );
 }
 
-describe("TopBar command-hub integration", () => {
+describe("command-hub integration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
