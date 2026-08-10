@@ -22,7 +22,9 @@
 - **Npgsql rejects a non-zero-offset `DateTimeOffset`** for a `timestamptz` column. Call `.ToUniversalTime()` before storing one.
 - **Build `Diariz.slnx`, not just the unit test project**, before considering a server task done: a unit-only run does not compile the integration project, and controller constructor changes have broken it before.
 - **`dotnet test --filter "Name=X"` does not work in this repo** despite what CLAUDE.md says. Use `--filter "FullyQualifiedName~X"`.
-- **Do not touch `apps/desktop/**`.** This release is a server redeploy. If a desktop change appears necessary, stop and escalate - it converts the release into a tagged desktop build.
+- **Do not touch anything the Electron build ships**: `apps/desktop/src/**`, `apps/desktop/build/**`, `apps/desktop/electron-builder.config.js`, or desktop dependencies. Changing any of those converts this from a server redeploy into a tagged desktop release. If one appears necessary, stop and escalate.
+  - **One deliberate exception, Task 2 only:** a comment correction in `apps/desktop/native/Diariz.OutlookReader/Program.cs`. That is the standalone native COM reader's C# source, compiled separately and not part of the Electron bundle, so editing a comment in it ships nothing. No other file under `apps/desktop/` may change.
+- **`apps/desktop/package.json` is bumped in Task 9** as a version mirror only (`versionMirrors.test.ts` asserts it). That is not a desktop change and cuts no release - desktop version numbers are allowed to skip.
 
 ---
 
