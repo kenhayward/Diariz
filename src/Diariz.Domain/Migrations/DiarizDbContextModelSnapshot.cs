@@ -1183,6 +1183,10 @@ namespace Diariz.Domain.Migrations
                     b.Property<bool>("LinkedManually")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("SeriesId")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
                     b.Property<DateTimeOffset>("StartsAt")
                         .HasColumnType("timestamp with time zone");
 
